@@ -1,4 +1,4 @@
-import { parseUnits, getAddress, ZeroAddress, AddressLike } from "ethers";
+import { AddressLike, ZeroAddress, getAddress, parseUnits } from "ethers";
 
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.
 const toFixed = (x: number, decimals: number) =>

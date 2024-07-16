@@ -1,7 +1,7 @@
 import {
+  Address,
   ChainId,
   Token,
-  Address,
   addresses,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";

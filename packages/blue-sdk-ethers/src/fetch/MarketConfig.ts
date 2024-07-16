@@ -4,11 +4,11 @@ import { MorphoBlue__factory } from "ethers-types";
 import {
   ChainId,
   ChainUtils,
-  getChainAddresses,
+  MarketConfig,
+  MarketId,
   UnknownMarketConfigError,
   _try,
-  MarketId,
-  MarketConfig,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 export async function fetchMarketConfig(

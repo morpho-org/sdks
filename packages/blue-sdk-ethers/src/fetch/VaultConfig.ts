@@ -2,12 +2,12 @@ import { Provider } from "ethers";
 import { MetaMorpho__factory } from "ethers-types";
 
 import {
+  Address,
   ChainId,
   ChainUtils,
   UnknownVaultConfigError,
   VaultConfig,
   _try,
-  Address,
 } from "@morpho-org/blue-sdk";
 
 export async function fetchVaultConfig(

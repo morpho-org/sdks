@@ -9,10 +9,10 @@ import { ViewOverrides } from "ethers-types/dist/common";
 import {
   ChainId,
   ChainUtils,
-  getChainAddresses,
   Market,
   MarketConfig,
   MarketId,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import "./MarketConfig";

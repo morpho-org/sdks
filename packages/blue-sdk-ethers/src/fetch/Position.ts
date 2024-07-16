@@ -4,14 +4,14 @@ import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
   AccrualPosition,
+  Address,
   ChainId,
   ChainUtils,
-  getChainAddresses,
-  Address,
-  MarketId,
   Market,
   MarketConfig,
+  MarketId,
   Position,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import "./Market";

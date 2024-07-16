@@ -14,12 +14,12 @@ import {
   ChainId,
   ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
-  getChainAddresses,
   Holding,
   NATIVE_ADDRESS,
+  PERMIT2_ALLOWANCE_RECIPIENTS,
+  getChainAddresses,
   permissionedBackedTokens,
   permissionedWrapperTokens,
-  PERMIT2_ALLOWANCE_RECIPIENTS,
 } from "@morpho-org/blue-sdk";
 import { fromEntries } from "@morpho-org/morpho-ts";
 

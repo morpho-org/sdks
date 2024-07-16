@@ -1,8 +1,8 @@
 import {
-  Provider,
   Contract,
   ContractRunner,
   Interface,
+  Provider,
   decodeBytes32String,
   isHexString,
 } from "ethers";
@@ -12,6 +12,7 @@ import { ViewOverrides } from "ethers-types/dist/common";
 import { ERC20, ERC20Interface } from "ethers-types/dist/token/ERC20/ERC20";
 
 import {
+  Address,
   ChainId,
   ChainUtils,
   ConstantWrappedToken,
@@ -21,7 +22,6 @@ import {
   addresses,
   getChainAddresses,
   getUnwrappedToken,
-  Address,
 } from "@morpho-org/blue-sdk";
 
 export const isBytes32ERC20Metadata = (address: string, chainId: ChainId) => {

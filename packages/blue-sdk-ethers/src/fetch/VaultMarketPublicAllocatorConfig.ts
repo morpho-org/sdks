@@ -3,12 +3,12 @@ import { PublicAllocator__factory } from "ethers-types";
 import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
+  Address,
   ChainId,
   ChainUtils,
-  getChainAddresses,
-  Address,
   MarketId,
   VaultMarketPublicAllocatorConfig,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 export async function fetchVaultMarketPublicAllocatorConfig(
