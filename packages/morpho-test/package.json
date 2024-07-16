@@ -19,7 +19,7 @@
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",
     "@nomicfoundation/hardhat-ethers": "^3.0.4",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.9",
-    "chai": "^4.3.10",
+    "chai": "^5.1.1",
     "chai-as-promised": "^7.1.2",
     "chai-exclude": "^2.1.0",
     "ethers": "^6.12.1",
