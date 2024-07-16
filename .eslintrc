@@ -1,0 +1,25 @@
+{
+  // Root leverages the cascading feature of ESLint.
+  // Children can still overrides settings.
+  // https://eslint.org/docs/latest/user-guide/configuring/configuration-files#cascading-and-hierarchy
+  "root": true,
+
+  // Common config shared accross all children projects.
+  "parser": "@typescript-eslint/parser",
+  "extends": ["plugin:prettier/recommended"],
+  "plugins": ["@typescript-eslint", "unused-imports", "address"],
+  "rules": {
+    "no-console": "error",
+    "unused-imports/no-unused-imports": "error",
+    "no-unused-vars": [
+      "error",
+      {
+        "vars": "all",
+        "args": "after-used",
+        "ignoreRestSiblings": true
+      }
+    ],
+    "address/addr-type": ["error", "checksum"]
+  },
+  "ignorePatterns": ["out", ".next", "dist", "cache", "lib", "storybook-*"]
+}

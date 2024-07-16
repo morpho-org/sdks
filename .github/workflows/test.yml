@@ -1,0 +1,36 @@
+name: Build & test packages
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  jest:
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - "@morpho-org/morpho-ts"
+          - "@morpho-org/morpho-test"
+          - "@morpho-org/blue-sdk"
+          - "@morpho-org/blue-sdk-ethers"
+
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+
+      - uses: actions/setup-node@b39b52d1213e96004bfcb1c61a8a6fa8ab84f3e8 # v4.0.1
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - run: yarn install --immutable
+
+      - run: yarn workspace ${{ matrix.package }} build
+
+      - run: yarn workspace ${{ matrix.package }} test --passWithNoTests

@@ -1,0 +1,115 @@
+import { MarketConfig } from "../../market";
+
+export const MAINNET_MARKETS = {
+  eth_wstEth: new MarketConfig({
+    loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+    oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 94_5000000000000000n,
+  }),
+  eth_wstEth_2: new MarketConfig({
+    loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+    oracle: "0xbD60A6770b27E084E8617335ddE769241B0e71D8",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 94_5000000000000000n,
+  }),
+  eth_rEth: new MarketConfig({
+    loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+    collateralToken: "0xae78736Cd615f374D3085123A210448E74Fc6393",
+    oracle: "0x1b4A3F92e5Fffd1d35A98751c9FE4472483579bB",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 94_5000000000000000n,
+  }),
+  usdt_wbtc: new MarketConfig({
+    loanToken: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    oracle: "0x008bF4B1cDA0cc9f0e882E0697f036667652E1ef",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+  usdt_wstEth: new MarketConfig({
+    loanToken: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+    collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+    oracle: "0x95DB30fAb9A3754e42423000DF27732CB2396992",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+
+  usdc_wbtc: new MarketConfig({
+    // USDC(wBTC, 86%, Chainlink, AdaptiveCurve)
+    loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+    oracle: "0xDddd770BADd886dF3864029e4B377B5F6a2B6b83",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+  usdc_wstEth: new MarketConfig({
+    // USDC(wstETH, 86%, Chainlink, AdaptiveCurve)
+    loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+    oracle: "0x48F7E36EB6B826B2dF4B2E630B62Cd25e89E40e2",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+  usdc_sDai: new MarketConfig({
+    // USDC(wstETH, 86%, Chainlink, AdaptiveCurve)
+    loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    collateralToken: "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
+    oracle: "0x6CAFE228eC0B0bC2D076577d56D35Fe704318f6d",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 96_500000000000000000n,
+  }),
+  idle_usdc: new MarketConfig({
+    loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    collateralToken: "0x0000000000000000000000000000000000000000",
+    oracle: "0x0000000000000000000000000000000000000000",
+    irm: "0x0000000000000000000000000000000000000000",
+    lltv: 0n,
+  }),
+
+  crvUsd_stkcvxcrvUSDTWBTCWETH: new MarketConfig({
+    loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+    collateralToken: "0xb0Ce26C88e4e7DCa51968b6047f44646f5064278",
+    oracle: "0x077Af6c2D4A75D4145d141F9e9421864C3940CB3",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+  crvUsd_stkcvxcrvUSDCWBTCWETH: new MarketConfig({
+    loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+    collateralToken: "0x0ea1a65A2c255f24Ee8D81eA6AaC54Decd9d269e",
+    oracle: "0xd2F7C3B2fC97cC7b6AfDd76D163394680EFc35b9",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+  crvUsd_stkcvxcrvCRVUSDTBTCWSTETH: new MarketConfig({
+    loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+    collateralToken: "0x3ce8Ec9f3d89aD0A2DdbCC3FDB8991BD241Fc82E",
+    oracle: "0xa9f7900476F43C45Ebf56cEa669B9c960C176112",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+  crvUsd_stkcvxTryLSD: new MarketConfig({
+    loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+    collateralToken: "0x6BA072F0d22806F2C52e9792AF47f2D59103BEBE",
+    oracle: "0x18B0d7311a97c5377445C80c768ab5201Bb27B5a",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+  crvUsd_stkcvxcrvUSDETHCRV: new MarketConfig({
+    loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+    collateralToken: "0xAc904BAfBb5FB04Deb2b6198FdCEedE75a78Ce5a",
+    oracle: "0xad7e157815df05029125B568E39d5402550d60bb",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+
+  usda_re7Eth: new MarketConfig({
+    loanToken: "0x0000206329b97DB379d5E1Bf586BbDB969C63274",
+    collateralToken: "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0",
+    oracle: "0x76052A2A28fDCB8124f4686C63C68355b142de3B",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 86_0000000000000000n,
+  }),
+};
