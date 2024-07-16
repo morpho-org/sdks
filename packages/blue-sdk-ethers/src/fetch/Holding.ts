@@ -1,0 +1,123 @@
+import { MaxUint256, Provider } from "ethers";
+import {
+  BackedWhitelistControllerAggregatorV2__factory,
+  ERC20__factory,
+  ERC2612__factory,
+  PermissionedERC20Wrapper__factory,
+  Permit2__factory,
+  WrappedBackedToken__factory,
+} from "ethers-types";
+import { ViewOverrides } from "ethers-types/dist/common";
+
+import {
+  Address,
+  ChainId,
+  ChainUtils,
+  ERC20_ALLOWANCE_RECIPIENTS,
+  getChainAddresses,
+  Holding,
+  NATIVE_ADDRESS,
+  permissionedBackedTokens,
+  permissionedWrapperTokens,
+  PERMIT2_ALLOWANCE_RECIPIENTS,
+} from "@morpho-org/blue-sdk";
+import { fromEntries } from "@morpho-org/morpho-ts";
+
+export async function fetchHolding(
+  user: Address,
+  token: Address,
+  runner: { provider: Provider },
+  { chainId, overrides = {} }: { chainId?: ChainId; overrides?: ViewOverrides } = {}
+) {
+  chainId = ChainUtils.parseSupportedChainId(chainId ?? (await runner.provider.getNetwork()).chainId);
+
+  const chainAddresses = getChainAddresses(chainId);
+
+  if (token === NATIVE_ADDRESS)
+    return new Holding({
+      user,
+      token,
+      erc20Allowances: fromEntries(ERC20_ALLOWANCE_RECIPIENTS.map((label) => [label, MaxUint256])),
+      permit2Allowances: fromEntries(
+        PERMIT2_ALLOWANCE_RECIPIENTS.map((label) => [
+          label,
+          {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        ])
+      ),
+      balance: await runner.provider.getBalance(user, overrides.blockTag),
+    });
+
+  const erc20 = ERC20__factory.connect(token, runner);
+  const permit2 = Permit2__factory.connect(chainAddresses.permit2, runner);
+  const erc2612 = ERC2612__factory.connect(token, runner);
+
+  const [
+    balance,
+    erc20Allowances,
+    permit2Allowances,
+    erc2612Nonce,
+    whitelistControllerAggregator,
+    hasErc20WrapperPermission,
+  ] = await Promise.all([
+    erc20.balanceOf(user, overrides),
+    Promise.all(
+      ERC20_ALLOWANCE_RECIPIENTS.map(
+        async (label) => [label, await erc20.allowance(user, chainAddresses[label], overrides)] as const
+      )
+    ),
+    Promise.all(
+      PERMIT2_ALLOWANCE_RECIPIENTS.map(
+        async (label) =>
+          [
+            label,
+            await permit2
+              .allowance(user, token, chainAddresses[label], overrides)
+              .then(({ amount, nonce, expiration }) => ({
+                amount,
+                expiration,
+                nonce,
+              })),
+          ] as const
+      )
+    ),
+    erc2612.nonces(user, overrides).catch(() => undefined),
+    permissionedBackedTokens[chainId].has(token)
+      ? WrappedBackedToken__factory.connect(token, runner).whitelistControllerAggregator(overrides)
+      : undefined,
+    PermissionedERC20Wrapper__factory.connect(token, runner)
+      .hasPermission(user, overrides)
+      .catch(() => (permissionedWrapperTokens[chainId].has(token) ? false : undefined)),
+  ]);
+
+  const holding = new Holding({
+    user,
+    token,
+    erc20Allowances: fromEntries(erc20Allowances),
+    permit2Allowances: fromEntries(permit2Allowances),
+    erc2612Nonce,
+    balance,
+    canTransfer: hasErc20WrapperPermission ?? true,
+  });
+
+  if (whitelistControllerAggregator)
+    holding.canTransfer = await BackedWhitelistControllerAggregatorV2__factory.connect(
+      whitelistControllerAggregator,
+      runner
+    )
+      .isWhitelisted(user, overrides)
+      .catch(() => undefined);
+
+  return holding;
+}
+
+declare module "@morpho-org/blue-sdk" {
+  namespace Holding {
+    let fetch: typeof fetchHolding;
+  }
+}
+
+Holding.fetch = fetchHolding;

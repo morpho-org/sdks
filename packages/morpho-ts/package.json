@@ -1,0 +1,58 @@
+{
+  "name": "@morpho-org/morpho-ts",
+  "version": "1.0.4",
+  "author": "Morpho Association <contact@morpho.org>",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "prepublish": "yarn build",
+    "add:morpho-ts": "yarn add",
+    "build": "tsc --build tsconfig.build.json",
+    "build:morpho-ts": "yarn build",
+    "test": "jest",
+    "test:morpho-ts": "yarn test"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.14",
+    "@types/jest": "^29.5.12",
+    "chai": "^4.3.10",
+    "jest": "^29.6.2",
+    "rxjs": "^7.8.1",
+    "ts-jest": "^29.1.1",
+    "typescript": "^5.4.5"
+  },
+  "peerDependencies": {
+    "rxjs": "^7.8.1"
+  },
+  "peerDependenciesMeta": {
+    "rxjs": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "lib/index.js"
+  },
+  "jest": {
+    "verbose": true,
+    "testTimeout": 15000,
+    "maxWorkers": 1,
+    "transform": {
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.json"
+        }
+      ]
+    },
+    "testRegex": "(/src/.*|(\\.|/)(test|spec)+)\\.test\\.(jsx?|tsx?)$",
+    "moduleFileExtensions": [
+      "js",
+      "ts"
+    ],
+    "preset": "ts-jest"
+  }
+}

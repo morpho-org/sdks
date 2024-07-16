@@ -1,0 +1,10 @@
+#!/bin/sh
+. "$(dirname "$0")/_/husky.sh"
+
+STAGED_TS_FILES=$(git diff --staged --name-only --diff-filter=d | grep '\.tsx\?$' | xargs)
+
+if [ -n "$STAGED_TS_FILES" ]; then
+    # yarn eslint --fix $STAGED_TS_FILES
+    yarn prettier --write $STAGED_TS_FILES
+    git add $STAGED_TS_FILES
+fi

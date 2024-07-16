@@ -1,0 +1,92 @@
+# IDE
+.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# dependencies
+node_modules
+
+# testing
+coverage
+.nyc_output
+.mp4
+
+# production
+build
+dist
+packages/**/lib
+sdks/**/lib
+services/**/lib
+services/**/.esbuild
+services/**/.serverless
+
+# misc
+.DS_Store
+*.env*
+!*.env.example*
+!*.env.test
+*.pem
+stats-*.json
+**/disk-store
+
+
+# debug
+cache
+*.log*
+*.tsbuildinfo
+
+# yarn
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/sdks
+!.yarn/versions
+
+
+# auto generated files
+manifest.json
+!**/public/manifest.json
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Local
+local_*
+
+# Cypress
+**/cypress/videos
+**/cypress/screenshots
+
+# Local Netlify folder
+.netlify
+
+# next.js
+.next
+out
+
+
+
+# Ignore artifacts
+**/.next
+**/out
+**/deployments
+**/generated
+
+.json
+**/.yarn
+
+*.hbs
+artifacts
+typechain-types

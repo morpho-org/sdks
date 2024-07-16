@@ -1,0 +1,80 @@
+{
+  "name": "@morpho-org/morpho-test",
+  "version": "1.0.4",
+  "main": "src/index.ts",
+  "files": [
+    "lib"
+  ],
+  "author": "Morpho Association <contact@morpho.org>",
+  "license": "MIT",
+  "scripts": {
+    "prepublish": "yarn build",
+    "add:morpho-test": "yarn add",
+    "build": "tsc --build tsconfig.build.json",
+    "build:morpho-test": "yarn build",
+    "test": "jest",
+    "test:morpho-test": "yarn test"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",
+    "@nomicfoundation/hardhat-ethers": "^3.0.4",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.9",
+    "chai": "^4.3.10",
+    "chai-as-promised": "^7.1.2",
+    "chai-exclude": "^2.1.0",
+    "ethers": "^6.12.1",
+    "ethers-types": "^3.17.1",
+    "hardhat": "2.20.1",
+    "hardhat-deal": "^3.1.0",
+    "hardhat-tracer": "^3.0.1",
+    "jest": "^29.6.2",
+    "rxjs": "^7.8.1",
+    "sinon": "^18.0.0",
+    "sinon-chai": "^3.7.0"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.14",
+    "@types/chai-as-promised": "^7",
+    "@types/jest": "^29.5.12",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.12.8",
+    "@types/sinon": "^17.0.3",
+    "@types/sinon-chai": "^3.2.12",
+    "dotenv": "^16.3.1",
+    "mocha": "^10.4.0",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "peerDependencies": {
+    "rxjs": "^7.8.1"
+  },
+  "peerDependenciesMeta": {
+    "rxjs": {
+      "optional": true
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "lib/index.js"
+  },
+  "jest": {
+    "verbose": true,
+    "testTimeout": 15000,
+    "maxWorkers": 1,
+    "transform": {
+      "^.+\\.tsx?$": [
+        "ts-jest",
+        {
+          "tsconfig": "tsconfig.json"
+        }
+      ]
+    },
+    "testRegex": "(/src/.*|(\\.|/)(test|spec)+)\\.test\\.(jsx?|tsx?)$",
+    "moduleFileExtensions": [
+      "js",
+      "ts"
+    ],
+    "preset": "ts-jest"
+  }
+}
