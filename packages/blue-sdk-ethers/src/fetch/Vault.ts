@@ -7,12 +7,12 @@ import {
   Address,
   ChainId,
   ChainUtils,
-  getChainAddresses,
   MarketId,
   Vault,
   VaultConfig,
   VaultMarketAllocation,
   VaultPublicAllocatorConfig,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import "./VaultConfig";

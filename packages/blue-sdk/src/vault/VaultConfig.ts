@@ -1,5 +1,5 @@
 import { ChainId } from "../chain";
-import { UnknownVaultConfigError, _try } from "../errors";
+import { UnknownVaultConfigError } from "../errors";
 import { Address } from "../types";
 
 interface InputVaultConfig {

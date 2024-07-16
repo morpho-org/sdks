@@ -3,9 +3,9 @@ import { MetaMorpho__factory } from "ethers-types";
 import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
+  Address,
   ChainId,
   ChainUtils,
-  Address,
   MarketId,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,

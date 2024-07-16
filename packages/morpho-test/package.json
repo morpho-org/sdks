@@ -2,9 +2,7 @@
   "name": "@morpho-org/morpho-test",
   "version": "1.0.6",
   "main": "src/index.ts",
-  "files": [
-    "lib"
-  ],
+  "files": ["lib"],
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "scripts": {
@@ -55,10 +53,7 @@
       ]
     },
     "testRegex": "(/src/.*|(\\.|/)(test|spec)+)\\.test\\.(jsx?|tsx?)$",
-    "moduleFileExtensions": [
-      "js",
-      "ts"
-    ],
+    "moduleFileExtensions": ["js", "ts"],
     "preset": "ts-jest"
   }
 }

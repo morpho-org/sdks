@@ -53,7 +53,7 @@ export const getEffectiveLocale = () => {
         navigator?.language || document?.documentElement?.lang || "en-US";
       new Intl.NumberFormat(locale);
       return locale;
-    } catch (e) {
+    } catch {
       return "en-US";
     }
   }

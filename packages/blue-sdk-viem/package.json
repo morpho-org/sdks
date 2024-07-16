@@ -1,6 +1,6 @@
 {
-  "name": "@morpho-org/blue-sdk-ethers",
-  "version": "1.0.5",
+  "name": "@morpho-org/blue-sdk-viem",
+  "version": "1.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
@@ -13,10 +13,7 @@
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:*",
     "@morpho-org/morpho-ts": "workspace:*",
-    "ethers": "^6.12.1",
-    "ethers-multicall-provider": "^6.3.0",
-    "ethers-types": "^3.17.1",
-    "rxjs": "^7.8.1"
+    "viem": "^2.17.4"
   },
   "devDependencies": {
     "@morpho-org/morpho-test": "workspace:*",

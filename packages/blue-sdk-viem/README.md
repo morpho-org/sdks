@@ -1,18 +1,18 @@
-# @morpho-org/blue-sdk-ethers
+# @morpho-org/blue-sdk-viem
 
 [![npm package][npm-img]][npm-url]
 [![Downloads][downloads-img]][downloads-url]
 
-Ethers-based SDK to augment [`@morpho-org/blue-sdk`](../blue-sdk/) with fetchers using a Ethers Provider.
+Viem-based SDK to augment [`@morpho-org/blue-sdk`](../blue-sdk/) with fetchers using a viem client.
 
 ## Install
 
 ```bash
-npm install @morpho-org/blue-sdk-ethers
+npm install @morpho-org/blue-sdk-viem
 ```
 
 ```bash
-yarn add @morpho-org/blue-sdk-ethers
+yarn add @morpho-org/blue-sdk-viem
 ```
 
 ---
@@ -21,24 +21,24 @@ yarn add @morpho-org/blue-sdk-ethers
 
 ### Augment blue-sdk entity classes with fetchers
 
-Opt in classes augmentation to easily fetch an entire entity of the Morpho Blue & MetaMorpho ecosystem using ethers:
+Opt in classes augmentation to easily fetch an entire entity of the Morpho Blue & MetaMorpho ecosystem using viem:
 
 ```typescript
 // Granular, opt-in, per-entity class augmentation:
-import "@morpho-org/blue-sdk-ethers/lib/fetch/AccrualPosition";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/Holding";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/Market";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/MarketConfig";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/Position";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/Token";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/Vault";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/VaultConfig";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/VaultMarketAllocation";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/VaultMarketConfig";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/VaultMarketPublicAllocatorConfig";
+import "@morpho-org/blue-sdk-viem/lib/fetch/AccrualPosition";
+import "@morpho-org/blue-sdk-viem/lib/fetch/Holding";
+import "@morpho-org/blue-sdk-viem/lib/fetch/Market";
+import "@morpho-org/blue-sdk-viem/lib/fetch/MarketConfig";
+import "@morpho-org/blue-sdk-viem/lib/fetch/Position";
+import "@morpho-org/blue-sdk-viem/lib/fetch/Token";
+import "@morpho-org/blue-sdk-viem/lib/fetch/Vault";
+import "@morpho-org/blue-sdk-viem/lib/fetch/VaultConfig";
+import "@morpho-org/blue-sdk-viem/lib/fetch/VaultMarketAllocation";
+import "@morpho-org/blue-sdk-viem/lib/fetch/VaultMarketConfig";
+import "@morpho-org/blue-sdk-viem/lib/fetch/VaultMarketPublicAllocatorConfig";
 
 // Or full, opt-in class augmentation:
-import "@morpho-org/blue-sdk-ethers/lib/fetch";
+import "@morpho-org/blue-sdk-viem/lib/fetch";
 ```
 
 ### Fetch the config of a specific market
@@ -46,12 +46,12 @@ import "@morpho-org/blue-sdk-ethers/lib/fetch";
 Leverage the [`MarketConfig`](./src/market/MarketConfig.ts) class to fetch information on a given market's immutable configuration:
 
 ```typescript
-import { MarketId, MarketConfig } from "@morpho-org/blue-sdk";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/MarketConfig";
+import { MarketConfig } from "@morpho-org/blue-sdk";
+import "@morpho-org/blue-sdk-viem/lib/fetch/MarketConfig";
 
 const config = await MarketConfig.fetch(
-  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
-  provider // Ethers provider.
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+  provider // viem provider.
 );
 
 config.collateralToken; // e.g. 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0.
@@ -63,18 +63,18 @@ Leverage the [`Market`](./src/market/Market.ts) class to fetch information on a 
 
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
-import { MarketId, Market } from "@morpho-org/blue-sdk";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/Market";
+import { Market } from "@morpho-org/blue-sdk";
+import "@morpho-org/blue-sdk-viem/lib/fetch/Market";
 
 const market = await Market.fetch(
-  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
-  provider // Ethers provider.
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+  provider // viem provider.
 );
 
 // Or from a config, to fetch faster (skips fetching the config):
 // const market = Market.fetchFromConfig(
 //   config,
-//   provider // Ethers provider.
+//   provider // viem provider.
 // );
 
 market.utilization; // e.g. 92% (scaled by WAD).
@@ -92,20 +92,20 @@ Leverage the [`Position`](./src/position/Position.ts) class to fetch the positio
 
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
-import { MarketId, AccrualPosition } from "@morpho-org/blue-sdk";
-import "@morpho-org/blue-sdk-ethers/lib/fetch/Position";
+import { AccrualPosition } from "@morpho-org/blue-sdk";
+import "@morpho-org/blue-sdk-viem/lib/fetch/Position";
 
 const position = await AccrualPosition.fetch(
   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",
-  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
-  provider // Ethers provider.
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+  provider // viem provider.
 );
 
 // Or from a config, to fetch faster:
 // const position = AccrualPosition.fetchFromConfig(
 //   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",
 //   config,
-//   provider // Ethers provider.
+//   provider // viem provider.
 // );
 
 position.borrowAssets; // e.g. 23_000000n (in loan assets).
@@ -117,7 +117,7 @@ const accruedPosition = position.accrueInterest(Time.timestamp()); // Accrue int
 position.borrowAssets; // e.g. 23_500000n (in loan assets).
 ```
 
-[downloads-img]: https://img.shields.io/npm/dt/@morpho-org/blue-sdk-ethers
-[downloads-url]: https://www.npmtrends.com/@morpho-org/blue-sdk-ethers
-[npm-img]: https://img.shields.io/npm/v/@morpho-org/blue-sdk-ethers
-[npm-url]: https://www.npmjs.com/package/@morpho-org/blue-sdk-ethers
+[downloads-img]: https://img.shields.io/npm/dt/@morpho-org/blue-sdk-viem
+[downloads-url]: https://www.npmtrends.com/@morpho-org/blue-sdk-viem
+[npm-img]: https://img.shields.io/npm/v/@morpho-org/blue-sdk-viem
+[npm-url]: https://www.npmjs.com/package/@morpho-org/blue-sdk-viem

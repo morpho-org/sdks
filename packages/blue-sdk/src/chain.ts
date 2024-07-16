@@ -1,5 +1,3 @@
-import { values } from "@morpho-org/morpho-ts";
-
 import { UnsupportedChainIdError } from "./errors";
 
 export enum ChainId {
