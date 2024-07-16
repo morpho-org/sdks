@@ -51,7 +51,7 @@ import "@morpho-org/blue-sdk-viem/lib/fetch/MarketConfig";
 
 const config = await MarketConfig.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-  provider // viem provider.
+  client // viem client.
 );
 
 config.collateralToken; // e.g. 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0.
@@ -68,13 +68,13 @@ import "@morpho-org/blue-sdk-viem/lib/fetch/Market";
 
 const market = await Market.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-  provider // viem provider.
+  client // viem client.
 );
 
 // Or from a config, to fetch faster (skips fetching the config):
 // const market = Market.fetchFromConfig(
 //   config,
-//   provider // viem provider.
+//   client // viem client.
 // );
 
 market.utilization; // e.g. 92% (scaled by WAD).
@@ -98,14 +98,14 @@ import "@morpho-org/blue-sdk-viem/lib/fetch/Position";
 const position = await AccrualPosition.fetch(
   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-  provider // viem provider.
+  client // viem client.
 );
 
 // Or from a config, to fetch faster:
 // const position = AccrualPosition.fetchFromConfig(
 //   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",
 //   config,
-//   provider // viem provider.
+//   client // viem client.
 // );
 
 position.borrowAssets; // e.g. 23_000000n (in loan assets).
