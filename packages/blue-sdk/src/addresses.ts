@@ -96,6 +96,7 @@ export const addresses = {
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
     aaveV3Bundler: "0xcAe2929baBc60Be34818EaA5F40bF69265677108",
+    compoundV3Bundler: "0x1f8076e2EB6f10b12e6886f30D4909A91969F7dA",
 
     /* Tokens */
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
