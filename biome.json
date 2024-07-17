@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
   "files": {
-    "ignore": ["out", "lib", "dist", ".pnp.*", ".vscode"]
+    "ignore": ["out", "lib", "dist", ".pnp.*", ".vscode", "package.json"]
   },
   "formatter": {
     "enabled": true,
