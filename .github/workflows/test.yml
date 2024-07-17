@@ -16,15 +16,15 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - name: "@morpho-org/morpho-ts"
+          - name: morpho-ts
             jest: true
-          - name: "@morpho-org/morpho-test"
-          - name: "@morpho-org/blue-sdk"
+          - name: morpho-test
+          - name: blue-sdk
             jest: true
-          - name: "@morpho-org/blue-sdk-ethers"
+          - name: blue-sdk-ethers
             jest: true
             hardhat: true
-          - name: "@morpho-org/blue-sdk-viem"
+          - name: blue-sdk-viem
             hardhat: true
 
     uses: ./.github/workflows/package.yml

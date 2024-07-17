@@ -23,7 +23,6 @@ jobs:
 
       - name: ${{ inputs.name }} build
         run: yarn workspace @morpho-org/${{ inputs.name }} build
-        shell: bash
 
   jest:
     runs-on: ubuntu-latest
@@ -38,7 +37,6 @@ jobs:
           cache: yarn
 
       - run: yarn workspace @morpho-org/${{ inputs.name }} jest --passWithNoTests
-        shell: bash
 
   hardhat:
     runs-on: ubuntu-latest
@@ -58,6 +56,5 @@ jobs:
           key: hardhat-${{ inputs.name }}-${{ github.ref_name }}
 
       - run: yarn workspace @morpho-org/${{ inputs.name }} hardhat test --bail
-        shell: bash
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
