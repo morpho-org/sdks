@@ -7,11 +7,11 @@ on:
   pull_request:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
 
 jobs:
-  jest:
+  packages:
     strategy:
       fail-fast: false
       matrix:
@@ -32,3 +32,4 @@ jobs:
       name: ${{ matrix.package.name }}
       jest: ${{ matrix.package.jest }}
       hardhat: ${{ matrix.package.hardhat }}
+    secrets: inherit

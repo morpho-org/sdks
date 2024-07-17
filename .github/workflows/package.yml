@@ -1,3 +1,5 @@
+name: Package CI
+
 on:
   workflow_call:
     inputs:
@@ -21,8 +23,8 @@ jobs:
           node-version-file: .nvmrc
           cache: yarn
 
-      - name: ${{ inputs.name }} build
-        run: yarn workspace @morpho-org/${{ inputs.name }} build
+      - run: yarn install --immutable
+      - run: yarn workspace @morpho-org/${{ inputs.name }} build
 
   jest:
     runs-on: ubuntu-latest
@@ -36,6 +38,7 @@ jobs:
           node-version-file: .nvmrc
           cache: yarn
 
+      - run: yarn install --immutable
       - run: yarn workspace @morpho-org/${{ inputs.name }} jest --passWithNoTests
 
   hardhat:
@@ -55,6 +58,7 @@ jobs:
           path: packages/${{ inputs.name }}/cache
           key: hardhat-${{ inputs.name }}-${{ github.ref_name }}
 
+      - run: yarn install --immutable
       - run: yarn workspace @morpho-org/${{ inputs.name }} hardhat test --bail
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
