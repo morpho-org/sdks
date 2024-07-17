@@ -1,7 +1,18 @@
 import { expect } from "chai";
-import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import { viem } from "hardhat";
+import {
+  Account,
+  Chain,
+  Client,
+  PublicActions,
+  TestActions,
+  Transport,
+  WalletActions,
+  WalletRpcSchema,
+  publicActions,
+  testActions,
+} from "viem";
 
 import {
   ChainId,
@@ -13,10 +24,20 @@ import { setUp } from "@morpho-org/morpho-test";
 import "../src/augment/Token";
 
 describe("augment/Token", () => {
-  let signer: SignerWithAddress;
+  let client: Client<
+    Transport,
+    Chain,
+    Account,
+    WalletRpcSchema,
+    WalletActions<Chain, Account> &
+      PublicActions<Transport, Chain, Account> &
+      TestActions
+  >;
 
   setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
+    client = (await viem.getWalletClients())[0]!
+      .extend(publicActions)
+      .extend(testActions({ mode: "hardhat" }));
   });
 
   it("should fetch token data", async () => {
@@ -27,7 +48,7 @@ describe("augment/Token", () => {
       name: "USD Coin",
     });
 
-    const value = await Token.fetch(addresses[ChainId.EthMainnet].usdc, signer);
+    const value = await Token.fetch(addresses[ChainId.EthMainnet].usdc, client);
 
     expect(value).to.eql(expectedData);
   });
@@ -46,7 +67,7 @@ describe("augment/Token", () => {
 
     const value = await Token.fetch(
       addresses[ChainId.EthMainnet].wstEth,
-      signer,
+      client,
     );
 
     expect(value).to.eql(expectedData);
@@ -60,7 +81,7 @@ describe("augment/Token", () => {
       name: "Maker",
     });
 
-    const value = await Token.fetch(addresses[ChainId.EthMainnet].mkr, signer);
+    const value = await Token.fetch(addresses[ChainId.EthMainnet].mkr, client);
 
     expect(value).to.eql(expectedData);
   });

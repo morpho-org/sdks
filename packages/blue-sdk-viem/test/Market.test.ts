@@ -1,27 +1,53 @@
-import { expect } from "chai";
-import { Wallet, parseUnits, toBigInt } from "ethers";
-import { MorphoBlue__factory } from "ethers-types";
-import { ethers } from "hardhat";
-
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   setBalance,
   setCode,
   time,
 } from "@nomicfoundation/hardhat-network-helpers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
+import { expect } from "chai";
+import { viem } from "hardhat";
+import {
+  Account,
+  Address,
+  Chain,
+  Client,
+  PublicActions,
+  TestActions,
+  Transport,
+  WalletActions,
+  WalletRpcSchema,
+  publicActions,
+  testActions,
+} from "viem";
 
-import { ChainId, Market, MarketConfig, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  Market,
+  MarketConfig,
+  MathLib,
+  addresses,
+} from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
-import { setUp } from "@morpho-org/morpho-test";
+import { createRandomAddress, setUp } from "@morpho-org/morpho-test";
 
 import "../src/augment/Market";
+import { blueAbi } from "../src/abis";
 
 describe("augment/Market", () => {
-  let signer: SignerWithAddress;
+  let client: Client<
+    Transport,
+    Chain,
+    Account,
+    WalletRpcSchema,
+    WalletActions<Chain, Account> &
+      PublicActions<Transport, Chain, Account> &
+      TestActions
+  >;
 
   setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
+    client = (await viem.getWalletClients())[0]!
+      .extend(publicActions)
+      .extend(testActions({ mode: "hardhat" }));
   });
 
   it("should fetch market data", async () => {
@@ -37,7 +63,7 @@ describe("augment/Market", () => {
       price: 4026279734253409453160432114n,
     };
 
-    const value = await Market.fetch(MAINNET_MARKETS.usdc_wstEth.id, signer);
+    const value = await Market.fetch(MAINNET_MARKETS.usdc_wstEth.id, client);
 
     expect(value).to.eql(expectedData);
   });
@@ -57,7 +83,7 @@ describe("augment/Market", () => {
 
     const value = await Market.fetchFromConfig(
       MAINNET_MARKETS.usdc_wstEth,
-      signer,
+      client,
     );
 
     expect(value).to.eql(expectedData);
@@ -76,33 +102,46 @@ describe("augment/Market", () => {
       rateAtTarget: undefined,
     };
 
-    const value = await Market.fetch(MAINNET_MARKETS.idle_usdc.id, signer);
+    const value = await Market.fetch(MAINNET_MARKETS.idle_usdc.id, client);
 
     expect(value).to.eql(expectedData);
   });
 
   it("should not fetch rate at target for unknown irm", async () => {
-    const morpho = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
-      signer,
+    const owner = await viem.getWalletClient(
+      await client.readContract({
+        address: addresses[ChainId.EthMainnet].morpho,
+        abi: blueAbi,
+        functionName: "owner",
+      }),
     );
-    const owner = await ethers.getSigner(await morpho.owner());
-    await setBalance(owner.address, parseUnits("1"));
-    await ethers.getImpersonatedSigner(owner.address);
+    await setBalance(owner.account.address, MathLib.WAD);
 
     const config = new MarketConfig({
       ...MAINNET_MARKETS.eth_wstEth,
-      irm: Wallet.createRandom().address,
+      irm: createRandomAddress(),
     });
     await setCode(
       config.irm,
-      await ethers.provider.getCode(MAINNET_MARKETS.eth_wstEth.irm),
+      (await client.getCode({
+        address: MAINNET_MARKETS.eth_wstEth.irm as Address,
+      }))!,
     );
-    await morpho.connect(owner).enableIrm(config.irm);
+    await owner.writeContract({
+      address: addresses[ChainId.EthMainnet].morpho,
+      abi: blueAbi,
+      functionName: "enableIrm",
+      args: [config.irm as Address],
+    });
 
-    const timestamp = toBigInt(await time.latest());
+    const timestamp = await time.latest();
     await setNextBlockTimestamp(timestamp);
-    await morpho.createMarket(config);
+    await client.writeContract({
+      address: addresses[ChainId.EthMainnet].morpho,
+      abi: blueAbi,
+      functionName: "createMarket",
+      args: [config.asViem()],
+    });
 
     const expectedData = {
       config,
@@ -116,7 +155,7 @@ describe("augment/Market", () => {
       rateAtTarget: undefined,
     };
 
-    const value = await Market.fetch(config.id, signer);
+    const value = await Market.fetch(config.id, client);
 
     expect(value).to.eql(expectedData);
   });

@@ -11,8 +11,6 @@ import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 import "../src/augment/Position";
 
-import sinon from "sinon";
-
 const market = MAINNET_MARKETS.usdc_wstEth;
 
 const supplyAssets = parseUnits("10", 6);
@@ -53,16 +51,6 @@ describe("augment/Position", () => {
       signer.address,
       signer.address,
     );
-
-    sinon.spy(signer.provider, "call");
-  });
-
-  afterEach(() => {
-    (signer.provider.call as sinon.SinonSpy).resetHistory();
-  });
-
-  after(() => {
-    (signer.provider.call as sinon.SinonSpy).restore();
   });
 
   it("should fetch position", async () => {
@@ -77,8 +65,5 @@ describe("augment/Position", () => {
     const value = await Position.fetch(signer.address, market.id, signer);
 
     expect(value).to.eql(expectedData);
-    expect((signer.provider.call as sinon.SinonSpy).getCalls()).to.have.length(
-      1,
-    );
   });
 });

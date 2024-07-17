@@ -21,18 +21,13 @@ import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAlloca
 
 export async function fetchVaultMarketConfig<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  rpcSchema extends RpcSchema | undefined,
 >(
   vault: Address,
   marketId: MarketId,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(

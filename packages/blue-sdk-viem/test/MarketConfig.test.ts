@@ -1,8 +1,19 @@
 import { expect } from "chai";
 import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import { viem } from "hardhat";
+import {
+  Account,
+  Chain,
+  Client,
+  PublicActions,
+  TestActions,
+  Transport,
+  WalletActions,
+  WalletRpcSchema,
+  publicActions,
+  testActions,
+} from "viem";
 
 import {
   ChainId,
@@ -16,16 +27,26 @@ import { setUp } from "@morpho-org/morpho-test";
 import "../src/augment/MarketConfig";
 
 describe("augment/MarketConfig", () => {
-  let signer: SignerWithAddress;
+  let client: Client<
+    Transport,
+    Chain,
+    Account,
+    WalletRpcSchema,
+    WalletActions<Chain, Account> &
+      PublicActions<Transport, Chain, Account> &
+      TestActions
+  >;
 
   setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
+    client = (await viem.getWalletClients())[0]!
+      .extend(publicActions)
+      .extend(testActions({ mode: "hardhat" }));
   });
 
   it("should fetch config from cache", async () => {
     const market = await MarketConfig.fetch(
       MAINNET_MARKETS.usdc_wstEth.id,
-      signer,
+      client,
     );
 
     expect(market).to.eql(MAINNET_MARKETS.usdc_wstEth);
@@ -42,7 +63,7 @@ describe("augment/MarketConfig", () => {
 
     const market = await MarketConfig.fetch(
       "0x58e212060645d18eab6d9b2af3d56fbc906a92ff5667385f616f662c70372284" as MarketId,
-      signer,
+      client,
     );
 
     expect(market).to.eql(marketParams);

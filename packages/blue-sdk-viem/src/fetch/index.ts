@@ -3,6 +3,7 @@ export * from "./Position";
 export * from "./MarketConfig";
 export * from "./Market";
 export * from "./Token";
+export * from "./User";
 export * from "./VaultConfig";
 export * from "./Vault";
 export * from "./VaultMarketConfig";

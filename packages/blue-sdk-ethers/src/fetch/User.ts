@@ -1,6 +1,5 @@
 import { Provider } from "ethers";
 import { ViewOverrides } from "ethers-types/dist/common";
-import {} from "ethers-types/dist/token/ERC20/ERC20";
 
 import {
   Address,

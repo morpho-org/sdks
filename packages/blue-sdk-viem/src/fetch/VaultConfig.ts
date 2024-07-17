@@ -19,17 +19,12 @@ import { metaMorphoAbi } from "../abis";
 
 export async function fetchVaultConfig<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  rpcSchema extends RpcSchema | undefined,
 >(
   address: Address,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
   { chainId }: { chainId?: ChainId } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(

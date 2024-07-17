@@ -14,7 +14,6 @@ import {
   Account,
   Address,
   Chain,
-  ParseAccount,
   PublicClient,
   RpcSchema,
   Transport,
@@ -32,19 +31,13 @@ import { ViewOverrides } from "../types";
 
 export async function fetchHolding<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  rpcSchema extends RpcSchema | undefined,
 >(
   user: Address,
-
   token: Address,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, account, rpcSchema>,
   {
     chainId,
     overrides = {},

@@ -24,17 +24,12 @@ import { fetchMarketConfig } from "./MarketConfig";
 
 export async function fetchMarket<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  rpcSchema extends RpcSchema | undefined,
 >(
   id: MarketId,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
   {
     chainId,
     overrides = {},
@@ -51,17 +46,12 @@ export async function fetchMarket<
 
 export async function fetchMarketFromConfig<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  rpcSchema extends RpcSchema | undefined,
 >(
   config: MarketConfig,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
   {
     chainId,
     overrides = {},
@@ -77,8 +67,8 @@ export async function fetchMarketFromConfig<
     [
       totalSupplyAssets,
       totalSupplyShares,
-      totalBorrowShares,
       totalBorrowAssets,
+      totalBorrowShares,
       lastUpdate,
       fee,
     ],
@@ -103,7 +93,7 @@ export async function fetchMarketFromConfig<
     config.irm === adaptiveCurveIrm
       ? await client.readContract({
           ...overrides,
-          address: morpho as Address,
+          address: adaptiveCurveIrm as Address,
           abi: adaptiveCurveIrmAbi,
           functionName: "rateAtTarget",
           args: [config.id],

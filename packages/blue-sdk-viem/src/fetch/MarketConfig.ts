@@ -20,17 +20,12 @@ import { blueAbi } from "../abis";
 
 export async function fetchMarketConfig<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  rpcSchema extends RpcSchema | undefined,
 >(
   id: MarketId,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
   { chainId }: { chainId?: ChainId } = {},
 ) {
   let config = _try(() => MarketConfig.get(id), UnknownMarketConfigError);

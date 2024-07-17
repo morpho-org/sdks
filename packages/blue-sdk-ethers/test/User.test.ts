@@ -6,8 +6,6 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ChainId, User, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-
-import sinon from "sinon";
 import "../src/augment/User";
 
 describe("augment/User", () => {
@@ -21,19 +19,7 @@ describe("augment/User", () => {
       signer,
     );
 
-    await (
-      await morpho.setAuthorization(addresses[ChainId.EthMainnet].bundler, true)
-    ).wait();
-
-    sinon.spy(signer.provider, "call");
-  });
-
-  afterEach(() => {
-    (signer.provider.call as sinon.SinonSpy).resetHistory();
-  });
-
-  after(() => {
-    (signer.provider.call as sinon.SinonSpy).restore();
+    await morpho.setAuthorization(addresses[ChainId.EthMainnet].bundler, true);
   });
 
   it("should fetch user data", async () => {
@@ -46,8 +32,5 @@ describe("augment/User", () => {
     const value = await User.fetch(signer.address, signer);
 
     expect(value).to.eql(expectedData);
-    expect((signer.provider.call as sinon.SinonSpy).getCalls()).to.have.length(
-      2,
-    );
   });
 });

@@ -59,12 +59,16 @@ export const resetAfterEach = (forking?: {
 };
 
 export const setUp = (onBefore?: (block: Block) => void) => {
-  const { ethers } = require("hardhat") as HardhatRuntimeEnvironment;
+  const { network } = require("hardhat") as HardhatRuntimeEnvironment;
 
   let snapshot: SnapshotRestorer;
 
   before(async () => {
-    const block = await ethers.provider.getBlock("latest", false);
+    const blockNumber = await network.provider.send("eth_blockNumber");
+    const block = await network.provider.send("eth_getBlockByNumber", [
+      blockNumber,
+      false,
+    ]);
 
     await onBefore?.(block!);
 

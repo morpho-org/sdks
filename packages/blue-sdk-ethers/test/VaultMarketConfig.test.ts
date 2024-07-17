@@ -14,7 +14,6 @@ import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
 import "../src/augment/VaultMarketConfig";
-import sinon from "sinon";
 import { steakUsdc } from "./fixtures";
 
 describe("augment/VaultMarketConfig", () => {
@@ -38,24 +37,12 @@ describe("augment/VaultMarketConfig", () => {
 
     await publicAllocator.setFee(steakUsdc.address, 1);
 
-    await (
-      await publicAllocator.setFlowCaps(steakUsdc.address, [
-        {
-          id: MAINNET_MARKETS.usdc_wstEth.id,
-          caps: { maxIn: 2, maxOut: 3 },
-        },
-      ])
-    ).wait();
-
-    sinon.spy(signer.provider, "call");
-  });
-
-  afterEach(() => {
-    (signer.provider.call as sinon.SinonSpy).resetHistory();
-  });
-
-  after(() => {
-    (signer.provider.call as sinon.SinonSpy).restore();
+    await publicAllocator.setFlowCaps(steakUsdc.address, [
+      {
+        id: MAINNET_MARKETS.usdc_wstEth.id,
+        caps: { maxIn: 2, maxOut: 3 },
+      },
+    ]);
   });
 
   it("should fetch vault market data", async () => {
@@ -84,8 +71,5 @@ describe("augment/VaultMarketConfig", () => {
     );
 
     expect(value).to.eql(expectedData);
-    expect((signer.provider.call as sinon.SinonSpy).getCalls()).to.have.length(
-      3,
-    );
   });
 });

@@ -24,18 +24,13 @@ import { fetchMarket, fetchMarketFromConfig } from "./Market";
 
 export async function fetchPosition<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  rpcSchema extends RpcSchema | undefined,
 >(
   user: Address,
   marketId: MarketId,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
   {
     chainId,
     overrides = {},
@@ -66,18 +61,13 @@ export async function fetchPosition<
 
 export async function fetchAccrualPosition<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
   rpcSchema extends RpcSchema | undefined = undefined,
 >(
   user: Address,
   marketId: MarketId,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
@@ -94,18 +84,13 @@ export async function fetchAccrualPosition<
 
 export async function fetchAccrualPositionFromConfig<
   transport extends Transport,
-  chain extends Chain | undefined = undefined,
-  accountOrAddress extends Account | Address | undefined = undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
+  chain extends Chain | undefined,
+  account extends Account | undefined,
+  rpcSchema extends RpcSchema | undefined,
 >(
   user: Address,
   config: MarketConfig,
-  client: PublicClient<
-    transport,
-    chain,
-    ParseAccount<accountOrAddress>,
-    rpcSchema
-  >,
+  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(

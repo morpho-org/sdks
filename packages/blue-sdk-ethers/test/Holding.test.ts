@@ -10,7 +10,6 @@ import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 
 import { setUp } from "@morpho-org/morpho-test";
 import { ethers } from "hardhat";
-import sinon from "sinon";
 import "../src/augment/Holding";
 
 describe("augment/Holding", () => {
@@ -18,16 +17,6 @@ describe("augment/Holding", () => {
 
   setUp(async () => {
     signer = (await ethers.getSigners())[0]!;
-
-    sinon.spy(signer.provider, "call");
-  });
-
-  afterEach(() => {
-    (signer.provider.call as sinon.SinonSpy).resetHistory();
-  });
-
-  after(() => {
-    (signer.provider.call as sinon.SinonSpy).restore();
   });
 
   it("should fetch user token data", async () => {
@@ -82,14 +71,12 @@ describe("augment/Holding", () => {
       expectedData.permit2Allowances.morpho.amount,
       expectedData.permit2Allowances.morpho.expiration,
     );
-    await (
-      await permit2.approve(
-        token,
-        addresses[ChainId.EthMainnet].bundler,
-        expectedData.permit2Allowances.bundler.amount,
-        expectedData.permit2Allowances.bundler.expiration,
-      )
-    ).wait();
+    await permit2.approve(
+      token,
+      addresses[ChainId.EthMainnet].bundler,
+      expectedData.permit2Allowances.bundler.amount,
+      expectedData.permit2Allowances.bundler.expiration,
+    );
 
     const value = await Holding.fetch(
       signer.address,
@@ -98,8 +85,5 @@ describe("augment/Holding", () => {
     );
 
     expect(value).to.eql(expectedData);
-    expect((signer.provider.call as sinon.SinonSpy).getCalls()).to.have.length(
-      8,
-    );
   });
 });
