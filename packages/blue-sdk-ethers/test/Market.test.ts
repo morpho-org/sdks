@@ -51,7 +51,7 @@ describe("augment/Market", () => {
     const value = await Market.fetch(MAINNET_MARKETS.usdc_wstEth.id, signer);
 
     expect(value).to.eql(expectedData);
-    expect((signer.provider.call as SinonSpy).getCalls()).to.have.length(4);
+    expect((signer.provider.call as SinonSpy).getCalls()).to.have.length(3);
   });
 
   it("should fetch market data from config", async () => {
@@ -92,7 +92,7 @@ describe("augment/Market", () => {
     const value = await Market.fetch(MAINNET_MARKETS.idle_usdc.id, signer);
 
     expect(value).to.eql(expectedData);
-    expect((signer.provider.call as SinonSpy).getCalls()).to.have.length(2);
+    expect((signer.provider.call as SinonSpy).getCalls()).to.have.length(1);
   });
 
   it("should not fetch rate at target for unknown irm", async () => {
