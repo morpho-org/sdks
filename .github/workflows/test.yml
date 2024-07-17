@@ -19,6 +19,7 @@ jobs:
           - "@morpho-org/morpho-test"
           - "@morpho-org/blue-sdk"
           - "@morpho-org/blue-sdk-ethers"
+          - "@morpho-org/blue-sdk-viem"
 
     runs-on: ubuntu-latest
     steps:
@@ -33,4 +34,4 @@ jobs:
 
       - run: yarn workspace ${{ matrix.package }} build
 
-      - run: yarn workspace ${{ matrix.package }} test --passWithNoTests
+      - run: yarn workspace ${{ matrix.package }} test --bail

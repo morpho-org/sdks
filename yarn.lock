@@ -1265,13 +1265,24 @@ __metadata:
     "@morpho-org/blue-sdk": "workspace:*"
     "@morpho-org/morpho-test": "workspace:*"
     "@morpho-org/morpho-ts": "workspace:*"
-    "@types/jest": "npm:^29.5.12"
+    "@nomicfoundation/hardhat-ethers": "npm:^3.0.6"
+    "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.11"
+    "@types/chai": "npm:^4.3.14"
+    "@types/mocha": "npm:^10.0.6"
+    "@types/node": "npm:^20.12.8"
+    "@types/sinon": "npm:^17.0.3"
+    "@types/sinon-chai": "npm:^3.2.12"
+    chai: "npm:^4.3.10"
+    dotenv: "npm:^16.4.5"
     ethers: "npm:^6.12.1"
     ethers-multicall-provider: "npm:^6.3.0"
     ethers-types: "npm:^3.17.1"
-    jest: "npm:^29.7.0"
+    hardhat: "npm:^2.22.6"
+    hardhat-deal: "npm:^3.1.0"
+    mocha: "npm:^10.4.0"
     rxjs: "npm:^7.8.1"
-    ts-jest: "npm:^29.2.2"
+    sinon: "npm:^18.0.0"
+    ts-node: "npm:^10.9.2"
     typescript: "npm:^5.4.5"
   languageName: unknown
   linkType: soft
@@ -1283,9 +1294,21 @@ __metadata:
     "@morpho-org/blue-sdk": "workspace:*"
     "@morpho-org/morpho-test": "workspace:*"
     "@morpho-org/morpho-ts": "workspace:*"
-    "@types/jest": "npm:^29.5.12"
-    jest: "npm:^29.7.0"
-    ts-jest: "npm:^29.2.2"
+    "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.11"
+    "@nomicfoundation/hardhat-viem": "npm:^2.0.3"
+    "@types/chai": "npm:^4.3.14"
+    "@types/mocha": "npm:^10.0.6"
+    "@types/node": "npm:^20.12.8"
+    "@types/sinon": "npm:^17.0.3"
+    "@types/sinon-chai": "npm:^3.2.12"
+    chai: "npm:^4.3.10"
+    dotenv: "npm:^16.4.5"
+    ethers: "npm:^6.13.1"
+    hardhat: "npm:^2.22.6"
+    hardhat-deal: "npm:^3.1.0"
+    mocha: "npm:^10.4.0"
+    sinon: "npm:^18.0.0"
+    ts-node: "npm:^10.9.2"
     typescript: "npm:^5.4.5"
     viem: "npm:^2.17.4"
   languageName: unknown
@@ -1558,7 +1581,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomicfoundation/hardhat-ethers@npm:^3.0.4":
+"@nomicfoundation/hardhat-ethers@npm:^3.0.4, @nomicfoundation/hardhat-ethers@npm:^3.0.6":
   version: 3.0.6
   resolution: "@nomicfoundation/hardhat-ethers@npm:3.0.6"
   dependencies:
@@ -1571,7 +1594,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomicfoundation/hardhat-network-helpers@npm:^1.0.9":
+"@nomicfoundation/hardhat-network-helpers@npm:^1.0.11, @nomicfoundation/hardhat-network-helpers@npm:^1.0.9":
   version: 1.0.11
   resolution: "@nomicfoundation/hardhat-network-helpers@npm:1.0.11"
   dependencies:
@@ -1579,6 +1602,20 @@ __metadata:
   peerDependencies:
     hardhat: ^2.9.5
   checksum: 10c0/67ca879a7fbb5866e9739ee3d4301d7169733f8f4c70affed1a4f15a8da0e8c80e76b1460e9fd4bd713c054714837bf2c3c01da215302609d7ac777033861fe1
+  languageName: node
+  linkType: hard
+
+"@nomicfoundation/hardhat-viem@npm:^2.0.3":
+  version: 2.0.3
+  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.3"
+  dependencies:
+    abitype: "npm:^0.9.8"
+    lodash.memoize: "npm:^4.1.2"
+  peerDependencies:
+    hardhat: "*"
+    typescript: ~5.0.0
+    viem: ^2.7.6
+  checksum: 10c0/c2ec81df185c823e0dd851809da95a17a730080197a9c684bef2d27bc4ad2827e09ce2033a1c447381191366e53b2556b9bb5c4ea2d4ae5f8eeb60707fb4cf1b
   languageName: node
   linkType: hard
 
@@ -2584,6 +2621,21 @@ __metadata:
     zod:
       optional: true
   checksum: 10c0/dc954877fba19e2b7a70f1025807d69fa5aabec8bd58ce94e68d1a5ec1697fff3fe5214b4392508db7191762150f19a2396cf66ffb1d3ba8c1f37a89fd25e598
+  languageName: node
+  linkType: hard
+
+"abitype@npm:^0.9.8":
+  version: 0.9.10
+  resolution: "abitype@npm:0.9.10"
+  peerDependencies:
+    typescript: ">=5.0.4"
+    zod: ^3 >=3.22.0
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+    zod:
+      optional: true
+  checksum: 10c0/084c36e70f8034e2cbf029b6f067b9425dc5b25673341ec659089deb220fd5e61f802dddf2aa875d788969c62aa6975490250e583825372483fdb3a76e222d3f
   languageName: node
   linkType: hard
 
@@ -4715,7 +4767,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hardhat@npm:^2.20.1":
+"hardhat-deal@npm:^3.1.0":
+  version: 3.1.0
+  resolution: "hardhat-deal@npm:3.1.0"
+  peerDependencies:
+    ethers: ^6.0.0
+    hardhat: ^2.21.0
+  checksum: 10c0/fa1f08bad7dd59bba4472669ab7e2b96635298ec1ac84baba987235e857b8c0321ec51d03a2ce6deac85039716dfa3231dd82ef788141859ef588b6192e40d91
+  languageName: node
+  linkType: hard
+
+"hardhat@npm:^2.20.1, hardhat@npm:^2.22.6":
   version: 2.22.6
   resolution: "hardhat@npm:2.22.6"
   dependencies:
@@ -6108,7 +6170,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lodash.memoize@npm:4.x":
+"lodash.memoize@npm:4.x, lodash.memoize@npm:^4.1.2":
   version: 4.1.2
   resolution: "lodash.memoize@npm:4.1.2"
   checksum: 10c0/c8713e51eccc650422716a14cece1809cfe34bc5ab5e242b7f8b4e2241c2483697b971a604252807689b9dd69bfe3a98852e19a5b89d506b000b4187a1285df8
