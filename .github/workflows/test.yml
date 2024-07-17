@@ -18,13 +18,18 @@ jobs:
         package:
           - name: morpho-ts
             jest: true
+            hardhat: false
           - name: morpho-test
+            jest: false
+            hardhat: false
           - name: blue-sdk
             jest: true
+            hardhat: false
           - name: blue-sdk-ethers
             jest: true
             hardhat: true
           - name: blue-sdk-viem
+            jest: false
             hardhat: true
 
     uses: ./.github/workflows/package.yml
