@@ -11,56 +11,53 @@ on:
 
 jobs:
   build:
-    name: Build
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@b39b52d1213e96004bfcb1c61a8a6fa8ab84f3e8 # v4.0.1
+      - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: yarn
 
       - name: ${{ inputs.name }} build
         run: yarn workspace @morpho-org/${{ inputs.name }} build
+        shell: bash
 
   jest:
-    name: Unit Tests
     runs-on: ubuntu-latest
 
     if: ${{ inputs.jest == true }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@b39b52d1213e96004bfcb1c61a8a6fa8ab84f3e8 # v4.0.1
+      - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: yarn
 
-      - name: Run jest test suite
-        run: yarn workspace @morpho-org/${{ inputs.name }} jest --passWithNoTests
+      - run: yarn workspace @morpho-org/${{ inputs.name }} jest --passWithNoTests
+        shell: bash
 
   hardhat:
-    name: E2E Tests
     runs-on: ubuntu-latest
 
     if: ${{ inputs.hardhat == true }}
     steps:
-      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.1
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@b39b52d1213e96004bfcb1c61a8a6fa8ab84f3e8 # v4.0.1
+      - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
           cache: yarn
 
-      - name: Restore hardhat cache
-        uses: actions/cache@v4
+      - uses: actions/cache@v4
         with:
           path: packages/${{ inputs.name }}/cache
           key: hardhat-${{ inputs.name }}-${{ github.ref_name }}
 
-      - name: Run hardhat test suite
-        run: yarn workspace @morpho-org/${{ inputs.name }} hardhat test --bail
+      - run: yarn workspace @morpho-org/${{ inputs.name }} hardhat test --bail
+        shell: bash
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
