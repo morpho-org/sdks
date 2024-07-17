@@ -1,8 +1,4 @@
-import {
-  setBalance,
-  setCode,
-  time,
-} from "@nomicfoundation/hardhat-network-helpers";
+import { setCode, time } from "@nomicfoundation/hardhat-network-helpers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 import { expect } from "chai";
 import { viem } from "hardhat";
@@ -20,13 +16,7 @@ import {
   testActions,
 } from "viem";
 
-import {
-  ChainId,
-  Market,
-  MarketConfig,
-  MathLib,
-  addresses,
-} from "@morpho-org/blue-sdk";
+import { ChainId, Market, MarketConfig, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { createRandomAddress, setUp } from "@morpho-org/morpho-test";
 
@@ -108,14 +98,12 @@ describe("augment/Market", () => {
   });
 
   it("should not fetch rate at target for unknown irm", async () => {
-    const owner = await viem.getWalletClient(
-      await client.readContract({
-        address: addresses[ChainId.EthMainnet].morpho,
-        abi: blueAbi,
-        functionName: "owner",
-      }),
-    );
-    await setBalance(owner.account.address, MathLib.WAD);
+    const owner = await client.readContract({
+      address: addresses[ChainId.EthMainnet].morpho,
+      abi: blueAbi,
+      functionName: "owner",
+    });
+    await client.impersonateAccount({ address: owner });
 
     const config = new MarketConfig({
       ...MAINNET_MARKETS.eth_wstEth,
@@ -127,7 +115,8 @@ describe("augment/Market", () => {
         address: MAINNET_MARKETS.eth_wstEth.irm as Address,
       }))!,
     );
-    await owner.writeContract({
+    await client.writeContract({
+      account: owner,
       address: addresses[ChainId.EthMainnet].morpho,
       abi: blueAbi,
       functionName: "enableIrm",
@@ -149,7 +138,7 @@ describe("augment/Market", () => {
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
       totalBorrowShares: 0n,
-      lastUpdate: timestamp,
+      lastUpdate: BigInt(timestamp),
       fee: 0n,
       price: 1160095030000000000000000000000000000n,
       rateAtTarget: undefined,

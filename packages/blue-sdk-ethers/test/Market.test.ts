@@ -1,14 +1,10 @@
 import { expect } from "chai";
-import { Wallet, parseUnits, toBigInt } from "ethers";
+import { Wallet, toBigInt } from "ethers";
 import { MorphoBlue__factory } from "ethers-types";
 import { ethers } from "hardhat";
 
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import {
-  setBalance,
-  setCode,
-  time,
-} from "@nomicfoundation/hardhat-network-helpers";
+import { setCode, time } from "@nomicfoundation/hardhat-network-helpers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
 import { ChainId, Market, MarketConfig, addresses } from "@morpho-org/blue-sdk";
@@ -86,9 +82,7 @@ describe("augment/Market", () => {
       addresses[ChainId.EthMainnet].morpho,
       signer,
     );
-    const owner = await ethers.getSigner(await morpho.owner());
-    await setBalance(owner.address, parseUnits("1"));
-    await ethers.getImpersonatedSigner(owner.address);
+    const owner = await ethers.getImpersonatedSigner(await morpho.owner());
 
     const config = new MarketConfig({
       ...MAINNET_MARKETS.eth_wstEth,

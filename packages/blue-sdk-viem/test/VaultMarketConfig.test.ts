@@ -44,29 +44,31 @@ describe("augment/VaultMarketConfig", () => {
       .extend(publicActions)
       .extend(testActions({ mode: "hardhat" }));
 
-    const owner = await viem.getWalletClient(
-      await client.readContract({
-        address: steakUsdc.address as Address,
-        abi: metaMorphoAbi,
-        functionName: "owner",
-      }),
-    );
+    const owner = await client.readContract({
+      address: steakUsdc.address as Address,
+      abi: metaMorphoAbi,
+      functionName: "owner",
+    });
+    await client.impersonateAccount({ address: owner });
 
-    await owner.writeContract({
+    await client.writeContract({
+      account: owner,
       address: steakUsdc.address as Address,
       abi: metaMorphoAbi,
       functionName: "setIsAllocator",
       args: [addresses[ChainId.EthMainnet].publicAllocator, true],
     });
 
-    await owner.writeContract({
+    await client.writeContract({
+      account: owner,
       address: addresses[ChainId.EthMainnet].publicAllocator as Address,
       abi: publicAllocatorAbi,
       functionName: "setFee",
       args: [steakUsdc.address as Address, 1n],
     });
 
-    await owner.writeContract({
+    await client.writeContract({
+      account: owner,
       address: addresses[ChainId.EthMainnet].publicAllocator as Address,
       abi: publicAllocatorAbi,
       functionName: "setFlowCaps",

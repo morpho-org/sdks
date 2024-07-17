@@ -21,11 +21,11 @@ import {
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
-import { wstEthAbi } from "../abis";
+import { bytes32Erc20Abi, wstEthAbi } from "../abis";
 import { ViewOverrides } from "../types";
 
-export const decodeString = (hexOrStr: string) => {
-  if (isHex(hexOrStr)) return hexToString(hexOrStr);
+export const decodeBytes32String = (hexOrStr: string) => {
+  if (isHex(hexOrStr)) return hexToString(hexOrStr, { size: 32 });
 
   return hexOrStr;
 };
@@ -63,7 +63,16 @@ export async function fetchToken<
         abi: erc20Abi,
         functionName: "symbol",
       })
-      .then(decodeString),
+      .catch(() =>
+        client
+          .readContract({
+            ...overrides,
+            address,
+            abi: bytes32Erc20Abi,
+            functionName: "symbol",
+          })
+          .then(decodeBytes32String),
+      ),
     client
       .readContract({
         ...overrides,
@@ -71,7 +80,16 @@ export async function fetchToken<
         abi: erc20Abi,
         functionName: "name",
       })
-      .then(decodeString),
+      .catch(() =>
+        client
+          .readContract({
+            ...overrides,
+            address,
+            abi: bytes32Erc20Abi,
+            functionName: "name",
+          })
+          .then(decodeBytes32String),
+      ),
   ]);
 
   const token = {
