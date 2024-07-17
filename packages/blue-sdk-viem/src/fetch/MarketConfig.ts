@@ -62,11 +62,3 @@ export async function fetchMarketConfig<
 
   return config;
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace MarketConfig {
-    let fetch: typeof fetchMarketConfig;
-  }
-}
-
-MarketConfig.fetch = fetchMarketConfig;

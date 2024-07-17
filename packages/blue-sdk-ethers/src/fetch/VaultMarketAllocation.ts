@@ -2,7 +2,6 @@ import { Provider } from "ethers";
 import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
-  AccrualPosition,
   Address,
   ChainId,
   ChainUtils,
@@ -10,9 +9,8 @@ import {
   VaultMarketAllocation,
   VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
-
-import "./Position";
-import "./VaultMarketConfig";
+import { fetchAccrualPosition } from "./Position";
+import { fetchVaultMarketConfig } from "./VaultMarketConfig";
 
 export async function fetchVaultMarketAllocation(
   vault: Address,
@@ -24,14 +22,9 @@ export async function fetchVaultMarketAllocation(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const config = await VaultMarketConfig.fetch(
-    vault,
-    marketId,
-    runner,
-    options,
-  );
+  const config = await fetchVaultMarketConfig(vault, marketId, runner, options);
 
-  return VaultMarketAllocation.fetchFromConfig(
+  return fetchVaultMarketAllocationFromConfig(
     config,
     marketId,
     runner,
@@ -51,7 +44,7 @@ export async function fetchVaultMarketAllocationFromConfig(
 
   return new VaultMarketAllocation({
     config,
-    position: await AccrualPosition.fetch(
+    position: await fetchAccrualPosition(
       config.vault,
       marketId,
       runner,
@@ -59,13 +52,3 @@ export async function fetchVaultMarketAllocationFromConfig(
     ),
   });
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace VaultMarketAllocation {
-    let fetch: typeof fetchVaultMarketAllocation;
-    let fetchFromConfig: typeof fetchVaultMarketAllocationFromConfig;
-  }
-}
-
-VaultMarketAllocation.fetch = fetchVaultMarketAllocation;
-VaultMarketAllocation.fetchFromConfig = fetchVaultMarketAllocationFromConfig;

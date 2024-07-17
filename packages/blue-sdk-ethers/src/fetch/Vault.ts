@@ -10,13 +10,11 @@ import {
   MarketId,
   Vault,
   VaultConfig,
-  VaultMarketAllocation,
   VaultPublicAllocatorConfig,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-
-import "./VaultConfig";
-import "./VaultMarketAllocation";
+import { fetchVaultConfig } from "./VaultConfig";
+import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
 export async function fetchVault(
   address: Address,
@@ -27,9 +25,9 @@ export async function fetchVault(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const config = await VaultConfig.fetch(address, runner, options);
+  const config = await fetchVaultConfig(address, runner, options);
 
-  return Vault.fetchFromConfig(address, config, runner, options);
+  return fetchVaultFromConfig(address, config, runner, options);
 }
 
 export async function fetchVaultFromConfig(
@@ -152,29 +150,14 @@ export async function fetchAccrualVault(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const vault = await Vault.fetch(address, runner, options);
+  const vault = await fetchVault(address, runner, options);
 
   const allocations = await Promise.all(
     [...new Set(vault.supplyQueue.concat(vault.withdrawQueue))].map(
       (marketId) =>
-        VaultMarketAllocation.fetch(vault.address, marketId, runner, options),
+        fetchVaultMarketAllocation(vault.address, marketId, runner, options),
     ),
   );
 
   return new AccrualVault(vault, allocations);
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace Vault {
-    let fetch: typeof fetchVault;
-    let fetchFromConfig: typeof fetchVaultFromConfig;
-  }
-
-  namespace AccrualVault {
-    let fetch: typeof fetchAccrualVault;
-  }
-}
-
-Vault.fetch = fetchVault;
-Vault.fetchFromConfig = fetchVaultFromConfig;
-AccrualVault.fetch = fetchAccrualVault;

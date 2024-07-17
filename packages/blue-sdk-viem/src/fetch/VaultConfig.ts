@@ -86,11 +86,3 @@ export async function fetchVaultConfig<
 
   return config;
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace VaultConfig {
-    let fetch: typeof fetchVaultConfig;
-  }
-}
-
-VaultConfig.fetch = fetchVaultConfig;

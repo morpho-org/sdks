@@ -60,11 +60,3 @@ export async function fetchVaultMarketPublicAllocatorConfig<
     maxOut,
   });
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace VaultMarketPublicAllocatorConfig {
-    let fetch: typeof fetchVaultMarketPublicAllocatorConfig;
-  }
-}
-
-VaultMarketPublicAllocatorConfig.fetch = fetchVaultMarketPublicAllocatorConfig;

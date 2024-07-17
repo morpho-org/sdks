@@ -14,8 +14,7 @@ import {
   MarketId,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-
-import "./MarketConfig";
+import { fetchMarketConfig } from "./MarketConfig";
 
 export async function fetchMarket(
   id: MarketId,
@@ -29,9 +28,9 @@ export async function fetchMarket(
     chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const config = await MarketConfig.fetch(id, runner, { chainId });
+  const config = await fetchMarketConfig(id, runner, { chainId });
 
-  return Market.fetchFromConfig(config, runner, { chainId, overrides });
+  return fetchMarketFromConfig(config, runner, { chainId, overrides });
 }
 
 export async function fetchMarketFromConfig(
@@ -84,13 +83,3 @@ export async function fetchMarketFromConfig(
     rateAtTarget,
   });
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace Market {
-    let fetch: typeof fetchMarket;
-    let fetchFromConfig: typeof fetchMarketFromConfig;
-  }
-}
-
-Market.fetch = fetchMarket;
-Market.fetchFromConfig = fetchMarketFromConfig;

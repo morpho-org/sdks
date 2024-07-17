@@ -8,10 +8,8 @@ import {
   ChainUtils,
   MarketId,
   VaultMarketConfig,
-  VaultMarketPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
-
-import "./VaultMarketPublicAllocatorConfig";
+import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig";
 
 export async function fetchVaultMarketConfig(
   vault: Address,
@@ -32,7 +30,7 @@ export async function fetchVaultMarketConfig(
       mm
         .pendingCap(marketId, options.overrides)
         .then(({ value, validAt }) => ({ value, validAt })),
-      VaultMarketPublicAllocatorConfig.fetch(vault, marketId, runner, options),
+      fetchVaultMarketPublicAllocatorConfig(vault, marketId, runner, options),
     ]);
 
   return new VaultMarketConfig({
@@ -45,11 +43,3 @@ export async function fetchVaultMarketConfig(
     publicAllocatorConfig,
   });
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace VaultMarketConfig {
-    let fetch: typeof fetchVaultMarketConfig;
-  }
-}
-
-VaultMarketConfig.fetch = fetchVaultMarketConfig;

@@ -12,7 +12,6 @@ import {
   AccrualPosition,
   ChainId,
   ChainUtils,
-  Market,
   MarketConfig,
   MarketId,
   Position,
@@ -21,7 +20,7 @@ import {
 
 import { blueAbi } from "../abis";
 import { ViewOverrides } from "../types";
-import "./Market";
+import { fetchMarket, fetchMarketFromConfig } from "./Market";
 
 export async function fetchPosition<
   transport extends Transport,
@@ -86,8 +85,8 @@ export async function fetchAccrualPosition<
   );
 
   const [position, market] = await Promise.all([
-    await Position.fetch(user, marketId, client, options),
-    await Market.fetch(marketId, client, options),
+    await fetchPosition(user, marketId, client, options),
+    await fetchMarket(marketId, client, options),
   ]);
 
   return new AccrualPosition(position, market);
@@ -114,24 +113,9 @@ export async function fetchAccrualPositionFromConfig<
   );
 
   const [position, market] = await Promise.all([
-    await Position.fetch(user, config.id, client, options),
-    await Market.fetchFromConfig(config, client, options),
+    await fetchPosition(user, config.id, client, options),
+    await fetchMarketFromConfig(config, client, options),
   ]);
 
   return new AccrualPosition(position, market);
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace Position {
-    let fetch: typeof fetchPosition;
-  }
-
-  namespace AccrualPosition {
-    let fetch: typeof fetchAccrualPosition;
-    let fetchFromConfig: typeof fetchAccrualPositionFromConfig;
-  }
-}
-
-Position.fetch = fetchPosition;
-AccrualPosition.fetch = fetchAccrualPosition;
-AccrualPosition.fetchFromConfig = fetchAccrualPositionFromConfig;

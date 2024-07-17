@@ -9,7 +9,6 @@ import {
 } from "viem";
 
 import {
-  AccrualPosition,
   ChainId,
   ChainUtils,
   MarketId,
@@ -17,9 +16,9 @@ import {
   VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
 
-import "./Position";
-import "./VaultMarketConfig";
 import { ViewOverrides } from "../types";
+import { fetchAccrualPosition } from "./Position";
+import { fetchVaultMarketConfig } from "./VaultMarketConfig";
 
 export async function fetchVaultMarketAllocation<
   transport extends Transport,
@@ -41,14 +40,9 @@ export async function fetchVaultMarketAllocation<
     options.chainId ?? (await client.getChainId()),
   );
 
-  const config = await VaultMarketConfig.fetch(
-    vault,
-    marketId,
-    client,
-    options,
-  );
+  const config = await fetchVaultMarketConfig(vault, marketId, client, options);
 
-  return VaultMarketAllocation.fetchFromConfig(
+  return fetchVaultMarketAllocationFromConfig(
     config,
     marketId,
     client,
@@ -78,7 +72,7 @@ export async function fetchVaultMarketAllocationFromConfig<
 
   return new VaultMarketAllocation({
     config,
-    position: await AccrualPosition.fetch(
+    position: await fetchAccrualPosition(
       config.vault as Address,
       marketId,
       client,
@@ -86,13 +80,3 @@ export async function fetchVaultMarketAllocationFromConfig<
     ),
   });
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace VaultMarketAllocation {
-    let fetch: typeof fetchVaultMarketAllocation;
-    let fetchFromConfig: typeof fetchVaultMarketAllocationFromConfig;
-  }
-}
-
-VaultMarketAllocation.fetch = fetchVaultMarketAllocation;
-VaultMarketAllocation.fetchFromConfig = fetchVaultMarketAllocationFromConfig;

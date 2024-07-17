@@ -18,9 +18,9 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import "./MarketConfig";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
 import { ViewOverrides } from "../types";
+import { fetchMarketConfig } from "./MarketConfig";
 
 export async function fetchMarket<
   transport extends Transport,
@@ -44,9 +44,9 @@ export async function fetchMarket<
     chainId ?? (await client.getChainId()),
   );
 
-  const config = await MarketConfig.fetch(id, client, { chainId });
+  const config = await fetchMarketConfig(id, client, { chainId });
 
-  return Market.fetchFromConfig(config, client, { chainId, overrides });
+  return fetchMarketFromConfig(config, client, { chainId, overrides });
 }
 
 export async function fetchMarketFromConfig<
@@ -123,13 +123,3 @@ export async function fetchMarketFromConfig<
     rateAtTarget,
   });
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace Market {
-    let fetch: typeof fetchMarket;
-    let fetchFromConfig: typeof fetchMarketFromConfig;
-  }
-}
-
-Market.fetch = fetchMarket;
-Market.fetchFromConfig = fetchMarketFromConfig;

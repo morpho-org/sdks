@@ -184,11 +184,3 @@ export async function fetchHolding<
 
   return holding;
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace Holding {
-    let fetch: typeof fetchHolding;
-  }
-}
-
-Holding.fetch = fetchHolding;

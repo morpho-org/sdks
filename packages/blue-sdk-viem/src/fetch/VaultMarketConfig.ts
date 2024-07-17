@@ -13,12 +13,11 @@ import {
   ChainUtils,
   MarketId,
   VaultMarketConfig,
-  VaultMarketPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 
-import "./VaultMarketPublicAllocatorConfig";
 import { metaMorphoAbi } from "../abis";
 import { ViewOverrides } from "../types";
+import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig";
 
 export async function fetchVaultMarketConfig<
   transport extends Transport,
@@ -58,7 +57,7 @@ export async function fetchVaultMarketConfig<
           args: [marketId],
         })
         .then(([value, validAt]) => ({ value, validAt })),
-      VaultMarketPublicAllocatorConfig.fetch(vault, marketId, client, options),
+      fetchVaultMarketPublicAllocatorConfig(vault, marketId, client, options),
     ]);
 
   return new VaultMarketConfig({
@@ -71,11 +70,3 @@ export async function fetchVaultMarketConfig<
     publicAllocatorConfig,
   });
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace VaultMarketConfig {
-    let fetch: typeof fetchVaultMarketConfig;
-  }
-}
-
-VaultMarketConfig.fetch = fetchVaultMarketConfig;

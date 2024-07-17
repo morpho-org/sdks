@@ -7,14 +7,12 @@ import {
   Address,
   ChainId,
   ChainUtils,
-  Market,
   MarketConfig,
   MarketId,
   Position,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-
-import "./Market";
+import { fetchMarket, fetchMarketFromConfig } from "./Market";
 
 export async function fetchPosition(
   user: Address,
@@ -58,8 +56,8 @@ export async function fetchAccrualPosition(
   );
 
   const [position, market] = await Promise.all([
-    await Position.fetch(user, marketId, runner, options),
-    await Market.fetch(marketId, runner, options),
+    await fetchPosition(user, marketId, runner, options),
+    await fetchMarket(marketId, runner, options),
   ]);
 
   return new AccrualPosition(position, market);
@@ -76,24 +74,9 @@ export async function fetchAccrualPositionFromConfig(
   );
 
   const [position, market] = await Promise.all([
-    await Position.fetch(user, config.id, runner, options),
-    await Market.fetchFromConfig(config, runner, options),
+    await fetchPosition(user, config.id, runner, options),
+    await fetchMarketFromConfig(config, runner, options),
   ]);
 
   return new AccrualPosition(position, market);
 }
-
-declare module "@morpho-org/blue-sdk" {
-  namespace Position {
-    let fetch: typeof fetchPosition;
-  }
-
-  namespace AccrualPosition {
-    let fetch: typeof fetchAccrualPosition;
-    let fetchFromConfig: typeof fetchAccrualPositionFromConfig;
-  }
-}
-
-Position.fetch = fetchPosition;
-AccrualPosition.fetch = fetchAccrualPosition;
-AccrualPosition.fetchFromConfig = fetchAccrualPositionFromConfig;
