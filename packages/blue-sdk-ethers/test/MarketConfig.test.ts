@@ -11,7 +11,7 @@ import {
   MarketId,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/lib/tests/mocks/markets";
+import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
 import "../src/augment/MarketConfig";
