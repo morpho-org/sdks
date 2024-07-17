@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  pull_request:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -15,11 +16,16 @@ jobs:
       fail-fast: false
       matrix:
         package:
-          - "@morpho-org/morpho-ts"
-          - "@morpho-org/morpho-test"
-          - "@morpho-org/blue-sdk"
-          - "@morpho-org/blue-sdk-ethers"
-          - "@morpho-org/blue-sdk-viem"
+          - name: "@morpho-org/morpho-ts"
+            jest: true
+          - name: "@morpho-org/morpho-test"
+          - name: "@morpho-org/blue-sdk"
+            jest: true
+          - name: "@morpho-org/blue-sdk-ethers"
+            jest: true
+            hardhat: true
+          - name: "@morpho-org/blue-sdk-viem"
+            hardhat: true
 
     runs-on: ubuntu-latest
     steps:
@@ -32,6 +38,8 @@ jobs:
 
       - run: yarn install --immutable
 
-      - run: yarn workspace ${{ matrix.package }} build
-
-      - run: yarn workspace ${{ matrix.package }} test --bail
+      - uses: ./.github/workflows/build-test-package.yml
+        with:
+          name: ${{ matrix.package.name }}
+          jest: ${{ matrix.package.jest }}
+          hardhat: ${{ matrix.package.hardhat }}
