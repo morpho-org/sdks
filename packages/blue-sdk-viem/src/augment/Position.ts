@@ -1,6 +1,5 @@
 import { AccrualPosition, Position } from "@morpho-org/blue-sdk";
 
-import "./Market";
 import {
   fetchAccrualPosition,
   fetchAccrualPositionFromConfig,

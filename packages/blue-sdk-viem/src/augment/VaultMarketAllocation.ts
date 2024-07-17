@@ -1,7 +1,5 @@
 import { VaultMarketAllocation } from "@morpho-org/blue-sdk";
 
-import "./Position";
-import "./VaultMarketConfig";
 import {
   fetchVaultMarketAllocation,
   fetchVaultMarketAllocationFromConfig,

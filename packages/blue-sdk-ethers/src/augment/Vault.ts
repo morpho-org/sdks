@@ -1,7 +1,5 @@
 import { AccrualVault, Vault } from "@morpho-org/blue-sdk";
 
-import "./VaultConfig";
-import "./VaultMarketAllocation";
 import { fetchAccrualVault, fetchVault, fetchVaultFromConfig } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
