@@ -1347,7 +1347,7 @@ __metadata:
     "@types/sinon-chai": "npm:^3.2.12"
     chai: "npm:^4.3.10"
     chai-as-promised: "npm:^7.1.2"
-    chai-exclude: "npm:^2.1.0"
+    chai-exclude: "npm:^3.0.0"
     dotenv: "npm:^16.3.1"
     ethers: "npm:^6.12.1"
     hardhat: "npm:^2.20.1"
@@ -3229,14 +3229,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chai-exclude@npm:^2.1.0":
-  version: 2.1.1
-  resolution: "chai-exclude@npm:2.1.1"
+"chai-exclude@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "chai-exclude@npm:3.0.0"
   dependencies:
     fclone: "npm:^1.0.11"
   peerDependencies:
-    chai: ">= 4.0.0 < 5"
-  checksum: 10c0/a101ea5b52c1bf2f41fcf7d9e03fcb2f1fb9b0c66a76a6eed9502cae5fa35a498ce02eea1b2a1b55eac227b9056285d6673ce2984f4088bd3058bd27fdb8ed9d
+    chai: ">= 5"
+  checksum: 10c0/c0bbe2f29398e9a9338e0aa86835668b701bf220e49ec24cf80d58f3b322b4a9dd332e3052c757f97ea5ba2c0086c64c7014a3b07862fa370480f350ceac4066
   languageName: node
   linkType: hard
 
