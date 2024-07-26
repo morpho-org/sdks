@@ -1,12 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-} from "viem";
+import { Address, Client } from "viem";
 
 import {
   AccrualPosition,
@@ -18,31 +10,27 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
+import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
 import { ViewOverrides } from "../types";
 import { fetchMarket, fetchMarketFromConfig } from "./Market";
 
-export async function fetchPosition<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchPosition(
   user: Address,
   marketId: MarketId,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   {
     chainId,
     overrides = {},
   }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await client.getChainId()),
+    chainId ?? (await getChainId(client)),
   );
 
   const { morpho } = getChainAddresses(chainId);
 
-  const [supplyShares, borrowShares, collateral] = await client.readContract({
+  const [supplyShares, borrowShares, collateral] = await readContract(client, {
     ...overrides,
     address: morpho as Address,
     abi: blueAbi,
@@ -59,19 +47,14 @@ export async function fetchPosition<
   });
 }
 
-export async function fetchAccrualPosition<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined = undefined,
->(
+export async function fetchAccrualPosition(
   user: Address,
   marketId: MarketId,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await client.getChainId()),
+    options.chainId ?? (await getChainId(client)),
   );
 
   const [position, market] = await Promise.all([
@@ -82,19 +65,14 @@ export async function fetchAccrualPosition<
   return new AccrualPosition(position, market);
 }
 
-export async function fetchAccrualPositionFromConfig<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchAccrualPositionFromConfig(
   user: Address,
   config: MarketConfig,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await client.getChainId()),
+    options.chainId ?? (await getChainId(client)),
   );
 
   const [position, market] = await Promise.all([

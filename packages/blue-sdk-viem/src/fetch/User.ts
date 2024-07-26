@@ -1,12 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-} from "viem";
+import { Address, Client } from "viem";
 
 import {
   ChainId,
@@ -14,37 +6,33 @@ import {
   User,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
 import { ViewOverrides } from "../types";
 
-export async function fetchUser<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchUser(
   address: Address,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   {
     chainId,
     overrides = {},
   }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await client.getChainId()),
+    chainId ?? (await getChainId(client)),
   );
 
   const { morpho, bundler } = getChainAddresses(chainId);
 
   const [isBundlerAuthorized, morphoNonce] = await Promise.all([
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address: morpho as Address,
       abi: blueAbi,
       functionName: "isAuthorized",
       args: [address, bundler as Address],
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address: morpho as Address,
       abi: blueAbi,

@@ -1,12 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-} from "viem";
+import { Address, Client } from "viem";
 
 import {
   AccrualVault,
@@ -19,23 +11,19 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
+import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi, publicAllocatorAbi } from "../abis";
 import { ViewOverrides } from "../types";
 import { fetchVaultConfig } from "./VaultConfig";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
-export async function fetchVault<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchVault(
   address: Address,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await client.getChainId()),
+    options.chainId ?? (await getChainId(client)),
   );
 
   const config = await fetchVaultConfig(address, client, options);
@@ -43,22 +31,17 @@ export async function fetchVault<
   return fetchVaultFromConfig(address, config, client, options);
 }
 
-export async function fetchVaultFromConfig<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchVaultFromConfig(
   address: Address,
   config: VaultConfig,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   {
     chainId,
     overrides = {},
   }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await client.getChainId()),
+    chainId ?? (await getChainId(client)),
   );
 
   const { publicAllocator } = getChainAddresses(chainId);
@@ -81,102 +64,98 @@ export async function fetchVaultFromConfig<
     withdrawQueueSize,
     hasPublicAllocator,
   ] = await Promise.all([
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "curator",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "owner",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "guardian",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "timelock",
     }),
-    client
-      .readContract({
-        ...overrides,
-        address,
-        abi: metaMorphoAbi,
-        functionName: "pendingTimelock",
-      })
-      .then(([value, validAt]) => ({ value, validAt })),
-    client
-      .readContract({
-        ...overrides,
-        address,
-        abi: metaMorphoAbi,
-        functionName: "pendingGuardian",
-      })
-      .then(([value, validAt]) => ({ value, validAt })),
-    client.readContract({
+    readContract(client, {
+      ...overrides,
+      address,
+      abi: metaMorphoAbi,
+      functionName: "pendingTimelock",
+    }).then(([value, validAt]) => ({ value, validAt })),
+    readContract(client, {
+      ...overrides,
+      address,
+      abi: metaMorphoAbi,
+      functionName: "pendingGuardian",
+    }).then(([value, validAt]) => ({ value, validAt })),
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "pendingOwner",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "fee",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "feeRecipient",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "skimRecipient",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "totalSupply",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "totalAssets",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "lastTotalAssets",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "supplyQueueLength",
     }),
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: metaMorphoAbi,
       functionName: "withdrawQueueLength",
     }),
     publicAllocator &&
-      client.readContract({
+      readContract(client, {
         ...overrides,
         address,
         abi: metaMorphoAbi,
@@ -191,21 +170,21 @@ export async function fetchVaultFromConfig<
 
   if (hasPublicAllocator)
     publicAllocatorConfigPromise = Promise.all([
-      client.readContract({
+      readContract(client, {
         ...overrides,
         address: publicAllocator as Address,
         abi: publicAllocatorAbi,
         functionName: "admin",
         args: [address],
       }),
-      client.readContract({
+      readContract(client, {
         ...overrides,
         address: publicAllocator as Address,
         abi: publicAllocatorAbi,
         functionName: "fee",
         args: [address],
       }),
-      client.readContract({
+      readContract(client, {
         ...overrides,
         address: publicAllocator as Address,
         abi: publicAllocatorAbi,
@@ -219,7 +198,7 @@ export async function fetchVaultFromConfig<
       Promise.all(
         new Array(Number(supplyQueueSize)).fill(null).map(
           (_, i) =>
-            client.readContract({
+            readContract(client, {
               ...overrides,
               address,
               abi: metaMorphoAbi,
@@ -231,7 +210,7 @@ export async function fetchVaultFromConfig<
       Promise.all(
         new Array(Number(withdrawQueueSize)).fill(null).map(
           (_, i) =>
-            client.readContract({
+            readContract(client, {
               ...overrides,
               address,
               abi: metaMorphoAbi,
@@ -265,18 +244,13 @@ export async function fetchVaultFromConfig<
   });
 }
 
-export async function fetchAccrualVault<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchAccrualVault(
   address: Address,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await client.getChainId()),
+    options.chainId ?? (await getChainId(client)),
   );
 
   const vault = await fetchVault(address, client, options);
