@@ -1,12 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-} from "viem";
+import { Address, Client } from "viem";
 
 import {
   ChainId,
@@ -15,32 +7,28 @@ import {
   VaultMarketPublicAllocatorConfig,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { getChainId, readContract } from "viem/actions";
 import { publicAllocatorAbi } from "../abis";
 import { ViewOverrides } from "../types";
 
-export async function fetchVaultMarketPublicAllocatorConfig<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,
   marketId: MarketId,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   {
     chainId,
     overrides = {},
   }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await client.getChainId()),
+    chainId ?? (await getChainId(client)),
   );
 
   const { publicAllocator } = getChainAddresses(chainId);
 
   if (!publicAllocator) return;
 
-  const [maxIn, maxOut] = await client.readContract({
+  const [maxIn, maxOut] = await readContract(client, {
     ...overrides,
     address: publicAllocator as Address,
     abi: publicAllocatorAbi,

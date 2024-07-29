@@ -1,13 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-  zeroAddress,
-} from "viem";
+import { Address, Client, zeroAddress } from "viem";
 
 import {
   ChainId,
@@ -18,25 +9,21 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
+import { getChainId, readContract } from "viem/actions";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
 import { ViewOverrides } from "../types";
 import { fetchMarketConfig } from "./MarketConfig";
 
-export async function fetchMarket<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchMarket(
   id: MarketId,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   {
     chainId,
     overrides = {},
   }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await client.getChainId()),
+    chainId ?? (await getChainId(client)),
   );
 
   const config = await fetchMarketConfig(id, client, { chainId });
@@ -44,21 +31,16 @@ export async function fetchMarket<
   return fetchMarketFromConfig(config, client, { chainId, overrides });
 }
 
-export async function fetchMarketFromConfig<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchMarketFromConfig(
   config: MarketConfig,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   {
     chainId,
     overrides = {},
   }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await client.getChainId()),
+    chainId ?? (await getChainId(client)),
   );
 
   const { morpho, adaptiveCurveIrm } = getChainAddresses(chainId);
@@ -75,7 +57,7 @@ export async function fetchMarketFromConfig<
     price,
     rateAtTarget,
   ] = await Promise.all([
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address: morpho as Address,
       abi: blueAbi,
@@ -83,7 +65,7 @@ export async function fetchMarketFromConfig<
       args: [config.id],
     }),
     config.oracle !== zeroAddress
-      ? client.readContract({
+      ? readContract(client, {
           ...overrides,
           address: config.oracle as Address,
           abi: blueOracleAbi,
@@ -91,7 +73,7 @@ export async function fetchMarketFromConfig<
         })
       : 0n,
     config.irm === adaptiveCurveIrm
-      ? await client.readContract({
+      ? await readContract(client, {
           ...overrides,
           address: adaptiveCurveIrm as Address,
           abi: adaptiveCurveIrmAbi,

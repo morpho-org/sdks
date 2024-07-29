@@ -1,12 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-} from "viem";
+import { Address, Client } from "viem";
 
 import {
   ChainId,
@@ -15,20 +7,16 @@ import {
   VaultConfig,
   _try,
 } from "@morpho-org/blue-sdk";
+import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis";
 
-export async function fetchVaultConfig<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchVaultConfig(
   address: Address,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   { chainId }: { chainId?: ChainId } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await client.getChainId()),
+    chainId ?? (await getChainId(client)),
   );
 
   let config = _try(
@@ -39,27 +27,27 @@ export async function fetchVaultConfig<
   if (!config) {
     // always fetch at latest block because config is immutable
     const [asset, symbol, name, decimals, decimalsOffset] = await Promise.all([
-      client.readContract({
+      readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "asset",
       }),
-      client.readContract({
+      readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "symbol",
       }),
-      client.readContract({
+      readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "name",
       }),
-      client.readContract({
+      readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "decimals",
       }),
-      client.readContract({
+      readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "DECIMALS_OFFSET",
