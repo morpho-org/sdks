@@ -5,7 +5,10 @@ type ReadFieldFunction = <T, K extends keyof T = keyof T>(
   from: T,
 ) => T[K];
 
-type MergeObjectsFunction = <T>(existing: T, incoming: T) => T;
+type MergeObjectsFunction = <T extends { __typename?: string }>(
+  existing: T,
+  incoming: T,
+) => T;
 
 export const readMaybeBigInt = (value: string | number | undefined | null) => {
   if (value == null) return value;
