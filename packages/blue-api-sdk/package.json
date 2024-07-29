@@ -1,0 +1,35 @@
+{
+  "name": "@morpho-org/blue-api-sdk",
+  "version": "1.0.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "main": "src/index.ts",
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "prepublish": "yarn build",
+    "codegen": "graphql-codegen --config codegen.ts",
+    "build": "tsc --build tsconfig.build.json"
+  },
+  "dependencies": {
+    "@morpho-org/blue-sdk": "workspace:*",
+    "@morpho-org/blue-sdk-ethers": "workspace:*",
+    "@morpho-org/morpho-ts": "workspace:*"
+  },
+  "devDependencies": {
+    "@apollo/client": "^3.11.1",
+    "@graphql-codegen/cli": "^5.0.0",
+    "@graphql-codegen/client-preset": "^4.2.5",
+    "@graphql-codegen/introspection": "^4.0.3",
+    "@graphql-codegen/typescript": "^4.0.1",
+    "@graphql-codegen/typescript-operations": "^4.0.1",
+    "@graphql-codegen/typescript-resolvers": "^4.1.0",
+    "graphql": "^16.8.1",
+    "graphql-tag": "^2.12.6",
+    "typescript": "^5.4.5"
+  },
+  "publishConfig": {
+    "access": "public",
+    "main": "lib/index.js"
+  }
+}
