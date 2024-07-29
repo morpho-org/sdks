@@ -1,12 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-} from "viem";
+import { Address, Client } from "viem";
 
 import {
   ChainId,
@@ -15,43 +7,37 @@ import {
   VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
 
+import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis";
 import { ViewOverrides } from "../types";
 import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig";
 
-export async function fetchVaultMarketConfig<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchVaultMarketConfig(
   vault: Address,
   marketId: MarketId,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await client.getChainId()),
+    options.chainId ?? (await getChainId(client)),
   );
 
   const [[cap, enabled, removableAt], pendingCap, publicAllocatorConfig] =
     await Promise.all([
-      client.readContract({
+      readContract(client, {
         ...options.overrides,
         address: vault,
         abi: metaMorphoAbi,
         functionName: "config",
         args: [marketId],
       }),
-      client
-        .readContract({
-          ...options.overrides,
-          address: vault,
-          abi: metaMorphoAbi,
-          functionName: "pendingCap",
-          args: [marketId],
-        })
-        .then(([value, validAt]) => ({ value, validAt })),
+      readContract(client, {
+        ...options.overrides,
+        address: vault,
+        abi: metaMorphoAbi,
+        functionName: "pendingCap",
+        args: [marketId],
+      }).then(([value, validAt]) => ({ value, validAt })),
       fetchVaultMarketPublicAllocatorConfig(vault, marketId, client, options),
     ]);
 

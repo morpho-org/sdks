@@ -1,12 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-} from "viem";
+import { Address, Client } from "viem";
 
 import {
   ChainId,
@@ -16,23 +8,19 @@ import {
   VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
 
+import { getChainId } from "viem/actions";
 import { ViewOverrides } from "../types";
 import { fetchAccrualPosition } from "./Position";
 import { fetchVaultMarketConfig } from "./VaultMarketConfig";
 
-export async function fetchVaultMarketAllocation<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchVaultMarketAllocation(
   vault: Address,
   marketId: MarketId,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await client.getChainId()),
+    options.chainId ?? (await getChainId(client)),
   );
 
   const config = await fetchVaultMarketConfig(vault, marketId, client, options);
@@ -45,19 +33,14 @@ export async function fetchVaultMarketAllocation<
   );
 }
 
-export async function fetchVaultMarketAllocationFromConfig<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchVaultMarketAllocationFromConfig(
   config: VaultMarketConfig,
   marketId: MarketId,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await client.getChainId()),
+    options.chainId ?? (await getChainId(client)),
   );
 
   return new VaultMarketAllocation({

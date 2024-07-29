@@ -1,15 +1,4 @@
-import {
-  Account,
-  Address,
-  Chain,
-  ParseAccount,
-  PublicClient,
-  RpcSchema,
-  Transport,
-  erc20Abi,
-  hexToString,
-  isHex,
-} from "viem";
+import { Address, Client, erc20Abi, hexToString, isHex } from "viem";
 
 import {
   ChainId,
@@ -21,6 +10,7 @@ import {
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
+import { getChainId, readContract } from "viem/actions";
 import { bytes32Erc20Abi, wstEthAbi } from "../abis";
 import { ViewOverrides } from "../types";
 
@@ -30,66 +20,53 @@ export const decodeBytes32String = (hexOrStr: string) => {
   return hexOrStr;
 };
 
-export async function fetchToken<
-  transport extends Transport,
-  chain extends Chain | undefined,
-  account extends Account | undefined,
-  rpcSchema extends RpcSchema | undefined,
->(
+export async function fetchToken(
   address: Address,
-  client: PublicClient<transport, chain, ParseAccount<account>, rpcSchema>,
+  client: Client,
   {
     chainId,
     overrides = {},
   }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await client.getChainId()),
+    chainId ?? (await getChainId(client)),
   );
 
   if (address === NATIVE_ADDRESS) return Token.native(chainId);
 
   const [decimals, symbol, name] = await Promise.all([
-    client.readContract({
+    readContract(client, {
       ...overrides,
       address,
       abi: erc20Abi,
       functionName: "decimals",
     }),
-    client
-      .readContract({
+    readContract(client, {
+      ...overrides,
+      address,
+      abi: erc20Abi,
+      functionName: "symbol",
+    }).catch(() =>
+      readContract(client, {
         ...overrides,
         address,
-        abi: erc20Abi,
+        abi: bytes32Erc20Abi,
         functionName: "symbol",
-      })
-      .catch(() =>
-        client
-          .readContract({
-            ...overrides,
-            address,
-            abi: bytes32Erc20Abi,
-            functionName: "symbol",
-          })
-          .then(decodeBytes32String),
-      ),
-    client
-      .readContract({
+      }).then(decodeBytes32String),
+    ),
+    readContract(client, {
+      ...overrides,
+      address,
+      abi: erc20Abi,
+      functionName: "name",
+    }).catch(() =>
+      readContract(client, {
         ...overrides,
         address,
-        abi: erc20Abi,
+        abi: bytes32Erc20Abi,
         functionName: "name",
-      })
-      .catch(() =>
-        client
-          .readContract({
-            ...overrides,
-            address,
-            abi: bytes32Erc20Abi,
-            functionName: "name",
-          })
-          .then(decodeBytes32String),
-      ),
+      }).then(decodeBytes32String),
+    ),
   ]);
 
   const token = {
@@ -104,7 +81,7 @@ export async function fetchToken<
   switch (address) {
     case wstEth: {
       if (stEth) {
-        const stEthPerWstEth = await client.readContract({
+        const stEthPerWstEth = await readContract(client, {
           ...overrides,
           address: wstEth as Address,
           abi: wstEthAbi,
