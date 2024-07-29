@@ -1,4 +1,4 @@
-import { MarketStateReward, VaultAllocation } from "@morpho-org/blue-api-sdk";
+import { MarketStateReward, VaultAllocation } from "./types";
 
 type ReadFieldFunction = <T, K extends keyof T = keyof T>(
   fieldName: K,
