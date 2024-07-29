@@ -19,9 +19,12 @@ yarn add @morpho-org/blue-api-sdk
 
 ## Getting Started
 
+
 ### Codegen
 
-Create a `codegen.ts` file using the [near-operation-file](https://the-guild.dev/graphql/codegen/plugins/presets/near-operation-file-preset) preset and define your desired plugins:
+Create a `codegen.ts` file and define your desired preset & plugins, importing types from `@morpho-org/blue-api-sdk`. Below is given 3 typically recommended configurations:
+
+#### Recommended [near-operation-file](https://the-guild.dev/graphql/codegen/plugins/presets/near-operation-file-preset) preset config
 
 ```typescript
 import type { CodegenConfig } from "@graphql-codegen/cli";
@@ -29,16 +32,59 @@ import type { CodegenConfig } from "@graphql-codegen/cli";
 import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
 
 const config: CodegenConfig = {
-  overwrite: true,
+  ...,
   schema: BLUE_API_GRAPHQL_URL,
-  documents: ["src/graphql/**/*.query.gql", "src/graphql/**/*.fragment.gql"],
+  documents: ["src/graphql/**/*.{query,fragment}.gql"],
   generates: {
     "src/graphql/": {
+      ...,
       preset: "near-operation-file",
-      plugins: ["typescript-operations", "typescript-react-apollo"],
       presetConfig: {
         baseTypesPath: "~@morpho-org/blue-api-sdk",
       },
+    },
+  },
+};
+
+export default config;
+```
+
+#### Recommended [import-types](https://the-guild.dev/graphql/codegen/plugins/presets/import-types-preset) preset config
+
+```typescript
+import type { CodegenConfig } from "@graphql-codegen/cli";
+
+import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
+
+const config: CodegenConfig = {
+  ...,
+  schema: BLUE_API_GRAPHQL_URL,
+  documents: ["graphql/*.{query,fragment}.gql"],
+  generates: {
+    "src/api/types.ts": {
+      ...,
+      preset: "import-types",
+      presetConfig: {
+        typesPath: "@morpho-org/blue-api-sdk",
+      },
+    },
+  },
+};
+```
+
+#### Recommended [typescript-operations](https://the-guild.dev/graphql/codegen/plugins/typescript-operations) plugin config
+
+```typescript
+import type { CodegenConfig } from "@graphql-codegen/cli";
+
+import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
+
+const config: CodegenConfig = {
+  ...,
+  schema: BLUE_API_GRAPHQL_URL,
+  generates: {
+    [...]: {
+      plugins: ["typescript-operations", ...],
       config: {
         avoidOptionals: {
           field: true,
@@ -67,9 +113,8 @@ const config: CodegenConfig = {
     },
   },
 };
-
-export default config;
 ```
+
 
 ### Apollo
 
