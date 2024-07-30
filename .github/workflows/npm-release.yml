@@ -19,15 +19,5 @@ jobs:
       - run: yarn install --immutable
 
       - run: |
-          yarn version check
-          yarn version apply --all
-
-      - run: |
-          git config --global user.name '${{ github.actor }}'
-          git config --global user.email '${{ github.actor }}@users.noreply.github.com'
-          git commit -am "build(packages): apply versions"
-          git push
-
-      - run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           yarn run publish --y
