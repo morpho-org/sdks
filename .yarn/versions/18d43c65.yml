@@ -1,0 +1,3 @@
+releases:
+  "@morpho-org/blue-sdk-ethers": patch
+  "@morpho-org/blue-sdk-viem": patch

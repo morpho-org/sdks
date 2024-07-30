@@ -18,6 +18,14 @@ jobs:
 
       - run: yarn install --immutable
 
+      - run: yarn version check
+
+      - run: yarn version apply
+
+      - run: |
+          git commit -am "build(package): bump versions"
+          git push
+
       - run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           yarn run publish --y

@@ -2700,6 +2700,9 @@ __metadata:
     ts-jest: "npm:^29.2.2"
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.4.5"
+  peerDependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
   languageName: unknown
   linkType: soft
 
@@ -2727,6 +2730,9 @@ __metadata:
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.4.5"
     viem: "npm:^2.17.4"
+  peerDependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
   languageName: unknown
   linkType: soft
 

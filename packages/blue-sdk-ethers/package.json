@@ -42,6 +42,10 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   },
+  "peerDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^"
+  },
   "publishConfig": {
     "access": "public",
     "main": "lib/index.js"
