@@ -105,6 +105,14 @@ export const MAINNET_MARKETS = {
     lltv: 86_0000000000000000n,
   }),
 
+  "crvUsd_stkcvx2BTC-f": new MarketConfig({
+    loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
+    collateralToken: "0x385E12cf4040543Bc8C18e05C1298Be5B04f3f5e",
+    oracle: "0x20c4fA59f032bEC6de1905B7201CB88DFD968abA",
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+    lltv: 860000000000000000n,
+  }),
+
   usda_re7Eth: new MarketConfig({
     loanToken: "0x0000206329b97DB379d5E1Bf586BbDB969C63274",
     collateralToken: "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0",
