@@ -35,6 +35,20 @@ const _get = (data: any, path: string[]): any => {
   return _get(data[key!], rest);
 };
 
+export const hasValue = <
+  T,
+  Path extends PartialDottedKeys<T> = PartialDottedKeys<T>,
+>(
+  data: T,
+  path: Path,
+): data is T & { [path in Path]: FieldType<T, path> } =>
+  getValue(data, path) != null;
+
+export const createHasValue =
+  <T, Path extends PartialDottedKeys<T> = PartialDottedKeys<T>>(path: Path) =>
+  (data: T): data is T & { [path in Path]: FieldType<T, path> } =>
+    hasValue(data, path) != null;
+
 export const getValue = <
   T,
   Path extends PartialDottedKeys<T> = PartialDottedKeys<T>,
