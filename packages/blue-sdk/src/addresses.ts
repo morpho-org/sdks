@@ -228,6 +228,7 @@ export const convexWrapperTokens: Record<ChainId, Set<Address>> = {
     addresses[ChainId.EthMainnet]["stkcvxcrvCRVUSDTBTCWSTETH-morpho"],
     addresses[ChainId.EthMainnet]["stkcvxTryLSD-morpho"],
     addresses[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"],
+    addresses[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"],
   ]),
   [ChainId.EthGoerliTestnet]: new Set(),
   [ChainId.BaseMainnet]: new Set(),
