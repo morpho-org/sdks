@@ -41,13 +41,13 @@ export const hasValue = <
 >(
   data: T,
   path: Path,
-): data is T & { [path in Path]: FieldType<T, path> } =>
-  getValue(data, path) != null;
+): data is T & { [path in Path]: NonNullable<FieldType<T, path>> } =>
+  isDefined(getValue(data, path));
 
 export const createHasValue =
   <T, Path extends PartialDottedKeys<T> = PartialDottedKeys<T>>(path: Path) =>
-  (data: T): data is T & { [path in Path]: FieldType<T, path> } =>
-    hasValue(data, path) != null;
+  (data: T): data is T & { [path in Path]: NonNullable<FieldType<T, path>> } =>
+    hasValue(data, path);
 
 export const getValue = <
   T,
