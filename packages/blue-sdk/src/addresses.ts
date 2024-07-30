@@ -83,7 +83,7 @@ export const addresses = {
   },
 } as const;
 
-interface ChainAddresses {
+export interface ChainAddresses {
   morpho: Address;
   permit2: Address;
   bundler: Address;
