@@ -23,6 +23,8 @@ jobs:
       - run: yarn version apply
 
       - run: |
+          git config --global user.name '${{ vars.GITHUB_ACTOR }}'
+          git config --global user.email '${{ vars.GITHUB_ACTOR }}@users.noreply.github.com'
           git commit -am "build(package): bump versions"
           git push
 
