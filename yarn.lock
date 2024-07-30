@@ -2662,22 +2662,22 @@ __metadata:
     "@graphql-codegen/typescript": "npm:^4.0.1"
     "@graphql-codegen/typescript-operations": "npm:^4.0.1"
     "@graphql-codegen/typescript-resolvers": "npm:^4.1.0"
-    "@morpho-org/blue-sdk": "workspace:*"
-    "@morpho-org/blue-sdk-ethers": "workspace:*"
-    "@morpho-org/morpho-ts": "workspace:*"
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-ethers": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
     graphql: "npm:^16.8.1"
     graphql-tag: "npm:^2.12.6"
     typescript: "npm:^5.4.5"
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk-ethers@workspace:*, @morpho-org/blue-sdk-ethers@workspace:packages/blue-sdk-ethers":
+"@morpho-org/blue-sdk-ethers@workspace:^, @morpho-org/blue-sdk-ethers@workspace:packages/blue-sdk-ethers":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-ethers@workspace:packages/blue-sdk-ethers"
   dependencies:
-    "@morpho-org/blue-sdk": "workspace:*"
-    "@morpho-org/morpho-test": "workspace:*"
-    "@morpho-org/morpho-ts": "workspace:*"
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/morpho-test": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
     "@nomicfoundation/hardhat-ethers": "npm:^3.0.6"
     "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.11"
     "@types/chai": "npm:^4.3.14"
@@ -2707,9 +2707,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-viem@workspace:packages/blue-sdk-viem"
   dependencies:
-    "@morpho-org/blue-sdk": "workspace:*"
-    "@morpho-org/morpho-test": "workspace:*"
-    "@morpho-org/morpho-ts": "workspace:*"
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/morpho-test": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
     "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.11"
     "@nomicfoundation/hardhat-viem": "npm:^2.0.3"
     "@types/chai": "npm:^4.3.14"
@@ -2730,12 +2730,12 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk@workspace:*, @morpho-org/blue-sdk@workspace:packages/blue-sdk":
+"@morpho-org/blue-sdk@workspace:^, @morpho-org/blue-sdk@workspace:packages/blue-sdk":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk@workspace:packages/blue-sdk"
   dependencies:
-    "@morpho-org/morpho-test": "workspace:*"
-    "@morpho-org/morpho-ts": "workspace:*"
+    "@morpho-org/morpho-test": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
     "@types/jest": "npm:^29.5.12"
     "@types/node": "npm:^22.0.0"
     jest: "npm:^29.7.0"
@@ -2745,7 +2745,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/morpho-test@workspace:*, @morpho-org/morpho-test@workspace:packages/morpho-test":
+"@morpho-org/morpho-test@workspace:^, @morpho-org/morpho-test@workspace:packages/morpho-test":
   version: 0.0.0-use.local
   resolution: "@morpho-org/morpho-test@workspace:packages/morpho-test"
   dependencies:
@@ -2772,7 +2772,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/morpho-ts@workspace:*, @morpho-org/morpho-ts@workspace:packages/morpho-ts":
+"@morpho-org/morpho-ts@workspace:^, @morpho-org/morpho-ts@workspace:packages/morpho-ts":
   version: 0.0.0-use.local
   resolution: "@morpho-org/morpho-ts@workspace:packages/morpho-ts"
   dependencies:
