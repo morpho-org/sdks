@@ -45,7 +45,6 @@ export const sendTransactionWithProducer = async (
         parseUnits("1.1"),
       );
     } catch (error: any) {
-      // eslint-disable-next-line no-console
       console.error(error);
       if (defaultGasLimit == null) throw error;
 
