@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
-  "version": "1.4.0",
+  "version": "1.3.9",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "lib/index.js",
@@ -13,12 +13,12 @@
     "test": "hardhat test"
   },
   "dependencies": {
-    "@morpho-org/blue-sdk": "^1.4.0",
-    "@morpho-org/morpho-ts": "^1.4.0",
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
     "viem": "^2.17.4"
   },
   "devDependencies": {
-    "@morpho-org/morpho-test": "^1.4.0",
+    "@morpho-org/morpho-test": "workspace:^",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
     "@nomicfoundation/hardhat-viem": "^2.0.3",
     "@types/chai": "^4.3.14",
@@ -37,8 +37,8 @@
     "typescript": "^5.4.5"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "^1.4.0",
-    "@morpho-org/morpho-ts": "^1.4.0"
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^"
   },
   "publishConfig": {
     "access": "public"
