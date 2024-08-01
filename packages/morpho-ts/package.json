@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/morpho-ts",
-  "version": "1.1.0",
+  "version": "1.4.1",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
