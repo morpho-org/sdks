@@ -2597,7 +2597,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lerna-lite/version@npm:3.7.1":
+"@lerna-lite/version@npm:3.7.1, @lerna-lite/version@npm:^3.7.1":
   version: 3.7.1
   resolution: "@lerna-lite/version@npm:3.7.1"
   dependencies:
@@ -2798,6 +2798,7 @@ __metadata:
     "@biomejs/biome": "npm:^1.8.3"
     "@lerna-lite/cli": "npm:3.5.1"
     "@lerna-lite/publish": "npm:3.7.1"
+    "@lerna-lite/version": "npm:^3.7.1"
     husky: "npm:^9.0.11"
     typescript: "npm:^5.4.5"
   languageName: unknown

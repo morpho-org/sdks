@@ -1,8 +1,8 @@
 {
   "name": "@morpho-org/blue-api-sdk",
-  "version": "1.4.1",
+  "version": "1.4.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "main": "src/index.ts",
+  "main": "lib/index.js",
   "files": [
     "lib"
   ],
@@ -12,9 +12,9 @@
     "build": "tsc --build tsconfig.build.json"
   },
   "dependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-ethers": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/blue-sdk": "^1.4.0",
+    "@morpho-org/blue-sdk-ethers": "^1.4.0",
+    "@morpho-org/morpho-ts": "^1.4.0"
   },
   "devDependencies": {
     "@apollo/client": "^3.11.1",
@@ -29,7 +29,7 @@
     "typescript": "^5.4.5"
   },
   "publishConfig": {
-    "access": "public",
-    "main": "lib/index.js"
-  }
+    "access": "public"
+  },
+  "gitHead": "17b1a46190f11620ae969927aec1c891f9752ca0"
 }

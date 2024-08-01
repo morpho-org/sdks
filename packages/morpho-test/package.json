@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-test",
-  "version": "1.4.1",
-  "main": "src/index.ts",
+  "version": "1.4.0",
+  "main": "lib/index.js",
   "files": [
     "lib"
   ],
@@ -37,7 +37,7 @@
     "typescript": "^5.4.5"
   },
   "publishConfig": {
-    "access": "public",
-    "main": "lib/index.js"
-  }
+    "access": "public"
+  },
+  "gitHead": "17b1a46190f11620ae969927aec1c891f9752ca0"
 }

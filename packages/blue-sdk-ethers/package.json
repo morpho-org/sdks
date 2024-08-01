@@ -1,9 +1,9 @@
 {
   "name": "@morpho-org/blue-sdk-ethers",
-  "version": "1.4.1",
+  "version": "1.4.0",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
-  "main": "src/index.ts",
+  "main": "lib/index.js",
   "files": [
     "lib"
   ],
@@ -14,15 +14,15 @@
     "test-hardhat": "hardhat test"
   },
   "dependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/blue-sdk": "^1.4.0",
+    "@morpho-org/morpho-ts": "^1.4.0",
     "ethers": "^6.12.1",
     "ethers-multicall-provider": "^6.3.0",
     "ethers-types": "^3.17.1",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
-    "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-test": "^1.4.0",
     "@nomicfoundation/hardhat-ethers": "^3.0.6",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
     "@types/chai": "^4.3.14",
@@ -43,12 +43,11 @@
     "typescript": "^5.4.5"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/blue-sdk": "^1.4.0",
+    "@morpho-org/morpho-ts": "^1.4.0"
   },
   "publishConfig": {
-    "access": "public",
-    "main": "lib/index.js"
+    "access": "public"
   },
   "jest": {
     "verbose": true,
@@ -68,5 +67,6 @@
       "ts"
     ],
     "preset": "ts-jest"
-  }
+  },
+  "gitHead": "17b1a46190f11620ae969927aec1c891f9752ca0"
 }

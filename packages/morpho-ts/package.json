@@ -1,9 +1,9 @@
 {
   "name": "@morpho-org/morpho-ts",
-  "version": "1.4.1",
+  "version": "1.4.0",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
-  "main": "src/index.ts",
+  "main": "lib/index.js",
   "files": [
     "lib"
   ],
@@ -21,8 +21,7 @@
     "typescript": "^5.4.5"
   },
   "publishConfig": {
-    "access": "public",
-    "main": "lib/index.js"
+    "access": "public"
   },
   "jest": {
     "verbose": true,
@@ -42,5 +41,6 @@
       "ts"
     ],
     "preset": "ts-jest"
-  }
+  },
+  "gitHead": "17b1a46190f11620ae969927aec1c891f9752ca0"
 }
