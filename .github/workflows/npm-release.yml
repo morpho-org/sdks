@@ -11,6 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -18,7 +22,7 @@ jobs:
 
       - run: yarn install --immutable
 
-      # - run: yarn lerna version --no-private --sign-git-tag --sign-git-commit --conventional-commits --force-publish
+      - run: yarn lerna version minor --no-private --sign-git-tag --sign-git-commit --conventional-commits --create-release github --generate-release-notes --force-publish
 
       - run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
