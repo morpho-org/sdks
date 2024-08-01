@@ -70,6 +70,7 @@ export const addresses = {
     crvUSDETHCRV: "0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14" as const,
     "stkcvx2BTC-f-morpho":
       "0x385E12cf4040543Bc8C18e05C1298Be5B04f3f5e" as const,
+    "2BTC-f": "0xB7ECB2AA52AA64a717180E030241bC75Cd946726" as const,
   },
   [ChainId.BaseMainnet]: {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as const,
@@ -150,6 +151,9 @@ export const unwrappedTokensMapping: Record<
       addresses[ChainId.EthMainnet].tryLSD,
     [addresses[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"]]:
       addresses[ChainId.EthMainnet].crvUSDETHCRV,
+
+    [addresses[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"]]:
+      addresses[ChainId.EthMainnet]["2BTC-f"],
   },
   [ChainId.BaseMainnet]: {
     [addresses[ChainId.BaseMainnet].wNative]: NATIVE_ADDRESS,
