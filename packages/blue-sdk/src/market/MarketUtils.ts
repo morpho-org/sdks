@@ -132,11 +132,40 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the liquidity available to withdraw until the market reach the given utilization rate.
+   * Returns the volume to supply until the market gets the closest to the given utilization rate.
    * @param market The market state.
    * @param utilization The target utilization rate (scaled by WAD).
    */
-  export function getSupplyLiquidityToUtilization(
+  export function getSupplyToUtilization(
+    {
+      totalSupplyAssets,
+      totalBorrowAssets,
+    }: {
+      totalSupplyAssets: BigIntish;
+      totalBorrowAssets: BigIntish;
+    },
+    utilization: BigIntish,
+  ) {
+    utilization = BigInt(utilization);
+    totalBorrowAssets = BigInt(totalBorrowAssets);
+    if (utilization === 0n) {
+      if (totalBorrowAssets === 0n) return totalSupplyAssets;
+
+      return 0n;
+    }
+
+    return MathLib.zeroFloorSub(
+      MathLib.wDivUp(totalBorrowAssets, utilization),
+      totalSupplyAssets,
+    );
+  }
+
+  /**
+   * Returns the liquidity available to withdraw until the market gets the closest to the given utilization rate.
+   * @param market The market state.
+   * @param utilization The target utilization rate (scaled by WAD).
+   */
+  export function getWithdrawToUtilization(
     {
       totalSupplyAssets,
       totalBorrowAssets,
@@ -161,11 +190,11 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the liquidity available to borrow until the market reach the given utilization rate.
+   * Returns the liquidity available to borrow until the market gets the closest to the given utilization rate.
    * @param market The market state.
    * @param utilization The target utilization rate (scaled by WAD).
    */
-  export function getBorrowLiquidityToUtilization(
+  export function getBorrowToUtilization(
     {
       totalSupplyAssets,
       totalBorrowAssets,
@@ -178,6 +207,27 @@ export namespace MarketUtils {
     return MathLib.zeroFloorSub(
       MathLib.wMulDown(totalSupplyAssets, utilization),
       totalBorrowAssets,
+    );
+  }
+
+  /**
+   * Returns the volume to repay until the market gets the closest to the given utilization rate.
+   * @param market The market state.
+   * @param utilization The target utilization rate (scaled by WAD).
+   */
+  export function getRepayToUtilization(
+    {
+      totalSupplyAssets,
+      totalBorrowAssets,
+    }: {
+      totalSupplyAssets: BigIntish;
+      totalBorrowAssets: BigIntish;
+    },
+    utilization: BigIntish,
+  ) {
+    return MathLib.zeroFloorSub(
+      totalBorrowAssets,
+      MathLib.wMulDown(totalSupplyAssets, utilization),
     );
   }
 

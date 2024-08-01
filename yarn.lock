@@ -2703,6 +2703,10 @@ __metadata:
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
+    ethers: ^6.12.1
+    ethers-multicall-provider: ^6.3.0
+    ethers-types: ^3.17.1
+    rxjs: ^7.8.1
   languageName: unknown
   linkType: soft
 

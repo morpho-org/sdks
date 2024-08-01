@@ -204,11 +204,11 @@ export class Market implements InputMarket {
 
     let borrowRate = 0n;
     let { rateAtTarget } = this;
-    if (this.rateAtTarget != null) {
+    if (rateAtTarget != null) {
       const { avgBorrowRate, endRateAtTarget } =
         AdaptiveCurveIrmLib.getBorrowRate(
           this.utilization,
-          this.rateAtTarget,
+          rateAtTarget,
           elapsed,
         );
 
@@ -351,19 +351,35 @@ export class Market implements InputMarket {
   }
 
   /**
-   * Returns the liquidity available to borrow until the market reach the given utilization rate.
+   * Returns the volume to supply until the market gets the closest to the given utilization rate.
    * @param utilization The target utilization rate (scaled by WAD).
    */
-  public getSupplyLiquidityToUtilization(utilization: bigint) {
-    return MarketUtils.getSupplyLiquidityToUtilization(this, utilization);
+  public getSupplyToUtilization(utilization: bigint) {
+    return MarketUtils.getSupplyToUtilization(this, utilization);
   }
 
   /**
-   * Returns the liquidity available to borrow until the market reach the given utilization rate.
+   * Returns the liquidity available to withdraw until the market gets the closest to the given utilization rate.
    * @param utilization The target utilization rate (scaled by WAD).
    */
-  public getBorrowLiquidityToUtilization(utilization: bigint) {
-    return MarketUtils.getBorrowLiquidityToUtilization(this, utilization);
+  public getWithdrawToUtilization(utilization: bigint) {
+    return MarketUtils.getWithdrawToUtilization(this, utilization);
+  }
+
+  /**
+   * Returns the liquidity available to borrow until the market gets the closest to the given utilization rate.
+   * @param utilization The target utilization rate (scaled by WAD).
+   */
+  public getBorrowToUtilization(utilization: bigint) {
+    return MarketUtils.getBorrowToUtilization(this, utilization);
+  }
+
+  /**
+   * Returns the volume to repay until the market gets the closest to the given utilization rate.
+   * @param utilization The target utilization rate (scaled by WAD).
+   */
+  public getRepayToUtilization(utilization: bigint) {
+    return MarketUtils.getRepayToUtilization(this, utilization);
   }
 
   /**

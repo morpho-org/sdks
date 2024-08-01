@@ -41,6 +41,5 @@
       "ts"
     ],
     "preset": "ts-jest"
-  },
-  "gitHead": "17b1a46190f11620ae969927aec1c891f9752ca0"
+  }
 }

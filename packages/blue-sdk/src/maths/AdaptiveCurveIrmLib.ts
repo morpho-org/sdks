@@ -145,4 +145,37 @@ export namespace AdaptiveCurveIrmLib {
       endRateAtTarget,
     };
   }
+
+  export function getUtilizationAtBorrowRate(
+    borrowRate: BigIntish,
+    rateAtTarget: BigIntish,
+  ) {
+    borrowRate = BigInt(borrowRate);
+    rateAtTarget = BigInt(rateAtTarget);
+
+    if (borrowRate >= rateAtTarget) {
+      const maxBorrowRate = MathLib.wMulDown(rateAtTarget, CURVE_STEEPNESS);
+
+      return MathLib.min(
+        MathLib.WAD,
+        TARGET_UTILIZATION +
+          MathLib.mulDivDown(
+            MathLib.WAD - TARGET_UTILIZATION,
+            borrowRate - rateAtTarget,
+            maxBorrowRate - rateAtTarget,
+          ),
+      );
+    }
+
+    const minBorrowRate = MathLib.wDivDown(rateAtTarget, CURVE_STEEPNESS);
+
+    return MathLib.max(
+      0n,
+      MathLib.mulDivDown(
+        TARGET_UTILIZATION,
+        borrowRate - minBorrowRate,
+        rateAtTarget - minBorrowRate,
+      ),
+    );
+  }
 }
