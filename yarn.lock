@@ -2668,6 +2668,10 @@ __metadata:
     graphql: "npm:^16.8.1"
     graphql-tag: "npm:^2.12.6"
     typescript: "npm:^5.4.5"
+  peerDependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-ethers": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
   languageName: unknown
   linkType: soft
 
@@ -2703,10 +2707,6 @@ __metadata:
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
-    ethers: ^6.12.1
-    ethers-multicall-provider: ^6.3.0
-    ethers-types: ^3.17.1
-    rxjs: ^7.8.1
   languageName: unknown
   linkType: soft
 
@@ -2752,6 +2752,8 @@ __metadata:
     keccak256: "npm:^1.0.6"
     ts-jest: "npm:^29.2.2"
     typescript: "npm:^5.4.5"
+  peerDependencies:
+    "@morpho-org/morpho-ts": "workspace:^"
   languageName: unknown
   linkType: soft
 

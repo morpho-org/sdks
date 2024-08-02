@@ -3,7 +3,7 @@
   "version": "1.4.0",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
-  "main": "lib/index.js",
+  "main": "src/index.ts",
   "files": [
     "lib"
   ],
@@ -14,15 +14,15 @@
     "test-hardhat": "hardhat test"
   },
   "dependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
     "ethers": "^6.12.1",
     "ethers-multicall-provider": "^6.3.0",
     "ethers-types": "^3.17.1",
     "rxjs": "^7.8.1"
   },
   "devDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
     "@nomicfoundation/hardhat-ethers": "^3.0.6",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
     "@types/chai": "^4.3.14",
@@ -44,13 +44,10 @@
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "ethers": "^6.12.1",
-    "ethers-multicall-provider": "^6.3.0",
-    "ethers-types": "^3.17.1",
-    "rxjs": "^7.8.1"
+    "@morpho-org/morpho-ts": "workspace:^"
   },
   "publishConfig": {
+    "main": "lib/index.js",
     "access": "public"
   },
   "jest": {

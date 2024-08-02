@@ -3,7 +3,7 @@
   "version": "1.4.0",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
-  "main": "lib/index.js",
+  "main": "src/index.ts",
   "files": [
     "lib"
   ],
@@ -13,12 +13,12 @@
     "test": "hardhat test"
   },
   "dependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
     "viem": "^2.17.4"
   },
   "devDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
     "@nomicfoundation/hardhat-viem": "^2.0.3",
     "@types/chai": "^4.3.14",
@@ -41,6 +41,7 @@
     "@morpho-org/morpho-ts": "workspace:^"
   },
   "publishConfig": {
+    "main": "lib/index.js",
     "access": "public"
   }
 }

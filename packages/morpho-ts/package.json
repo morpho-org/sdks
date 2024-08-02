@@ -3,7 +3,7 @@
   "version": "1.4.0",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
-  "main": "lib/index.js",
+  "main": "src/index.ts",
   "files": [
     "lib"
   ],
@@ -21,6 +21,7 @@
     "typescript": "^5.4.5"
   },
   "publishConfig": {
+    "main": "lib/index.js",
     "access": "public"
   },
   "jest": {
