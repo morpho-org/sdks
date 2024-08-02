@@ -1,8 +1,8 @@
 {
   "name": "@morpho-org/blue-api-sdk",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "author": "Morpho Association <contact@morpho.org>",
-  "main": "lib/index.js",
+  "main": "src/index.ts",
   "files": [
     "lib"
   ],
@@ -10,11 +10,6 @@
     "prepublish": "yarn build",
     "codegen": "graphql-codegen --config codegen.ts",
     "build": "tsc --build tsconfig.build.json"
-  },
-  "dependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-ethers": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
   },
   "devDependencies": {
     "@apollo/client": "^3.11.1",
@@ -24,12 +19,20 @@
     "@graphql-codegen/typescript": "^4.0.1",
     "@graphql-codegen/typescript-operations": "^4.0.1",
     "@graphql-codegen/typescript-resolvers": "^4.1.0",
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-ethers": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
     "graphql": "^16.8.1",
     "graphql-tag": "^2.12.6",
     "typescript": "^5.4.5"
   },
-  "publishConfig": {
-    "access": "public"
+  "peerDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-ethers": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^"
   },
-  "gitHead": "17b1a46190f11620ae969927aec1c891f9752ca0"
+  "publishConfig": {
+    "main": "lib/index.js",
+    "access": "public"
+  }
 }
