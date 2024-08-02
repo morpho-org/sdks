@@ -132,7 +132,7 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the volume to supply until the market gets the closest to the given utilization rate.
+   * Returns the smallest volume to supply until the market gets the closest to the given utilization rate.
    * @param market The market state.
    * @param utilization The target utilization rate (scaled by WAD).
    */
@@ -208,7 +208,7 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the volume to repay until the market gets the closest to the given utilization rate.
+   * Returns the smallest volume to repay until the market gets the closest to the given utilization rate.
    * @param market The market state.
    * @param utilization The target utilization rate (scaled by WAD).
    */
