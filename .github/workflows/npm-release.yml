@@ -30,7 +30,7 @@ jobs:
 
       - run: yarn install --immutable
 
-      - run: yarn lerna version --no-private --conventional-commits --create-release github --generate-release-notes --force-publish --y
+      - run: yarn lerna version --no-private --conventional-commits --create-release github --generate-release-notes --y
 
       - run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
