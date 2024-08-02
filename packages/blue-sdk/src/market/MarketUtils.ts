@@ -137,26 +137,22 @@ export namespace MarketUtils {
    * @param utilization The target utilization rate (scaled by WAD).
    */
   export function getSupplyToUtilization(
-    {
-      totalSupplyAssets,
-      totalBorrowAssets,
-    }: {
+    market: {
       totalSupplyAssets: BigIntish;
       totalBorrowAssets: BigIntish;
     },
     utilization: BigIntish,
   ) {
     utilization = BigInt(utilization);
-    totalBorrowAssets = BigInt(totalBorrowAssets);
     if (utilization === 0n) {
-      if (totalBorrowAssets === 0n) return totalSupplyAssets;
+      if (getUtilization(market) === 0n) return 0n;
 
-      return 0n;
+      return MathLib.MAX_UINT_256;
     }
 
     return MathLib.zeroFloorSub(
-      MathLib.wDivUp(totalBorrowAssets, utilization),
-      totalSupplyAssets,
+      MathLib.wDivUp(market.totalBorrowAssets, utilization),
+      market.totalSupplyAssets,
     );
   }
 
@@ -176,6 +172,7 @@ export namespace MarketUtils {
     utilization: BigIntish,
   ) {
     utilization = BigInt(utilization);
+    totalSupplyAssets = BigInt(totalSupplyAssets);
     totalBorrowAssets = BigInt(totalBorrowAssets);
     if (utilization === 0n) {
       if (totalBorrowAssets === 0n) return totalSupplyAssets;

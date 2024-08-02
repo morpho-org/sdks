@@ -36,6 +36,20 @@ describe("MarketUtils", () => {
         90_0000000000000000n,
       ),
     ).toEqual(0n);
+
+    expect(
+      MarketUtils.getSupplyToUtilization(
+        { totalSupplyAssets: MathLib.WAD, totalBorrowAssets: 0n },
+        0n,
+      ),
+    ).toEqual(0n);
+
+    expect(
+      MarketUtils.getSupplyToUtilization(
+        { totalSupplyAssets: MathLib.WAD, totalBorrowAssets: 1n },
+        0n,
+      ),
+    ).toEqual(MathLib.MAX_UINT_256);
   });
 
   it("should calculate the withdraw volume to reach utilization", () => {
