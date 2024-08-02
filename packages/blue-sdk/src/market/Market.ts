@@ -351,7 +351,7 @@ export class Market implements InputMarket {
   }
 
   /**
-   * Returns the volume to supply until the market gets the closest to the given utilization rate.
+   * Returns the smallest volume to supply until the market gets the closest to the given utilization rate.
    * @param utilization The target utilization rate (scaled by WAD).
    */
   public getSupplyToUtilization(utilization: bigint) {
@@ -375,7 +375,7 @@ export class Market implements InputMarket {
   }
 
   /**
-   * Returns the volume to repay until the market gets the closest to the given utilization rate.
+   * Returns the smallest volume to repay until the market gets the closest to the given utilization rate.
    * @param utilization The target utilization rate (scaled by WAD).
    */
   public getRepayToUtilization(utilization: bigint) {
