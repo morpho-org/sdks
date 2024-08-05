@@ -1,6 +1,6 @@
 import { CapacityLimit, CapacityLimitReason } from "../market";
 import { MathLib, RoundingDirection } from "../maths";
-import { Token } from "../token";
+import { VaultToken } from "../token";
 import { Address, MarketId } from "../types";
 
 import { VaultConfig } from "./VaultConfig";
@@ -50,7 +50,7 @@ export interface InputVault {
   publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
-export class Vault implements InputVault {
+export class Vault extends VaultToken implements InputVault {
   /**
    * The MetaMorpho vault's config.
    */
@@ -145,6 +145,8 @@ export class Vault implements InputVault {
     totalAssets,
     lastTotalAssets,
   }: InputVault) {
+    super(config, { totalAssets, totalSupply });
+
     this.config = config;
     this.curator = curator;
     this.owner = owner;
@@ -165,10 +167,6 @@ export class Vault implements InputVault {
     this.totalAssets = totalAssets;
     this.lastTotalAssets = lastTotalAssets;
     this.publicAllocatorConfig = publicAllocatorConfig;
-  }
-
-  get address() {
-    return this.config.address;
   }
 
   get asset() {
@@ -209,11 +207,6 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   public readonly allocations: Map<MarketId, VaultMarketAllocation>;
 
   /**
-   * The ERC4626 vault's share token.
-   */
-  public token: Token;
-
-  /**
    * The proportion of assets of the vault supplied to markets collateralized by each collateral asset.
    */
   public readonly collateralAllocations: Map<Address, CollateralAllocation>;
@@ -244,7 +237,6 @@ export class AccrualVault extends Vault implements InputAccrualVault {
         }),
       ]),
     );
-    this.token = new Token(this.config);
 
     this.collateralAllocations = new Map<Address, CollateralAllocation>();
 
