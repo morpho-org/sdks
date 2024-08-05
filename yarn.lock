@@ -2693,8 +2693,7 @@ __metadata:
     chai: "npm:^4.3.10"
     dotenv: "npm:^16.4.5"
     ethers: "npm:^6.12.1"
-    ethers-multicall-provider: "npm:^6.3.0"
-    ethers-types: "npm:^3.17.1"
+    ethers-types: "npm:^3.17.0"
     hardhat: "npm:^2.22.6"
     hardhat-deal: "npm:^3.1.0"
     jest: "npm:^29.7.0"
@@ -2707,6 +2706,8 @@ __metadata:
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
+    ethers: ^6.0.0
+    ethers-types: ^3.17.0
   languageName: unknown
   linkType: soft
 
@@ -6026,28 +6027,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ethers-multicall-provider@npm:^6.3.0":
-  version: 6.4.0
-  resolution: "ethers-multicall-provider@npm:6.4.0"
-  dependencies:
-    dataloader: "npm:^2.2.2"
-    ethers: "npm:^6.13.1"
-  checksum: 10c0/01ab33ca8f765936847a6105c0c40f89b80a2d5959750aeb197218ac2fc8203fa39add39aa632788c59b38fcd5e9cda15db43a1217a2cf8d9711208706921005
-  languageName: node
-  linkType: hard
-
-"ethers-types@npm:^3.17.1":
-  version: 3.17.1
-  resolution: "ethers-types@npm:3.17.1"
-  dependencies:
-    ethers: "npm:^6.12.0"
+"ethers-types@npm:^3.17.0":
+  version: 3.17.2
+  resolution: "ethers-types@npm:3.17.2"
   peerDependencies:
     ethers: ^6.0.0
-  checksum: 10c0/8d1f1ca93538b73031f69972b7999e665f66078190def1e5c95887efbf00f78ce774ab637353dd74cf546207928240928ef9f03e97419616b34e564e23b770f3
+  checksum: 10c0/e99ad59253cd5de0c7f5669b2a13ca06b6e6eaf493541fcecf4587341bd14f60fae46ab60cb5bae6e46acdd7c38d718df9d80b4a92bea75a74a09d525ad4cad7
   languageName: node
   linkType: hard
 
-"ethers@npm:^6.12.0, ethers@npm:^6.12.1, ethers@npm:^6.13.1":
+"ethers@npm:^6.12.1, ethers@npm:^6.13.1":
   version: 6.13.1
   resolution: "ethers@npm:6.13.1"
   dependencies:
