@@ -4,8 +4,6 @@ import { Address } from "../types";
 import { InputToken, Token } from "./Token";
 
 export abstract class WrappedToken extends Token {
-  protected _noSlippage = false;
-
   constructor(
     token: InputToken,
     readonly underlying: Address,
@@ -20,7 +18,7 @@ export abstract class WrappedToken extends Token {
     rounding: RoundingDirection = "Down",
   ) {
     const wrappedAmount = this._wrap(unwrappedAmount, rounding);
-    if (this._noSlippage) return wrappedAmount;
+
     return MathLib.wMul(wrappedAmount, MathLib.WAD - slippage, "Down");
   }
 
@@ -30,9 +28,11 @@ export abstract class WrappedToken extends Token {
     slippage = 0n,
     rounding: RoundingDirection = "Up",
   ) {
-    const wAmountTarget = this._noSlippage
-      ? wrappedAmount
-      : MathLib.wDiv(wrappedAmount, MathLib.WAD - slippage, rounding);
+    const wAmountTarget = MathLib.wDiv(
+      wrappedAmount,
+      MathLib.WAD - slippage,
+      rounding,
+    );
 
     return this._unwrap(wAmountTarget, rounding);
   }
@@ -44,7 +44,7 @@ export abstract class WrappedToken extends Token {
     rounding: RoundingDirection = "Down",
   ) {
     const unwrappedAmount = this._unwrap(wrappedAmount, rounding);
-    if (this._noSlippage) return unwrappedAmount;
+
     return MathLib.wMul(unwrappedAmount, MathLib.WAD - slippage, "Up");
   }
 
@@ -54,9 +54,11 @@ export abstract class WrappedToken extends Token {
     slippage = 0n,
     rounding: RoundingDirection = "Up",
   ) {
-    const unwrappedAmountToTarget = this._noSlippage
-      ? unwrappedAmount
-      : MathLib.wDiv(unwrappedAmount, MathLib.WAD - slippage, rounding);
+    const unwrappedAmountToTarget = MathLib.wDiv(
+      unwrappedAmount,
+      MathLib.WAD - slippage,
+      rounding,
+    );
 
     return this._wrap(unwrappedAmountToTarget, rounding);
   }
