@@ -2,7 +2,7 @@ import { ChainId } from "../chain";
 import { UnknownVaultConfigError } from "../errors";
 import { Address } from "../types";
 
-interface InputVaultConfig {
+export interface InputVaultConfig {
   address: Address;
   decimals: number;
   decimalsOffset: bigint;

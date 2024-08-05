@@ -1,16 +1,10 @@
 import { MathLib, RoundingDirection } from "../maths";
 import { Address } from "../types";
-import { Vault, VaultConfig, VaultUtils } from "../vault";
+import {} from "../vault";
 
 import { InputToken, Token } from "./Token";
 
 export abstract class WrappedToken extends Token {
-  protected abstract _wrap(amount: bigint, rounding: RoundingDirection): bigint;
-  protected abstract _unwrap(
-    amount: bigint,
-    rounding: RoundingDirection,
-  ): bigint;
-
   protected _noSlippage = false;
 
   constructor(
@@ -21,7 +15,7 @@ export abstract class WrappedToken extends Token {
   }
 
   /** The expected amount when wrapping `unwrappedAmount` */
-  toWrappedExactAmountIn(
+  public toWrappedExactAmountIn(
     unwrappedAmount: bigint,
     slippage = 0n,
     rounding: RoundingDirection = "Down",
@@ -32,7 +26,7 @@ export abstract class WrappedToken extends Token {
   }
 
   /** The amount of unwrappedTokens that should be wrapped to receive `wrappedAmount` */
-  toWrappedExactAmountOut(
+  public toWrappedExactAmountOut(
     wrappedAmount: bigint,
     slippage = 0n,
     rounding: RoundingDirection = "Up",
@@ -40,11 +34,12 @@ export abstract class WrappedToken extends Token {
     const wAmountTarget = this._noSlippage
       ? wrappedAmount
       : MathLib.wDiv(wrappedAmount, MathLib.WAD - slippage, rounding);
+
     return this._unwrap(wAmountTarget, rounding);
   }
 
   /** The expected amount when unwrapping `wrappedAmount` */
-  toUnwrappedExactAmountIn(
+  public toUnwrappedExactAmountIn(
     wrappedAmount: bigint,
     slippage = 0n,
     rounding: RoundingDirection = "Down",
@@ -55,7 +50,7 @@ export abstract class WrappedToken extends Token {
   }
 
   /** The amount of wrappedTokens that should be unwrapped to receive `unwrappedAmount` */
-  toUnwrappedExactAmountOut(
+  public toUnwrappedExactAmountOut(
     unwrappedAmount: bigint,
     slippage = 0n,
     rounding: RoundingDirection = "Up",
@@ -63,78 +58,13 @@ export abstract class WrappedToken extends Token {
     const unwrappedAmountToTarget = this._noSlippage
       ? unwrappedAmount
       : MathLib.wDiv(unwrappedAmount, MathLib.WAD - slippage, rounding);
+
     return this._wrap(unwrappedAmountToTarget, rounding);
   }
-}
 
-export class ConstantWrappedToken extends WrappedToken {
-  protected _noSlippage = true;
-
-  constructor(
-    token: InputToken,
-    readonly underlying: Address,
-    private readonly _underlyingDecimals = 18,
-  ) {
-    super(token, underlying);
-  }
-
-  protected _wrap(amount: bigint) {
-    return MathLib.mulDivDown(
-      amount,
-      10n ** BigInt(this.decimals),
-      10n ** BigInt(this._underlyingDecimals),
-    );
-  }
-
-  protected _unwrap(amount: bigint) {
-    return MathLib.mulDivDown(
-      amount,
-      10n ** BigInt(this._underlyingDecimals),
-      10n ** BigInt(this.decimals),
-    );
-  }
-}
-
-export class ExchangeRateWrappedToken extends WrappedToken {
-  protected _wrap(amount: bigint, rounding: RoundingDirection) {
-    return MathLib.wDiv(amount, this.wrappedTokenExchangeRate, rounding);
-  }
-  protected _unwrap(amount: bigint, rounding: RoundingDirection) {
-    return MathLib.wMul(amount, this.wrappedTokenExchangeRate, rounding);
-  }
-
-  constructor(
-    token: InputToken,
-    readonly underlying: Address,
-    public wrappedTokenExchangeRate: bigint,
-  ) {
-    super(token, underlying);
-  }
-}
-
-export class VaultToken extends WrappedToken {
-  protected _wrap(amount: bigint, rounding: RoundingDirection) {
-    return VaultUtils.toShares(amount, this, this.config, rounding);
-  }
-  protected _unwrap(amount: bigint, rounding: RoundingDirection) {
-    return VaultUtils.toAssets(amount, this, this.config, rounding);
-  }
-
-  public totalAssets: bigint;
-  public totalSupply: bigint;
-  public config: VaultConfig;
-
-  constructor(
-    token: InputToken,
-    {
-      totalAssets,
-      totalSupply,
-      config,
-    }: Pick<Vault, "totalAssets" | "totalSupply" | "config">,
-  ) {
-    super(token, config.asset);
-    this.totalAssets = totalAssets;
-    this.totalSupply = totalSupply;
-    this.config = config;
-  }
+  protected abstract _wrap(amount: bigint, rounding: RoundingDirection): bigint;
+  protected abstract _unwrap(
+    amount: bigint,
+    rounding: RoundingDirection,
+  ): bigint;
 }
