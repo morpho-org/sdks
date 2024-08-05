@@ -1,6 +1,5 @@
 import { MathLib } from "../maths";
 import { Address } from "../types";
-import {} from "../vault";
 
 import { InputToken } from "./Token";
 import { WrappedToken } from "./WrappedToken";

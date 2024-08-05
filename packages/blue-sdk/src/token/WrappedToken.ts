@@ -1,6 +1,5 @@
 import { MathLib, RoundingDirection } from "../maths";
 import { Address } from "../types";
-import {} from "../vault";
 
 import { InputToken, Token } from "./Token";
 

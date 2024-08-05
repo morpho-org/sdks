@@ -1,5 +1,6 @@
 import { RoundingDirection } from "../maths";
-import { InputVaultConfig, Vault, VaultUtils } from "../vault";
+import { InputVaultConfig } from "../vault/VaultConfig";
+import { VaultUtils } from "../vault/VaultUtils";
 import { WrappedToken } from "./WrappedToken";
 
 export class VaultToken extends WrappedToken {
@@ -9,7 +10,7 @@ export class VaultToken extends WrappedToken {
 
   constructor(
     config: InputVaultConfig,
-    { totalAssets, totalSupply }: Pick<Vault, "totalAssets" | "totalSupply">,
+    { totalAssets, totalSupply }: { totalAssets: bigint; totalSupply: bigint },
   ) {
     super(config, config.asset);
 

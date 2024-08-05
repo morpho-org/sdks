@@ -1,6 +1,6 @@
 import { CapacityLimit, CapacityLimitReason } from "../market";
 import { MathLib, RoundingDirection } from "../maths";
-import { Token, VaultToken } from "../token";
+import { VaultToken } from "../token";
 import { Address, MarketId } from "../types";
 
 import { VaultConfig } from "./VaultConfig";
@@ -207,11 +207,6 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   public readonly allocations: Map<MarketId, VaultMarketAllocation>;
 
   /**
-   * The ERC4626 vault's share token.
-   */
-  public token: Token;
-
-  /**
    * The proportion of assets of the vault supplied to markets collateralized by each collateral asset.
    */
   public readonly collateralAllocations: Map<Address, CollateralAllocation>;
@@ -242,7 +237,6 @@ export class AccrualVault extends Vault implements InputAccrualVault {
         }),
       ]),
     );
-    this.token = new Token(this.config);
 
     this.collateralAllocations = new Map<Address, CollateralAllocation>();
 
