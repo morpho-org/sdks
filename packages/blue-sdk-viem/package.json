@@ -12,9 +12,6 @@
     "build": "tsc --build tsconfig.build.json",
     "test": "hardhat test"
   },
-  "dependencies": {
-    "viem": "^2.17.4"
-  },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
@@ -23,22 +20,24 @@
     "@nomicfoundation/hardhat-viem": "^2.0.3",
     "@types/chai": "^4.3.14",
     "@types/mocha": "^10.0.6",
-    "@types/node": "^22.0.0",
+    "@types/node": "^22.1.0",
     "@types/sinon": "^17.0.3",
     "@types/sinon-chai": "^3.2.12",
     "chai": "^4.3.10",
     "dotenv": "^16.4.5",
-    "ethers": "^6.13.1",
+    "ethers": "^6.13.2",
     "hardhat": "^2.22.6",
     "hardhat-deal": "^3.1.0",
     "mocha": "^10.4.0",
     "sinon": "^18.0.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "viem": "^2.18.8"
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^",
+    "viem": "^2.0.0"
   },
   "publishConfig": {
     "main": "lib/index.js",
