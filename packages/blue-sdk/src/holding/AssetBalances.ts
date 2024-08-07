@@ -1,11 +1,11 @@
 import { Token } from "../token/Token";
 
 export type PeripheralBalanceType =
-  | "base" // The requested token balance (ETH for ETH, wstETH for wstETH).
-  | "wrapped" // The unwrapped token balance (none for DAI, wstETH for wstETH).
+  | "base" // The balance of the requested token (ETH for ETH, wstETH for wstETH).
+  | "wrapped" // The balance of the unwrapped token (none for DAI, wstETH for wstETH).
   | "staked-wrapped" // The balance of the unstaked token staked then wrapped (none for WETH, ETH for wstETH).
-  | "vault" // The vault token balance (none for WETH, re7WETH for re7WETH).
-  | "wrapped-vault" // The balance of the unwrapped token wrapped then deposited to the vault (none for sparkDAI, ETH for re7WETH).
+  | "vault" // The balance of the underlying token deposited into the vault (none for WETH, re7WETH for re7WETH).
+  | "wrapped-vault" // The balance of the unwrapped token wrapped then deposited into the vault (none for sparkDAI, ETH for re7WETH).
   | "unwrapped-staked-wrapped"; // The balance of the wrapped token unwrapped then staked then wrapped (none for sDAI, WETH for wstETH).
 
 /**
