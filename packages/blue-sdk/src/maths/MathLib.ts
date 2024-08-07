@@ -185,29 +185,27 @@ export class MathLib {
   }
 
   /**
-   * Converts an apr to compounded apy
+   * Converts an rate to compounded apy
    *
-   * @param apr The rate to convert (in WAD)
-   * @param compounding The compounding basis
+   * @param rate The rate to convert (in WAD)
+   * @param period The compounding basis
    */
-  static rateToApy(rate: BigIntish, unit: Time.Unit) {
-    const factor = Time[unit].from.y(1n);
+  static rateToApy(rate: BigIntish, period: Time.PeriodLike) {
+    const { unit, duration } = Time.toPeriod(period);
+    const factor = Time[unit].from.y(1) / duration;
 
-    return (
-      (1 + Number(format.number.of(BigInt(rate), 18))) ** Number(factor) - 1
-    );
+    return (1 + Number(format.number.of(BigInt(rate), 18))) ** factor - 1;
   }
 
   /**
    * Converts an apr to compounded apy
    *
-   * @param apr The yearly apr to convert (in WAD)
+   * @param apr The apr to convert (in WAD)
    * @param compounding The compounding basis
    */
-  static aprToApy(apr: BigIntish, compounding: Time.Unit) {
-    const factor = Time[compounding].from.y(1n);
-
-    const rate = BigInt(apr) / factor;
+  static aprToApy(apr: BigIntish, compounding: Time.PeriodLike) {
+    const { unit, duration } = Time.toPeriod(compounding);
+    const rate = (BigInt(apr) * BigInt(duration)) / Time[unit].from.y(1n);
 
     return this.rateToApy(rate, compounding);
   }
