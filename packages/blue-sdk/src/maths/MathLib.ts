@@ -192,11 +192,9 @@ export class MathLib {
    */
   static rateToApy(rate: BigIntish, period: Time.PeriodLike) {
     const { unit, duration } = Time.toPeriod(period);
-    const factor = Time[unit].from.y(1n) / BigInt(duration);
+    const factor = Time[unit].from.y(1) / duration;
 
-    return (
-      (1 + Number(format.number.of(BigInt(rate), 18))) ** Number(factor) - 1
-    );
+    return (1 + Number(format.number.of(BigInt(rate), 18))) ** factor - 1;
   }
 
   /**
