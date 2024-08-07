@@ -30,11 +30,7 @@ jobs:
 
       - run: yarn install --immutable
 
-      - if: github.ref == 'refs/heads/main'
-        run: yarn lerna version --no-private --conventional-commits --create-release github --generate-release-notes --y
-
-      - if: github.ref != 'refs/heads/main'
-        run: yarn lerna version --no-private --conventional-prerelease --y
+      - run: yarn lerna version --no-private --conventional-commits ${{ github.ref != 'refs/head/main' && '--conventional-prerelease' }} --create-release github --generate-release-notes --y
 
       - run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
