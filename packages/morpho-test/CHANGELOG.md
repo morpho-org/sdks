@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# 1.5.0 (2024-08-07)
+
+### Bug Fixes
+
+* **blue-sdk:** remove dead import ([cfd89a7](https://github.com/morpho-org/sdks/commit/cfd89a7dcb207bafb76c3294c1e96ab553c1568a))
+
 ## 1.4.7 (2024-08-07)
 
 **Note:** Version bump only for package @morpho-org/morpho-test
