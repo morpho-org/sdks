@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
-  "version": "1.5.4",
+  "version": "1.5.5",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
