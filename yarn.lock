@@ -2783,17 +2783,6 @@ __metadata:
     sinon: "npm:^18.0.0"
     sinon-chai: "npm:^3.7.0"
     typescript: "npm:^5.4.5"
-  peerDependencies:
-    "@nomicfoundation/hardhat-ethers": ^3.0.0
-    "@nomicfoundation/hardhat-network-helpers": ^1.0.0
-    chai: ^4.3.0
-    chai-as-promised: ^7.1.0
-    chai-exclude: ^2.1.0
-    ethers: ^6.0.0
-    hardhat: ^2.20.0
-    jest: ^29.7.0
-    sinon: ^18.0.0
-    sinon-chai: ^3.7.0
   languageName: unknown
   linkType: soft
 
