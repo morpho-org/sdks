@@ -30,9 +30,7 @@ jobs:
 
       - run: yarn install --immutable
 
-      - run: echo "${{ github.ref }}"
-
-      - run: yarn lerna version --no-private --conventional-commits ${{ github.ref != 'refs/head/main' && '--conventional-prerelease' }} --create-release github --generate-release-notes --y
+      - run: yarn lerna version --no-private --conventional-commits ${{ github.ref != 'refs/heads/main' && '--conventional-prerelease' }} --create-release github --generate-release-notes --y
 
       - run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
