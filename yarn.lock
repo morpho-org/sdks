@@ -2766,26 +2766,25 @@ __metadata:
     "@nomicfoundation/hardhat-ethers": "npm:^3.0.4"
     "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.9"
     "@types/chai": "npm:^4.3.17"
-    "@types/chai-as-promised": "npm:^7"
     "@types/jest": "npm:^29.5.12"
     "@types/mocha": "npm:^10.0.6"
     "@types/node": "npm:^22.1.0"
     "@types/sinon": "npm:^17.0.3"
     "@types/sinon-chai": "npm:^3.2.12"
     chai: "npm:^4.5.0"
-    chai-as-promised: "npm:^7.1.2"
-    chai-exclude: "npm:^2.1.1"
     dotenv: "npm:^16.3.1"
     ethers: "npm:^6.13.2"
     hardhat: "npm:^2.20.1"
-    jest: "npm:^29.7.0"
     mocha: "npm:^10.4.0"
     sinon: "npm:^18.0.0"
     sinon-chai: "npm:^3.7.0"
     typescript: "npm:^5.4.5"
   peerDependencies:
+    chai: ^4.3.0
     ethers: ^6.0.0
     hardhat: ^2.20.0
+    sinon: ^18.0.0
+    sinon-chai: ^3.7.0
   languageName: unknown
   linkType: soft
 
@@ -3862,15 +3861,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/chai-as-promised@npm:^7":
-  version: 7.1.8
-  resolution: "@types/chai-as-promised@npm:7.1.8"
-  dependencies:
-    "@types/chai": "npm:*"
-  checksum: 10c0/c0a19cffe8d3f406b2cb9ba17f5f0efe318b14f27896d807b3199cc2231c16a4b5b6c464fdf2a939214de481de58cffd46c240539d3d4ece18659277d71ccc23
-  languageName: node
-  linkType: hard
-
 "@types/chai@npm:*, @types/chai@npm:^4.3.14":
   version: 4.3.16
   resolution: "@types/chai@npm:4.3.16"
@@ -4928,28 +4918,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chai-as-promised@npm:^7.1.2":
-  version: 7.1.2
-  resolution: "chai-as-promised@npm:7.1.2"
-  dependencies:
-    check-error: "npm:^1.0.2"
-  peerDependencies:
-    chai: ">= 2.1.2 < 6"
-  checksum: 10c0/ee20ed75296d8cbf828b2f3c9ad64627cee67b1a38b8e906ca59fe788fb6965ddb10f702ae66645ed88f15a905ade4f2d9f8540029e92e2d59b229c9f912273f
-  languageName: node
-  linkType: hard
-
-"chai-exclude@npm:^2.1.1":
-  version: 2.1.1
-  resolution: "chai-exclude@npm:2.1.1"
-  dependencies:
-    fclone: "npm:^1.0.11"
-  peerDependencies:
-    chai: ">= 4.0.0 < 5"
-  checksum: 10c0/a101ea5b52c1bf2f41fcf7d9e03fcb2f1fb9b0c66a76a6eed9502cae5fa35a498ce02eea1b2a1b55eac227b9056285d6673ce2984f4088bd3058bd27fdb8ed9d
-  languageName: node
-  linkType: hard
-
 "chai@npm:^4.3.10":
   version: 4.4.1
   resolution: "chai@npm:4.4.1"
@@ -5060,7 +5028,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"check-error@npm:^1.0.2, check-error@npm:^1.0.3":
+"check-error@npm:^1.0.3":
   version: 1.0.3
   resolution: "check-error@npm:1.0.3"
   dependencies:
@@ -6266,13 +6234,6 @@ __metadata:
     setimmediate: "npm:^1.0.5"
     ua-parser-js: "npm:^1.0.35"
   checksum: 10c0/66d0a2fc9a774f9066e35ac2ac4bf1245931d27f3ac287c7d47e6aa1fc152b243c2109743eb8f65341e025621fb51a12038fadb9fd8fda2e3ddae04ebab06f91
-  languageName: node
-  linkType: hard
-
-"fclone@npm:^1.0.11":
-  version: 1.0.11
-  resolution: "fclone@npm:1.0.11"
-  checksum: 10c0/dbe3ebd0883edeec2998874bf951aa03198d727f1091351b22af250ff53e227ee94872487ae88ba7280b2469fb164a7d4dd4e5ece10afd4988ab4712f49bc43b
   languageName: node
   linkType: hard
 
