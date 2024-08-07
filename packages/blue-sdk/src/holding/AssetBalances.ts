@@ -36,6 +36,8 @@ export interface PeripheralBalance {
   dstAmount: bigint;
 }
 
+export interface InputAssetBalances extends Omit<PeripheralBalance, "type"> {}
+
 export class AssetBalances {
   /**
    * The total balance of all types of related tokens.
@@ -49,9 +51,11 @@ export class AssetBalances {
     [T in Exclude<PeripheralBalanceType, "base">]?: PeripheralBalance;
   };
 
-  constructor(balance: PeripheralBalance) {
+  constructor(balance: InputAssetBalances) {
     this.total = balance.dstAmount;
-    this.allocations = { base: balance };
+    this.allocations = {
+      base: { ...balance, type: "base" },
+    };
   }
 
   public add(balance: PeripheralBalance) {
