@@ -3,10 +3,10 @@ name: Publish on NPM
 on:
   workflow_dispatch:
     inputs:
-      type:
+      version:
         type: choice
         required: true
-        description: Type of release
+        description: Type of version
         options:
           - patch
           - minor
