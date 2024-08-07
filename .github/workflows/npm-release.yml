@@ -30,6 +30,8 @@ jobs:
 
       - run: yarn install --immutable
 
+      - run: echo "${{ github.ref }}"
+
       - run: yarn lerna version --no-private --conventional-commits ${{ github.ref != 'refs/head/main' && '--conventional-prerelease' }} --create-release github --generate-release-notes --y
 
       - run: |
