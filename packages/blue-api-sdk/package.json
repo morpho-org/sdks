@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-api-sdk",
-  "version": "1.4.6-alpha.3",
+  "version": "1.4.6",
   "author": "Morpho Association <contact@morpho.org>",
   "main": "src/index.ts",
   "files": [
