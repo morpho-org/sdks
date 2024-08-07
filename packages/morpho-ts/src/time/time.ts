@@ -4,8 +4,8 @@ const toNumberish = (returnValue: bigint, initialValue: bigint | number) => {
 };
 
 const UNITS = ["ms", "s", "min", "h", "d", "w", "mo", "y"] as const;
-export type TUnit = (typeof UNITS)[number];
-export type TPeriod = {
+type TUnit = (typeof UNITS)[number];
+type TPeriod = {
   unit: TUnit;
   duration: number;
 };
