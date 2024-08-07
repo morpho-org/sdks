@@ -1,5 +1,4 @@
 import { expect } from "chai";
-import { ZeroAddress } from "ethers";
 
 import { viem } from "hardhat";
 import {
@@ -13,6 +12,7 @@ import {
   WalletRpcSchema,
   publicActions,
   testActions,
+  zeroAddress,
 } from "viem";
 
 import {
@@ -54,11 +54,11 @@ describe("augment/MarketConfig", () => {
 
   it("should fetch config from chain", async () => {
     const marketParams = {
-      collateralToken: ZeroAddress,
+      collateralToken: zeroAddress,
       loanToken: addresses[ChainId.EthMainnet].wNative,
       lltv: 0n,
-      irm: ZeroAddress,
-      oracle: ZeroAddress,
+      irm: zeroAddress,
+      oracle: zeroAddress,
     };
 
     const market = await MarketConfig.fetch(
