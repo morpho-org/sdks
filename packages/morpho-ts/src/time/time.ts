@@ -5,6 +5,10 @@ const toNumberish = (returnValue: bigint, initialValue: bigint | number) => {
 
 const UNITS = ["ms", "s", "min", "h", "d", "w", "mo", "y"] as const;
 export type TUnit = (typeof UNITS)[number];
+export type TPeriod = {
+  unit: TUnit;
+  duration: number;
+};
 
 type P = {
   [U in TUnit]: <T extends number | bigint>(
@@ -99,6 +103,16 @@ Object.defineProperties(
 
 export namespace Time {
   export type Unit = TUnit;
+  export type Period = TPeriod;
+  export type PeriodLike = TPeriod | TUnit;
+
+  export function toPeriod(periodLike: PeriodLike): Period {
+    if (typeof periodLike === "object") return periodLike;
+    return {
+      unit: periodLike,
+      duration: 1,
+    };
+  }
 
   export async function wait<T>(ms: number, value?: T) {
     return new Promise((resolve) => setTimeout(() => resolve(value), ms));

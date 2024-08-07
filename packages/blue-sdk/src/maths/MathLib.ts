@@ -190,8 +190,9 @@ export class MathLib {
    * @param apr The rate to convert (in WAD)
    * @param compounding The compounding basis
    */
-  static rateToApy(rate: BigIntish, unit: Time.Unit) {
-    const factor = Time[unit].from.y(1n);
+  static rateToApy(rate: BigIntish, period: Time.PeriodLike) {
+    const { unit, duration } = Time.toPeriod(period);
+    const factor = Time[unit].from.y(1n) / BigInt(duration);
 
     return (
       (1 + Number(format.number.of(BigInt(rate), 18))) ** Number(factor) - 1
@@ -204,8 +205,9 @@ export class MathLib {
    * @param apr The yearly apr to convert (in WAD)
    * @param compounding The compounding basis
    */
-  static aprToApy(apr: BigIntish, compounding: Time.Unit) {
-    const factor = Time[compounding].from.y(1n);
+  static aprToApy(apr: BigIntish, compounding: Time.PeriodLike) {
+    const { unit, duration } = Time.toPeriod(compounding);
+    const factor = Time[unit].from.y(1n) / BigInt(duration);
 
     const rate = BigInt(apr) / factor;
 
