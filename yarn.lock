@@ -2765,16 +2765,16 @@ __metadata:
   dependencies:
     "@nomicfoundation/hardhat-ethers": "npm:^3.0.4"
     "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.9"
-    "@types/chai": "npm:^4.3.14"
+    "@types/chai": "npm:^4.3.17"
     "@types/chai-as-promised": "npm:^7"
     "@types/jest": "npm:^29.5.12"
     "@types/mocha": "npm:^10.0.6"
     "@types/node": "npm:^22.1.0"
     "@types/sinon": "npm:^17.0.3"
     "@types/sinon-chai": "npm:^3.2.12"
-    chai: "npm:^4.3.10"
+    chai: "npm:^4.5.0"
     chai-as-promised: "npm:^7.1.2"
-    chai-exclude: "npm:^2.1.0"
+    chai-exclude: "npm:^2.1.1"
     dotenv: "npm:^16.3.1"
     ethers: "npm:^6.13.2"
     hardhat: "npm:^2.20.1"
@@ -2783,6 +2783,9 @@ __metadata:
     sinon: "npm:^18.0.0"
     sinon-chai: "npm:^3.7.0"
     typescript: "npm:^5.4.5"
+  peerDependencies:
+    ethers: ^6.0.0
+    hardhat: ^2.20.0
   languageName: unknown
   linkType: soft
 
@@ -3875,6 +3878,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/chai@npm:^4.3.17":
+  version: 4.3.17
+  resolution: "@types/chai@npm:4.3.17"
+  checksum: 10c0/322a74489cdfde9c301b593d086c539584924c4c92689a858e0930708895a5ab229c31c64ac26b137615ef3ffbff1866851c280c093e07b3d3de05983d3793e0
+  languageName: node
+  linkType: hard
+
 "@types/graceful-fs@npm:^4.1.3":
   version: 4.1.9
   resolution: "@types/graceful-fs@npm:4.1.9"
@@ -4929,7 +4939,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chai-exclude@npm:^2.1.0":
+"chai-exclude@npm:^2.1.1":
   version: 2.1.1
   resolution: "chai-exclude@npm:2.1.1"
   dependencies:
@@ -4952,6 +4962,21 @@ __metadata:
     pathval: "npm:^1.1.1"
     type-detect: "npm:^4.0.8"
   checksum: 10c0/91590a8fe18bd6235dece04ccb2d5b4ecec49984b50924499bdcd7a95c02cb1fd2a689407c19bb854497bde534ef57525cfad6c7fdd2507100fd802fbc2aefbd
+  languageName: node
+  linkType: hard
+
+"chai@npm:^4.5.0":
+  version: 4.5.0
+  resolution: "chai@npm:4.5.0"
+  dependencies:
+    assertion-error: "npm:^1.1.0"
+    check-error: "npm:^1.0.3"
+    deep-eql: "npm:^4.1.3"
+    get-func-name: "npm:^2.0.2"
+    loupe: "npm:^2.3.6"
+    pathval: "npm:^1.1.1"
+    type-detect: "npm:^4.1.0"
+  checksum: 10c0/b8cb596bd1aece1aec659e41a6e479290c7d9bee5b3ad63d2898ad230064e5b47889a3bc367b20100a0853b62e026e2dc514acf25a3c9385f936aa3614d4ab4d
   languageName: node
   linkType: hard
 
@@ -11010,6 +11035,13 @@ __metadata:
   version: 4.0.8
   resolution: "type-detect@npm:4.0.8"
   checksum: 10c0/8fb9a51d3f365a7de84ab7f73b653534b61b622aa6800aecdb0f1095a4a646d3f5eb295322127b6573db7982afcd40ab492d038cf825a42093a58b1e1353e0bd
+  languageName: node
+  linkType: hard
+
+"type-detect@npm:^4.1.0":
+  version: 4.1.0
+  resolution: "type-detect@npm:4.1.0"
+  checksum: 10c0/df8157ca3f5d311edc22885abc134e18ff8ffbc93d6a9848af5b682730ca6a5a44499259750197250479c5331a8a75b5537529df5ec410622041650a7f293e2a
   languageName: node
   linkType: hard
 
