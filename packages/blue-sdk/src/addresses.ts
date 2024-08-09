@@ -31,6 +31,7 @@ export const addresses = {
     aaveV2Bundler: "0xb3dCc75DB379925edFd3007511A8CE0cB4aa8e76" as const,
     aaveV3Bundler: "0x98ccB155E86bb478d514a827d16f58c6912f9BDC" as const,
     compoundV3Bundler: "0x3a0e2E9FB9c95fBc843daF166276C90B6C479558" as const,
+    compoundV2Bundler: "0x26bf52a84360ad3d01d7cdc28fc2ddc04d8c8647" as const,
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" as const,
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D" as const,
 
@@ -76,6 +77,7 @@ export const addresses = {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as const,
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const,
     bundler: "0x23055618898e202386e6c13955a58D3C68200BFB" as const,
+    compoundV2Bundler: "0x123f3167a416cA19365dE03a65e0AF3532af7223" as const,
     aaveV3Bundler: "0xcAe2929baBc60Be34818EaA5F40bF69265677108" as const,
     compoundV3Bundler: "0x1f8076e2EB6f10b12e6886f30D4909A91969F7dA" as const,
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687" as const,
@@ -96,6 +98,7 @@ export interface ChainAddresses {
   aaveV2Bundler?: Address;
   aaveV3Bundler?: Address;
   compoundV3Bundler?: Address;
+  compoundV2Bundler?: Address;
   adaptiveCurveIrm?: Address;
   publicAllocator?: Address;
 
