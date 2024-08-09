@@ -207,6 +207,9 @@ export const typePolicies = {
       creationTimestamp: {
         read: readMaybeBigInt,
       },
+      metadata: {
+        merge: true,
+      },
       historicalState: {
         // Fixes issue with cache causing infinite query loop when querying vault history through multiple queries
         merge: true,
