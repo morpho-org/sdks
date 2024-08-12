@@ -58,6 +58,7 @@ export type Asset = {
   /** Current spot price in ETH. */
   spotPriceEth: Maybe<Scalars["Float"]["output"]>;
   symbol: Scalars["String"]["output"];
+  tags: Maybe<Array<Scalars["String"]["output"]>>;
   /** ERC-20 token total supply */
   totalSupply: Scalars["BigInt"]["output"];
   /** MetaMorpho vault */
@@ -206,6 +207,8 @@ export type Market = {
   state: Maybe<MarketState>;
   /** Vaults with the market in supply queue */
   supplyingVaults: Maybe<Array<Vault>>;
+  targetBorrowUtilization: Scalars["BigInt"]["output"];
+  targetWithdrawUtilization: Scalars["BigInt"]["output"];
   uniqueKey: Scalars["MarketId"]["output"];
   /** Market warnings */
   warnings: Maybe<Array<MarketWarning>>;
@@ -290,6 +293,8 @@ export type MarketFilters = {
   collateralAssetAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by collateral asset id */
   collateralAssetId_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by collateral asset tags. */
+  collateralAssetTags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   countryCode?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by greater than or equal to given fee rate */
   fee_gte?: InputMaybe<Scalars["Float"]["input"]>;
@@ -308,6 +313,8 @@ export type MarketFilters = {
   loanAssetAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by loan asset id */
   loanAssetId_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by loan asset tags. */
+  loanAssetTags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by greater than or equal to given net borrow APY */
   netBorrowApy_gte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by lower than or equal to given net borrow APY */
