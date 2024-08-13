@@ -168,6 +168,8 @@ export type IntDataPoint = {
 /** Morpho Blue market */
 export type Market = {
   __typename?: "Market";
+  /** All time market APYs */
+  allTimeApys: Maybe<MarketApyAggregates>;
   /** Market bad debt values */
   badDebt: Maybe<MarketBadDebt>;
   collateralAsset: Maybe<Asset>;
@@ -199,6 +201,8 @@ export type Market = {
   oracleInfo: Maybe<MarketOracleInfo>;
   /** Public allocator shared liquidity available reallocations */
   publicAllocatorSharedLiquidity: Maybe<Array<PublicAllocatorSharedLiquidity>>;
+  /** Quarterly market APYs */
+  quarterlyApys: Maybe<MarketApyAggregates>;
   /** Market realized bad debt values */
   realizedBadDebt: Maybe<MarketBadDebt>;
   /** Underlying amount of assets that can be reallocated to this market */
@@ -215,6 +219,8 @@ export type Market = {
   /** Weekly market APYs */
   weeklyApys: Maybe<MarketApyAggregates>;
   whitelisted: Scalars["Boolean"]["output"];
+  /** Yearly market APYs */
+  yearlyApys: Maybe<MarketApyAggregates>;
 };
 
 /** Morpho Blue market */
