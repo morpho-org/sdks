@@ -10,7 +10,7 @@ export type Address = string;
  */
 export type MarketId = `0x${Hex64}` & { __TYPE__: "marketId" };
 
-export type BigIntish = bigint | string;
+export type BigIntish = bigint | string | number | boolean;
 
 /**
  * The possible transaction type on the Blue contract

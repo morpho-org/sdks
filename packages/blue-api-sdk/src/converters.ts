@@ -11,6 +11,7 @@ import {
   VaultMarketAllocation,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
+  VaultUtils,
 } from "@morpho-org/blue-sdk";
 import { safeGetAddress, safeParseNumber } from "@morpho-org/blue-sdk-ethers";
 import { Time, isDefined } from "@morpho-org/morpho-ts";
@@ -231,7 +232,7 @@ export namespace BlueSdkConverters {
       {
         ...dto,
         decimals: Math.max(18, dto.asset.decimals),
-        decimalsOffset: MathLib.zeroFloorSub(18n, BigInt(dto.asset.decimals)),
+        decimalsOffset: VaultUtils.decimalsOffset(dto.asset.decimals),
         asset: dto.asset.address,
       },
       dto.chain.id,
