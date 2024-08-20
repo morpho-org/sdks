@@ -56,6 +56,24 @@ export namespace BlueErrors {
       super(`insufficient liquidity on market ${marketId}`);
     }
   }
+
+  export class InsufficientPosition extends Error {
+    constructor(
+      public readonly user: Address,
+      public readonly marketId: MarketId,
+    ) {
+      super(`insufficient position for user ${user} on market ${marketId}`);
+    }
+  }
+
+  export class InsufficientCollateral extends Error {
+    constructor(
+      public readonly user: Address,
+      public readonly marketId: MarketId,
+    ) {
+      super(`insufficient collateral for user ${user} on market ${marketId}`);
+    }
+  }
 }
 
 export class InvalidSignatureError extends Error {

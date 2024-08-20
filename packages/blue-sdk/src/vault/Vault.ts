@@ -278,6 +278,7 @@ export class AccrualVault extends Vault implements InputAccrualVault {
    */
   get avgApy() {
     if (this.totalAssets === 0n) return 0n;
+
     return (
       Array.from(this.allocations.values()).reduce(
         (total, { position }) =>
