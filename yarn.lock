@@ -6654,12 +6654,12 @@ __metadata:
   linkType: hard
 
 "hardhat-deal@npm:^3.1.0":
-  version: 3.1.0
-  resolution: "hardhat-deal@npm:3.1.0"
+  version: 3.1.1
+  resolution: "hardhat-deal@npm:3.1.1"
   peerDependencies:
     ethers: ^6.0.0
     hardhat: ^2.21.0
-  checksum: 10c0/fa1f08bad7dd59bba4472669ab7e2b96635298ec1ac84baba987235e857b8c0321ec51d03a2ce6deac85039716dfa3231dd82ef788141859ef588b6192e40d91
+  checksum: 10c0/2c1a1c4c63be3ac52e49b3143c36e69005e4842432ae65f2ae11bfb14492b344cad2eeb387c2240c70faba921b158b4ed309c49749cdeab3d56ed1eb7335bc55
   languageName: node
   linkType: hard
 
