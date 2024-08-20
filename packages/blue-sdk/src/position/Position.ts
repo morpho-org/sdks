@@ -1,3 +1,4 @@
+import { BlueErrors } from "../errors";
 import { Market } from "../market";
 import { Address, MarketId } from "../types";
 
@@ -165,6 +166,95 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
 
   public accrueInterest(timestamp: bigint) {
     return new AccrualPosition(this, this.market.accrueInterest(timestamp));
+  }
+
+  public supply(assets: bigint, shares: bigint, timestamp?: bigint) {
+    let { market } = this;
+    ({ market, assets, shares } = market.supply(assets, shares, timestamp));
+
+    this.supplyShares += shares;
+
+    return {
+      position: new AccrualPosition(this, market),
+      assets,
+      shares,
+    };
+  }
+
+  public withdraw(assets: bigint, shares: bigint, timestamp?: bigint) {
+    let { market } = this;
+    ({ market, assets, shares } = market.withdraw(assets, shares, timestamp));
+
+    this.supplyShares -= shares;
+
+    if (this.supplyShares < 0n)
+      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+
+    return {
+      position: new AccrualPosition(this, market),
+      assets,
+      shares,
+    };
+  }
+
+  public supplyCollateral(
+    assets: bigint,
+    timestamp: bigint = this.market.lastUpdate,
+  ) {
+    const market = this.market.accrueInterest(timestamp);
+
+    this.collateral += assets;
+
+    return new AccrualPosition(this, market);
+  }
+
+  public withdrawCollateral(
+    assets: bigint,
+    timestamp: bigint = this.market.lastUpdate,
+  ) {
+    const market = this.market.accrueInterest(timestamp);
+
+    this.collateral -= assets;
+
+    if (this.collateral < 0n)
+      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+
+    if (!market.isHealthy(this))
+      throw new BlueErrors.InsufficientCollateral(this.user, this.marketId);
+
+    return new AccrualPosition(this, market);
+  }
+
+  public borrow(assets: bigint, shares: bigint, timestamp?: bigint) {
+    let { market } = this;
+    ({ market, assets, shares } = market.borrow(assets, shares, timestamp));
+
+    this.borrowShares += shares;
+
+    if (!market.isHealthy(this))
+      throw new BlueErrors.InsufficientCollateral(this.user, this.marketId);
+
+    return {
+      position: new AccrualPosition(this, market),
+      assets,
+      shares,
+    };
+  }
+
+  public repay(assets: bigint, shares: bigint, timestamp?: bigint) {
+    let { market } = this;
+    ({ market, assets, shares } = market.repay(assets, shares, timestamp));
+
+    this.borrowShares -= shares;
+
+    if (this.borrowShares < 0n)
+      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+
+    return {
+      position: new AccrualPosition(this, market),
+      assets,
+      shares,
+    };
   }
 
   public getRepayCapacityLimit(loanTokenBalance: bigint) {
