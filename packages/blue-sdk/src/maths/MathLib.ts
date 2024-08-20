@@ -194,7 +194,10 @@ export class MathLib {
     const { unit, duration } = Time.toPeriod(period);
     const factor = Time[unit].from.y(1) / duration;
 
-    return (1 + Number(format.number.of(BigInt(rate), 18))) ** factor - 1;
+    return (
+      (1 + Number(format.number.locale("en").of(BigInt(rate), 18))) ** factor -
+      1
+    );
   }
 
   /**
