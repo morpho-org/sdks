@@ -2,8 +2,8 @@ import { UnsupportedChainIdError } from "./errors";
 
 export enum ChainId {
   EthMainnet = 1,
-  EthGoerliTestnet = 5,
   BaseMainnet = 8453,
+  // EthGoerliTestnet = 5,
   // PolygonMainnet = 137,
   // MumbaiTestnet = 80001,
   // OptimismMainnet = 10,
@@ -90,18 +90,6 @@ export namespace ChainUtils {
       logoSrc: "https://cdn.morpho.org/assets/chains/eth.svg",
       identifier: "mainnet",
     },
-    [ChainId.EthGoerliTestnet]: {
-      name: "Ethereum Goerli Testnet",
-      id: ChainId.EthGoerliTestnet,
-      nativeCurrency: { name: "Goerli Ether", symbol: "ETH", decimals: 18 },
-      defaultRpcUrl:
-        "https://goerli.infura.io/V3/84842078b09946638c03157f83405213",
-      explorerUrl: "https://goerli.etherscan.io",
-      isTestnet: true,
-      shortName: "Goerli",
-      logoSrc: "https://cdn.morpho.org/assets/chains/eth.svg",
-      identifier: "goerli",
-    },
     [ChainId.BaseMainnet]: {
       name: "Base",
       id: ChainId.BaseMainnet,
@@ -113,6 +101,18 @@ export namespace ChainUtils {
       logoSrc: "https://cdn.morpho.org/assets/chains/base.png",
       identifier: "base",
     },
+    // [ChainId.EthGoerliTestnet]: {
+    //   name: "Ethereum Goerli Testnet",
+    //   id: ChainId.EthGoerliTestnet,
+    //   nativeCurrency: { name: "Goerli Ether", symbol: "ETH", decimals: 18 },
+    //   defaultRpcUrl:
+    //     "https://goerli.infura.io/V3/84842078b09946638c03157f83405213",
+    //   explorerUrl: "https://goerli.etherscan.io",
+    //   isTestnet: true,
+    //   shortName: "Goerli",
+    //   logoSrc: "https://cdn.morpho.org/assets/chains/eth.svg",
+    //   identifier: "goerli",
+    // },
     // [ChainId.PolygonMainnet]: {
     //   name: "Polygon Mainnet",
     //   id: ChainId.PolygonMainnet,

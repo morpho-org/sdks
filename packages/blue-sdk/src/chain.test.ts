@@ -17,7 +17,6 @@ describe("Network", () => {
       });
   });
   it("Should convert correctly a chainId to hexChainId", () => {
-    expect(ChainUtils.toHexChainId(ChainId.EthGoerliTestnet)).toEqual("0x5");
     expect(ChainUtils.toHexChainId(ChainId.BaseMainnet)).toEqual("0x2105");
   });
 });
