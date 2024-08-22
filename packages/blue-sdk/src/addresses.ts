@@ -11,17 +11,6 @@ import { Address } from "./types";
 export const NATIVE_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
 export const addresses = {
-  [ChainId.EthGoerliTestnet]: {
-    morpho: "0x64c7044050Ba0431252df24fEd4d9635a275CB41" as const,
-    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const,
-    bundler: "0xCFFbEEAFCD79Fd68FD56Dbc31A419f290A2Fe9e0" as const,
-
-    wNative: "0xB4FBF271143F4FBf7B91A5ded31805e42b2208d6" as const,
-    stEth: "0x1643E812aE58766192Cf7D2Cf9567dF2C37e9B7F" as const,
-    wstEth: "0x6320cD32aA674d2898A68ec82e869385Fc5f7E2f" as const,
-    dai: "0x11fE4B6AE13d2a6055C8D9cF65c55bac32B5d844" as const,
-    usdc: "0x62bD2A599664D421132d7C54AB4DbE3233f4f0Ae" as const,
-  },
   [ChainId.EthMainnet]: {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb" as const,
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3" as const,
@@ -133,11 +122,6 @@ export const unwrappedTokensMapping: Record<
   ChainId,
   Record<Address, Address>
 > = {
-  [ChainId.EthGoerliTestnet]: {
-    [addresses[ChainId.EthGoerliTestnet].wNative]: NATIVE_ADDRESS,
-    [addresses[ChainId.EthGoerliTestnet].wstEth]:
-      addresses[ChainId.EthGoerliTestnet].stEth,
-  },
   [ChainId.EthMainnet]: {
     [addresses[ChainId.EthMainnet].wbIB01]: addresses[ChainId.EthMainnet].bIB01,
     [addresses[ChainId.EthMainnet].wbC3M]: addresses[ChainId.EthMainnet].bC3M,
@@ -176,7 +160,6 @@ export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {
  */
 export const erc20WrapperTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set(),
-  [ChainId.EthGoerliTestnet]: new Set(),
   [ChainId.BaseMainnet]: new Set(),
 };
 
@@ -186,7 +169,6 @@ export const erc20WrapperTokens: Record<ChainId, Set<Address>> = {
  */
 export const permissionedWrapperTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set(),
-  [ChainId.EthGoerliTestnet]: new Set(),
   [ChainId.BaseMainnet]: new Set([addresses[ChainId.BaseMainnet].testUsdc]),
 };
 
@@ -199,7 +181,6 @@ export const permissionedBackedTokens: Record<ChainId, Set<Address>> = {
     addresses[ChainId.EthMainnet].wbIB01,
     addresses[ChainId.EthMainnet].wbC3M,
   ]),
-  [ChainId.EthGoerliTestnet]: new Set(),
   [ChainId.BaseMainnet]: new Set(),
 };
 
@@ -209,7 +190,6 @@ export const permissionedBackedTokens: Record<ChainId, Set<Address>> = {
  */
 export const permissionedCoinbaseTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set(),
-  [ChainId.EthGoerliTestnet]: new Set(),
   [ChainId.BaseMainnet]: new Set([addresses[ChainId.BaseMainnet].verUsdc]),
 };
 
@@ -237,6 +217,5 @@ export const convexWrapperTokens: Record<ChainId, Set<Address>> = {
     addresses[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"],
     addresses[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"],
   ]),
-  [ChainId.EthGoerliTestnet]: new Set(),
   [ChainId.BaseMainnet]: new Set(),
 };
