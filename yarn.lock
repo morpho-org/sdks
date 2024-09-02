@@ -6550,8 +6550,8 @@ __metadata:
   linkType: hard
 
 "hardhat@npm:^2.20.1, hardhat@npm:^2.22.6":
-  version: 2.22.9
-  resolution: "hardhat@npm:2.22.9"
+  version: 2.22.10
+  resolution: "hardhat@npm:2.22.10"
   dependencies:
     "@ethersproject/abi": "npm:^5.1.2"
     "@metamask/eth-sig-util": "npm:^4.0.0"
@@ -6606,7 +6606,7 @@ __metadata:
       optional: true
   bin:
     hardhat: internal/cli/bootstrap.js
-  checksum: 10c0/172a0ecab081c76b6da68f84297ccf24e5ad9e9ba3372b5c456d848f3de96d92ecbae7d0e80d9dfeca9a17773e30dc208ea45d5855594605db42bf915b749174
+  checksum: 10c0/ce0c834f23dd15eac7fd085368696260df1ce6dfd96ce019f5e8b2c90030767f74555e7a4db9a73f41540e14a61b6663575a3540258c564899b3a54343c76592
   languageName: node
   linkType: hard
 
