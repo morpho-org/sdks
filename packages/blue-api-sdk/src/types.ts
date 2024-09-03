@@ -104,6 +104,8 @@ export type AssetsFilters = {
   search?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by token symbol */
   symbol_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by token's tags  */
+  tags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 
 export type BigIntDataPoint = {
