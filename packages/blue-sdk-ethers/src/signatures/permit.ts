@@ -107,7 +107,7 @@ export const getPermitMessage = (
 };
 
 export const WITH_SIMPLE_PERMIT: {
-  [id in ChainId]: (Address | undefined)[];
+  [id in ChainId]: Address[];
 } = {
   [ChainId.EthMainnet]: [
     addresses[ChainId.EthMainnet].wbIB01,
