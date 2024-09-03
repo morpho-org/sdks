@@ -2938,16 +2938,16 @@ __metadata:
   linkType: hard
 
 "@nomicfoundation/hardhat-viem@npm:^2.0.3":
-  version: 2.0.3
-  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.3"
+  version: 2.0.4
+  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.4"
   dependencies:
     abitype: "npm:^0.9.8"
     lodash.memoize: "npm:^4.1.2"
   peerDependencies:
-    hardhat: "*"
+    hardhat: ^2.17.0
     typescript: ~5.0.0
     viem: ^2.7.6
-  checksum: 10c0/c2ec81df185c823e0dd851809da95a17a730080197a9c684bef2d27bc4ad2827e09ce2033a1c447381191366e53b2556b9bb5c4ea2d4ae5f8eeb60707fb4cf1b
+  checksum: 10c0/fd9b46f72fd89ce84375b0c7e6a29d506502712db46478b676fe2e95f0dcbafed6986232d283dd10d67f064fa1a49b44c12c0497c7e97513acddb3a5a5be482e
   languageName: node
   linkType: hard
 
