@@ -229,12 +229,9 @@ export class AccrualVault extends Vault implements InputAccrualVault {
     });
 
     this.allocations = new Map(
-      allocations.map(({ config, position }) => [
-        position.market.id,
-        new VaultMarketAllocation({
-          config,
-          position,
-        }),
+      allocations.map((allocation) => [
+        allocation.position.market.id,
+        new VaultMarketAllocation(allocation),
       ]),
     );
 
