@@ -200,7 +200,7 @@ export class Market implements InputMarket {
         this.lastUpdate,
       );
 
-    if (elapsed === 0n) return this;
+    if (elapsed === 0n) return new Market(this);
 
     let borrowRate = 0n;
     let { rateAtTarget } = this;
