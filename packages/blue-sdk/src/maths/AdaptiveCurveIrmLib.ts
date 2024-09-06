@@ -156,13 +156,16 @@ export namespace AdaptiveCurveIrmLib {
     if (borrowRate >= rateAtTarget) {
       const maxBorrowRate = MathLib.wMulDown(rateAtTarget, CURVE_STEEPNESS);
 
+      const diffToMaxBorrowRate = maxBorrowRate - rateAtTarget;
+      if (diffToMaxBorrowRate === 0n) return MathLib.WAD;
+
       return MathLib.min(
         MathLib.WAD,
         TARGET_UTILIZATION +
           MathLib.mulDivDown(
             MathLib.WAD - TARGET_UTILIZATION,
             borrowRate - rateAtTarget,
-            maxBorrowRate - rateAtTarget,
+            diffToMaxBorrowRate,
           ),
       );
     }
