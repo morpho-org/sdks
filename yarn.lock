@@ -30,8 +30,8 @@ __metadata:
   linkType: hard
 
 "@apollo/client@npm:^3.11.1":
-  version: 3.11.4
-  resolution: "@apollo/client@npm:3.11.4"
+  version: 3.11.5
+  resolution: "@apollo/client@npm:3.11.5"
   dependencies:
     "@graphql-typed-document-node/core": "npm:^3.1.1"
     "@wry/caches": "npm:^1.0.0"
@@ -62,7 +62,7 @@ __metadata:
       optional: true
     subscriptions-transport-ws:
       optional: true
-  checksum: 10c0/1d0f848a68803e4987f7bceb6c4d76a1c9c584a66cefbcacfe8aebb342b68e4cca96ecb76e7a5a423f5047da8c35e52d971cad3d532248976976c32336eac7d9
+  checksum: 10c0/e3e4449e9aa028ee28db70906f213c959674b518135449437a0a7d249e1a7f74e0c9b33feec5810dc195872579b3ccd3321357e9cd4ac173fd9dac4b8249b2ab
   languageName: node
   linkType: hard
 
@@ -2321,6 +2321,37 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@lerna-lite/cli@npm:3.9.0":
+  version: 3.9.0
+  resolution: "@lerna-lite/cli@npm:3.9.0"
+  dependencies:
+    "@lerna-lite/core": "npm:3.9.0"
+    "@lerna-lite/init": "npm:3.9.0"
+    "@lerna-lite/npmlog": "npm:3.8.0"
+    dedent: "npm:^1.5.3"
+    dotenv: "npm:^16.4.5"
+    import-local: "npm:^3.2.0"
+    load-json-file: "npm:^7.0.1"
+    yargs: "npm:^17.7.2"
+  peerDependenciesMeta:
+    "@lerna-lite/exec":
+      optional: true
+    "@lerna-lite/list":
+      optional: true
+    "@lerna-lite/publish":
+      optional: true
+    "@lerna-lite/run":
+      optional: true
+    "@lerna-lite/version":
+      optional: true
+    "@lerna-lite/watch":
+      optional: true
+  bin:
+    lerna: dist/cli.js
+  checksum: 10c0/2c81ecb3a3e35ff98f01f533a383ca96bb74a5e4cc96dccc40ba5baea1d5cbb2d7222d977d013f17c8906d6681326e90802f42016da1246576feb6a3f8449ba3
+  languageName: node
+  linkType: hard
+
 "@lerna-lite/core@npm:3.8.0":
   version: 3.8.0
   resolution: "@lerna-lite/core@npm:3.8.0"
@@ -2357,6 +2388,42 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@lerna-lite/core@npm:3.9.0":
+  version: 3.9.0
+  resolution: "@lerna-lite/core@npm:3.9.0"
+  dependencies:
+    "@inquirer/expand": "npm:^2.1.22"
+    "@inquirer/input": "npm:^2.2.9"
+    "@inquirer/select": "npm:^2.4.7"
+    "@lerna-lite/npmlog": "npm:^3.8.0"
+    "@npmcli/run-script": "npm:^8.1.0"
+    chalk: "npm:^5.3.0"
+    clone-deep: "npm:^4.0.1"
+    config-chain: "npm:^1.1.13"
+    cosmiconfig: "npm:^9.0.0"
+    dedent: "npm:^1.5.3"
+    execa: "npm:^8.0.1"
+    fs-extra: "npm:^11.2.0"
+    glob-parent: "npm:^6.0.2"
+    globby: "npm:^14.0.2"
+    is-ci: "npm:^3.0.1"
+    json5: "npm:^2.2.3"
+    load-json-file: "npm:^7.0.1"
+    minimatch: "npm:^9.0.5"
+    npm-package-arg: "npm:^11.0.3"
+    p-map: "npm:^7.0.2"
+    p-queue: "npm:^8.0.1"
+    resolve-from: "npm:^5.0.0"
+    semver: "npm:^7.6.3"
+    slash: "npm:^5.1.0"
+    strong-log-transformer: "npm:^2.1.0"
+    write-file-atomic: "npm:^5.0.1"
+    write-json-file: "npm:^6.0.0"
+    write-package: "npm:^7.1.0"
+  checksum: 10c0/0b54125c76b76b3ddf15515bbe12553bb949ab62b65c654d8ea92983f0cd255ee56b1669575a4876830433a59ed80c2ef91946453024a1aa2e52bdd13507a38c
+  languageName: node
+  linkType: hard
+
 "@lerna-lite/init@npm:3.8.0":
   version: 3.8.0
   resolution: "@lerna-lite/init@npm:3.8.0"
@@ -2366,6 +2433,18 @@ __metadata:
     p-map: "npm:^7.0.2"
     write-json-file: "npm:^6.0.0"
   checksum: 10c0/a6474b914bf41f132ac9337a0e2e7e255e6631d0675722c98ee9240535190cc92f31249885f76a14d661817b6427de22edbe0af1e38eda307679edc8d1d1b83e
+  languageName: node
+  linkType: hard
+
+"@lerna-lite/init@npm:3.9.0":
+  version: 3.9.0
+  resolution: "@lerna-lite/init@npm:3.9.0"
+  dependencies:
+    "@lerna-lite/core": "npm:3.9.0"
+    fs-extra: "npm:^11.2.0"
+    p-map: "npm:^7.0.2"
+    write-json-file: "npm:^6.0.0"
+  checksum: 10c0/2f19d383086e0fed1c2d599b9534e54f5a03c95475c92c63c564377fe8976d523d5a3f7fc483950a6f4c6311e6f35fd1b8b9e88d0e0be9867e4e4876c060562e
   languageName: node
   linkType: hard
 
@@ -2630,7 +2709,7 @@ __metadata:
   resolution: "@morpho-org/sdks@workspace:."
   dependencies:
     "@biomejs/biome": "npm:^1.8.3"
-    "@lerna-lite/cli": "npm:3.8.0"
+    "@lerna-lite/cli": "npm:3.9.0"
     "@lerna-lite/publish": "npm:3.8.0"
     "@lerna-lite/version": "npm:^3.7.1"
     husky: "npm:^9.0.11"
@@ -2859,16 +2938,16 @@ __metadata:
   linkType: hard
 
 "@nomicfoundation/hardhat-viem@npm:^2.0.3":
-  version: 2.0.3
-  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.3"
+  version: 2.0.4
+  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.4"
   dependencies:
     abitype: "npm:^0.9.8"
     lodash.memoize: "npm:^4.1.2"
   peerDependencies:
-    hardhat: "*"
+    hardhat: ^2.17.0
     typescript: ~5.0.0
     viem: ^2.7.6
-  checksum: 10c0/c2ec81df185c823e0dd851809da95a17a730080197a9c684bef2d27bc4ad2827e09ce2033a1c447381191366e53b2556b9bb5c4ea2d4ae5f8eeb60707fb4cf1b
+  checksum: 10c0/fd9b46f72fd89ce84375b0c7e6a29d506502712db46478b676fe2e95f0dcbafed6986232d283dd10d67f064fa1a49b44c12c0497c7e97513acddb3a5a5be482e
   languageName: node
   linkType: hard
 
@@ -6550,8 +6629,8 @@ __metadata:
   linkType: hard
 
 "hardhat@npm:^2.20.1, hardhat@npm:^2.22.6":
-  version: 2.22.9
-  resolution: "hardhat@npm:2.22.9"
+  version: 2.22.10
+  resolution: "hardhat@npm:2.22.10"
   dependencies:
     "@ethersproject/abi": "npm:^5.1.2"
     "@metamask/eth-sig-util": "npm:^4.0.0"
@@ -6606,7 +6685,7 @@ __metadata:
       optional: true
   bin:
     hardhat: internal/cli/bootstrap.js
-  checksum: 10c0/172a0ecab081c76b6da68f84297ccf24e5ad9e9ba3372b5c456d848f3de96d92ecbae7d0e80d9dfeca9a17773e30dc208ea45d5855594605db42bf915b749174
+  checksum: 10c0/ce0c834f23dd15eac7fd085368696260df1ce6dfd96ce019f5e8b2c90030767f74555e7a4db9a73f41540e14a61b6663575a3540258c564899b3a54343c76592
   languageName: node
   linkType: hard
 
@@ -11045,8 +11124,8 @@ __metadata:
   linkType: hard
 
 "viem@npm:^2.18.8":
-  version: 2.18.8
-  resolution: "viem@npm:2.18.8"
+  version: 2.21.1
+  resolution: "viem@npm:2.21.1"
   dependencies:
     "@adraffy/ens-normalize": "npm:1.10.0"
     "@noble/curves": "npm:1.4.0"
@@ -11062,7 +11141,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/c1394b71fdb00096d7a41608cbf06e77719501a82a7ca74e4aaa8667e937f67f3d7c0da8e7e62293ca7663a99e581c67a901d21df6a7e9c46697eb06056a3bb4
+  checksum: 10c0/04b9581831c58c831426bb90bcd4c262c91c466668303bfde24ec133e2e63bed5860e1941dbb0179db70bf48db48e9395ef2242e78a7fe394cf867e509833429
   languageName: node
   linkType: hard
 
