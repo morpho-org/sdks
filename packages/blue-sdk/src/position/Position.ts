@@ -1,6 +1,6 @@
 import { BlueErrors } from "../errors";
 import { Market } from "../market";
-import { Address, MarketId } from "../types";
+import { Address, BigIntish, MarketId } from "../types";
 
 export interface InputPosition {
   user: Address;
@@ -164,11 +164,15 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
     return this.market.getWithdrawCollateralCapacityLimit(this);
   }
 
-  public accrueInterest(timestamp: bigint) {
+  /**
+   * Returns a new position derived from this position, whose interest has been accrued up to the given timestamp.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the market's `lastUpdate`.
+   */
+  public accrueInterest(timestamp?: BigIntish) {
     return new AccrualPosition(this, this.market.accrueInterest(timestamp));
   }
 
-  public supply(assets: bigint, shares: bigint, timestamp?: bigint) {
+  public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
     ({ market, assets, shares } = market.supply(assets, shares, timestamp));
 
@@ -181,7 +185,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
     };
   }
 
-  public withdraw(assets: bigint, shares: bigint, timestamp?: bigint) {
+  public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
     ({ market, assets, shares } = market.withdraw(assets, shares, timestamp));
 
@@ -197,21 +201,13 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
     };
   }
 
-  public supplyCollateral(
-    assets: bigint,
-    timestamp: bigint = this.market.lastUpdate,
-  ) {
-    const market = this.market.accrueInterest(timestamp);
-
+  public supplyCollateral(assets: bigint) {
     this.collateral += assets;
 
-    return new AccrualPosition(this, market);
+    return new AccrualPosition(this, new Market(this.market));
   }
 
-  public withdrawCollateral(
-    assets: bigint,
-    timestamp: bigint = this.market.lastUpdate,
-  ) {
+  public withdrawCollateral(assets: bigint, timestamp?: BigIntish) {
     const market = this.market.accrueInterest(timestamp);
 
     this.collateral -= assets;
@@ -225,7 +221,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
     return new AccrualPosition(this, market);
   }
 
-  public borrow(assets: bigint, shares: bigint, timestamp?: bigint) {
+  public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
     ({ market, assets, shares } = market.borrow(assets, shares, timestamp));
 
@@ -241,7 +237,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
     };
   }
 
-  public repay(assets: bigint, shares: bigint, timestamp?: bigint) {
+  public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
     ({ market, assets, shares } = market.repay(assets, shares, timestamp));
 

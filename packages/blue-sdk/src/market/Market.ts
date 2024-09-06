@@ -187,9 +187,9 @@ export class Market implements InputMarket {
 
   /**
    * Returns a new market derived from this market, whose interest has been accrued up to the given timestamp.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to `lastUpdate`.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to `lastUpdate`. Defaults to `lastUpdate` (returns a copy of the market).
    */
-  public accrueInterest(timestamp: BigIntish) {
+  public accrueInterest(timestamp: BigIntish = this.lastUpdate) {
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;
@@ -232,11 +232,7 @@ export class Market implements InputMarket {
     });
   }
 
-  public supply(
-    assets: bigint,
-    shares: bigint,
-    timestamp: bigint = this.lastUpdate,
-  ) {
+  public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if (assets === 0n && shares === 0n)
       throw new BlueErrors.InconsistentInput();
 
@@ -251,11 +247,7 @@ export class Market implements InputMarket {
     return { market, assets, shares };
   }
 
-  public withdraw(
-    assets: bigint,
-    shares: bigint,
-    timestamp: bigint = this.lastUpdate,
-  ) {
+  public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if (assets === 0n && shares === 0n)
       throw new BlueErrors.InconsistentInput();
 
@@ -273,11 +265,7 @@ export class Market implements InputMarket {
     return { market, assets, shares };
   }
 
-  public borrow(
-    assets: bigint,
-    shares: bigint,
-    timestamp: bigint = this.lastUpdate,
-  ) {
+  public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if (assets === 0n && shares === 0n)
       throw new BlueErrors.InconsistentInput();
 
@@ -295,11 +283,7 @@ export class Market implements InputMarket {
     return { market, assets, shares };
   }
 
-  public repay(
-    assets: bigint,
-    shares: bigint,
-    timestamp: bigint = this.lastUpdate,
-  ) {
+  public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if (assets === 0n && shares === 0n)
       throw new BlueErrors.InconsistentInput();
 
