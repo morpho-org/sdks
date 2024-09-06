@@ -26,7 +26,7 @@ export namespace MarketUtils {
         market.collateralToken.substring(2).toLowerCase().padStart(64, "0") +
         market.oracle.substring(2).padStart(64, "0") +
         market.irm.substring(2).toLowerCase().padStart(64, "0") +
-        market.lltv.toString(16).padStart(64, "0"),
+        BigInt(market.lltv).toString(16).padStart(64, "0"),
     ).toString("hex")}` as MarketId;
   }
 
