@@ -2612,7 +2612,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk-viem@workspace:packages/blue-sdk-viem":
+"@morpho-org/blue-sdk-viem@workspace:^, @morpho-org/blue-sdk-viem@workspace:packages/blue-sdk-viem":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-viem@workspace:packages/blue-sdk-viem"
   dependencies:
@@ -2639,6 +2639,39 @@ __metadata:
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
+    viem: ^2.0.0
+  languageName: unknown
+  linkType: soft
+
+"@morpho-org/blue-sdk-wagmi@workspace:packages/blue-sdk-wagmi":
+  version: 0.0.0-use.local
+  resolution: "@morpho-org/blue-sdk-wagmi@workspace:packages/blue-sdk-wagmi"
+  dependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/morpho-test": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
+    "@tanstack/react-query": "npm:^5.55.4"
+    "@types/chai": "npm:^4.3.14"
+    "@types/mocha": "npm:^10.0.6"
+    "@types/node": "npm:^22.1.0"
+    "@types/sinon": "npm:^17.0.3"
+    "@types/sinon-chai": "npm:^3.2.12"
+    chai: "npm:^4.3.10"
+    dotenv: "npm:^16.4.5"
+    ethers: "npm:^6.13.2"
+    mocha: "npm:^10.4.0"
+    sinon: "npm:^18.0.0"
+    ts-node: "npm:^10.9.2"
+    typescript: "npm:^5.4.5"
+    viem: "npm:^2.18.8"
+  peerDependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
+    "@tanstack/react-query": ">=5.0.0"
+    react: ">=18"
+    typescript: ">=5.0.4"
     viem: ^2.0.0
   languageName: unknown
   linkType: soft
@@ -3657,6 +3690,24 @@ __metadata:
   version: 0.7.2
   resolution: "@sinonjs/text-encoding@npm:0.7.2"
   checksum: 10c0/583a45bf3643169e313ff9d4395aff28b0c4f330d3697e252c3effc13d4303ee30f83df542732c1a68617720e4ea6fc08d48a3d9151c9b354a7fc356a8e9b162
+  languageName: node
+  linkType: hard
+
+"@tanstack/query-core@npm:5.55.4":
+  version: 5.55.4
+  resolution: "@tanstack/query-core@npm:5.55.4"
+  checksum: 10c0/c463b582b8c7c24fddd8da9c6fd311805df48bbfbdf9feae5662cd6e3d1df3eba47a1fc0c6e7f3feed6e0add2e363fbfcaad25e931b1bda6da6aabdccf3e5898
+  languageName: node
+  linkType: hard
+
+"@tanstack/react-query@npm:^5.55.4":
+  version: 5.55.4
+  resolution: "@tanstack/react-query@npm:5.55.4"
+  dependencies:
+    "@tanstack/query-core": "npm:5.55.4"
+  peerDependencies:
+    react: ^18 || ^19
+  checksum: 10c0/b81f4e2942aa4e978278816e7939ac4df500cc38e052fd24c48e6ee5eddb89809b546e8536b50558f65ad679635ac0763ddfa3c14e73d60cfcf0646d5e57fd2a
   languageName: node
   linkType: hard
 
