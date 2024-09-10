@@ -1,11 +1,11 @@
 import { ChainId } from "../chain";
 import { UnknownVaultConfigError } from "../errors";
-import { Address } from "../types";
+import { Address, BigIntish } from "../types";
 
 export interface InputVaultConfig {
   address: Address;
-  decimals: number;
-  decimalsOffset: bigint;
+  decimals: BigIntish;
+  decimalsOffset: BigIntish;
   symbol: string;
   name: string;
   asset: Address;
@@ -44,8 +44,8 @@ export class VaultConfig implements InputVaultConfig {
     public readonly chainId?: number,
   ) {
     this.address = address;
-    this.decimals = decimals;
-    this.decimalsOffset = decimalsOffset;
+    this.decimals = Number(decimals);
+    this.decimalsOffset = BigInt(decimalsOffset);
     this.symbol = symbol;
     this.name = name;
     this.asset = asset;

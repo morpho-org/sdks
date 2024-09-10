@@ -1,17 +1,18 @@
 import {
-  ChainId,
   ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
   NATIVE_ADDRESS,
   PERMIT2_ALLOWANCE_RECIPIENTS,
+  addresses,
   getChainAddresses,
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { fromEntries } from "@morpho-org/morpho-ts";
 import { Address, Client, erc20Abi, maxUint256 } from "viem";
 import { getBalance, getChainId, readContract } from "viem/actions";
+
+import { fromEntries } from "@morpho-org/morpho-ts";
 import {
   erc2612Abi,
   permissionedErc20WrapperAbi,
@@ -19,7 +20,14 @@ import {
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
 } from "../abis";
-import { ViewOverrides } from "../types";
+import { abi, code } from "../queries/GetHolding";
+import { FetchOptions } from "../types";
+
+export enum Boolean {
+  Undefined,
+  False,
+  True,
+}
 
 export async function fetchHolding(
   user: Address,
@@ -28,13 +36,14 @@ export async function fetchHolding(
   {
     chainId,
     overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+    deployless = true,
+  }: FetchOptions & {
+    deployless?: boolean;
+  } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await getChainId(client)),
   );
-
-  const chainAddresses = getChainAddresses(chainId);
 
   if (token === NATIVE_ADDRESS)
     return new Holding({
@@ -55,6 +64,48 @@ export async function fetchHolding(
       ),
       balance: await getBalance(client, { ...overrides, address: user }),
     });
+
+  if (deployless) {
+    const { morpho, permit2, bundler } = addresses[chainId];
+    try {
+      const {
+        balance,
+        erc20Allowances,
+        permit2Allowances,
+        isErc2612,
+        erc2612Nonce,
+        canTransfer,
+      } = await readContract(client, {
+        ...overrides,
+        abi,
+        code,
+        functionName: "query",
+        args: [
+          token,
+          user,
+          morpho,
+          permit2,
+          bundler,
+          permissionedBackedTokens[chainId].has(token),
+          permissionedWrapperTokens[chainId].has(token),
+        ],
+      });
+
+      return new Holding({
+        user,
+        token,
+        erc20Allowances,
+        permit2Allowances,
+        erc2612Nonce: isErc2612 ? erc2612Nonce : undefined,
+        balance,
+        canTransfer,
+      });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
+  }
+
+  const chainAddresses = getChainAddresses(chainId);
 
   const [
     balance,
@@ -126,9 +177,7 @@ export async function fetchHolding(
       address: token,
       functionName: "hasPermission",
       args: [user],
-    }).catch(() =>
-      permissionedWrapperTokens[chainId].has(token) ? false : undefined,
-    ),
+    }).catch(() => !permissionedWrapperTokens[chainId].has(token)),
   ]);
 
   const holding = new Holding({
@@ -138,7 +187,7 @@ export async function fetchHolding(
     permit2Allowances: fromEntries(permit2Allowances),
     erc2612Nonce,
     balance,
-    canTransfer: hasErc20WrapperPermission ?? true,
+    canTransfer: hasErc20WrapperPermission,
   });
 
   if (whitelistControllerAggregator)
@@ -148,7 +197,7 @@ export async function fetchHolding(
       address: whitelistControllerAggregator,
       functionName: "isWhitelisted",
       args: [user],
-    }).catch(() => undefined);
+    }).catch(() => false);
 
   return holding;
 }

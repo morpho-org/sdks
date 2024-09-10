@@ -1,7 +1,6 @@
 import { Address, Client, erc20Abi, hexToString, isHex } from "viem";
 
 import {
-  ChainId,
   ChainUtils,
   ConstantWrappedToken,
   ExchangeRateWrappedToken,
@@ -12,7 +11,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { bytes32Erc20Abi, wstEthAbi } from "../abis";
-import { ViewOverrides } from "../types";
+import { FetchOptions } from "../types";
 
 export const decodeBytes32String = (hexOrStr: string) => {
   if (isHex(hexOrStr)) return hexToString(hexOrStr, { size: 32 });
@@ -23,10 +22,7 @@ export const decodeBytes32String = (hexOrStr: string) => {
 export async function fetchToken(
   address: Address,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await getChainId(client)),

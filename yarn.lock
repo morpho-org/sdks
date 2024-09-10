@@ -2629,7 +2629,7 @@ __metadata:
     chai: "npm:^4.3.10"
     dotenv: "npm:^16.4.5"
     ethers: "npm:^6.13.2"
-    hardhat: "npm:^2.22.6"
+    hardhat: "npm:^2.22.10"
     hardhat-deal: "npm:^3.1.0"
     mocha: "npm:^10.4.0"
     sinon: "npm:^18.0.0"
@@ -6679,7 +6679,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hardhat@npm:^2.20.1, hardhat@npm:^2.22.6":
+"hardhat@npm:^2.20.1, hardhat@npm:^2.22.10, hardhat@npm:^2.22.6":
   version: 2.22.10
   resolution: "hardhat@npm:2.22.10"
   dependencies:

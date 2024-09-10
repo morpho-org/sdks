@@ -1,11 +1,10 @@
 import { AccrualVault, Vault } from "@morpho-org/blue-sdk";
 
-import { fetchAccrualVault, fetchVault, fetchVaultFromConfig } from "../fetch";
+import { fetchAccrualVault, fetchVault } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
   namespace Vault {
     let fetch: typeof fetchVault;
-    let fetchFromConfig: typeof fetchVaultFromConfig;
   }
 
   namespace AccrualVault {
@@ -14,5 +13,4 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 Vault.fetch = fetchVault;
-Vault.fetchFromConfig = fetchVaultFromConfig;
 AccrualVault.fetch = fetchAccrualVault;

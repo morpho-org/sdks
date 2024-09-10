@@ -1,3 +1,4 @@
+import { ChainId } from "@morpho-org/blue-sdk";
 import { Account, Address, BlockTag, StateOverride } from "viem";
 
 export type ViewOverrides = {
@@ -13,3 +14,8 @@ export type ViewOverrides = {
       blockTag?: BlockTag;
     }
 );
+
+export interface FetchOptions {
+  chainId?: ChainId;
+  overrides?: ViewOverrides;
+}

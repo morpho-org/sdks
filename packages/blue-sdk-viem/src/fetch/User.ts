@@ -1,22 +1,14 @@
 import { Address, Client } from "viem";
 
-import {
-  ChainId,
-  ChainUtils,
-  User,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
+import { ChainUtils, User, getChainAddresses } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
-import { ViewOverrides } from "../types";
+import { FetchOptions } from "../types";
 
 export async function fetchUser(
   address: Address,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await getChainId(client)),

@@ -16,7 +16,7 @@ export class VaultToken extends WrappedToken {
 
     this.totalAssets = totalAssets;
     this.totalSupply = totalSupply;
-    this.decimalsOffset = config.decimalsOffset;
+    this.decimalsOffset = BigInt(config.decimalsOffset);
   }
 
   protected _wrap(amount: bigint, rounding: RoundingDirection) {

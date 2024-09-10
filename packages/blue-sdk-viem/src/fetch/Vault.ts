@@ -2,51 +2,91 @@ import { Address, Client } from "viem";
 
 import {
   AccrualVault,
-  ChainId,
   ChainUtils,
   MarketId,
   Vault,
   VaultConfig,
   VaultPublicAllocatorConfig,
-  getChainAddresses,
+  addresses,
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi, publicAllocatorAbi } from "../abis";
-import { ViewOverrides } from "../types";
-import { fetchVaultConfig } from "./VaultConfig";
+import { FetchOptions } from "../types";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
+
+import { abi, code } from "../queries/GetVault";
+import { fetchVaultConfig } from "./VaultConfig";
 
 export async function fetchVault(
   address: Address,
   client: Client,
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
-) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await getChainId(client)),
-  );
-
-  const config = await fetchVaultConfig(address, client, options);
-
-  return fetchVaultFromConfig(address, config, client, options);
-}
-
-export async function fetchVaultFromConfig(
-  address: Address,
-  config: VaultConfig,
-  client: Client,
   {
     chainId,
     overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+    deployless = true,
+  }: FetchOptions & { deployless?: boolean } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await getChainId(client)),
   );
 
-  const { publicAllocator } = getChainAddresses(chainId);
+  const { publicAllocator } = addresses[chainId];
+
+  if (deployless) {
+    try {
+      const {
+        config,
+        owner,
+        curator,
+        guardian,
+        timelock,
+        pendingTimelock,
+        pendingGuardian,
+        pendingOwner,
+        fee,
+        feeRecipient,
+        skimRecipient,
+        totalSupply,
+        totalAssets,
+        lastTotalAssets,
+        supplyQueue,
+        withdrawQueue,
+        publicAllocatorConfig,
+      } = await readContract(client, {
+        ...overrides,
+        abi,
+        code,
+        functionName: "query",
+        args: [address, publicAllocator],
+      });
+
+      return new Vault({
+        config: new VaultConfig({ ...config, address }, chainId),
+        owner,
+        curator,
+        guardian,
+        feeRecipient,
+        skimRecipient,
+        timelock,
+        fee,
+        pendingOwner,
+        pendingGuardian,
+        pendingTimelock,
+        publicAllocatorConfig,
+        supplyQueue: supplyQueue as MarketId[],
+        withdrawQueue: withdrawQueue as MarketId[],
+        totalSupply,
+        totalAssets,
+        lastTotalAssets,
+      });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
+  }
 
   const [
+    config,
     curator,
     owner,
     guardian,
@@ -64,6 +104,7 @@ export async function fetchVaultFromConfig(
     withdrawQueueSize,
     hasPublicAllocator,
   ] = await Promise.all([
+    fetchVaultConfig(address, client, { chainId }),
     readContract(client, {
       ...overrides,
       address,
@@ -172,21 +213,21 @@ export async function fetchVaultFromConfig(
     publicAllocatorConfigPromise = Promise.all([
       readContract(client, {
         ...overrides,
-        address: publicAllocator as Address,
+        address: publicAllocator,
         abi: publicAllocatorAbi,
         functionName: "admin",
         args: [address],
       }),
       readContract(client, {
         ...overrides,
-        address: publicAllocator as Address,
+        address: publicAllocator,
         abi: publicAllocatorAbi,
         functionName: "fee",
         args: [address],
       }),
       readContract(client, {
         ...overrides,
-        address: publicAllocator as Address,
+        address: publicAllocator,
         abi: publicAllocatorAbi,
         functionName: "accruedFee",
         args: [address],
@@ -247,7 +288,7 @@ export async function fetchVaultFromConfig(
 export async function fetchAccrualVault(
   address: Address,
   client: Client,
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  options: FetchOptions & { deployless?: boolean } = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await getChainId(client)),

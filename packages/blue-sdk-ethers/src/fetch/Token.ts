@@ -8,7 +8,6 @@ import {
 } from "ethers";
 import { WStEth__factory } from "ethers-types";
 import { ERC20__factory } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 import { ERC20, ERC20Interface } from "ethers-types/dist/token/ERC20/ERC20";
 
 import {
@@ -23,6 +22,7 @@ import {
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
+import { FetchOptions } from "../types";
 
 export const isBytes32ERC20Metadata = (address: string, chainId: ChainId) => {
   switch (chainId) {
@@ -138,10 +138,7 @@ export class ERC20Metadata__factory {
 export async function fetchToken(
   address: Address,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,

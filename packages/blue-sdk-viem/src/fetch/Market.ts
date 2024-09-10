@@ -1,18 +1,18 @@
 import { Address, Client, zeroAddress } from "viem";
 
 import {
-  ChainId,
   ChainUtils,
   Market,
   MarketConfig,
   MarketId,
-  getChainAddresses,
+  addresses,
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
+import { FetchOptions } from "../types";
+
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
-import { ViewOverrides } from "../types";
-import { fetchMarketConfig } from "./MarketConfig";
+import { abi, code } from "../queries/GetMarket";
 
 export async function fetchMarket(
   id: MarketId,
@@ -20,30 +20,74 @@ export async function fetchMarket(
   {
     chainId,
     overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+    deployless = true,
+  }: FetchOptions & {
+    deployless?: boolean;
+  } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await getChainId(client)),
   );
 
-  const config = await fetchMarketConfig(id, client, { chainId });
+  const { morpho, adaptiveCurveIrm } = addresses[chainId];
 
-  return fetchMarketFromConfig(config, client, { chainId, overrides });
-}
+  if (deployless) {
+    try {
+      const {
+        marketParams,
+        market: {
+          totalSupplyAssets,
+          totalSupplyShares,
+          totalBorrowAssets,
+          totalBorrowShares,
+          lastUpdate,
+          fee,
+        },
+        price,
+        rateAtTarget,
+      } = await readContract(client, {
+        ...overrides,
+        abi,
+        code,
+        functionName: "query",
+        args: [morpho, id, adaptiveCurveIrm],
+      });
 
-export async function fetchMarketFromConfig(
-  config: MarketConfig,
-  client: Client,
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
-) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+      return new Market({
+        config: new MarketConfig(marketParams),
+        totalSupplyAssets,
+        totalBorrowAssets,
+        totalSupplyShares,
+        totalBorrowShares,
+        lastUpdate,
+        fee,
+        price,
+        rateAtTarget:
+          marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
+      });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
+  }
+
+  const [loanToken, collateralToken, oracle, irm, lltv] = await readContract(
+    client,
+    {
+      ...overrides,
+      address: morpho as Address,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      args: [id],
+    },
   );
 
-  const { morpho, adaptiveCurveIrm } = getChainAddresses(chainId);
+  const config = new MarketConfig({
+    loanToken,
+    collateralToken,
+    oracle,
+    irm,
+    lltv,
+  });
 
   const [
     [

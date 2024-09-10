@@ -7,11 +7,9 @@ import {
   Permit2__factory,
   WrappedBackedToken__factory,
 } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
   Address,
-  ChainId,
   ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
@@ -22,15 +20,13 @@ import {
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
 import { fromEntries } from "@morpho-org/morpho-ts";
+import { FetchOptions } from "../types";
 
 export async function fetchHolding(
   user: Address,
   token: Address,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -126,7 +122,7 @@ export async function fetchHolding(
         runner,
       )
         .isWhitelisted(user, overrides)
-        .catch(() => undefined);
+        .catch(() => false);
 
   return holding;
 }

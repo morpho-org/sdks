@@ -1,11 +1,9 @@
 import { Provider, resolveProperties } from "ethers";
 import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
   AccrualVault,
   Address,
-  ChainId,
   ChainUtils,
   MarketId,
   Vault,
@@ -13,13 +11,14 @@ import {
   VaultPublicAllocatorConfig,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { FetchOptions } from "../types";
 import { fetchVaultConfig } from "./VaultConfig";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
 export async function fetchVault(
   address: Address,
   runner: { provider: Provider },
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  options: FetchOptions = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -34,10 +33,7 @@ export async function fetchVaultFromConfig(
   address: Address,
   config: VaultConfig,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -144,7 +140,7 @@ export async function fetchVaultFromConfig(
 export async function fetchAccrualVault(
   address: Address,
   runner: { provider: Provider },
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  options: FetchOptions = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,

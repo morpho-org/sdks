@@ -58,27 +58,6 @@ describe("augment/Market", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch market data from config", async () => {
-    const expectedData = {
-      config: MAINNET_MARKETS.usdc_wstEth,
-      totalSupplyAssets: 32212092216793n,
-      totalSupplyShares: 31693536738210306937n,
-      totalBorrowAssets: 30448219939637n,
-      totalBorrowShares: 29909458369905209203n,
-      lastUpdate: 1711589915n,
-      fee: 0n,
-      rateAtTarget: 3386101241n,
-      price: 4026279734253409453160432114n,
-    };
-
-    const value = await Market.fetchFromConfig(
-      MAINNET_MARKETS.usdc_wstEth,
-      client,
-    );
-
-    expect(value).to.eql(expectedData);
-  });
-
   it("should fetch price and rate if idle market", async () => {
     const expectedData = {
       config: MAINNET_MARKETS.idle_usdc,

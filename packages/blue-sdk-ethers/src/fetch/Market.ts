@@ -4,25 +4,21 @@ import {
   BlueOracle__factory,
   MorphoBlue__factory,
 } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
-  ChainId,
   ChainUtils,
   Market,
   MarketConfig,
   MarketId,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { FetchOptions } from "../types";
 import { fetchMarketConfig } from "./MarketConfig";
 
 export async function fetchMarket(
   id: MarketId,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -36,10 +32,7 @@ export async function fetchMarket(
 export async function fetchMarketFromConfig(
   config: MarketConfig,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,

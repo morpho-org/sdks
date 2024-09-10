@@ -1,11 +1,11 @@
 import { NATIVE_ADDRESS } from "../addresses";
 import { ChainId, ChainUtils } from "../chain";
 import { MathLib, RoundingDirection } from "../maths";
-import { Address } from "../types";
+import { Address, BigIntish } from "../types";
 
 export interface InputToken {
   address: Address;
-  decimals: number;
+  decimals: BigIntish;
   symbol: string;
   name?: string;
 }
@@ -39,7 +39,7 @@ export class Token implements InputToken {
 
   constructor({ address, decimals, symbol, name }: InputToken) {
     this.address = address;
-    this.decimals = decimals;
+    this.decimals = Number(decimals);
     this.symbol = symbol;
     this.name = name ?? symbol;
   }

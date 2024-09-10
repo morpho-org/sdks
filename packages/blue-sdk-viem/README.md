@@ -50,7 +50,7 @@ import { MarketConfig } from "@morpho-org/blue-sdk";
 import "@morpho-org/blue-sdk-viem/lib/augment/MarketConfig";
 
 const config = await MarketConfig.fetch(
-  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
   client // viem client.
 );
 
@@ -67,15 +67,9 @@ import { Market } from "@morpho-org/blue-sdk";
 import "@morpho-org/blue-sdk-viem/lib/augment/Market";
 
 const market = await Market.fetch(
-  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
   client // viem client.
 );
-
-// Or from a config, to fetch faster (skips fetching the config):
-// const market = Market.fetchFromConfig(
-//   config,
-//   client // viem client.
-// );
 
 market.utilization; // e.g. 92% (scaled by WAD).
 market.liquidity; // e.g. 23_000000n (in loan assets).
@@ -97,16 +91,9 @@ import "@morpho-org/blue-sdk-viem/lib/augment/Position";
 
 const position = await AccrualPosition.fetch(
   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",
-  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+  "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
   client // viem client.
 );
-
-// Or from a config, to fetch faster:
-// const position = AccrualPosition.fetchFromConfig(
-//   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",
-//   config,
-//   client // viem client.
-// );
 
 position.borrowAssets; // e.g. 23_000000n (in loan assets).
 position.isHealthy; // e.g. true.
