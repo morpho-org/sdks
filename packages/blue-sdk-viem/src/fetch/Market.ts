@@ -9,27 +9,25 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
-import { FetchOptions } from "../types";
+import { FetchParameters } from "../types";
 
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
 import { abi, code } from "../queries/GetMarket";
 
+export type FetchMarketParameters = FetchParameters & {
+  deployless?: boolean;
+};
+
 export async function fetchMarket(
   id: MarketId,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-    deployless = true,
-  }: FetchOptions & {
-    deployless?: boolean;
-  } = {},
+  { deployless = true, ...parameters }: FetchMarketParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
 
-  const { morpho, adaptiveCurveIrm } = addresses[chainId];
+  const { morpho, adaptiveCurveIrm } = addresses[parameters.chainId];
 
   if (deployless) {
     try {
@@ -46,7 +44,7 @@ export async function fetchMarket(
         price,
         rateAtTarget,
       } = await readContract(client, {
-        ...overrides,
+        ...parameters,
         abi,
         code,
         functionName: "query",
@@ -73,7 +71,7 @@ export async function fetchMarket(
   const [loanToken, collateralToken, oracle, irm, lltv] = await readContract(
     client,
     {
-      ...overrides,
+      ...parameters,
       address: morpho as Address,
       abi: blueAbi,
       functionName: "idToMarketParams",
@@ -102,7 +100,7 @@ export async function fetchMarket(
     rateAtTarget,
   ] = await Promise.all([
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address: morpho as Address,
       abi: blueAbi,
       functionName: "market",
@@ -110,7 +108,7 @@ export async function fetchMarket(
     }),
     config.oracle !== zeroAddress
       ? readContract(client, {
-          ...overrides,
+          ...parameters,
           address: config.oracle as Address,
           abi: blueOracleAbi,
           functionName: "price",
@@ -118,7 +116,7 @@ export async function fetchMarket(
       : 0n,
     config.irm === adaptiveCurveIrm
       ? await readContract(client, {
-          ...overrides,
+          ...parameters,
           address: adaptiveCurveIrm as Address,
           abi: adaptiveCurveIrmAbi,
           functionName: "rateAtTarget",
@@ -126,7 +124,6 @@ export async function fetchMarket(
         })
       : undefined,
   ]);
-
   return new Market({
     config,
     totalSupplyAssets,
