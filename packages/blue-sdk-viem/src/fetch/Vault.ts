@@ -201,14 +201,12 @@ export async function fetchVault(
         address,
         abi: metaMorphoAbi,
         functionName: "isAllocator",
-        args: [publicAllocator as Address],
+        args: [publicAllocator],
       }),
   ]);
-
   let publicAllocatorConfigPromise:
     | Promise<VaultPublicAllocatorConfig>
     | undefined;
-
   if (hasPublicAllocator)
     publicAllocatorConfigPromise = Promise.all([
       readContract(client, {
@@ -233,7 +231,6 @@ export async function fetchVault(
         args: [address],
       }),
     ]).then(([admin, fee, accruedFee]) => ({ admin, fee, accruedFee }));
-
   const [supplyQueue, withdrawQueue, publicAllocatorConfig] = await Promise.all(
     [
       Promise.all(
@@ -263,7 +260,6 @@ export async function fetchVault(
       publicAllocatorConfigPromise,
     ],
   );
-
   return new Vault({
     config,
     owner,
@@ -284,7 +280,6 @@ export async function fetchVault(
     lastTotalAssets,
   });
 }
-
 export async function fetchAccrualVault(
   address: Address,
   client: Client,
@@ -293,9 +288,7 @@ export async function fetchAccrualVault(
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await getChainId(client)),
   );
-
   const vault = await fetchVault(address, client, options);
-
   const allocations = await Promise.all(
     [...new Set(vault.supplyQueue.concat(vault.withdrawQueue))].map(
       (marketId) =>
@@ -307,6 +300,5 @@ export async function fetchAccrualVault(
         ),
     ),
   );
-
   return new AccrualVault(vault, allocations);
 }

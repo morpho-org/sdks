@@ -126,7 +126,6 @@ export async function fetchMarket(
         })
       : undefined,
   ]);
-
   return new Market({
     config,
     totalSupplyAssets,
