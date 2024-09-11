@@ -9,21 +9,21 @@ import {
 import { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
-import { FetchOptions } from "../types";
+import { FetchParameters } from "../types";
 import { fetchMarket } from "./Market";
 
 export async function fetchPosition(
   user: Address,
   marketId: MarketId,
   client: Client,
-  { chainId, overrides = {} }: FetchOptions = {},
+  parameters: FetchParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
-  const { morpho } = addresses[chainId];
+  const { morpho } = addresses[parameters.chainId];
   const [supplyShares, borrowShares, collateral] = await readContract(client, {
-    ...overrides,
+    ...parameters,
     address: morpho,
     abi: blueAbi,
     functionName: "position",
@@ -37,20 +37,21 @@ export async function fetchPosition(
     collateral,
   });
 }
+
 export async function fetchAccrualPosition(
   user: Address,
   marketId: MarketId,
   client: Client,
-  options: FetchOptions & {
+  parameters: FetchParameters & {
     deployless?: boolean;
   } = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
   const [position, market] = await Promise.all([
-    await fetchPosition(user, marketId, client, options),
-    await fetchMarket(marketId, client, options),
+    await fetchPosition(user, marketId, client, parameters),
+    await fetchMarket(marketId, client, parameters),
   ]);
 
   return new AccrualPosition(position, market);
