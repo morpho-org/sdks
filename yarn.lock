@@ -2385,12 +2385,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lerna-lite/cli@npm:3.9.0":
-  version: 3.9.0
-  resolution: "@lerna-lite/cli@npm:3.9.0"
+"@lerna-lite/cli@npm:3.9.1":
+  version: 3.9.1
+  resolution: "@lerna-lite/cli@npm:3.9.1"
   dependencies:
-    "@lerna-lite/core": "npm:3.9.0"
-    "@lerna-lite/init": "npm:3.9.0"
+    "@lerna-lite/core": "npm:3.9.1"
+    "@lerna-lite/init": "npm:3.9.1"
     "@lerna-lite/npmlog": "npm:3.8.0"
     dedent: "npm:^1.5.3"
     dotenv: "npm:^16.4.5"
@@ -2412,7 +2412,7 @@ __metadata:
       optional: true
   bin:
     lerna: dist/cli.js
-  checksum: 10c0/2c81ecb3a3e35ff98f01f533a383ca96bb74a5e4cc96dccc40ba5baea1d5cbb2d7222d977d013f17c8906d6681326e90802f42016da1246576feb6a3f8449ba3
+  checksum: 10c0/9c86d8198fff1f1541604b742a957fb43a89f3ca6fdcc17a2accab7d92ffa9461060794e55c4f4e97f903e7fe310a3adaa2f2268946edb4631569b1f2fcc94c9
   languageName: node
   linkType: hard
 
@@ -2483,13 +2483,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lerna-lite/core@npm:3.9.0":
-  version: 3.9.0
-  resolution: "@lerna-lite/core@npm:3.9.0"
+"@lerna-lite/core@npm:3.9.1":
+  version: 3.9.1
+  resolution: "@lerna-lite/core@npm:3.9.1"
   dependencies:
-    "@inquirer/expand": "npm:^2.1.22"
-    "@inquirer/input": "npm:^2.2.9"
-    "@inquirer/select": "npm:^2.4.7"
+    "@inquirer/expand": "npm:^2.3.0"
+    "@inquirer/input": "npm:^2.3.0"
+    "@inquirer/select": "npm:^2.5.0"
     "@lerna-lite/npmlog": "npm:^3.8.0"
     "@npmcli/run-script": "npm:^8.1.0"
     chalk: "npm:^5.3.0"
@@ -2515,7 +2515,7 @@ __metadata:
     write-file-atomic: "npm:^5.0.1"
     write-json-file: "npm:^6.0.0"
     write-package: "npm:^7.1.0"
-  checksum: 10c0/0b54125c76b76b3ddf15515bbe12553bb949ab62b65c654d8ea92983f0cd255ee56b1669575a4876830433a59ed80c2ef91946453024a1aa2e52bdd13507a38c
+  checksum: 10c0/ba9bff7741bb61c3c96b835cb22a8476ee655e4ea62f712b8ec960c6aac4362c800d51c89d64deb680bd05f7b8bda9fe83ef047893b0ea82eb023a85dd36d2e7
   languageName: node
   linkType: hard
 
@@ -2567,15 +2567,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lerna-lite/init@npm:3.9.0":
-  version: 3.9.0
-  resolution: "@lerna-lite/init@npm:3.9.0"
+"@lerna-lite/init@npm:3.9.1":
+  version: 3.9.1
+  resolution: "@lerna-lite/init@npm:3.9.1"
   dependencies:
-    "@lerna-lite/core": "npm:3.9.0"
+    "@lerna-lite/core": "npm:3.9.1"
     fs-extra: "npm:^11.2.0"
     p-map: "npm:^7.0.2"
     write-json-file: "npm:^6.0.0"
-  checksum: 10c0/2f19d383086e0fed1c2d599b9534e54f5a03c95475c92c63c564377fe8976d523d5a3f7fc483950a6f4c6311e6f35fd1b8b9e88d0e0be9867e4e4876c060562e
+  checksum: 10c0/705aabd9a34a2a77614be6ba189581b6ef9f0c8a9daac382f4850a46bd4b61e2932bf80f15673f1ac6bbe62ab022676bdeae524cf0908b02b9637c9e1a522ce8
   languageName: node
   linkType: hard
 
@@ -2893,7 +2893,7 @@ __metadata:
   resolution: "@morpho-org/sdks@workspace:."
   dependencies:
     "@biomejs/biome": "npm:^1.8.3"
-    "@lerna-lite/cli": "npm:3.9.0"
+    "@lerna-lite/cli": "npm:3.9.1"
     "@lerna-lite/publish": "npm:3.8.0"
     "@lerna-lite/version": "npm:^3.7.1"
     husky: "npm:^9.0.11"
