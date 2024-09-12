@@ -20,7 +20,7 @@ export function fetchMarketQueryOptions<config extends Config>(
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
     async queryFn({ queryKey }) {
       const { id, chainId, ...parameters } = queryKey[1];
-      if (!id) throw new Error("id is required");
+      if (!id) throw Error("id is required");
 
       return fetchMarket(id, config.getClient({ chainId }), {
         chainId,
