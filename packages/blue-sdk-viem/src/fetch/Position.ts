@@ -9,7 +9,7 @@ import {
 import { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
-import { FetchParameters } from "../types";
+import { DeploylessFetchParameters, FetchParameters } from "../types";
 import { fetchMarket } from "./Market";
 
 export async function fetchPosition(
@@ -29,6 +29,7 @@ export async function fetchPosition(
     functionName: "position",
     args: [marketId, user],
   });
+
   return new Position({
     user,
     marketId,
@@ -42,9 +43,7 @@ export async function fetchAccrualPosition(
   user: Address,
   marketId: MarketId,
   client: Client,
-  parameters: FetchParameters & {
-    deployless?: boolean;
-  } = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),

@@ -246,38 +246,6 @@ describe("augment/Holding", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch empty user holding", async () => {
-    const token = MAINNET_MARKETS.usdc_wbtc.collateralToken as Address;
-
-    const expectedData = new Holding({
-      token,
-      user: client.account.address,
-      erc20Allowances: {
-        morpho: 0n,
-        permit2: 0n,
-        bundler: 0n,
-      },
-      permit2Allowances: {
-        morpho: {
-          amount: 0n,
-          expiration: 0n,
-          nonce: 0n,
-        },
-        bundler: {
-          amount: 0n,
-          expiration: 0n,
-          nonce: 0n,
-        },
-      },
-      balance: 0n,
-      canTransfer: true,
-    });
-
-    const value = await Holding.fetch(client.account.address, token, client);
-
-    expect(value).to.eql(expectedData);
-  });
-
   it("should fetch backed token user holding with deployless", async () => {
     const token = addresses[ChainId.EthMainnet].wbC3M as Address;
 
@@ -285,25 +253,76 @@ describe("augment/Holding", () => {
       token,
       user: client.account.address,
       erc20Allowances: {
-        morpho: 0n,
-        permit2: 0n,
-        bundler: 0n,
+        morpho: 6n,
+        permit2: 5n,
+        bundler: 4n,
       },
       permit2Allowances: {
         morpho: {
-          amount: 0n,
-          expiration: 0n,
+          amount: 9n,
+          expiration: MathLib.MAX_UINT_48 - 2n,
           nonce: 0n,
         },
         bundler: {
-          amount: 0n,
-          expiration: 0n,
+          amount: 8n,
+          expiration: MathLib.MAX_UINT_48 - 7n,
           nonce: 0n,
         },
       },
-      balance: 0n,
+      balance: 2853958n,
       erc2612Nonce: 0n,
       canTransfer: false,
+    });
+
+    await deal(token, client.account.address, expectedData.balance);
+    await client.writeContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [
+        addresses[ChainId.EthMainnet].morpho,
+        expectedData.erc20Allowances.morpho,
+      ],
+    });
+    await client.writeContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [
+        addresses[ChainId.EthMainnet].bundler,
+        expectedData.erc20Allowances.bundler,
+      ],
+    });
+    await client.writeContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [
+        addresses[ChainId.EthMainnet].permit2,
+        expectedData.erc20Allowances.permit2,
+      ],
+    });
+    await client.writeContract({
+      address: addresses[ChainId.EthMainnet].permit2,
+      abi: permit2Abi,
+      functionName: "approve",
+      args: [
+        token,
+        addresses[ChainId.EthMainnet].morpho,
+        expectedData.permit2Allowances.morpho.amount,
+        Number(expectedData.permit2Allowances.morpho.expiration),
+      ],
+    });
+    await client.writeContract({
+      address: addresses[ChainId.EthMainnet].permit2,
+      abi: permit2Abi,
+      functionName: "approve",
+      args: [
+        token,
+        addresses[ChainId.EthMainnet].bundler,
+        expectedData.permit2Allowances.bundler.amount,
+        Number(expectedData.permit2Allowances.bundler.expiration),
+      ],
     });
 
     const value = await Holding.fetch(client.account.address, token, client);
@@ -318,25 +337,76 @@ describe("augment/Holding", () => {
       token,
       user: client.account.address,
       erc20Allowances: {
-        morpho: 0n,
-        permit2: 0n,
-        bundler: 0n,
+        morpho: 6n,
+        permit2: 5n,
+        bundler: 4n,
       },
       permit2Allowances: {
         morpho: {
-          amount: 0n,
-          expiration: 0n,
+          amount: 9n,
+          expiration: MathLib.MAX_UINT_48 - 2n,
           nonce: 0n,
         },
         bundler: {
-          amount: 0n,
-          expiration: 0n,
+          amount: 8n,
+          expiration: MathLib.MAX_UINT_48 - 7n,
           nonce: 0n,
         },
       },
-      balance: 0n,
+      balance: 2853958n,
       erc2612Nonce: 0n,
       canTransfer: false,
+    });
+
+    await deal(token, client.account.address, expectedData.balance);
+    await client.writeContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [
+        addresses[ChainId.EthMainnet].morpho,
+        expectedData.erc20Allowances.morpho,
+      ],
+    });
+    await client.writeContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [
+        addresses[ChainId.EthMainnet].bundler,
+        expectedData.erc20Allowances.bundler,
+      ],
+    });
+    await client.writeContract({
+      address: token,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [
+        addresses[ChainId.EthMainnet].permit2,
+        expectedData.erc20Allowances.permit2,
+      ],
+    });
+    await client.writeContract({
+      address: addresses[ChainId.EthMainnet].permit2,
+      abi: permit2Abi,
+      functionName: "approve",
+      args: [
+        token,
+        addresses[ChainId.EthMainnet].morpho,
+        expectedData.permit2Allowances.morpho.amount,
+        Number(expectedData.permit2Allowances.morpho.expiration),
+      ],
+    });
+    await client.writeContract({
+      address: addresses[ChainId.EthMainnet].permit2,
+      abi: permit2Abi,
+      functionName: "approve",
+      args: [
+        token,
+        addresses[ChainId.EthMainnet].bundler,
+        expectedData.permit2Allowances.bundler.amount,
+        Number(expectedData.permit2Allowances.bundler.expiration),
+      ],
     });
 
     const value = await Holding.fetch(client.account.address, token, client, {

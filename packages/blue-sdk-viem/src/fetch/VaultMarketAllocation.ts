@@ -7,7 +7,7 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { getChainId } from "viem/actions";
-import { FetchParameters } from "../types";
+import { DeploylessFetchParameters } from "../types";
 import { fetchAccrualPosition } from "./Position";
 import { fetchVaultMarketConfig } from "./VaultMarketConfig";
 
@@ -15,7 +15,7 @@ export async function fetchVaultMarketAllocation(
   vault: Address,
   marketId: MarketId,
   client: Client,
-  parameters: FetchParameters & { deployless?: boolean } = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),

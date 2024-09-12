@@ -27,3 +27,7 @@ export type FetchParameters = UnionEvaluate<
 > & {
   chainId?: ChainId;
 };
+
+export type DeploylessFetchParameters = FetchParameters & {
+  deployless?: boolean;
+};

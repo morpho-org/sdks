@@ -8,24 +8,24 @@ import {
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { publicAllocatorAbi } from "../abis";
-import { FetchOptions } from "../types";
+import { FetchParameters } from "../types";
 
 export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,
   marketId: MarketId,
   client: Client,
-  { chainId, overrides = {} }: FetchOptions = {},
+  parameters: FetchParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
 
-  const { publicAllocator } = addresses[chainId];
+  const { publicAllocator } = addresses[parameters.chainId];
 
   if (!publicAllocator) return;
 
   const [maxIn, maxOut] = await readContract(client, {
-    ...overrides,
+    ...parameters,
     address: publicAllocator,
     abi: publicAllocatorAbi,
     functionName: "flowCaps",

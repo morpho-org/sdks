@@ -21,7 +21,7 @@ import {
   wrappedBackedTokenAbi,
 } from "../abis";
 import { abi, code } from "../queries/GetHolding";
-import { FetchParameters } from "../types";
+import { DeploylessFetchParameters } from "../types";
 
 export enum Boolean {
   Undefined,
@@ -33,12 +33,7 @@ export async function fetchHolding(
   user: Address,
   token: Address,
   client: Client,
-  {
-    deployless = true,
-    ...parameters
-  }: FetchParameters & {
-    deployless?: boolean;
-  } = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),

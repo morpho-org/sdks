@@ -9,19 +9,15 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
-import { FetchParameters } from "../types";
+import { DeploylessFetchParameters } from "../types";
 
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
 import { abi, code } from "../queries/GetMarket";
 
-export type FetchMarketParameters = FetchParameters & {
-  deployless?: boolean;
-};
-
 export async function fetchMarket(
   id: MarketId,
   client: Client,
-  { deployless = true, ...parameters }: FetchMarketParameters = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),

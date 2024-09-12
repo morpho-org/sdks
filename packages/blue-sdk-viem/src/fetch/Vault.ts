@@ -12,7 +12,7 @@ import {
 
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi, publicAllocatorAbi } from "../abis";
-import { FetchParameters } from "../types";
+import { DeploylessFetchParameters } from "../types";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
 import { abi, code } from "../queries/GetVault";
@@ -21,10 +21,7 @@ import { fetchVaultConfig } from "./VaultConfig";
 export async function fetchVault(
   address: Address,
   client: Client,
-  {
-    deployless = true,
-    ...parameters
-  }: FetchParameters & { deployless?: boolean } = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
@@ -282,7 +279,7 @@ export async function fetchVault(
 export async function fetchAccrualVault(
   address: Address,
   client: Client,
-  parameters: FetchParameters & { deployless?: boolean } = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
