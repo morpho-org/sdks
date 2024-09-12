@@ -4,10 +4,10 @@ import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
 import {
-  FetchMarketOptions,
+  FetchMarketParameters,
   FetchMarketQueryKey,
   fetchMarketQueryOptions,
-} from "../query/fetchMarket.js";
+} from "../queries/fetchMarket.js";
 import { ConfigParameter, QueryParameter } from "../types/properties.js";
 import { useChainId } from "./useChainId.js";
 
@@ -15,7 +15,7 @@ export type UseMarketParameters<
   config extends Config = Config,
   selectData = Market,
 > = UnionCompute<
-  FetchMarketOptions &
+  FetchMarketParameters &
     ConfigParameter<config> &
     QueryParameter<
       Market,
@@ -34,7 +34,6 @@ export function useMarket<
   config extends Config = ResolvedRegister["config"],
   selectData = Market,
 >({
-  id,
   query = {},
   ...parameters
 }: UseMarketParameters<config, selectData>): UseMarketReturnType<selectData> {
@@ -49,7 +48,7 @@ export function useMarket<
   return useQuery({
     ...query,
     ...options,
-    enabled: id != null && query.enabled,
+    enabled: parameters.marketId != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
   });
 }

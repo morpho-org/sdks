@@ -2,7 +2,10 @@ import { Market, MarketId } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { fetchMarketQueryOptions } from "../query/fetchMarket.js";
+import {
+  MarketParameters,
+  fetchMarketQueryOptions,
+} from "../queries/fetchMarket.js";
 import { useChainId } from "./useChainId.js";
 import { UseMarketParameters, UseMarketReturnType } from "./useMarket.js";
 
@@ -10,8 +13,8 @@ export type UseMarketsParameters<
   config extends Config = Config,
   selectData = Market,
 > = {
-  ids: Iterable<MarketId>;
-} & Omit<UseMarketParameters<config, selectData>, "id">;
+  marketIds: Iterable<MarketId | undefined>;
+} & Omit<UseMarketParameters<config, selectData>, keyof MarketParameters>;
 
 export type UseMarketsReturnType<selectData = Market> =
   UseMarketReturnType<selectData>[];
@@ -20,7 +23,7 @@ export function useMarkets<
   config extends Config = ResolvedRegister["config"],
   selectData = Market,
 >({
-  ids,
+  marketIds,
   query = {},
   ...parameters
 }: UseMarketsParameters<config, selectData>): UseMarketsReturnType<selectData> {
@@ -28,14 +31,14 @@ export function useMarkets<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(ids, (id) => ({
+    queries: Array.from(marketIds, (marketId) => ({
       ...query,
       ...fetchMarketQueryOptions(config, {
         ...parameters,
-        id,
+        marketId,
         chainId,
       }),
-      enabled: id != null && query.enabled,
+      enabled: marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
     })),
   });

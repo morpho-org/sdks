@@ -10,7 +10,7 @@ export interface InputVaultMarketConfig {
   pendingCap: Pending<bigint>;
   removableAt: bigint;
   enabled: boolean;
-  publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
+  publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
 }
 
 export class VaultMarketConfig implements InputVaultMarketConfig {
@@ -47,7 +47,7 @@ export class VaultMarketConfig implements InputVaultMarketConfig {
   /**
    * The vault's PublicAllocator configuration on the corresponding market.
    */
-  public publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
+  public publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
 
   constructor({
     vault,

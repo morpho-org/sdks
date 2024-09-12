@@ -1,40 +1,49 @@
-import { Vault } from "@morpho-org/blue-sdk";
+import { VaultConfig } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
 import { Address } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
-  VaultParameters,
-  fetchVaultQueryOptions,
-} from "../queries/fetchVault.js";
+  VaultConfigParameters,
+  fetchVaultConfigQueryOptions,
+} from "../queries/fetchVaultConfig.js";
 import { useChainId } from "./useChainId.js";
-import { UseVaultParameters, UseVaultReturnType } from "./useVault.js";
+import {
+  UseVaultConfigParameters,
+  UseVaultConfigReturnType,
+} from "./useVaultConfig.js";
 
-export type UseVaultsParameters<
+export type UseVaultConfigsParameters<
   config extends Config = Config,
-  selectData = Vault,
+  selectData = VaultConfig,
 > = {
   vaults: Iterable<Address | undefined>;
-} & Omit<UseVaultParameters<config, selectData>, keyof VaultParameters>;
+} & Omit<
+  UseVaultConfigParameters<config, selectData>,
+  keyof VaultConfigParameters
+>;
 
-export type UseVaultsReturnType<selectData = Vault> =
-  UseVaultReturnType<selectData>[];
+export type UseVaultConfigsReturnType<selectData = VaultConfig> =
+  UseVaultConfigReturnType<selectData>[];
 
-export function useVaults<
+export function useVaultConfigs<
   config extends Config = ResolvedRegister["config"],
-  selectData = Vault,
+  selectData = VaultConfig,
 >({
   vaults,
   query = {},
   ...parameters
-}: UseVaultsParameters<config, selectData>): UseVaultsReturnType<selectData> {
+}: UseVaultConfigsParameters<
+  config,
+  selectData
+>): UseVaultConfigsReturnType<selectData> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
   return useQueries({
     queries: Array.from(vaults, (vault) => ({
       ...query,
-      ...fetchVaultQueryOptions(config, {
+      ...fetchVaultConfigQueryOptions(config, {
         ...parameters,
         vault,
         chainId,

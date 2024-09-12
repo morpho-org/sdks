@@ -1,47 +1,47 @@
-import { MarketConfig } from "@morpho-org/blue-sdk";
+import { VaultMarketConfig } from "@morpho-org/blue-sdk";
 import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
 import {
-  FetchMarketConfigParameters,
-  FetchMarketConfigQueryKey,
-  fetchMarketConfigQueryOptions,
-} from "../queries/fetchMarketConfig.js";
+  FetchVaultMarketConfigParameters,
+  FetchVaultMarketConfigQueryKey,
+  fetchVaultMarketConfigQueryOptions,
+} from "../queries/fetchVaultMarketConfig.js";
 import { ConfigParameter, QueryParameter } from "../types/properties.js";
 import { useChainId } from "./useChainId.js";
 
-export type UseMarketConfigParameters<
+export type UseVaultMarketConfigParameters<
   config extends Config = Config,
-  selectData = MarketConfig,
+  selectData = VaultMarketConfig,
 > = UnionCompute<
-  FetchMarketConfigParameters &
+  FetchVaultMarketConfigParameters &
     ConfigParameter<config> &
     QueryParameter<
-      MarketConfig,
+      VaultMarketConfig,
       ReadContractErrorType,
       selectData,
-      FetchMarketConfigQueryKey
+      FetchVaultMarketConfigQueryKey
     >
 >;
 
-export type UseMarketConfigReturnType<selectData = MarketConfig> =
+export type UseVaultMarketConfigReturnType<selectData = VaultMarketConfig> =
   UseQueryReturnType<selectData, ReadContractErrorType>;
 
-export function useMarketConfig<
+export function useVaultMarketConfig<
   config extends Config = ResolvedRegister["config"],
-  selectData = MarketConfig,
+  selectData = VaultMarketConfig,
 >({
   query = {},
   ...parameters
-}: UseMarketConfigParameters<
+}: UseVaultMarketConfigParameters<
   config,
   selectData
->): UseMarketConfigReturnType<selectData> {
+>): UseVaultMarketConfigReturnType<selectData> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  const options = fetchMarketConfigQueryOptions<config>(config, {
+  const options = fetchVaultMarketConfigQueryOptions<config>(config, {
     ...parameters,
     chainId,
   });
@@ -49,7 +49,8 @@ export function useMarketConfig<
   return useQuery({
     ...query,
     ...options,
-    enabled: parameters.marketId != null && query.enabled,
+    enabled:
+      parameters.vault != null && parameters.marketId != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
   });
 }

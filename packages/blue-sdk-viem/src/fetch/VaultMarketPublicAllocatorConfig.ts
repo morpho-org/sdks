@@ -22,8 +22,6 @@ export async function fetchVaultMarketPublicAllocatorConfig(
 
   const { publicAllocator } = addresses[parameters.chainId];
 
-  if (!publicAllocator) return;
-
   const [maxIn, maxOut] = await readContract(client, {
     ...parameters,
     address: publicAllocator,

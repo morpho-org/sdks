@@ -1,47 +1,49 @@
-import { MarketConfig } from "@morpho-org/blue-sdk";
+import { Position } from "@morpho-org/blue-sdk";
 import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
 import {
-  FetchMarketConfigParameters,
-  FetchMarketConfigQueryKey,
-  fetchMarketConfigQueryOptions,
-} from "../queries/fetchMarketConfig.js";
+  FetchPositionParameters,
+  FetchPositionQueryKey,
+  fetchPositionQueryOptions,
+} from "../queries/fetchPosition.js";
 import { ConfigParameter, QueryParameter } from "../types/properties.js";
 import { useChainId } from "./useChainId.js";
 
-export type UseMarketConfigParameters<
+export type UsePositionParameters<
   config extends Config = Config,
-  selectData = MarketConfig,
+  selectData = Position,
 > = UnionCompute<
-  FetchMarketConfigParameters &
+  FetchPositionParameters &
     ConfigParameter<config> &
     QueryParameter<
-      MarketConfig,
+      Position,
       ReadContractErrorType,
       selectData,
-      FetchMarketConfigQueryKey
+      FetchPositionQueryKey
     >
 >;
 
-export type UseMarketConfigReturnType<selectData = MarketConfig> =
-  UseQueryReturnType<selectData, ReadContractErrorType>;
+export type UsePositionReturnType<selectData = Position> = UseQueryReturnType<
+  selectData,
+  ReadContractErrorType
+>;
 
-export function useMarketConfig<
+export function usePosition<
   config extends Config = ResolvedRegister["config"],
-  selectData = MarketConfig,
+  selectData = Position,
 >({
   query = {},
   ...parameters
-}: UseMarketConfigParameters<
+}: UsePositionParameters<
   config,
   selectData
->): UseMarketConfigReturnType<selectData> {
+>): UsePositionReturnType<selectData> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  const options = fetchMarketConfigQueryOptions<config>(config, {
+  const options = fetchPositionQueryOptions<config>(config, {
     ...parameters,
     chainId,
   });
@@ -49,7 +51,8 @@ export function useMarketConfig<
   return useQuery({
     ...query,
     ...options,
-    enabled: parameters.marketId != null && query.enabled,
+    enabled:
+      parameters.user != null && parameters.marketId != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
   });
 }

@@ -4,17 +4,19 @@ import {
   fetchHolding,
 } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
-import type { Address, ReadContractErrorType } from "viem";
+import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
+import { TokenParameters } from "./fetchToken.js";
+import { UserParameters } from "./fetchUser.js";
 
-export type FetchHoldingOptions = {
-  user?: Address;
-  token?: Address;
-} & DeploylessFetchParameters;
+export type HoldingParameters = UserParameters & TokenParameters;
+
+export type FetchHoldingParameters = Partial<HoldingParameters> &
+  DeploylessFetchParameters;
 
 export function fetchHoldingQueryOptions<config extends Config>(
   config: config,
-  options: FetchHoldingOptions,
+  parameters: FetchHoldingParameters,
 ) {
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
@@ -29,7 +31,7 @@ export function fetchHoldingQueryOptions<config extends Config>(
         ...parameters,
       });
     },
-    queryKey: fetchHoldingQueryKey(options),
+    queryKey: fetchHoldingQueryKey(parameters),
   } as const satisfies QueryOptions<
     Holding,
     ReadContractErrorType,
@@ -38,8 +40,8 @@ export function fetchHoldingQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchHoldingQueryKey(options: FetchHoldingOptions) {
-  return ["fetchHolding", options] as const;
+export function fetchHoldingQueryKey(parameters: FetchHoldingParameters) {
+  return ["fetchHolding", parameters] as const;
 }
 
 export type FetchHoldingQueryKey = ReturnType<typeof fetchHoldingQueryKey>;

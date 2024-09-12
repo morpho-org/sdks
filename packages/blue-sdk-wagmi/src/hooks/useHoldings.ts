@@ -1,9 +1,11 @@
 import { Holding } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { Address } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { fetchHoldingQueryOptions } from "../query/fetchHolding.js";
+import {
+  HoldingParameters,
+  fetchHoldingQueryOptions,
+} from "../queries/fetchHolding.js";
 import { useChainId } from "./useChainId.js";
 import { UseHoldingParameters, UseHoldingReturnType } from "./useHolding.js";
 
@@ -11,8 +13,8 @@ export type UseHoldingsParameters<
   config extends Config = Config,
   selectData = Holding,
 > = {
-  holdings: Iterable<{ user: Address; token: Address }>;
-} & Omit<UseHoldingParameters<config, selectData>, "id">;
+  holdings: Iterable<Partial<HoldingParameters>>;
+} & Omit<UseHoldingParameters<config, selectData>, keyof HoldingParameters>;
 
 export type UseHoldingsReturnType<selectData = Holding> =
   UseHoldingReturnType<selectData>[];
@@ -32,15 +34,14 @@ export function useHoldings<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(holdings, ({ user, token }) => ({
+    queries: Array.from(holdings, (holding) => ({
       ...query,
       ...fetchHoldingQueryOptions(config, {
         ...parameters,
-        user,
-        token,
+        ...holding,
         chainId,
       }),
-      enabled: user != null && token != null && query.enabled,
+      enabled: holding.user != null && holding.token != null && query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
     })),
   });

@@ -7,27 +7,30 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
 
-export type FetchMarketOptions = {
-  id?: MarketId;
-} & DeploylessFetchParameters;
+export type MarketParameters = {
+  marketId: MarketId;
+};
+
+export type FetchMarketParameters = Partial<MarketParameters> &
+  DeploylessFetchParameters;
 
 export function fetchMarketQueryOptions<config extends Config>(
   config: config,
-  options: FetchMarketOptions,
+  parameters: FetchMarketParameters,
 ) {
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
     async queryFn({ queryKey }) {
-      const { id, chainId, ...parameters } = queryKey[1];
-      if (!id) throw Error("id is required");
+      const { marketId, chainId, ...parameters } = queryKey[1];
+      if (!marketId) throw Error("marketId is required");
 
-      return fetchMarket(id, config.getClient({ chainId }), {
+      return fetchMarket(marketId, config.getClient({ chainId }), {
         chainId,
         ...parameters,
       });
     },
-    queryKey: fetchMarketQueryKey(options),
+    queryKey: fetchMarketQueryKey(parameters),
   } as const satisfies QueryOptions<
     Market,
     ReadContractErrorType,
@@ -36,8 +39,8 @@ export function fetchMarketQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchMarketQueryKey(options: FetchMarketOptions) {
-  return ["fetchMarket", options] as const;
+export function fetchMarketQueryKey(parameters: FetchMarketParameters) {
+  return ["fetchMarket", parameters] as const;
 }
 
 export type FetchMarketQueryKey = ReturnType<typeof fetchMarketQueryKey>;

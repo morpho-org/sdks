@@ -4,10 +4,10 @@ import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
 import {
-  FetchVaultOptions,
+  FetchVaultParameters,
   FetchVaultQueryKey,
   fetchVaultQueryOptions,
-} from "../query/fetchVault.js";
+} from "../queries/fetchVault.js";
 import { ConfigParameter, QueryParameter } from "../types/properties.js";
 import { useChainId } from "./useChainId.js";
 
@@ -15,7 +15,7 @@ export type UseVaultParameters<
   config extends Config = Config,
   selectData = Vault,
 > = UnionCompute<
-  FetchVaultOptions &
+  FetchVaultParameters &
     ConfigParameter<config> &
     QueryParameter<Vault, ReadContractErrorType, selectData, FetchVaultQueryKey>
 >;
@@ -29,7 +29,6 @@ export function useVault<
   config extends Config = ResolvedRegister["config"],
   selectData = Vault,
 >({
-  address,
   query = {},
   ...parameters
 }: UseVaultParameters<config, selectData>): UseVaultReturnType<selectData> {
@@ -44,7 +43,7 @@ export function useVault<
   return useQuery({
     ...query,
     ...options,
-    enabled: address != null && query.enabled,
+    enabled: parameters.vault != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
   });
 }

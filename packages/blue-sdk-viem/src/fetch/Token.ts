@@ -11,7 +11,8 @@ import {
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { bytes32Erc20Abi, wstEthAbi } from "../abis";
-import { FetchParameters } from "../types";
+import { abi, code } from "../queries/GetToken";
+import { DeploylessFetchParameters } from "../types";
 
 export const decodeBytes32String = (hexOrStr: string) => {
   if (isHex(hexOrStr)) return hexToString(hexOrStr, { size: 32 });
@@ -22,13 +23,48 @@ export const decodeBytes32String = (hexOrStr: string) => {
 export async function fetchToken(
   address: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
   );
 
   if (address === NATIVE_ADDRESS) return Token.native(parameters.chainId);
+
+  const { wstEth, stEth } = getChainAddresses(parameters.chainId);
+
+  if (deployless) {
+    try {
+      const isWstEth = address === wstEth;
+
+      const token = await readContract(client, {
+        ...parameters,
+        abi,
+        code,
+        functionName: "query",
+        args: [address, isWstEth],
+      });
+
+      if (isWstEth && stEth != null)
+        return new ExchangeRateWrappedToken(
+          { ...token, address },
+          stEth,
+          token.stEthPerWstEth,
+        );
+
+      const unwrapToken = getUnwrappedToken(address, parameters.chainId);
+      if (unwrapToken)
+        return new ConstantWrappedToken(
+          { ...token, address },
+          unwrapToken,
+          Number(token.decimals),
+        );
+
+      return new Token({ ...token, address });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
+  }
 
   const [decimals, symbol, name] = await Promise.all([
     readContract(client, {
@@ -71,8 +107,6 @@ export async function fetchToken(
     symbol,
     name,
   };
-
-  const { wstEth, stEth } = getChainAddresses(parameters.chainId);
 
   switch (address) {
     case wstEth: {

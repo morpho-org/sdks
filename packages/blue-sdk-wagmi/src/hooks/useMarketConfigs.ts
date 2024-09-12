@@ -1,80 +1,46 @@
-import { MarketConfig, MarketId, addresses } from "@morpho-org/blue-sdk";
-import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import { ChainIdParameter } from "@wagmi/core/internal";
-import { Address } from "viem";
-import { Config, ResolvedRegister, UseReadContractParameters } from "wagmi";
+import { Market, MarketId } from "@morpho-org/blue-sdk";
+import { useQueries } from "@tanstack/react-query";
+import { MarketConfigParameters } from "src/queries/fetchMarketConfig.js";
+import { Config, ResolvedRegister, useConfig } from "wagmi";
+import { structuralSharing } from "wagmi/query";
+import { fetchMarketQueryOptions } from "../queries/fetchMarket.js";
 import { useChainId } from "./useChainId.js";
-import { initialMarketConfig, selectMarketConfig } from "./useMarketConfig.js";
-import {
-  UseReadContractsReturnType,
-  useReadContracts,
-} from "./useReadContracts.js";
+import { UseMarketParameters, UseMarketReturnType } from "./useMarket.js";
 
-export type UseMarketConfigsContracts = {
-  chainId: number;
-  address: Address;
-  abi: typeof blueAbi;
-  functionName: "idToMarketParams";
-  args: [MarketId];
-}[];
+export type UseMarketConfigsParameters<
+  config extends Config = Config,
+  selectData = Market,
+> = {
+  marketIds: Iterable<MarketId | undefined>;
+} & Omit<UseMarketParameters<config, selectData>, keyof MarketConfigParameters>;
 
-export type UseMarketConfigsParameters<config extends Config = Config> = {
-  ids: Iterable<MarketId>;
-} & Omit<
-  UseReadContractParameters<
-    typeof blueAbi,
-    "idToMarketParams",
-    [MarketId],
-    config,
-    MarketConfig
-  >,
-  "address" | "abi" | "functionName" | "args"
-> &
-  ChainIdParameter<config>;
-
-export type UseMarketConfigsReturnType = UseReadContractsReturnType<
-  typeof blueAbi,
-  "idToMarketParams",
-  [MarketId],
-  MarketConfig
->;
+export type UseMarketConfigsReturnType<selectData = Market> =
+  UseMarketReturnType<selectData>[];
 
 export function useMarketConfigs<
   config extends Config = ResolvedRegister["config"],
->(parameters: UseMarketConfigsParameters<config>): UseMarketConfigsReturnType {
+  selectData = Market,
+>({
+  marketIds,
+  query = {},
+  ...parameters
+}: UseMarketConfigsParameters<
+  config,
+  selectData
+>): UseMarketConfigsReturnType<selectData> {
+  const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  const { morpho } = addresses[chainId];
-
-  return useReadContracts<
-    typeof blueAbi,
-    "idToMarketParams",
-    [MarketId],
-    config,
-    MarketConfig
-  >(
-    Array.from(
-      parameters.ids,
-      (id) =>
-        ({
-          ...parameters,
-          chainId,
-          address: morpho,
-          abi: blueAbi,
-          functionName: "idToMarketParams",
-          args: [id],
-          query: {
-            // Disable refetching by default for immutable market configs.
-            refetchInterval: false,
-            refetchOnMount: false,
-            refetchOnReconnect: false,
-            refetchOnWindowFocus: false,
-            staleTime: Infinity,
-            ...parameters.query,
-            initialData: initialMarketConfig(id),
-            select: selectMarketConfig,
-          },
-        }) as const,
-    ),
-  );
+  return useQueries({
+    queries: Array.from(marketIds, (marketId) => ({
+      ...query,
+      ...fetchMarketQueryOptions(config, {
+        ...parameters,
+        marketId,
+        chainId,
+      }),
+      enabled: marketId != null && query.enabled,
+      structuralSharing: query.structuralSharing ?? structuralSharing,
+    })),
+  });
 }
