@@ -46,7 +46,13 @@ export function useMarketConfigs<
 
   const { morpho } = addresses[chainId];
 
-  return useReadContracts(
+  return useReadContracts<
+    typeof blueAbi,
+    "idToMarketParams",
+    [MarketId],
+    config,
+    MarketConfig
+  >(
     Array.from(
       parameters.ids,
       (id) =>

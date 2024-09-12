@@ -30,8 +30,9 @@ export function useMarkets<
   return useQueries({
     queries: Array.from(ids, (id) => ({
       ...query,
-      ...fetchMarketQueryOptions<config>(config, {
+      ...fetchMarketQueryOptions(config, {
         ...parameters,
+        id,
         chainId,
       }),
       enabled: id != null && query.enabled,
