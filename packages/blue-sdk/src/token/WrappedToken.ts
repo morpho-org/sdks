@@ -6,7 +6,7 @@ import { InputToken, Token } from "./Token";
 export abstract class WrappedToken extends Token {
   constructor(
     token: InputToken,
-    readonly underlying: Address,
+    public readonly underlying: Address,
   ) {
     super(token);
   }

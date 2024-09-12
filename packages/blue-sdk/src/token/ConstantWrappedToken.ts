@@ -1,16 +1,20 @@
 import { MathLib, RoundingDirection } from "../maths";
-import { Address } from "../types";
+import { Address, BigIntish } from "../types";
 
 import { InputToken } from "./Token";
 import { WrappedToken } from "./WrappedToken";
 
 export class ConstantWrappedToken extends WrappedToken {
+  public readonly underlyingDecimals;
+
   constructor(
     token: InputToken,
-    readonly underlying: Address,
-    private readonly _underlyingDecimals = 18,
+    underlying: Address,
+    underlyingDecimals: BigIntish = 18n,
   ) {
     super(token, underlying);
+
+    this.underlyingDecimals = BigInt(underlyingDecimals);
   }
 
   public override toWrappedExactAmountIn(
@@ -52,14 +56,14 @@ export class ConstantWrappedToken extends WrappedToken {
     return MathLib.mulDivDown(
       amount,
       10n ** BigInt(this.decimals),
-      10n ** BigInt(this._underlyingDecimals),
+      10n ** this.underlyingDecimals,
     );
   }
 
   protected _unwrap(amount: bigint) {
     return MathLib.mulDivDown(
       amount,
-      10n ** BigInt(this._underlyingDecimals),
+      10n ** this.underlyingDecimals,
       10n ** BigInt(this.decimals),
     );
   }

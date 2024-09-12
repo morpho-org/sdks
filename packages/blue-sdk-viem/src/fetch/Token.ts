@@ -11,6 +11,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { bytes32Erc20Abi, wstEthAbi } from "../abis";
+import { abi, code } from "../queries/GetToken";
 import { FetchOptions } from "../types";
 
 export const decodeBytes32String = (hexOrStr: string) => {
@@ -22,13 +23,52 @@ export const decodeBytes32String = (hexOrStr: string) => {
 export async function fetchToken(
   address: Address,
   client: Client,
-  { chainId, overrides = {} }: FetchOptions = {},
+  {
+    chainId,
+    overrides = {},
+    deployless = true,
+  }: FetchOptions & { deployless?: boolean } = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await getChainId(client)),
   );
 
   if (address === NATIVE_ADDRESS) return Token.native(chainId);
+
+  const { wstEth, stEth } = getChainAddresses(chainId);
+
+  if (deployless) {
+    try {
+      const isWstEth = address === wstEth;
+
+      const token = await readContract(client, {
+        ...overrides,
+        abi,
+        code,
+        functionName: "query",
+        args: [address, isWstEth],
+      });
+
+      if (isWstEth && stEth != null)
+        return new ExchangeRateWrappedToken(
+          { ...token, address },
+          stEth,
+          token.stEthPerWstEth,
+        );
+
+      const unwrapToken = getUnwrappedToken(address, chainId);
+      if (unwrapToken)
+        return new ConstantWrappedToken(
+          { ...token, address },
+          unwrapToken,
+          Number(token.decimals),
+        );
+
+      return new Token({ ...token, address });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
+  }
 
   const [decimals, symbol, name] = await Promise.all([
     readContract(client, {
@@ -71,8 +111,6 @@ export async function fetchToken(
     symbol,
     name,
   };
-
-  const { wstEth, stEth } = getChainAddresses(chainId);
 
   switch (address) {
     case wstEth: {
