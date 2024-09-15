@@ -1,11 +1,11 @@
 import { BlueErrors, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { BlueSimulationErrors } from "../../errors";
-import { BlueOperations } from "../../operations";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import { BlueSimulationErrors } from "../../errors.js";
+import { BlueOperations } from "../../operations.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import { OperationHandler } from "../types.js";
 
-import { handleBlueAccrueInterestOperation } from "./accrueInterest";
+import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleBlueBorrowOperation: OperationHandler<
   BlueOperations["Blue_Borrow"]
@@ -13,11 +13,10 @@ export const handleBlueBorrowOperation: OperationHandler<
   {
     args: { id, assets = 0n, shares = 0n, onBehalf, receiver, slippage = 0n },
     sender,
-    address,
   },
   data,
 ) => {
-  const { bundler } = getChainAddresses(data.chainId);
+  const { morpho, bundler } = getChainAddresses(data.chainId);
 
   if (sender === bundler) {
     const userData = data.getUser(onBehalf);
@@ -29,8 +28,7 @@ export const handleBlueBorrowOperation: OperationHandler<
   handleBlueAccrueInterestOperation(
     {
       type: "Blue_AccrueInterest",
-      sender: address,
-      address,
+      sender: morpho,
       args: { id },
     },
     data,
@@ -65,11 +63,11 @@ export const handleBlueBorrowOperation: OperationHandler<
   handleErc20Operation(
     {
       type: "Erc20_Transfer",
-      sender: address,
+      sender: morpho,
       address: market.config.loanToken,
       args: {
         amount: assets,
-        from: address,
+        from: morpho,
         to: receiver,
       },
     },

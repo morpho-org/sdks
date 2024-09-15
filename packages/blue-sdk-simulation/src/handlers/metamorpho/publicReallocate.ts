@@ -1,5 +1,3 @@
-import { MaxUint256, ZeroAddress } from "ethers";
-
 import { MarketId, NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
 
 import {
@@ -7,13 +5,14 @@ import {
   PublicAllocatorErrors,
   UnknownMarketPublicAllocatorConfigError,
   UnknownVaultPublicAllocatorConfigError,
-} from "../../errors";
-import { MetaMorphoOperations } from "../../operations";
-import { handleBlueOperation } from "../blue";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+} from "../../errors.js";
+import { MetaMorphoOperations } from "../../operations.js";
+import { handleBlueOperation } from "../blue/index.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import { OperationHandler } from "../types.js";
 
-import { handleMetaMorphoReallocateOperation } from "./reallocate";
+import { maxUint256, zeroAddress } from "viem";
+import { handleMetaMorphoReallocateOperation } from "./reallocate.js";
 
 export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_PublicReallocate"]
@@ -33,7 +32,7 @@ export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
         args: {
           amount: fee,
           from: sender,
-          to: ZeroAddress,
+          to: zeroAddress,
         },
       },
       data,
@@ -89,7 +88,6 @@ export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
       {
         type: "Blue_AccrueInterest",
         sender: address,
-        address: ZeroAddress, // Replaced with Blue address inside `handleBlueOperation`.
         args: { id },
       },
       data,
@@ -112,7 +110,7 @@ export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
 
   vaultSupplyMarketConfig.publicAllocatorConfig.maxIn -= totalWithdrawn;
   vaultSupplyMarketConfig.publicAllocatorConfig.maxOut += totalWithdrawn;
-  allocations.push({ id: supplyMarketId, assets: MaxUint256 });
+  allocations.push({ id: supplyMarketId, assets: maxUint256 });
 
   handleMetaMorphoReallocateOperation(
     {

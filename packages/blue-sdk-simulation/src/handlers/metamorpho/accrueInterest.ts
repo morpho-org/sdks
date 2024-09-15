@@ -1,10 +1,10 @@
-import { ZeroAddress } from "ethers";
+import { zeroAddress } from "viem";
 
 import { Vault } from "@morpho-org/blue-sdk";
 
-import { MetaMorphoOperations } from "../../operations";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import { MetaMorphoOperations } from "../../operations.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import { OperationHandler } from "../types.js";
 
 export const handleMetaMorphoAccrueInterestOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_AccrueInterest"]
@@ -12,12 +12,12 @@ export const handleMetaMorphoAccrueInterestOperation: OperationHandler<
   const vault = data.getAccrualVault(address);
   const newVault = vault.accrueInterest(data.timestamp);
 
-  data.metamorpho.vaultsData[address] = new Vault(newVault);
+  data.vaults[address] = new Vault(newVault);
 
   const feeShares = newVault.totalSupply - vault.totalSupply;
 
   // Mint fee shares.
-  if (feeShares > 0n && vault.feeRecipient !== ZeroAddress) {
+  if (feeShares > 0n && vault.feeRecipient !== zeroAddress) {
     handleErc20Operation(
       {
         type: "Erc20_Transfer",
@@ -25,7 +25,7 @@ export const handleMetaMorphoAccrueInterestOperation: OperationHandler<
         address,
         args: {
           amount: feeShares,
-          from: ZeroAddress,
+          from: zeroAddress,
           to: vault.feeRecipient,
         },
       },

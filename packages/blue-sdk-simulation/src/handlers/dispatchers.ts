@@ -1,18 +1,18 @@
 import { makeCreator } from "mutative";
 
-import { SimulationState } from "../SimulationState";
-import { SimulationErrors } from "../errors";
+import { SimulationState } from "../SimulationState.js";
+import { SimulationErrors } from "../errors.js";
 import {
   Operation,
   isBlueOperation,
   isErc20Operation,
   isMetaMorphoOperation,
-} from "../operations";
+} from "../operations.js";
 
-import { handleBlueOperation } from "./blue";
-import { handleErc20Operation } from "./erc20";
-import { handleMetaMorphoOperation } from "./metamorpho";
-import { MaybeDraft } from "./types";
+import { handleBlueOperation } from "./blue/index.js";
+import { handleErc20Operation } from "./erc20/index.js";
+import { handleMetaMorphoOperation } from "./metamorpho/index.js";
+import { MaybeDraft } from "./types.js";
 
 export type SimulationResult = [
   MaybeDraft<SimulationState>,

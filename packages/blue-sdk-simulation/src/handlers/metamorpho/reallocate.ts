@@ -1,11 +1,11 @@
-import { MaxUint256, ZeroAddress } from "ethers";
+import { maxUint256, zeroAddress } from "viem";
 
 import { MathLib } from "@morpho-org/blue-sdk";
 
-import { MetaMorphoErrors } from "../../errors";
-import { MetaMorphoOperations } from "../../operations";
-import { handleBlueOperation } from "../blue";
-import { OperationHandler } from "../types";
+import { MetaMorphoErrors } from "../../errors.js";
+import { MetaMorphoOperations } from "../../operations.js";
+import { handleBlueOperation } from "../blue/index.js";
+import { OperationHandler } from "../types.js";
 
 export const handleMetaMorphoReallocateOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_Reallocate"]
@@ -22,7 +22,6 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
       {
         type: "Blue_AccrueInterest",
         sender: address,
-        address,
         args: { id },
       },
       data,
@@ -42,7 +41,6 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
           // Bypass balance check because the vault's token balance is not stored
           // and it is checked with invariant `totalWithdrawn == totalSupplied`.
           sender: address,
-          address: ZeroAddress, // Replaced with Blue address inside `handleBlueOperation`.
           args: {
             id,
             ...(assets === 0n
@@ -58,7 +56,7 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
       totalWithdrawn += withdrawn;
     } else {
       const suppliedAssets =
-        assets === MaxUint256
+        assets === maxUint256
           ? MathLib.zeroFloorSub(totalWithdrawn, totalSupplied)
           : assets - supplyAssets;
 
@@ -75,8 +73,7 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
           type: "Blue_Supply",
           // Bypass balance check because the vault's token balance is not stored
           // and it is checked with invariant `totalWithdrawn == totalSupplied`.
-          sender: ZeroAddress,
-          address: ZeroAddress, // Replaced with Blue address inside `handleBlueOperation`.
+          sender: zeroAddress,
           args: {
             id,
             assets: suppliedAssets,

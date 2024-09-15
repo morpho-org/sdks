@@ -1,14 +1,13 @@
-import { MaxUint256 } from "ethers";
-
 import { BlueErrors, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { BlueSimulationErrors } from "../../errors";
-import { BlueOperations } from "../../operations";
-import { handleOperations } from "../dispatchers";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import { BlueSimulationErrors } from "../../errors.js";
+import { BlueOperations } from "../../operations.js";
+import { handleOperations } from "../dispatchers.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import { OperationHandler } from "../types.js";
 
-import { handleBlueAccrueInterestOperation } from "./accrueInterest";
+import { maxUint256 } from "viem";
+import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleBlueRepayOperation: OperationHandler<
   BlueOperations["Blue_Repay"]
@@ -16,25 +15,24 @@ export const handleBlueRepayOperation: OperationHandler<
   {
     args: { id, assets = 0n, shares = 0n, onBehalf, callback, slippage = 0n },
     sender,
-    address,
   },
   data,
 ) => {
+  const { morpho, bundler } = getChainAddresses(data.chainId);
+
   handleBlueAccrueInterestOperation(
     {
       type: "Blue_AccrueInterest",
-      sender: address,
-      address,
+      sender: morpho,
       args: { id },
     },
     data,
   );
 
   const market = data.getMarket(id);
-  const { bundler } = getChainAddresses(data.chainId);
 
   // Simulate the bundler's behavior on supply.
-  if (sender === bundler && assets === MaxUint256)
+  if (sender === bundler && assets === maxUint256)
     assets = MathLib.min(
       assets,
       data.getHolding(bundler, market.config.loanToken).balance,
@@ -68,12 +66,12 @@ export const handleBlueRepayOperation: OperationHandler<
   handleErc20Operation(
     {
       type: "Erc20_Transfer",
-      sender: address,
+      sender: morpho,
       address: market.config.loanToken,
       args: {
         amount: assets,
         from: sender,
-        to: address,
+        to: morpho,
       },
     },
     data,

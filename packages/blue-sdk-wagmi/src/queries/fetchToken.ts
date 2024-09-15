@@ -16,7 +16,7 @@ export type FetchTokenParameters = Partial<TokenParameters> &
 
 export function fetchTokenQueryOptions<config extends Config>(
   config: config,
-  options: FetchTokenParameters,
+  parameters: FetchTokenParameters,
 ) {
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
@@ -30,7 +30,7 @@ export function fetchTokenQueryOptions<config extends Config>(
         ...parameters,
       });
     },
-    queryKey: fetchTokenQueryKey(options),
+    queryKey: fetchTokenQueryKey(parameters),
   } as const satisfies QueryOptions<
     Token,
     ReadContractErrorType,
@@ -39,8 +39,28 @@ export function fetchTokenQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchTokenQueryKey(options: FetchTokenParameters) {
-  return ["fetchToken", options] as const;
+export function fetchTokenQueryKey({
+  token,
+  chainId,
+  blockTag,
+  blockNumber,
+  deployless,
+  account,
+  stateOverride,
+}: FetchTokenParameters) {
+  return [
+    "fetchToken",
+    // Ignore all other irrelevant parameters.
+    {
+      token,
+      chainId,
+      blockTag,
+      blockNumber,
+      deployless,
+      account,
+      stateOverride,
+    },
+  ] as const;
 }
 
 export type FetchTokenQueryKey = ReturnType<typeof fetchTokenQueryKey>;

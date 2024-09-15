@@ -39,8 +39,28 @@ export function fetchMarketQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchMarketQueryKey(parameters: FetchMarketParameters) {
-  return ["fetchMarket", parameters] as const;
+export function fetchMarketQueryKey({
+  marketId,
+  chainId,
+  blockTag,
+  blockNumber,
+  deployless,
+  account,
+  stateOverride,
+}: FetchMarketParameters) {
+  return [
+    "fetchMarket",
+    // Ignore all other irrelevant parameters.
+    {
+      marketId,
+      chainId,
+      blockTag,
+      blockNumber,
+      deployless,
+      account,
+      stateOverride,
+    },
+  ] as const;
 }
 
 export type FetchMarketQueryKey = ReturnType<typeof fetchMarketQueryKey>;

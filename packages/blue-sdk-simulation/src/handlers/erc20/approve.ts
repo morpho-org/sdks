@@ -1,8 +1,8 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { UnknownAllowanceError } from "../../errors";
-import { Erc20Operations } from "../../operations";
-import { OperationHandler } from "../types";
+import { UnknownAllowanceError } from "../../errors.js";
+import { Erc20Operations } from "../../operations.js";
+import { OperationHandler } from "../types.js";
 
 export const handleErc20ApproveOperation: OperationHandler<
   Erc20Operations["Erc20_Approve"]
@@ -22,9 +22,9 @@ export const handleErc20ApproveOperation: OperationHandler<
 
   if (contract != null) senderTokenData.erc20Allowances[contract] = amount;
   else {
-    const vaultConfig = data.metamorpho.vaultsConfig[spender];
+    const vault = data.vaults[spender];
 
-    if (vaultConfig != null && vaultConfig.asset === address) {
+    if (vault != null && vault.asset === address) {
       const vaultUserData = data.getVaultUserData(spender, sender);
 
       vaultUserData.allowance = amount;

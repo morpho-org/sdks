@@ -1,11 +1,11 @@
-import { MaxUint256, ZeroAddress } from "ethers";
+import { maxUint256, zeroAddress } from "viem";
 
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { Erc20Operations } from "../../operations";
-import { OperationHandler } from "../types";
+import { Erc20Operations } from "../../operations.js";
+import { OperationHandler } from "../types.js";
 
-import { handleErc20TransferOperation } from "./transfer";
+import { handleErc20TransferOperation } from "./transfer.js";
 
 export const handleErc20WrapOperation: OperationHandler<
   Erc20Operations["Erc20_Wrap"]
@@ -13,7 +13,7 @@ export const handleErc20WrapOperation: OperationHandler<
   const { bundler } = getChainAddresses(data.chainId);
 
   // Simulate the bundler's behavior on wraps only with MaxUint256.
-  if (sender === bundler && amount === MaxUint256)
+  if (sender === bundler && amount === maxUint256)
     amount = MathLib.min(amount, data.getHolding(bundler, address).balance);
 
   const wrappedToken = data.getWrappedToken(address);
@@ -28,7 +28,7 @@ export const handleErc20WrapOperation: OperationHandler<
       args: {
         amount,
         from: sender,
-        to: ZeroAddress,
+        to: zeroAddress,
       },
     },
     data,
@@ -42,7 +42,7 @@ export const handleErc20WrapOperation: OperationHandler<
       address: wrappedToken.address,
       args: {
         amount: wrappedAmount,
-        from: ZeroAddress,
+        from: zeroAddress,
         to: owner,
       },
     },

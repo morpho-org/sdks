@@ -39,8 +39,27 @@ export function fetchVaultQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchVaultQueryKey(parameters: FetchVaultParameters) {
-  return ["fetchVault", parameters] as const;
+export function fetchVaultQueryKey({
+  vault,
+  chainId,
+  blockTag,
+  blockNumber,
+  deployless,
+  account,
+  stateOverride,
+}: FetchVaultParameters) {
+  return [
+    "fetchVault",
+    {
+      vault,
+      chainId,
+      blockTag,
+      blockNumber,
+      deployless,
+      account,
+      stateOverride,
+    },
+  ] as const;
 }
 
 export type FetchVaultQueryKey = ReturnType<typeof fetchVaultQueryKey>;

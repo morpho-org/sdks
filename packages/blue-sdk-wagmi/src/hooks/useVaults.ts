@@ -10,12 +10,15 @@ import {
 import { useChainId } from "./useChainId.js";
 import { UseVaultParameters, UseVaultReturnType } from "./useVault.js";
 
+export type FetchVaultsParameters = {
+  vaults: Iterable<Address | undefined>;
+};
+
 export type UseVaultsParameters<
   config extends Config = Config,
   selectData = Vault,
-> = {
-  vaults: Iterable<Address | undefined>;
-} & Omit<UseVaultParameters<config, selectData>, keyof VaultParameters>;
+> = FetchVaultsParameters &
+  Omit<UseVaultParameters<config, selectData>, keyof VaultParameters>;
 
 export type UseVaultsReturnType<selectData = Vault> =
   UseVaultReturnType<selectData>[];

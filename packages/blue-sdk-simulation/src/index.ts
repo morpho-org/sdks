@@ -1,9 +1,9 @@
-export * from "./errors";
-export * from "./operations";
-export * from "./handlers";
-export * from "./SimulationState";
+export * from "./errors.js";
+export * from "./operations.js";
+export * from "./handlers/index.js";
+export * from "./SimulationState.js";
 
-export * as errors from "./errors";
-export * as operations from "./operations";
-export * as handlers from "./handlers";
-export * as types from "./SimulationState";
+export * as errors from "./errors.js";
+export * as operations from "./operations.js";
+export * as handlers from "./handlers/index.js";
+export * as types from "./SimulationState.js";

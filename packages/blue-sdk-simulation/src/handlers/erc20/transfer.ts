@@ -1,24 +1,23 @@
-import { MaxUint256, ZeroAddress } from "ethers";
-
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { Erc20Errors } from "../../errors";
-import { Erc20Operations } from "../../operations";
-import { OperationHandler } from "../types";
+import { maxUint256, zeroAddress } from "viem";
+import { Erc20Errors } from "../../errors.js";
+import { Erc20Operations } from "../../operations.js";
+import { OperationHandler } from "../types.js";
 
 export const handleErc20TransferOperation: OperationHandler<
   Erc20Operations["Erc20_Transfer"]
 > = ({ args: { amount, from, to }, sender, address }, data) => {
   const { morpho, bundler, permit2 } = getChainAddresses(data.chainId);
 
-  if (from !== ZeroAddress && from !== morpho) {
+  if (from !== zeroAddress && from !== morpho) {
     const fromTokenData = data.getHolding(from, address);
 
     if (fromTokenData.canTransfer === false)
       throw new Erc20Errors.UnauthorizedTransfer(address, from);
 
     // Simulate the bundler's behavior on output transfers.
-    if (sender === bundler && from === bundler && amount === MaxUint256)
+    if (sender === bundler && from === bundler && amount === maxUint256)
       amount = MathLib.min(amount, fromTokenData.balance);
 
     if (fromTokenData.balance < amount)
@@ -42,10 +41,10 @@ export const handleErc20TransferOperation: OperationHandler<
         fromTokenData.erc20Allowances[contract] -= amount;
       } else {
         // Check allowance of MetaMorpho vaults on the underlying asset.
-        const vaultConfig = data.metamorpho.vaultsConfig[sender];
-        const vaultFromData = data.metamorpho.vaultsUsersData[sender]?.[from];
+        const vault = data.vaults[sender];
+        const vaultFromData = data.vaultsUsersData[sender]?.[from];
 
-        if (vaultConfig?.asset === address && vaultFromData != null) {
+        if (vault?.asset === address && vaultFromData != null) {
           if (vaultFromData.allowance < amount)
             throw new Erc20Errors.InsufficientAllowance(address, from, sender);
 
@@ -57,7 +56,7 @@ export const handleErc20TransferOperation: OperationHandler<
     fromTokenData.balance -= amount;
   }
 
-  const toTokenData = data.blue.userTokenHoldings[to]?.[address];
+  const toTokenData = data.holdings[to]?.[address];
 
   if (toTokenData != null) toTokenData.balance += amount;
 };

@@ -5,7 +5,7 @@ import {
   UnknownDataError,
 } from "@morpho-org/blue-sdk";
 
-import { Operation } from "./operations";
+import { Operation } from "./operations.js";
 
 export class UnknownWstEthExchangeRateError extends UnknownDataError {
   constructor() {

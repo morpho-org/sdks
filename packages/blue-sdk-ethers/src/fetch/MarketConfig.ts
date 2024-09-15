@@ -26,8 +26,10 @@ export async function fetchMarketConfig(
     const { morpho } = getChainAddresses(chainId);
 
     config = new MarketConfig(
-      // Always fetch at latest block because config is immutable.
-      await MorphoBlue__factory.connect(morpho, runner).idToMarketParams(id),
+      await MorphoBlue__factory.connect(morpho, runner).idToMarketParams(id, {
+        // Always fetch at latest block because config is immutable.
+        blockTag: "latest",
+      }),
     );
   }
 

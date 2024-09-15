@@ -1,5 +1,5 @@
-import { BlueOperations } from "../../operations";
-import { OperationHandler } from "../types";
+import { BlueOperations } from "../../operations.js";
+import { OperationHandler } from "../types.js";
 
 export const handleBlueAccrueInterestOperation: OperationHandler<
   BlueOperations["Blue_AccrueInterest"]
@@ -7,10 +7,9 @@ export const handleBlueAccrueInterestOperation: OperationHandler<
   const marketData = data.getMarket(id);
   const newMarketData = marketData.accrueInterest(data.timestamp);
 
-  data.blue.marketsData[id] = newMarketData;
+  data.markets[id] = newMarketData;
 
-  const feeRecipientMarketData =
-    data.blue.positionByMarketByUser[data.blue.globalData.feeRecipient]?.[id];
+  const feeRecipientMarketData = data.positions[data.global.feeRecipient]?.[id];
 
   if (feeRecipientMarketData != null)
     feeRecipientMarketData.supplyShares +=

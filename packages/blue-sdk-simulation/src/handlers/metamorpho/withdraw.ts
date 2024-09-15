@@ -1,14 +1,14 @@
-import { MaxUint256, ZeroAddress } from "ethers";
+import { maxUint256, zeroAddress } from "viem";
 
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { MetaMorphoErrors } from "../../errors";
-import { MetaMorphoOperations } from "../../operations";
-import { handleBlueOperation } from "../blue";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import { MetaMorphoErrors } from "../../errors.js";
+import { MetaMorphoOperations } from "../../operations.js";
+import { handleBlueOperation } from "../blue/index.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import { OperationHandler } from "../types.js";
 
-import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest";
+import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleMetaMorphoWithdrawOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_Withdraw"]
@@ -42,7 +42,7 @@ export const handleMetaMorphoWithdrawOperation: OperationHandler<
   } else {
     if (sender === bundler) {
       // Simulate the bundler's behavior on withdrawals only with MaxUint256.
-      if (shares === MaxUint256)
+      if (shares === maxUint256)
         shares = MathLib.min(shares, data.getHolding(owner, address).balance);
 
       if (shares === 0n) throw new MetaMorphoErrors.ZeroShares();
@@ -60,7 +60,7 @@ export const handleMetaMorphoWithdrawOperation: OperationHandler<
       args: {
         amount: shares,
         from: owner,
-        to: ZeroAddress,
+        to: zeroAddress,
       },
     },
     data,
@@ -76,7 +76,6 @@ export const handleMetaMorphoWithdrawOperation: OperationHandler<
       {
         type: "Blue_AccrueInterest",
         sender: address,
-        address: ZeroAddress, // Replaced with Blue address inside `handleBlueOperation`.
         args: { id },
       },
       data,
@@ -90,7 +89,6 @@ export const handleMetaMorphoWithdrawOperation: OperationHandler<
       {
         type: "Blue_Withdraw",
         sender: address,
-        address: ZeroAddress, // Replaced with Blue address inside `handleBlueOperation`.
         args: {
           id,
           assets: toWithdrawInMarket,
@@ -121,7 +119,7 @@ export const handleMetaMorphoWithdrawOperation: OperationHandler<
       address: vault.config.asset,
       args: {
         amount: assets,
-        from: ZeroAddress, // Bypass the vault balance check.
+        from: zeroAddress, // Bypass the vault balance check.
         to: receiver,
       },
     },

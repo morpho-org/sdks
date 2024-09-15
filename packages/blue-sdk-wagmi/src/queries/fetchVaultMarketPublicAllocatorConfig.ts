@@ -1,6 +1,6 @@
 import { VaultMarketPublicAllocatorConfig } from "@morpho-org/blue-sdk";
 import {
-  DeploylessFetchParameters,
+  FetchParameters,
   fetchVaultMarketPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
@@ -13,8 +13,7 @@ export type VaultMarketPublicAllocatorConfigParameters = VaultParameters &
   MarketParameters;
 
 export type FetchVaultMarketPublicAllocatorConfigParameters =
-  Partial<VaultMarketPublicAllocatorConfigParameters> &
-    DeploylessFetchParameters;
+  Partial<VaultMarketPublicAllocatorConfigParameters> & FetchParameters;
 
 export function fetchVaultMarketPublicAllocatorConfigQueryOptions<
   config extends Config,
@@ -46,10 +45,28 @@ export function fetchVaultMarketPublicAllocatorConfigQueryOptions<
   >;
 }
 
-export function fetchVaultMarketPublicAllocatorConfigQueryKey(
-  parameters: FetchVaultMarketPublicAllocatorConfigParameters,
-) {
-  return ["fetchVaultMarketPublicAllocatorConfig", parameters] as const;
+export function fetchVaultMarketPublicAllocatorConfigQueryKey({
+  vault,
+  marketId,
+  chainId,
+  blockTag,
+  blockNumber,
+  account,
+  stateOverride,
+}: FetchVaultMarketPublicAllocatorConfigParameters) {
+  return [
+    "fetchVaultMarketPublicAllocatorConfig",
+    // Ignore all other irrelevant parameters.
+    {
+      vault,
+      marketId,
+      chainId,
+      blockTag,
+      blockNumber,
+      account,
+      stateOverride,
+    },
+  ] as const;
 }
 
 export type FetchVaultMarketPublicAllocatorConfigQueryKey = ReturnType<

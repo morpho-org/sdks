@@ -3,14 +3,18 @@ import {
   AccrualVault,
   Address,
   ChainId,
+  Holding,
+  Market,
   MarketId,
-  UnknownMarketConfigError,
+  Position,
+  Token,
   UnknownTokenError,
-  UnknownVaultConfigError,
+  User,
+  Vault,
+  VaultMarketConfig,
   WrappedToken,
   _try,
 } from "@morpho-org/blue-sdk";
-import {} from "@morpho-org/morpho-ts";
 
 import {
   UnknownHoldingError,
@@ -19,38 +23,47 @@ import {
   UnknownUserError,
   UnknownVaultError,
   UnknownVaultMarketConfigError,
-  UnknownVaultUserDataError,
   UnknownWrappedTokenError,
   UnknownWstEthExchangeRateError,
-} from "./errors";
+} from "./errors.js";
 
 export class SimulationState {
   constructor(
-    public readonly blue: BlueSimulationState,
-    public readonly metamorpho: MetaMorphoSimulationState,
+    public readonly global: { stEthPerWstEth?: bigint; feeRecipient: Address },
+    public readonly markets: Record<MarketId, Market>,
+    public readonly users: Record<Address, User>,
+    public readonly tokens: Record<Address, Token>,
+    public readonly vaults: Record<Address, Vault>,
+    /**
+     * Positions indexed by user then by market.
+     */
+    public readonly positions: Record<Address, Record<MarketId, Position>>,
+    /**
+     * Holdings indexed by user then by token.
+     */
+    public readonly holdings: Record<Address, Record<Address, Holding>>,
+    /**
+     * VaultMarketConfigs indexed by vault then by market.
+     */
+    public readonly vaultMarketConfigs: Record<
+      Address,
+      Record<MarketId, VaultMarketConfig>
+    >,
     public readonly chainId: ChainId,
     public blockNumber: bigint,
     public timestamp: bigint,
   ) {}
 
   getStEthPerWstEth() {
-    const { stEthPerWstEth } = this.blue.globalData;
+    const { stEthPerWstEth } = this.global;
 
     if (stEthPerWstEth == null) throw new UnknownWstEthExchangeRateError();
 
     return stEthPerWstEth;
   }
 
-  getMarketConfig(marketId: MarketId) {
-    const marketConfig = this.blue.marketsConfig[marketId];
-
-    if (marketConfig == null) throw new UnknownMarketConfigError(marketId);
-
-    return marketConfig;
-  }
-
   getMarket(marketId: MarketId) {
-    const marketData = this.blue.marketsData[marketId];
+    const marketData = this.markets[marketId];
 
     if (marketData == null) throw new UnknownMarketError(marketId);
 
@@ -58,31 +71,23 @@ export class SimulationState {
   }
 
   getUser(user: Address) {
-    const userData = this.blue.usersData[user];
+    const userData = this.users[user];
 
     if (userData == null) throw new UnknownUserError(user);
 
     return userData;
   }
 
-  getTokenData(token: Address) {
-    const tokenData = this.blue.tokensData[token];
+  getToken(token: Address) {
+    const tokenData = this.tokens[token];
 
     if (tokenData == null) throw new UnknownTokenError(token);
 
     return tokenData;
   }
 
-  getVaultConfig(vault: Address) {
-    const vaultConfig = this.metamorpho.vaultsConfig[vault];
-
-    if (vaultConfig == null) throw new UnknownVaultConfigError(vault);
-
-    return vaultConfig;
-  }
-
   getVault(vault: Address) {
-    const vaultData = this.metamorpho.vaultsData[vault];
+    const vaultData = this.vaults[vault];
 
     if (vaultData == null) throw new UnknownVaultError(vault);
 
@@ -102,7 +107,7 @@ export class SimulationState {
   }
 
   getPosition(user: Address, market: MarketId) {
-    const position = this.blue.positionByMarketByUser[user]?.[market];
+    const position = this.positions[user]?.[market];
 
     if (position == null) throw new UnknownPositionError(user, market);
 
@@ -117,24 +122,15 @@ export class SimulationState {
   }
 
   getHolding(user: Address, token: Address) {
-    const userTokenData = this.blue.userTokenHoldings[user]?.[token];
+    const userTokenData = this.holdings[user]?.[token];
 
     if (userTokenData == null) throw new UnknownHoldingError(user, token);
 
     return userTokenData;
   }
 
-  getVaultUserData(vault: Address, user: Address) {
-    const vaultUserData = this.metamorpho.vaultsUsersData[vault]?.[user];
-
-    if (vaultUserData == null) throw new UnknownVaultUserDataError(vault, user);
-
-    return vaultUserData;
-  }
-
   getVaultMarketConfig(vault: Address, market: MarketId) {
-    const vaultMarketConfig =
-      this.metamorpho.vaultsMarketsConfig[vault]?.[market];
+    const vaultMarketConfig = this.vaultMarketConfigs[vault]?.[market];
 
     if (vaultMarketConfig == null)
       throw new UnknownVaultMarketConfigError(vault, market);
@@ -143,7 +139,7 @@ export class SimulationState {
   }
 
   getWrappedToken(address: Address) {
-    const token = this.getTokenData(address);
+    const token = this.getToken(address);
 
     if (!(token instanceof WrappedToken)) {
       const vault = _try(

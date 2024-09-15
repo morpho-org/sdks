@@ -3045,6 +3045,7 @@ __metadata:
   dependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/blue-sdk-wagmi": "workspace:^"
     "@morpho-org/morpho-test": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
     "@tanstack/query-core": "npm:^5.55.4"
@@ -3060,6 +3061,7 @@ __metadata:
     chai: "npm:^4.3.10"
     dotenv: "npm:^16.4.5"
     mocha: "npm:^10.4.0"
+    mutative: "npm:^1.0.8"
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
     sinon: "npm:^18.0.0"
@@ -3110,7 +3112,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk-wagmi@workspace:packages/blue-sdk-wagmi":
+"@morpho-org/blue-sdk-wagmi@workspace:^, @morpho-org/blue-sdk-wagmi@workspace:packages/blue-sdk-wagmi":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-wagmi@workspace:packages/blue-sdk-wagmi"
   dependencies:
@@ -10900,6 +10902,13 @@ __metadata:
   version: 9.9.0
   resolution: "multiformats@npm:9.9.0"
   checksum: 10c0/1fdb34fd2fb085142665e8bd402570659b50a5fae5994027e1df3add9e1ce1283ed1e0c2584a5c63ac0a58e871b8ee9665c4a99ca36ce71032617449d48aa975
+  languageName: node
+  linkType: hard
+
+"mutative@npm:^1.0.8":
+  version: 1.0.8
+  resolution: "mutative@npm:1.0.8"
+  checksum: 10c0/18d61dbb89d9c7af0e00ec303bbd6d0d7286a01ffa6093943d186f15dbaa843be31ce6da66fb42f2b45fd6d107562df091c3ce6b0d14e71f2023d0cbd117fea3
   languageName: node
   linkType: hard
 

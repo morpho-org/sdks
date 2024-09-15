@@ -1,15 +1,15 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { Erc20Errors, UnknownContractError } from "../../errors";
-import { Erc20Operations } from "../../operations";
-import { OperationHandler } from "../types";
+import { Erc20Errors, UnknownContractError } from "../../errors.js";
+import { Erc20Operations } from "../../operations.js";
+import { OperationHandler } from "../types.js";
 
-import { handleErc20TransferOperation } from "./transfer";
+import { handleErc20TransferOperation } from "./transfer.js";
 
 export const handleErc20Transfer2Operation: OperationHandler<
   Erc20Operations["Erc20_Transfer2"]
 > = ({ args: { amount, from, to }, sender, address }, data) => {
-  const fromTokenData = data.blue.userTokenHoldings[from]?.[address];
+  const fromTokenData = data.holdings[from]?.[address];
   if (fromTokenData == null)
     throw new Erc20Errors.InsufficientBalance(address, from);
 

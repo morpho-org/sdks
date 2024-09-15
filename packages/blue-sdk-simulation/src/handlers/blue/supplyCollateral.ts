@@ -1,21 +1,22 @@
-import { MaxUint256 } from "ethers";
-
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { BlueSimulationErrors } from "../../errors";
-import { BlueOperations } from "../../operations";
-import { handleOperations } from "../dispatchers";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import { maxUint256 } from "viem";
+import { BlueSimulationErrors } from "../../errors.js";
+import { BlueOperations } from "../../operations.js";
+import { handleOperations } from "../dispatchers.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import { OperationHandler } from "../types.js";
 
 export const handleBlueSupplyCollateralOperation: OperationHandler<
   BlueOperations["Blue_SupplyCollateral"]
-> = ({ args: { id, assets, onBehalf, callback }, sender, address }, data) => {
-  const { collateralToken } = data.getMarketConfig(id);
-  const { bundler } = getChainAddresses(data.chainId);
+> = ({ args: { id, assets, onBehalf, callback }, sender }, data) => {
+  const {
+    config: { collateralToken },
+  } = data.getMarket(id);
+  const { morpho, bundler } = getChainAddresses(data.chainId);
 
   // Simulate the bundler's behavior on supply.
-  if (sender === bundler && assets === MaxUint256)
+  if (sender === bundler && assets === maxUint256)
     assets = MathLib.min(
       assets,
       data.getHolding(bundler, collateralToken).balance,
@@ -33,12 +34,12 @@ export const handleBlueSupplyCollateralOperation: OperationHandler<
   handleErc20Operation(
     {
       type: "Erc20_Transfer",
-      sender: address,
+      sender: morpho,
       address: collateralToken,
       args: {
         amount: assets,
         from: sender,
-        to: address,
+        to: morpho,
       },
     },
     data,

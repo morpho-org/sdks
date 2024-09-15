@@ -1,14 +1,14 @@
-import { MaxUint256, ZeroAddress } from "ethers";
+import { maxUint256, zeroAddress } from "viem";
 
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { MetaMorphoErrors } from "../../errors";
-import { MetaMorphoOperations } from "../../operations";
-import { handleBlueOperation } from "../blue";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import { MetaMorphoErrors } from "../../errors.js";
+import { MetaMorphoOperations } from "../../operations.js";
+import { handleBlueOperation } from "../blue/index.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import { OperationHandler } from "../types.js";
 
-import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest";
+import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleMetaMorphoDepositOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_Deposit"]
@@ -32,7 +32,7 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
   if (shares === 0n) {
     if (sender === bundler) {
       // Simulate the bundler's behavior on deposits only with MaxUint256.
-      if (assets === MaxUint256)
+      if (assets === maxUint256)
         assets = MathLib.min(
           assets,
           data.getHolding(bundler, vault.asset).balance,
@@ -86,8 +86,7 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
     handleBlueOperation(
       {
         type: "Blue_Supply",
-        sender: ZeroAddress, // Bypass the vault balance check.
-        address: ZeroAddress, // Replaced with Blue address inside `handleBlueOperation`.
+        sender: zeroAddress, // Bypass the vault balance check.
         args: {
           id,
           assets: toSupplyInMarket,
@@ -117,7 +116,7 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
       address,
       args: {
         amount: shares,
-        from: ZeroAddress,
+        from: zeroAddress,
         to: owner,
       },
     },

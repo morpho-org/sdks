@@ -1,18 +1,18 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { BlueSimulationErrors } from "../../errors";
-import { BlueOperations } from "../../operations";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import { BlueSimulationErrors } from "../../errors.js";
+import { BlueOperations } from "../../operations.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import { OperationHandler } from "../types.js";
 
-import { handleBlueAccrueInterestOperation } from "./accrueInterest";
+import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleBlueWithdrawCollateralOperation: OperationHandler<
   BlueOperations["Blue_WithdrawCollateral"]
-> = ({ args: { id, assets, onBehalf, receiver }, sender, address }, data) => {
+> = ({ args: { id, assets, onBehalf, receiver }, sender }, data) => {
   if (assets === 0n) throw new BlueSimulationErrors.ZeroAssets();
 
-  const { bundler } = getChainAddresses(data.chainId);
+  const { morpho, bundler } = getChainAddresses(data.chainId);
 
   if (sender === bundler) {
     const userData = data.getUser(onBehalf);
@@ -24,8 +24,7 @@ export const handleBlueWithdrawCollateralOperation: OperationHandler<
   handleBlueAccrueInterestOperation(
     {
       type: "Blue_AccrueInterest",
-      sender: address,
-      address,
+      sender: morpho,
       args: { id },
     },
     data,
@@ -46,11 +45,11 @@ export const handleBlueWithdrawCollateralOperation: OperationHandler<
   handleErc20Operation(
     {
       type: "Erc20_Transfer",
-      sender: address,
+      sender: morpho,
       address: market.config.collateralToken,
       args: {
         amount: assets,
-        from: address,
+        from: morpho,
         to: receiver,
       },
     },

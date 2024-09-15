@@ -1,7 +1,7 @@
 import { Address, MarketId } from "@morpho-org/blue-sdk";
 
-import { SimulationState } from "./SimulationState";
-import { MaybeDraft } from "./handlers";
+import { SimulationState } from "./SimulationState.js";
+import { MaybeDraft } from "./handlers/types.js";
 
 export interface OperationMetadata<T extends string> {
   type: T;
@@ -117,9 +117,9 @@ export interface BlueOperationArgs {
       };
 }
 export type BlueOperations = {
-  [OperationType in BlueOperationType]: WithOperationArgs<
-    OperationType,
-    BlueOperationArgs
+  [OperationType in BlueOperationType]: Omit<
+    WithOperationArgs<OperationType, BlueOperationArgs>,
+    "address"
   >;
 };
 export type BlueOperation = BlueOperations[BlueOperationType];
@@ -244,57 +244,22 @@ export type Erc20Operations = {
 };
 export type Erc20Operation = Erc20Operations[Erc20OperationType];
 
-const ORACLE_OPERATIONS = [] as const;
-
-export type OracleOperationType = (typeof ORACLE_OPERATIONS)[number];
-export interface OracleOperationArgs {}
-export type OracleOperations = {
-  [OperationType in OracleOperationType]: WithOperationArgs<
-    OperationType,
-    OracleOperationArgs
-  >;
-};
-export type OracleOperation = OracleOperations[OracleOperationType];
-
-const IRM_OPERATIONS = [] as const;
-
-export type IrmOperationType = (typeof IRM_OPERATIONS)[number];
-export interface IrmOperationArgs {}
-export type IrmOperations = {
-  [OperationType in IrmOperationType]: WithOperationArgs<
-    OperationType,
-    IrmOperationArgs
-  >;
-};
-export type IrmOperation = IrmOperations[IrmOperationType];
-
 export interface Operations
   extends BlueOperations,
     Erc20Operations,
-    OracleOperations,
-    IrmOperations,
     MetaMorphoOperations {}
 
 export interface OperationArgs
   extends BlueOperationArgs,
     Erc20OperationArgs,
-    OracleOperationArgs,
-    IrmOperationArgs,
     MetaMorphoOperationArgs {}
 
 export type OperationType =
   | BlueOperationType
   | Erc20OperationType
-  | OracleOperationType
-  | IrmOperationType
   | MetaMorphoOperationType;
 
-export type Operation =
-  | BlueOperation
-  | Erc20Operation
-  | OracleOperation
-  | IrmOperation
-  | MetaMorphoOperation;
+export type Operation = BlueOperation | Erc20Operation | MetaMorphoOperation;
 
 export const CALLBACK_OPERATIONS = [
   "Blue_Repay",
@@ -329,20 +294,6 @@ export const isErc20Operation = (operation: {
   type: OperationType;
 }): operation is Erc20Operation => {
   return (ERC20_OPERATIONS as readonly OperationType[]).includes(
-    operation.type,
-  );
-};
-
-export const isIrmOperation = (operation: {
-  type: OperationType;
-}): operation is IrmOperation => {
-  return (IRM_OPERATIONS as readonly OperationType[]).includes(operation.type);
-};
-
-export const isOracleOperation = (operation: {
-  type: OperationType;
-}): operation is OracleOperation => {
-  return (ORACLE_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };

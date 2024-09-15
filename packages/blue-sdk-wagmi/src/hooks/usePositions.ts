@@ -1,5 +1,6 @@
 import { Position } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
+import { UnionCompute } from "@wagmi/core/internal";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -9,12 +10,17 @@ import {
 import { useChainId } from "./useChainId.js";
 import { UsePositionParameters, UsePositionReturnType } from "./usePosition.js";
 
+export type FetchPositionsParameters = {
+  positions: Iterable<Partial<PositionParameters>>;
+};
+
 export type UsePositionsParameters<
   config extends Config = Config,
   selectData = Position,
-> = {
-  positions: Iterable<Partial<PositionParameters>>;
-} & Omit<UsePositionParameters<config, selectData>, keyof PositionParameters>;
+> = UnionCompute<
+  FetchPositionsParameters &
+    Omit<UsePositionParameters<config, selectData>, keyof PositionParameters>
+>;
 
 export type UsePositionsReturnType<selectData = Position> =
   UsePositionReturnType<selectData>[];

@@ -1,7 +1,7 @@
 import { Draft } from "mutative";
 
-import { SimulationState } from "../SimulationState";
-import { Operation } from "../operations";
+import { SimulationState } from "../SimulationState.js";
+import { Operation } from "../operations.js";
 
 export type MaybeDraft<T> = T | Draft<T>;
 
