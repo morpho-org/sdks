@@ -1,3 +1,5 @@
+import { addresses } from "@morpho-org/blue-sdk";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
   ConfigParameter,
   FetchMarketsParameters,
@@ -15,9 +17,8 @@ import {
 } from "@morpho-org/blue-sdk-wagmi";
 import { UnionCompute } from "@wagmi/core/internal";
 import { useMemo } from "react";
-import { ReadContractErrorType } from "viem";
-import { Config, ResolvedRegister } from "wagmi";
-import { UseQueryReturnType } from "wagmi/query";
+import { zeroAddress } from "viem";
+import { Config, ResolvedRegister, useReadContract } from "wagmi";
 import { SimulationState } from "../SimulationState.js";
 
 export type FetchSimulationStateParameters = UnionCompute<
@@ -30,16 +31,18 @@ export type FetchSimulationStateParameters = UnionCompute<
 export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters & ConfigParameter<config>;
 
-export type UseSimulationStateReturnType<selectData = SimulationState> =
-  UseQueryReturnType<selectData, ReadContractErrorType>;
-
 export function useSimulationState<
   config extends Config = ResolvedRegister["config"],
-  selectData = SimulationState,
->(
-  parameters: UseSimulationStateParameters<config>,
-): UseSimulationStateReturnType<selectData> {
+>(parameters: UseSimulationStateParameters<config>) {
   const chainId = useChainId(parameters);
+
+  const { morpho } = addresses[chainId];
+
+  const { data: feeRecipient = zeroAddress } = useReadContract({
+    address: morpho,
+    abi: blueAbi,
+    functionName: "feeRecipient",
+  });
 
   const markets = useMarkets(parameters);
   const users = useUsers(parameters);
@@ -80,8 +83,8 @@ export function useSimulationState<
   return useMemo(
     () =>
       new SimulationState(
-        global,
-        markets,
+        { feeRecipient },
+        markets, // TODO: change datatype stored to include error reason, fetch status etc
         users,
         tokens,
         vaults,
@@ -92,6 +95,18 @@ export function useSimulationState<
         blockNumber,
         timestamp,
       ),
-    [],
+    [
+      feeRecipient,
+      markets,
+      users,
+      tokens,
+      vaults,
+      positions,
+      holdings,
+      vaultMarketConfigs,
+      chainId,
+      blockNumber,
+      timestamp,
+    ],
   );
 }

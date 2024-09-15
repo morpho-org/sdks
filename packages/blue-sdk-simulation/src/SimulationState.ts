@@ -24,12 +24,11 @@ import {
   UnknownVaultError,
   UnknownVaultMarketConfigError,
   UnknownWrappedTokenError,
-  UnknownWstEthExchangeRateError,
 } from "./errors.js";
 
 export class SimulationState {
   constructor(
-    public readonly global: { stEthPerWstEth?: bigint; feeRecipient: Address },
+    public readonly global: { feeRecipient: Address },
     public readonly markets: Record<MarketId, Market>,
     public readonly users: Record<Address, User>,
     public readonly tokens: Record<Address, Token>,
@@ -53,14 +52,6 @@ export class SimulationState {
     public blockNumber: bigint,
     public timestamp: bigint,
   ) {}
-
-  getStEthPerWstEth() {
-    const { stEthPerWstEth } = this.global;
-
-    if (stEthPerWstEth == null) throw new UnknownWstEthExchangeRateError();
-
-    return stEthPerWstEth;
-  }
 
   getMarket(marketId: MarketId) {
     const marketData = this.markets[marketId];
