@@ -238,7 +238,7 @@ describe("augment/Holding", () => {
         },
       },
       balance: 10000000000000000000000n,
-      canTransfer: true,
+      canTransfer: undefined,
     });
 
     const value = await Holding.fetch(client.account.address, token, client);
