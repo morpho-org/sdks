@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
