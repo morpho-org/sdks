@@ -65,7 +65,7 @@ export class Holding implements InputHolding {
   /**
    * Whether the user is allowed to transfer this holding's balance.
    */
-  public canTransfer: boolean;
+  public canTransfer?: boolean;
 
   /**
    * ERC20 allowance for this token from the user to the allowance recipient.
@@ -94,7 +94,7 @@ export class Holding implements InputHolding {
     permit2Allowances,
     balance,
     erc2612Nonce,
-    canTransfer = true,
+    canTransfer,
   }: InputHolding) {
     this.user = user;
     this.token = token;
