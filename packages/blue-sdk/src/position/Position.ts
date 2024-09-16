@@ -1,5 +1,9 @@
 import { BlueErrors } from "../errors";
-import { Market } from "../market";
+import {
+  Market,
+  MaxBorrowOptions,
+  MaxWithdrawCollateralOptions,
+} from "../market";
 import { Address, BigIntish, MarketId } from "../types";
 
 export interface InputPosition {
@@ -263,11 +267,16 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
   public getMaxCapacities(
     loanTokenBalance: bigint,
     collateralTokenBalance: bigint,
+    options?: {
+      borrow?: MaxBorrowOptions;
+      withdrawCollateral?: MaxWithdrawCollateralOptions;
+    },
   ) {
     return this.market.getMaxCapacities(
       this,
       loanTokenBalance,
       collateralTokenBalance,
+      options,
     );
   }
 }
