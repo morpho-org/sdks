@@ -100,9 +100,7 @@ export async function fetchHolding(
       : undefined,
     PermissionedERC20Wrapper__factory.connect(token, runner)
       .hasPermission(user, overrides)
-      .catch(() =>
-        permissionedWrapperTokens[chainId].has(token) ? false : undefined,
-      ),
+      .catch(() => !permissionedWrapperTokens[chainId].has(token)),
   ]);
 
   const holding = new Holding({
@@ -112,7 +110,7 @@ export async function fetchHolding(
     permit2Allowances: fromEntries(permit2Allowances),
     erc2612Nonce,
     balance,
-    canTransfer: hasErc20WrapperPermission ?? true,
+    canTransfer: hasErc20WrapperPermission,
   });
 
   if (whitelistControllerAggregator)
@@ -122,7 +120,7 @@ export async function fetchHolding(
         runner,
       )
         .isWhitelisted(user, overrides)
-        .catch(() => false);
+        .catch(() => undefined);
 
   return holding;
 }

@@ -18,13 +18,19 @@ struct Permit2Allowances {
     Permit2Allowance bundler;
 }
 
+enum OptionalBoolean {
+    Undefined,
+    False,
+    True
+}
+
 struct HoldingResponse {
     uint256 balance;
     ERC20Allowances erc20Allowances;
     Permit2Allowances permit2Allowances;
     bool isErc2612;
     uint256 erc2612Nonce;
-    bool canTransfer;
+    OptionalBoolean canTransfer;
 }
 
 contract GetHolding {
@@ -54,19 +60,19 @@ contract GetHolding {
         } catch {}
 
         try IERC20Permissioned(address(token)).hasPermission(account) returns (bool hasPermission) {
-            res.canTransfer = hasPermission;
+            res.canTransfer = hasPermission ? OptionalBoolean.True : OptionalBoolean.False;
         } catch {
-            res.canTransfer = !isErc20Permissioned;
+            res.canTransfer = isErc20Permissioned ? OptionalBoolean.False : OptionalBoolean.True;
         }
 
         if (isWrappedBackedToken) {
-            res.canTransfer = false;
+            res.canTransfer = OptionalBoolean.Undefined;
 
             try IWrappedBackedToken(address(token)).whitelistControllerAggregator() returns (
                 IWhitelistControllerAggregator whitelistControllerAggregator
             ) {
                 try whitelistControllerAggregator.isWhitelisted(account) returns (bool isWhitelisted) {
-                    if (isWhitelisted) res.canTransfer = true;
+                    res.canTransfer = isWhitelisted ? OptionalBoolean.True : OptionalBoolean.False;
                 } catch {}
             } catch {}
         }
