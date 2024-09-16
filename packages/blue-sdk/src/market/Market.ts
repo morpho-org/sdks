@@ -18,9 +18,11 @@ export interface CapacityLimit {
   limiter: CapacityLimitReason;
 }
 
-export interface MaxCapacitiesOptions {
-  borrow?: { maxLtv?: bigint };
-  withdrawCollateral?: { maxLtv?: bigint };
+export interface MaxBorrowOptions {
+  maxLtv?: bigint;
+}
+export interface MaxWithdrawCollateralOptions {
+  maxLtv?: bigint;
 }
 
 export interface MaxPositionCapacities {
@@ -385,10 +387,10 @@ export class Market implements InputMarket {
    */
   public getMaxBorrowAssets(
     collateral: bigint,
-    options: MaxCapacitiesOptions["borrow"] = {},
+    { maxLtv = this.config.lltv }: MaxBorrowOptions = {},
   ) {
     return MarketUtils.getMaxBorrowAssets(collateral, this, {
-      lltv: options.maxLtv ?? this.config.lltv,
+      lltv: MathLib.min(maxLtv, this.config.lltv),
     });
   }
 
@@ -447,10 +449,10 @@ export class Market implements InputMarket {
       collateral: bigint;
       borrowShares: bigint;
     },
-    options: MaxCapacitiesOptions["withdrawCollateral"] = {},
+    { maxLtv = this.config.lltv }: MaxWithdrawCollateralOptions = {},
   ) {
     return MarketUtils.getWithdrawableCollateral(position, this, {
-      lltv: options.maxLtv ?? this.config.lltv,
+      lltv: MathLib.min(maxLtv, this.config.lltv),
     });
   }
 
@@ -531,7 +533,7 @@ export class Market implements InputMarket {
       collateral: bigint;
       borrowShares?: bigint;
     },
-    options: MaxCapacitiesOptions["borrow"] = {},
+    options?: MaxBorrowOptions,
   ): CapacityLimit {
     // handle edge cases when the user is liquidatable (maxBorrow < borrow)
     const maxBorrowableAssets = MathLib.zeroFloorSub(
@@ -611,7 +613,7 @@ export class Market implements InputMarket {
       collateral: bigint;
       borrowShares: bigint;
     },
-    options: MaxCapacitiesOptions["withdrawCollateral"] = {},
+    options?: MaxWithdrawCollateralOptions,
   ): CapacityLimit {
     const withdrawableCollateral = this.getWithdrawableCollateral(
       position,
@@ -645,7 +647,10 @@ export class Market implements InputMarket {
     },
     loanTokenBalance: bigint,
     collateralTokenBalance: bigint,
-    options: MaxCapacitiesOptions = {},
+    options?: {
+      borrow?: MaxBorrowOptions;
+      withdrawCollateral?: MaxWithdrawCollateralOptions;
+    },
   ): MaxPositionCapacities {
     return {
       supply: {
@@ -653,7 +658,7 @@ export class Market implements InputMarket {
         limiter: CapacityLimitReason.balance,
       },
       withdraw: this.getWithdrawCapacityLimit(position),
-      borrow: this.getBorrowCapacityLimit(position, options.borrow),
+      borrow: this.getBorrowCapacityLimit(position, options?.borrow),
       repay: this.getRepayCapacityLimit(
         position.borrowShares,
         loanTokenBalance,
@@ -664,7 +669,7 @@ export class Market implements InputMarket {
       },
       withdrawCollateral: this.getWithdrawCollateralCapacityLimit(
         position,
-        options.withdrawCollateral,
+        options?.withdrawCollateral,
       ),
     };
   }
