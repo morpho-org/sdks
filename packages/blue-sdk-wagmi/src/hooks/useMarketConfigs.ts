@@ -1,7 +1,7 @@
 import { Market, MarketId } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { UnionCompute } from "@wagmi/core/internal";
 import { MarketConfigParameters } from "src/queries/fetchMarketConfig.js";
+import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import { fetchMarketQueryOptions } from "../queries/fetchMarket.js";
@@ -15,10 +15,11 @@ export type FetchMarketConfigsParameters = {
 export type UseMarketConfigsParameters<
   config extends Config = Config,
   selectData = Market,
-> = UnionCompute<
-  FetchMarketConfigsParameters &
-    Omit<UseMarketParameters<config, selectData>, keyof MarketConfigParameters>
->;
+> = FetchMarketConfigsParameters &
+  UnionOmit<
+    UseMarketParameters<config, selectData>,
+    keyof MarketConfigParameters
+  >;
 
 export type UseMarketConfigsReturnType<selectData = Market> =
   UseMarketReturnType<selectData>[];

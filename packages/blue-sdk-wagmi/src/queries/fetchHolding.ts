@@ -62,7 +62,7 @@ export function fetchHoldingQueryKey({
       deployless,
       account,
       stateOverride,
-    },
+    } as FetchHoldingParameters,
   ] as const;
 }
 

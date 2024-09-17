@@ -1,5 +1,6 @@
 import { VaultUser } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
+import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -20,7 +21,10 @@ export type UseVaultUsersParameters<
   config extends Config = Config,
   selectData = VaultUser,
 > = FetchVaultUsersParameters &
-  Omit<UseVaultUserParameters<config, selectData>, keyof VaultUserParameters>;
+  UnionOmit<
+    UseVaultUserParameters<config, selectData>,
+    keyof VaultUserParameters
+  >;
 
 export type UseVaultUsersReturnType<selectData = VaultUser> =
   UseVaultUserReturnType<selectData>[];

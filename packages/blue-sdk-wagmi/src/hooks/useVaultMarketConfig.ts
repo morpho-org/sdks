@@ -1,5 +1,4 @@
 import { VaultMarketConfig } from "@morpho-org/blue-sdk";
-import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
@@ -14,16 +13,14 @@ import { useChainId } from "./useChainId.js";
 export type UseVaultMarketConfigParameters<
   config extends Config = Config,
   selectData = VaultMarketConfig,
-> = UnionCompute<
-  FetchVaultMarketConfigParameters &
-    ConfigParameter<config> &
-    QueryParameter<
-      VaultMarketConfig,
-      ReadContractErrorType,
-      selectData,
-      FetchVaultMarketConfigQueryKey
-    >
->;
+> = FetchVaultMarketConfigParameters &
+  ConfigParameter<config> &
+  QueryParameter<
+    VaultMarketConfig,
+    ReadContractErrorType,
+    selectData,
+    FetchVaultMarketConfigQueryKey
+  >;
 
 export type UseVaultMarketConfigReturnType<selectData = VaultMarketConfig> =
   UseQueryReturnType<selectData, ReadContractErrorType>;

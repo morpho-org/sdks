@@ -1,7 +1,6 @@
 import { Token } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { UnionCompute } from "@wagmi/core/internal";
-import { Address } from "viem";
+import { Address, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -18,10 +17,8 @@ export type FetchTokensParameters = {
 export type UseTokensParameters<
   config extends Config = Config,
   selectData = Token,
-> = UnionCompute<
-  FetchTokensParameters &
-    Omit<UseTokenParameters<config, selectData>, keyof TokenParameters>
->;
+> = FetchTokensParameters &
+  UnionOmit<UseTokenParameters<config, selectData>, keyof TokenParameters>;
 
 export type UseTokensReturnType<selectData = Token> =
   UseTokenReturnType<selectData>[];

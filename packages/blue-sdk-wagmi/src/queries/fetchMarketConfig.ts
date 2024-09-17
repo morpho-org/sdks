@@ -44,7 +44,7 @@ export function fetchMarketConfigQueryKey({
     {
       marketId,
       chainId,
-    },
+    } as FetchMarketConfigParameters,
   ] as const;
 }
 

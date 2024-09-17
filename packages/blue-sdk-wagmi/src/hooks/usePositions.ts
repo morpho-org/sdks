@@ -1,6 +1,6 @@
 import { Position } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { UnionCompute } from "@wagmi/core/internal";
+import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -17,10 +17,11 @@ export type FetchPositionsParameters = {
 export type UsePositionsParameters<
   config extends Config = Config,
   selectData = Position,
-> = UnionCompute<
-  FetchPositionsParameters &
-    Omit<UsePositionParameters<config, selectData>, keyof PositionParameters>
->;
+> = FetchPositionsParameters &
+  UnionOmit<
+    UsePositionParameters<config, selectData>,
+    keyof PositionParameters
+  >;
 
 export type UsePositionsReturnType<selectData = Position> =
   UsePositionReturnType<selectData>[];

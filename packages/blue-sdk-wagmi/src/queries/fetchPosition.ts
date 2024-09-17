@@ -57,7 +57,7 @@ export function fetchPositionQueryKey({
       blockNumber,
       account,
       stateOverride,
-    },
+    } as FetchPositionParameters,
   ] as const;
 }
 

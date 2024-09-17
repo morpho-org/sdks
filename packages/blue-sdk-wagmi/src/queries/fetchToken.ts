@@ -59,7 +59,7 @@ export function fetchTokenQueryKey({
       deployless,
       account,
       stateOverride,
-    },
+    } as FetchTokenParameters,
   ] as const;
 }
 

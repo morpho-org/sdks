@@ -7,16 +7,13 @@ import {
   VaultUser,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { DeploylessFetchParameters, blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
+  ConfigParameter,
   FetchMarketsParameters,
   FetchTokensParameters,
   FetchUsersParameters,
   FetchVaultsParameters,
-  UseMarketsParameters,
-  UseTokensParameters,
-  UseUsersParameters,
-  UseVaultsParameters,
   useChainId,
   useHoldings,
   useMarkets,
@@ -28,32 +25,29 @@ import {
   useVaults,
 } from "@morpho-org/blue-sdk-wagmi";
 import { fromEntries } from "@morpho-org/morpho-ts";
-import { UnionCompute } from "@wagmi/core/internal";
 import { useMemo } from "react";
 import { zeroAddress } from "viem";
 import { Config, ResolvedRegister, useReadContract } from "wagmi";
 import { SimulationState } from "../SimulationState.js";
 
-export type FetchSimulationStateParameters = UnionCompute<
-  FetchMarketsParameters &
-    FetchUsersParameters &
-    FetchTokensParameters &
-    FetchVaultsParameters
->;
+export type FetchSimulationStateParameters = FetchMarketsParameters &
+  FetchUsersParameters &
+  FetchTokensParameters &
+  FetchVaultsParameters;
 
 export type UseSimulationStateParameters<config extends Config = Config> =
-  UnionCompute<
-    Omit<UseMarketsParameters<config>, "query"> &
-      Omit<UseUsersParameters<config>, "query"> &
-      Omit<UseTokensParameters<config>, "query"> &
-      Omit<UseVaultsParameters<config>, "query">
-  >;
+  FetchSimulationStateParameters &
+    DeploylessFetchParameters &
+    ConfigParameter<config>;
 
 export function useSimulationState<
   config extends Config = ResolvedRegister["config"],
 >(parameters: UseSimulationStateParameters<config>) {
   const chainId = useChainId(parameters);
-  // const block = useBlock({ ...parameters, watch: true });
+  // const block = useBlock({
+  //   // ...parameters,
+  //   includeTransactions: false,
+  // });
 
   const { morpho } = addresses[chainId];
 
@@ -120,9 +114,11 @@ export function useSimulationState<
       vaultMarketConfigs,
     ].flat();
 
-    const error = results.find(({ error }) => error)?.error ?? null;
+    const error =
+      block.error ?? results.find(({ error }) => error)?.error ?? null;
 
-    const isSuccess = results.every(({ isSuccess }) => isSuccess);
+    const isSuccess =
+      block.isSuccess && results.every(({ isSuccess }) => isSuccess);
 
     const status = error != null ? "error" : isSuccess ? "success" : "pending";
 
@@ -166,17 +162,18 @@ export function useSimulationState<
               {},
             ),
             chainId,
-            blockNumber,
-            timestamp,
+            block.data.number,
+            block.data.timestamp,
           )
         : undefined,
       error,
       isError: status === "error",
       isPending: status === "pending",
-      isLoading: results.some(({ isLoading }) => isLoading),
-      isFetching: results.some(({ isFetching }) => isFetching),
-      isStale: results.some(({ isStale }) => isStale),
-      isFetched: results.every(({ isFetched }) => isFetched),
+      isLoading: block.isLoading || results.some(({ isLoading }) => isLoading),
+      isFetching:
+        block.isFetching || results.some(({ isFetching }) => isFetching),
+      isStale: block.isStale || results.some(({ isStale }) => isStale),
+      isFetched: block.isFetched && results.every(({ isFetched }) => isFetched),
       isSuccess,
       status,
     };
@@ -190,7 +187,7 @@ export function useSimulationState<
     holdings,
     vaultMarketConfigs,
     chainId,
-    blockNumber,
-    timestamp,
+    block.data?.number,
+    block.data?.timestamp,
   ]);
 }

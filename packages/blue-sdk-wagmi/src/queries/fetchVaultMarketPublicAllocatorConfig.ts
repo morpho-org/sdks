@@ -65,7 +65,7 @@ export function fetchVaultMarketPublicAllocatorConfigQueryKey({
       blockNumber,
       account,
       stateOverride,
-    },
+    } as FetchVaultMarketPublicAllocatorConfigParameters,
   ] as const;
 }
 

@@ -59,7 +59,7 @@ export function fetchMarketQueryKey({
       deployless,
       account,
       stateOverride,
-    },
+    } as FetchMarketParameters,
   ] as const;
 }
 

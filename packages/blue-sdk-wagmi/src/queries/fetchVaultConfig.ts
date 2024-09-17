@@ -45,7 +45,7 @@ export function fetchVaultConfigQueryKey({
     {
       vault,
       chainId,
-    },
+    } as FetchVaultConfigParameters,
   ] as const;
 }
 

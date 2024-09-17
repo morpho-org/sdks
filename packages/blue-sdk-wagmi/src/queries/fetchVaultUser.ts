@@ -61,7 +61,7 @@ export function fetchVaultUserQueryKey({
       deployless,
       account,
       stateOverride,
-    },
+    } as FetchVaultUserParameters,
   ] as const;
 }
 

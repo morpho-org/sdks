@@ -8,90 +8,63 @@ import {
   MarketId,
   Position,
   Token,
-  UnknownTokenError,
   User,
   Vault,
   VaultMarketConfig,
   VaultUser,
   WrappedToken,
-  _try,
 } from "@morpho-org/blue-sdk";
-
-import {
-  UnknownHoldingError,
-  UnknownMarketError,
-  UnknownPositionError,
-  UnknownUserError,
-  UnknownVaultError,
-  UnknownVaultMarketConfigError,
-  UnknownWrappedTokenError,
-} from "./errors.js";
 
 export class SimulationState {
   constructor(
-    public readonly global: { feeRecipient: Address },
-    public readonly markets: Record<MarketId, Market>,
-    public readonly users: Record<Address, User>,
-    public readonly tokens: Record<Address, Token>,
-    public readonly vaults: Record<Address, Vault>,
+    protected readonly global: { feeRecipient: Address },
+    protected readonly markets: Record<MarketId, Market>,
+    protected readonly users: Record<Address, User>,
+    protected readonly tokens: Record<Address, Token>,
+    protected readonly vaults: Record<Address, Vault>,
     /**
      * Positions indexed by user then by market.
      */
-    public readonly positions: Record<Address, Record<MarketId, Position>>,
+    protected readonly positions: Record<Address, Record<MarketId, Position>>,
     /**
      * Holdings indexed by user then by token.
      */
-    public readonly holdings: Record<Address, Record<Address, Holding>>,
+    protected readonly holdings: Record<Address, Record<Address, Holding>>,
     /**
      * VaultMarketConfigs indexed by vault then by market.
      */
-    public readonly vaultMarketConfigs: Record<
+    protected readonly vaultMarketConfigs: Record<
       Address,
       Record<MarketId, VaultMarketConfig>
     >,
     /**
      * VaultUsers indexed by vault then by user.
      */
-    public readonly vaultUsers: Record<Address, Record<Address, VaultUser>>,
+    protected readonly vaultUsers: Record<Address, Record<Address, VaultUser>>,
     public readonly chainId: ChainId,
     public blockNumber: bigint,
     public timestamp: bigint,
   ) {}
 
   getMarket(marketId: MarketId) {
-    const marketData = this.markets[marketId];
-
-    if (marketData == null) throw new UnknownMarketError(marketId);
-
-    return marketData;
+    return this.markets[marketId];
   }
 
   getUser(user: Address) {
-    const userData = this.users[user];
-
-    if (userData == null) throw new UnknownUserError(user);
-
-    return userData;
+    return this.users[user];
   }
 
   getToken(token: Address) {
-    const tokenData = this.tokens[token];
-
-    if (tokenData == null) throw new UnknownTokenError(token);
-
-    return tokenData;
+    return this.tokens[token];
   }
 
   getVault(vault: Address) {
-    const vaultData = this.vaults[vault];
-
-    if (vaultData == null) throw new UnknownVaultError(vault);
-
-    return vaultData;
+    return this.vaults[vault];
   }
 
   getAccrualVault(address: Address) {
     const vault = this.getVault(address);
+    if (vault == null) return;
 
     return new AccrualVault(
       vault,
@@ -103,57 +76,37 @@ export class SimulationState {
   }
 
   getPosition(user: Address, market: MarketId) {
-    const position = this.positions[user]?.[market];
-
-    if (position == null) throw new UnknownPositionError(user, market);
-
-    return position;
+    return this.positions[user]?.[market];
   }
 
-  getAccrualPosition(user: Address, market: MarketId) {
-    return new AccrualPosition(
-      this.getPosition(user, market),
-      this.getMarket(market),
-    );
+  getAccrualPosition(user: Address, marketId: MarketId) {
+    const position = this.getPosition(user, marketId);
+    const market = this.getMarket(marketId);
+
+    if (position == null || market == null) return;
+
+    return new AccrualPosition(position, market);
   }
 
   getHolding(user: Address, token: Address) {
-    const userTokenData = this.holdings[user]?.[token];
-
-    if (userTokenData == null) throw new UnknownHoldingError(user, token);
-
-    return userTokenData;
+    return this.holdings[user]?.[token];
   }
 
   getVaultMarketConfig(vault: Address, market: MarketId) {
-    const vaultMarketConfig = this.vaultMarketConfigs[vault]?.[market];
-
-    if (vaultMarketConfig == null)
-      throw new UnknownVaultMarketConfigError(vault, market);
-
-    return vaultMarketConfig;
+    return this.vaultMarketConfigs[vault]?.[market];
   }
 
   getVaultUser(vault: Address, user: Address) {
-    const vaultUser = this.vaultUsers[vault]?.[user];
-
-    if (vaultUser == null) throw new UnknownVaultUserError(vault, user);
-
-    return vaultUser;
+    return this.vaultUsers[vault]?.[user];
   }
 
   getWrappedToken(address: Address) {
     const token = this.getToken(address);
 
-    if (!(token instanceof WrappedToken)) {
-      const vault = _try(
-        () => this.getAccrualVault(token.address),
-        UnknownVaultError,
-      );
+    if (token && !(token instanceof WrappedToken)) {
+      const vault = this.getAccrualVault(token.address);
 
-      if (vault == null) throw new UnknownWrappedTokenError(address);
-
-      return vault;
+      if (vault != null) return vault;
     }
 
     return token;

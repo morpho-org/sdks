@@ -1,5 +1,4 @@
 import { Position } from "@morpho-org/blue-sdk";
-import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
@@ -14,16 +13,14 @@ import { useChainId } from "./useChainId.js";
 export type UsePositionParameters<
   config extends Config = Config,
   selectData = Position,
-> = UnionCompute<
-  FetchPositionParameters &
-    ConfigParameter<config> &
-    QueryParameter<
-      Position,
-      ReadContractErrorType,
-      selectData,
-      FetchPositionQueryKey
-    >
->;
+> = FetchPositionParameters &
+  ConfigParameter<config> &
+  QueryParameter<
+    Position,
+    ReadContractErrorType,
+    selectData,
+    FetchPositionQueryKey
+  >;
 
 export type UsePositionReturnType<selectData = Position> = UseQueryReturnType<
   selectData,

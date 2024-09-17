@@ -68,7 +68,7 @@ export function fetchVaultMarketAllocationQueryKey({
       deployless,
       account,
       stateOverride,
-    },
+    } as FetchVaultMarketAllocationParameters,
   ] as const;
 }
 

@@ -53,7 +53,7 @@ export function fetchUserQueryKey({
       blockNumber,
       account,
       stateOverride,
-    },
+    } as FetchUserParameters,
   ] as const;
 }
 

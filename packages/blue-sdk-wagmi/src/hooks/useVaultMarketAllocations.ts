@@ -1,6 +1,6 @@
 import { VaultMarketAllocation } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { UnionCompute } from "@wagmi/core/internal";
+import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -20,13 +20,11 @@ export type FetchVaultMarketAllocationsParameters = {
 export type UseVaultMarketAllocationsParameters<
   config extends Config = Config,
   selectData = VaultMarketAllocation,
-> = UnionCompute<
-  FetchVaultMarketAllocationsParameters &
-    Omit<
-      UseVaultMarketAllocationParameters<config, selectData>,
-      "address" | "marketId"
-    >
->;
+> = FetchVaultMarketAllocationsParameters &
+  UnionOmit<
+    UseVaultMarketAllocationParameters<config, selectData>,
+    keyof VaultMarketAllocationParameters
+  >;
 
 export type UseVaultMarketAllocationsReturnType<
   selectData = VaultMarketAllocation,

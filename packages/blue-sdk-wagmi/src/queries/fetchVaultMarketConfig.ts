@@ -65,7 +65,7 @@ export function fetchVaultMarketConfigQueryKey({
       blockNumber,
       account,
       stateOverride,
-    },
+    } as FetchVaultMarketConfigParameters,
   ] as const;
 }
 

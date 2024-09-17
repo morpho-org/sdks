@@ -1,6 +1,6 @@
 import { Holding } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { UnionCompute } from "@wagmi/core/internal";
+import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -17,10 +17,8 @@ export type FetchHoldingsParameters = {
 export type UseHoldingsParameters<
   config extends Config = Config,
   selectData = Holding,
-> = UnionCompute<
-  FetchHoldingsParameters &
-    Omit<UseHoldingParameters<config, selectData>, keyof HoldingParameters>
->;
+> = FetchHoldingsParameters &
+  UnionOmit<UseHoldingParameters<config, selectData>, keyof HoldingParameters>;
 
 export type UseHoldingsReturnType<selectData = Holding> =
   UseHoldingReturnType<selectData>[];
