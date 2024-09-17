@@ -25,7 +25,7 @@ export const handleErc20ApproveOperation: OperationHandler<
     const vault = data.vaults[spender];
 
     if (vault != null && vault.asset === address) {
-      const vaultUserData = data.getVaultUserData(spender, sender);
+      const vaultUserData = data.getVaultUser(spender, sender);
 
       vaultUserData.allowance = amount;
     } else throw new UnknownAllowanceError(address, sender, spender);

@@ -12,6 +12,7 @@ import {
   User,
   Vault,
   VaultMarketConfig,
+  VaultUser,
   WrappedToken,
   _try,
 } from "@morpho-org/blue-sdk";
@@ -48,6 +49,10 @@ export class SimulationState {
       Address,
       Record<MarketId, VaultMarketConfig>
     >,
+    /**
+     * VaultUsers indexed by vault then by user.
+     */
+    public readonly vaultUsers: Record<Address, Record<Address, VaultUser>>,
     public readonly chainId: ChainId,
     public blockNumber: bigint,
     public timestamp: bigint,
@@ -127,6 +132,14 @@ export class SimulationState {
       throw new UnknownVaultMarketConfigError(vault, market);
 
     return vaultMarketConfig;
+  }
+
+  getVaultUser(vault: Address, user: Address) {
+    const vaultUser = this.vaultUsers[vault]?.[user];
+
+    if (vaultUser == null) throw new UnknownVaultUserError(vault, user);
+
+    return vaultUser;
   }
 
   getWrappedToken(address: Address) {

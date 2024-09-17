@@ -42,7 +42,7 @@ export const handleErc20TransferOperation: OperationHandler<
       } else {
         // Check allowance of MetaMorpho vaults on the underlying asset.
         const vault = data.vaults[sender];
-        const vaultFromData = data.vaultsUsersData[sender]?.[from];
+        const vaultFromData = data.vaultUsers[sender]?.[from];
 
         if (vault?.asset === address && vaultFromData != null) {
           if (vaultFromData.allowance < amount)
