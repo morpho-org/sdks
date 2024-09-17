@@ -2886,9 +2886,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/sdk@npm:0.28.2":
-  version: 0.28.2
-  resolution: "@metamask/sdk@npm:0.28.2"
+"@metamask/sdk@npm:0.28.4":
+  version: 0.28.4
+  resolution: "@metamask/sdk@npm:0.28.4"
   dependencies:
     "@metamask/onboarding": "npm:^1.0.1"
     "@metamask/providers": "npm:16.1.0"
@@ -2921,7 +2921,7 @@ __metadata:
       optional: true
     react-dom:
       optional: true
-  checksum: 10c0/519240bd0729e9fbee6000d794c7071d4739917c40b3f4529f6315690b76221595110e4ede6ade10b595da8de4a152ac8a8571f6600ab16b132de61548536b37
+  checksum: 10c0/734045ba59e01baf9d5e87cfe85eeb44433e497ac845810f43361ce821260d6a2d89e34a2fe17a877a0f659b137767475fadf3ed23bc4562ad03220817c6df4c
   languageName: node
   linkType: hard
 
@@ -2995,7 +2995,7 @@ __metadata:
     "@morpho-org/morpho-ts": "workspace:^"
     graphql: "npm:^16.8.1"
     graphql-tag: "npm:^2.12.6"
-    typescript: "npm:^5.4.5"
+    typescript: "npm:^5.6.2"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/blue-sdk-ethers": "workspace:^"
@@ -3027,10 +3027,10 @@ __metadata:
     jest: "npm:^29.7.0"
     mocha: "npm:^10.4.0"
     rxjs: "npm:^7.8.1"
-    sinon: "npm:^18.0.0"
+    sinon: "npm:^19.0.2"
     ts-jest: "npm:^29.2.2"
     ts-node: "npm:^10.9.2"
-    typescript: "npm:^5.4.5"
+    typescript: "npm:^5.6.2"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
@@ -3101,10 +3101,10 @@ __metadata:
     hardhat: "npm:^2.22.10"
     hardhat-deal: "npm:^3.1.0"
     mocha: "npm:^10.4.0"
-    sinon: "npm:^18.0.0"
+    sinon: "npm:^19.0.2"
     ts-node: "npm:^10.9.2"
-    typescript: "npm:^5.4.5"
-    viem: "npm:^2.18.8"
+    typescript: "npm:^5.6.2"
+    viem: "npm:^2.21.8"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
@@ -3128,9 +3128,9 @@ __metadata:
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
     ts-node: "npm:^10.9.2"
-    typescript: "npm:^5.4.5"
-    viem: "npm:^2.18.8"
-    wagmi: "npm:^2.12.10"
+    typescript: "npm:^5.6.2"
+    viem: "npm:^2.21.8"
+    wagmi: "npm:^2.12.12"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/blue-sdk-viem": "workspace:^"
@@ -3153,7 +3153,7 @@ __metadata:
     jest: "npm:^29.7.0"
     keccak256: "npm:^1.0.6"
     ts-jest: "npm:^29.2.2"
-    typescript: "npm:^5.4.5"
+    typescript: "npm:^5.6.2"
   peerDependencies:
     "@morpho-org/morpho-ts": "workspace:^"
   languageName: unknown
@@ -3176,16 +3176,16 @@ __metadata:
     ethers: "npm:^6.13.2"
     hardhat: "npm:^2.20.1"
     mocha: "npm:^10.4.0"
-    sinon: "npm:^18.0.0"
+    sinon: "npm:^19.0.2"
     sinon-chai: "npm:^3.7.0"
-    typescript: "npm:^5.4.5"
+    typescript: "npm:^5.6.2"
   peerDependencies:
     "@nomicfoundation/hardhat-ethers": ^3.0.0
     "@nomicfoundation/hardhat-network-helpers": ^1.0.0
     chai: ^4.3.0
     ethers: ^6.0.0
     hardhat: ^2.20.0
-    sinon: ^18.0.0
+    sinon: ^19.0.2
     sinon-chai: ^3.7.0
   languageName: unknown
   linkType: soft
@@ -3199,7 +3199,7 @@ __metadata:
     chai: "npm:^4.3.10"
     jest: "npm:^29.7.0"
     ts-jest: "npm:^29.2.2"
-    typescript: "npm:^5.4.5"
+    typescript: "npm:^5.6.2"
   languageName: unknown
   linkType: soft
 
@@ -3212,7 +3212,6 @@ __metadata:
     "@lerna-lite/publish": "npm:3.8.0"
     "@lerna-lite/version": "npm:^3.7.1"
     husky: "npm:^9.0.11"
-    typescript: "npm:^5.4.5"
   languageName: unknown
   linkType: soft
 
@@ -4398,15 +4397,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sinonjs/commons@npm:^2.0.0":
-  version: 2.0.0
-  resolution: "@sinonjs/commons@npm:2.0.0"
-  dependencies:
-    type-detect: "npm:4.0.8"
-  checksum: 10c0/babe3fdfc7dfb810f6918f2ae055032a1c7c18910595f1c6bfda87bb1737c1a57268d4ca78c3d8ad2fa4aae99ff79796fad76be735a5a38ab763c0b3cfad1ae7
-  languageName: node
-  linkType: hard
-
 "@sinonjs/commons@npm:^3.0.0, @sinonjs/commons@npm:^3.0.1":
   version: 3.0.1
   resolution: "@sinonjs/commons@npm:3.0.1"
@@ -4425,30 +4415,30 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@sinonjs/fake-timers@npm:^11.2.2":
-  version: 11.2.2
-  resolution: "@sinonjs/fake-timers@npm:11.2.2"
+"@sinonjs/fake-timers@npm:^13.0.1, @sinonjs/fake-timers@npm:^13.0.2":
+  version: 13.0.2
+  resolution: "@sinonjs/fake-timers@npm:13.0.2"
   dependencies:
-    "@sinonjs/commons": "npm:^3.0.0"
-  checksum: 10c0/a4218efa6fdafda622d02d4c0a6ab7df3641cb038bb0b14f0a3ee56f50c95aab4f1ab2d7798ce928b40c6fc1839465a558c9393a77e4dca879e1b2f8d60d8136
+    "@sinonjs/commons": "npm:^3.0.1"
+  checksum: 10c0/fc68fd872dff8a3457f7b0cf4e3c06db5ab35332a19da58165bb2e02b2016911dd77c6d5bd8995f8d9e012f3379b065ea37c3f240d0aa6716a591ba89912a486
   languageName: node
   linkType: hard
 
-"@sinonjs/samsam@npm:^8.0.0":
-  version: 8.0.0
-  resolution: "@sinonjs/samsam@npm:8.0.0"
+"@sinonjs/samsam@npm:^8.0.1":
+  version: 8.0.2
+  resolution: "@sinonjs/samsam@npm:8.0.2"
   dependencies:
-    "@sinonjs/commons": "npm:^2.0.0"
+    "@sinonjs/commons": "npm:^3.0.1"
     lodash.get: "npm:^4.4.2"
-    type-detect: "npm:^4.0.8"
-  checksum: 10c0/c1654ad72ecd9efd4a57d756c492c1c17a197c3138da57b75ba1729562001ed1b3b9c656cce1bd1d91640bc86eb4185a72eced528d176fff09a3a01de28cdcc6
+    type-detect: "npm:^4.1.0"
+  checksum: 10c0/31d74c415040161f2963a202d7f866bedbb5a9b522a74b08a17086c15a75c3ef2893eecebb0c65a7b1603ef4ebdf83fa73cbe384b4cd679944918ed833200443
   languageName: node
   linkType: hard
 
-"@sinonjs/text-encoding@npm:^0.7.2":
-  version: 0.7.2
-  resolution: "@sinonjs/text-encoding@npm:0.7.2"
-  checksum: 10c0/583a45bf3643169e313ff9d4395aff28b0c4f330d3697e252c3effc13d4303ee30f83df542732c1a68617720e4ea6fc08d48a3d9151c9b354a7fc356a8e9b162
+"@sinonjs/text-encoding@npm:^0.7.3":
+  version: 0.7.3
+  resolution: "@sinonjs/text-encoding@npm:0.7.3"
+  checksum: 10c0/b112d1e97af7f99fbdc63c7dbcd35d6a60764dfec85cfcfff532e55cce8ecd8453f9fa2139e70aea47142c940fd90cd201d19f370b9a0141700d8a6de3116815
   languageName: node
   linkType: hard
 
@@ -5008,12 +4998,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@wagmi/connectors@npm:5.1.10":
-  version: 5.1.10
-  resolution: "@wagmi/connectors@npm:5.1.10"
+"@wagmi/connectors@npm:5.1.11":
+  version: 5.1.11
+  resolution: "@wagmi/connectors@npm:5.1.11"
   dependencies:
     "@coinbase/wallet-sdk": "npm:4.0.4"
-    "@metamask/sdk": "npm:0.28.2"
+    "@metamask/sdk": "npm:0.28.4"
     "@safe-global/safe-apps-provider": "npm:0.18.3"
     "@safe-global/safe-apps-sdk": "npm:9.1.0"
     "@walletconnect/ethereum-provider": "npm:2.16.1"
@@ -5026,7 +5016,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/9af1a06bd239f7c710ebc05a507f65d20a1860b8e05d4bf10b85cef94d8d9ae77cc7a4dbc402b9237fde0701071f46fa8e7a384fcb7873ea03493b11a6125d22
+  checksum: 10c0/643062e5315d9c54de4370684a448ab1c098f146a58c2d771794b80744d3946274ed6259072a0888f716bfde0c0366e4a6762ecc32a4da3381b247116601bc37
   languageName: node
   linkType: hard
 
@@ -7269,6 +7259,13 @@ __metadata:
   version: 5.2.0
   resolution: "diff@npm:5.2.0"
   checksum: 10c0/aed0941f206fe261ecb258dc8d0ceea8abbde3ace5827518ff8d302f0fc9cc81ce116c4d8f379151171336caf0516b79e01abdc1ed1201b6440d895a66689eb4
+  languageName: node
+  linkType: hard
+
+"diff@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "diff@npm:7.0.0"
+  checksum: 10c0/251fd15f85ffdf814cfc35a728d526b8d2ad3de338dcbd011ac6e57c461417090766b28995f8ff733135b5fbc3699c392db1d5e27711ac4e00244768cd1d577b
   languageName: node
   linkType: hard
 
@@ -10963,16 +10960,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nise@npm:^6.0.0":
-  version: 6.0.0
-  resolution: "nise@npm:6.0.0"
+"nise@npm:^6.1.1":
+  version: 6.1.1
+  resolution: "nise@npm:6.1.1"
   dependencies:
-    "@sinonjs/commons": "npm:^3.0.0"
-    "@sinonjs/fake-timers": "npm:^11.2.2"
-    "@sinonjs/text-encoding": "npm:^0.7.2"
+    "@sinonjs/commons": "npm:^3.0.1"
+    "@sinonjs/fake-timers": "npm:^13.0.1"
+    "@sinonjs/text-encoding": "npm:^0.7.3"
     just-extend: "npm:^6.2.0"
-    path-to-regexp: "npm:^6.2.1"
-  checksum: 10c0/aacb6b937a5a00e1b5e1f92b4ee60b9e6e96f65e2b2205249e9bf34a77a1ef473e86883f94e9b20aa75ba314280c4a09858cbe3f06c6cf210229f4b409faa098
+    path-to-regexp: "npm:^8.1.0"
+  checksum: 10c0/09471adb738dc3be2981cc7815c90879ed6a5a3e162202ca66e12f9a5a0956bea718d0ec2f0c07acc26e3f958481b8fb30c30da76c13620e922f3b9dcd249c50
   languageName: node
   linkType: hard
 
@@ -11754,10 +11751,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"path-to-regexp@npm:^6.2.1":
-  version: 6.2.2
-  resolution: "path-to-regexp@npm:6.2.2"
-  checksum: 10c0/4b60852d3501fd05ca9dd08c70033d73844e5eca14e41f499f069afa8364f780f15c5098002f93bd42af8b3514de62ac6e82a53b5662de881d2b08c9ef21ea6b
+"path-to-regexp@npm:^8.1.0":
+  version: 8.1.0
+  resolution: "path-to-regexp@npm:8.1.0"
+  checksum: 10c0/1c46be3806ab081bedc51eb238fcb026b61b15f19e8924b26e7dad88812dda499efe357a780665dc915dcab3be67213f145f5e2921b8fc8c6c497608d4e092ed
   languageName: node
   linkType: hard
 
@@ -12857,17 +12854,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"sinon@npm:^18.0.0":
-  version: 18.0.0
-  resolution: "sinon@npm:18.0.0"
+"sinon@npm:^19.0.2":
+  version: 19.0.2
+  resolution: "sinon@npm:19.0.2"
   dependencies:
     "@sinonjs/commons": "npm:^3.0.1"
-    "@sinonjs/fake-timers": "npm:^11.2.2"
-    "@sinonjs/samsam": "npm:^8.0.0"
-    diff: "npm:^5.2.0"
-    nise: "npm:^6.0.0"
-    supports-color: "npm:^7"
-  checksum: 10c0/19db83cc8e135a824c8a5efc088673fedd81092d89cd9a878dbb4bc20ed3fc3b6e9f646788c3fff0c9a984a108f205d08c7230ae8776396f89f096b03b11a7c7
+    "@sinonjs/fake-timers": "npm:^13.0.2"
+    "@sinonjs/samsam": "npm:^8.0.1"
+    diff: "npm:^7.0.0"
+    nise: "npm:^6.1.1"
+    supports-color: "npm:^7.2.0"
+  checksum: 10c0/a5d988d55643677e55bbc70c3aa6c9977f8a7cf55d157278ea8e4474d9acbec16d9c44056bd763e4f5988daf0fb75370099cf90105243dbb8742978478d53c40
   languageName: node
   linkType: hard
 
@@ -13328,7 +13325,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"supports-color@npm:^7, supports-color@npm:^7.1.0":
+"supports-color@npm:^7.1.0, supports-color@npm:^7.2.0":
   version: 7.2.0
   resolution: "supports-color@npm:7.2.0"
   dependencies:
@@ -13700,23 +13697,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"typescript@npm:^5.4.5":
-  version: 5.5.4
-  resolution: "typescript@npm:5.5.4"
+"typescript@npm:^5.6.2":
+  version: 5.6.2
+  resolution: "typescript@npm:5.6.2"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/422be60f89e661eab29ac488c974b6cc0a660fb2228003b297c3d10c32c90f3bcffc1009b43876a082515a3c376b1eefcce823d6e78982e6878408b9a923199c
+  checksum: 10c0/3ed8297a8c7c56b7fec282532503d1ac795239d06e7c4966b42d4330c6cf433a170b53bcf93a130a7f14ccc5235de5560df4f1045eb7f3550b46ebed16d3c5e5
   languageName: node
   linkType: hard
 
-"typescript@patch:typescript@npm%3A^5.4.5#optional!builtin<compat/typescript>":
-  version: 5.5.4
-  resolution: "typescript@patch:typescript@npm%3A5.5.4#optional!builtin<compat/typescript>::version=5.5.4&hash=379a07"
+"typescript@patch:typescript@npm%3A^5.6.2#optional!builtin<compat/typescript>":
+  version: 5.6.2
+  resolution: "typescript@patch:typescript@npm%3A5.6.2#optional!builtin<compat/typescript>::version=5.6.2&hash=8c6c40"
   bin:
     tsc: bin/tsc
     tsserver: bin/tsserver
-  checksum: 10c0/73409d7b9196a5a1217b3aaad929bf76294d3ce7d6e9766dd880ece296ee91cf7d7db6b16c6c6c630ee5096eccde726c0ef17c7dfa52b01a243e57ae1f09ef07
+  checksum: 10c0/94eb47e130d3edd964b76da85975601dcb3604b0c848a36f63ac448d0104e93819d94c8bdf6b07c00120f2ce9c05256b8b6092d23cf5cf1c6fa911159e4d572f
   languageName: node
   linkType: hard
 
@@ -14139,15 +14136,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"viem@npm:^2.18.8":
-  version: 2.21.1
-  resolution: "viem@npm:2.21.1"
+"viem@npm:^2.21.8":
+  version: 2.21.8
+  resolution: "viem@npm:2.21.8"
   dependencies:
     "@adraffy/ens-normalize": "npm:1.10.0"
     "@noble/curves": "npm:1.4.0"
     "@noble/hashes": "npm:1.4.0"
     "@scure/bip32": "npm:1.4.0"
-    "@scure/bip39": "npm:1.3.0"
+    "@scure/bip39": "npm:1.4.0"
     abitype: "npm:1.0.5"
     isows: "npm:1.0.4"
     webauthn-p256: "npm:0.0.5"
@@ -14157,15 +14154,15 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/04b9581831c58c831426bb90bcd4c262c91c466668303bfde24ec133e2e63bed5860e1941dbb0179db70bf48db48e9395ef2242e78a7fe394cf867e509833429
+  checksum: 10c0/ba7acc456b779014a47bb09db97c2daafd80b45faa0993fec62c89bf6502bc38f9e1b940fa7d5a63ffc32db33141558b779ea93424c5328cde73694379e7f573
   languageName: node
   linkType: hard
 
-"wagmi@npm:^2.12.10":
-  version: 2.12.10
-  resolution: "wagmi@npm:2.12.10"
+"wagmi@npm:^2.12.12":
+  version: 2.12.12
+  resolution: "wagmi@npm:2.12.12"
   dependencies:
-    "@wagmi/connectors": "npm:5.1.10"
+    "@wagmi/connectors": "npm:5.1.11"
     "@wagmi/core": "npm:2.13.5"
     use-sync-external-store: "npm:1.2.0"
   peerDependencies:
@@ -14176,7 +14173,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/03f819dc307bf2065ade2da818c5380a72ad4544dd456e54fac812c5437a8e7d53fdfdb72857cbc5f73d5178e1fb6da37f8e7646b53c78c03e1de25c0b960634
+  checksum: 10c0/f3aceb254d31eae2c0ca08040665581eb4d16cafd852005f698d2d7e7d662bb70604a3d01a6153fec805bd49e1a92cdb7b980d6898197bb2e2e53378ab15be94
   languageName: node
   linkType: hard
 

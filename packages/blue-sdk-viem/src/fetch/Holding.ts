@@ -23,11 +23,7 @@ import {
 import { abi, code } from "../queries/GetHolding";
 import { DeploylessFetchParameters } from "../types";
 
-export enum Boolean {
-  Undefined,
-  False,
-  True,
-}
+export const optionalBoolean = [undefined, false, true] as const;
 
 export async function fetchHolding(
   user: Address,
@@ -95,7 +91,7 @@ export async function fetchHolding(
         permit2Allowances,
         erc2612Nonce: isErc2612 ? erc2612Nonce : undefined,
         balance,
-        canTransfer,
+        canTransfer: optionalBoolean[canTransfer],
       });
     } catch {
       // Fallback to multicall if deployless call fails.
@@ -194,7 +190,7 @@ export async function fetchHolding(
       address: whitelistControllerAggregator,
       functionName: "isWhitelisted",
       args: [user],
-    }).catch(() => false);
+    }).catch(() => undefined);
 
   return holding;
 }

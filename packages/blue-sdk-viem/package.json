@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
-  "version": "1.7.3",
+  "version": "1.7.5",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
@@ -30,10 +30,10 @@
     "hardhat": "^2.22.10",
     "hardhat-deal": "^3.1.0",
     "mocha": "^10.4.0",
-    "sinon": "^18.0.0",
+    "sinon": "^19.0.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5",
-    "viem": "^2.18.8"
+    "typescript": "^5.6.2",
+    "viem": "^2.21.8"
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
