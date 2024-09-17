@@ -26,8 +26,13 @@ import {
 } from "@morpho-org/blue-sdk-wagmi";
 import { fromEntries } from "@morpho-org/morpho-ts";
 import { useMemo } from "react";
-import { zeroAddress } from "viem";
-import { Config, ResolvedRegister, useReadContract } from "wagmi";
+import {
+  BlockTag,
+  GetBlockErrorType,
+  ReadContractErrorType,
+  UnionOmit,
+} from "viem";
+import { Config, ResolvedRegister, useBlock, useReadContract } from "wagmi";
 import { SimulationState } from "../SimulationState.js";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
@@ -37,21 +42,63 @@ export type FetchSimulationStateParameters = FetchMarketsParameters &
 
 export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
-    DeploylessFetchParameters &
+    UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
+    (
+      | {
+          blockNumber?: bigint;
+          blockTag?: undefined;
+        }
+      | {
+          blockNumber?: undefined;
+          // Pending block does not have a number nor a timestamp.
+          blockTag?: Exclude<BlockTag, "pending">;
+        }
+    ) &
     ConfigParameter<config>;
+
+export type UseSimulationStateReturnType =
+  | {
+      data: undefined;
+      error: GetBlockErrorType | ReadContractErrorType;
+      isError: true;
+      isPending: false;
+      isSuccess: false;
+      status: "error";
+    }
+  | {
+      data: undefined;
+      error: null;
+      isError: false;
+      isPending: true;
+      isSuccess: false;
+      status: "pending";
+    }
+  | {
+      data: SimulationState;
+      error: null;
+      isError: false;
+      isPending: false;
+      isSuccess: true;
+      status: "success";
+    };
 
 export function useSimulationState<
   config extends Config = ResolvedRegister["config"],
->(parameters: UseSimulationStateParameters<config>) {
+>(
+  parameters: UseSimulationStateParameters<config>,
+): UseSimulationStateReturnType {
   const chainId = useChainId(parameters);
-  // const block = useBlock({
-  //   // ...parameters,
-  //   includeTransactions: false,
-  // });
+
+  const { config, ...blockParameters } = parameters;
+  const block = useBlock({
+    ...blockParameters,
+    watch: true,
+    includeTransactions: false,
+  });
 
   const { morpho } = addresses[chainId];
 
-  const { data: feeRecipient = zeroAddress } = useReadContract({
+  const feeRecipient = useReadContract({
     address: morpho,
     abi: blueAbi,
     functionName: "feeRecipient",
@@ -103,7 +150,7 @@ export function useSimulationState<
     ),
   });
 
-  return useMemo(() => {
+  return useMemo((): UseSimulationStateReturnType => {
     const results = [
       markets,
       users,
@@ -115,70 +162,85 @@ export function useSimulationState<
     ].flat();
 
     const error =
-      block.error ?? results.find(({ error }) => error)?.error ?? null;
+      block.error ??
+      feeRecipient.error ??
+      results.find(({ error }) => error)?.error ??
+      null;
 
     const isSuccess =
-      block.isSuccess && results.every(({ isSuccess }) => isSuccess);
+      block.isSuccess &&
+      feeRecipient.isSuccess &&
+      results.every(({ isSuccess }) => isSuccess);
 
-    const status = error != null ? "error" : isSuccess ? "success" : "pending";
+    if (error != null)
+      return {
+        data: undefined,
+        error,
+        status: "error",
+        isError: true,
+        isPending: false,
+        isSuccess: false,
+      };
 
-    return {
-      data: isSuccess
-        ? new SimulationState(
-            { feeRecipient },
-            fromEntries(markets.map(({ data }) => [data!.id, data!])),
-            fromEntries(users.map(({ data }) => [data!.address, data!])),
-            fromEntries(tokens.map(({ data }) => [data!.address, data!])),
-            fromEntries(vaults.map(({ data }) => [data!.address, data!])),
-            positions.reduce<Record<Address, Record<MarketId, Position>>>(
-              (acc, { data }) => {
-                (acc[data!.user] ??= {})[data!.marketId] = data!;
-
-                return acc;
-              },
-              {},
-            ),
-            holdings.reduce<Record<Address, Record<Address, Holding>>>(
-              (acc, { data }) => {
-                (acc[data!.user] ??= {})[data!.token] = data!;
-
-                return acc;
-              },
-              {},
-            ),
-            vaultMarketConfigs.reduce<
-              Record<Address, Record<MarketId, VaultMarketConfig>>
-            >((acc, { data }) => {
-              (acc[data!.vault] ??= {})[data!.marketId] = data!;
+    if (isSuccess)
+      return {
+        data: new SimulationState(
+          { feeRecipient: feeRecipient.data },
+          fromEntries(markets.map(({ data }) => [data!.id, data!])),
+          fromEntries(users.map(({ data }) => [data!.address, data!])),
+          fromEntries(tokens.map(({ data }) => [data!.address, data!])),
+          fromEntries(vaults.map(({ data }) => [data!.address, data!])),
+          positions.reduce<Record<Address, Record<MarketId, Position>>>(
+            (acc, { data }) => {
+              (acc[data!.user] ??= {})[data!.marketId] = data!;
 
               return acc;
-            }, {}),
-            vaultUsers.reduce<Record<Address, Record<Address, VaultUser>>>(
-              (acc, { data }) => {
-                (acc[data!.vault] ??= {})[data!.user] = data!;
+            },
+            {},
+          ),
+          holdings.reduce<Record<Address, Record<Address, Holding>>>(
+            (acc, { data }) => {
+              (acc[data!.user] ??= {})[data!.token] = data!;
 
-                return acc;
-              },
-              {},
-            ),
-            chainId,
-            block.data.number,
-            block.data.timestamp,
-          )
-        : undefined,
-      error,
-      isError: status === "error",
-      isPending: status === "pending",
-      isLoading: block.isLoading || results.some(({ isLoading }) => isLoading),
-      isFetching:
-        block.isFetching || results.some(({ isFetching }) => isFetching),
-      isStale: block.isStale || results.some(({ isStale }) => isStale),
-      isFetched: block.isFetched && results.every(({ isFetched }) => isFetched),
-      isSuccess,
-      status,
+              return acc;
+            },
+            {},
+          ),
+          vaultMarketConfigs.reduce<
+            Record<Address, Record<MarketId, VaultMarketConfig>>
+          >((acc, { data }) => {
+            (acc[data!.vault] ??= {})[data!.marketId] = data!;
+
+            return acc;
+          }, {}),
+          vaultUsers.reduce<Record<Address, Record<Address, VaultUser>>>(
+            (acc, { data }) => {
+              (acc[data!.vault] ??= {})[data!.user] = data!;
+
+              return acc;
+            },
+            {},
+          ),
+          chainId,
+          block.data.number!, // Block cannot be pending, so it must have a number.
+          block.data.timestamp,
+        ),
+        error: null,
+        status: "success",
+        isError: false,
+        isPending: false,
+        isSuccess: true,
+      };
+
+    return {
+      data: undefined,
+      error: null,
+      status: "pending",
+      isError: false,
+      isPending: true,
+      isSuccess: false,
     };
   }, [
-    feeRecipient,
     markets,
     users,
     tokens,
@@ -186,8 +248,14 @@ export function useSimulationState<
     positions,
     holdings,
     vaultMarketConfigs,
+    vaultUsers,
     chainId,
     block.data?.number,
     block.data?.timestamp,
+    block.error,
+    block.isSuccess,
+    feeRecipient.data,
+    feeRecipient.error,
+    feeRecipient.isSuccess,
   ]);
 }
