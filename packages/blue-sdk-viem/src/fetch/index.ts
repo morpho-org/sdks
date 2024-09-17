@@ -6,6 +6,7 @@ export * from "./Token";
 export * from "./User";
 export * from "./VaultConfig";
 export * from "./Vault";
+export * from "./VaultUser";
 export * from "./VaultMarketConfig";
 export * from "./VaultMarketAllocation";
 export * from "./VaultMarketPublicAllocatorConfig";

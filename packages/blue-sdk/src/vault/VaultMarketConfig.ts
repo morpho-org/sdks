@@ -17,12 +17,12 @@ export class VaultMarketConfig implements InputVaultMarketConfig {
   /**
    * The vault's address.
    */
-  public vault: Address;
+  public readonly vault: Address;
 
   /**
    * The market's id.
    */
-  public marketId: MarketId;
+  public readonly marketId: MarketId;
 
   /**
    * The maximum amount of tokens that can be allocated to this market.
@@ -47,7 +47,7 @@ export class VaultMarketConfig implements InputVaultMarketConfig {
   /**
    * The vault's PublicAllocator configuration on the corresponding market.
    */
-  public publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
+  public readonly publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
 
   constructor({
     vault,

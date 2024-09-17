@@ -3,4 +3,5 @@ export * from "./VaultConfig";
 export * from "./VaultMarketAllocation";
 export * from "./VaultMarketConfig";
 export * from "./VaultMarketPublicAllocatorConfig";
+export * from "./VaultUser";
 export * from "./Vault";
