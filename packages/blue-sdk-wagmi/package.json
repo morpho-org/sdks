@@ -26,8 +26,8 @@
     "react-dom": "^18.3.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.2",
-    "viem": "^2.18.8",
-    "wagmi": "^2.12.10"
+    "viem": "^2.21.8",
+    "wagmi": "^2.12.12"
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
