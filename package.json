@@ -23,7 +23,6 @@
     "@lerna-lite/cli": "3.9.1",
     "@lerna-lite/publish": "3.8.0",
     "@lerna-lite/version": "^3.7.1",
-    "husky": "^9.0.11",
-    "typescript": "^5.4.5"
+    "husky": "^9.0.11"
   }
 }
