@@ -21,7 +21,7 @@ import {
   wrappedBackedTokenAbi,
 } from "../abis";
 import { abi, code } from "../queries/GetHolding";
-import { FetchOptions } from "../types";
+import { DeploylessFetchParameters } from "../types";
 
 export const optionalBoolean = [undefined, false, true] as const;
 
@@ -29,16 +29,10 @@ export async function fetchHolding(
   user: Address,
   token: Address,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-    deployless = true,
-  }: FetchOptions & {
-    deployless?: boolean;
-  } = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
 
   if (token === NATIVE_ADDRESS)
@@ -58,11 +52,14 @@ export async function fetchHolding(
           },
         ]),
       ),
-      balance: await getBalance(client, { ...overrides, address: user }),
+      balance: await getBalance(client, {
+        ...(parameters as any),
+        address: user,
+      }),
     });
 
   if (deployless) {
-    const { morpho, permit2, bundler } = addresses[chainId];
+    const { morpho, permit2, bundler } = addresses[parameters.chainId];
     try {
       const {
         balance,
@@ -72,7 +69,7 @@ export async function fetchHolding(
         erc2612Nonce,
         canTransfer,
       } = await readContract(client, {
-        ...overrides,
+        ...parameters,
         abi,
         code,
         functionName: "query",
@@ -82,8 +79,8 @@ export async function fetchHolding(
           morpho,
           permit2,
           bundler,
-          permissionedBackedTokens[chainId].has(token),
-          permissionedWrapperTokens[chainId].has(token),
+          permissionedBackedTokens[parameters.chainId].has(token),
+          permissionedWrapperTokens[parameters.chainId].has(token),
         ],
       });
 
@@ -101,7 +98,7 @@ export async function fetchHolding(
     }
   }
 
-  const chainAddresses = getChainAddresses(chainId);
+  const chainAddresses = getChainAddresses(parameters.chainId);
 
   const [
     balance,
@@ -112,7 +109,7 @@ export async function fetchHolding(
     hasErc20WrapperPermission,
   ] = await Promise.all([
     readContract(client, {
-      ...overrides,
+      ...parameters,
       abi: erc20Abi,
       address: token,
       functionName: "balanceOf",
@@ -124,7 +121,7 @@ export async function fetchHolding(
           [
             label,
             await readContract(client, {
-              ...overrides,
+              ...parameters,
               abi: erc20Abi,
               address: token,
               functionName: "allowance",
@@ -139,7 +136,7 @@ export async function fetchHolding(
           [
             label,
             await readContract(client, {
-              ...overrides,
+              ...parameters,
               abi: permit2Abi,
               address: chainAddresses.permit2 as Address,
               functionName: "allowance",
@@ -153,27 +150,27 @@ export async function fetchHolding(
       ),
     ),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       abi: erc2612Abi,
       address: token,
       functionName: "nonces",
       args: [user],
     }).catch(() => undefined),
-    permissionedBackedTokens[chainId].has(token)
+    permissionedBackedTokens[parameters.chainId].has(token)
       ? readContract(client, {
-          ...overrides,
+          ...parameters,
           abi: wrappedBackedTokenAbi,
           address: token,
           functionName: "whitelistControllerAggregator",
         })
       : undefined,
     readContract(client, {
-      ...overrides,
+      ...parameters,
       abi: permissionedErc20WrapperAbi,
       address: token,
       functionName: "hasPermission",
       args: [user],
-    }).catch(() => !permissionedWrapperTokens[chainId].has(token)),
+    }).catch(() => !permissionedWrapperTokens[parameters.chainId!].has(token)),
   ]);
 
   const holding = new Holding({
@@ -188,7 +185,7 @@ export async function fetchHolding(
 
   if (whitelistControllerAggregator)
     holding.canTransfer = await readContract(client, {
-      ...overrides,
+      ...parameters,
       abi: whitelistControllerAggregatorV2Abi,
       address: whitelistControllerAggregator,
       functionName: "isWhitelisted",

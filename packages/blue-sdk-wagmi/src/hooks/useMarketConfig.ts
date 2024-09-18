@@ -1,46 +1,47 @@
-import { Market } from "@morpho-org/blue-sdk";
+import { MarketConfig } from "@morpho-org/blue-sdk";
 import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
 import {
-  FetchMarketParameters,
-  FetchMarketQueryKey,
-  fetchMarketQueryOptions,
-} from "../queries/fetchMarket.js";
+  FetchMarketConfigParameters,
+  FetchMarketConfigQueryKey,
+  fetchMarketConfigQueryOptions,
+} from "../queries/fetchMarketConfig.js";
 import { ConfigParameter, QueryParameter } from "../types/properties.js";
 import { useChainId } from "./useChainId.js";
 
-export type UseMarketParameters<
+export type UseMarketConfigParameters<
   config extends Config = Config,
-  selectData = Market,
+  selectData = MarketConfig,
 > = UnionCompute<
-  FetchMarketParameters &
+  FetchMarketConfigParameters &
     ConfigParameter<config> &
     QueryParameter<
-      Market,
+      MarketConfig,
       ReadContractErrorType,
       selectData,
-      FetchMarketQueryKey
+      FetchMarketConfigQueryKey
     >
 >;
 
-export type UseMarketReturnType<selectData = Market> = UseQueryReturnType<
-  selectData,
-  ReadContractErrorType
->;
+export type UseMarketConfigReturnType<selectData = MarketConfig> =
+  UseQueryReturnType<selectData, ReadContractErrorType>;
 
-export function useMarket<
+export function useMarketConfig<
   config extends Config = ResolvedRegister["config"],
-  selectData = Market,
+  selectData = MarketConfig,
 >({
   query = {},
   ...parameters
-}: UseMarketParameters<config, selectData>): UseMarketReturnType<selectData> {
+}: UseMarketConfigParameters<
+  config,
+  selectData
+>): UseMarketConfigReturnType<selectData> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  const options = fetchMarketQueryOptions<config>(config, {
+  const options = fetchMarketConfigQueryOptions<config>(config, {
     ...parameters,
     chainId,
   });

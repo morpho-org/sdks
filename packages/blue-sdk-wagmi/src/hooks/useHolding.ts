@@ -1,46 +1,46 @@
-import { Market } from "@morpho-org/blue-sdk";
+import { Holding } from "@morpho-org/blue-sdk";
 import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
 import {
-  FetchMarketParameters,
-  FetchMarketQueryKey,
-  fetchMarketQueryOptions,
-} from "../queries/fetchMarket.js";
+  FetchHoldingParameters,
+  FetchHoldingQueryKey,
+  fetchHoldingQueryOptions,
+} from "../queries/fetchHolding.js";
 import { ConfigParameter, QueryParameter } from "../types/properties.js";
 import { useChainId } from "./useChainId.js";
 
-export type UseMarketParameters<
+export type UseHoldingParameters<
   config extends Config = Config,
-  selectData = Market,
+  selectData = Holding,
 > = UnionCompute<
-  FetchMarketParameters &
+  FetchHoldingParameters &
     ConfigParameter<config> &
     QueryParameter<
-      Market,
+      Holding,
       ReadContractErrorType,
       selectData,
-      FetchMarketQueryKey
+      FetchHoldingQueryKey
     >
 >;
 
-export type UseMarketReturnType<selectData = Market> = UseQueryReturnType<
+export type UseHoldingReturnType<selectData = Holding> = UseQueryReturnType<
   selectData,
   ReadContractErrorType
 >;
 
-export function useMarket<
+export function useHolding<
   config extends Config = ResolvedRegister["config"],
-  selectData = Market,
+  selectData = Holding,
 >({
   query = {},
   ...parameters
-}: UseMarketParameters<config, selectData>): UseMarketReturnType<selectData> {
+}: UseHoldingParameters<config, selectData>): UseHoldingReturnType<selectData> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  const options = fetchMarketQueryOptions<config>(config, {
+  const options = fetchHoldingQueryOptions<config>(config, {
     ...parameters,
     chainId,
   });
@@ -48,7 +48,8 @@ export function useMarket<
   return useQuery({
     ...query,
     ...options,
-    enabled: parameters.marketId != null && query.enabled,
+    enabled:
+      parameters.user != null && parameters.token != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
   });
 }

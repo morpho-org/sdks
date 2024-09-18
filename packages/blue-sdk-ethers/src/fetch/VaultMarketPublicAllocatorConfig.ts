@@ -6,7 +6,7 @@ import {
   ChainUtils,
   MarketId,
   VaultMarketPublicAllocatorConfig,
-  getChainAddresses,
+  addresses,
 } from "@morpho-org/blue-sdk";
 import { FetchOptions } from "../types";
 
@@ -20,9 +20,7 @@ export async function fetchVaultMarketPublicAllocatorConfig(
     chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const { publicAllocator } = getChainAddresses(chainId);
-
-  if (!publicAllocator) return;
+  const { publicAllocator } = addresses[chainId];
 
   const [maxIn, maxOut] = await PublicAllocator__factory.connect(
     publicAllocator,

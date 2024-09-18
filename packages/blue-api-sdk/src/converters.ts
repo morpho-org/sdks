@@ -280,9 +280,11 @@ export namespace BlueSdkConverters {
         validAt: dto.pendingSupplyCapValidAt ?? 0n,
       },
       removableAt: dto.removableAt,
-      publicAllocatorConfig: flowCaps
-        ? BlueSdkConverters.getVaultMarketPublicAllocatorConfig(vault, flowCaps)
-        : undefined,
+      publicAllocatorConfig:
+        BlueSdkConverters.getVaultMarketPublicAllocatorConfig(
+          vault,
+          flowCaps ?? { ...dto, maxIn: 0n, maxOut: 0n },
+        ),
     });
   }
 

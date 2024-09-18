@@ -12,7 +12,7 @@ import {
 
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi, publicAllocatorAbi } from "../abis";
-import { FetchOptions } from "../types";
+import { DeploylessFetchParameters } from "../types";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
 import { abi, code } from "../queries/GetVault";
@@ -21,17 +21,13 @@ import { fetchVaultConfig } from "./VaultConfig";
 export async function fetchVault(
   address: Address,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-    deployless = true,
-  }: FetchOptions & { deployless?: boolean } = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
 
-  const { publicAllocator } = addresses[chainId];
+  const { publicAllocator } = addresses[parameters.chainId];
 
   if (deployless) {
     try {
@@ -54,7 +50,7 @@ export async function fetchVault(
         withdrawQueue,
         publicAllocatorConfig,
       } = await readContract(client, {
-        ...overrides,
+        ...parameters,
         abi,
         code,
         functionName: "query",
@@ -62,7 +58,7 @@ export async function fetchVault(
       });
 
       return new Vault({
-        config: new VaultConfig({ ...config, address }, chainId),
+        config: new VaultConfig({ ...config, address }, parameters.chainId),
         owner,
         curator,
         guardian,
@@ -104,143 +100,140 @@ export async function fetchVault(
     withdrawQueueSize,
     hasPublicAllocator,
   ] = await Promise.all([
-    fetchVaultConfig(address, client, { chainId }),
+    fetchVaultConfig(address, client, parameters),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "curator",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "owner",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "guardian",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "timelock",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "pendingTimelock",
     }).then(([value, validAt]) => ({ value, validAt })),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "pendingGuardian",
     }).then(([value, validAt]) => ({ value, validAt })),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "pendingOwner",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "fee",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "feeRecipient",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "skimRecipient",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "totalSupply",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "totalAssets",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "lastTotalAssets",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "supplyQueueLength",
     }),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       address,
       abi: metaMorphoAbi,
       functionName: "withdrawQueueLength",
     }),
     publicAllocator &&
       readContract(client, {
-        ...overrides,
+        ...parameters,
         address,
         abi: metaMorphoAbi,
         functionName: "isAllocator",
-        args: [publicAllocator as Address],
+        args: [publicAllocator],
       }),
   ]);
-
   let publicAllocatorConfigPromise:
     | Promise<VaultPublicAllocatorConfig>
     | undefined;
-
   if (hasPublicAllocator)
     publicAllocatorConfigPromise = Promise.all([
       readContract(client, {
-        ...overrides,
+        ...parameters,
         address: publicAllocator,
         abi: publicAllocatorAbi,
         functionName: "admin",
         args: [address],
       }),
       readContract(client, {
-        ...overrides,
+        ...parameters,
         address: publicAllocator,
         abi: publicAllocatorAbi,
         functionName: "fee",
         args: [address],
       }),
       readContract(client, {
-        ...overrides,
+        ...parameters,
         address: publicAllocator,
         abi: publicAllocatorAbi,
         functionName: "accruedFee",
         args: [address],
       }),
     ]).then(([admin, fee, accruedFee]) => ({ admin, fee, accruedFee }));
-
   const [supplyQueue, withdrawQueue, publicAllocatorConfig] = await Promise.all(
     [
       Promise.all(
         new Array(Number(supplyQueueSize)).fill(null).map(
           (_, i) =>
             readContract(client, {
-              ...overrides,
+              ...parameters,
               address,
               abi: metaMorphoAbi,
               functionName: "supplyQueue",
@@ -252,7 +245,7 @@ export async function fetchVault(
         new Array(Number(withdrawQueueSize)).fill(null).map(
           (_, i) =>
             readContract(client, {
-              ...overrides,
+              ...parameters,
               address,
               abi: metaMorphoAbi,
               functionName: "withdrawQueue",
@@ -263,7 +256,6 @@ export async function fetchVault(
       publicAllocatorConfigPromise,
     ],
   );
-
   return new Vault({
     config,
     owner,
@@ -284,29 +276,26 @@ export async function fetchVault(
     lastTotalAssets,
   });
 }
-
 export async function fetchAccrualVault(
   address: Address,
   client: Client,
-  options: FetchOptions & { deployless?: boolean } = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
-
-  const vault = await fetchVault(address, client, options);
-
+  const vault = await fetchVault(address, client, parameters);
   const allocations = await Promise.all(
-    [...new Set(vault.supplyQueue.concat(vault.withdrawQueue))].map(
+    Array.from(
+      new Set(vault.supplyQueue.concat(vault.withdrawQueue)),
       (marketId) =>
         fetchVaultMarketAllocation(
           vault.address as Address,
           marketId,
           client,
-          options,
+          parameters,
         ),
     ),
   );
-
   return new AccrualVault(vault, allocations);
 }
