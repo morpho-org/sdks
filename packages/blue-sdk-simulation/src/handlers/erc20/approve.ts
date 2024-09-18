@@ -22,7 +22,7 @@ export const handleErc20ApproveOperation: OperationHandler<
 
   if (contract != null) senderTokenData.erc20Allowances[contract] = amount;
   else {
-    const vault = data.vaults[spender];
+    const vault = data.tryGetVault(spender);
 
     if (vault != null && vault.asset === address) {
       const vaultUserData = data.getVaultUser(spender, sender);

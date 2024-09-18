@@ -7,21 +7,15 @@ import {
 
 import { Operation } from "./operations.js";
 
-export class UnknownWstEthExchangeRateError extends UnknownDataError {
-  constructor() {
-    super(`unknown wstETH/ETH exchange rate`);
-  }
-}
-
 export class UnknownMarketError extends UnknownDataError {
   constructor(public readonly marketId: MarketId) {
-    super(`unknown data for market ${marketId}`);
+    super(`unknown market "${marketId}"`);
   }
 }
 
 export class UnknownUserError extends UnknownDataError {
   constructor(public readonly user: Address) {
-    super(`unknown data for user ${user}`);
+    super(`unknown user "${user}"`);
   }
 }
 
@@ -30,7 +24,7 @@ export class UnknownPositionError extends UnknownDataError {
     public readonly user: Address,
     public readonly marketId: MarketId,
   ) {
-    super(`unknown data for user ${user} on market ${marketId}`);
+    super(`unknown position of user "${user}" on market "${marketId}"`);
   }
 }
 
@@ -39,7 +33,13 @@ export class UnknownHoldingError extends UnknownDataError {
     public readonly user: Address,
     public readonly token: Address,
   ) {
-    super(`unknown data for user ${user} of token ${token}`);
+    super(`unknown holding of user "${user}" of token "${token}"`);
+  }
+}
+
+export class UnknownVaultError extends UnknownDataError {
+  constructor(public readonly vault: Address) {
+    super(`unknown vault "${vault}"`);
   }
 }
 
@@ -48,34 +48,28 @@ export class UnknownVaultMarketConfigError extends UnknownDataError {
     public readonly vault: Address,
     public readonly marketId: MarketId,
   ) {
-    super(`unknown config for vault ${vault} on market ${marketId}`);
+    super(`unknown config for vault "${vault}" on market "${marketId}"`);
   }
 }
 
-export class UnknownVaultUserDataError extends UnknownDataError {
+export class UnknownVaultUserError extends UnknownDataError {
   constructor(
     public readonly vault: Address,
     public readonly user: Address,
   ) {
-    super(`unknown config user ${user} on vault ${vault}`);
+    super(`unknown user "${user}" of vault "${vault}"`);
   }
 }
 
 export class UnknownWrappedTokenError extends UnknownDataError {
   constructor(public readonly token: Address) {
-    super(`unknown wrapped token ${token}`);
-  }
-}
-
-export class UnknownUnwrappedTokenError extends UnknownDataError {
-  constructor(public readonly token: Address) {
-    super(`unknown unwrapped token ${token}`);
+    super(`unknown wrapped token "${token}"`);
   }
 }
 
 export class UnknownContractError extends UnknownDataError {
   constructor(public readonly contract: Address) {
-    super(`unknown contract ${contract}`);
+    super(`unknown contract "${contract}"`);
   }
 }
 
@@ -86,7 +80,7 @@ export class UnknownAllowanceError extends UnknownDataError {
     public readonly spender: Address,
   ) {
     super(
-      `unknown allowance for token ${token} from owner ${owner} to spender ${spender}`,
+      `unknown allowance for token "${token}" from owner "${owner}" to spender "${spender}"`,
     );
   }
 }
@@ -96,30 +90,13 @@ export class UnknownEIP2612DataError extends UnknownDataError {
     public readonly token: Address,
     public readonly owner: Address,
   ) {
-    super(`unknown EIP-2612 data for token ${token} of owner ${owner}`);
-  }
-}
-
-export class UnknownVaultError extends UnknownDataError {
-  constructor(public readonly vault: Address) {
-    super(`unknown data for vault ${vault}`);
+    super(`unknown EIP-2612 data for token "${token}" of owner "${owner}"`);
   }
 }
 
 export class UnknownVaultPublicAllocatorConfigError extends UnknownDataError {
   constructor(public readonly vault: Address) {
-    super(`missing public allocator config for vault ${vault}`);
-  }
-}
-
-export class UnknownMarketPublicAllocatorConfigError extends UnknownDataError {
-  constructor(
-    public readonly vault: Address,
-    public readonly marketId: MarketId,
-  ) {
-    super(
-      `missing public allocator config for vault ${vault} on market ${marketId}`,
-    );
+    super(`missing public allocator config for vault "${vault}"`);
   }
 }
 
@@ -129,7 +106,7 @@ export namespace Erc20Errors {
       public readonly token: Address,
       public readonly user: Address,
     ) {
-      super(`insufficient balance of user ${user} for token ${token}`);
+      super(`insufficient balance of user "${user}" for token "${token}"`);
     }
   }
 
@@ -140,7 +117,7 @@ export namespace Erc20Errors {
       public readonly spender: Address,
     ) {
       super(
-        `insufficient allowance for token ${token} from owner ${owner} to spender ${spender}`,
+        `insufficient allowance for token "${token}" from owner "${owner}" to spender "${spender}"`,
       );
     }
   }
@@ -152,7 +129,7 @@ export namespace Erc20Errors {
       public readonly nonce: bigint,
     ) {
       super(
-        `invalid EIP-2612 nonce ${nonce} for token ${token} of owner ${owner}`,
+        `invalid EIP-2612 nonce "${nonce}" for token "${token}" of owner "${owner}"`,
       );
     }
   }
@@ -165,7 +142,7 @@ export namespace Erc20Errors {
       public readonly nonce: bigint,
     ) {
       super(
-        `invalid permit2 nonce ${nonce} for token ${token} from owner ${owner} to spender ${spender}`,
+        `invalid permit2 nonce "${nonce}" for token "${token}" from owner "${owner}" to spender "${spender}"`,
       );
     }
   }
@@ -177,7 +154,7 @@ export namespace Erc20Errors {
       public readonly spender: "morpho" | "bundler",
     ) {
       super(
-        `insufficient permit2 allowance for token ${token} from owner ${owner} to spender ${spender}`,
+        `insufficient permit2 allowance for token "${token}" from owner "${owner}" to spender "${spender}"`,
       );
     }
   }
@@ -187,7 +164,7 @@ export namespace Erc20Errors {
       public readonly token: Address,
       public readonly user: Address,
     ) {
-      super(`unauthorized transfer of token ${token} from owner ${user}`);
+      super(`unauthorized transfer of token "${token}" from owner "${user}"`);
     }
   }
 }
@@ -219,7 +196,7 @@ export namespace SimulationErrors {
 export namespace BlueSimulationErrors {
   export class MarketNotEnabled extends Error {
     constructor(public readonly marketId: MarketId) {
-      super(`market ${marketId} not enabled`);
+      super(`market "${marketId}" not enabled`);
     }
   }
 
@@ -231,7 +208,7 @@ export namespace BlueSimulationErrors {
 
   export class UnauthorizedBundler extends Error {
     constructor(public readonly user: Address) {
-      super(`unauthorized bundler for user ${user}`);
+      super(`unauthorized bundler for user "${user}"`);
     }
   }
 
@@ -240,7 +217,7 @@ export namespace BlueSimulationErrors {
       public readonly user: Address,
       public readonly marketId: MarketId,
     ) {
-      super(`insufficient position for user ${user} on market ${marketId}`);
+      super(`insufficient position for user "${user}" on market "${marketId}"`);
     }
   }
 
@@ -249,7 +226,9 @@ export namespace BlueSimulationErrors {
       public readonly user: Address,
       public readonly marketId: MarketId,
     ) {
-      super(`insufficient collateral for user ${user} on market ${marketId}`);
+      super(
+        `insufficient collateral for user "${user}" on market "${marketId}"`,
+      );
     }
   }
 }
@@ -272,7 +251,7 @@ export namespace MetaMorphoErrors {
       public readonly vault: Address,
       public readonly account: Address,
     ) {
-      super(`account ${account} not allocator of vault ${vault}`);
+      super(`account ${account} not allocator of vault "${vault}"`);
     }
   }
 
@@ -282,7 +261,7 @@ export namespace MetaMorphoErrors {
       public readonly remainingRequested: bigint,
     ) {
       super(
-        `not enough liquidity on vault ${vault} (remaining requested: ${remainingRequested})`,
+        `not enough liquidity on vault "${vault}" (remaining requested: ${remainingRequested})`,
       );
     }
   }
@@ -292,7 +271,7 @@ export namespace MetaMorphoErrors {
       public readonly vault: Address,
       public readonly marketId: MarketId,
     ) {
-      super(`market ${marketId} not enabled on vault ${vault}`);
+      super(`market "${marketId}" not enabled on vault "${vault}"`);
     }
   }
 
@@ -301,7 +280,7 @@ export namespace MetaMorphoErrors {
       public readonly vault: Address,
       public readonly marketId: MarketId,
     ) {
-      super(`unauthorized market ${marketId} on vault ${vault}`);
+      super(`unauthorized market "${marketId}" on vault "${vault}"`);
     }
   }
 
@@ -312,7 +291,7 @@ export namespace MetaMorphoErrors {
       public readonly cap: bigint,
     ) {
       super(
-        `supply cap of ${cap} exceeded for vault ${vault} on market ${marketId}`,
+        `supply cap of ${cap} exceeded for vault "${vault}" on market "${marketId}"`,
       );
     }
   }
@@ -323,7 +302,7 @@ export namespace MetaMorphoErrors {
       public readonly remainingRequested: bigint,
     ) {
       super(
-        `all caps reached on vault ${vault} (remaining requested: ${remainingRequested})`,
+        `all caps reached on vault "${vault}" (remaining requested: ${remainingRequested})`,
       );
     }
   }
@@ -335,7 +314,7 @@ export namespace MetaMorphoErrors {
       public readonly totalWithdrawn: bigint,
     ) {
       super(
-        `inconsistent reallocation for vault ${vault}: total supplied (${totalSupplied}) != total withdrawn (${totalWithdrawn})`,
+        `inconsistent reallocation for vault "${vault}": total supplied (${totalSupplied}) != total withdrawn (${totalWithdrawn})`,
       );
     }
   }
@@ -347,13 +326,13 @@ export namespace PublicAllocatorErrors {
       public readonly vault: Address,
       public readonly marketId: MarketId,
     ) {
-      super(`vault ${vault} withdrawing 0 on market ${marketId}`);
+      super(`vault "${vault}" withdrawing 0 on market "${marketId}"`);
     }
   }
 
   export class EmptyWithdrawals extends Error {
     constructor(public readonly vault: Address) {
-      super(`empty withdrawals for vault ${vault}`);
+      super(`empty withdrawals for vault "${vault}"`);
     }
   }
 
@@ -364,7 +343,7 @@ export namespace PublicAllocatorErrors {
       public readonly nextId: MarketId,
     ) {
       super(
-        `inconsistent withdrawals for vault ${vault}: ${prevId} is expected to appear before ${nextId}`,
+        `inconsistent withdrawals for vault "${vault}": "${prevId}" is expected to appear before "${nextId}"`,
       );
     }
   }
@@ -374,7 +353,9 @@ export namespace PublicAllocatorErrors {
       public readonly vault: Address,
       public readonly marketId: MarketId,
     ) {
-      super(`max outflow exceeded for vault ${vault} on market ${marketId}`);
+      super(
+        `max outflow exceeded for vault "${vault}" on market "${marketId}"`,
+      );
     }
   }
 
@@ -383,7 +364,7 @@ export namespace PublicAllocatorErrors {
       public readonly vault: Address,
       public readonly marketId: MarketId,
     ) {
-      super(`max inflow exceeded for vault ${vault} on market ${marketId}`);
+      super(`max inflow exceeded for vault "${vault}" on market "${marketId}"`);
     }
   }
 
@@ -392,7 +373,9 @@ export namespace PublicAllocatorErrors {
       public readonly vault: Address,
       public readonly supplyMarketId: MarketId,
     ) {
-      super(`supply market ${supplyMarketId} in withdrawals of vault ${vault}`);
+      super(
+        `supply market "${supplyMarketId}" in withdrawals of vault "${vault}"`,
+      );
     }
   }
 
@@ -401,7 +384,7 @@ export namespace PublicAllocatorErrors {
       public readonly vault: Address,
       public readonly marketId: MarketId,
     ) {
-      super(`not enough supply of vault ${vault} on market ${marketId}`);
+      super(`not enough supply of vault "${vault}" on market "${marketId}"`);
     }
   }
 }

@@ -9,9 +9,12 @@ export const handleBlueAccrueInterestOperation: OperationHandler<
 
   data.markets[id] = newMarketData;
 
-  const feeRecipientMarketData = data.positions[data.global.feeRecipient]?.[id];
+  const { feeRecipient } = data.global;
+  if (feeRecipient != null) {
+    const feeRecipientPosition = data.tryGetPosition(feeRecipient, id);
 
-  if (feeRecipientMarketData != null)
-    feeRecipientMarketData.supplyShares +=
-      newMarketData.totalSupplyShares - marketData.totalSupplyShares;
+    if (feeRecipientPosition != null)
+      feeRecipientPosition.supplyShares +=
+        newMarketData.totalSupplyShares - marketData.totalSupplyShares;
+  }
 };

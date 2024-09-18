@@ -26,12 +26,7 @@ import {
 } from "@morpho-org/blue-sdk-wagmi";
 import { fromEntries } from "@morpho-org/morpho-ts";
 import { useMemo } from "react";
-import {
-  BlockTag,
-  GetBlockErrorType,
-  ReadContractErrorType,
-  UnionOmit,
-} from "viem";
+import { GetBlockErrorType, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useBlock, useReadContract } from "wagmi";
 import { SimulationState } from "../SimulationState.js";
 
@@ -42,45 +37,34 @@ export type FetchSimulationStateParameters = FetchMarketsParameters &
 
 export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
-    UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
-    (
-      | {
-          blockNumber?: bigint;
-          blockTag?: undefined;
-        }
-      | {
-          blockNumber?: undefined;
-          // Pending block does not have a number nor a timestamp.
-          blockTag?: Exclude<BlockTag, "pending">;
-        }
-    ) &
-    ConfigParameter<config>;
+    UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> & {
+      blockNumber: bigint;
+    } & ConfigParameter<config>;
 
 export type UseSimulationStateReturnType =
-  | {
-      data: undefined;
-      error: GetBlockErrorType | ReadContractErrorType;
-      isError: true;
-      isPending: false;
-      isSuccess: false;
-      status: "error";
-    }
-  | {
-      data: undefined;
-      error: null;
-      isError: false;
-      isPending: true;
-      isSuccess: false;
-      status: "pending";
-    }
   | {
       data: SimulationState;
       error: null;
       isError: false;
-      isPending: false;
+      isFetching: boolean;
       isSuccess: true;
-      status: "success";
+    }
+  | {
+      data?: SimulationState;
+      error: GetBlockErrorType | ReadContractErrorType;
+      isError: true;
+      isFetching: boolean;
+      isSuccess: false;
+    }
+  | {
+      data: undefined;
+      error: null;
+      isError: false;
+      isFetching: true;
+      isSuccess: false;
     };
+
+const isDataDefined = ({ data }: { data?: any }) => data != null;
 
 export function useSimulationState<
   config extends Config = ResolvedRegister["config"],
@@ -92,7 +76,6 @@ export function useSimulationState<
   const { config, ...blockParameters } = parameters;
   const block = useBlock({
     ...blockParameters,
-    watch: true,
     includeTransactions: false,
   });
 
@@ -102,12 +85,27 @@ export function useSimulationState<
     address: morpho,
     abi: blueAbi,
     functionName: "feeRecipient",
+    query: {
+      enabled: !block.error,
+    },
   });
 
-  const markets = useMarkets(parameters);
-  const users = useUsers(parameters);
-  const tokens = useTokens(parameters);
-  const vaults = useVaults(parameters);
+  const markets = useMarkets({
+    ...parameters,
+    query: { enabled: !block.error },
+  });
+  const users = useUsers({
+    ...parameters,
+    query: { enabled: !block.error },
+  });
+  const tokens = useTokens({
+    ...parameters,
+    query: { enabled: !block.error },
+  });
+  const vaults = useVaults({
+    ...parameters,
+    query: { enabled: !block.error },
+  });
 
   const positions = usePositions({
     ...parameters,
@@ -118,6 +116,9 @@ export function useSimulationState<
         ),
       [parameters.users, parameters.marketIds],
     ),
+    query: {
+      enabled: !block.error,
+    },
   });
   const holdings = useHoldings({
     ...parameters,
@@ -128,6 +129,9 @@ export function useSimulationState<
         ),
       [parameters.users, parameters.tokens],
     ),
+    query: {
+      enabled: !block.error,
+    },
   });
   const vaultMarketConfigs = useVaultMarketConfigs({
     ...parameters,
@@ -138,6 +142,9 @@ export function useSimulationState<
         ),
       [parameters.vaults, parameters.marketIds],
     ),
+    query: {
+      enabled: !block.error,
+    },
   });
   const vaultUsers = useVaultUsers({
     ...parameters,
@@ -148,9 +155,33 @@ export function useSimulationState<
         ),
       [parameters.vaults, parameters.users],
     ),
+    query: {
+      enabled: !block.error,
+    },
   });
 
-  return useMemo((): UseSimulationStateReturnType => {
+  return useMemo(() => {
+    if (block.data?.number == null) {
+      const { error, isFetching } = block;
+
+      if (error != null)
+        return {
+          data: undefined,
+          error,
+          isError: true,
+          isFetching,
+          isSuccess: false,
+        };
+
+      return {
+        data: undefined,
+        error: null,
+        isError: false,
+        isFetching: true, // Block cannot be pending, so it is fetching.
+        isSuccess: false,
+      };
+    }
+
     const results = [
       markets,
       users,
@@ -167,78 +198,82 @@ export function useSimulationState<
       results.find(({ error }) => error)?.error ??
       null;
 
-    const isSuccess =
-      block.isSuccess &&
-      feeRecipient.isSuccess &&
-      results.every(({ isSuccess }) => isSuccess);
+    const isFetching =
+      block.isFetching ||
+      feeRecipient.isFetching ||
+      results.some(({ isFetching }) => isFetching);
 
-    if (error != null)
-      return {
-        data: undefined,
-        error,
-        status: "error",
-        isError: true,
-        isPending: false,
-        isSuccess: false,
-      };
+    const data = new SimulationState(
+      { feeRecipient: feeRecipient.data },
+      fromEntries(
+        markets.filter(isDataDefined).map(({ data }) => [data!.id, data!]),
+      ),
+      fromEntries(
+        users.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
+      ),
+      fromEntries(
+        tokens.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
+      ),
+      fromEntries(
+        vaults.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
+      ),
+      positions
+        .filter(isDataDefined)
+        .reduce<Record<Address, Record<MarketId, Position>>>(
+          (acc, { data }) => {
+            (acc[data!.user] ??= {})[data!.marketId] = data!;
 
-    if (isSuccess)
-      return {
-        data: new SimulationState(
-          { feeRecipient: feeRecipient.data },
-          fromEntries(markets.map(({ data }) => [data!.id, data!])),
-          fromEntries(users.map(({ data }) => [data!.address, data!])),
-          fromEntries(tokens.map(({ data }) => [data!.address, data!])),
-          fromEntries(vaults.map(({ data }) => [data!.address, data!])),
-          positions.reduce<Record<Address, Record<MarketId, Position>>>(
-            (acc, { data }) => {
-              (acc[data!.user] ??= {})[data!.marketId] = data!;
+            return acc;
+          },
+          {},
+        ),
+      holdings
+        .filter(isDataDefined)
+        .reduce<Record<Address, Record<Address, Holding>>>((acc, { data }) => {
+          (acc[data!.user] ??= {})[data!.token] = data!;
 
-              return acc;
-            },
-            {},
-          ),
-          holdings.reduce<Record<Address, Record<Address, Holding>>>(
-            (acc, { data }) => {
-              (acc[data!.user] ??= {})[data!.token] = data!;
-
-              return acc;
-            },
-            {},
-          ),
-          vaultMarketConfigs.reduce<
-            Record<Address, Record<MarketId, VaultMarketConfig>>
-          >((acc, { data }) => {
+          return acc;
+        }, {}),
+      vaultMarketConfigs
+        .filter(isDataDefined)
+        .reduce<Record<Address, Record<MarketId, VaultMarketConfig>>>(
+          (acc, { data }) => {
             (acc[data!.vault] ??= {})[data!.marketId] = data!;
 
             return acc;
-          }, {}),
-          vaultUsers.reduce<Record<Address, Record<Address, VaultUser>>>(
-            (acc, { data }) => {
-              (acc[data!.vault] ??= {})[data!.user] = data!;
-
-              return acc;
-            },
-            {},
-          ),
-          chainId,
-          block.data.number!, // Block cannot be pending, so it must have a number.
-          block.data.timestamp,
+          },
+          {},
         ),
-        error: null,
-        status: "success",
-        isError: false,
-        isPending: false,
-        isSuccess: true,
+      vaultUsers
+        .filter(isDataDefined)
+        .reduce<Record<Address, Record<Address, VaultUser>>>(
+          (acc, { data }) => {
+            (acc[data!.vault] ??= {})[data!.user] = data!;
+
+            return acc;
+          },
+          {},
+        ),
+      chainId,
+      block.data.number,
+      block.data.timestamp,
+    );
+
+    if (error != null)
+      return {
+        data,
+        error,
+        isError: true,
+        isFetching,
+        isSuccess: false,
       };
 
     return {
-      data: undefined,
+      data,
       error: null,
-      status: "pending",
       isError: false,
-      isPending: true,
-      isSuccess: false,
+      isFetching,
+      isSuccess: true,
     };
   }, [
     markets,
@@ -253,9 +288,9 @@ export function useSimulationState<
     block.data?.number,
     block.data?.timestamp,
     block.error,
-    block.isSuccess,
+    block.isFetching,
     feeRecipient.data,
     feeRecipient.error,
-    feeRecipient.isSuccess,
+    feeRecipient.isFetching,
   ]);
 }

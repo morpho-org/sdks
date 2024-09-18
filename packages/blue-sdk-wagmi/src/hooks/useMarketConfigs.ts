@@ -1,10 +1,10 @@
 import { Market, MarketId } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { MarketConfigParameters } from "src/queries/fetchMarketConfig.js";
 import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import { fetchMarketQueryOptions } from "../queries/fetchMarket.js";
+import { MarketConfigParameters } from "../queries/fetchMarketConfig.js";
 import { useChainId } from "./useChainId.js";
 import { UseMarketParameters, UseMarketReturnType } from "./useMarket.js";
 

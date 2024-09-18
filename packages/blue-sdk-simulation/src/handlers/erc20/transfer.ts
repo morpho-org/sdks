@@ -11,16 +11,16 @@ export const handleErc20TransferOperation: OperationHandler<
   const { morpho, bundler, permit2 } = getChainAddresses(data.chainId);
 
   if (from !== zeroAddress && from !== morpho) {
-    const fromTokenData = data.getHolding(from, address);
+    const fromHolding = data.getHolding(from, address);
 
-    if (fromTokenData.canTransfer === false)
+    if (fromHolding.canTransfer === false)
       throw new Erc20Errors.UnauthorizedTransfer(address, from);
 
     // Simulate the bundler's behavior on output transfers.
     if (sender === bundler && from === bundler && amount === maxUint256)
-      amount = MathLib.min(amount, fromTokenData.balance);
+      amount = MathLib.min(amount, fromHolding.balance);
 
-    if (fromTokenData.balance < amount)
+    if (fromHolding.balance < amount)
       throw new Erc20Errors.InsufficientBalance(address, from);
 
     if (sender !== from && from !== bundler) {
@@ -35,14 +35,14 @@ export const handleErc20TransferOperation: OperationHandler<
               : undefined;
 
       if (contract != null) {
-        if (fromTokenData.erc20Allowances[contract] < amount)
+        if (fromHolding.erc20Allowances[contract] < amount)
           throw new Erc20Errors.InsufficientAllowance(address, from, sender);
 
-        fromTokenData.erc20Allowances[contract] -= amount;
+        fromHolding.erc20Allowances[contract] -= amount;
       } else {
         // Check allowance of MetaMorpho vaults on the underlying asset.
-        const vault = data.vaults[sender];
-        const vaultFromData = data.vaultUsers[sender]?.[from];
+        const vault = data.tryGetVault(sender);
+        const vaultFromData = data.tryGetVaultUser(sender, from);
 
         if (vault?.asset === address && vaultFromData != null) {
           if (vaultFromData.allowance < amount)
@@ -53,10 +53,10 @@ export const handleErc20TransferOperation: OperationHandler<
       }
     }
 
-    fromTokenData.balance -= amount;
+    fromHolding.balance -= amount;
   }
 
-  const toTokenData = data.holdings[to]?.[address];
+  const toHolding = data.tryGetHolding(to, address);
 
-  if (toTokenData != null) toTokenData.balance += amount;
+  if (toHolding != null) toHolding.balance += amount;
 };

@@ -5,7 +5,7 @@ import { ChainUtils, VaultUser } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { DeploylessFetchParameters } from "../types";
 
-import { metaMorphoAbi } from "src/abis";
+import { metaMorphoAbi } from "../abis";
 import { abi, code } from "../queries/GetVaultUser";
 import { fetchVaultConfig } from "./VaultConfig";
 

@@ -8,63 +8,112 @@ import {
   MarketId,
   Position,
   Token,
+  UnknownDataError,
+  UnknownTokenError,
   User,
   Vault,
   VaultMarketConfig,
   VaultUser,
   WrappedToken,
+  _try,
 } from "@morpho-org/blue-sdk";
+
+import {
+  UnknownHoldingError,
+  UnknownMarketError,
+  UnknownPositionError,
+  UnknownUserError,
+  UnknownVaultError,
+  UnknownVaultMarketConfigError,
+  UnknownVaultUserError,
+  UnknownWrappedTokenError,
+} from "./errors.js";
+
+export interface GetStateOptions {
+  throwIfMissing?: boolean;
+}
 
 export class SimulationState {
   constructor(
-    protected readonly global: { feeRecipient: Address },
-    protected readonly markets: Record<MarketId, Market>,
-    protected readonly users: Record<Address, User>,
-    protected readonly tokens: Record<Address, Token>,
-    protected readonly vaults: Record<Address, Vault>,
+    public readonly global: { feeRecipient?: Address },
+    public readonly markets: Record<MarketId, Market>,
+    public readonly users: Record<Address, User>,
+    public readonly tokens: Record<Address, Token>,
+    public readonly vaults: Record<Address, Vault>,
     /**
      * Positions indexed by user then by market.
      */
-    protected readonly positions: Record<Address, Record<MarketId, Position>>,
+    public readonly positions: Record<Address, Record<MarketId, Position>>,
     /**
      * Holdings indexed by user then by token.
      */
-    protected readonly holdings: Record<Address, Record<Address, Holding>>,
+    public readonly holdings: Record<Address, Record<Address, Holding>>,
     /**
      * VaultMarketConfigs indexed by vault then by market.
      */
-    protected readonly vaultMarketConfigs: Record<
+    public readonly vaultMarketConfigs: Record<
       Address,
       Record<MarketId, VaultMarketConfig>
     >,
     /**
      * VaultUsers indexed by vault then by user.
      */
-    protected readonly vaultUsers: Record<Address, Record<Address, VaultUser>>,
+    public readonly vaultUsers: Record<Address, Record<Address, VaultUser>>,
     public readonly chainId: ChainId,
     public blockNumber: bigint,
     public timestamp: bigint,
   ) {}
 
-  getMarket(marketId: MarketId) {
-    return this.markets[marketId];
+  public getMarket(marketId: MarketId) {
+    const market = this.markets[marketId];
+
+    if (market == null) throw new UnknownMarketError(marketId);
+
+    return market;
   }
 
-  getUser(user: Address) {
-    return this.users[user];
+  public tryGetMarket(marketId: MarketId) {
+    return _try(this.getMarket.bind(this, marketId), UnknownMarketError);
   }
 
-  getToken(token: Address) {
-    return this.tokens[token];
+  public getUser(address: Address) {
+    const user = this.users[address];
+
+    if (user == null) throw new UnknownUserError(address);
+
+    return user;
   }
 
-  getVault(vault: Address) {
-    return this.vaults[vault];
+  public tryGetUser(address: Address) {
+    return _try(this.getUser.bind(this, address), UnknownUserError);
   }
 
-  getAccrualVault(address: Address) {
+  public getToken(address: Address) {
+    const token = this.tokens[address];
+
+    if (token == null) throw new UnknownTokenError(address);
+
+    return token;
+  }
+
+  public tryGetToken(address: Address) {
+    return _try(this.getToken.bind(this, address), UnknownTokenError);
+  }
+
+  public getVault(address: Address) {
+    const vault = this.vaults[address];
+
+    if (vault == null) throw new UnknownVaultError(address);
+
+    return vault;
+  }
+
+  public tryGetVault(address: Address) {
+    return _try(this.getVault.bind(this, address), UnknownVaultError);
+  }
+
+  public getAccrualVault(address: Address) {
     const vault = this.getVault(address);
-    if (vault == null) return;
 
     return new AccrualVault(
       vault,
@@ -75,40 +124,97 @@ export class SimulationState {
     );
   }
 
-  getPosition(user: Address, market: MarketId) {
-    return this.positions[user]?.[market];
+  public tryGetAccrualVault(address: Address) {
+    return _try(this.getAccrualVault.bind(this, address), UnknownDataError);
   }
 
-  getAccrualPosition(user: Address, marketId: MarketId) {
-    const position = this.getPosition(user, marketId);
-    const market = this.getMarket(marketId);
+  public getPosition(user: Address, market: MarketId) {
+    const position = this.positions[user]?.[market];
 
-    if (position == null || market == null) return;
+    if (position == null) throw new UnknownPositionError(user, market);
 
-    return new AccrualPosition(position, market);
+    return position;
   }
 
-  getHolding(user: Address, token: Address) {
-    return this.holdings[user]?.[token];
+  public tryGetPosition(user: Address, market: MarketId) {
+    return _try(
+      this.getPosition.bind(this, user, market),
+      UnknownPositionError,
+    );
   }
 
-  getVaultMarketConfig(vault: Address, market: MarketId) {
-    return this.vaultMarketConfigs[vault]?.[market];
+  public getAccrualPosition(user: Address, marketId: MarketId) {
+    return new AccrualPosition(
+      this.getPosition(user, marketId),
+      this.getMarket(marketId),
+    );
   }
 
-  getVaultUser(vault: Address, user: Address) {
-    return this.vaultUsers[vault]?.[user];
+  public tryGetAccrualPosition(user: Address, marketId: MarketId) {
+    return _try(
+      this.getAccrualPosition.bind(this, user, marketId),
+      UnknownDataError,
+    );
   }
 
-  getWrappedToken(address: Address) {
+  public getHolding(user: Address, token: Address) {
+    const holding = this.holdings[user]?.[token];
+
+    if (holding == null) throw new UnknownHoldingError(user, token);
+
+    return holding;
+  }
+
+  public tryGetHolding(user: Address, token: Address) {
+    return _try(this.getHolding.bind(this, user, token), UnknownHoldingError);
+  }
+
+  public getVaultMarketConfig(vault: Address, market: MarketId) {
+    const vaultMarketConfig = this.vaultMarketConfigs[vault]?.[market];
+
+    if (vaultMarketConfig == null)
+      throw new UnknownVaultMarketConfigError(vault, market);
+
+    return vaultMarketConfig;
+  }
+
+  public tryGetVaultMarketConfig(vault: Address, market: MarketId) {
+    return _try(
+      this.getVaultMarketConfig.bind(this, vault, market),
+      UnknownVaultMarketConfigError,
+    );
+  }
+
+  public getVaultUser(vault: Address, user: Address) {
+    const vaultUser = this.vaultUsers[vault]?.[user];
+
+    if (vaultUser == null) throw new UnknownVaultUserError(vault, user);
+
+    return vaultUser;
+  }
+
+  public tryGetVaultUser(vault: Address, user: Address) {
+    return _try(
+      this.getVaultUser.bind(this, vault, user),
+      UnknownVaultUserError,
+    );
+  }
+
+  public getWrappedToken(address: Address) {
     const token = this.getToken(address);
 
-    if (token && !(token instanceof WrappedToken)) {
-      const vault = this.getAccrualVault(token.address);
+    if (!(token instanceof WrappedToken)) {
+      const vault = this.tryGetAccrualVault(token.address);
 
-      if (vault != null) return vault;
+      if (vault == null) throw new UnknownWrappedTokenError(address);
+
+      return vault;
     }
 
     return token;
+  }
+
+  public tryGetWrappedToken(address: Address) {
+    return _try(this.getWrappedToken.bind(this, address), UnknownDataError);
   }
 }

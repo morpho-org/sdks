@@ -9,8 +9,8 @@ import { handleErc20TransferOperation } from "./transfer.js";
 export const handleErc20Transfer2Operation: OperationHandler<
   Erc20Operations["Erc20_Transfer2"]
 > = ({ args: { amount, from, to }, sender, address }, data) => {
-  const fromTokenData = data.holdings[from]?.[address];
-  if (fromTokenData == null)
+  const fromHolding = data.tryGetHolding(from, address);
+  if (fromHolding == null)
     throw new Erc20Errors.InsufficientBalance(address, from);
 
   const { morpho, bundler, permit2 } = getChainAddresses(data.chainId);
@@ -19,7 +19,7 @@ export const handleErc20Transfer2Operation: OperationHandler<
 
   if (contract == null) throw new UnknownContractError(sender);
 
-  const permit2Allowance = fromTokenData.permit2Allowances[contract];
+  const permit2Allowance = fromHolding.permit2Allowances[contract];
   if (
     permit2Allowance.expiration < data.timestamp ||
     permit2Allowance.amount < amount

@@ -3,7 +3,6 @@ import { MarketId, NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
 import {
   MetaMorphoErrors,
   PublicAllocatorErrors,
-  UnknownMarketPublicAllocatorConfigError,
   UnknownVaultPublicAllocatorConfigError,
 } from "../../errors.js";
 import { MetaMorphoOperations } from "../../operations.js";
@@ -51,9 +50,6 @@ export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
   if (!vaultSupplyMarketConfig.enabled)
     throw new MetaMorphoErrors.MarketNotEnabled(address, supplyMarketId);
 
-  if (vaultSupplyMarketConfig.publicAllocatorConfig == null)
-    throw new UnknownMarketPublicAllocatorConfigError(address, supplyMarketId);
-
   let totalWithdrawn = 0n;
   let prevId: MarketId | undefined = undefined;
 
@@ -71,9 +67,6 @@ export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
     const vaultMarketConfig = data.getVaultMarketConfig(address, id);
     if (!vaultMarketConfig.enabled)
       throw new MetaMorphoErrors.MarketNotEnabled(address, id);
-
-    if (vaultMarketConfig.publicAllocatorConfig == null)
-      throw new UnknownMarketPublicAllocatorConfigError(address, id);
 
     if (vaultMarketConfig.publicAllocatorConfig.maxOut < assets)
       throw new PublicAllocatorErrors.MaxOutflowExceeded(address, id);
