@@ -3,6 +3,42 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## 1.9.1 (2024-09-20)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
+# 1.9.0 (2024-09-20)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
+# 1.8.0 (2024-09-19)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
+## 1.7.5 (2024-09-16)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
+## 1.7.4 (2024-09-16)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
+## 1.7.3 (2024-09-06)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
+## 1.7.2 (2024-09-06)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
+## 1.7.1 (2024-09-03)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
+# 1.7.0 (2024-08-22)
+
+**Note:** Version bump only for package @morpho-org/morpho-ts
+
 ## 1.6.1 (2024-08-20)
 
 **Note:** Version bump only for package @morpho-org/morpho-ts

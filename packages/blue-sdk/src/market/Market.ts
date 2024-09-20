@@ -18,6 +18,13 @@ export interface CapacityLimit {
   limiter: CapacityLimitReason;
 }
 
+export interface MaxBorrowOptions {
+  maxLtv?: bigint;
+}
+export interface MaxWithdrawCollateralOptions {
+  maxLtv?: bigint;
+}
+
 export interface MaxPositionCapacities {
   supply: CapacityLimit;
   withdraw: CapacityLimit;
@@ -187,9 +194,9 @@ export class Market implements InputMarket {
 
   /**
    * Returns a new market derived from this market, whose interest has been accrued up to the given timestamp.
-   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to `lastUpdate`.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to `lastUpdate`. Defaults to `lastUpdate` (returns a copy of the market).
    */
-  public accrueInterest(timestamp: BigIntish) {
+  public accrueInterest(timestamp: BigIntish = this.lastUpdate) {
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;
@@ -200,7 +207,7 @@ export class Market implements InputMarket {
         this.lastUpdate,
       );
 
-    if (elapsed === 0n) return this;
+    if (elapsed === 0n) return new Market(this);
 
     let borrowRate = 0n;
     let { rateAtTarget } = this;
@@ -232,11 +239,7 @@ export class Market implements InputMarket {
     });
   }
 
-  public supply(
-    assets: bigint,
-    shares: bigint,
-    timestamp: bigint = this.lastUpdate,
-  ) {
+  public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if (assets === 0n && shares === 0n)
       throw new BlueErrors.InconsistentInput();
 
@@ -251,11 +254,7 @@ export class Market implements InputMarket {
     return { market, assets, shares };
   }
 
-  public withdraw(
-    assets: bigint,
-    shares: bigint,
-    timestamp: bigint = this.lastUpdate,
-  ) {
+  public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if (assets === 0n && shares === 0n)
       throw new BlueErrors.InconsistentInput();
 
@@ -273,11 +272,7 @@ export class Market implements InputMarket {
     return { market, assets, shares };
   }
 
-  public borrow(
-    assets: bigint,
-    shares: bigint,
-    timestamp: bigint = this.lastUpdate,
-  ) {
+  public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if (assets === 0n && shares === 0n)
       throw new BlueErrors.InconsistentInput();
 
@@ -295,11 +290,7 @@ export class Market implements InputMarket {
     return { market, assets, shares };
   }
 
-  public repay(
-    assets: bigint,
-    shares: bigint,
-    timestamp: bigint = this.lastUpdate,
-  ) {
+  public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if (assets === 0n && shares === 0n)
       throw new BlueErrors.InconsistentInput();
 
@@ -394,8 +385,13 @@ export class Market implements InputMarket {
    * Returns the maximum amount of loan assets that can be borrowed given a certain amount of collateral.
    * @param collateral The amount of collateral to consider.
    */
-  public getMaxBorrowAssets(collateral: bigint) {
-    return MarketUtils.getMaxBorrowAssets(collateral, this, this.config);
+  public getMaxBorrowAssets(
+    collateral: bigint,
+    { maxLtv = this.config.lltv }: MaxBorrowOptions = {},
+  ) {
+    return MarketUtils.getMaxBorrowAssets(collateral, this, {
+      lltv: MathLib.min(maxLtv, this.config.lltv),
+    });
   }
 
   /**
@@ -448,11 +444,16 @@ export class Market implements InputMarket {
    * Returns the amount of collateral that can be withdrawn given a certain borrow position.
    * @param position The borrow position to consider.
    */
-  public getWithdrawableCollateral(position: {
-    collateral: bigint;
-    borrowShares: bigint;
-  }) {
-    return MarketUtils.getWithdrawableCollateral(position, this, this.config);
+  public getWithdrawableCollateral(
+    position: {
+      collateral: bigint;
+      borrowShares: bigint;
+    },
+    { maxLtv = this.config.lltv }: MaxWithdrawCollateralOptions = {},
+  ) {
+    return MarketUtils.getWithdrawableCollateral(position, this, {
+      lltv: MathLib.min(maxLtv, this.config.lltv),
+    });
   }
 
   /**
@@ -524,16 +525,19 @@ export class Market implements InputMarket {
    * and the reason for the limit.
    * @param position The borrow position to consider.
    */
-  public getBorrowCapacityLimit({
-    collateral,
-    borrowShares = 0n,
-  }: {
-    collateral: bigint;
-    borrowShares?: bigint;
-  }): CapacityLimit {
+  public getBorrowCapacityLimit(
+    {
+      collateral,
+      borrowShares = 0n,
+    }: {
+      collateral: bigint;
+      borrowShares?: bigint;
+    },
+    options?: MaxBorrowOptions,
+  ): CapacityLimit {
     // handle edge cases when the user is liquidatable (maxBorrow < borrow)
     const maxBorrowableAssets = MathLib.zeroFloorSub(
-      this.getMaxBorrowAssets(collateral),
+      this.getMaxBorrowAssets(collateral, options),
       this.toBorrowAssets(borrowShares),
     );
 
@@ -604,11 +608,17 @@ export class Market implements InputMarket {
    * and the reason for the limit.
    * @param position The borrow position to consider.
    */
-  public getWithdrawCollateralCapacityLimit(position: {
-    collateral: bigint;
-    borrowShares: bigint;
-  }): CapacityLimit {
-    const withdrawableCollateral = this.getWithdrawableCollateral(position);
+  public getWithdrawCollateralCapacityLimit(
+    position: {
+      collateral: bigint;
+      borrowShares: bigint;
+    },
+    options?: MaxWithdrawCollateralOptions,
+  ): CapacityLimit {
+    const withdrawableCollateral = this.getWithdrawableCollateral(
+      position,
+      options,
+    );
 
     if (position.collateral > withdrawableCollateral)
       return {
@@ -637,6 +647,10 @@ export class Market implements InputMarket {
     },
     loanTokenBalance: bigint,
     collateralTokenBalance: bigint,
+    options?: {
+      borrow?: MaxBorrowOptions;
+      withdrawCollateral?: MaxWithdrawCollateralOptions;
+    },
   ): MaxPositionCapacities {
     return {
       supply: {
@@ -644,7 +658,7 @@ export class Market implements InputMarket {
         limiter: CapacityLimitReason.balance,
       },
       withdraw: this.getWithdrawCapacityLimit(position),
-      borrow: this.getBorrowCapacityLimit(position),
+      borrow: this.getBorrowCapacityLimit(position, options?.borrow),
       repay: this.getRepayCapacityLimit(
         position.borrowShares,
         loanTokenBalance,
@@ -653,7 +667,10 @@ export class Market implements InputMarket {
         value: collateralTokenBalance,
         limiter: CapacityLimitReason.balance,
       },
-      withdrawCollateral: this.getWithdrawCollateralCapacityLimit(position),
+      withdrawCollateral: this.getWithdrawCollateralCapacityLimit(
+        position,
+        options?.withdrawCollateral,
+      ),
     };
   }
 }

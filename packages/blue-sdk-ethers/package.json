@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-ethers",
-  "version": "1.6.1",
+  "version": "1.9.1",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
@@ -36,8 +36,8 @@
     "hardhat-deal": "^3.1.0",
     "jest": "^29.7.0",
     "mocha": "^10.4.0",
-    "sinon": "^18.0.0",
-    "ts-jest": "^29.2.2",
+    "sinon": "^19.0.2",
+    "ts-jest": "^29.2.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   },

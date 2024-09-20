@@ -1,0 +1,7 @@
+query getWhitelistedMarketIds($chainId: Int!) {
+  markets(where: { chainId_in: [$chainId], whitelisted: true }) {
+    items {
+      uniqueKey
+    }
+  }
+}

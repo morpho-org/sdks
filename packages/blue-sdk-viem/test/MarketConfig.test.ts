@@ -59,6 +59,8 @@ describe("augment/MarketConfig", () => {
       lltv: 0n,
       irm: zeroAddress,
       oracle: zeroAddress,
+      id: "0x58e212060645d18eab6d9b2af3d56fbc906a92ff5667385f616f662c70372284",
+      liquidationIncentiveFactor: 1150000000000000000n,
     };
 
     const market = await MarketConfig.fetch(

@@ -67,27 +67,31 @@ export class MarketConfig implements MarketParams {
    */
   public readonly lltv: bigint;
 
-  constructor({ collateralToken, loanToken, oracle, irm, lltv }: MarketParams) {
+  /**
+   * The market's hex-encoded id, defined as the hash of the market params.
+   */
+  // Cached because params are readonly.
+  public readonly id: MarketId;
+
+  /**
+   * The market's liquidation incentive factor.
+   */
+  // Cached because lltv is readonly.
+  public readonly liquidationIncentiveFactor: bigint;
+
+  constructor(params: MarketParams) {
+    const { collateralToken, loanToken, oracle, irm, lltv } = params;
+
     this.collateralToken = collateralToken;
     this.loanToken = loanToken;
     this.oracle = oracle;
     this.irm = irm;
     this.lltv = BigInt(lltv);
 
+    this.id = MarketUtils.getMarketId(params);
+    this.liquidationIncentiveFactor =
+      MarketUtils.getLiquidationIncentiveFactor(params);
+
     MarketConfig._CACHE[this.id] = this;
-  }
-
-  /**
-   * The market's hex-encoded id, defined as the hash of the market params.
-   */
-  get id() {
-    return MarketUtils.getMarketId(this);
-  }
-
-  /**
-   * The market's liquidation incentive factor.
-   */
-  get liquidationIncentiveFactor() {
-    return MarketUtils.getLiquidationIncentiveFactor(this);
   }
 }
