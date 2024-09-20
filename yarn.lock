@@ -2947,7 +2947,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk-ethers-liquidation@workspace:packages/blue-sdk-ethers-liquidation":
+"@morpho-org/blue-sdk-ethers-liquidation@workspace:^, @morpho-org/blue-sdk-ethers-liquidation@workspace:packages/blue-sdk-ethers-liquidation":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-ethers-liquidation@workspace:packages/blue-sdk-ethers-liquidation"
   dependencies:
@@ -2960,6 +2960,7 @@ __metadata:
     "@morpho-org/blue-api-sdk": "workspace:^"
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/blue-sdk-ethers": "workspace:^"
+    "@morpho-org/blue-sdk-ethers-liquidation": "workspace:^"
     "@morpho-org/morpho-test": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
     "@nomicfoundation/hardhat-chai-matchers": "npm:^2.0.2"

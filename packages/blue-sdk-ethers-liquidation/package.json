@@ -31,6 +31,7 @@
     "@morpho-org/blue-api-sdk": "workspace:^",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-ethers": "workspace:^",
+    "@morpho-org/blue-sdk-ethers-liquidation": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",

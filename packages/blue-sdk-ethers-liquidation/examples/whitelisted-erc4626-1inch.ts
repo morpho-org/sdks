@@ -29,8 +29,12 @@ import {
   fetchAccrualPositionFromConfig,
   safeParseNumber,
 } from "@morpho-org/blue-sdk-ethers";
+import {
+  LiquidationEncoder,
+  apiSdk,
+  fetchBestSwap,
+} from "@morpho-org/blue-sdk-ethers-liquidation";
 import { Time } from "@morpho-org/morpho-ts";
-import { LiquidationEncoder, apiSdk, fetchBestSwap } from "../src";
 
 export const check = async (
   executorAddress: string,
