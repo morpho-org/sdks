@@ -5,9 +5,9 @@ import {
   MarketId,
   UnknownMarketConfigError,
   _try,
-  getChainAddresses,
+  addresses,
 } from "@morpho-org/blue-sdk";
-import { Address, Client } from "viem";
+import { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
 
@@ -23,12 +23,12 @@ export async function fetchMarketConfig(
       chainId ?? (await getChainId(client)),
     );
 
-    const { morpho } = getChainAddresses(chainId);
+    const { morpho } = addresses[chainId];
 
     const [loanToken, collateralToken, oracle, irm, lltv] =
       // Always fetch at latest block because config is immutable.
       await readContract(client, {
-        address: morpho as Address,
+        address: morpho,
         abi: blueAbi,
         functionName: "idToMarketParams",
         args: [id],

@@ -1,46 +1,47 @@
-import { Market } from "@morpho-org/blue-sdk";
+import { VaultConfig } from "@morpho-org/blue-sdk";
 import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
 import {
-  FetchMarketParameters,
-  FetchMarketQueryKey,
-  fetchMarketQueryOptions,
-} from "../queries/fetchMarket.js";
+  FetchVaultConfigParameters,
+  FetchVaultConfigQueryKey,
+  fetchVaultConfigQueryOptions,
+} from "../queries/fetchVaultConfig.js";
 import { ConfigParameter, QueryParameter } from "../types/properties.js";
 import { useChainId } from "./useChainId.js";
 
-export type UseMarketParameters<
+export type UseVaultConfigParameters<
   config extends Config = Config,
-  selectData = Market,
+  selectData = VaultConfig,
 > = UnionCompute<
-  FetchMarketParameters &
+  FetchVaultConfigParameters &
     ConfigParameter<config> &
     QueryParameter<
-      Market,
+      VaultConfig,
       ReadContractErrorType,
       selectData,
-      FetchMarketQueryKey
+      FetchVaultConfigQueryKey
     >
 >;
 
-export type UseMarketReturnType<selectData = Market> = UseQueryReturnType<
-  selectData,
-  ReadContractErrorType
->;
+export type UseVaultConfigReturnType<selectData = VaultConfig> =
+  UseQueryReturnType<selectData, ReadContractErrorType>;
 
-export function useMarket<
+export function useVaultConfig<
   config extends Config = ResolvedRegister["config"],
-  selectData = Market,
+  selectData = VaultConfig,
 >({
   query = {},
   ...parameters
-}: UseMarketParameters<config, selectData>): UseMarketReturnType<selectData> {
+}: UseVaultConfigParameters<
+  config,
+  selectData
+>): UseVaultConfigReturnType<selectData> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  const options = fetchMarketQueryOptions<config>(config, {
+  const options = fetchVaultConfigQueryOptions<config>(config, {
     ...parameters,
     chainId,
   });
@@ -48,7 +49,7 @@ export function useMarket<
   return useQuery({
     ...query,
     ...options,
-    enabled: parameters.marketId != null && query.enabled,
+    enabled: parameters.vault != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
   });
 }

@@ -1,46 +1,41 @@
-import { Market } from "@morpho-org/blue-sdk";
+import { Token } from "@morpho-org/blue-sdk";
 import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
 import {
-  FetchMarketParameters,
-  FetchMarketQueryKey,
-  fetchMarketQueryOptions,
-} from "../queries/fetchMarket.js";
+  FetchTokenParameters,
+  FetchTokenQueryKey,
+  fetchTokenQueryOptions,
+} from "../queries/fetchToken.js";
 import { ConfigParameter, QueryParameter } from "../types/properties.js";
 import { useChainId } from "./useChainId.js";
 
-export type UseMarketParameters<
+export type UseTokenParameters<
   config extends Config = Config,
-  selectData = Market,
+  selectData = Token,
 > = UnionCompute<
-  FetchMarketParameters &
+  FetchTokenParameters &
     ConfigParameter<config> &
-    QueryParameter<
-      Market,
-      ReadContractErrorType,
-      selectData,
-      FetchMarketQueryKey
-    >
+    QueryParameter<Token, ReadContractErrorType, selectData, FetchTokenQueryKey>
 >;
 
-export type UseMarketReturnType<selectData = Market> = UseQueryReturnType<
+export type UseTokenReturnType<selectData = Token> = UseQueryReturnType<
   selectData,
   ReadContractErrorType
 >;
 
-export function useMarket<
+export function useToken<
   config extends Config = ResolvedRegister["config"],
-  selectData = Market,
+  selectData = Token,
 >({
   query = {},
   ...parameters
-}: UseMarketParameters<config, selectData>): UseMarketReturnType<selectData> {
+}: UseTokenParameters<config, selectData>): UseTokenReturnType<selectData> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  const options = fetchMarketQueryOptions<config>(config, {
+  const options = fetchTokenQueryOptions<config>(config, {
     ...parameters,
     chainId,
   });
@@ -48,7 +43,7 @@ export function useMarket<
   return useQuery({
     ...query,
     ...options,
-    enabled: parameters.marketId != null && query.enabled,
+    enabled: parameters.token != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
   });
 }

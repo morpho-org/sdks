@@ -149,7 +149,8 @@ export async function fetchAccrualVault(
   const vault = await fetchVault(address, runner, options);
 
   const allocations = await Promise.all(
-    [...new Set(vault.supplyQueue.concat(vault.withdrawQueue))].map(
+    Array.from(
+      new Set(vault.supplyQueue.concat(vault.withdrawQueue)),
       (marketId) =>
         fetchVaultMarketAllocation(vault.address, marketId, runner, options),
     ),

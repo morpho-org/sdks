@@ -1,0 +1,46 @@
+import { Vault } from "@morpho-org/blue-sdk";
+import { useQueries } from "@tanstack/react-query";
+import { Address } from "viem";
+import { Config, ResolvedRegister, useConfig } from "wagmi";
+import { structuralSharing } from "wagmi/query";
+import {
+  VaultParameters,
+  fetchVaultQueryOptions,
+} from "../queries/fetchVault.js";
+import { useChainId } from "./useChainId.js";
+import { UseVaultParameters, UseVaultReturnType } from "./useVault.js";
+
+export type UseVaultsParameters<
+  config extends Config = Config,
+  selectData = Vault,
+> = {
+  vaults: Iterable<Address | undefined>;
+} & Omit<UseVaultParameters<config, selectData>, keyof VaultParameters>;
+
+export type UseVaultsReturnType<selectData = Vault> =
+  UseVaultReturnType<selectData>[];
+
+export function useVaults<
+  config extends Config = ResolvedRegister["config"],
+  selectData = Vault,
+>({
+  vaults,
+  query = {},
+  ...parameters
+}: UseVaultsParameters<config, selectData>): UseVaultsReturnType<selectData> {
+  const config = useConfig(parameters);
+  const chainId = useChainId(parameters);
+
+  return useQueries({
+    queries: Array.from(vaults, (vault) => ({
+      ...query,
+      ...fetchVaultQueryOptions(config, {
+        ...parameters,
+        vault,
+        chainId,
+      }),
+      enabled: vault != null && query.enabled,
+      structuralSharing: query.structuralSharing ?? structuralSharing,
+    })),
+  });
+}
