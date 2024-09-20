@@ -34,6 +34,9 @@ jobs:
           - name: blue-sdk-viem
             jest: false
             hardhat: true
+          - name: blue-sdk-ethers-liquidation
+            jest: false
+            hardhat: true
 
     uses: ./.github/workflows/package.yml
     with:
