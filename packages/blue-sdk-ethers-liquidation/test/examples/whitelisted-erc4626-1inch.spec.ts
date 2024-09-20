@@ -30,13 +30,11 @@ import { BuildTxInput } from "@paraswap/sdk";
 import {
   Address,
   ChainId,
-  Market,
   MarketConfig,
   MarketId,
-  Token,
   addresses,
 } from "@morpho-org/blue-sdk";
-import "@morpho-org/blue-sdk-ethers/lib/augment";
+import { fetchMarket, fetchToken } from "@morpho-org/blue-sdk-ethers";
 import { setUp } from "@morpho-org/morpho-test";
 import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
 
@@ -269,10 +267,10 @@ describe("erc4626-1inch", () => {
     const marketId =
       "0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99" as MarketId; // WBTC/USDT (86%)
 
-    const market = await Market.fetch(marketId, signer);
+    const market = await fetchMarket(marketId, signer);
     const [collateralToken, loanToken] = await Promise.all([
-      Token.fetch(market.config.collateralToken, signer),
-      Token.fetch(market.config.loanToken, signer),
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
     ]);
 
     // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
@@ -362,10 +360,10 @@ describe("erc4626-1inch", () => {
     const marketId =
       "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e" as MarketId; // wstETH/WETH (96.5%)
 
-    const market = await Market.fetch(marketId, signer);
+    const market = await fetchMarket(marketId, signer);
     const [collateralToken, loanToken] = await Promise.all([
-      Token.fetch(market.config.collateralToken, signer),
-      Token.fetch(market.config.loanToken, signer),
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
     ]);
 
     const collateral = parseUnits("10000", collateralToken.decimals);
@@ -487,8 +485,8 @@ describe("erc4626-1inch", () => {
     await morpho.createMarket(config);
 
     const [collateralToken, loanToken] = await Promise.all([
-      Token.fetch(config.collateralToken, signer),
-      Token.fetch(config.loanToken, signer),
+      fetchToken(config.collateralToken, signer),
+      fetchToken(config.loanToken, signer),
     ]);
 
     // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
