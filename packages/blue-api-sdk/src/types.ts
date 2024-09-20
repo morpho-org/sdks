@@ -233,13 +233,13 @@ export type MarketCurrentIrmCurveArgs = {
 /** Market APY aggregates */
 export type MarketApyAggregates = {
   __typename?: "MarketApyAggregates";
-  /** Average market borrow APY */
+  /** Average market borrow APY excluding rewards */
   borrowApy: Maybe<Scalars["Float"]["output"]>;
   /** Average market borrow APY including rewards */
   netBorrowApy: Maybe<Scalars["Float"]["output"]>;
   /** Average market supply APY including rewards */
   netSupplyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Average market supply APY */
+  /** Average market supply APY excluding rewards */
   supplyApy: Maybe<Scalars["Float"]["output"]>;
 };
 
@@ -366,7 +366,15 @@ export type MarketFilters = {
 /** Market state history */
 export type MarketHistory = {
   __typename?: "MarketHistory";
-  /** Borrow APY */
+  /** All Time Borrow APY excluding rewards */
+  allTimeBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** All Time Borrow APY including rewards */
+  allTimeNetBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** All Time Supply APY including rewards */
+  allTimeNetSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** All Time Supply APY excluding rewards */
+  allTimeSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Borrow APY excluding rewards */
   borrowApy: Maybe<Array<FloatDataPoint>>;
   /** Amount borrowed on the market, in underlying units. Amount increases as interests accrue. */
   borrowAssets: Maybe<Array<BigIntDataPoint>>;
@@ -378,19 +386,43 @@ export type MarketHistory = {
   collateralAssets: Maybe<Array<BigIntDataPoint>>;
   /** Amount of collateral in the market, in USD for display purpose */
   collateralAssetsUsd: Maybe<Array<FloatDataPoint>>;
+  /** Daily Borrow APY excluding rewards */
+  dailyBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Daily Borrow APY including rewards */
+  dailyNetBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Daily Supply APY including rewards */
+  dailyNetSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Daily Supply APY excluding rewards */
+  dailySupplyApy: Maybe<Array<FloatDataPoint>>;
   /** Fee rate */
   fee: Maybe<Array<FloatDataPoint>>;
   /** Amount available to borrow on the market, in underlying units */
   liquidityAssets: Maybe<Array<BigIntDataPoint>>;
   /** Amount available to borrow on the market, in USD for display purpose */
   liquidityAssetsUsd: Maybe<Array<FloatDataPoint>>;
+  /** Monthly Borrow APY excluding rewards */
+  monthlyBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Monthly Borrow APY including rewards */
+  monthlyNetBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Monthly Supply APY including rewards */
+  monthlyNetSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Monthly Supply APY excluding rewards */
+  monthlySupplyApy: Maybe<Array<FloatDataPoint>>;
   /** Supply APY including rewards */
   netBorrowApy: Maybe<Array<FloatDataPoint>>;
   /** Supply APY including rewards */
   netSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Quarterly Borrow APY excluding rewards */
+  quarterlyBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Quarterly Borrow APY including rewards */
+  quarterlyNetBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Quarterly Supply APY including rewards */
+  quarterlyNetSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Quarterly Supply APY excluding rewards */
+  quarterlySupplyApy: Maybe<Array<FloatDataPoint>>;
   /** Rate at utilization target */
   rateAtUTarget: Maybe<Array<FloatDataPoint>>;
-  /** Supply APY */
+  /** Supply APY excluding rewards */
   supplyApy: Maybe<Array<FloatDataPoint>>;
   /** Amount supplied on the market, in underlying units. Amount increases as interests accrue. */
   supplyAssets: Maybe<Array<BigIntDataPoint>>;
@@ -400,6 +432,42 @@ export type MarketHistory = {
   supplyShares: Maybe<Array<BigIntDataPoint>>;
   /** Utilization rate */
   utilization: Maybe<Array<FloatDataPoint>>;
+  /** Weekly Borrow APY excluding rewards */
+  weeklyBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Weekly Borrow APY including rewards */
+  weeklyNetBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Weekly Supply APY including rewards */
+  weeklyNetSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Weekly Supply APY excluding rewards */
+  weeklySupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Yearly Borrow APY excluding rewards */
+  yearlyBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Yearly Borrow APY including rewards */
+  yearlyNetBorrowApy: Maybe<Array<FloatDataPoint>>;
+  /** Yearly Supply APY including rewards */
+  yearlyNetSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Yearly Supply APY excluding rewards */
+  yearlySupplyApy: Maybe<Array<FloatDataPoint>>;
+};
+
+/** Market state history */
+export type MarketHistoryAllTimeBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryAllTimeNetBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryAllTimeNetSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryAllTimeSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
 };
 
 /** Market state history */
@@ -433,6 +501,26 @@ export type MarketHistoryCollateralAssetsUsdArgs = {
 };
 
 /** Market state history */
+export type MarketHistoryDailyBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryDailyNetBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryDailyNetSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryDailySupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
 export type MarketHistoryFeeArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
@@ -448,12 +536,52 @@ export type MarketHistoryLiquidityAssetsUsdArgs = {
 };
 
 /** Market state history */
+export type MarketHistoryMonthlyBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryMonthlyNetBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryMonthlyNetSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryMonthlySupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
 export type MarketHistoryNetBorrowApyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
 /** Market state history */
 export type MarketHistoryNetSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryQuarterlyBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryQuarterlyNetBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryQuarterlyNetSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryQuarterlySupplyApyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -484,6 +612,46 @@ export type MarketHistorySupplySharesArgs = {
 
 /** Market state history */
 export type MarketHistoryUtilizationArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryWeeklyBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryWeeklyNetBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryWeeklyNetSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryWeeklySupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryYearlyBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryYearlyNetBorrowApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryYearlyNetSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryYearlySupplyApyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -629,6 +797,14 @@ export enum MarketPositionOrderBy {
 /** Morpho Blue market state */
 export type MarketState = {
   __typename?: "MarketState";
+  /** All Time Borrow APY excluding rewards */
+  allTimeBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** All Time Borrow APY including rewards */
+  allTimeNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** All Time Supply APY including rewards */
+  allTimeNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** All Time Supply APY excluding rewards */
+  allTimeSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Borrow APY */
   borrowApy: Scalars["Float"]["output"];
   /** Amount borrowed on the market, in underlying units. Amount increases as interests accrue. */
@@ -641,6 +817,14 @@ export type MarketState = {
   collateralAssets: Maybe<Scalars["BigInt"]["output"]>;
   /** Amount of collateral in the market, in USD for display purpose */
   collateralAssetsUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Daily Borrow APY excluding rewards */
+  dailyBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Daily Borrow APY including rewards */
+  dailyNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Daily Supply APY including rewards */
+  dailyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Daily Supply APY excluding rewards */
+  dailySupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Fee rate */
   fee: Scalars["Float"]["output"];
   id: Scalars["ID"]["output"];
@@ -648,10 +832,26 @@ export type MarketState = {
   liquidityAssets: Scalars["BigInt"]["output"];
   /** Amount available to borrow on the market, in USD for display purpose */
   liquidityAssetsUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Monthly Borrow APY excluding rewards */
+  monthlyBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Monthly Borrow APY including rewards */
+  monthlyNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Monthly Supply APY including rewards */
+  monthlyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Monthly Supply APY excluding rewards */
+  monthlySupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Borrow APY including rewards */
   netBorrowApy: Maybe<Scalars["Float"]["output"]>;
   /** Supply APY including rewards */
   netSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Quarterly Borrow APY excluding rewards */
+  quarterlyBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Quarterly Borrow APY including rewards */
+  quarterlyNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Quarterly Supply APY including rewards */
+  quarterlyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Quarterly Supply APY excluding rewards */
+  quarterlySupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Borrow rate at target utilization */
   rateAtUTarget: Scalars["Float"]["output"];
   /** Market state rewards */
@@ -668,6 +868,22 @@ export type MarketState = {
   timestamp: Scalars["BigInt"]["output"];
   /** Utilization rate */
   utilization: Scalars["Float"]["output"];
+  /** Weekly Borrow APY excluding rewards */
+  weeklyBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Weekly Borrow APY including rewards */
+  weeklyNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Weekly Supply APY including rewards */
+  weeklyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Weekly Supply APY excluding rewards */
+  weeklySupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Yearly Borrow APY excluding rewards */
+  yearlyBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Yearly Borrow APY including rewards */
+  yearlyNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Yearly Supply APY including rewards */
+  yearlyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Yearly Supply APY excluding rewards */
+  yearlySupplyApy: Maybe<Scalars["Float"]["output"]>;
 };
 
 /** Morpho Blue market state rewards */
