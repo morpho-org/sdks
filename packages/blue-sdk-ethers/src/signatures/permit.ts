@@ -2,7 +2,6 @@ import {
   Address,
   ChainId,
   Token,
-  addresses,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
@@ -105,24 +104,3 @@ export const getPermitMessage = (
 
   return getMessage(domain, types, value);
 };
-
-export const WITH_SIMPLE_PERMIT: {
-  [id in ChainId]: Address[];
-} = {
-  [ChainId.EthMainnet]: [
-    addresses[ChainId.EthMainnet].wbIB01,
-    addresses[ChainId.EthMainnet].wbC3M,
-    addresses[ChainId.EthMainnet].wstEth,
-    addresses[ChainId.EthMainnet].sDai,
-    addresses[ChainId.EthMainnet].osEth,
-    addresses[ChainId.EthMainnet].usdc,
-    addresses[ChainId.EthMainnet].dai,
-  ],
-  [ChainId.BaseMainnet]: [
-    addresses[ChainId.BaseMainnet].usdc,
-    addresses[ChainId.BaseMainnet].verUsdc,
-  ],
-};
-
-export const hasSimplePermit = (chainId: ChainId, address: Address) =>
-  WITH_SIMPLE_PERMIT[chainId]?.includes(address);

@@ -1,55 +1,84 @@
 {
-  "name": "@morpho-org/blue-sdk-ethers",
+  "name": "@morpho-org/blue-sdk-ethers-liquidation",
   "version": "1.10.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "license": "MIT",
   "main": "src/index.ts",
   "files": [
-    "lib"
+    "lib",
+    "examples"
   ],
   "scripts": {
     "prepublish": "yarn build",
     "build": "tsc --build tsconfig.build.json",
     "test-jest": "jest",
-    "test-hardhat": "hardhat test"
+    "test-hardhat": "hardhat test",
+    "codegen": "graphql-codegen --config codegen.ts && prettier -w src/api/"
   },
   "dependencies": {
-    "rxjs": "^7.8.1"
+    "@flashbots/ethers-provider-bundle": "^1.0.0",
+    "@paraswap/sdk": "^6.10.0",
+    "executooor": "^1.4.0",
+    "graphql": "^15.6.0",
+    "graphql-request": "^6.1.0",
+    "graphql-tag": "^2.12.6"
   },
   "devDependencies": {
+    "@graphql-codegen/cli": "^5.0.0",
+    "@graphql-codegen/import-types-preset": "^3.0.0",
+    "@graphql-codegen/typescript": "^4.0.1",
+    "@graphql-codegen/typescript-graphql-request": "^6.2.0",
+    "@graphql-codegen/typescript-operations": "^4.0.1",
+    "@morpho-org/blue-api-sdk": "workspace:^",
     "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-ethers": "workspace:^",
+    "@morpho-org/blue-sdk-ethers-liquidation": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
+    "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",
     "@nomicfoundation/hardhat-ethers": "^3.0.6",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
+    "@typechain/ethers-v6": "^0.5.1",
+    "@typechain/hardhat": "^9.1.0",
     "@types/chai": "^4.3.14",
     "@types/jest": "^29.5.12",
     "@types/mocha": "^10.0.6",
     "@types/node": "^22.1.0",
+    "@types/simple-mock": "^0",
     "@types/sinon": "^17.0.3",
     "@types/sinon-chai": "^3.2.12",
     "chai": "^4.3.10",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.2",
+    "ethers-multicall-provider": "^6.3.1",
     "ethers-types": "^3.17.0",
+    "evm-maths": "^7.0.0",
+    "fetch-mock": "^9.11.0",
     "hardhat": "^2.22.6",
     "hardhat-deal": "^3.1.0",
     "jest": "^29.7.0",
     "mocha": "^10.4.0",
+    "nock": "^13.5.4",
+    "node-fetch": "^2.6.6",
+    "simple-mock": "^0.8.0",
     "sinon": "^19.0.2",
+    "sinon-chai": "^3.7.0",
     "ts-jest": "^29.2.4",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.2"
+    "typechain": "^8.3.2",
+    "typescript": "^5.4.5"
   },
   "peerDependencies": {
+    "@morpho-org/blue-api-sdk": "workspace:^",
     "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-ethers": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "ethers": "^6.0.0",
-    "ethers-types": "^3.17.0"
+    "ethers-types": "^3.17.0",
+    "evm-maths": "^7.0.0"
   },
   "publishConfig": {
-    "main": "lib/index.js",
-    "access": "public"
+    "access": "public",
+    "main": "lib/index.js"
   },
   "jest": {
     "verbose": true,
