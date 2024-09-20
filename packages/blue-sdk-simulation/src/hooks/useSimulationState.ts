@@ -37,9 +37,9 @@ export type FetchSimulationStateParameters = FetchMarketsParameters &
 
 export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
-    UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> & {
+    UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
+    ConfigParameter<config> & {
       blockNumber: bigint;
-    } & ConfigParameter<config> & {
       query?: {
         enabled?: boolean;
         staleTime?: number;
