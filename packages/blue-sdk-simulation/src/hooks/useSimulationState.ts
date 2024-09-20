@@ -39,7 +39,18 @@ export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
     UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> & {
       blockNumber: bigint;
-    } & ConfigParameter<config>;
+    } & ConfigParameter<config> & {
+      query?: {
+        enabled?: boolean;
+        staleTime?: number;
+        refetchInterval?: number | false;
+        refetchIntervalInBackground?: boolean;
+        refetchOnWindowFocus?: boolean | "always";
+        refetchOnReconnect?: boolean | "always";
+        refetchOnMount?: boolean | "always";
+        retryOnMount?: boolean;
+      };
+    };
 
 export type UseSimulationStateReturnType =
   | {
@@ -92,19 +103,31 @@ export function useSimulationState<
 
   const markets = useMarkets({
     ...parameters,
-    query: { enabled: !block.error },
+    query: {
+      ...parameters.query,
+      enabled: !!parameters.query?.enabled && !block.error,
+    },
   });
   const users = useUsers({
     ...parameters,
-    query: { enabled: !block.error },
+    query: {
+      ...parameters.query,
+      enabled: !!parameters.query?.enabled && !block.error,
+    },
   });
   const tokens = useTokens({
     ...parameters,
-    query: { enabled: !block.error },
+    query: {
+      ...parameters.query,
+      enabled: !!parameters.query?.enabled && !block.error,
+    },
   });
   const vaults = useVaults({
     ...parameters,
-    query: { enabled: !block.error },
+    query: {
+      ...parameters.query,
+      enabled: !!parameters.query?.enabled && !block.error,
+    },
   });
 
   const positions = usePositions({
@@ -117,7 +140,8 @@ export function useSimulationState<
       [parameters.users, parameters.marketIds],
     ),
     query: {
-      enabled: !block.error,
+      ...parameters.query,
+      enabled: !!parameters.query?.enabled && !block.error,
     },
   });
   const holdings = useHoldings({
@@ -130,7 +154,8 @@ export function useSimulationState<
       [parameters.users, parameters.tokens],
     ),
     query: {
-      enabled: !block.error,
+      ...parameters.query,
+      enabled: !!parameters.query?.enabled && !block.error,
     },
   });
   const vaultMarketConfigs = useVaultMarketConfigs({
@@ -143,7 +168,8 @@ export function useSimulationState<
       [parameters.vaults, parameters.marketIds],
     ),
     query: {
-      enabled: !block.error,
+      ...parameters.query,
+      enabled: !!parameters.query?.enabled && !block.error,
     },
   });
   const vaultUsers = useVaultUsers({
@@ -156,7 +182,8 @@ export function useSimulationState<
       [parameters.vaults, parameters.users],
     ),
     query: {
-      enabled: !block.error,
+      ...parameters.query,
+      enabled: !!parameters.query?.enabled && !block.error,
     },
   });
 

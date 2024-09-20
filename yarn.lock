@@ -3223,7 +3223,7 @@ __metadata:
     react: ">=18"
     typescript: ">=5.0.4"
     viem: ^2.0.0
-    wagmi: ^2.0.0
+    wagmi: ^2.12.10
   languageName: unknown
   linkType: soft
 
@@ -3284,7 +3284,7 @@ __metadata:
     "@tanstack/react-query": ">=5.0.0"
     react: ">=18"
     viem: ^2.0.0
-    wagmi: ^2.0.0
+    wagmi: ^2.12.10
   languageName: unknown
   linkType: soft
 
