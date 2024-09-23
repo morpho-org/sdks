@@ -2070,6 +2070,7 @@ export type VaultMetadataCurator = {
 export enum VaultOrderBy {
   Address = "Address",
   Apy = "Apy",
+  Curator = "Curator",
   Fee = "Fee",
   Name = "Name",
   NetApy = "NetApy",
