@@ -1,6 +1,5 @@
 import { Time } from "@morpho-org/morpho-ts";
 
-import { format } from "../helpers";
 import { BigIntish } from "../types";
 
 export type RoundingDirection = "Up" | "Down";
@@ -194,10 +193,7 @@ export class MathLib {
     const { unit, duration } = Time.toPeriod(period);
     const factor = Time[unit].from.y(1) / duration;
 
-    return (
-      (1 + Number(format.number.locale("en").of(BigInt(rate), 18))) ** factor -
-      1
-    );
+    return (1 + Number(rate) / 10 ** 18) ** factor - 1;
   }
 
   /**
