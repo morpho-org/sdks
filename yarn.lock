@@ -2992,7 +2992,7 @@ __metadata:
     jest: "npm:^29.7.0"
     mocha: "npm:^10.4.0"
     nock: "npm:^13.5.4"
-    node-fetch: "npm:^2.6.6"
+    node-fetch: "npm:^3.3.2"
     simple-mock: "npm:^0.8.0"
     sinon: "npm:^19.0.2"
     sinon-chai: "npm:^3.7.0"
@@ -9510,7 +9510,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-fetch@npm:^2.6.1, node-fetch@npm:^2.6.12, node-fetch@npm:^2.6.6":
+"node-fetch@npm:^2.6.1, node-fetch@npm:^2.6.12":
   version: 2.7.0
   resolution: "node-fetch@npm:2.7.0"
   dependencies:
