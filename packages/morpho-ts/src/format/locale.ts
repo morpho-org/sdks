@@ -20,8 +20,6 @@ const _convertEnNumStrToLocale = (
 
 /**
  * @returns the locale symbols for the given locale defaulting to en-US
- *
- * @deprecated Import from `@morpho-org/morpho-ts`
  */
 export const getLocaleSymbols = (locale: string): LocaleSymbols => {
   let formatter: Intl.NumberFormat;
@@ -47,8 +45,6 @@ export const getLocaleSymbols = (locale: string): LocaleSymbols => {
 
 /**
  * @returns the effective browser locale
- *
- * @deprecated Import from `@morpho-org/morpho-ts`
  */
 export const getEffectiveLocale = () => {
   if (typeof window !== "undefined") {
@@ -69,8 +65,6 @@ export const getEffectiveLocale = () => {
  * @param numStr the number as a string in the "from" locale (e.g. "1,2345.6" for en-US)
  * @param from the locale the numStr is in (e.g. "en-US")
  * @param to the locale to convert to (e.g. "fr-FR")
- *
- * @deprecated Import from `@morpho-org/morpho-ts`
  */
 export const convertNumStrToLocal = (
   numStr: string,
@@ -91,8 +85,6 @@ export const convertNumStrToLocal = (
  * @returns the value as a string in the effective browser locale
  * @param numStr the number as a string in the effective browser locale (e.g. "1,2345.6" for en-US)
  * @param to the locale to use (e.g. "fr-FR")
- *
- * @deprecated Import from `@morpho-org/morpho-ts`
  */
 export const convertNumStrFromEffectiveTo = (numStr: string, to: string) => {
   const from = getEffectiveLocale();
@@ -103,8 +95,6 @@ export const convertNumStrFromEffectiveTo = (numStr: string, to: string) => {
  * @returns the value as a string with the given locale symbols either from the given locale or the effective browser locale
  * @param numStr the number as a string in english format (e.g. "1,2345.6")
  * @param locale optional - the locale to use (e.g. "fr-FR")
- *
- * @deprecated Import from `@morpho-org/morpho-ts`
  */
 export const getEnUSNumberToLocalParts = (
   numStr: string,
