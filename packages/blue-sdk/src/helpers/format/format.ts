@@ -258,6 +258,9 @@ function formatBI(
   return formattedValue;
 }
 
+/**
+ * @deprecated Import from `@morpho-org/morpho-ts`
+ */
 export abstract class BaseFormatter {
   protected abstract _options: FormatOptions;
 
@@ -281,10 +284,16 @@ export abstract class BaseFormatter {
   }
 }
 
+/**
+ * @deprecated Import from `@morpho-org/morpho-ts`
+ */
 export class HexFormatter extends BaseFormatter {
   protected _options = { format: Format.hex };
 }
 
+/**
+ * @deprecated Import from `@morpho-org/morpho-ts`
+ */
 export abstract class CommonFormatter extends BaseFormatter {
   protected abstract _options: BaseFormatOptions;
 
@@ -329,14 +338,23 @@ export abstract class CommonFormatter extends BaseFormatter {
   }
 }
 
+/**
+ * @deprecated Import from `@morpho-org/morpho-ts`
+ */
 export class NumberFormatter extends CommonFormatter {
   protected _options: FormatNumberOptions = { format: Format.number };
 }
 
+/**
+ * @deprecated Import from `@morpho-org/morpho-ts`
+ */
 export class CommasFormatter extends CommonFormatter {
   protected _options: FormatCommasOptions = { format: Format.commas };
 }
 
+/**
+ * @deprecated Import from `@morpho-org/morpho-ts`
+ */
 export class ShortFormatter extends CommonFormatter {
   protected _options: FormatShortOptions = { format: Format.short };
 
@@ -346,10 +364,16 @@ export class ShortFormatter extends CommonFormatter {
   }
 }
 
+/**
+ * @deprecated Import from `@morpho-org/morpho-ts`
+ */
 export class PercentFormatter extends CommonFormatter {
   protected _options: FormatPercentOptions = { format: Format.percent };
 }
 
+/**
+ * @deprecated Import from `@morpho-org/morpho-ts`
+ */
 export const format = {
   /**
    * Return the value as an integer in hex format
