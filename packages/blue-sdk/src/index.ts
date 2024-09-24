@@ -9,7 +9,6 @@ export * from "./maths";
 export * from "./user";
 export * from "./holding";
 export * from "./position";
-export * from "./helpers";
 export * from "./vault";
 
 export * as constants from "./constants";
@@ -22,5 +21,4 @@ export * as holding from "./holding";
 export * as types from "./types";
 export * as maths from "./maths";
 export * as user from "./user";
-export * as helpers from "./helpers";
 export * as vault from "./vault";

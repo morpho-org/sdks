@@ -1,6 +1,5 @@
-import { Time } from "@morpho-org/morpho-ts";
+import { Time, format } from "@morpho-org/morpho-ts";
 
-import { format } from "../helpers";
 import { BigIntish } from "../types";
 
 export type RoundingDirection = "Up" | "Down";
