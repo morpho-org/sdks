@@ -19,6 +19,12 @@ yarn add @morpho-org/morpho-ts
 
 ## Usage
 
+### Utility
+
+Refer to the specific documentation for detailed information on each utility:
+- [`format`](./src/format/format/README.md)
+- [`Time`](./src/time/README.md)
+
 ### jest
 
 When running a jest ts suite, you may encounter the following error:
