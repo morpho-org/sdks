@@ -2984,7 +2984,7 @@ __metadata:
     evm-maths: "npm:^7.0.0"
     executooor: "npm:^1.4.0"
     fetch-mock: "npm:^9.11.0"
-    graphql: "npm:^15.6.0"
+    graphql: "npm:^16.9.0"
     graphql-request: "npm:^6.1.0"
     graphql-tag: "npm:^2.12.6"
     hardhat: "npm:^2.22.6"
@@ -3373,26 +3373,26 @@ __metadata:
   linkType: hard
 
 "@nomicfoundation/hardhat-ethers@npm:^3.0.4, @nomicfoundation/hardhat-ethers@npm:^3.0.6":
-  version: 3.0.7
-  resolution: "@nomicfoundation/hardhat-ethers@npm:3.0.7"
+  version: 3.0.8
+  resolution: "@nomicfoundation/hardhat-ethers@npm:3.0.8"
   dependencies:
     debug: "npm:^4.1.1"
     lodash.isequal: "npm:^4.5.0"
   peerDependencies:
     ethers: ^6.1.0
-    hardhat: "*"
-  checksum: 10c0/623efffe17fd770bf71ebf8692141d534b88a71e7a2dbaae020e3a3f4528cebb65acf485ab456da6ec80f5d61a4e973fef2803f988e01e9385fe050e7111dab9
+    hardhat: ^2.0.0
+  checksum: 10c0/478b5d9607e7fc50377bec45ecebbf74240719c76aa08c81052d2a2174eee6f422db8cfd3f13fd17a080d8ff1046fac50dfffa3a2e57c9e3ed466932239e4af2
   languageName: node
   linkType: hard
 
 "@nomicfoundation/hardhat-network-helpers@npm:^1.0.11, @nomicfoundation/hardhat-network-helpers@npm:^1.0.9":
-  version: 1.0.11
-  resolution: "@nomicfoundation/hardhat-network-helpers@npm:1.0.11"
+  version: 1.0.12
+  resolution: "@nomicfoundation/hardhat-network-helpers@npm:1.0.12"
   dependencies:
     ethereumjs-util: "npm:^7.1.4"
   peerDependencies:
     hardhat: ^2.9.5
-  checksum: 10c0/67ca879a7fbb5866e9739ee3d4301d7169733f8f4c70affed1a4f15a8da0e8c80e76b1460e9fd4bd713c054714837bf2c3c01da215302609d7ac777033861fe1
+  checksum: 10c0/93df80bb824fb9146c354f71637d6deee4b7ba19527eee94b4f79064ccbb8e4e45e14d8e558f6e5c2be17d64429faaef07ac8fe12ef11395c549f7b5fc540722
   languageName: node
   linkType: hard
 
@@ -7354,14 +7354,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"graphql@npm:^15.6.0":
-  version: 15.9.0
-  resolution: "graphql@npm:15.9.0"
-  checksum: 10c0/0e93f7138daae07dcb0713ce5e2ae7f8039e911b6180f0170c4929664ec32ab8e690a9ea12be2dc4ab18544f9898989765122f30d2d07d38b0ce2a4c839d29bc
-  languageName: node
-  linkType: hard
-
-"graphql@npm:^16.8.1":
+"graphql@npm:^16.8.1, graphql@npm:^16.9.0":
   version: 16.9.0
   resolution: "graphql@npm:16.9.0"
   checksum: 10c0/a8850f077ff767377237d1f8b1da2ec70aeb7623cdf1dfc9e1c7ae93accc0c8149c85abe68923be9871a2934b1bce5a2496f846d4d56e1cfb03eaaa7ddba9b6a
@@ -12081,8 +12074,8 @@ __metadata:
   linkType: hard
 
 "viem@npm:^2.18.8":
-  version: 2.21.7
-  resolution: "viem@npm:2.21.7"
+  version: 2.21.12
+  resolution: "viem@npm:2.21.12"
   dependencies:
     "@adraffy/ens-normalize": "npm:1.10.0"
     "@noble/curves": "npm:1.4.0"
@@ -12098,7 +12091,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/6f129fc706b95455bfa7f42d8e328ecbf11365cfd7ec887a486ebe51a9ec69082d16a9dc662b0218c9e74108dce6f6962e9704ace10fd1b7abc04ee186039194
+  checksum: 10c0/f7727adae0f621dc6256cf6fdd4e7fc5f3b87392a683d22c87626d4499cb9813be914bb9f63b119226dae46090cb5fca7c4422af0fb0a21d26610c74322c4b4c
   languageName: node
   linkType: hard
 
