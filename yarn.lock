@@ -3373,15 +3373,15 @@ __metadata:
   linkType: hard
 
 "@nomicfoundation/hardhat-ethers@npm:^3.0.4, @nomicfoundation/hardhat-ethers@npm:^3.0.6":
-  version: 3.0.7
-  resolution: "@nomicfoundation/hardhat-ethers@npm:3.0.7"
+  version: 3.0.8
+  resolution: "@nomicfoundation/hardhat-ethers@npm:3.0.8"
   dependencies:
     debug: "npm:^4.1.1"
     lodash.isequal: "npm:^4.5.0"
   peerDependencies:
     ethers: ^6.1.0
-    hardhat: "*"
-  checksum: 10c0/623efffe17fd770bf71ebf8692141d534b88a71e7a2dbaae020e3a3f4528cebb65acf485ab456da6ec80f5d61a4e973fef2803f988e01e9385fe050e7111dab9
+    hardhat: ^2.0.0
+  checksum: 10c0/478b5d9607e7fc50377bec45ecebbf74240719c76aa08c81052d2a2174eee6f422db8cfd3f13fd17a080d8ff1046fac50dfffa3a2e57c9e3ed466932239e4af2
   languageName: node
   linkType: hard
 
