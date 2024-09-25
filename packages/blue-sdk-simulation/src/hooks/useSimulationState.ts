@@ -109,7 +109,7 @@ export function useSimulationState<
     functionName: "feeRecipient",
     query: {
       ...parameters.query,
-      enabled: !block,
+      enabled: block != null && parameters.query?.enabled,
       staleTime,
     },
   });
@@ -119,7 +119,7 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: !block && parameters.query?.enabled,
+      enabled: block != null && parameters.query?.enabled,
     },
   });
   const users = useUsers({
@@ -127,7 +127,7 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: !block && parameters.query?.enabled,
+      enabled: block != null && parameters.query?.enabled,
     },
   });
   const tokens = useTokens({
@@ -135,7 +135,7 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: !block && parameters.query?.enabled,
+      enabled: block != null && parameters.query?.enabled,
     },
   });
   const vaults = useVaults({
@@ -143,7 +143,7 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: !block && parameters.query?.enabled,
+      enabled: block != null && parameters.query?.enabled,
     },
   });
 
@@ -159,7 +159,7 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !block && parameters.query?.enabled,
+      enabled: block != null && parameters.query?.enabled,
     },
   });
   const holdings = useHoldings({
@@ -174,7 +174,7 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !block && parameters.query?.enabled,
+      enabled: block != null && parameters.query?.enabled,
     },
   });
   const vaultMarketConfigs = useVaultMarketConfigs({
@@ -189,7 +189,7 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !block && parameters.query?.enabled,
+      enabled: block != null && parameters.query?.enabled,
     },
   });
   const vaultUsers = useVaultUsers({
@@ -204,7 +204,7 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !block && parameters.query?.enabled,
+      enabled: block != null && parameters.query?.enabled,
     },
   });
 
