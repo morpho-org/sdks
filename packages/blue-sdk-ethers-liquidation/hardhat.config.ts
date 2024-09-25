@@ -52,7 +52,6 @@ const config: HardhatUserConfig = {
       [addresses[ChainId.EthMainnet].morpho]: "Morpho",
       "0x111111125421cA6dc452d289314280a0f8842A65": "1inch",
     },
-    defaultVerbosity: 0,
   },
 };
 

@@ -48,9 +48,14 @@ import { check } from "../../examples/whitelisted-erc4626-1inch";
 import { SwapMock__factory } from "../../mocks/types";
 import { getOneInchSwapApiUrl } from "../../src/1inch";
 import { PARASWAP_API_URL } from "../../src/paraswap";
-import { getPendleRedeemApiUrl, getPendleSwapApiUrl } from "../../src/pendle";
+import {
+  getPendleRedeemApiUrl,
+  getPendleSwapApiUrl,
+  pendleMarkets,
+} from "../../src/pendle";
 import { sendRawBundleMockImpl } from "../mocks";
 
+//allow for 0.1% tolerance for balance checks
 chai.use(chaiAlmost(0.1));
 
 const rpcUrl = process.env.MAINNET_RPC_URL;
@@ -282,7 +287,11 @@ describe("erc4626-1inch", () => {
     });
   };
 
-  const mockPendleOperations = (srcAmount: bigint, dstAmount: string) => {
+  const mockPendleOperations = (
+    srcAmount: bigint,
+    dstAmount: string,
+    ptToken: string,
+  ) => {
     // Mock for Pendle Swap API
     fetchMock
       .get(
@@ -413,7 +422,7 @@ describe("erc4626-1inch", () => {
                 "swap",
                 [
                   {
-                    token: yt,
+                    token: ptToken,
                     amount: toBigInt(amountIn!),
                   },
                   {
@@ -678,7 +687,7 @@ describe("erc4626-1inch", () => {
     expect(decimalBalance).to.almost.eq(5976971822403273072470n / decimals);
   });
 
-  it(`should liquidate on a PT standard market`, async () => {
+  it(`should liquidate on a PT standard market before maturity`, async () => {
     const collateralPriceUsd = 1;
     const ethPriceUsd = 2_644;
 
@@ -775,6 +784,7 @@ describe("erc4626-1inch", () => {
     mockPendleOperations(
       accruedPosition.seizableCollateral / 2n,
       "60475733901",
+      market.config.collateralToken,
     );
     mockOneInch(
       accruedPosition.seizableCollateral / 2n,
@@ -793,6 +803,131 @@ describe("erc4626-1inch", () => {
         executorAddress,
       )) / decimals;
     expect(decimalBalance).to.almost.eq(7369167071383784310757n / decimals);
+  });
+
+  it(`should liquidate on a PT standard market after maturity`, async () => {
+    const collateralPriceUsd = 1;
+    const ethPriceUsd = 2_644;
+
+    const marketId =
+      "0x8f46cd82c4c44a090c3d72bd7a84baf4e69ee50331d5deae514f86fe062b0748" as MarketId; // PT-sUSDE-24OCT2024 / DAI (86%)
+
+    const market = await fetchMarket(marketId, signer);
+    const [collateralToken, loanToken] = await Promise.all([
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
+    ]);
+
+    // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
+    const collateral = parseUnits("10000", collateralToken.decimals);
+
+    const morphoBorrower = MorphoBlue__factory.connect(
+      addresses[ChainId.EthMainnet].morpho,
+      borrower,
+    );
+
+    await deal(collateralToken.address, borrower.address, collateral);
+
+    await ERC20__factory.connect(collateralToken.address, borrower).approve(
+      addresses[ChainId.EthMainnet].morpho,
+      MaxUint256,
+    );
+
+    await setNextBlockTimestamp(start);
+    await mine(1);
+
+    await morphoBorrower.supplyCollateral(
+      market.config,
+      collateral,
+      borrower.address,
+      "0x",
+    );
+
+    await morphoBorrower.borrow(
+      market.config,
+      market.getMaxBorrowAssets(collateral) - 1n,
+      0n,
+      borrower.address,
+      borrower.address,
+    );
+
+    const newCollateralPriceUsd = collateralPriceUsd * 0.5; // 50% price drop
+
+    nock(BLUE_API_BASE_URL)
+      .post("/graphql")
+      .reply(200, {
+        data: { markets: { items: [{ uniqueKey: marketId }] } },
+      })
+      .post("/graphql")
+      .reply(200, {
+        data: {
+          assetByAddress: {
+            priceUsd: ethPriceUsd,
+            spotPriceEth: 1,
+          },
+          marketPositions: {
+            items: [
+              {
+                user: {
+                  address: borrower.address,
+                },
+                market: {
+                  oracleAddress: market.config.oracle,
+                  irmAddress: market.config.irm,
+                  lltv: market.config.lltv,
+                  collateralAsset: {
+                    address: market.config.collateralToken,
+                    decimals: collateralToken.decimals,
+                    priceUsd: newCollateralPriceUsd,
+                    spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
+                  },
+                  loanAsset: {
+                    address: market.config.loanToken,
+                    decimals: loanToken.decimals,
+                    priceUsd: null,
+                    spotPriceEth: 1 / ethPriceUsd,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+    const accrualPosition = await fetchAccrualPositionFromConfig(
+      borrower.address,
+      market.config,
+      signer,
+    );
+    const pendleMarketData =
+      pendleMarkets[ChainId.EthMainnet][market.config.collateralToken];
+    const postMaturity = pendleMarketData!.maturity.getTime() / 1000 + 1;
+    const accruedPosition = accrualPosition.accrueInterest(postMaturity);
+    setTimestamp(postMaturity);
+    mockPendleOperations(
+      accruedPosition.seizableCollateral / 2n,
+      "11669266773005108147657",
+      market.config.collateralToken,
+    );
+    mockOneInch(
+      accruedPosition.seizableCollateral / 2n,
+      "11669266773005108147657",
+    );
+    mockParaSwap(
+      accruedPosition.seizableCollateral / 2n,
+      "11669266773005108147656",
+    );
+    console.log("swap mock", swapMockAddress);
+
+    await check(executorAddress, hardhatSigner, signer, [marketId]);
+
+    const decimals = BigInt.pow10(loanToken.decimals);
+
+    const decimalBalance =
+      (await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
+        executorAddress,
+      )) / decimals;
+    expect(decimalBalance).to.almost.eq(7325591893360572899357n / decimals);
   });
 
   it.skip(`should liquidate on rehypothecated market with limited swap liquidity`, async () => {

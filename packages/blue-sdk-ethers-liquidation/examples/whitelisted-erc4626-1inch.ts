@@ -1,3 +1,4 @@
+import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 import {
   AbstractSigner,
   MaxUint256,
@@ -10,8 +11,6 @@ import {
 } from "ethers";
 import { MulticallWrapper } from "ethers-multicall-provider";
 import { ERC20__factory, ERC4626__factory } from "ethers-types";
-
-import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 
 import { BlueSdkConverters } from "@morpho-org/blue-api-sdk";
 import {
@@ -191,15 +190,15 @@ export const check = async (
                     );
 
                     encoder
-                      .erc20Approve(srcToken, redeemCallData.tx.to, srcAmount)
+                      .erc20Approve(srcToken, redeemCallData.tx.to, MaxUint256)
                       .erc20Approve(
                         market.config.collateralToken,
                         redeemCallData.tx.to,
-                        srcAmount,
+                        MaxUint256,
                       )
                       .pushCall(
                         redeemCallData.tx.to,
-                        redeemCallData.tx.value,
+                        redeemCallData.tx.value ? redeemCallData.tx.value : 0n,
                         redeemCallData.tx.data,
                       );
                   } else {
@@ -216,11 +215,11 @@ export const check = async (
                       },
                     );
                     encoder
-                      .erc20Approve(srcToken, swapCallData.tx.to, srcAmount)
+                      .erc20Approve(srcToken, swapCallData.tx.to, MaxUint256)
                       .erc20Approve(
                         market.config.collateralToken,
                         swapCallData.tx.to,
-                        srcAmount,
+                        MaxUint256,
                       )
                       .pushCall(
                         swapCallData.tx.to,
