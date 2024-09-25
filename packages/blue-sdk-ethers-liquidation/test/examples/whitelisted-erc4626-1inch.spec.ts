@@ -1,4 +1,4 @@
-import { expect } from "chai";
+import chai, { expect } from "chai";
 import {
   AbstractSigner,
   MaxUint256,
@@ -20,6 +20,7 @@ import { deal } from "hardhat-deal";
 import nock from "nock";
 import simple from "simple-mock";
 import sinon from "sinon";
+import "evm-maths";
 
 import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
@@ -28,24 +29,29 @@ import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/
 import { BuildTxInput } from "@paraswap/sdk";
 
 import {
-  AccrualPosition,
   Address,
   ChainId,
-  Market,
   MarketConfig,
   MarketId,
-  Token,
   addresses,
 } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
 
+import {
+  fetchAccrualPositionFromConfig,
+  fetchMarket,
+  fetchToken,
+} from "@morpho-org/blue-sdk-ethers";
+import chaiAlmost from "chai-almost";
 import { check } from "../../examples/whitelisted-erc4626-1inch";
 import { SwapMock__factory } from "../../mocks/types";
 import { getOneInchSwapApiUrl } from "../../src/1inch";
 import { PARASWAP_API_URL } from "../../src/paraswap";
 import { getPendleRedeemApiUrl, getPendleSwapApiUrl } from "../../src/pendle";
 import { sendRawBundleMockImpl } from "../mocks";
+
+chai.use(chaiAlmost(0.1));
 
 const rpcUrl = process.env.MAINNET_RPC_URL;
 if (!rpcUrl) throw Error(`no RPC provided`);
@@ -441,10 +447,10 @@ describe("erc4626-1inch", () => {
     const marketId =
       "0xa921ef34e2fc7a27ccc50ae7e4b154e16c9799d3387076c421423ef52ac4df99" as MarketId; // WBTC/USDT (86%)
 
-    let market = await Market.fetch(marketId, signer);
+    let market = await fetchMarket(marketId, signer);
     const [collateralToken, loanToken] = await Promise.all([
-      Token.fetch(market.config.collateralToken, signer),
-      Token.fetch(market.config.loanToken, signer),
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
     ]);
 
     // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
@@ -470,7 +476,7 @@ describe("erc4626-1inch", () => {
     await setNextBlockTimestamp(start);
     await mine(1);
 
-    market = await Market.fetch(marketId, signer);
+    market = await fetchMarket(marketId, signer);
 
     await morpho.borrow(
       market.config,
@@ -519,7 +525,7 @@ describe("erc4626-1inch", () => {
         },
       });
 
-    const accrualPosition = await AccrualPosition.fetchFromConfig(
+    const accrualPosition = await fetchAccrualPositionFromConfig(
       borrower.address,
       market.config,
       signer,
@@ -534,11 +540,13 @@ describe("erc4626-1inch", () => {
 
     await check(executorAddress, hardhatSigner, signer, [marketId]);
 
-    expect(
-      await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
+    const decimals = BigInt.pow10(loanToken.decimals);
+
+    const decimalBalance =
+      (await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
         executorAddress,
-      ),
-    ).to.eq(33_316_586_406n);
+      )) / decimals;
+    expect(decimalBalance).to.almost.eq(33_316_586_406n / decimals);
   });
 
   it(`should liquidate on standard market with bad debt`, async () => {
@@ -548,10 +556,10 @@ describe("erc4626-1inch", () => {
     const marketId =
       "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e" as MarketId; // wstETH/WETH (96.5%)
 
-    const market = await Market.fetch(marketId, signer);
+    const market = await fetchMarket(marketId, signer);
     const [collateralToken, loanToken] = await Promise.all([
-      Token.fetch(market.config.collateralToken, signer),
-      Token.fetch(market.config.loanToken, signer),
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
     ]);
 
     const collateral = parseUnits("10000", collateralToken.decimals);
@@ -640,7 +648,7 @@ describe("erc4626-1inch", () => {
         },
       });
 
-    const accrualPosition = await AccrualPosition.fetchFromConfig(
+    const accrualPosition = await fetchAccrualPositionFromConfig(
       borrower.address,
       market.config,
       signer,
@@ -661,11 +669,13 @@ describe("erc4626-1inch", () => {
 
     await check(executorAddress, hardhatSigner, signer, [marketId]);
 
-    const balance = await ERC20__factory.connect(
-      market.config.loanToken,
-      signer,
-    ).balanceOf(executorAddress);
-    expect(balance).to.eq(5976971822403273072470n);
+    const decimals = BigInt.pow10(loanToken.decimals);
+
+    const decimalBalance =
+      (await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
+        executorAddress,
+      )) / decimals;
+    expect(decimalBalance).to.almost.eq(5976971822403273072470n / decimals);
   });
 
   it(`should liquidate on a PT standard market`, async () => {
@@ -675,10 +685,10 @@ describe("erc4626-1inch", () => {
     const marketId =
       "0x8f46cd82c4c44a090c3d72bd7a84baf4e69ee50331d5deae514f86fe062b0748" as MarketId; // PT-sUSDE-24OCT2024 / DAI (86%)
 
-    const market = await Market.fetch(marketId, signer);
+    const market = await fetchMarket(marketId, signer);
     const [collateralToken, loanToken] = await Promise.all([
-      Token.fetch(market.config.collateralToken, signer),
-      Token.fetch(market.config.loanToken, signer),
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
     ]);
 
     // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
@@ -755,7 +765,7 @@ describe("erc4626-1inch", () => {
         },
       });
 
-    const accrualPosition = await AccrualPosition.fetchFromConfig(
+    const accrualPosition = await fetchAccrualPositionFromConfig(
       borrower.address,
       market.config,
       signer,
@@ -776,11 +786,13 @@ describe("erc4626-1inch", () => {
     );
     await check(executorAddress, hardhatSigner, signer, [marketId]);
 
-    expect(
-      await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
+    const decimals = BigInt.pow10(loanToken.decimals);
+
+    const decimalBalance =
+      (await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
         executorAddress,
-      ),
-    ).to.eq(7369167071383784310757n);
+      )) / decimals;
+    expect(decimalBalance).to.almost.eq(7369167071383784310757n / decimals);
   });
 
   it.skip(`should liquidate on rehypothecated market with limited swap liquidity`, async () => {
@@ -806,8 +818,8 @@ describe("erc4626-1inch", () => {
     await morpho.createMarket(config);
 
     const [collateralToken, loanToken] = await Promise.all([
-      Token.fetch(config.collateralToken, signer),
-      Token.fetch(config.loanToken, signer),
+      fetchToken(config.collateralToken, signer),
+      fetchToken(config.loanToken, signer),
     ]);
 
     // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.

@@ -15,7 +15,6 @@ import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 
 import { BlueSdkConverters } from "@morpho-org/blue-api-sdk";
 import {
-  AccrualPosition,
   Address,
   ChainId,
   ChainUtils,
@@ -26,7 +25,11 @@ import {
   getChainAddresses,
   isMarketId,
 } from "@morpho-org/blue-sdk";
-import { safeParseNumber } from "@morpho-org/blue-sdk-ethers";
+
+import {
+  fetchAccrualPositionFromConfig,
+  safeParseNumber,
+} from "@morpho-org/blue-sdk-ethers";
 import { Time } from "@morpho-org/morpho-ts";
 import {
   LiquidationEncoder,
@@ -78,7 +81,7 @@ export const check = async (
     (positions ?? []).map(async (position) => {
       if (position.market.collateralAsset == null) return;
 
-      const accrualPosition = await AccrualPosition.fetchFromConfig(
+      const accrualPosition = await fetchAccrualPositionFromConfig(
         position.user.address,
         BlueSdkConverters.getMarketConfig(position.market),
         signer,
