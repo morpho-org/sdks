@@ -34,6 +34,7 @@
     "@morpho-org/blue-sdk-ethers-liquidation": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
+    "@nomicfoundation/ethereumjs-util": "^9.0.4",
     "@nomicfoundation/hardhat-chai-matchers": "^2.0.2",
     "@nomicfoundation/hardhat-ethers": "^3.0.6",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
@@ -42,22 +43,24 @@
     "@types/chai": "^4.3.14",
     "@types/jest": "^29.5.12",
     "@types/mocha": "^10.0.6",
-    "@types/node": "^22.1.0",
+    "@types/node": "^22.7.0",
     "@types/simple-mock": "^0",
     "@types/sinon": "^17.0.3",
     "@types/sinon-chai": "^3.2.12",
     "chai": "^4.3.10",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.2",
-    "ethers-multicall-provider": "^6.3.1",
+    "ethers-multicall-provider": "^6.4.1",
     "ethers-types": "^3.17.0",
     "evm-maths": "^7.0.0",
     "fetch-mock": "^11.1.4",
-    "hardhat": "^2.22.6",
+    "hardhat": "^2.22.12",
+    "hardhat-config": "^0.0.1-security",
     "hardhat-deal": "^3.1.0",
+    "hardhat-tracer": "^3.1.0",
     "jest": "^29.7.0",
     "mocha": "^10.4.0",
-    "nock": "^13.5.4",
+    "nock": "^13.5.5",
     "node-fetch": "^3.3.2",
     "simple-mock": "^0.8.0",
     "sinon": "^19.0.2",
@@ -97,6 +100,8 @@
       "js",
       "ts"
     ],
-    "preset": "ts-jest"
+    "testPathIgnorePatterns": [
+      "node_modules/"
+    ]
   }
 }

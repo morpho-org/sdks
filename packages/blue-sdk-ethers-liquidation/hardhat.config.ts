@@ -1,11 +1,14 @@
 import "dotenv/config";
 import "hardhat-deal";
+import "hardhat-tracer";
 import { HardhatUserConfig } from "hardhat/config";
 
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-ethers";
 import "@nomicfoundation/hardhat-network-helpers";
 import "@typechain/hardhat";
+
+import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
 const rpcUrl = process.env.MAINNET_RPC_URL;
 if (!rpcUrl) throw Error(`no RPC provided`);
@@ -16,13 +19,14 @@ const config: HardhatUserConfig = {
       chainId: 1,
       forking: {
         url: rpcUrl,
-        blockNumber: 19_939_540,
+        blockNumber: 20_818_976,
       },
       mining: {
         mempool: {
           order: "fifo",
         },
       },
+      allowBlocksWithSameTimestamp: true,
     },
   },
   solidity: {
@@ -42,6 +46,13 @@ const config: HardhatUserConfig = {
   typechain: {
     outDir: "./mocks/types/",
     target: "ethers-v6",
+  },
+  tracer: {
+    nameTags: {
+      [addresses[ChainId.EthMainnet].morpho]: "Morpho",
+      "0x111111125421cA6dc452d289314280a0f8842A65": "1inch",
+    },
+    defaultVerbosity: 0,
   },
 };
 
