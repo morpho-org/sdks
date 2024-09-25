@@ -18,6 +18,7 @@ import {
   _try,
 } from "@morpho-org/blue-sdk";
 
+import { Block } from "viem";
 import {
   UnknownHoldingError,
   UnknownMarketError,
@@ -31,8 +32,7 @@ import {
 
 export interface InputSimulationState {
   chainId: ChainId;
-  blockNumber: bigint;
-  timestamp: bigint;
+  block: Pick<Block<bigint, false, "latest">, "number" | "timestamp">;
   global?: { feeRecipient?: Address };
   markets?: Record<MarketId, Market>;
   users?: Record<Address, User>;
@@ -58,8 +58,7 @@ export interface InputSimulationState {
 
 export class SimulationState implements InputSimulationState {
   public readonly chainId: ChainId;
-  public blockNumber: bigint;
-  public timestamp: bigint;
+  public block: Pick<Block<bigint, false, "latest">, "number" | "timestamp">;
 
   public readonly global: { feeRecipient?: Address };
   public readonly markets: Record<MarketId, Market>;
@@ -88,8 +87,7 @@ export class SimulationState implements InputSimulationState {
 
   constructor({
     chainId,
-    blockNumber,
-    timestamp,
+    block,
     global = {},
     markets = {},
     users = {},
@@ -101,8 +99,7 @@ export class SimulationState implements InputSimulationState {
     vaultUsers = {},
   }: InputSimulationState) {
     this.chainId = chainId;
-    this.blockNumber = blockNumber;
-    this.timestamp = timestamp;
+    this.block = block;
 
     this.global = global;
     this.markets = markets;

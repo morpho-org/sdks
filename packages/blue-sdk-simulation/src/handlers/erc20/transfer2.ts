@@ -21,7 +21,7 @@ export const handleErc20Transfer2Operation: OperationHandler<
 
   const permit2Allowance = fromHolding.permit2Allowances[contract];
   if (
-    permit2Allowance.expiration < data.timestamp ||
+    permit2Allowance.expiration < data.block.timestamp ||
     permit2Allowance.amount < amount
   )
     throw new Erc20Errors.InsufficientPermit2Allowance(address, from, contract);

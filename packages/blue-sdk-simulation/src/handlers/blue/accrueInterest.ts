@@ -5,7 +5,7 @@ export const handleBlueAccrueInterestOperation: OperationHandler<
   BlueOperations["Blue_AccrueInterest"]
 > = ({ args: { id } }, data) => {
   const marketData = data.getMarket(id);
-  const newMarketData = marketData.accrueInterest(data.timestamp);
+  const newMarketData = marketData.accrueInterest(data.block.timestamp);
 
   data.markets[id] = newMarketData;
 

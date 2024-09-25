@@ -27,7 +27,7 @@ import {
 import { fromEntries } from "@morpho-org/morpho-ts";
 import { useMemo } from "react";
 import { GetBlockErrorType, ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useBlock, useReadContract } from "wagmi";
+import { Config, ResolvedRegister, useReadContract } from "wagmi";
 import { SimulationState } from "../SimulationState.js";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
@@ -39,7 +39,7 @@ export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
     UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
     ConfigParameter<config> & {
-      blockNumber?: bigint;
+      block: SimulationState["block"];
       query?: {
         enabled?: boolean;
         staleTime?: number;
@@ -79,71 +79,66 @@ const isDataDefined = ({ data }: { data?: any }) => data != null;
 
 export function useSimulationState<
   config extends Config = ResolvedRegister["config"],
->(
-  parameters: UseSimulationStateParameters<config>,
-): UseSimulationStateReturnType {
+>({
+  block,
+  ...parameters
+}: UseSimulationStateParameters<config>): UseSimulationStateReturnType {
   const staleTime =
-    parameters.query?.staleTime ?? parameters.blockNumber != null
-      ? Infinity
-      : undefined;
+    parameters.query?.staleTime ?? block?.number != null ? Infinity : undefined;
 
   const chainId = useChainId(parameters);
-
-  const { config, ...blockParameters } = parameters;
-  const block = useBlock({
-    ...blockParameters,
-    includeTransactions: false,
-    query: {
-      ...parameters.query,
-      staleTime,
-    },
-  });
 
   const { morpho } = addresses[chainId];
 
   const feeRecipient = useReadContract({
     ...parameters,
+    blockNumber: block?.number,
     address: morpho,
     abi: blueAbi,
     functionName: "feeRecipient",
     query: {
       ...parameters.query,
-      enabled: !block.error,
+      enabled: !block,
       staleTime,
     },
   });
 
   const markets = useMarkets({
     ...parameters,
+    blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: !block.error && parameters.query?.enabled,
+      enabled: !block && parameters.query?.enabled,
     },
   });
   const users = useUsers({
     ...parameters,
+    blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: !block.error && parameters.query?.enabled,
+      enabled: !block && parameters.query?.enabled,
     },
   });
   const tokens = useTokens({
     ...parameters,
+    blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: !block.error && parameters.query?.enabled,
+      enabled: !block && parameters.query?.enabled,
     },
   });
   const vaults = useVaults({
     ...parameters,
+    blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: !block.error && parameters.query?.enabled,
+      enabled: !block && parameters.query?.enabled,
     },
   });
 
   const positions = usePositions({
     ...parameters,
+    blockNumber: block?.number,
     positions: useMemo(
       () =>
         Array.from(parameters.users).flatMap((user) =>
@@ -153,11 +148,12 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !block.error && parameters.query?.enabled,
+      enabled: !block && parameters.query?.enabled,
     },
   });
   const holdings = useHoldings({
     ...parameters,
+    blockNumber: block?.number,
     holdings: useMemo(
       () =>
         Array.from(parameters.users).flatMap((user) =>
@@ -167,11 +163,12 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !block.error && parameters.query?.enabled,
+      enabled: !block && parameters.query?.enabled,
     },
   });
   const vaultMarketConfigs = useVaultMarketConfigs({
     ...parameters,
+    blockNumber: block?.number,
     configs: useMemo(
       () =>
         Array.from(parameters.vaults).flatMap((vault) =>
@@ -181,11 +178,12 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !block.error && parameters.query?.enabled,
+      enabled: !block && parameters.query?.enabled,
     },
   });
   const vaultUsers = useVaultUsers({
     ...parameters,
+    blockNumber: block?.number,
     vaultUsers: useMemo(
       () =>
         Array.from(parameters.vaults).flatMap((vault) =>
@@ -195,32 +193,11 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !block.error && parameters.query?.enabled,
+      enabled: !block && parameters.query?.enabled,
     },
   });
 
   return useMemo(() => {
-    if (block.data?.number == null) {
-      const { error, isFetching } = block;
-
-      if (error != null)
-        return {
-          data: undefined,
-          error,
-          isError: true,
-          isFetching,
-          isSuccess: false,
-        };
-
-      return {
-        data: undefined,
-        error: null,
-        isError: false,
-        isFetching: true, // Block cannot be pending, so it is fetching.
-        isSuccess: false,
-      };
-    }
-
     const results = [
       markets,
       users,
@@ -232,20 +209,14 @@ export function useSimulationState<
     ].flat();
 
     const error =
-      block.error ??
-      feeRecipient.error ??
-      results.find(({ error }) => error)?.error ??
-      null;
+      feeRecipient.error ?? results.find(({ error }) => error)?.error ?? null;
 
     const isFetching =
-      block.isFetching ||
-      feeRecipient.isFetching ||
-      results.some(({ isFetching }) => isFetching);
+      feeRecipient.isFetching || results.some(({ isFetching }) => isFetching);
 
     const data = new SimulationState({
       chainId,
-      blockNumber: block.data.number,
-      timestamp: block.data.timestamp,
+      block,
       global: { feeRecipient: feeRecipient.data },
       markets: fromEntries(
         markets.filter(isDataDefined).map(({ data }) => [data!.id, data!]),
@@ -324,10 +295,7 @@ export function useSimulationState<
     vaultMarketConfigs,
     vaultUsers,
     chainId,
-    block.data?.number,
-    block.data?.timestamp,
-    block.error,
-    block.isFetching,
+    block,
     feeRecipient.data,
     feeRecipient.error,
     feeRecipient.isFetching,

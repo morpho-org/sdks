@@ -75,7 +75,7 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
   for (const id of vault.supplyQueue) {
     const { supplyAssets } = data
       .getAccrualPosition(address, id)
-      .accrueInterest(data.timestamp);
+      .accrueInterest(data.block.timestamp);
     const { cap } = data.getVaultMarketConfig(address, id);
 
     const suppliable = MathLib.zeroFloorSub(cap, supplyAssets);

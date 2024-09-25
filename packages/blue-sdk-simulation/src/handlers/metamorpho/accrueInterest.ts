@@ -10,7 +10,7 @@ export const handleMetaMorphoAccrueInterestOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_AccrueInterest"]
 > = ({ address }, data) => {
   const vault = data.getAccrualVault(address);
-  const newVault = vault.accrueInterest(data.timestamp);
+  const newVault = vault.accrueInterest(data.block.timestamp);
 
   data.vaults[address] = new Vault(newVault);
 
