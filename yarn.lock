@@ -3044,6 +3044,7 @@ __metadata:
     "@typechain/ethers-v6": "npm:^0.5.1"
     "@typechain/hardhat": "npm:^9.1.0"
     "@types/chai": "npm:^4.3.14"
+    "@types/chai-almost": "npm:^1"
     "@types/jest": "npm:^29.5.12"
     "@types/mocha": "npm:^10.0.6"
     "@types/node": "npm:^22.7.0"
@@ -3051,6 +3052,7 @@ __metadata:
     "@types/sinon": "npm:^17.0.3"
     "@types/sinon-chai": "npm:^3.2.12"
     chai: "npm:^4.3.10"
+    chai-almost: "npm:^1.0.1"
     dotenv: "npm:^16.4.5"
     ethers: "npm:^6.13.2"
     ethers-multicall-provider: "npm:^6.4.1"
@@ -4552,6 +4554,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/chai-almost@npm:^1":
+  version: 1.0.3
+  resolution: "@types/chai-almost@npm:1.0.3"
+  dependencies:
+    "@types/chai": "npm:*"
+  checksum: 10c0/6a2076feb1ee044bfc7324e6f5ec088a3d7ce1b0de0313fc9508efed9ded92c46d9c203d9442750b542df3ffc70094880816b6bbd7d102e367ed6a1c9512234b
+  languageName: node
+  linkType: hard
+
 "@types/chai-as-promised@npm:^7.1.3":
   version: 7.1.8
   resolution: "@types/chai-as-promised@npm:7.1.8"
@@ -5698,6 +5709,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"chai-almost@npm:^1.0.1":
+  version: 1.0.1
+  resolution: "chai-almost@npm:1.0.1"
+  dependencies:
+    deep-eql: "npm:^2.0.2"
+    type-detect: "npm:^4.0.3"
+  checksum: 10c0/013f3a856c8ef7986a07ba5f2d7c60e1f97ad2e50f7bc50c43288da680cd368454e1dadef942ac5ec7c2aa21a783a88f14116a64c932e1138b173c556f0df1fe
+  languageName: node
+  linkType: hard
+
 "chai-as-promised@npm:^7.1.1":
   version: 7.1.2
   resolution: "chai-as-promised@npm:7.1.2"
@@ -6499,6 +6520,15 @@ __metadata:
     babel-plugin-macros:
       optional: true
   checksum: 10c0/d94bde6e6f780be4da4fd760288fcf755ec368872f4ac5218197200d86430aeb8d90a003a840bff1c20221188e3f23adced0119cb811c6873c70d0ac66d12832
+  languageName: node
+  linkType: hard
+
+"deep-eql@npm:^2.0.2":
+  version: 2.0.2
+  resolution: "deep-eql@npm:2.0.2"
+  dependencies:
+    type-detect: "npm:^3.0.0"
+  checksum: 10c0/af4db0f3ae98e51c3f68a64a59df76eb44ee94865bf307d56b205d5d03b283e8f2fea57352d47166f19cfeda0df5d514f88faa29f701f98ff30ef255f93ca035
   languageName: node
   linkType: hard
 
@@ -12222,7 +12252,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"type-detect@npm:^4.1.0":
+"type-detect@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "type-detect@npm:3.0.0"
+  checksum: 10c0/68f40161ee4e35e02f57953fd2ce489868f8248692abd8250533c6e9621f1a4b59cd0e6862aa411bc24d27fb60b1e1eac00e0f4484584687e3427f380df18363
+  languageName: node
+  linkType: hard
+
+"type-detect@npm:^4.0.3, type-detect@npm:^4.1.0":
   version: 4.1.0
   resolution: "type-detect@npm:4.1.0"
   checksum: 10c0/df8157ca3f5d311edc22885abc134e18ff8ffbc93d6a9848af5b682730ca6a5a44499259750197250479c5331a8a75b5537529df5ec410622041650a7f293e2a
