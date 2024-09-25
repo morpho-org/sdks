@@ -57,6 +57,10 @@ export function useVaultMarketAllocations<
         allocation.marketId != null &&
         query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
+      staleTime:
+        query.staleTime ?? parameters.blockNumber != null
+          ? Infinity
+          : undefined,
     })),
   });
 }

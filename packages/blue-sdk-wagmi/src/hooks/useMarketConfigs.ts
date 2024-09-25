@@ -3,10 +3,13 @@ import { useQueries } from "@tanstack/react-query";
 import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { fetchMarketQueryOptions } from "../queries/fetchMarket.js";
+import { fetchMarketConfigQueryOptions } from "../queries/fetchMarketConfig.js";
 import { MarketConfigParameters } from "../queries/fetchMarketConfig.js";
 import { useChainId } from "./useChainId.js";
-import { UseMarketParameters, UseMarketReturnType } from "./useMarket.js";
+import {
+  UseMarketConfigParameters,
+  UseMarketConfigReturnType,
+} from "./useMarketConfig.js";
 
 export type FetchMarketConfigsParameters = {
   marketIds: Iterable<MarketId | undefined>;
@@ -17,12 +20,12 @@ export type UseMarketConfigsParameters<
   selectData = Market,
 > = FetchMarketConfigsParameters &
   UnionOmit<
-    UseMarketParameters<config, selectData>,
+    UseMarketConfigParameters<config, selectData>,
     keyof MarketConfigParameters
   >;
 
 export type UseMarketConfigsReturnType<selectData = Market> =
-  UseMarketReturnType<selectData>[];
+  UseMarketConfigReturnType<selectData>[];
 
 export function useMarketConfigs<
   config extends Config = ResolvedRegister["config"],
@@ -41,7 +44,7 @@ export function useMarketConfigs<
   return useQueries({
     queries: Array.from(marketIds, (marketId) => ({
       ...query,
-      ...fetchMarketQueryOptions(config, {
+      ...fetchMarketConfigQueryOptions(config, {
         ...parameters,
         marketId,
         chainId,

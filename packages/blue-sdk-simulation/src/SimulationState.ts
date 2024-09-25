@@ -29,40 +29,91 @@ import {
   UnknownWrappedTokenError,
 } from "./errors.js";
 
-export interface GetStateOptions {
-  throwIfMissing?: boolean;
+export interface InputSimulationState {
+  chainId: ChainId;
+  blockNumber: bigint;
+  timestamp: bigint;
+  global?: { feeRecipient?: Address };
+  markets?: Record<MarketId, Market>;
+  users?: Record<Address, User>;
+  tokens?: Record<Address, Token>;
+  vaults?: Record<Address, Vault>;
+  /**
+   * Positions indexed by user then by market.
+   */
+  positions?: Record<Address, Record<MarketId, Position>>;
+  /**
+   * Holdings indexed by user then by token.
+   */
+  holdings?: Record<Address, Record<Address, Holding>>;
+  /**
+   * VaultMarketConfigs indexed by vault then by market.
+   */
+  vaultMarketConfigs?: Record<Address, Record<MarketId, VaultMarketConfig>>;
+  /**
+   * VaultUsers indexed by vault then by user.
+   */
+  vaultUsers?: Record<Address, Record<Address, VaultUser>>;
 }
 
-export class SimulationState {
-  constructor(
-    public readonly global: { feeRecipient?: Address },
-    public readonly markets: Record<MarketId, Market>,
-    public readonly users: Record<Address, User>,
-    public readonly tokens: Record<Address, Token>,
-    public readonly vaults: Record<Address, Vault>,
-    /**
-     * Positions indexed by user then by market.
-     */
-    public readonly positions: Record<Address, Record<MarketId, Position>>,
-    /**
-     * Holdings indexed by user then by token.
-     */
-    public readonly holdings: Record<Address, Record<Address, Holding>>,
-    /**
-     * VaultMarketConfigs indexed by vault then by market.
-     */
-    public readonly vaultMarketConfigs: Record<
-      Address,
-      Record<MarketId, VaultMarketConfig>
-    >,
-    /**
-     * VaultUsers indexed by vault then by user.
-     */
-    public readonly vaultUsers: Record<Address, Record<Address, VaultUser>>,
-    public readonly chainId: ChainId,
-    public blockNumber: bigint,
-    public timestamp: bigint,
-  ) {}
+export class SimulationState implements InputSimulationState {
+  public readonly chainId: ChainId;
+  public blockNumber: bigint;
+  public timestamp: bigint;
+
+  public readonly global: { feeRecipient?: Address };
+  public readonly markets: Record<MarketId, Market>;
+  public readonly users: Record<Address, User>;
+  public readonly tokens: Record<Address, Token>;
+  public readonly vaults: Record<Address, Vault>;
+  /**
+   * Positions indexed by user then by market.
+   */
+  public readonly positions: Record<Address, Record<MarketId, Position>>;
+  /**
+   * Holdings indexed by user then by token.
+   */
+  public readonly holdings: Record<Address, Record<Address, Holding>>;
+  /**
+   * VaultMarketConfigs indexed by vault then by market.
+   */
+  public readonly vaultMarketConfigs: Record<
+    Address,
+    Record<MarketId, VaultMarketConfig>
+  >;
+  /**
+   * VaultUsers indexed by vault then by user.
+   */
+  public readonly vaultUsers: Record<Address, Record<Address, VaultUser>>;
+
+  constructor({
+    chainId,
+    blockNumber,
+    timestamp,
+    global = {},
+    markets = {},
+    users = {},
+    tokens = {},
+    vaults = {},
+    positions = {},
+    holdings = {},
+    vaultMarketConfigs = {},
+    vaultUsers = {},
+  }: InputSimulationState) {
+    this.chainId = chainId;
+    this.blockNumber = blockNumber;
+    this.timestamp = timestamp;
+
+    this.global = global;
+    this.markets = markets;
+    this.users = users;
+    this.tokens = tokens;
+    this.vaults = vaults;
+    this.positions = positions;
+    this.holdings = holdings;
+    this.vaultMarketConfigs = vaultMarketConfigs;
+    this.vaultUsers = vaultUsers;
+  }
 
   public getMarket(marketId: MarketId) {
     const market = this.markets[marketId];

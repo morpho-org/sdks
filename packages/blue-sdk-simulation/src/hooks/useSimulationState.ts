@@ -39,7 +39,7 @@ export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
     UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
     ConfigParameter<config> & {
-      blockNumber: bigint;
+      blockNumber?: bigint;
       query?: {
         enabled?: boolean;
         staleTime?: number;
@@ -82,22 +82,34 @@ export function useSimulationState<
 >(
   parameters: UseSimulationStateParameters<config>,
 ): UseSimulationStateReturnType {
+  const staleTime =
+    parameters.query?.staleTime ?? parameters.blockNumber != null
+      ? Infinity
+      : undefined;
+
   const chainId = useChainId(parameters);
 
   const { config, ...blockParameters } = parameters;
   const block = useBlock({
     ...blockParameters,
     includeTransactions: false,
+    query: {
+      ...parameters.query,
+      staleTime,
+    },
   });
 
   const { morpho } = addresses[chainId];
 
   const feeRecipient = useReadContract({
+    ...parameters,
     address: morpho,
     abi: blueAbi,
     functionName: "feeRecipient",
     query: {
+      ...parameters.query,
       enabled: !block.error,
+      staleTime,
     },
   });
 
@@ -105,28 +117,28 @@ export function useSimulationState<
     ...parameters,
     query: {
       ...parameters.query,
-      enabled: !!parameters.query?.enabled && !block.error,
+      enabled: !block.error && parameters.query?.enabled,
     },
   });
   const users = useUsers({
     ...parameters,
     query: {
       ...parameters.query,
-      enabled: !!parameters.query?.enabled && !block.error,
+      enabled: !block.error && parameters.query?.enabled,
     },
   });
   const tokens = useTokens({
     ...parameters,
     query: {
       ...parameters.query,
-      enabled: !!parameters.query?.enabled && !block.error,
+      enabled: !block.error && parameters.query?.enabled,
     },
   });
   const vaults = useVaults({
     ...parameters,
     query: {
       ...parameters.query,
-      enabled: !!parameters.query?.enabled && !block.error,
+      enabled: !block.error && parameters.query?.enabled,
     },
   });
 
@@ -141,7 +153,7 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !!parameters.query?.enabled && !block.error,
+      enabled: !block.error && parameters.query?.enabled,
     },
   });
   const holdings = useHoldings({
@@ -155,7 +167,7 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !!parameters.query?.enabled && !block.error,
+      enabled: !block.error && parameters.query?.enabled,
     },
   });
   const vaultMarketConfigs = useVaultMarketConfigs({
@@ -169,7 +181,7 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !!parameters.query?.enabled && !block.error,
+      enabled: !block.error && parameters.query?.enabled,
     },
   });
   const vaultUsers = useVaultUsers({
@@ -183,7 +195,7 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: !!parameters.query?.enabled && !block.error,
+      enabled: !block.error && parameters.query?.enabled,
     },
   });
 
@@ -230,21 +242,24 @@ export function useSimulationState<
       feeRecipient.isFetching ||
       results.some(({ isFetching }) => isFetching);
 
-    const data = new SimulationState(
-      { feeRecipient: feeRecipient.data },
-      fromEntries(
+    const data = new SimulationState({
+      chainId,
+      blockNumber: block.data.number,
+      timestamp: block.data.timestamp,
+      global: { feeRecipient: feeRecipient.data },
+      markets: fromEntries(
         markets.filter(isDataDefined).map(({ data }) => [data!.id, data!]),
       ),
-      fromEntries(
+      users: fromEntries(
         users.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
       ),
-      fromEntries(
+      tokens: fromEntries(
         tokens.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
       ),
-      fromEntries(
+      vaults: fromEntries(
         vaults.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
       ),
-      positions
+      positions: positions
         .filter(isDataDefined)
         .reduce<Record<Address, Record<MarketId, Position>>>(
           (acc, { data }) => {
@@ -254,14 +269,14 @@ export function useSimulationState<
           },
           {},
         ),
-      holdings
+      holdings: holdings
         .filter(isDataDefined)
         .reduce<Record<Address, Record<Address, Holding>>>((acc, { data }) => {
           (acc[data!.user] ??= {})[data!.token] = data!;
 
           return acc;
         }, {}),
-      vaultMarketConfigs
+      vaultMarketConfigs: vaultMarketConfigs
         .filter(isDataDefined)
         .reduce<Record<Address, Record<MarketId, VaultMarketConfig>>>(
           (acc, { data }) => {
@@ -271,7 +286,7 @@ export function useSimulationState<
           },
           {},
         ),
-      vaultUsers
+      vaultUsers: vaultUsers
         .filter(isDataDefined)
         .reduce<Record<Address, Record<Address, VaultUser>>>(
           (acc, { data }) => {
@@ -281,10 +296,7 @@ export function useSimulationState<
           },
           {},
         ),
-      chainId,
-      block.data.number,
-      block.data.timestamp,
-    );
+    });
 
     if (error != null)
       return {
