@@ -1,5 +1,4 @@
 import { VaultMarketAllocation } from "@morpho-org/blue-sdk";
-import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
@@ -14,16 +13,14 @@ import { useChainId } from "./useChainId.js";
 export type UseVaultMarketAllocationParameters<
   config extends Config = Config,
   selectData = VaultMarketAllocation,
-> = UnionCompute<
-  FetchVaultMarketAllocationParameters &
-    ConfigParameter<config> &
-    QueryParameter<
-      VaultMarketAllocation,
-      ReadContractErrorType,
-      selectData,
-      FetchVaultMarketAllocationQueryKey
-    >
->;
+> = FetchVaultMarketAllocationParameters &
+  ConfigParameter<config> &
+  QueryParameter<
+    VaultMarketAllocation,
+    ReadContractErrorType,
+    selectData,
+    FetchVaultMarketAllocationQueryKey
+  >;
 
 export type UseVaultMarketAllocationReturnType<
   selectData = VaultMarketAllocation,
@@ -53,5 +50,7 @@ export function useVaultMarketAllocation<
     enabled:
       parameters.vault != null && parameters.marketId != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
+    staleTime:
+      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
   });
 }

@@ -1,5 +1,6 @@
 import { ChainUtils } from "@morpho-org/blue-sdk";
 import { ChainIdParameter } from "@wagmi/core/internal";
+import { useMemo } from "react";
 import {
   Config,
   ResolvedRegister,
@@ -15,5 +16,7 @@ export function useChainId<config extends Config = ResolvedRegister["config"]>(
 ) {
   const wagmiChainId = wagmi_useChainId(parameters);
 
-  return ChainUtils.parseSupportedChainId(parameters.chainId ?? wagmiChainId);
+  const chainId = parameters.chainId ?? wagmiChainId;
+
+  return useMemo(() => ChainUtils.parseSupportedChainId(chainId), [chainId]);
 }

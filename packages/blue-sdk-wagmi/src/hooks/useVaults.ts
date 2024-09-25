@@ -1,6 +1,6 @@
 import { Vault } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { Address } from "viem";
+import { Address, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -10,12 +10,15 @@ import {
 import { useChainId } from "./useChainId.js";
 import { UseVaultParameters, UseVaultReturnType } from "./useVault.js";
 
+export type FetchVaultsParameters = {
+  vaults: Iterable<Address | undefined>;
+};
+
 export type UseVaultsParameters<
   config extends Config = Config,
   selectData = Vault,
-> = {
-  vaults: Iterable<Address | undefined>;
-} & Omit<UseVaultParameters<config, selectData>, keyof VaultParameters>;
+> = FetchVaultsParameters &
+  UnionOmit<UseVaultParameters<config, selectData>, keyof VaultParameters>;
 
 export type UseVaultsReturnType<selectData = Vault> =
   UseVaultReturnType<selectData>[];
@@ -41,6 +44,10 @@ export function useVaults<
       }),
       enabled: vault != null && query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
+      staleTime:
+        query.staleTime ?? parameters.blockNumber != null
+          ? Infinity
+          : undefined,
     })),
   });
 }

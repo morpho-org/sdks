@@ -59,67 +59,67 @@ export class Vault extends VaultToken implements InputVault {
   /**
    * The MetaMorpho vault's owner address.
    */
-  owner: Address;
+  public owner: Address;
   /**
    * The MetaMorpho vault's curator address.
    */
-  curator: Address;
+  public curator: Address;
   /**
    * The MetaMorpho vault's guardian address.
    */
-  guardian: Address;
+  public guardian: Address;
   /**
    * The MetaMorpho vault's skim recipient address (mostly used to skim reward tokens claimed to the vault).
    */
-  skimRecipient: Address;
+  public skimRecipient: Address;
   /**
    * The MetaMorpho vault's fee recipient address.
    */
-  feeRecipient: Address;
+  public feeRecipient: Address;
 
   /**
    * The MetaMorpho vault's timelock (in seconds).
    */
-  timelock: bigint;
+  public timelock: bigint;
   /**
    * The MetaMorpho vault's fee.
    */
-  fee: bigint;
+  public fee: bigint;
 
   /**
    * The MetaMorpho vault's pending owner address and activation timestamp.
    */
-  pendingOwner: Address;
+  public pendingOwner: Address;
   /**
    * The MetaMorpho vault's pending guardian address and activation timestamp.
    */
-  pendingGuardian: Pending<Address>;
+  public pendingGuardian: Pending<Address>;
   /**
    * The MetaMorpho vault's pending timelock (in seconds) and activation timestamp.
    */
-  pendingTimelock: Pending<bigint>;
+  public pendingTimelock: Pending<bigint>;
 
   /**
    * The MetaMorpho vault's ordered supply queue.
    */
-  supplyQueue: MarketId[];
+  public supplyQueue: MarketId[];
   /**
    * The MetaMorpho vault's ordered withdraw queue.
    */
-  withdrawQueue: MarketId[];
+  public withdrawQueue: MarketId[];
 
   /**
    * The ERC4626 vault's total supply of shares.
    */
-  totalSupply: bigint;
+  public totalSupply: bigint;
   /**
    * The ERC4626 vault's total assets.
    */
-  totalAssets: bigint;
+  public totalAssets: bigint;
   /**
    * The MetaMorpho vault's last total assets used to calculate performance fees.
    */
-  lastTotalAssets: bigint;
+  public lastTotalAssets: bigint;
 
   /**
    * The MetaMorpho vault's public allocator configuration.

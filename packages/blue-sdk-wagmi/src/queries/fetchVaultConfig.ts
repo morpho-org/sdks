@@ -1,8 +1,5 @@
 import { VaultConfig } from "@morpho-org/blue-sdk";
-import {
-  DeploylessFetchParameters,
-  fetchVaultConfig,
-} from "@morpho-org/blue-sdk-viem";
+import { FetchParameters, fetchVaultConfig } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
@@ -11,11 +8,11 @@ import { VaultParameters } from "./fetchVault.js";
 export type VaultConfigParameters = VaultParameters;
 
 export type FetchVaultConfigParameters = Partial<VaultConfigParameters> &
-  DeploylessFetchParameters;
+  Pick<FetchParameters, "chainId">;
 
 export function fetchVaultConfigQueryOptions<config extends Config>(
   config: config,
-  options: FetchVaultConfigParameters,
+  parameters: FetchVaultConfigParameters,
 ) {
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
@@ -29,7 +26,7 @@ export function fetchVaultConfigQueryOptions<config extends Config>(
         ...parameters,
       });
     },
-    queryKey: fetchVaultConfigQueryKey(options),
+    queryKey: fetchVaultConfigQueryKey(parameters),
   } as const satisfies QueryOptions<
     VaultConfig,
     ReadContractErrorType,
@@ -38,8 +35,18 @@ export function fetchVaultConfigQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchVaultConfigQueryKey(options: FetchVaultConfigParameters) {
-  return ["fetchVaultConfig", options] as const;
+export function fetchVaultConfigQueryKey({
+  vault,
+  chainId,
+}: FetchVaultConfigParameters) {
+  return [
+    "fetchVaultConfig",
+    // Ignore all other irrelevant parameters.
+    {
+      vault,
+      chainId,
+    } as FetchVaultConfigParameters,
+  ] as const;
 }
 
 export type FetchVaultConfigQueryKey = ReturnType<

@@ -1,8 +1,5 @@
 import { Position } from "@morpho-org/blue-sdk";
-import {
-  DeploylessFetchParameters,
-  fetchPosition,
-} from "@morpho-org/blue-sdk-viem";
+import { FetchParameters, fetchPosition } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
@@ -12,7 +9,7 @@ import { UserParameters } from "./fetchUser.js";
 export type PositionParameters = UserParameters & MarketParameters;
 
 export type FetchPositionParameters = Partial<PositionParameters> &
-  DeploylessFetchParameters;
+  FetchParameters;
 
 export function fetchPositionQueryOptions<config extends Config>(
   config: config,
@@ -40,8 +37,28 @@ export function fetchPositionQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchPositionQueryKey(parameters: FetchPositionParameters) {
-  return ["fetchPosition", parameters] as const;
+export function fetchPositionQueryKey({
+  user,
+  marketId,
+  chainId,
+  blockTag,
+  blockNumber,
+  account,
+  stateOverride,
+}: FetchPositionParameters) {
+  return [
+    "fetchPosition",
+    // Ignore all other irrelevant parameters.
+    {
+      user,
+      marketId,
+      chainId,
+      blockTag,
+      blockNumber,
+      account,
+      stateOverride,
+    } as FetchPositionParameters,
+  ] as const;
 }
 
 export type FetchPositionQueryKey = ReturnType<typeof fetchPositionQueryKey>;

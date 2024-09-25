@@ -1,18 +1,21 @@
 import { User } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { Address } from "viem";
+import { Address, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import { UserParameters, fetchUserQueryOptions } from "../queries/fetchUser.js";
 import { useChainId } from "./useChainId.js";
 import { UseUserParameters, UseUserReturnType } from "./useUser.js";
 
+export type FetchUsersParameters = {
+  users: Iterable<Address | undefined>;
+};
+
 export type UseUsersParameters<
   config extends Config = Config,
   selectData = User,
-> = {
-  users: Iterable<Address>;
-} & Omit<UseUserParameters<config, selectData>, keyof UserParameters>;
+> = FetchUsersParameters &
+  UnionOmit<UseUserParameters<config, selectData>, keyof UserParameters>;
 
 export type UseUsersReturnType<selectData = User> =
   UseUserReturnType<selectData>[];
@@ -38,6 +41,10 @@ export function useUsers<
       }),
       enabled: user != null && query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
+      staleTime:
+        query.staleTime ?? parameters.blockNumber != null
+          ? Infinity
+          : undefined,
     })),
   });
 }

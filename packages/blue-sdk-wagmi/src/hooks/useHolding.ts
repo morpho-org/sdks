@@ -1,5 +1,4 @@
 import { Holding } from "@morpho-org/blue-sdk";
-import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
@@ -14,16 +13,14 @@ import { useChainId } from "./useChainId.js";
 export type UseHoldingParameters<
   config extends Config = Config,
   selectData = Holding,
-> = UnionCompute<
-  FetchHoldingParameters &
-    ConfigParameter<config> &
-    QueryParameter<
-      Holding,
-      ReadContractErrorType,
-      selectData,
-      FetchHoldingQueryKey
-    >
->;
+> = FetchHoldingParameters &
+  ConfigParameter<config> &
+  QueryParameter<
+    Holding,
+    ReadContractErrorType,
+    selectData,
+    FetchHoldingQueryKey
+  >;
 
 export type UseHoldingReturnType<selectData = Holding> = UseQueryReturnType<
   selectData,
@@ -51,5 +48,7 @@ export function useHolding<
     enabled:
       parameters.user != null && parameters.token != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
+    staleTime:
+      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
   });
 }

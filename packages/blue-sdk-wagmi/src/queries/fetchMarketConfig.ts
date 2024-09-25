@@ -1,8 +1,5 @@
 import { MarketConfig } from "@morpho-org/blue-sdk";
-import {
-  DeploylessFetchParameters,
-  fetchMarketConfig,
-} from "@morpho-org/blue-sdk-viem";
+import { FetchParameters, fetchMarketConfig } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
@@ -11,7 +8,7 @@ import { MarketParameters } from "./fetchMarket.js";
 export type MarketConfigParameters = MarketParameters;
 
 export type FetchMarketConfigParameters = Partial<MarketConfigParameters> &
-  DeploylessFetchParameters;
+  Pick<FetchParameters, "chainId">;
 
 export function fetchMarketConfigQueryOptions<config extends Config>(
   config: config,
@@ -21,12 +18,11 @@ export function fetchMarketConfigQueryOptions<config extends Config>(
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
     async queryFn({ queryKey }) {
-      const { marketId, chainId, ...parameters } = queryKey[1];
+      const { marketId, chainId } = queryKey[1];
       if (!marketId) throw Error("marketId is required");
 
       return fetchMarketConfig(marketId, config.getClient({ chainId }), {
         chainId,
-        ...parameters,
       });
     },
     queryKey: fetchMarketConfigQueryKey(parameters),
@@ -38,10 +34,18 @@ export function fetchMarketConfigQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchMarketConfigQueryKey(
-  parameters: FetchMarketConfigParameters,
-) {
-  return ["fetchMarketConfig", parameters] as const;
+export function fetchMarketConfigQueryKey({
+  marketId,
+  chainId,
+}: FetchMarketConfigParameters) {
+  return [
+    "fetchMarketConfig",
+    // Ignore all other irrelevant parameters.
+    {
+      marketId,
+      chainId,
+    } as FetchMarketConfigParameters,
+  ] as const;
 }
 
 export type FetchMarketConfigQueryKey = ReturnType<

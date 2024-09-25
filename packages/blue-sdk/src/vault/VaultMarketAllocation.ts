@@ -12,7 +12,7 @@ export class VaultMarketAllocation implements InputVaultMarketAllocation {
   /**
    * The vault's configuration on the corresponding market.
    */
-  public config: VaultMarketConfig;
+  public readonly config: VaultMarketConfig;
 
   /**
    * The vault's position on the corresponding market.

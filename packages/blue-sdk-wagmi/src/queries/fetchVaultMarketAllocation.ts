@@ -46,10 +46,30 @@ export function fetchVaultMarketAllocationQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchVaultMarketAllocationQueryKey(
-  parameters: FetchVaultMarketAllocationParameters,
-) {
-  return ["fetchVaultMarketAllocation", parameters] as const;
+export function fetchVaultMarketAllocationQueryKey({
+  vault,
+  marketId,
+  chainId,
+  blockTag,
+  blockNumber,
+  deployless,
+  account,
+  stateOverride,
+}: FetchVaultMarketAllocationParameters) {
+  return [
+    "fetchVaultMarketAllocation",
+    // Ignore all other irrelevant parameters.
+    {
+      vault,
+      marketId,
+      chainId,
+      blockTag,
+      blockNumber,
+      deployless,
+      account,
+      stateOverride,
+    } as FetchVaultMarketAllocationParameters,
+  ] as const;
 }
 
 export type FetchVaultMarketAllocationQueryKey = ReturnType<

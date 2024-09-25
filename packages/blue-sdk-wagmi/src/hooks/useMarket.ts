@@ -1,5 +1,4 @@
 import { Market } from "@morpho-org/blue-sdk";
-import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
@@ -14,16 +13,14 @@ import { useChainId } from "./useChainId.js";
 export type UseMarketParameters<
   config extends Config = Config,
   selectData = Market,
-> = UnionCompute<
-  FetchMarketParameters &
-    ConfigParameter<config> &
-    QueryParameter<
-      Market,
-      ReadContractErrorType,
-      selectData,
-      FetchMarketQueryKey
-    >
->;
+> = FetchMarketParameters &
+  ConfigParameter<config> &
+  QueryParameter<
+    Market,
+    ReadContractErrorType,
+    selectData,
+    FetchMarketQueryKey
+  >;
 
 export type UseMarketReturnType<selectData = Market> = UseQueryReturnType<
   selectData,
@@ -50,5 +47,7 @@ export function useMarket<
     ...options,
     enabled: parameters.marketId != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
+    staleTime:
+      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
   });
 }

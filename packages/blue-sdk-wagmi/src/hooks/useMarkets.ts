@@ -1,5 +1,6 @@
 import { Market, MarketId } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
+import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -9,12 +10,15 @@ import {
 import { useChainId } from "./useChainId.js";
 import { UseMarketParameters, UseMarketReturnType } from "./useMarket.js";
 
+export type FetchMarketsParameters = {
+  marketIds: Iterable<MarketId | undefined>;
+};
+
 export type UseMarketsParameters<
   config extends Config = Config,
   selectData = Market,
-> = {
-  marketIds: Iterable<MarketId | undefined>;
-} & Omit<UseMarketParameters<config, selectData>, keyof MarketParameters>;
+> = FetchMarketsParameters &
+  UnionOmit<UseMarketParameters<config, selectData>, keyof MarketParameters>;
 
 export type UseMarketsReturnType<selectData = Market> =
   UseMarketReturnType<selectData>[];
@@ -40,6 +44,10 @@ export function useMarkets<
       }),
       enabled: marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
+      staleTime:
+        query.staleTime ?? parameters.blockNumber != null
+          ? Infinity
+          : undefined,
     })),
   });
 }

@@ -1,5 +1,6 @@
 import { VaultMarketPublicAllocatorConfig } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
+import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -12,15 +13,18 @@ import {
   UseVaultMarketPublicAllocatorConfigReturnType,
 } from "./useVaultMarketPublicAllocatorConfig.js";
 
+export type FetchVaultMarketPublicAllocatorConfigsParameters = {
+  configs: Iterable<Partial<VaultMarketPublicAllocatorConfigParameters>>;
+};
+
 export type UseVaultMarketPublicAllocatorConfigsParameters<
   config extends Config = Config,
   selectData = VaultMarketPublicAllocatorConfig,
-> = {
-  configs: Iterable<Partial<VaultMarketPublicAllocatorConfigParameters>>;
-} & Omit<
-  UseVaultMarketPublicAllocatorConfigParameters<config, selectData>,
-  keyof VaultMarketPublicAllocatorConfigParameters
->;
+> = FetchVaultMarketPublicAllocatorConfigsParameters &
+  UnionOmit<
+    UseVaultMarketPublicAllocatorConfigParameters<config, selectData>,
+    keyof VaultMarketPublicAllocatorConfigParameters
+  >;
 
 export type UseVaultMarketPublicAllocatorConfigsReturnType<
   selectData = VaultMarketPublicAllocatorConfig,
@@ -53,6 +57,10 @@ export function useVaultMarketPublicAllocatorConfigs<
         vaultMarketPublicAllocatorConfig.marketId != null &&
         query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
+      staleTime:
+        query.staleTime ?? parameters.blockNumber != null
+          ? Infinity
+          : undefined,
     })),
   });
 }

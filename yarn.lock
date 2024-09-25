@@ -3069,6 +3069,48 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@morpho-org/blue-sdk-simulation@workspace:packages/blue-sdk-simulation":
+  version: 0.0.0-use.local
+  resolution: "@morpho-org/blue-sdk-simulation@workspace:packages/blue-sdk-simulation"
+  dependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/blue-sdk-wagmi": "workspace:^"
+    "@morpho-org/morpho-test": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
+    "@tanstack/query-core": "npm:^5.55.4"
+    "@tanstack/react-query": "npm:^5.55.4"
+    "@types/chai": "npm:^4.3.14"
+    "@types/mocha": "npm:^10.0.6"
+    "@types/node": "npm:^22.1.0"
+    "@types/react": "npm:^18.3.1"
+    "@types/react-dom": "npm:^18.3.0"
+    "@types/sinon": "npm:^17.0.3"
+    "@types/sinon-chai": "npm:^3.2.12"
+    "@wagmi/core": "npm:^2.13.5"
+    chai: "npm:^4.3.10"
+    dotenv: "npm:^16.4.5"
+    mocha: "npm:^10.4.0"
+    mutative: "npm:^1.0.8"
+    react: "npm:^18.3.1"
+    react-dom: "npm:^18.3.1"
+    sinon: "npm:^19.0.2"
+    ts-node: "npm:^10.9.2"
+    typescript: "npm:^5.6.2"
+    viem: "npm:^2.21.8"
+    wagmi: "npm:^2.12.12"
+  peerDependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
+    "@tanstack/react-query": ">=5.0.0"
+    react: ">=18"
+    typescript: ">=5.0.4"
+    viem: ^2.0.0
+    wagmi: ^2.12.10
+  languageName: unknown
+  linkType: soft
+
 "@morpho-org/blue-sdk-viem@workspace:^, @morpho-org/blue-sdk-viem@workspace:packages/blue-sdk-viem":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-viem@workspace:packages/blue-sdk-viem"
@@ -3100,7 +3142,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk-wagmi@workspace:packages/blue-sdk-wagmi":
+"@morpho-org/blue-sdk-wagmi@workspace:^, @morpho-org/blue-sdk-wagmi@workspace:packages/blue-sdk-wagmi":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-wagmi@workspace:packages/blue-sdk-wagmi"
   dependencies:
@@ -3126,7 +3168,7 @@ __metadata:
     "@tanstack/react-query": ">=5.0.0"
     react: ">=18"
     viem: ^2.0.0
-    wagmi: ^2.0.0
+    wagmi: ^2.12.10
   languageName: unknown
   linkType: soft
 
@@ -11174,6 +11216,13 @@ __metadata:
   version: 9.9.0
   resolution: "multiformats@npm:9.9.0"
   checksum: 10c0/1fdb34fd2fb085142665e8bd402570659b50a5fae5994027e1df3add9e1ce1283ed1e0c2584a5c63ac0a58e871b8ee9665c4a99ca36ce71032617449d48aa975
+  languageName: node
+  linkType: hard
+
+"mutative@npm:^1.0.8":
+  version: 1.0.8
+  resolution: "mutative@npm:1.0.8"
+  checksum: 10c0/18d61dbb89d9c7af0e00ec303bbd6d0d7286a01ffa6093943d186f15dbaa843be31ce6da66fb42f2b45fd6d107562df091c3ce6b0d14e71f2023d0cbd117fea3
   languageName: node
   linkType: hard
 

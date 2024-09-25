@@ -40,8 +40,30 @@ export function fetchHoldingQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchHoldingQueryKey(parameters: FetchHoldingParameters) {
-  return ["fetchHolding", parameters] as const;
+export function fetchHoldingQueryKey({
+  user,
+  token,
+  chainId,
+  blockTag,
+  blockNumber,
+  deployless,
+  account,
+  stateOverride,
+}: FetchHoldingParameters) {
+  return [
+    "fetchHolding",
+    // Ignore all other irrelevant parameters.
+    {
+      user,
+      token,
+      chainId,
+      blockTag,
+      blockNumber,
+      deployless,
+      account,
+      stateOverride,
+    } as FetchHoldingParameters,
+  ] as const;
 }
 
 export type FetchHoldingQueryKey = ReturnType<typeof fetchHoldingQueryKey>;

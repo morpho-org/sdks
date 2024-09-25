@@ -1,5 +1,4 @@
 import { Token } from "@morpho-org/blue-sdk";
-import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
@@ -14,11 +13,9 @@ import { useChainId } from "./useChainId.js";
 export type UseTokenParameters<
   config extends Config = Config,
   selectData = Token,
-> = UnionCompute<
-  FetchTokenParameters &
-    ConfigParameter<config> &
-    QueryParameter<Token, ReadContractErrorType, selectData, FetchTokenQueryKey>
->;
+> = FetchTokenParameters &
+  ConfigParameter<config> &
+  QueryParameter<Token, ReadContractErrorType, selectData, FetchTokenQueryKey>;
 
 export type UseTokenReturnType<selectData = Token> = UseQueryReturnType<
   selectData,
@@ -45,5 +42,7 @@ export function useToken<
     ...options,
     enabled: parameters.token != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
+    staleTime:
+      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
   });
 }

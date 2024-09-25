@@ -1,8 +1,5 @@
 import { User } from "@morpho-org/blue-sdk";
-import {
-  DeploylessFetchParameters,
-  fetchUser,
-} from "@morpho-org/blue-sdk-viem";
+import { FetchParameters, fetchUser } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
@@ -11,8 +8,7 @@ export type UserParameters = {
   user: Address;
 };
 
-export type FetchUserParameters = Partial<UserParameters> &
-  DeploylessFetchParameters;
+export type FetchUserParameters = Partial<UserParameters> & FetchParameters;
 
 export function fetchUserQueryOptions<config extends Config>(
   config: config,
@@ -39,8 +35,26 @@ export function fetchUserQueryOptions<config extends Config>(
   >;
 }
 
-export function fetchUserQueryKey(parameters: FetchUserParameters) {
-  return ["fetchUser", parameters] as const;
+export function fetchUserQueryKey({
+  user,
+  chainId,
+  blockTag,
+  blockNumber,
+  account,
+  stateOverride,
+}: FetchUserParameters) {
+  return [
+    "fetchUser",
+    // Ignore all other irrelevant parameters.
+    {
+      user,
+      chainId,
+      blockTag,
+      blockNumber,
+      account,
+      stateOverride,
+    } as FetchUserParameters,
+  ] as const;
 }
 
 export type FetchUserQueryKey = ReturnType<typeof fetchUserQueryKey>;

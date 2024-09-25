@@ -1,5 +1,4 @@
 import { User } from "@morpho-org/blue-sdk";
-import { UnionCompute } from "@wagmi/core/internal";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
@@ -14,11 +13,9 @@ import { useChainId } from "./useChainId.js";
 export type UseUserParameters<
   config extends Config = Config,
   selectData = User,
-> = UnionCompute<
-  FetchUserParameters &
-    ConfigParameter<config> &
-    QueryParameter<User, ReadContractErrorType, selectData, FetchUserQueryKey>
->;
+> = FetchUserParameters &
+  ConfigParameter<config> &
+  QueryParameter<User, ReadContractErrorType, selectData, FetchUserQueryKey>;
 
 export type UseUserReturnType<selectData = User> = UseQueryReturnType<
   selectData,
@@ -45,5 +42,7 @@ export function useUser<
     ...options,
     enabled: parameters.user != null && query.enabled,
     structuralSharing: query.structuralSharing ?? structuralSharing,
+    staleTime:
+      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
   });
 }

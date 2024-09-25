@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-wagmi",
-  "version": "1.0.0",
+  "version": "1.10.5-alpha.1",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "type": "module",
@@ -36,7 +36,7 @@
     "@tanstack/react-query": ">=5.0.0",
     "react": ">=18",
     "viem": "^2.0.0",
-    "wagmi": "^2.0.0"
+    "wagmi": "^2.12.10"
   },
   "publishConfig": {
     "main": "lib/index.js",

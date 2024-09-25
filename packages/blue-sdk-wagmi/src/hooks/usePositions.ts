@@ -1,5 +1,6 @@
 import { Position } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
+import { UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -9,12 +10,18 @@ import {
 import { useChainId } from "./useChainId.js";
 import { UsePositionParameters, UsePositionReturnType } from "./usePosition.js";
 
+export type FetchPositionsParameters = {
+  positions: Iterable<Partial<PositionParameters>>;
+};
+
 export type UsePositionsParameters<
   config extends Config = Config,
   selectData = Position,
-> = {
-  positions: Iterable<Partial<PositionParameters>>;
-} & Omit<UsePositionParameters<config, selectData>, keyof PositionParameters>;
+> = FetchPositionsParameters &
+  UnionOmit<
+    UsePositionParameters<config, selectData>,
+    keyof PositionParameters
+  >;
 
 export type UsePositionsReturnType<selectData = Position> =
   UsePositionReturnType<selectData>[];
@@ -44,6 +51,10 @@ export function usePositions<
       enabled:
         position.user != null && position.marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
+      staleTime:
+        query.staleTime ?? parameters.blockNumber != null
+          ? Infinity
+          : undefined,
     })),
   });
 }

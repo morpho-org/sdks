@@ -1,6 +1,6 @@
 import { Token } from "@morpho-org/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
-import { Address } from "viem";
+import { Address, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
 import {
@@ -10,12 +10,15 @@ import {
 import { useChainId } from "./useChainId.js";
 import { UseTokenParameters, UseTokenReturnType } from "./useToken.js";
 
+export type FetchTokensParameters = {
+  tokens: Iterable<Address | undefined>;
+};
+
 export type UseTokensParameters<
   config extends Config = Config,
   selectData = Token,
-> = {
-  tokens: Iterable<Address | undefined>;
-} & Omit<UseTokenParameters<config, selectData>, keyof TokenParameters>;
+> = FetchTokensParameters &
+  UnionOmit<UseTokenParameters<config, selectData>, keyof TokenParameters>;
 
 export type UseTokensReturnType<selectData = Token> =
   UseTokenReturnType<selectData>[];
@@ -41,6 +44,10 @@ export function useTokens<
       }),
       enabled: token != null && query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
+      staleTime:
+        query.staleTime ?? parameters.blockNumber != null
+          ? Infinity
+          : undefined,
     })),
   });
 }
