@@ -18,7 +18,8 @@
       "recommended": false,
       "correctness": {
         "noUnusedImports": "error",
-        "noUnusedVariables": "error"
+        "noUnusedVariables": "error",
+        "useExhaustiveDependencies": "error"
       },
       "style": {
         "useBlockStatements": "off"

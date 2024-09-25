@@ -59,7 +59,7 @@ export type UseSimulationStateReturnType =
       isError: false;
       isFetching: boolean;
       isPending: false;
-      isSuccess: true;
+      isSuccess: boolean;
     }
   | {
       data?: SimulationState;
@@ -208,34 +208,10 @@ export function useSimulationState<
     },
   });
 
-  return useMemo(() => {
-    if (block == null)
-      return {
-        data: undefined,
-        error: null,
-        isError: false,
-        isFetching: false,
-        isPending: true,
-        isSuccess: false,
-      };
+  const data = useMemo(() => {
+    if (block == null) return;
 
-    const results = [
-      markets,
-      users,
-      tokens,
-      vaults,
-      positions,
-      holdings,
-      vaultMarketConfigs,
-    ].flat();
-
-    const error =
-      feeRecipient.error ?? results.find(({ error }) => error)?.error ?? null;
-
-    const isFetching =
-      feeRecipient.isFetching || results.some(({ isFetching }) => isFetching);
-
-    const data = new SimulationState({
+    return new SimulationState({
       chainId,
       block,
       global: { feeRecipient: feeRecipient.data },
@@ -289,26 +265,31 @@ export function useSimulationState<
           {},
         ),
     });
+  }, [
+    chainId,
+    block,
+    feeRecipient.data,
+    markets,
+    vaults,
+    tokens,
+    users,
+    positions,
+    holdings,
+    vaultUsers,
+    vaultMarketConfigs,
+  ]);
 
-    if (error != null)
-      return {
-        data,
-        error,
-        isError: true,
-        isFetching,
-        isPending: false,
-        isSuccess: false,
-      };
-
+  if (block == null)
     return {
-      data,
+      data: undefined,
       error: null,
       isError: false,
-      isFetching,
-      isPending: false,
-      isSuccess: true,
+      isFetching: false,
+      isPending: true,
+      isSuccess: false,
     };
-  }, [
+
+  const results = [
     markets,
     users,
     tokens,
@@ -316,11 +297,33 @@ export function useSimulationState<
     positions,
     holdings,
     vaultMarketConfigs,
-    vaultUsers,
-    chainId,
-    block,
-    feeRecipient.data,
-    feeRecipient.error,
-    feeRecipient.isFetching,
-  ]);
+  ].flat();
+
+  const error =
+    feeRecipient.error ?? results.find(({ error }) => error)?.error ?? null;
+
+  const isFetching =
+    feeRecipient.isFetching || results.some(({ isFetching }) => isFetching);
+
+  if (error != null)
+    return {
+      data,
+      error,
+      isError: true,
+      isFetching,
+      isPending: false,
+      isSuccess: false,
+    };
+
+  const isSuccess =
+    feeRecipient.isSuccess && results.every(({ isSuccess }) => isSuccess);
+
+  return {
+    data: data!,
+    error: null,
+    isError: false,
+    isFetching,
+    isPending: false,
+    isSuccess,
+  };
 }

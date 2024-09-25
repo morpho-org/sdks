@@ -87,8 +87,8 @@ export class SimulationState implements InputSimulationState {
 
   constructor({
     chainId,
-    block,
-    global = {},
+    block: { number, timestamp },
+    global: { feeRecipient } = {},
     markets = {},
     users = {},
     tokens = {},
@@ -99,9 +99,9 @@ export class SimulationState implements InputSimulationState {
     vaultUsers = {},
   }: InputSimulationState) {
     this.chainId = chainId;
-    this.block = block;
+    this.block = { number, timestamp };
 
-    this.global = global;
+    this.global = { feeRecipient };
     this.markets = markets;
     this.users = users;
     this.tokens = tokens;
