@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/morpho-test",
-  "version": "1.10.5-alpha.0",
+  "version": "1.10.5-alpha.1",
   "main": "src/index.ts",
   "files": [
     "lib"
