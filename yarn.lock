@@ -2819,14 +2819,12 @@ __metadata:
     "@graphql-codegen/typescript-operations": "npm:^4.0.1"
     "@graphql-codegen/typescript-resolvers": "npm:^4.1.0"
     "@morpho-org/blue-sdk": "workspace:^"
-    "@morpho-org/blue-sdk-ethers": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
     graphql: "npm:^16.8.1"
     graphql-tag: "npm:^2.12.6"
     typescript: "npm:^5.4.5"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
-    "@morpho-org/blue-sdk-ethers": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
   languageName: unknown
   linkType: soft

@@ -13,7 +13,7 @@ import { ERC20__factory, ERC4626__factory } from "ethers-types";
 
 import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 
-import { BlueSdkConverters } from "@morpho-org/blue-api-sdk";
+import { BlueSdkConverter } from "@morpho-org/blue-api-sdk";
 import {
   Address,
   ChainId,
@@ -27,6 +27,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   fetchAccrualPositionFromConfig,
+  safeGetAddress,
   safeParseNumber,
 } from "@morpho-org/blue-sdk-ethers";
 import {
@@ -35,6 +36,11 @@ import {
   fetchBestSwap,
 } from "@morpho-org/blue-sdk-ethers-liquidation";
 import { Time } from "@morpho-org/morpho-ts";
+
+const converter = new BlueSdkConverter({
+  parseAddress: safeGetAddress,
+  parseNumber: safeParseNumber,
+});
 
 export const check = async (
   executorAddress: string,
@@ -78,7 +84,7 @@ export const check = async (
 
       const accrualPosition = await fetchAccrualPositionFromConfig(
         position.user.address,
-        BlueSdkConverters.getMarketConfig(position.market),
+        converter.getMarketConfig(position.market),
         signer,
         { chainId },
       );
@@ -87,14 +93,14 @@ export const check = async (
         accrualPosition.accrueInterest(Time.timestamp());
 
       try {
-        const collateralToken = BlueSdkConverters.getTokenWithPrice(
+        const collateralToken = converter.getTokenWithPrice(
           position.market.collateralAsset,
           wethPriceUsd,
         );
         if (collateralToken.price == null)
           throw new UnknownTokenPriceError(collateralToken.address);
 
-        const loanToken = BlueSdkConverters.getTokenWithPrice(
+        const loanToken = converter.getTokenWithPrice(
           position.market.loanAsset,
           wethPriceUsd,
         );
