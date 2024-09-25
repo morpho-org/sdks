@@ -26,7 +26,7 @@ import {
 } from "@morpho-org/blue-sdk-wagmi";
 import { fromEntries } from "@morpho-org/morpho-ts";
 import { useMemo } from "react";
-import { GetBlockErrorType, ReadContractErrorType, UnionOmit } from "viem";
+import { ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useReadContract } from "wagmi";
 import { SimulationState } from "../SimulationState.js";
 
@@ -39,7 +39,7 @@ export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
     UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
     ConfigParameter<config> & {
-      block: SimulationState["block"];
+      block?: SimulationState["block"];
       query?: {
         enabled?: boolean;
         staleTime?: number;
@@ -58,13 +58,15 @@ export type UseSimulationStateReturnType =
       error: null;
       isError: false;
       isFetching: boolean;
+      isPending: false;
       isSuccess: true;
     }
   | {
       data?: SimulationState;
-      error: GetBlockErrorType | ReadContractErrorType;
+      error: ReadContractErrorType;
       isError: true;
       isFetching: boolean;
+      isPending: false;
       isSuccess: false;
     }
   | {
@@ -72,6 +74,15 @@ export type UseSimulationStateReturnType =
       error: null;
       isError: false;
       isFetching: true;
+      isPending: false;
+      isSuccess: false;
+    }
+  | {
+      data: undefined;
+      error: null;
+      isError: false;
+      isFetching: false;
+      isPending: true;
       isSuccess: false;
     };
 
@@ -198,6 +209,16 @@ export function useSimulationState<
   });
 
   return useMemo(() => {
+    if (block == null)
+      return {
+        data: undefined,
+        error: null,
+        isError: false,
+        isFetching: false,
+        isPending: true,
+        isSuccess: false,
+      };
+
     const results = [
       markets,
       users,
@@ -275,6 +296,7 @@ export function useSimulationState<
         error,
         isError: true,
         isFetching,
+        isPending: false,
         isSuccess: false,
       };
 
@@ -283,6 +305,7 @@ export function useSimulationState<
       error: null,
       isError: false,
       isFetching,
+      isPending: false,
       isSuccess: true,
     };
   }, [
