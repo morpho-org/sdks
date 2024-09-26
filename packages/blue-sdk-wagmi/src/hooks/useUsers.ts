@@ -62,5 +62,6 @@ export function useUsers<
           ? Infinity
           : undefined,
     })),
+    combine,
   });
 }
