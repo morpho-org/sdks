@@ -47,16 +47,15 @@ jobs:
 
       - name: Version and publish
         run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           if [ "${{ inputs.version }}" == "custom" ]; then
             if [ -z "${{ inputs.custom_version }}" ]; then
               echo "Error: Custom version is required when 'custom' is selected"
               exit 1
             fi
             yarn lerna version ${{ inputs.custom_version }} --no-git-tag-version --yes --force-publish
-            echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-            yarn lerna publish from-package --yes --dist-tag unstable
+            yarn run publish --yes --dist-tag unstable
           else
             yarn lerna version ${{ inputs.version }} --no-private --conventional-commits --create-release github --generate-release-notes --yes
-            echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
             yarn run publish --yes
           fi
