@@ -15,7 +15,7 @@ on:
       custom_version:
         type: string
         required: false
-        description: Custom version (e.g., 1.0.0-unstable.1)
+        description: Custom semver version to publish. Falls back to incremental versioning if empty. (e.g., 1.0.0-unstable.1)
 
 jobs:
   publish-to-npm:
