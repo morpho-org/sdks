@@ -208,7 +208,7 @@ export const check = async (
                       pendleMarketData.address,
                       {
                         receiver: executorAddress,
-                        slippage: 0.01,
+                        slippage: 0.04,
                         tokenIn: market.config.collateralToken,
                         tokenOut: pendleMarketData.underlyingTokenAddress,
                         amountIn: seizedAssets.toString(),
