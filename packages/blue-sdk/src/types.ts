@@ -1,14 +1,12 @@
-export type Hex64 = string & { __LENGTH__: 64 };
-
 /**
  * The address of a Contract, or an EOA
  */
-export type Address = string;
+export type Address = `0x${string}`;
 
 /**
  * The id of a market used on the Blue contract
  */
-export type MarketId = `0x${Hex64}` & { __TYPE__: "marketId" };
+export type MarketId = `0x${string}` & { __TYPE__: "marketId" };
 
 export type BigIntish = bigint | string | number | boolean;
 

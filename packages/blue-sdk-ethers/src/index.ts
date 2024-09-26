@@ -11,3 +11,5 @@ export * as signatures from "./signatures";
 export * as fetch from "./fetch";
 export * as ethers from "./ethers";
 export * as types from "./types";
+
+import "./augment/ethers";
