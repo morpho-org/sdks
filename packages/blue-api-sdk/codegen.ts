@@ -22,11 +22,11 @@ const config: CodegenConfig = {
           },
           HexString: {
             input: "string",
-            output: "string",
+            output: "`0x${string}`",
           },
           Address: {
             input: "string",
-            output: "string",
+            output: "@morpho-org/blue-sdk#Address",
           },
           MarketId: {
             input: "string",

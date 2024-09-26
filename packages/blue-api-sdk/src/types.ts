@@ -1,4 +1,5 @@
-import { Address, MarketId } from "@morpho-org/blue-sdk";
+import { Address } from "@morpho-org/blue-sdk";
+import { MarketId } from "@morpho-org/blue-sdk";
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = {
@@ -50,6 +51,8 @@ export type Asset = {
   /** Historical spot price in ETH */
   historicalSpotPriceEth: Maybe<Array<FloatDataPoint>>;
   id: Scalars["ID"]["output"];
+  /** Token logo URI, for display purpose */
+  logoURI: Maybe<Scalars["String"]["output"]>;
   name: Scalars["String"]["output"];
   /** Current oracle price in USD, for display purpose. */
   oraclePriceUsd: Maybe<Scalars["Float"]["output"]>;
@@ -1938,6 +1941,10 @@ export type VaultFilters = {
   netApy_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by MetaMorpho current owner address */
   ownerAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by lower than or equal to given public allocator fee in dollar. */
+  publicAllocatorFeeUsd_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by lower than or equal to given public allocator fee. */
+  publicAllocatorFee_lte?: InputMaybe<Scalars["Float"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by MetaMorpho vault symbol */
   symbol_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
