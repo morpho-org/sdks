@@ -28,7 +28,7 @@ export type Scalars = {
   Float: { input: number; output: number };
   Address: { input: string; output: Address };
   BigInt: { input: string | number; output: bigint };
-  HexString: { input: string; output: string };
+  HexString: { input: string; output: `0x${string}` };
   MarketId: { input: string; output: MarketId };
 };
 
