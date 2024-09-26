@@ -1,12 +1,4 @@
-import {
-  Address,
-  Holding,
-  MarketId,
-  Position,
-  VaultMarketConfig,
-  VaultUser,
-  addresses,
-} from "@morpho-org/blue-sdk";
+import { addresses } from "@morpho-org/blue-sdk";
 import { DeploylessFetchParameters, blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
   ConfigParameter,
@@ -24,7 +16,6 @@ import {
   useVaultUsers,
   useVaults,
 } from "@morpho-org/blue-sdk-wagmi";
-import { fromEntries } from "@morpho-org/morpho-ts";
 import { useMemo } from "react";
 import { ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useReadContract } from "wagmi";
@@ -85,8 +76,6 @@ export type UseSimulationStateReturnType =
       isPending: true;
       isSuccess: false;
     };
-
-const isDataDefined = ({ data }: { data?: any }) => data != null;
 
 export function useSimulationState<
   config extends Config = ResolvedRegister["config"],
@@ -215,68 +204,27 @@ export function useSimulationState<
       chainId,
       block,
       global: { feeRecipient: feeRecipient.data },
-      markets: fromEntries(
-        markets.filter(isDataDefined).map(({ data }) => [data!.id, data!]),
-      ),
-      users: fromEntries(
-        users.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
-      ),
-      tokens: fromEntries(
-        tokens.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
-      ),
-      vaults: fromEntries(
-        vaults.filter(isDataDefined).map(({ data }) => [data!.address, data!]),
-      ),
-      positions: positions
-        .filter(isDataDefined)
-        .reduce<Record<Address, Record<MarketId, Position>>>(
-          (acc, { data }) => {
-            (acc[data!.user] ??= {})[data!.marketId] = data!;
-
-            return acc;
-          },
-          {},
-        ),
-      holdings: holdings
-        .filter(isDataDefined)
-        .reduce<Record<Address, Record<Address, Holding>>>((acc, { data }) => {
-          (acc[data!.user] ??= {})[data!.token] = data!;
-
-          return acc;
-        }, {}),
-      vaultMarketConfigs: vaultMarketConfigs
-        .filter(isDataDefined)
-        .reduce<Record<Address, Record<MarketId, VaultMarketConfig>>>(
-          (acc, { data }) => {
-            (acc[data!.vault] ??= {})[data!.marketId] = data!;
-
-            return acc;
-          },
-          {},
-        ),
-      vaultUsers: vaultUsers
-        .filter(isDataDefined)
-        .reduce<Record<Address, Record<Address, VaultUser>>>(
-          (acc, { data }) => {
-            (acc[data!.vault] ??= {})[data!.user] = data!;
-
-            return acc;
-          },
-          {},
-        ),
+      markets: markets.data,
+      users: users.data,
+      tokens: tokens.data,
+      vaults: vaults.data,
+      positions: positions.data,
+      holdings: holdings.data,
+      vaultMarketConfigs: vaultMarketConfigs.data,
+      vaultUsers: vaultUsers.data,
     });
   }, [
     chainId,
     block,
     feeRecipient.data,
-    markets,
-    vaults,
-    tokens,
-    users,
-    positions,
-    holdings,
-    vaultUsers,
-    vaultMarketConfigs,
+    markets.data,
+    users.data,
+    tokens.data,
+    vaults.data,
+    positions.data,
+    holdings.data,
+    vaultMarketConfigs.data,
+    vaultUsers.data,
   ]);
 
   if (block == null)
@@ -289,21 +237,27 @@ export function useSimulationState<
       isSuccess: false,
     };
 
-  const results = [
-    markets,
-    users,
-    tokens,
-    vaults,
-    positions,
-    holdings,
-    vaultMarketConfigs,
-  ].flat();
-
   const error =
-    feeRecipient.error ?? results.find(({ error }) => error)?.error ?? null;
+    feeRecipient.error ??
+    markets.error ??
+    users.error ??
+    tokens.error ??
+    vaults.error ??
+    positions.error ??
+    holdings.error ??
+    vaultMarketConfigs.error ??
+    vaultUsers.error;
 
   const isFetching =
-    feeRecipient.isFetching || results.some(({ isFetching }) => isFetching);
+    feeRecipient.isFetching ||
+    markets.isFetching ||
+    users.isFetching ||
+    tokens.isFetching ||
+    vaults.isFetching ||
+    positions.isFetching ||
+    holdings.isFetching ||
+    vaultMarketConfigs.isFetching ||
+    vaultUsers.isFetching;
 
   if (error != null)
     return {
@@ -316,7 +270,15 @@ export function useSimulationState<
     };
 
   const isSuccess =
-    feeRecipient.isSuccess && results.every(({ isSuccess }) => isSuccess);
+    feeRecipient.isSuccess &&
+    markets.isSuccess &&
+    users.isSuccess &&
+    tokens.isSuccess &&
+    vaults.isSuccess &&
+    positions.isSuccess &&
+    holdings.isSuccess &&
+    vaultMarketConfigs.isSuccess &&
+    vaultUsers.isSuccess;
 
   return {
     data: data!,

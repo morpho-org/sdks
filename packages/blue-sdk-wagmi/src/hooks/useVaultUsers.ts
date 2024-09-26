@@ -1,17 +1,15 @@
 import { VaultUser } from "@morpho-org/blue-sdk";
-import { useQueries } from "@tanstack/react-query";
-import { UnionOmit } from "viem";
+import { UseQueryResult, useQueries } from "@tanstack/react-query";
+import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   VaultUserParameters,
   fetchVaultUserQueryOptions,
 } from "../queries/fetchVaultUser.js";
 import { useChainId } from "./useChainId.js";
-import {
-  UseVaultUserParameters,
-  UseVaultUserReturnType,
-} from "./useVaultUser.js";
+import { UseVaultUserParameters } from "./useVaultUser.js";
 
 export type FetchVaultUsersParameters = {
   vaultUsers: Iterable<Partial<VaultUserParameters>>;
@@ -19,27 +17,36 @@ export type FetchVaultUsersParameters = {
 
 export type UseVaultUsersParameters<
   config extends Config = Config,
-  selectData = VaultUser,
+  TCombinedResult = ReturnType<typeof combineVaultUsers>,
 > = FetchVaultUsersParameters &
-  UnionOmit<
-    UseVaultUserParameters<config, selectData>,
-    keyof VaultUserParameters
-  >;
+  UnionOmit<UseVaultUserParameters<config>, keyof VaultUserParameters> & {
+    combine?: (
+      results: UseQueryResult<VaultUser, ReadContractErrorType>[],
+    ) => TCombinedResult;
+  };
 
-export type UseVaultUsersReturnType<selectData = VaultUser> =
-  UseVaultUserReturnType<selectData>[];
+export type UseVaultUsersReturnType<
+  TCombinedResult = ReturnType<typeof combineVaultUsers>,
+> = TCombinedResult;
+
+export const combineVaultUsers = combineIndexedQueries<
+  VaultUser,
+  ReadContractErrorType,
+  [Address, Address]
+>((vaultUser) => [vaultUser.vault as Address, vaultUser.user as Address]);
 
 export function useVaultUsers<
   config extends Config = ResolvedRegister["config"],
-  selectData = VaultUser,
+  TCombinedResult = ReturnType<typeof combineVaultUsers>,
 >({
   vaultUsers,
+  combine = combineVaultUsers as any,
   query = {},
   ...parameters
 }: UseVaultUsersParameters<
   config,
-  selectData
->): UseVaultUsersReturnType<selectData> {
+  TCombinedResult
+>): UseVaultUsersReturnType<TCombinedResult> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
@@ -59,5 +66,6 @@ export function useVaultUsers<
           ? Infinity
           : undefined,
     })),
+    combine,
   });
 }

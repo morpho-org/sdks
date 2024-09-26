@@ -1,14 +1,15 @@
-import { Position } from "@morpho-org/blue-sdk";
-import { useQueries } from "@tanstack/react-query";
-import { UnionOmit } from "viem";
+import { MarketId, Position } from "@morpho-org/blue-sdk";
+import { UseQueryResult, useQueries } from "@tanstack/react-query";
+import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   PositionParameters,
   fetchPositionQueryOptions,
 } from "../queries/fetchPosition.js";
 import { useChainId } from "./useChainId.js";
-import { UsePositionParameters, UsePositionReturnType } from "./usePosition.js";
+import { UsePositionParameters } from "./usePosition.js";
 
 export type FetchPositionsParameters = {
   positions: Iterable<Partial<PositionParameters>>;
@@ -16,27 +17,36 @@ export type FetchPositionsParameters = {
 
 export type UsePositionsParameters<
   config extends Config = Config,
-  selectData = Position,
+  TCombinedResult = ReturnType<typeof combinePositions>,
 > = FetchPositionsParameters &
-  UnionOmit<
-    UsePositionParameters<config, selectData>,
-    keyof PositionParameters
-  >;
+  UnionOmit<UsePositionParameters<config>, keyof PositionParameters> & {
+    combine?: (
+      results: UseQueryResult<Position, ReadContractErrorType>[],
+    ) => TCombinedResult;
+  };
 
-export type UsePositionsReturnType<selectData = Position> =
-  UsePositionReturnType<selectData>[];
+export type UsePositionsReturnType<
+  TCombinedResult = ReturnType<typeof combinePositions>,
+> = TCombinedResult;
+
+export const combinePositions = combineIndexedQueries<
+  Position,
+  ReadContractErrorType,
+  [Address, MarketId]
+>((position) => [position.user as Address, position.marketId]);
 
 export function usePositions<
   config extends Config = ResolvedRegister["config"],
-  selectData = Position,
+  TCombinedResult = ReturnType<typeof combinePositions>,
 >({
   positions,
+  combine = combinePositions as any,
   query = {},
   ...parameters
 }: UsePositionsParameters<
   config,
-  selectData
->): UsePositionsReturnType<selectData> {
+  TCombinedResult
+>): UsePositionsReturnType<TCombinedResult> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
@@ -56,5 +66,6 @@ export function usePositions<
           ? Infinity
           : undefined,
     })),
+    combine,
   });
 }

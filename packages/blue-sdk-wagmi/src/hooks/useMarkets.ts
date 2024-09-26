@@ -1,14 +1,15 @@
 import { Market, MarketId } from "@morpho-org/blue-sdk";
-import { useQueries } from "@tanstack/react-query";
-import { UnionOmit } from "viem";
+import { UseQueryResult, useQueries } from "@tanstack/react-query";
+import { ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   MarketParameters,
   fetchMarketQueryOptions,
 } from "../queries/fetchMarket.js";
 import { useChainId } from "./useChainId.js";
-import { UseMarketParameters, UseMarketReturnType } from "./useMarket.js";
+import { UseMarketParameters } from "./useMarket.js";
 
 export type FetchMarketsParameters = {
   marketIds: Iterable<MarketId | undefined>;
@@ -16,21 +17,36 @@ export type FetchMarketsParameters = {
 
 export type UseMarketsParameters<
   config extends Config = Config,
-  selectData = Market,
+  TCombinedResult = ReturnType<typeof combineMarkets>,
 > = FetchMarketsParameters &
-  UnionOmit<UseMarketParameters<config, selectData>, keyof MarketParameters>;
+  UnionOmit<UseMarketParameters<config>, keyof MarketParameters> & {
+    combine?: (
+      results: UseQueryResult<Market, ReadContractErrorType>[],
+    ) => TCombinedResult;
+  };
 
-export type UseMarketsReturnType<selectData = Market> =
-  UseMarketReturnType<selectData>[];
+export type UseMarketsReturnType<
+  TCombinedResult = ReturnType<typeof combineMarkets>,
+> = TCombinedResult;
+
+export const combineMarkets = combineIndexedQueries<
+  Market,
+  ReadContractErrorType,
+  [MarketId]
+>((market) => [market.id]);
 
 export function useMarkets<
   config extends Config = ResolvedRegister["config"],
-  selectData = Market,
+  TCombinedResult = ReturnType<typeof combineMarkets>,
 >({
   marketIds,
+  combine = combineMarkets as any,
   query = {},
   ...parameters
-}: UseMarketsParameters<config, selectData>): UseMarketsReturnType<selectData> {
+}: UseMarketsParameters<
+  config,
+  TCombinedResult
+>): UseMarketsReturnType<TCombinedResult> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
@@ -49,5 +65,6 @@ export function useMarkets<
           ? Infinity
           : undefined,
     })),
+    combine,
   });
 }

@@ -1,14 +1,15 @@
 import { Vault } from "@morpho-org/blue-sdk";
-import { useQueries } from "@tanstack/react-query";
-import { Address, UnionOmit } from "viem";
+import { UseQueryResult, useQueries } from "@tanstack/react-query";
+import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   VaultParameters,
   fetchVaultQueryOptions,
 } from "../queries/fetchVault.js";
 import { useChainId } from "./useChainId.js";
-import { UseVaultParameters, UseVaultReturnType } from "./useVault.js";
+import { UseVaultParameters } from "./useVault.js";
 
 export type FetchVaultsParameters = {
   vaults: Iterable<Address | undefined>;
@@ -16,21 +17,36 @@ export type FetchVaultsParameters = {
 
 export type UseVaultsParameters<
   config extends Config = Config,
-  selectData = Vault,
+  TCombinedResult = ReturnType<typeof combineVaults>,
 > = FetchVaultsParameters &
-  UnionOmit<UseVaultParameters<config, selectData>, keyof VaultParameters>;
+  UnionOmit<UseVaultParameters<config>, keyof VaultParameters> & {
+    combine?: (
+      results: UseQueryResult<Vault, ReadContractErrorType>[],
+    ) => TCombinedResult;
+  };
 
-export type UseVaultsReturnType<selectData = Vault> =
-  UseVaultReturnType<selectData>[];
+export type UseVaultsReturnType<
+  TCombinedResult = ReturnType<typeof combineVaults>,
+> = TCombinedResult;
+
+export const combineVaults = combineIndexedQueries<
+  Vault,
+  ReadContractErrorType,
+  [Address]
+>((vault) => [vault.address as Address]);
 
 export function useVaults<
   config extends Config = ResolvedRegister["config"],
-  selectData = Vault,
+  TCombinedResult = ReturnType<typeof combineVaults>,
 >({
   vaults,
+  combine = combineVaults as any,
   query = {},
   ...parameters
-}: UseVaultsParameters<config, selectData>): UseVaultsReturnType<selectData> {
+}: UseVaultsParameters<
+  config,
+  TCombinedResult
+>): UseVaultsReturnType<TCombinedResult> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
@@ -49,5 +65,6 @@ export function useVaults<
           ? Infinity
           : undefined,
     })),
+    combine,
   });
 }

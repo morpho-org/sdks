@@ -10,3 +10,4 @@ export * from "./fetchHolding.js";
 export * from "./fetchVaultMarketConfig.js";
 export * from "./fetchVaultMarketAllocation.js";
 export * from "./fetchVaultMarketPublicAllocatorConfig.js";
+export * from "./combineIndexedQueries.js";

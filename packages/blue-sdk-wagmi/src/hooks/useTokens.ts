@@ -1,14 +1,15 @@
 import { Token } from "@morpho-org/blue-sdk";
-import { useQueries } from "@tanstack/react-query";
-import { Address, UnionOmit } from "viem";
+import { UseQueryResult, useQueries } from "@tanstack/react-query";
+import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   TokenParameters,
   fetchTokenQueryOptions,
 } from "../queries/fetchToken.js";
 import { useChainId } from "./useChainId.js";
-import { UseTokenParameters, UseTokenReturnType } from "./useToken.js";
+import { UseTokenParameters } from "./useToken.js";
 
 export type FetchTokensParameters = {
   tokens: Iterable<Address | undefined>;
@@ -16,21 +17,36 @@ export type FetchTokensParameters = {
 
 export type UseTokensParameters<
   config extends Config = Config,
-  selectData = Token,
+  TCombinedResult = ReturnType<typeof combineTokens>,
 > = FetchTokensParameters &
-  UnionOmit<UseTokenParameters<config, selectData>, keyof TokenParameters>;
+  UnionOmit<UseTokenParameters<config>, keyof TokenParameters> & {
+    combine?: (
+      results: UseQueryResult<Token, ReadContractErrorType>[],
+    ) => TCombinedResult;
+  };
 
-export type UseTokensReturnType<selectData = Token> =
-  UseTokenReturnType<selectData>[];
+export type UseTokensReturnType<
+  TCombinedResult = ReturnType<typeof combineTokens>,
+> = TCombinedResult;
+
+export const combineTokens = combineIndexedQueries<
+  Token,
+  ReadContractErrorType,
+  [Address]
+>((token) => [token.address as Address]);
 
 export function useTokens<
   config extends Config = ResolvedRegister["config"],
-  selectData = Token,
+  TCombinedResult = ReturnType<typeof combineTokens>,
 >({
   tokens,
+  combine = combineTokens as any,
   query = {},
   ...parameters
-}: UseTokensParameters<config, selectData>): UseTokensReturnType<selectData> {
+}: UseTokensParameters<
+  config,
+  TCombinedResult
+>): UseTokensReturnType<TCombinedResult> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
@@ -49,5 +65,6 @@ export function useTokens<
           ? Infinity
           : undefined,
     })),
+    combine,
   });
 }

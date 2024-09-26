@@ -1,14 +1,15 @@
 import { Holding } from "@morpho-org/blue-sdk";
-import { useQueries } from "@tanstack/react-query";
-import { UnionOmit } from "viem";
+import { UseQueryResult, useQueries } from "@tanstack/react-query";
+import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   HoldingParameters,
   fetchHoldingQueryOptions,
 } from "../queries/fetchHolding.js";
 import { useChainId } from "./useChainId.js";
-import { UseHoldingParameters, UseHoldingReturnType } from "./useHolding.js";
+import { UseHoldingParameters } from "./useHolding.js";
 
 export type FetchHoldingsParameters = {
   holdings: Iterable<Partial<HoldingParameters>>;
@@ -16,24 +17,36 @@ export type FetchHoldingsParameters = {
 
 export type UseHoldingsParameters<
   config extends Config = Config,
-  selectData = Holding,
+  TCombinedResult = ReturnType<typeof combineHoldings>,
 > = FetchHoldingsParameters &
-  UnionOmit<UseHoldingParameters<config, selectData>, keyof HoldingParameters>;
+  UnionOmit<UseHoldingParameters<config>, keyof HoldingParameters> & {
+    combine?: (
+      results: UseQueryResult<Holding, ReadContractErrorType>[],
+    ) => TCombinedResult;
+  };
 
-export type UseHoldingsReturnType<selectData = Holding> =
-  UseHoldingReturnType<selectData>[];
+export type UseHoldingsReturnType<
+  TCombinedResult = ReturnType<typeof combineHoldings>,
+> = TCombinedResult;
+
+export const combineHoldings = combineIndexedQueries<
+  Holding,
+  ReadContractErrorType,
+  [Address, Address]
+>((holding) => [holding.user as Address, holding.token as Address]);
 
 export function useHoldings<
   config extends Config = ResolvedRegister["config"],
-  selectData = Holding,
+  TCombinedResult = ReturnType<typeof combineHoldings>,
 >({
   holdings,
+  combine = combineHoldings as any,
   query = {},
   ...parameters
 }: UseHoldingsParameters<
   config,
-  selectData
->): UseHoldingsReturnType<selectData> {
+  TCombinedResult
+>): UseHoldingsReturnType<TCombinedResult> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
@@ -52,5 +65,6 @@ export function useHoldings<
           ? Infinity
           : undefined,
     })),
+    combine,
   });
 }

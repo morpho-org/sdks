@@ -1,11 +1,12 @@
 import { User } from "@morpho-org/blue-sdk";
-import { useQueries } from "@tanstack/react-query";
-import { Address, UnionOmit } from "viem";
+import { UseQueryResult, useQueries } from "@tanstack/react-query";
+import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import { UserParameters, fetchUserQueryOptions } from "../queries/fetchUser.js";
 import { useChainId } from "./useChainId.js";
-import { UseUserParameters, UseUserReturnType } from "./useUser.js";
+import { UseUserParameters } from "./useUser.js";
 
 export type FetchUsersParameters = {
   users: Iterable<Address | undefined>;
@@ -13,21 +14,36 @@ export type FetchUsersParameters = {
 
 export type UseUsersParameters<
   config extends Config = Config,
-  selectData = User,
+  TCombinedResult = ReturnType<typeof combineUsers>,
 > = FetchUsersParameters &
-  UnionOmit<UseUserParameters<config, selectData>, keyof UserParameters>;
+  UnionOmit<UseUserParameters<config>, keyof UserParameters> & {
+    combine?: (
+      results: UseQueryResult<User, ReadContractErrorType>[],
+    ) => TCombinedResult;
+  };
 
-export type UseUsersReturnType<selectData = User> =
-  UseUserReturnType<selectData>[];
+export type UseUsersReturnType<
+  TCombinedResult = ReturnType<typeof combineUsers>,
+> = TCombinedResult;
+
+export const combineUsers = combineIndexedQueries<
+  User,
+  ReadContractErrorType,
+  [Address]
+>((user) => [user.address as Address]);
 
 export function useUsers<
   config extends Config = ResolvedRegister["config"],
-  selectData = User,
+  TCombinedResult = ReturnType<typeof combineUsers>,
 >({
   users,
+  combine = combineUsers as any,
   query = {},
   ...parameters
-}: UseUsersParameters<config, selectData>): UseUsersReturnType<selectData> {
+}: UseUsersParameters<
+  config,
+  TCombinedResult
+>): UseUsersReturnType<TCombinedResult> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 

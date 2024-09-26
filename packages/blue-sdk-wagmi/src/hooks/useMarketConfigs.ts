@@ -1,15 +1,13 @@
-import { Market, MarketId } from "@morpho-org/blue-sdk";
-import { useQueries } from "@tanstack/react-query";
-import { UnionOmit } from "viem";
+import { MarketConfig, MarketId } from "@morpho-org/blue-sdk";
+import { UseQueryResult, useQueries } from "@tanstack/react-query";
+import { ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import { fetchMarketConfigQueryOptions } from "../queries/fetchMarketConfig.js";
 import { MarketConfigParameters } from "../queries/fetchMarketConfig.js";
 import { useChainId } from "./useChainId.js";
-import {
-  UseMarketConfigParameters,
-  UseMarketConfigReturnType,
-} from "./useMarketConfig.js";
+import { UseMarketConfigParameters } from "./useMarketConfig.js";
 
 export type FetchMarketConfigsParameters = {
   marketIds: Iterable<MarketId | undefined>;
@@ -17,27 +15,36 @@ export type FetchMarketConfigsParameters = {
 
 export type UseMarketConfigsParameters<
   config extends Config = Config,
-  selectData = Market,
+  TCombinedResult = ReturnType<typeof combineMarketConfigs>,
 > = FetchMarketConfigsParameters &
-  UnionOmit<
-    UseMarketConfigParameters<config, selectData>,
-    keyof MarketConfigParameters
-  >;
+  UnionOmit<UseMarketConfigParameters<config>, keyof MarketConfigParameters> & {
+    combine?: (
+      results: UseQueryResult<MarketConfig, ReadContractErrorType>[],
+    ) => TCombinedResult;
+  };
 
-export type UseMarketConfigsReturnType<selectData = Market> =
-  UseMarketConfigReturnType<selectData>[];
+export type UseMarketConfigsReturnType<
+  TCombinedResult = ReturnType<typeof combineMarketConfigs>,
+> = TCombinedResult;
+
+export const combineMarketConfigs = combineIndexedQueries<
+  MarketConfig,
+  ReadContractErrorType,
+  [MarketId]
+>((market) => [market.id]);
 
 export function useMarketConfigs<
   config extends Config = ResolvedRegister["config"],
-  selectData = Market,
+  TCombinedResult = ReturnType<typeof combineMarketConfigs>,
 >({
   marketIds,
+  combine = combineMarketConfigs as any,
   query = {},
   ...parameters
 }: UseMarketConfigsParameters<
   config,
-  selectData
->): UseMarketConfigsReturnType<selectData> {
+  TCombinedResult
+>): UseMarketConfigsReturnType<TCombinedResult> {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
@@ -52,5 +59,6 @@ export function useMarketConfigs<
       enabled: marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? structuralSharing,
     })),
+    combine,
   });
 }
