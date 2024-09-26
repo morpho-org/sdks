@@ -2,6 +2,7 @@ import { Provider } from "ethers";
 import { MorphoBlue__factory } from "ethers-types";
 
 import {
+  Address,
   ChainId,
   ChainUtils,
   MarketConfig,
@@ -25,12 +26,21 @@ export async function fetchMarketConfig(
 
     const { morpho } = getChainAddresses(chainId);
 
-    config = new MarketConfig(
-      await MorphoBlue__factory.connect(morpho, runner).idToMarketParams(id, {
-        // Always fetch at latest block because config is immutable.
-        blockTag: "latest",
-      }),
-    );
+    const marketParams = await MorphoBlue__factory.connect(
+      morpho,
+      runner,
+    ).idToMarketParams(id, {
+      // Always fetch at latest block because config is immutable.
+      blockTag: "latest",
+    });
+
+    config = new MarketConfig({
+      lltv: marketParams.lltv,
+      loanToken: marketParams.loanToken as Address,
+      collateralToken: marketParams.collateralToken as Address,
+      irm: marketParams.irm as Address,
+      oracle: marketParams.oracle as Address,
+    });
   }
 
   return config;

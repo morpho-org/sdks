@@ -60,20 +60,20 @@ export async function fetchVaultFromConfig(
     withdrawQueueSize,
     hasPublicAllocator,
   ] = await Promise.all([
-    mm.curator(overrides),
-    mm.owner(overrides),
-    mm.guardian(overrides),
+    mm.curator(overrides) as Promise<Address>,
+    mm.owner(overrides) as Promise<Address>,
+    mm.guardian(overrides) as Promise<Address>,
     mm.timelock(overrides),
     mm
       .pendingTimelock(overrides)
       .then(({ value, validAt }) => ({ value, validAt })),
     mm
       .pendingGuardian(overrides)
-      .then(({ value, validAt }) => ({ value, validAt })),
-    mm.pendingOwner(overrides),
+      .then(({ value, validAt }) => ({ value: value as Address, validAt })),
+    mm.pendingOwner(overrides) as Promise<Address>,
     mm.fee(overrides),
-    mm.feeRecipient(overrides),
-    mm.skimRecipient(overrides),
+    mm.feeRecipient(overrides) as Promise<Address>,
+    mm.skimRecipient(overrides) as Promise<Address>,
     mm.totalSupply(overrides),
     mm.totalAssets(overrides),
     mm.lastTotalAssets(overrides),
@@ -94,7 +94,7 @@ export async function fetchVaultFromConfig(
     );
 
     publicAllocatorConfigPromise = resolveProperties({
-      admin: publicAllocator.admin(address, overrides),
+      admin: publicAllocator.admin(address, overrides) as Promise<Address>,
       fee: publicAllocator.fee(address, overrides),
       accruedFee: publicAllocator.accruedFee(address, overrides),
     });

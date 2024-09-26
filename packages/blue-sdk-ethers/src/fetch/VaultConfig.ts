@@ -29,7 +29,7 @@ export async function fetchVaultConfig(
 
     // always fetch at latest block because config is immutable
     const [asset, symbol, name, decimals, decimalsOffset] = await Promise.all([
-      mm.asset(),
+      mm.asset() as Promise<Address>,
       mm.symbol(),
       mm.name(),
       mm.decimals(),
