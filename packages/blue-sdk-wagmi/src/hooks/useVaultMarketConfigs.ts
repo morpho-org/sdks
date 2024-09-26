@@ -1,9 +1,9 @@
 import { MarketId, VaultMarketConfig } from "@morpho-org/blue-sdk";
 import { UseQueryResult, useQueries } from "@tanstack/react-query";
-import { combineIndexedQueries } from "src/queries/combineIndexedQueries.js";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   VaultMarketConfigParameters,
   fetchVaultMarketConfigQueryOptions,
