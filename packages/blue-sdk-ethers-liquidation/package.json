@@ -101,9 +101,6 @@
     "moduleFileExtensions": [
       "js",
       "ts"
-    ],
-    "testPathIgnorePatterns": [
-      "node_modules/"
     ]
   }
 }
