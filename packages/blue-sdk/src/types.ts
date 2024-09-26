@@ -1,15 +1,12 @@
-export type Hex<L extends number = -1> = `0x${string}` &
-  (L extends -1 ? unknown : { __LENGTH__: L });
-
 /**
  * The address of a Contract, or an EOA
  */
-export type Address = Hex;
+export type Address = `0x${string}`;
 
 /**
  * The id of a market used on the Blue contract
  */
-export type MarketId = `0x${Hex<64>}` & { __TYPE__: "marketId" };
+export type MarketId = `0x${string}` & { __TYPE__: "marketId" };
 
 export type BigIntish = bigint | string | number | boolean;
 
