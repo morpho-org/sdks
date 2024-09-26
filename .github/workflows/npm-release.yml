@@ -1,5 +1,4 @@
 name: Publish on NPM
-
 on:
   workflow_dispatch:
     inputs:
@@ -12,6 +11,10 @@ on:
           - minor
           - major
           - prerelease
+      prerelease_id:
+        type: string
+        required: false
+        description: Prerelease identifier (e.g., beta, alpha, rc)
 
 jobs:
   publish-to-npm:
@@ -39,9 +42,23 @@ jobs:
           cache: yarn
 
       - run: yarn install --immutable
-
-      - run: yarn lerna version ${{ inputs.version }} --no-private --conventional-commits --create-release github --generate-release-notes --y
-
-      - run: |
+      
+      - name: Run Lerna version
+        run: |
+          VERSION_CMD="yarn lerna version --no-private --conventional-commits --create-release github --generate-release-notes --yes"
+          if [ "${{ inputs.version }}" == "prerelease" ]; then
+            if [ -n "${{ inputs.prerelease_id }}" ]; then
+              VERSION_CMD="$VERSION_CMD prerelease --preid ${{ inputs.prerelease_id }}"
+            else
+              echo "Error: Prerelease identifier is required for prerelease versions"
+              exit 1
+            fi
+          else
+            VERSION_CMD="$VERSION_CMD ${{ inputs.version }}"
+          fi
+          echo "Running command: $VERSION_CMD"
+          $VERSION_CMD
+      - name: Publish to NPM
+        run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          yarn run publish --y
+          yarn run publish --yes
