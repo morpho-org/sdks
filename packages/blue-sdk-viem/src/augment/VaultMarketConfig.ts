@@ -9,3 +9,4 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 VaultMarketConfig.fetch = fetchVaultMarketConfig;
+export { VaultMarketConfig };

@@ -20,3 +20,4 @@ declare module "@morpho-org/blue-sdk" {
 Position.fetch = fetchPosition;
 AccrualPosition.fetch = fetchAccrualPosition;
 AccrualPosition.fetchFromConfig = fetchAccrualPositionFromConfig;
+export { Position, AccrualPosition };
