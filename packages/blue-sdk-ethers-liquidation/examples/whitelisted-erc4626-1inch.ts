@@ -181,7 +181,7 @@ export const check = async (
                       chainId,
                       {
                         receiver: executorAddress,
-                        slippage: 0.01,
+                        slippage: 0.04,
                         yt: pendleMarketData.yieldTokenAddress,
                         amountIn: seizedAssets.toString(),
                         tokenOut: pendleMarketData.underlyingTokenAddress,
