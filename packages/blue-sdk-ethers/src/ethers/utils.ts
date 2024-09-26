@@ -1,3 +1,4 @@
+import { Address } from "@morpho-org/blue-sdk";
 import { AddressLike, ZeroAddress, getAddress, parseUnits } from "ethers";
 
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.
@@ -9,7 +10,7 @@ const toFixed = (x: number, decimals: number) =>
     minimumFractionDigits: decimals,
   }).format(x);
 
-export const safeGetAddress = (address: string) =>
+export const safeGetAddress = (address: string): Address =>
   getAddress(address.toLowerCase());
 
 export const safeParseNumber = (value: number, decimals = 18) =>
