@@ -12,7 +12,6 @@ on:
           - minor
           - major
           - prerelease
-          - custom
       custom_version:
         type: string
         required: false
@@ -48,11 +47,7 @@ jobs:
       - name: Version and publish
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          if [ "${{ inputs.version }}" == "custom" ]; then
-            if [ -z "${{ inputs.custom_version }}" ]; then
-              echo "Error: Custom version is required when 'custom' is selected"
-              exit 1
-            fi
+          if [ -n "${{ inputs.custom_version }}" ]; then
             yarn lerna version ${{ inputs.custom_version }} --no-git-tag-version --yes --force-publish
             yarn run publish --yes --dist-tag unstable
           else
