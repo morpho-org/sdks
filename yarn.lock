@@ -3069,9 +3069,53 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk-simulation@workspace:packages/blue-sdk-simulation":
+"@morpho-org/blue-sdk-viem-bundler@workspace:packages/blue-sdk-viem-bundler":
   version: 0.0.0-use.local
-  resolution: "@morpho-org/blue-sdk-simulation@workspace:packages/blue-sdk-simulation"
+  resolution: "@morpho-org/blue-sdk-viem-bundler@workspace:packages/blue-sdk-viem-bundler"
+  dependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/blue-sdk-viem-simulation": "workspace:^"
+    "@morpho-org/morpho-test": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
+    "@nomicfoundation/hardhat-chai-matchers": "npm:^2.0.2"
+    "@nomicfoundation/hardhat-ethers": "npm:^3.0.6"
+    "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.9"
+    "@types/chai": "npm:^4.3.17"
+    "@types/jest": "npm:^29.5.12"
+    "@types/lodash": "npm:^4.17.7"
+    "@types/mocha": "npm:^10.0.6"
+    "@types/node": "npm:^22.2.0"
+    "@types/sinon": "npm:^17.0.3"
+    "@types/sinon-chai": "npm:^3.2.12"
+    chai: "npm:^4.5.0"
+    dotenv: "npm:^16.3.1"
+    ethers: "npm:^6.12.1"
+    ethers-types: "npm:^3.17.1"
+    hardhat: "npm:^2.22.10"
+    hardhat-deal: "npm:^3.1.0"
+    jest: "npm:^29.6.2"
+    lodash: "npm:^4.17.21"
+    mocha: "npm:^10.4.0"
+    sinon: "npm:^19.0.2"
+    sinon-chai: "npm:^3.7.0"
+    ts-jest: "npm:^29.2.4"
+    ts-node: "npm:^10.9.2"
+    typescript: "npm:^5.6.2"
+    viem: "npm:^2.21.15"
+  peerDependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/blue-sdk-viem-simulation": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
+    mutative: ^1.0.8
+    viem: ^2.0.0
+  languageName: unknown
+  linkType: soft
+
+"@morpho-org/blue-sdk-viem-simulation@workspace:^, @morpho-org/blue-sdk-viem-simulation@workspace:packages/blue-sdk-viem-simulation":
+  version: 0.0.0-use.local
+  resolution: "@morpho-org/blue-sdk-viem-simulation@workspace:packages/blue-sdk-viem-simulation"
   dependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/blue-sdk-viem": "workspace:^"
@@ -4931,6 +4975,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/lodash@npm:^4.17.7":
+  version: 4.17.9
+  resolution: "@types/lodash@npm:4.17.9"
+  checksum: 10c0/54de935e835508b5f835a5dfaedd2b9a299685a21d11e9c5cd2dde57331d03bc2f98b71d2424ca8460f447ecd55a673e45ccdb70e58f9f72745710f6b91abc60
+  languageName: node
+  linkType: hard
+
 "@types/lru-cache@npm:^5.1.0":
   version: 5.1.1
   resolution: "@types/lru-cache@npm:5.1.1"
@@ -4974,6 +5025,15 @@ __metadata:
   version: 18.15.13
   resolution: "@types/node@npm:18.15.13"
   checksum: 10c0/6e5f61c559e60670a7a8fb88e31226ecc18a21be103297ca4cf9848f0a99049dae77f04b7ae677205f2af494f3701b113ba8734f4b636b355477a6534dbb8ada
+  languageName: node
+  linkType: hard
+
+"@types/node@npm:^22.2.0":
+  version: 22.7.3
+  resolution: "@types/node@npm:22.7.3"
+  dependencies:
+    undici-types: "npm:~6.19.2"
+  checksum: 10c0/0e579813528b0370454337a952f43b792cd12731e10fdca0fdb627158e980c1219bba99e9048c134b6a19325d817016059afe016ccd372326c838a1b85a51574
   languageName: node
   linkType: hard
 
@@ -7937,7 +7997,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ethers-types@npm:^3.15.0, ethers-types@npm:^3.17.0":
+"ethers-types@npm:^3.15.0, ethers-types@npm:^3.17.0, ethers-types@npm:^3.17.1":
   version: 3.17.2
   resolution: "ethers-types@npm:3.17.2"
   peerDependencies:
@@ -10267,7 +10327,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"jest@npm:^29.7.0":
+"jest@npm:^29.6.2, jest@npm:^29.7.0":
   version: 29.7.0
   resolution: "jest@npm:29.7.0"
   dependencies:
@@ -14611,6 +14671,28 @@ __metadata:
     typescript:
       optional: true
   checksum: 10c0/17e56aad1fb0d6a168bfa17677348a26025e8350056dd009c68cfeb7e6f06ba1dbd4d8a6382a8b8457bab80610f41da7c415a54b7e0d6e26665a6ce279b242a6
+  languageName: node
+  linkType: hard
+
+"viem@npm:^2.21.15":
+  version: 2.21.15
+  resolution: "viem@npm:2.21.15"
+  dependencies:
+    "@adraffy/ens-normalize": "npm:1.10.0"
+    "@noble/curves": "npm:1.4.0"
+    "@noble/hashes": "npm:1.4.0"
+    "@scure/bip32": "npm:1.4.0"
+    "@scure/bip39": "npm:1.4.0"
+    abitype: "npm:1.0.5"
+    isows: "npm:1.0.4"
+    webauthn-p256: "npm:0.0.5"
+    ws: "npm:8.17.1"
+  peerDependencies:
+    typescript: ">=5.0.4"
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 10c0/72549a364daf3f983637a127c5f73421e088babd76b6283f474154c565c550d1d670300ab178dda7c33fce98eac23a596ddb07d3c4cbc6f90252b8d81e649c49
   languageName: node
   linkType: hard
 

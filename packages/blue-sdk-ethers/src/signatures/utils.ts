@@ -8,8 +8,9 @@ import {
   recoverAddress,
 } from "ethers";
 
-import { Address, InvalidSignatureError } from "@morpho-org/blue-sdk";
+import { Address } from "@morpho-org/blue-sdk";
 
+import { InvalidSignatureError } from "../errors";
 import { SignatureMessage } from "./types";
 
 export async function safeSignTypedData(

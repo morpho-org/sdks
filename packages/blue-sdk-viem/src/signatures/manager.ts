@@ -1,9 +1,7 @@
 import { ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
+import { TypedDataDefinition } from "viem";
 
-import { HashTypedDataParameters, hashTypedData } from "viem";
-import { SignatureMessage } from "./types";
-
-export interface ManagerApprovalSignatureArgs extends Record<string, unknown> {
+export interface AuthorizationArgs {
   authorizer: string;
   authorized: string;
   isAuthorized: boolean;
@@ -11,49 +9,33 @@ export interface ManagerApprovalSignatureArgs extends Record<string, unknown> {
   deadline: bigint;
 }
 
-export const getManagerApprovalMessage = (
-  args: ManagerApprovalSignatureArgs,
+const authorizationTypes = {
+  Authorization: [
+    { name: "authorizer", type: "address" },
+    { name: "authorized", type: "address" },
+    { name: "isAuthorized", type: "bool" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+};
+
+export const getAuthorizationTypedData = (
+  { authorizer, authorized, isAuthorized, nonce, deadline }: AuthorizationArgs,
   chainId: ChainId,
-): SignatureMessage => {
-  const domain = {
-    chainId: chainId,
-    verifyingContract: getChainAddresses(chainId).morpho,
-  };
-
-  const types = {
-    Authorization: [
-      {
-        name: "authorizer",
-        type: "address",
-      },
-      {
-        name: "authorized",
-        type: "address",
-      },
-      {
-        name: "isAuthorized",
-        type: "bool",
-      },
-      {
-        name: "nonce",
-        type: "uint256",
-      },
-      {
-        name: "deadline",
-        type: "uint256",
-      },
-    ],
-  };
-
-  const data: HashTypedDataParameters = {
-    types,
-    message: args,
-    domain,
-    primaryType: "Authorization",
-  };
-
+): TypedDataDefinition<typeof authorizationTypes, "Authorization"> => {
   return {
-    data,
-    hash: hashTypedData(data),
+    domain: {
+      chainId: chainId,
+      verifyingContract: getChainAddresses(chainId).morpho,
+    },
+    types: authorizationTypes,
+    message: {
+      authorizer,
+      authorized,
+      isAuthorized,
+      nonce,
+      deadline,
+    },
+    primaryType: "Authorization",
   };
 };
