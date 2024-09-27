@@ -70,6 +70,16 @@ export async function fetchBestSwap(
     }),
     retryPromiseLinearBackoff(() => fetchParaSwapSwap(swapParams), {
       timeout: 200,
+      onError: (error) => {
+        if (error instanceof Error) {
+          if (
+            error.message === "Not Found" ||
+            error.message.startsWith("invalid json response body")
+          )
+            return true;
+        }
+        return false;
+      },
     }),
   ]);
 
