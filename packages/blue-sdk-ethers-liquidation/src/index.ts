@@ -7,3 +7,4 @@ export * from "./paraswap";
 export * from "./swap";
 export * from "./pendle";
 export * from "./addresses";
+export * from "./curve";

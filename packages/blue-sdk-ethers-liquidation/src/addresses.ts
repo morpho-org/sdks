@@ -15,6 +15,7 @@ declare module "@morpho-org/blue-sdk" {
     rsEth?: Address;
     usdE?: Address;
     sUsdE?: Address;
+    usd0?: Address;
     "usd0++"?: Address;
     "usd0usd0++"?: Address;
     verUsdc?: Address;
@@ -42,6 +43,8 @@ mainnetAddresses["PT-weETH-26DEC2024"] =
   "0x6ee2b5E19ECBa773a352E5B21415Dc419A700d1d";
 mainnetAddresses["PT-weETH-27JUN2024"] =
   "0xc69Ad9baB1dEE23F4605a82b3354F8E40d1E5966";
+
+mainnetAddresses["usd0"] = "0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5";
 
 export const pendleTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
