@@ -2,6 +2,7 @@ import {
   AccrualPosition,
   AccrualVault,
   Address,
+  AssetBalances,
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
@@ -9,6 +10,10 @@ import {
   Market,
   MarketId,
   MathLib,
+  MaxBorrowOptions,
+  MaxWithdrawCollateralOptions,
+  NATIVE_ADDRESS,
+  PeripheralBalanceType,
   Position,
   Token,
   UnknownDataError,
@@ -16,13 +21,19 @@ import {
   User,
   Vault,
   VaultMarketConfig,
+  VaultToken,
   VaultUser,
   WrappedToken,
   _try,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import { bigIntComparator, keys } from "@morpho-org/morpho-ts";
+import {
+  bigIntComparator,
+  isDefined,
+  keys,
+  values,
+} from "@morpho-org/morpho-ts";
 import { Block, zeroAddress } from "viem";
 import {
   UnknownHoldingError,
@@ -293,6 +304,214 @@ export class SimulationState implements InputSimulationState {
 
   public tryGetWrappedToken(address: Address) {
     return _try(this.getWrappedToken.bind(this, address), UnknownDataError);
+  }
+
+  public getBundleBalance(
+    user: Address,
+    token: Address,
+    accountBundlerBalance = true,
+  ) {
+    return _try(() => {
+      let { balance } = this.getHolding(user, token);
+
+      if (!accountBundlerBalance) return balance;
+
+      const { bundler } = getChainAddresses(this.chainId);
+      _try(() => {
+        balance += this.getHolding(bundler, token).balance;
+      }, UnknownDataError);
+
+      return balance;
+    }, UnknownDataError);
+  }
+
+  public getBundleMaxBalance(
+    user: Address,
+    token: Address,
+    slippage?: bigint,
+    disabledPeripheralTokens = new Set<PeripheralBalanceType>(),
+  ) {
+    const maxBalances = this.getBundleAssetBalances(user, token, slippage);
+
+    if (!maxBalances) return maxBalances;
+
+    return values(maxBalances.allocations)
+      .filter(isDefined)
+      .filter(({ type }) => !disabledPeripheralTokens.has(type))
+      .reduce((acc, { dstAmount }) => acc + dstAmount, 0n);
+  }
+
+  public getBundleMaxCapacities(
+    user: Address,
+    marketId: MarketId,
+    slippage?: bigint,
+    reallocationOptions?: PublicAllocatorOptions,
+    disabledPeripheralTokens = new Set<PeripheralBalanceType>(),
+    maxCapacitiesOptions?: {
+      borrow?: MaxBorrowOptions;
+      withdrawCollateral?: MaxWithdrawCollateralOptions;
+    },
+  ) {
+    return _try(() => {
+      const { loanToken, collateralToken } = this.getMarket(marketId).config;
+
+      const loanBalance = this.getBundleMaxBalance(
+        user,
+        loanToken,
+        slippage,
+        disabledPeripheralTokens,
+      );
+      const collateralBalance = this.getBundleMaxBalance(
+        user,
+        collateralToken,
+        slippage,
+        disabledPeripheralTokens,
+      );
+      if (loanBalance == null || collateralBalance == null) return;
+
+      return this.getMarketPublicReallocations(marketId, reallocationOptions)
+        .data.getAccrualPosition(user, marketId)
+        .getMaxCapacities(loanBalance, collateralBalance, maxCapacitiesOptions);
+    }, UnknownDataError);
+  }
+
+  public getBundleAssetBalances(
+    user: Address,
+    token: Address,
+    slippage?: bigint,
+    accountBundlerBalance = true,
+  ): AssetBalances | undefined {
+    return _try(() => {
+      const balance = this.getBundleBalance(user, token, accountBundlerBalance);
+
+      if (balance == null) return;
+
+      const balances = new AssetBalances({
+        srcToken: this.getToken(token),
+        srcAmount: balance,
+        dstAmount: balance,
+      });
+
+      const wrappedToken = _try(
+        () => this.getWrappedToken(token),
+        UnknownWrappedTokenError,
+      );
+
+      if (!wrappedToken) return balances;
+
+      _try(() => {
+        if (wrappedToken instanceof VaultToken) return;
+
+        const unwrappedBalance = this.getBundleBalance(
+          user,
+          wrappedToken.underlying,
+        );
+
+        if (unwrappedBalance != null) {
+          const wrappedBalance = wrappedToken.toWrappedExactAmountIn(
+            unwrappedBalance,
+            slippage,
+          );
+
+          balances.add({
+            type: "wrapped",
+            srcToken: this.getToken(wrappedToken.underlying),
+            srcAmount: unwrappedBalance,
+            dstAmount: wrappedBalance,
+          });
+        }
+      }, UnknownDataError);
+
+      const { wstEth, stEth, wNative } = getChainAddresses(this.chainId);
+
+      // staking is only available on mainnet for now
+      if (this.chainId === ChainId.EthMainnet && token === wstEth && stEth) {
+        _try(() => {
+          const wEthBalance = this.getBundleBalance(user, wNative);
+
+          if (wEthBalance != null) {
+            const stEthToken = this.getWrappedToken(stEth);
+            const stEthBalance = stEthToken.toWrappedExactAmountIn(
+              wEthBalance,
+              slippage,
+            );
+            const wrappedBalance = wrappedToken.toWrappedExactAmountIn(
+              stEthBalance,
+              slippage,
+            );
+
+            balances.add({
+              type: "unwrapped-staked-wrapped",
+              srcToken: this.getToken(wNative),
+              srcAmount: wEthBalance,
+              dstAmount: wrappedBalance,
+            });
+          }
+        }, UnknownDataError);
+
+        _try(() => {
+          const ethBalance = this.getBundleBalance(user, NATIVE_ADDRESS);
+
+          if (ethBalance != null) {
+            const stEthToken = this.getWrappedToken(stEth);
+            const stEthBalance = stEthToken.toWrappedExactAmountIn(
+              ethBalance,
+              slippage,
+            );
+            const wrappedBalance = wrappedToken.toWrappedExactAmountIn(
+              stEthBalance,
+              slippage,
+            );
+
+            balances.add({
+              type: "staked-wrapped",
+              srcToken: this.getToken(NATIVE_ADDRESS),
+              srcAmount: ethBalance,
+              dstAmount: wrappedBalance,
+            });
+          }
+        }, UnknownDataError);
+      }
+
+      _try(() => {
+        if (!(wrappedToken instanceof VaultToken)) return;
+
+        const vaultBalances = this.getBundleAssetBalances(
+          user,
+          wrappedToken.underlying,
+          slippage,
+        );
+
+        if (vaultBalances) {
+          for (const { type, srcToken, srcAmount, dstAmount } of values(
+            vaultBalances.allocations,
+          ).filter(isDefined)) {
+            const newType = (
+              {
+                base: "vault",
+                wrapped: "wrapped-vault",
+              } as Partial<Record<PeripheralBalanceType, PeripheralBalanceType>>
+            )[type];
+
+            if (newType) {
+              const depositedBalance = wrappedToken.toWrappedExactAmountIn(
+                dstAmount,
+                slippage,
+              );
+
+              balances.add({
+                type: newType,
+                srcToken,
+                srcAmount,
+                dstAmount: depositedBalance,
+              });
+            }
+          }
+        }
+      });
+
+      return balances;
+    }, UnknownDataError);
   }
 
   /**

@@ -42,7 +42,7 @@ export interface BundlingOptions {
   };
   getRequirementOperations?: (
     requiredTokenAmounts: {
-      token: string;
+      token: Address;
       required: bigint;
     }[],
   ) => BundlerOperation[];
