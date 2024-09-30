@@ -1,3 +1,4 @@
+import { expect } from "chai";
 import {
   AdaptiveCurveIrm__factory,
   BlueOracle__factory,
@@ -13,9 +14,11 @@ import {
   latest,
   setNextBlockTimestamp,
 } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
+import { parseUnits } from "ethers";
 import { ethers } from "hardhat";
 import { deal } from "hardhat-deal";
-import { ChainId, Market, MarketConfig, MathLib, addresses } from "../src";
+import { ChainId, Market, addresses } from "../src";
+import { MAINNET_MARKETS } from "../src/tests/mocks/markets";
 
 describe("Market", () => {
   let signer: SignerWithAddress;
@@ -28,22 +31,22 @@ describe("Market", () => {
     const { morpho: morphoAddress } = addresses[ChainId.EthMainnet];
     const morpho = MorphoBlue__factory.connect(morphoAddress, signer);
 
-    const config = new MarketConfig({
-      loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-      collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-      oracle: "0x48F7E36EB6B826B2dF4B2E630B62Cd25e89E40e2",
-      irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
-      lltv: 86_0000000000000000n,
-    });
+    const config = MAINNET_MARKETS.usdc_wstEth;
 
-    const collateral = MathLib.WAD;
+    const collateral = parseUnits("1", 18);
     await deal(config.collateralToken, signer, collateral);
     await ERC20__factory.connect(config.collateralToken, signer).approve(
       morphoAddress,
       collateral,
     );
     await morpho.supplyCollateral(config, collateral, signer.address, "0x");
-    await morpho.borrow(config, 1_000000n, 0n, signer.address, signer.address);
+    await morpho.borrow(
+      config,
+      parseUnits("1", 6),
+      0n,
+      signer.address,
+      signer.address,
+    );
 
     const {
       totalSupplyAssets,
@@ -75,35 +78,47 @@ describe("Market", () => {
 
     await setNextBlockTimestamp(timestamp);
 
+    const maxBorrowable = market.getMaxBorrowableAssets(position);
+
+    await expect(
+      morpho.borrow(
+        config,
+        maxBorrowable + 1n,
+        0n,
+        signer.address,
+        signer.address,
+      ),
+    ).to.be.rejectedWith("insufficient collateral");
+
     await morpho.borrow(
       config,
-      market.getMaxBorrowableAssets(position),
+      maxBorrowable,
       0n,
       signer.address,
       signer.address,
     );
   });
 
-  it("should borrow borrowable assets in a galaxy far far away", async () => {
+  it("should borrow borrowable assets in an extreme future", async () => {
     const { morpho: morphoAddress } = addresses[ChainId.EthMainnet];
     const morpho = MorphoBlue__factory.connect(morphoAddress, signer);
 
-    const config = new MarketConfig({
-      loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
-      collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-      oracle: "0x48F7E36EB6B826B2dF4B2E630B62Cd25e89E40e2",
-      irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
-      lltv: 86_0000000000000000n,
-    });
+    const config = MAINNET_MARKETS.usdc_wstEth;
 
-    const collateral = MathLib.WAD * 10_000_000_000n;
+    const collateral = parseUnits("10000000000", 18);
     await deal(config.collateralToken, signer, collateral);
     await ERC20__factory.connect(config.collateralToken, signer).approve(
       morphoAddress,
       collateral,
     );
     await morpho.supplyCollateral(config, collateral, signer.address, "0x");
-    await morpho.borrow(config, 1_000000n, 0n, signer.address, signer.address);
+    await morpho.borrow(
+      config,
+      parseUnits("1", 6),
+      0n,
+      signer.address,
+      signer.address,
+    );
 
     const {
       totalSupplyAssets,
@@ -132,17 +147,23 @@ describe("Market", () => {
     }).accrueInterest(timestamp);
 
     const position = await morpho.position(config.id, signer.address);
-    const borrowable = market.getMaxBorrowableAssets(position);
+    const maxBorrowable = market.getMaxBorrowableAssets(position);
 
-    await deal(config.loanToken, signer, borrowable);
+    await deal(config.loanToken, signer, maxBorrowable);
     await ERC20__factory.connect(config.loanToken, signer).approve(
       morphoAddress,
-      borrowable,
+      maxBorrowable,
     );
-    await morpho.supply(config, borrowable, 0n, signer.address, "0x");
+    await morpho.supply(config, maxBorrowable, 0n, signer.address, "0x");
 
     await setNextBlockTimestamp(timestamp);
 
-    await morpho.borrow(config, borrowable, 0n, signer.address, signer.address);
+    await morpho.borrow(
+      config,
+      maxBorrowable,
+      0n,
+      signer.address,
+      signer.address,
+    );
   });
 });

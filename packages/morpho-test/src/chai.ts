@@ -1,7 +1,9 @@
 import chai, { Assertion } from "chai";
+import chaiAsPromised from "chai-as-promised";
 import sinonChai from "sinon-chai";
 
 chai.use(sinonChai);
+chai.use(chaiAsPromised);
 
 // @ts-ignore
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt#use_within_json
