@@ -1,6 +1,5 @@
 import {
   ChainId,
-  Holding,
   MathLib,
   NATIVE_ADDRESS,
   addresses,
@@ -10,7 +9,6 @@ import { expect } from "chai";
 
 import { setUp } from "@morpho-org/morpho-test";
 import { viem } from "hardhat";
-import "../src/augment/Holding";
 import { deal } from "hardhat-deal";
 import {
   Account,
@@ -28,6 +26,7 @@ import {
   testActions,
 } from "viem";
 import { permit2Abi } from "../src/abis";
+import { Holding } from "../src/augment/Holding";
 
 describe("augment/Holding", () => {
   let client: Client<

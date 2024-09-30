@@ -47,8 +47,9 @@ import "@morpho-org/blue-sdk-ethers/lib/augment";
 Leverage the [`MarketConfig`](./src/market/MarketConfig.ts) class to fetch information on a given market's immutable configuration:
 
 ```typescript
-import { MarketId, MarketConfig } from "@morpho-org/blue-sdk";
-import "@morpho-org/blue-sdk-ethers/lib/augment/MarketConfig";
+import { MarketId } from "@morpho-org/blue-sdk";
+// /!\ Import MarketConfig from the augmentation file (or simply import the file)
+import { MarketConfig } from "@morpho-org/blue-sdk-ethers/lib/augment/MarketConfig";
 
 const config = await MarketConfig.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
@@ -64,8 +65,9 @@ Leverage the [`Market`](./src/market/Market.ts) class to fetch information on a 
 
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
-import { MarketId, Market } from "@morpho-org/blue-sdk";
-import "@morpho-org/blue-sdk-ethers/lib/augment/Market";
+import { MarketId } from "@morpho-org/blue-sdk";
+// /!\ Import Market from the augmentation file (or simply import the file)
+import { Market } from "@morpho-org/blue-sdk-ethers/lib/augment/Market";
 
 const market = await Market.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
@@ -93,8 +95,9 @@ Leverage the [`Position`](./src/position/Position.ts) class to fetch the positio
 
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
-import { MarketId, AccrualPosition } from "@morpho-org/blue-sdk";
-import "@morpho-org/blue-sdk-ethers/lib/augment/Position";
+import { MarketId } from "@morpho-org/blue-sdk";
+// /!\ Import AccrualPosition from the augmentation file (or simply import the file)
+import { AccrualPosition } from "@morpho-org/blue-sdk-ethers/lib/augment/Position";
 
 const position = await AccrualPosition.fetch(
   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",

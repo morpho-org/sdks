@@ -16,12 +16,12 @@ import {
   testActions,
 } from "viem";
 
-import { ChainId, Market, MarketConfig, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MarketConfig, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { createRandomAddress, setUp } from "@morpho-org/morpho-test";
 
-import "../src/augment/Market";
 import { blueAbi } from "../src/abis";
+import { Market } from "../src/augment/Market";
 
 describe("augment/Market", () => {
   let client: Client<

@@ -9,3 +9,5 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 VaultMarketAllocation.fetch = fetchVaultMarketAllocation;
+
+export { VaultMarketAllocation };

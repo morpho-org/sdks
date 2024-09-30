@@ -4,16 +4,11 @@ import { ethers } from "hardhat";
 
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import {
-  ChainId,
-  MarketConfig,
-  MarketId,
-  addresses,
-} from "@morpho-org/blue-sdk";
+import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import "../src/augment/MarketConfig";
+import { MarketConfig } from "../src/augment/MarketConfig";
 
 describe("augment/MarketConfig", () => {
   let signer: SignerWithAddress;

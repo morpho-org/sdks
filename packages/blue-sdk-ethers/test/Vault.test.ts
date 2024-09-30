@@ -6,10 +6,10 @@ import { ethers } from "hardhat";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
-import { ChainId, MarketId, Vault, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 
-import "../src/augment/Vault";
+import { Vault } from "../src/augment/Vault";
 import { steakUsdc } from "./fixtures";
 
 describe("augment/Vault", () => {
