@@ -17,6 +17,7 @@ import {
   MaybeDraft,
   Operation,
   Operations,
+  PublicAllocatorOptions,
   SimulationResult,
   SimulationState,
   handleOperation,

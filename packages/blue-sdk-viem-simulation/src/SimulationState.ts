@@ -3,9 +3,12 @@ import {
   AccrualVault,
   Address,
   ChainId,
+  DEFAULT_SLIPPAGE_TOLERANCE,
+  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   Holding,
   Market,
   MarketId,
+  MathLib,
   Position,
   Token,
   UnknownDataError,
@@ -16,9 +19,11 @@ import {
   VaultUser,
   WrappedToken,
   _try,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import { Block } from "viem";
+import { bigIntComparator, keys } from "@morpho-org/morpho-ts";
+import { Block, zeroAddress } from "viem";
 import {
   UnknownHoldingError,
   UnknownMarketError,
@@ -29,6 +34,30 @@ import {
   UnknownVaultUserError,
   UnknownWrappedTokenError,
 } from "./errors.js";
+import {
+  MaybeDraft,
+  produceImmutable,
+  simulateOperation,
+  simulateOperations,
+} from "./handlers/index.js";
+import { Operation } from "./operations.js";
+
+export interface PublicAllocatorOptions {
+  /* The array of vaults to reallocate. Must all have enabled the PublicAllocator. Defaults to all the vaults that have enabled the PublicAllocator. */
+  reallocatableVaults?: Address[];
+
+  /* Fallback maximum utilization allowed from withdrawn markets. */
+  defaultMaxWithdrawalUtilization?: bigint;
+
+  /* Market-specific maximum utilization allowed for each corresponding withdrawn market. */
+  maxWithdrawalUtilization?: Record<MarketId, bigint | undefined>;
+}
+
+export interface PublicReallocation {
+  id: MarketId;
+  vault: Address;
+  assets: bigint;
+}
 
 export interface InputSimulationState {
   chainId: ChainId;
@@ -264,5 +293,182 @@ export class SimulationState implements InputSimulationState {
 
   public tryGetWrappedToken(address: Address) {
     return _try(this.getWrappedToken.bind(this, address), UnknownDataError);
+  }
+
+  /**
+   * Calculates the public reallocations required to reach the maximum liquidity available according to some reallocation algorithm.
+   * @param marketId The market on which to calculate the shared liquidity.
+   * @param options The options for the reallocation.
+   * @returns The array of withdrawals to perform and the end simulation data.
+   * @warning The end SimulationData may have incorrectly accrued some fee from public reallocations multiple times.
+   */
+  public getMarketPublicReallocations(
+    marketId: MarketId,
+    {
+      reallocatableVaults = keys(this.vaultMarketConfigs),
+      defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+      maxWithdrawalUtilization = {},
+    }: PublicAllocatorOptions = {},
+  ) {
+    // Filter the vaults that have the market enabled and configured on the PublicAllocator.
+    reallocatableVaults = reallocatableVaults.filter((vault) => {
+      const vaultMarketConfig = this.vaultMarketConfigs[vault]?.[marketId];
+
+      return (
+        !!vaultMarketConfig?.enabled &&
+        vaultMarketConfig.publicAllocatorConfig != null &&
+        this.vaults[vault]?.publicAllocatorConfig != null
+      );
+    });
+
+    let data: MaybeDraft<SimulationState> = this;
+    const withdrawals: PublicReallocation[] = [];
+
+    const _getMarketPublicReallocations = () => {
+      const vaultWithdrawals = reallocatableVaults
+        .map((vault) =>
+          _try(() => {
+            const dstAssets = data
+              .getAccrualPosition(vault, marketId)
+              .accrueInterest(this.block.timestamp).supplyAssets;
+            const { cap, publicAllocatorConfig } = data.getVaultMarketConfig(
+              vault,
+              marketId,
+            );
+
+            const suppliable =
+              cap -
+              // There is slippage in the expected vault's supply on the destination market.
+              MathLib.wMulDown(
+                dstAssets,
+                MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+              );
+            const { maxIn } = publicAllocatorConfig!;
+
+            const marketWithdrawals = data
+              .getVault(vault)
+              .withdrawQueue.filter((srcMarketId) => srcMarketId !== marketId)
+              .map((srcMarketId) => {
+                try {
+                  const srcPosition = data
+                    .getAccrualPosition(vault, srcMarketId)
+                    .accrueInterest(this.block.timestamp);
+
+                  const targetUtilizationLiquidity =
+                    srcPosition.market.getWithdrawToUtilization(
+                      maxWithdrawalUtilization[srcMarketId] ??
+                        defaultMaxWithdrawalUtilization,
+                    );
+
+                  const maxOut =
+                    data.getVaultMarketConfig(vault, srcMarketId)
+                      .publicAllocatorConfig?.maxOut ?? 0n;
+
+                  return {
+                    id: srcMarketId,
+                    assets: MathLib.min(
+                      srcPosition.supplyAssets, // Cannot reallocate more than what the vault supplied on the source market.
+                      targetUtilizationLiquidity, // Cannot reallocate more than the liquidity directly available on the source market under target utilization.
+                      suppliable, // Cannot supply over the destination market's configured cap.
+                      maxIn, // Cannot supply over the destination market's configured maxIn.
+                      maxOut, // Cannot reallocate more than the source market's configured maxOut.
+                    ),
+                  };
+                } catch {
+                  return { id: srcMarketId, assets: 0n };
+                }
+              })
+              .filter(({ assets }) => assets > 0n)
+              // Sort by decreasing reallocatable liquidity.
+              .sort(bigIntComparator(({ assets }) => assets, "desc"));
+
+            return {
+              vault,
+              largestWithdrawal: marketWithdrawals[0],
+            };
+          }, UnknownDataError),
+        )
+        .filter(
+          (vaultWithdrawals) =>
+            vaultWithdrawals?.largestWithdrawal != null &&
+            vaultWithdrawals.largestWithdrawal.assets > 0n,
+        )
+        // Sort by decreasing reallocatable liquidity.
+        .sort(
+          bigIntComparator(
+            (vaultWithdrawals) => vaultWithdrawals!.largestWithdrawal!.assets,
+            "desc",
+          ),
+        );
+
+      const largestVaultWithdrawal = vaultWithdrawals[0];
+      if (
+        largestVaultWithdrawal == null ||
+        largestVaultWithdrawal.largestWithdrawal == null
+      )
+        return { withdrawals, data };
+
+      const { vault, largestWithdrawal } = largestVaultWithdrawal;
+
+      withdrawals.push({ ...largestWithdrawal, vault });
+
+      data = simulateOperation(
+        {
+          type: "MetaMorpho_PublicReallocate",
+          address: vault,
+          sender: zeroAddress, // Bypass fee balance check.
+          args: {
+            withdrawals: [largestWithdrawal],
+            supplyMarketId: marketId,
+          },
+        },
+        data,
+      );
+
+      return _getMarketPublicReallocations();
+    };
+
+    return _getMarketPublicReallocations();
+  }
+
+  public simulateRequiredTokenAmounts(operations: Operation[]) {
+    const { bundler } = getChainAddresses(this.chainId);
+
+    const virtualBundlerData = produceImmutable(this, (draft) => {
+      Object.values(draft.holdings[bundler] ?? {}).forEach(
+        (bundlerTokenData) => {
+          // Virtual balance to calculate the amount required.
+          bundlerTokenData.balance += MathLib.MAX_UINT_160;
+        },
+      );
+    });
+
+    const steps = simulateOperations(operations, virtualBundlerData);
+
+    const bundlerTokenDiffs = keys(virtualBundlerData.holdings[bundler]).map(
+      (token) => ({
+        token,
+        required: steps
+          .map(
+            (step) =>
+              // When recursively simulated, this will cause tokens to be required at the highest recursion level.
+              // For example: supplyCollateral(x, supplyCollateral(y, borrow(z)))   [provided x, y, z < MAX_UINT_160]
+              //              |                   |                   |=> MAX_UINT_160 - (3 * MAX_UINT_160 + z) < 0
+              //              |                   |=> MAX_UINT_160 - (2 * MAX_UINT_160 - y) < 0
+              //              |=> MAX_UINT_160 - (MAX_UINT_160 - y - x) > 0
+              MathLib.MAX_UINT_160 -
+              (step.holdings[bundler]?.[token]?.balance ?? 0n),
+          )
+          .sort(
+            bigIntComparator(
+              (required) => required,
+              // Take the highest required amount among all operations.
+              "desc",
+            ),
+          )[0]!,
+      }),
+    );
+
+    return bundlerTokenDiffs.filter(({ required }) => required > 0n);
   }
 }
