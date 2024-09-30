@@ -8,3 +8,5 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 MarketConfig.fetch = fetchMarketConfig;
+
+export { MarketConfig };

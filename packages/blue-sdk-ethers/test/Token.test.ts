@@ -6,11 +6,10 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   ChainId,
   ExchangeRateWrappedToken,
-  Token,
   addresses,
 } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-import "../src/augment/Token";
+import { Token } from "../src/augment/Token";
 
 describe("augment/Token", () => {
   let signer: SignerWithAddress;

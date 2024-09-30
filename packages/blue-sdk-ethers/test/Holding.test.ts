@@ -5,12 +5,12 @@ import { deal } from "hardhat-deal";
 
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ChainId, Holding, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 
 import { setUp } from "@morpho-org/morpho-test";
 import { ethers } from "hardhat";
-import "../src/augment/Holding";
+import { Holding } from "../src/augment/Holding";
 
 describe("augment/Holding", () => {
   let signer: SignerWithAddress;
