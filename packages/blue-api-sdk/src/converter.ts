@@ -13,7 +13,6 @@ import {
   VaultMarketPublicAllocatorConfig,
   VaultUtils,
 } from "@morpho-org/blue-sdk";
-import { safeGetAddress, safeParseNumber } from "@morpho-org/blue-sdk-ethers";
 import { Time, isDefined } from "@morpho-org/morpho-ts";
 
 import {
@@ -136,61 +135,70 @@ export interface PartialBlueApiVault
   publicAllocatorConfig: Maybe<PartialBlueApiPublicAllocatorConfig>;
 }
 
-export namespace BlueSdkConverters {
-  export function getPriceUsd(
+export interface ConverterOptions {
+  parseAddress: (value: string) => Address;
+  parseNumber: (value: number, decimals: number) => bigint;
+}
+
+export class BlueSdkConverter {
+  constructor(protected readonly options: ConverterOptions) {}
+
+  public getPriceUsd(
     dto: PartialBlueApiTokenPrice,
     ethPriceUsd?: BlueApiToken["priceUsd"],
   ) {
     let price: bigint | undefined;
 
-    if (dto.priceUsd != null) price = safeParseNumber(dto.priceUsd, 18);
+    if (dto.priceUsd != null)
+      price = this.options.parseNumber(dto.priceUsd, 18);
     else if (dto.spotPriceEth != null && ethPriceUsd != null)
       price = MathLib.wMulDown(
-        safeParseNumber(dto.spotPriceEth, 18),
-        safeParseNumber(ethPriceUsd, 18),
+        this.options.parseNumber(dto.spotPriceEth, 18),
+        this.options.parseNumber(ethPriceUsd, 18),
       );
 
     return price;
   }
 
-  export function getTokenWithPrice(
+  public getTokenWithPrice(
     dto: PartialBlueApiToken,
     ethPriceUsd?: BlueApiToken["priceUsd"],
   ) {
     return new TokenWithPrice(
       {
         ...dto,
-        address: safeGetAddress(dto.address),
+        address: this.options.parseAddress(dto.address),
       },
-      getPriceUsd(dto, ethPriceUsd),
+      this.getPriceUsd(dto, ethPriceUsd),
     );
   }
 
-  export function getMarketConfig(dto: PartialBlueApiMarketConfig) {
+  public getMarketConfig(dto: PartialBlueApiMarketConfig) {
     return new MarketConfig({
-      collateralToken: safeGetAddress(
+      collateralToken: this.options.parseAddress(
         dto.collateralAsset?.address ??
           "0x0000000000000000000000000000000000000000",
       ),
-      loanToken: safeGetAddress(dto.loanAsset.address),
-      oracle: safeGetAddress(dto.oracleAddress),
-      irm: safeGetAddress(dto.irmAddress),
+      loanToken: this.options.parseAddress(dto.loanAsset.address),
+      oracle: this.options.parseAddress(dto.oracleAddress),
+      irm: this.options.parseAddress(dto.irmAddress),
       lltv: dto.lltv,
     });
   }
 
-  export function getMarket(dto: PartialBlueApiMarket) {
+  public getMarket(dto: PartialBlueApiMarket) {
     if (dto.state == null) return null;
 
-    const config = getMarketConfig(dto);
-    const fee = safeParseNumber(dto.state.fee, 18);
+    const config = this.getMarketConfig(dto);
+    const fee = this.options.parseNumber(dto.state.fee, 18);
     const price = dto.collateralPrice ?? 1n;
 
     const rateAtTarget =
       // rateAtUTarget is not typed nullable, but it will be as soon as a non-compatible IRM is enabled.
       dto.state.rateAtUTarget != null
         ? // API rate at targed is annualized, while the Market rateAtTarget is per second.
-          safeParseNumber(dto.state.rateAtUTarget, 18) / Time.s.from.y(1n)
+          this.options.parseNumber(dto.state.rateAtUTarget, 18) /
+          Time.s.from.y(1n)
         : undefined;
 
     return new Market({
@@ -206,28 +214,28 @@ export namespace BlueSdkConverters {
     });
   }
 
-  export function getPosition(dto: PartialBlueApiMarketPosition) {
+  public getPosition(dto: PartialBlueApiMarketPosition) {
     return new Position({
       ...dto,
       marketId: dto.market.uniqueKey,
-      user: safeGetAddress(dto.user.address),
+      user: this.options.parseAddress(dto.user.address),
     });
   }
 
-  export function getAccrualPosition(dto: PartialBlueApiMarketAccrualPosition) {
-    const market = BlueSdkConverters.getMarket(dto.market);
+  public getAccrualPosition(dto: PartialBlueApiMarketAccrualPosition) {
+    const market = this.getMarket(dto.market);
     if (market == null) return null;
 
     return new AccrualPosition(
       {
         ...dto,
-        user: safeGetAddress(dto.user.address),
+        user: this.options.parseAddress(dto.user.address),
       },
       market,
     );
   }
 
-  export function getVaultConfig(dto: PartialBlueApiVaultConfig) {
+  public getVaultConfig(dto: PartialBlueApiVaultConfig) {
     return new VaultConfig(
       {
         ...dto,
@@ -239,12 +247,12 @@ export namespace BlueSdkConverters {
     );
   }
 
-  export function getVaultMarketAllocation(
+  public getVaultMarketAllocation(
     vault: Address,
     dto: PartialBlueApiVaultAllocation,
     publicAllocatorConfig?: Maybe<PartialBlueApiPublicAllocatorConfig>,
   ) {
-    const position = BlueSdkConverters.getAccrualPosition({
+    const position = this.getAccrualPosition({
       user: { address: vault },
       market: dto.market,
       supplyShares: dto.supplyShares,
@@ -254,7 +262,7 @@ export namespace BlueSdkConverters {
     if (!position) return;
 
     return new VaultMarketAllocation({
-      config: BlueSdkConverters.getVaultMarketConfig(
+      config: this.getVaultMarketConfig(
         vault,
         dto,
         publicAllocatorConfig?.flowCaps.find(
@@ -265,7 +273,7 @@ export namespace BlueSdkConverters {
     });
   }
 
-  export function getVaultMarketConfig(
+  public getVaultMarketConfig(
     vault: Address,
     dto: PartialBlueApiVaultAllocation,
     flowCaps?: Maybe<PartialBlueApiPublicAllocatorFlowCaps>,
@@ -280,15 +288,13 @@ export namespace BlueSdkConverters {
         validAt: dto.pendingSupplyCapValidAt ?? 0n,
       },
       removableAt: dto.removableAt,
-      publicAllocatorConfig:
-        BlueSdkConverters.getVaultMarketPublicAllocatorConfig(
-          vault,
-          flowCaps ?? { ...dto, maxIn: 0n, maxOut: 0n },
-        ),
+      publicAllocatorConfig: flowCaps
+        ? this.getVaultMarketPublicAllocatorConfig(vault, flowCaps)
+        : undefined,
     });
   }
 
-  export function getVaultMarketPublicAllocatorConfig(
+  public getVaultMarketPublicAllocatorConfig(
     vault: Address,
     dto: PartialBlueApiPublicAllocatorFlowCaps,
   ) {
@@ -299,7 +305,7 @@ export namespace BlueSdkConverters {
     });
   }
 
-  export function getAccrualVault({
+  public getAccrualVault({
     state,
     publicAllocatorConfig,
     ...dto
@@ -309,8 +315,8 @@ export namespace BlueSdkConverters {
     return new AccrualVault(
       {
         ...state,
-        config: BlueSdkConverters.getVaultConfig(dto),
-        fee: safeParseNumber(state.fee),
+        config: this.getVaultConfig(dto),
+        fee: this.options.parseNumber(state.fee, 18),
         pendingOwner:
           state.pendingOwner ?? "0x0000000000000000000000000000000000000000",
         pendingTimelock: {
@@ -336,7 +342,7 @@ export namespace BlueSdkConverters {
       },
       state.allocation
         ?.map((allocation) =>
-          BlueSdkConverters.getVaultMarketAllocation(
+          this.getVaultMarketAllocation(
             dto.address,
             allocation,
             publicAllocatorConfig,
