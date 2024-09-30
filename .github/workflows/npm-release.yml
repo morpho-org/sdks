@@ -12,6 +12,10 @@ on:
           - minor
           - major
           - prerelease
+      custom_version:
+        type: string
+        required: false
+        description: Custom semver version to publish. Falls back to incremental versioning if empty. (e.g., 1.0.0-unstable.1)
 
 jobs:
   publish-to-npm:
@@ -40,8 +44,13 @@ jobs:
 
       - run: yarn install --immutable
 
-      - run: yarn lerna version ${{ inputs.version }} --no-private --conventional-commits --create-release github --generate-release-notes --y
-
-      - run: |
+      - name: Version and publish
+        run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-          yarn run publish --y
+          if [ -n "${{ inputs.custom_version }}" ]; then
+            yarn lerna version ${{ inputs.custom_version }} --no-git-tag-version --yes --force-publish
+            yarn run publish --yes --dist-tag unstable
+          else
+            yarn lerna version ${{ inputs.version }} --no-private --conventional-commits --create-release github --generate-release-notes --yes
+            yarn run publish --yes
+          fi
