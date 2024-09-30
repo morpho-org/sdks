@@ -270,13 +270,26 @@ export abstract class BaseFormatter {
   of(value: bigint | number, decimals?: number) {
     if (typeof value === "number") {
       const str = value.toString();
-      const [significant] = str.split(/[eE]/);
-      const [, digits = ""] = significant!.split(".");
+      const [significant, exp] = str.split(/[eE]/);
+      const [whole, digits = ""] = significant!.split(".");
 
-      decimals =
-        Math.min(100, Math.max(0, Math.floor(-Math.log10(value)))) +
-        digits.length;
-      value = BigInt(value.toFixed(decimals).replace(".", ""));
+      decimals = Math.min(100, Math.max(0, -Number(exp ?? 0))) + digits.length;
+
+      if (Number(exp) > 0) {
+        const newDigits =
+          digits + "0".repeat(Math.max(0, Number(exp) - digits.length));
+
+        const strValue =
+          whole +
+          newDigits.slice(0, Number(exp)) +
+          "." +
+          newDigits.slice(Number(exp));
+
+        decimals = strValue.split(".")[1]?.length ?? 0;
+        value = BigInt(strValue.replace(".", ""));
+      } else {
+        value = BigInt(value.toFixed(decimals).replace(".", ""));
+      }
     }
 
     return formatBI(value, decimals!, this._options);
