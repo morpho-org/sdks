@@ -4,9 +4,9 @@ import { ethers } from "hardhat";
 
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ChainId, User, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-import "../src/augment/User";
+import { User } from "../src/augment/User";
 
 describe("augment/User", () => {
   let signer: SignerWithAddress;

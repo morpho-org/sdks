@@ -7,11 +7,11 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { setCode, time } from "@nomicfoundation/hardhat-network-helpers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
-import { ChainId, Market, MarketConfig, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MarketConfig, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import "../src/augment/Market";
+import { Market } from "../src/augment/Market";
 
 describe("augment/Market", () => {
   let signer: SignerWithAddress;
