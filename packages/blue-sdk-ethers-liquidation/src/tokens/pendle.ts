@@ -1,6 +1,8 @@
-import { BigNumberish } from "ethers";
+import { BigNumberish, MaxUint256 } from "ethers";
 
-import { Address, ChainId } from "@morpho-org/blue-sdk";
+import { Address, ChainId, Market } from "@morpho-org/blue-sdk";
+import { LiquidationEncoder } from "../LiquidationEncoder";
+import { pendleTokens } from "../addresses";
 
 export const PENDLE_API_URL = "https://api-v2.pendle.finance/core/";
 
@@ -131,4 +133,78 @@ export async function getPendleRedeemCallData(
     "/redeem",
     params,
   );
+}
+
+export async function handlePendleTokens(
+  chainId: ChainId,
+  market: Market,
+  seizedAssets: bigint,
+  executorAddress: string,
+  encoder: LiquidationEncoder,
+): Promise<{ srcAmount: bigint; srcToken: string }> {
+  if (!pendleTokens[chainId].has(market.config.collateralToken)) {
+    return { srcAmount: seizedAssets, srcToken: market.config.collateralToken };
+  }
+
+  const pendleMarketData =
+    pendleMarkets[chainId][market.config.collateralToken];
+  const maturity = pendleMarketData?.maturity;
+  if (!maturity) {
+    throw Error("Pendle market not found");
+  }
+
+  let srcAmount = seizedAssets;
+  let srcToken = pendleMarketData.underlyingTokenAddress;
+
+  if (maturity < new Date()) {
+    // Pendle market is expired, we can directly redeem the collateral
+    const redeemCallData = await getPendleRedeemCallData(chainId, {
+      receiver: executorAddress,
+      slippage: 0.04,
+      yt: pendleMarketData.yieldTokenAddress,
+      amountIn: seizedAssets.toString(),
+      tokenOut: pendleMarketData.underlyingTokenAddress,
+      enableAggregator: true,
+    });
+    encoder
+      .erc20Approve(srcToken, redeemCallData.tx.to, MaxUint256)
+      .erc20Approve(
+        market.config.collateralToken,
+        redeemCallData.tx.to,
+        MaxUint256,
+      )
+      .pushCall(
+        redeemCallData.tx.to,
+        redeemCallData.tx.value ? redeemCallData.tx.value : 0n,
+        redeemCallData.tx.data,
+      );
+  } else {
+    // Pendle market is not expired, we need to swap the collateral token (PT) to the underlying token
+    const swapCallData = await getPendleSwapCallData(
+      chainId,
+      pendleMarketData.address,
+      {
+        receiver: executorAddress,
+        slippage: 0.04,
+        tokenIn: market.config.collateralToken,
+        tokenOut: pendleMarketData.underlyingTokenAddress,
+        amountIn: seizedAssets.toString(),
+      },
+    );
+    encoder
+      .erc20Approve(srcToken, swapCallData.tx.to, MaxUint256)
+      .erc20Approve(
+        market.config.collateralToken,
+        swapCallData.tx.to,
+        MaxUint256,
+      )
+      .pushCall(
+        swapCallData.tx.to,
+        swapCallData.tx.value ? swapCallData.tx.value : 0n,
+        swapCallData.tx.data,
+      );
+    srcAmount = BigInt(swapCallData.data.amountOut);
+  }
+
+  return { srcAmount, srcToken };
 }

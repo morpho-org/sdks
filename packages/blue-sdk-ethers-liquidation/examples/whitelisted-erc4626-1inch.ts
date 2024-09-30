@@ -5,7 +5,6 @@ import {
   Provider,
   Signer,
   Wallet,
-  ethers,
   getDefaultProvider,
   parseEther,
   toBigInt,
@@ -37,7 +36,6 @@ import {
   fetchBestSwap,
   getPendleRedeemCallData,
   getPendleSwapCallData,
-  getUSD0USD0PlusPlusWitdhrawal,
   mainnetAddresses,
   pendleMarkets,
   pendleTokens,
@@ -238,25 +236,14 @@ export const check = async (
                     mainnetAddresses["usd0usd0++"] &&
                   chainId === ChainId.EthMainnet
                 ) {
-                  let abi = [
-                    "function remove_liquidity_one_coin(uint256 _burn_amount to, int128 i, address _receiver)",
-                  ];
-                  let iface = new ethers.Interface(abi);
-                  encoder.pushCall(
-                    mainnetAddresses["usd0usd0++"]!,
-                    0n,
-                    iface.encodeFunctionData("remove_liquidity_one_coin", [
-                      srcAmount,
-                      0,
-                      executorAddress,
-                    ]),
-                  );
-                  const usd0usd0PlusPlusWithdrawal =
-                    await getUSD0USD0PlusPlusWitdhrawal(signer, srcAmount);
-                  srcAmount = usd0usd0PlusPlusWithdrawal;
-                  srcToken = mainnetAddresses["usd0"]!;
+                  //TODO - add usd0usd0++ liquidation
+                } else if (
+                  market.config.collateralToken ===
+                    mainnetAddresses["usd0++"] &&
+                  chainId === ChainId.EthMainnet
+                ) {
+                  //TODO - add usd0++ liquidation
                 }
-
                 const bestSwap = await fetchBestSwap({
                   chainId,
                   src: srcToken,

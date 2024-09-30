@@ -56,3 +56,8 @@ export const pendleTokens: Record<ChainId, Set<Address>> = {
   ]),
   [ChainId.BaseMainnet]: new Set(),
 };
+
+export const curvePools = {
+  "usd0usd0++": "0x1d08e7adc263cfc70b1babe6dc5bb339c16eec52",
+  usd0usdc: "0x14100f81e33c33ecc7cdac70181fb45b6e78569f",
+};

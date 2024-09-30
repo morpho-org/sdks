@@ -2,6 +2,7 @@ import { BigNumberish, toBigInt } from "ethers";
 
 import { retryPromiseLinearBackoff } from "@morpho-org/morpho-ts";
 
+import { ChainId } from "@morpho-org/blue-sdk";
 import { fetchOneInchSwap } from "./1inch";
 import { fetchParaSwapSwap } from "./paraswap";
 
@@ -104,4 +105,44 @@ export async function fetchBestSwap(
     }
     return best;
   });
+}
+
+export async function fetchBestSwapDetails(
+  chainId: ChainId,
+  srcToken: string,
+  dstToken: string,
+  srcAmount: bigint,
+  executorAddress: string,
+  slippage: number,
+): Promise<{
+  dstAmount: bigint;
+  to: string;
+  value: bigint;
+  data: string;
+}> {
+  const bestSwap = await fetchBestSwap({
+    chainId,
+    src: srcToken,
+    dst: dstToken,
+    amount: srcAmount,
+    from: executorAddress,
+    slippage,
+    includeTokensInfo: false,
+    includeProtocols: false,
+    includeGas: false,
+    allowPartialFill: false,
+    disableEstimate: true,
+    usePermit2: false,
+  });
+
+  if (!bestSwap) {
+    throw Error("could not fetch swap from both 1inch and paraswap");
+  }
+
+  return {
+    dstAmount: BigInt(bestSwap.dstAmount),
+    to: bestSwap.tx.to,
+    value: BigInt(bestSwap.tx.value || 0),
+    data: bestSwap.tx.data,
+  };
 }

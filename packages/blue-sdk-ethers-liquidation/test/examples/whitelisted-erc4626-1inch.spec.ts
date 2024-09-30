@@ -46,13 +46,13 @@ import {
 import chaiAlmost from "chai-almost";
 import { check } from "../../examples/whitelisted-erc4626-1inch";
 import { SwapMock__factory } from "../../mocks/types";
-import { getOneInchSwapApiUrl } from "../../src/1inch";
-import { PARASWAP_API_URL } from "../../src/paraswap";
+import { getOneInchSwapApiUrl } from "../../src/swap/1inch";
+import { PARASWAP_API_URL } from "../../src/swap/paraswap";
 import {
   getPendleRedeemApiUrl,
   getPendleSwapApiUrl,
   pendleMarkets,
-} from "../../src/pendle";
+} from "../../src/tokens/pendle";
 import { sendRawBundleMockImpl } from "../mocks";
 
 //allow for 0.1% tolerance for balance checks
