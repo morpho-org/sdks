@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/sdks",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "Collection of SDKs to interact with Morpho",
   "repository": "git@github.com:morpho-org/sdks.git",
   "author": "Morpho Association <contact@morpho.org>",
