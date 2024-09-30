@@ -76,18 +76,6 @@ export namespace BlueErrors {
   }
 }
 
-export class InvalidSignatureError extends Error {
-  constructor(
-    public readonly hash: string,
-    public readonly signer: Address,
-    public readonly recovered: Address,
-  ) {
-    super(
-      `invalid signature for hash ${hash}: expected ${signer}, recovered ${recovered}`,
-    );
-  }
-}
-
 export interface ErrorClass<E extends Error> {
   new (...args: any[]): E;
 }

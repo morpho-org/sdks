@@ -4,7 +4,6 @@ import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/
 import { viem } from "hardhat";
 import {
   Account,
-  Address,
   Chain,
   Client,
   PublicActions,
@@ -41,7 +40,7 @@ describe("augment/Vault", () => {
       .extend(testActions({ mode: "hardhat" }));
 
     const owner = await client.readContract({
-      address: steakUsdc.address as Address,
+      address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "owner",
     });
@@ -50,7 +49,7 @@ describe("augment/Vault", () => {
     await setNextBlockTimestamp(block.timestamp);
     await client.writeContract({
       account: owner,
-      address: steakUsdc.address as Address,
+      address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "setIsAllocator",
       args: [addresses[ChainId.EthMainnet].publicAllocator, true],
@@ -59,10 +58,10 @@ describe("augment/Vault", () => {
     await setNextBlockTimestamp(block.timestamp);
     await client.writeContract({
       account: owner,
-      address: addresses[ChainId.EthMainnet].publicAllocator as Address,
+      address: addresses[ChainId.EthMainnet].publicAllocator,
       abi: publicAllocatorAbi,
       functionName: "setFee",
-      args: [steakUsdc.address as Address, 1n],
+      args: [steakUsdc.address, 1n],
     });
   });
 
@@ -106,7 +105,7 @@ describe("augment/Vault", () => {
       totalSupply: 25752992371062043744406063n,
     });
 
-    const value = await Vault.fetch(steakUsdc.address as Address, client);
+    const value = await Vault.fetch(steakUsdc.address, client);
 
     expect(value).to.eql(expectedData);
   });

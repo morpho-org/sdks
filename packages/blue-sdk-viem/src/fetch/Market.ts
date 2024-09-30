@@ -1,4 +1,4 @@
-import { Address, Client, zeroAddress } from "viem";
+import { Client, zeroAddress } from "viem";
 
 import {
   ChainUtils,
@@ -68,7 +68,7 @@ export async function fetchMarket(
     client,
     {
       ...parameters,
-      address: morpho as Address,
+      address: morpho,
       abi: blueAbi,
       functionName: "idToMarketParams",
       args: [id],
@@ -97,7 +97,7 @@ export async function fetchMarket(
   ] = await Promise.all([
     readContract(client, {
       ...parameters,
-      address: morpho as Address,
+      address: morpho,
       abi: blueAbi,
       functionName: "market",
       args: [config.id],
@@ -105,7 +105,7 @@ export async function fetchMarket(
     config.oracle !== zeroAddress
       ? readContract(client, {
           ...parameters,
-          address: config.oracle as Address,
+          address: config.oracle,
           abi: blueOracleAbi,
           functionName: "price",
         })
@@ -113,7 +113,7 @@ export async function fetchMarket(
     config.irm === adaptiveCurveIrm
       ? await readContract(client, {
           ...parameters,
-          address: adaptiveCurveIrm as Address,
+          address: adaptiveCurveIrm,
           abi: adaptiveCurveIrmAbi,
           functionName: "rateAtTarget",
           args: [config.id],

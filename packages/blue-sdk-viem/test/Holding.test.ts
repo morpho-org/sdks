@@ -12,7 +12,6 @@ import { viem } from "hardhat";
 import { deal } from "hardhat-deal";
 import {
   Account,
-  Address,
   Chain,
   Client,
   PublicActions,
@@ -46,7 +45,7 @@ describe("augment/Holding", () => {
   });
 
   it("should fetch user WETH data with deployless", async () => {
-    const token = MAINNET_MARKETS.eth_wstEth.loanToken as Address;
+    const token = MAINNET_MARKETS.eth_wstEth.loanToken;
 
     const expectedData = new Holding({
       token,
@@ -129,7 +128,7 @@ describe("augment/Holding", () => {
   });
 
   it("should fetch user WETH data without deployless", async () => {
-    const token = MAINNET_MARKETS.eth_wstEth.loanToken as Address;
+    const token = MAINNET_MARKETS.eth_wstEth.loanToken;
 
     const expectedData = new Holding({
       token,
@@ -214,7 +213,7 @@ describe("augment/Holding", () => {
   });
 
   it("should fetch native user holding", async () => {
-    const token = NATIVE_ADDRESS as Address;
+    const token = NATIVE_ADDRESS;
 
     const expectedData = new Holding({
       token,
@@ -246,7 +245,7 @@ describe("augment/Holding", () => {
   });
 
   it("should fetch backed token user holding with deployless", async () => {
-    const token = addresses[ChainId.EthMainnet].wbC3M as Address;
+    const token = addresses[ChainId.EthMainnet].wbC3M;
 
     const expectedData = new Holding({
       token,
@@ -330,7 +329,7 @@ describe("augment/Holding", () => {
   });
 
   it("should fetch backed token user holding without deployless", async () => {
-    const token = addresses[ChainId.EthMainnet].wbC3M as Address;
+    const token = addresses[ChainId.EthMainnet].wbC3M;
 
     const expectedData = new Holding({
       token,

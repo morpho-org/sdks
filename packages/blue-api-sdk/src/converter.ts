@@ -288,9 +288,10 @@ export class BlueSdkConverter {
         validAt: dto.pendingSupplyCapValidAt ?? 0n,
       },
       removableAt: dto.removableAt,
-      publicAllocatorConfig: flowCaps
-        ? this.getVaultMarketPublicAllocatorConfig(vault, flowCaps)
-        : undefined,
+      publicAllocatorConfig: this.getVaultMarketPublicAllocatorConfig(
+        vault,
+        flowCaps ?? { ...dto, maxIn: 0n, maxOut: 0n },
+      ),
     });
   }
 

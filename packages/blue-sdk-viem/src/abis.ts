@@ -1,34 +1,3 @@
-import { erc20Abi } from "viem";
-
-export const bytes32Erc20Abi = [
-  ...erc20Abi.filter(
-    ({ type, name }) =>
-      type !== "function" || (name !== "name" && name !== "symbol"),
-  ),
-  {
-    type: "function",
-    name: "name",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [
-      {
-        type: "bytes32",
-      },
-    ],
-  },
-  {
-    type: "function",
-    name: "symbol",
-    stateMutability: "view",
-    inputs: [],
-    outputs: [
-      {
-        type: "bytes32",
-      },
-    ],
-  },
-] as const;
-
 export const erc2612Abi = [
   {
     inputs: [],

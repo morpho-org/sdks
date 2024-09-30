@@ -1,4 +1,11 @@
-import { Address, Client, erc20Abi, hexToString, isHex } from "viem";
+import {
+  Address,
+  Client,
+  erc20Abi,
+  erc20Abi_bytes32,
+  hexToString,
+  isHex,
+} from "viem";
 
 import {
   ChainUtils,
@@ -10,7 +17,7 @@ import {
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { bytes32Erc20Abi, wstEthAbi } from "../abis";
+import { wstEthAbi } from "../abis";
 import { abi, code } from "../queries/GetToken";
 import { DeploylessFetchParameters } from "../types";
 
@@ -82,7 +89,7 @@ export async function fetchToken(
       readContract(client, {
         ...parameters,
         address,
-        abi: bytes32Erc20Abi,
+        abi: erc20Abi_bytes32,
         functionName: "symbol",
       }).then(decodeBytes32String),
     ),
@@ -95,7 +102,7 @@ export async function fetchToken(
       readContract(client, {
         ...parameters,
         address,
-        abi: bytes32Erc20Abi,
+        abi: erc20Abi_bytes32,
         functionName: "name",
       }).then(decodeBytes32String),
     ),
@@ -113,7 +120,7 @@ export async function fetchToken(
       if (stEth) {
         const stEthPerWstEth = await readContract(client, {
           ...parameters,
-          address: wstEth as Address,
+          address: wstEth!,
           abi: wstEthAbi,
           functionName: "stEthPerToken",
         });

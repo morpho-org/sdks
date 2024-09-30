@@ -36,7 +36,7 @@ export const combineVaultMarketConfigs = combineIndexedQueries<
   VaultMarketConfig,
   ReadContractErrorType,
   [Address, MarketId]
->((config) => [config.vault as Address, config.marketId]);
+>((config) => [config.vault, config.marketId]);
 
 export function useVaultMarketConfigs<
   config extends Config = ResolvedRegister["config"],

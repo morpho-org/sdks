@@ -1,15 +1,9 @@
-import {
-  Address,
-  ChainId,
-  Token,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
-
-import { HashTypedDataParameters, hashTypedData } from "viem";
-import { SignatureMessage } from "./types";
+import { Address, ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
+import { TypedDataDefinition } from "viem";
 
 export interface PermitArgs {
-  erc20: Token;
+  name: string;
+  address: Address;
   owner: Address;
   spender: Address;
   allowance: bigint;
@@ -17,95 +11,88 @@ export interface PermitArgs {
   deadline: bigint;
 }
 
+const permitTypes = {
+  Permit: [
+    { name: "owner", type: "address" },
+    { name: "spender", type: "address" },
+    { name: "value", type: "uint256" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+} as const;
+
 /**
  * Permit signature for ERC20 tokens, following EIP-2612.
  * Docs: https://eips.ethereum.org/EIPS/eip-2612
  */
-export const getPermitMessage = (
-  { deadline, owner, nonce, spender, erc20, allowance }: PermitArgs,
+export const getPermitTypedData = (
+  { deadline, owner, nonce, spender, name, address, allowance }: PermitArgs,
   chainId: ChainId,
-): SignatureMessage => {
-  const { usdc, dai } = getChainAddresses(chainId);
+): TypedDataDefinition<typeof permitTypes, "Permit"> => {
+  const { usdc } = getChainAddresses(chainId);
 
   const domain = {
-    name: erc20.name,
-    version: erc20.address === usdc ? "2" : "1",
+    name: name,
+    version: address === usdc ? "2" : "1",
     chainId,
-    verifyingContract: erc20.address,
+    verifyingContract: address,
   };
 
-  const data: HashTypedDataParameters =
-    erc20.address === dai
-      ? {
-          domain,
-          types: {
-            Permit: [
-              {
-                name: "holder",
-                type: "address",
-              },
-              {
-                name: "spender",
-                type: "address",
-              },
-              {
-                name: "nonce",
-                type: "uint256",
-              },
-              {
-                name: "expiry",
-                type: "uint256",
-              },
-              {
-                name: "allowed",
-                type: "bool",
-              },
-            ],
-          },
-          message: {
-            holder: owner,
-            spender,
-            allowed: allowance > 0n,
-            nonce,
-            expiry: deadline,
-          },
-          primaryType: "Permit",
-        }
-      : {
-          domain,
-          types: {
-            Permit: [
-              {
-                name: "owner",
-                type: "address",
-              },
-              {
-                name: "spender",
-                type: "address",
-              },
-              {
-                name: "value",
-                type: "uint256",
-              },
-              {
-                name: "nonce",
-                type: "uint256",
-              },
-              {
-                name: "deadline",
-                type: "uint256",
-              },
-            ],
-          },
-          message: {
-            owner,
-            spender,
-            value: allowance,
-            nonce,
-            deadline,
-          },
-          primaryType: "Permit",
-        };
+  return {
+    domain,
+    types: permitTypes,
+    message: {
+      owner,
+      spender,
+      value: allowance,
+      nonce,
+      deadline,
+    },
+    primaryType: "Permit",
+  };
+};
 
-  return { data, hash: hashTypedData(data) };
+export interface DaiPermitArgs {
+  owner: Address;
+  spender: Address;
+  allowance: bigint;
+  nonce: bigint;
+  deadline: bigint;
+}
+
+const daiPermitTypes = {
+  Permit: [
+    { name: "holder", type: "address" },
+    { name: "spender", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "expiry", type: "uint256" },
+    { name: "allowed", type: "bool" },
+  ],
+} as const;
+
+export const getDaiPermitTypedData = (
+  { deadline, owner, nonce, spender, allowance }: DaiPermitArgs,
+  chainId: ChainId,
+): TypedDataDefinition<typeof daiPermitTypes, "Permit"> => {
+  const { dai } = getChainAddresses(chainId);
+
+  const domain = {
+    name: "DAI",
+    version: "1",
+    chainId,
+    verifyingContract: dai,
+  };
+
+  return {
+    domain,
+    types: daiPermitTypes,
+    message: {
+      holder: owner,
+      spender,
+      allowed: allowance > 0n,
+      nonce,
+      expiry: deadline,
+    },
+    primaryType: "Permit",
+  };
 };
