@@ -917,7 +917,6 @@ describe("erc4626-1inch", () => {
       accruedPosition.seizableCollateral / 2n,
       "11669266773005108147656",
     );
-    console.log("swap mock", swapMockAddress);
 
     await check(executorAddress, hardhatSigner, signer, [marketId]);
 
