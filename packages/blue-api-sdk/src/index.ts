@@ -1,4 +1,4 @@
 export * from "./types";
-export * from "./converters";
+export * from "./converter";
 export * from "./warnings";
 export * from "./cache";

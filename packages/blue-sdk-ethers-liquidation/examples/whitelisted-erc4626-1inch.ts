@@ -12,7 +12,7 @@ import {
 import { MulticallWrapper } from "ethers-multicall-provider";
 import { ERC20__factory, ERC4626__factory } from "ethers-types";
 
-import { BlueSdkConverters } from "@morpho-org/blue-api-sdk";
+import { BlueSdkConverter } from "@morpho-org/blue-api-sdk";
 import {
   Address,
   ChainId,
@@ -27,6 +27,7 @@ import {
 
 import {
   fetchAccrualPositionFromConfig,
+  safeGetAddress,
   safeParseNumber,
 } from "@morpho-org/blue-sdk-ethers";
 import { Time } from "@morpho-org/morpho-ts";
@@ -39,6 +40,11 @@ import {
   pendleMarkets,
   pendleTokens,
 } from "../src";
+
+const converter = new BlueSdkConverter({
+  parseAddress: safeGetAddress,
+  parseNumber: safeParseNumber,
+});
 
 export const check = async (
   executorAddress: string,
@@ -82,7 +88,7 @@ export const check = async (
 
       const accrualPosition = await fetchAccrualPositionFromConfig(
         position.user.address,
-        BlueSdkConverters.getMarketConfig(position.market),
+        converter.getMarketConfig(position.market),
         signer,
         { chainId },
       );
@@ -91,14 +97,14 @@ export const check = async (
         accrualPosition.accrueInterest(Time.timestamp());
 
       try {
-        const collateralToken = BlueSdkConverters.getTokenWithPrice(
+        const collateralToken = converter.getTokenWithPrice(
           position.market.collateralAsset,
           wethPriceUsd,
         );
         if (collateralToken.price == null)
           throw new UnknownTokenPriceError(collateralToken.address);
 
-        const loanToken = BlueSdkConverters.getTokenWithPrice(
+        const loanToken = converter.getTokenWithPrice(
           position.market.loanAsset,
           wethPriceUsd,
         );
@@ -326,7 +332,9 @@ export const check = async (
 
                 if (gasLimitUsd > profitUsd)
                   throw Error(
-                    `gas cost ($${gasLimitUsd.formatWad(2)}) > profit ($${profitUsd.formatWad(2)})`,
+                    `gas cost ($${gasLimitUsd.formatWad(
+                      2,
+                    )}) > profit ($${profitUsd.formatWad(2)})`,
                   );
 
                 const transaction = {
