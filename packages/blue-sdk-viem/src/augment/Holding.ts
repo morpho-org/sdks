@@ -8,4 +8,5 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 Holding.fetch = fetchHolding;
+
 export { Holding };

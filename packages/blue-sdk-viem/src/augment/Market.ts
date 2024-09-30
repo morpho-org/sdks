@@ -10,4 +10,5 @@ declare module "@morpho-org/blue-sdk" {
 
 Market.fetch = fetchMarket;
 Market.fetchFromConfig = fetchMarketFromConfig;
+
 export { Market };

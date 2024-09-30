@@ -8,4 +8,5 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 VaultConfig.fetch = fetchVaultConfig;
+
 export { VaultConfig };

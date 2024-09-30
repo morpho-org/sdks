@@ -8,4 +8,5 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 VaultMarketPublicAllocatorConfig.fetch = fetchVaultMarketPublicAllocatorConfig;
+
 export { VaultMarketPublicAllocatorConfig };
