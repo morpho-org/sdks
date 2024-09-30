@@ -120,7 +120,7 @@ export async function fetchToken(
       if (stEth) {
         const stEthPerWstEth = await readContract(client, {
           ...parameters,
-          address: wstEth as Address,
+          address: wstEth!,
           abi: wstEthAbi,
           functionName: "stEthPerToken",
         });

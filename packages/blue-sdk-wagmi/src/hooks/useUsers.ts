@@ -30,7 +30,7 @@ export const combineUsers = combineIndexedQueries<
   User,
   ReadContractErrorType,
   [Address]
->((user) => [user.address as Address]);
+>((user) => [user.address]);
 
 export function useUsers<
   config extends Config = ResolvedRegister["config"],

@@ -33,7 +33,7 @@ export const combineVaultConfigs = combineIndexedQueries<
   VaultConfig,
   ReadContractErrorType,
   [Address]
->((config) => [config.address as Address]);
+>((config) => [config.address]);
 
 export function useVaultConfigs<
   config extends Config = ResolvedRegister["config"],

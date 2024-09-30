@@ -289,12 +289,7 @@ export async function fetchAccrualVault(
     Array.from(
       new Set(vault.supplyQueue.concat(vault.withdrawQueue)),
       (marketId) =>
-        fetchVaultMarketAllocation(
-          vault.address as Address,
-          marketId,
-          client,
-          parameters,
-        ),
+        fetchVaultMarketAllocation(vault.address, marketId, client, parameters),
     ),
   );
   return new AccrualVault(vault, allocations);

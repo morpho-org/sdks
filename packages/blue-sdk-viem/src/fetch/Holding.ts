@@ -125,7 +125,7 @@ export async function fetchHolding(
               abi: erc20Abi,
               address: token,
               functionName: "allowance",
-              args: [user, chainAddresses[label] as Address],
+              args: [user, chainAddresses[label]],
             }),
           ] as const,
       ),
@@ -138,9 +138,9 @@ export async function fetchHolding(
             await readContract(client, {
               ...parameters,
               abi: permit2Abi,
-              address: chainAddresses.permit2 as Address,
+              address: chainAddresses.permit2,
               functionName: "allowance",
-              args: [user, token, chainAddresses[label] as Address],
+              args: [user, token, chainAddresses[label]],
             }).then(([amount, expiration, nonce]) => ({
               amount,
               expiration: BigInt(expiration),

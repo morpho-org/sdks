@@ -33,7 +33,7 @@ export const combinePositions = combineIndexedQueries<
   Position,
   ReadContractErrorType,
   [Address, MarketId]
->((position) => [position.user as Address, position.marketId]);
+>((position) => [position.user, position.marketId]);
 
 export function usePositions<
   config extends Config = ResolvedRegister["config"],

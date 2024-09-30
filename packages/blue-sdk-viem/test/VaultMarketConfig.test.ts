@@ -3,7 +3,6 @@ import { expect } from "chai";
 import { viem } from "hardhat";
 import {
   Account,
-  Address,
   Chain,
   Client,
   PublicActions,
@@ -44,7 +43,7 @@ describe("augment/VaultMarketConfig", () => {
       .extend(testActions({ mode: "hardhat" }));
 
     const owner = await client.readContract({
-      address: steakUsdc.address as Address,
+      address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "owner",
     });
@@ -52,7 +51,7 @@ describe("augment/VaultMarketConfig", () => {
 
     await client.writeContract({
       account: owner,
-      address: steakUsdc.address as Address,
+      address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "setIsAllocator",
       args: [addresses[ChainId.EthMainnet].publicAllocator, true],
@@ -60,19 +59,19 @@ describe("augment/VaultMarketConfig", () => {
 
     await client.writeContract({
       account: owner,
-      address: addresses[ChainId.EthMainnet].publicAllocator as Address,
+      address: addresses[ChainId.EthMainnet].publicAllocator,
       abi: publicAllocatorAbi,
       functionName: "setFee",
-      args: [steakUsdc.address as Address, 1n],
+      args: [steakUsdc.address, 1n],
     });
 
     await client.writeContract({
       account: owner,
-      address: addresses[ChainId.EthMainnet].publicAllocator as Address,
+      address: addresses[ChainId.EthMainnet].publicAllocator,
       abi: publicAllocatorAbi,
       functionName: "setFlowCaps",
       args: [
-        steakUsdc.address as Address,
+        steakUsdc.address,
         [
           {
             id: MAINNET_MARKETS.usdc_wstEth.id,
@@ -103,7 +102,7 @@ describe("augment/VaultMarketConfig", () => {
     });
 
     const value = await VaultMarketConfig.fetch(
-      steakUsdc.address as Address,
+      steakUsdc.address,
       MAINNET_MARKETS.usdc_wstEth.id,
       client,
     );

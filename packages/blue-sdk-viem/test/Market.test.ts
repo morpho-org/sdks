@@ -4,7 +4,6 @@ import { expect } from "chai";
 import { viem } from "hardhat";
 import {
   Account,
-  Address,
   Chain,
   Client,
   PublicActions,
@@ -77,8 +76,10 @@ describe("augment/Market", () => {
   });
 
   it("should not fetch rate at target for unknown irm", async () => {
+    const { morpho } = addresses[ChainId.EthMainnet];
+
     const owner = await client.readContract({
-      address: addresses[ChainId.EthMainnet].morpho,
+      address: morpho,
       abi: blueAbi,
       functionName: "owner",
     });
@@ -91,24 +92,24 @@ describe("augment/Market", () => {
     await setCode(
       config.irm,
       (await client.getCode({
-        address: MAINNET_MARKETS.eth_wstEth.irm as Address,
+        address: MAINNET_MARKETS.eth_wstEth.irm,
       }))!,
     );
     await client.writeContract({
       account: owner,
-      address: addresses[ChainId.EthMainnet].morpho,
+      address: morpho,
       abi: blueAbi,
       functionName: "enableIrm",
-      args: [config.irm as Address],
+      args: [config.irm],
     });
 
     const timestamp = await time.latest();
     await setNextBlockTimestamp(timestamp);
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].morpho,
+      address: morpho,
       abi: blueAbi,
       functionName: "createMarket",
-      args: [config.asViem()],
+      args: [{ ...config }],
     });
 
     const expectedData = {

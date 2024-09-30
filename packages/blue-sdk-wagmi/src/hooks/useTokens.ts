@@ -33,7 +33,7 @@ export const combineTokens = combineIndexedQueries<
   Token,
   ReadContractErrorType,
   [Address]
->((token) => [token.address as Address]);
+>((token) => [token.address]);
 
 export function useTokens<
   config extends Config = ResolvedRegister["config"],

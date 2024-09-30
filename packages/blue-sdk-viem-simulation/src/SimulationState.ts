@@ -316,7 +316,6 @@ export class SimulationState implements InputSimulationState {
 
       return (
         !!vaultMarketConfig?.enabled &&
-        vaultMarketConfig.publicAllocatorConfig != null &&
         this.vaults[vault]?.publicAllocatorConfig != null
       );
     });
@@ -343,7 +342,6 @@ export class SimulationState implements InputSimulationState {
                 dstAssets,
                 MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
               );
-            const { maxIn } = publicAllocatorConfig!;
 
             const marketWithdrawals = data
               .getVault(vault)
@@ -360,9 +358,8 @@ export class SimulationState implements InputSimulationState {
                         defaultMaxWithdrawalUtilization,
                     );
 
-                  const maxOut =
-                    data.getVaultMarketConfig(vault, srcMarketId)
-                      .publicAllocatorConfig?.maxOut ?? 0n;
+                  const maxOut = data.getVaultMarketConfig(vault, srcMarketId)
+                    .publicAllocatorConfig.maxOut;
 
                   return {
                     id: srcMarketId,
@@ -370,7 +367,7 @@ export class SimulationState implements InputSimulationState {
                       srcPosition.supplyAssets, // Cannot reallocate more than what the vault supplied on the source market.
                       targetUtilizationLiquidity, // Cannot reallocate more than the liquidity directly available on the source market under target utilization.
                       suppliable, // Cannot supply over the destination market's configured cap.
-                      maxIn, // Cannot supply over the destination market's configured maxIn.
+                      publicAllocatorConfig.maxIn, // Cannot supply over the destination market's configured maxIn.
                       maxOut, // Cannot reallocate more than the source market's configured maxOut.
                     ),
                   };

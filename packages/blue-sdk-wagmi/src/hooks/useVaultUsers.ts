@@ -33,7 +33,7 @@ export const combineVaultUsers = combineIndexedQueries<
   VaultUser,
   ReadContractErrorType,
   [Address, Address]
->((vaultUser) => [vaultUser.vault as Address, vaultUser.user as Address]);
+>((vaultUser) => [vaultUser.vault, vaultUser.user]);
 
 export function useVaultUsers<
   config extends Config = ResolvedRegister["config"],

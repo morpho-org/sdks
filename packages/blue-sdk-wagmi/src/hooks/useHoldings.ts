@@ -33,7 +33,7 @@ export const combineHoldings = combineIndexedQueries<
   Holding,
   ReadContractErrorType,
   [Address, Address]
->((holding) => [holding.user as Address, holding.token as Address]);
+>((holding) => [holding.user, holding.token]);
 
 export function useHoldings<
   config extends Config = ResolvedRegister["config"],

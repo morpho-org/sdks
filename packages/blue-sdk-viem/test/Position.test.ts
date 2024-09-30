@@ -4,7 +4,6 @@ import { deal } from "hardhat-deal";
 import { viem } from "hardhat";
 import {
   Account,
-  Address,
   Chain,
   Client,
   PublicActions,
@@ -62,37 +61,37 @@ describe("augment/Position", () => {
 
     await deal(market.loanToken, supplier.account.address, supplyAssets);
     await supplier.writeContract({
-      address: market.loanToken as Address,
+      address: market.loanToken,
       abi: erc20Abi,
       functionName: "approve",
       args: [addresses[ChainId.EthMainnet].morpho, maxUint256],
     });
     await supplier.writeContract({
-      address: addresses[ChainId.EthMainnet].morpho as Address,
+      address: addresses[ChainId.EthMainnet].morpho,
       abi: blueAbi,
       functionName: "supply",
-      args: [market.asViem(), supplyAssets, 0n, supplier.account.address, "0x"],
+      args: [market, supplyAssets, 0n, supplier.account.address, "0x"],
     });
 
     await deal(market.collateralToken, client.account.address, collateral);
     await client.writeContract({
-      address: market.collateralToken as Address,
+      address: market.collateralToken,
       abi: erc20Abi,
       functionName: "approve",
       args: [addresses[ChainId.EthMainnet].morpho, maxUint256],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].morpho as Address,
+      address: addresses[ChainId.EthMainnet].morpho,
       abi: blueAbi,
       functionName: "supplyCollateral",
-      args: [market.asViem(), collateral, client.account.address, "0x"],
+      args: [market, collateral, client.account.address, "0x"],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].morpho as Address,
+      address: addresses[ChainId.EthMainnet].morpho,
       abi: blueAbi,
       functionName: "borrow",
       args: [
-        market.asViem(),
+        { ...market },
         0n,
         borrowShares,
         client.account.address,

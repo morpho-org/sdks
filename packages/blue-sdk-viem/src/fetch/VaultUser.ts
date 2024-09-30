@@ -45,7 +45,7 @@ export async function fetchVaultUser(
   const [allowance, isAllocator] = await Promise.all([
     readContract(client, {
       ...parameters,
-      address: config.asset as Address,
+      address: config.asset,
       abi: erc20Abi,
       functionName: "allowance",
       args: [user, vault],
