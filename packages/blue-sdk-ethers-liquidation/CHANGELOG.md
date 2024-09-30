@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+# 1.11.0 (2024-09-30)
+
+**Note:** Version bump only for package @morpho-org/blue-sdk-ethers-liquidation
+
 ## 1.10.4 (2024-09-23)
 
 **Note:** Version bump only for package @morpho-org/blue-sdk-ethers-liquidation
