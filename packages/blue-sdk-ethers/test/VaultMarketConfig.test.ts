@@ -6,14 +6,13 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   ChainId,
-  VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import "../src/augment/VaultMarketConfig";
+import { VaultMarketConfig } from "../src/augment/VaultMarketConfig";
 import { steakUsdc } from "./fixtures";
 
 describe("augment/VaultMarketConfig", () => {

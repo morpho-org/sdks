@@ -14,10 +14,10 @@ import {
   testActions,
 } from "viem";
 
-import { ChainId, User, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-import "../src/augment/User";
 import { blueAbi } from "../src/abis";
+import { User } from "../src/augment/User";
 
 describe("augment/User", () => {
   let client: Client<
