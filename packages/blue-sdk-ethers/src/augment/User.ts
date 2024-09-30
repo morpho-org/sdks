@@ -8,3 +8,5 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 User.fetch = fetchUser;
+
+export { User };

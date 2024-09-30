@@ -8,3 +8,5 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 Market.fetch = fetchMarket;
+
+export { Market };
