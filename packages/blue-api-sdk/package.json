@@ -20,7 +20,6 @@
     "@graphql-codegen/typescript-operations": "^4.0.1",
     "@graphql-codegen/typescript-resolvers": "^4.1.0",
     "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-ethers": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "graphql": "^16.8.1",
     "graphql-tag": "^2.12.6",
@@ -28,7 +27,6 @@
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-ethers": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^"
   },
   "publishConfig": {
