@@ -19,11 +19,11 @@ import {
   testActions,
 } from "viem";
 
-import { ChainId, Position, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
-import "../src/augment/Position";
 import { blueAbi } from "../src/abis";
+import { Position } from "../src/augment/Position";
 
 const market = MAINNET_MARKETS.usdc_wstEth;
 
