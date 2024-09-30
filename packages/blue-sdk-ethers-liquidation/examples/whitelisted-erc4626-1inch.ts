@@ -39,6 +39,8 @@ import {
   mainnetAddresses,
   pendleMarkets,
   pendleTokens,
+  swapUSD0PPToUSDC,
+  swapUsd0Usd0PPToUSDC,
 } from "../src";
 
 export const check = async (
@@ -231,49 +233,69 @@ export const check = async (
                   }
                 }
 
-                if (
-                  market.config.collateralToken ===
+                switch (true) {
+                  // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
+                  // Process USD0/USD0++ collateral liquidation with specific process (using curve)
+                  case market.config.collateralToken ===
                     mainnetAddresses["usd0usd0++"] &&
-                  chainId === ChainId.EthMainnet
-                ) {
-                  //TODO - add usd0usd0++ liquidation
-                } else if (
-                  market.config.collateralToken ===
+                    chainId === ChainId.EthMainnet:
+                    await swapUsd0Usd0PPToUSDC(
+                      signer,
+                      srcAmount,
+                      accrualPosition.collateral,
+                      encoder,
+                      executorAddress,
+                    );
+                    break;
+                  // Process USD0++ colalteral liquidation with specific process (using curve)
+                  case market.config.collateralToken ===
                     mainnetAddresses["usd0++"] &&
-                  chainId === ChainId.EthMainnet
-                ) {
-                  //TODO - add usd0++ liquidation
+                    chainId === ChainId.EthMainnet: {
+                    await swapUSD0PPToUSDC(
+                      signer,
+                      srcAmount,
+                      accrualPosition.collateral,
+                      encoder,
+                      executorAddress,
+                    );
+                    break;
+                  }
+                  // Default case, use 1inch/paraswap for other collaterals
+                  default: {
+                    const bestSwap = await fetchBestSwap({
+                      chainId,
+                      src: srcToken,
+                      dst: market.config.loanToken,
+                      amount: srcAmount,
+                      from: executorAddress,
+                      slippage,
+                      includeTokensInfo: false,
+                      includeProtocols: false,
+                      includeGas: false,
+                      allowPartialFill: false,
+                      disableEstimate: true,
+                      usePermit2: false,
+                    });
+                    if (!bestSwap)
+                      throw Error(
+                        "could not fetch swap from both 1inch and paraswap",
+                      );
+                    dstAmount = toBigInt(bestSwap.dstAmount);
+
+                    if (
+                      dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage)
+                    )
+                      return;
+                    encoder
+                      .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
+                      .pushCall(
+                        bestSwap.tx.to,
+                        bestSwap.tx.value,
+                        bestSwap.tx.data,
+                      );
+                    break;
+                  }
                 }
-                const bestSwap = await fetchBestSwap({
-                  chainId,
-                  src: srcToken,
-                  dst: market.config.loanToken,
-                  amount: srcAmount,
-                  from: executorAddress,
-                  slippage,
-                  includeTokensInfo: false,
-                  includeProtocols: false,
-                  includeGas: false,
-                  allowPartialFill: false,
-                  disableEstimate: true,
-                  usePermit2: false,
-                });
-
-                if (!bestSwap)
-                  throw Error(
-                    "could not fetch swap from both 1inch and paraswap",
-                  );
-                dstAmount = toBigInt(bestSwap.dstAmount);
-
-                if (dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage))
-                  return;
-                encoder
-                  .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
-                  .pushCall(
-                    bestSwap.tx.to,
-                    bestSwap.tx.value,
-                    bestSwap.tx.data,
-                  );
 
                 // Handle ERC20Wrapper collateral tokens.
                 if (
