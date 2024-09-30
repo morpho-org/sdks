@@ -382,7 +382,8 @@ export class Market implements InputMarket {
   }
 
   /**
-   * Returns the maximum amount of loan assets that can be borrowed given a certain amount of collateral.
+   * Returns the maximum debt allowed given a certain amount of collateral.
+   * To calculate the amount of loan assets that can be borrowed, use `getMaxBorrowableAssets`.
    * @param collateral The amount of collateral to consider.
    */
   public getMaxBorrowAssets(
