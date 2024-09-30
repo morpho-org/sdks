@@ -1,4 +1,4 @@
-import { addresses } from "@morpho-org/blue-sdk";
+import { MarketId, addresses } from "@morpho-org/blue-sdk";
 import { DeploylessFetchParameters, blueAbi } from "@morpho-org/blue-sdk-viem";
 import {
   ConfigParameter,
@@ -17,7 +17,7 @@ import {
   useVaults,
 } from "@morpho-org/blue-sdk-wagmi";
 import { useMemo } from "react";
-import { ReadContractErrorType, UnionOmit } from "viem";
+import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useReadContract } from "wagmi";
 import { SimulationState } from "../SimulationState.js";
 
@@ -43,6 +43,18 @@ export type UseSimulationStateParameters<config extends Config = Config> =
       };
     };
 
+export interface SimulationStateLike<T> {
+  global?: { feeRecipient?: T };
+  markets?: Record<MarketId, T>;
+  users?: Record<Address, T>;
+  tokens?: Record<Address, T>;
+  vaults?: Record<Address, T>;
+  positions?: Record<Address, Record<MarketId, T>>;
+  holdings?: Record<Address, Record<Address, T>>;
+  vaultMarketConfigs?: Record<Address, Record<MarketId, T>>;
+  vaultUsers?: Record<Address, Record<Address, T>>;
+}
+
 export type UseSimulationReturnType<T> =
   | {
       /**
@@ -50,13 +62,13 @@ export type UseSimulationReturnType<T> =
        */
       data: T;
       /**
-       * The error that occurred while fetching data, if any.
+       * The errors that occurred while fetching data, if any.
        */
-      error: ReadContractErrorType | null;
+      error: SimulationStateLike<ReadContractErrorType | null>;
       /**
        * Whether data is being fetched.
        */
-      isFetching: boolean;
+      isFetching: SimulationStateLike<boolean>;
       /**
        * If data is available, request is not pending.
        */
@@ -70,11 +82,11 @@ export type UseSimulationReturnType<T> =
       /**
        * No error can occur for as long as request is pending.
        */
-      error: null;
+      error: SimulationStateLike<null>;
       /**
        * Request is not fetching when pending.
        */
-      isFetching: false;
+      isFetching: SimulationStateLike<false>;
       /**
        * Request is pending a valid block number and timestamp.
        */
@@ -234,40 +246,52 @@ export function useSimulationState<
     vaultUsers.data,
   ]);
 
+  const error = useMemo(() => {
+    return {
+      global: { feeRecipient: feeRecipient.error },
+      markets: markets.error,
+      users: users.error,
+      tokens: tokens.error,
+      vaults: vaults.error,
+      positions: positions.error,
+      holdings: holdings.error,
+      vaultMarketConfigs: vaultMarketConfigs.error,
+      vaultUsers: vaultUsers.error,
+    };
+  }, [
+    feeRecipient.error,
+    markets.error,
+    users.error,
+    tokens.error,
+    vaults.error,
+    positions.error,
+    holdings.error,
+    vaultMarketConfigs.error,
+    vaultUsers.error,
+  ]);
+
   if (block == null)
     return {
       data: undefined,
-      error: null,
-      isFetching: false,
+      error: {},
+      isFetching: {},
       isPending: true,
     };
-
-  const error =
-    feeRecipient.error ??
-    markets.error ??
-    users.error ??
-    tokens.error ??
-    vaults.error ??
-    positions.error ??
-    holdings.error ??
-    vaultMarketConfigs.error ??
-    vaultUsers.error;
-
-  const isFetching =
-    feeRecipient.isFetching ||
-    markets.isFetching ||
-    users.isFetching ||
-    tokens.isFetching ||
-    vaults.isFetching ||
-    positions.isFetching ||
-    holdings.isFetching ||
-    vaultMarketConfigs.isFetching ||
-    vaultUsers.isFetching;
 
   return {
     data: data!,
     error,
-    isFetching,
+    isFetching: {
+      global: { feeRecipient: feeRecipient.isFetching },
+      markets: markets.isFetching,
+      users: users.isFetching,
+      tokens: tokens.isFetching,
+      vaults: vaults.isFetching,
+      positions: positions.isFetching,
+      holdings: holdings.isFetching,
+      vaultMarketConfigs: vaultMarketConfigs.isFetching,
+      vaultUsers: vaultUsers.isFetching,
+    },
     isPending: false,
   };
 }

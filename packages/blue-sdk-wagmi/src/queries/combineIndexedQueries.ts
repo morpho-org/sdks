@@ -23,36 +23,11 @@ export type CombineIndexedQueriesReturnType<
   TData = unknown,
   TError = DefaultError,
   Index extends PropertyKey[] = PropertyKey[],
-> = { data: NestedRecord<Index, TData> } & (
-  | {
-      error: null;
-      isError: false;
-      isFetching: boolean;
-      isPending: false;
-      isSuccess: boolean;
-    }
-  | {
-      error: TError;
-      isError: true;
-      isFetching: boolean;
-      isPending: false;
-      isSuccess: false;
-    }
-  | {
-      error: null;
-      isError: false;
-      isFetching: true;
-      isPending: false;
-      isSuccess: false;
-    }
-  | {
-      error: null;
-      isError: false;
-      isFetching: false;
-      isPending: true;
-      isSuccess: false;
-    }
-);
+> = {
+  data: NestedRecord<Index, TData>;
+  error: NestedRecord<Index, NonNullable<TError>>;
+  isFetching: NestedRecord<Index, true>;
+};
 
 export function combineIndexedQueries<
   TData,
@@ -63,30 +38,51 @@ export function combineIndexedQueries<
     TError
   >,
 >(getIndex: (data: TData) => Index) {
-  return function (results: QueryResult[]) {
-    const indexedData = {} as NestedRecord<Index, TData>;
+  return function (
+    results: QueryResult[],
+  ): CombineIndexedQueriesReturnType<TData, TError, Index> {
+    const combined = {
+      data: {} as NestedRecord<Index, TData>,
+      error: {} as NestedRecord<Index, NonNullable<TError>>,
+      isFetching: {} as NestedRecord<Index, true>,
+    };
 
-    for (const { data } of results) {
+    for (const { data, error, isFetching } of results) {
       if (data == null) continue;
 
       const index = getIndex(data);
       if (index.length === 0) continue;
 
-      let levelData = indexedData;
-      for (let i = 0; i < index.length - 1; i++)
+      const isError = error != null;
+
+      let {
+        data: levelData,
+        error: levelError,
+        isFetching: levelIsFetching,
+      } = combined;
+      for (const subIndex of index.slice(0, -1)) {
         // @ts-ignore
-        levelData = levelData[index[i]!] ??= {};
+        levelData = levelData[subIndex] ??= {};
+        if (isError)
+          // @ts-ignore
+          levelError = levelError[subIndex] ??= {};
+        if (isFetching)
+          // @ts-ignore
+          levelIsFetching = levelIsFetching[subIndex] ??= {};
+      }
+
+      const lastSubIndex = index[index.length - 1]!;
+
       // @ts-ignore
-      levelData[index[index.length - 1]!] = data;
+      levelData[lastSubIndex] = data;
+      if (isError)
+        // @ts-ignore
+        levelError[lastSubIndex] = error;
+      if (isFetching)
+        // @ts-ignore
+        levelIsFetching[lastSubIndex] = isFetching;
     }
 
-    return {
-      data: indexedData,
-      error: results.find((result) => result.error)?.error ?? null,
-      isError: results.some((result) => result.isError),
-      isFetching: results.some((result) => result.isFetching),
-      isPending: results.every((result) => result.isPending),
-      isSuccess: results.every((result) => result.isSuccess),
-    } as CombineIndexedQueriesReturnType<TData, TError, Index>;
+    return combined;
   };
 }
