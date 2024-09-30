@@ -273,17 +273,19 @@ export abstract class BaseFormatter {
       const [significant, exp] = str.split(/[eE]/);
       const [whole, digits = ""] = significant!.split(".");
 
-      decimals = Math.min(100, Math.max(0, -Number(exp ?? 0))) + digits.length;
+      const numberExp = Number(exp ?? 0);
 
-      if (Number(exp) > 0) {
+      decimals = Math.min(100, Math.max(0, -numberExp)) + digits.length;
+
+      if (numberExp > 0) {
         const newDigits =
-          digits + "0".repeat(Math.max(0, Number(exp) - digits.length));
+          digits + "0".repeat(Math.max(0, numberExp - digits.length));
 
         const strValue =
           whole +
-          newDigits.slice(0, Number(exp)) +
+          newDigits.slice(0, numberExp) +
           "." +
-          newDigits.slice(Number(exp));
+          newDigits.slice(numberExp);
 
         decimals = strValue.split(".")[1]?.length ?? 0;
         value = BigInt(strValue.replace(".", ""));

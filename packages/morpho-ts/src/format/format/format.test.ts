@@ -49,13 +49,13 @@ describe("format", () => {
       it("with locale", () => {
         expect(format.number.locale("fr-FR").of(number)).toEqual("12345,6789");
       });
-      it.only("with really small numbers", () => {
+      it("with really small numbers", () => {
         expect(format.number.of(1.23e-30)).toEqual(
           "0.00000000000000000000000000000123",
         );
         expect(format.number.of(0.99e-12)).toEqual("0.00000000000099");
       });
-      it.only("with really big numbers", () => {
+      it("with really big numbers", () => {
         expect(format.number.of(1e30)).toEqual("1" + "0".repeat(30));
         expect(format.number.of(1.234e30)).toEqual("1234" + "0".repeat(27));
         expect(format.number.of(1.234e2)).toEqual("123.4");
