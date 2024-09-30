@@ -43,39 +43,46 @@ export type UseSimulationStateParameters<config extends Config = Config> =
       };
     };
 
-export type UseSimulationStateReturnType =
+export type UseSimulationReturnType<T> =
   | {
-      data: SimulationState;
-      error: null;
-      isError: false;
+      /**
+       * Latest available data, completely fetched when `!isFetching`.
+       */
+      data: T;
+      /**
+       * The error that occurred while fetching data, if any.
+       */
+      error: ReadContractErrorType | null;
+      /**
+       * Whether data is being fetched.
+       */
       isFetching: boolean;
+      /**
+       * If data is available, request is not pending.
+       */
       isPending: false;
-      isSuccess: boolean;
     }
   | {
-      data?: SimulationState;
-      error: ReadContractErrorType;
-      isError: true;
-      isFetching: boolean;
-      isPending: false;
-      isSuccess: false;
-    }
-  | {
+      /**
+       * No data available when request is pending.
+       */
       data: undefined;
+      /**
+       * No error can occur for as long as request is pending.
+       */
       error: null;
-      isError: false;
-      isFetching: true;
-      isPending: false;
-      isSuccess: false;
-    }
-  | {
-      data: undefined;
-      error: null;
-      isError: false;
+      /**
+       * Request is not fetching when pending.
+       */
       isFetching: false;
+      /**
+       * Request is pending a valid block number and timestamp.
+       */
       isPending: true;
-      isSuccess: false;
     };
+
+export type UseSimulationStateReturnType =
+  UseSimulationReturnType<SimulationState>;
 
 export function useSimulationState<
   config extends Config = ResolvedRegister["config"],
@@ -231,10 +238,8 @@ export function useSimulationState<
     return {
       data: undefined,
       error: null,
-      isError: false,
       isFetching: false,
       isPending: true,
-      isSuccess: false,
     };
 
   const error =
@@ -259,33 +264,10 @@ export function useSimulationState<
     vaultMarketConfigs.isFetching ||
     vaultUsers.isFetching;
 
-  if (error != null)
-    return {
-      data,
-      error,
-      isError: true,
-      isFetching,
-      isPending: false,
-      isSuccess: false,
-    };
-
-  const isSuccess =
-    feeRecipient.isSuccess &&
-    markets.isSuccess &&
-    users.isSuccess &&
-    tokens.isSuccess &&
-    vaults.isSuccess &&
-    positions.isSuccess &&
-    holdings.isSuccess &&
-    vaultMarketConfigs.isSuccess &&
-    vaultUsers.isSuccess;
-
   return {
     data: data!,
-    error: null,
-    isError: false,
+    error,
     isFetching,
     isPending: false,
-    isSuccess,
   };
 }

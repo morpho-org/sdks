@@ -1,5 +1,6 @@
 import "dotenv/config";
 import "hardhat-deal";
+import "hardhat-tracer";
 import { HardhatUserConfig } from "hardhat/config";
 import { HardhatNetworkUserConfig } from "hardhat/types";
 
