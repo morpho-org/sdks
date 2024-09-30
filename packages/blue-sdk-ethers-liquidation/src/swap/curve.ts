@@ -86,7 +86,7 @@ export async function getCurveSwapInputAmountFromOutput(
   return result;
 }
 
-export async function removeLiquidityFromCurvePool(
+export async function encodeRemoveLiquidityFromCurvePool(
   amount: bigint,
   curvePool: Address,
   withdrawnTokenIndex: number,
@@ -117,7 +117,7 @@ export async function removeLiquidityFromCurvePool(
   );
 }
 
-export async function curveSwap(
+export async function encodeCurveSwap(
   amount: bigint,
   curvePool: Address,
   inputTokenIndex: number,

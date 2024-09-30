@@ -2,10 +2,10 @@ import { AbstractSigner, Provider } from "ethers";
 import { LiquidationEncoder } from "../LiquidationEncoder";
 import { curvePools } from "../addresses";
 import {
-  curveSwap,
+  encodeCurveSwap,
+  encodeRemoveLiquidityFromCurvePool,
   getCurveSwapInputAmountFromOutput,
   getCurveWithdrawalAmount,
-  removeLiquidityFromCurvePool,
 } from "../swap/curve";
 
 export const USD0_USDC_USD0_INDEX = 0;
@@ -36,7 +36,7 @@ export async function swapUsd0Usd0PPToUSDC(
     curvePools["usd0usdc"],
   );
 
-  await removeLiquidityFromCurvePool(
+  await encodeRemoveLiquidityFromCurvePool(
     withdrawableUSD0Amount,
     curvePools["usd0usd0++"],
     USD0_USD0PP_USD0_INDEX,
@@ -45,7 +45,7 @@ export async function swapUsd0Usd0PPToUSDC(
     encoder,
   );
 
-  await curveSwap(
+  await encodeCurveSwap(
     minUSD0Amount,
     curvePools["usd0usdc"],
     USD0_USDC_USD0_INDEX,
@@ -71,7 +71,7 @@ export async function swapUSD0PPToUSDC(
     curvePools["usd0usd0++"],
   );
 
-  await curveSwap(
+  await encodeCurveSwap(
     amount,
     curvePools["usd0usd0++"],
     USD0_USD0PP_USDPP_INDEX,
@@ -81,7 +81,7 @@ export async function swapUSD0PPToUSDC(
     encoder,
   );
 
-  await curveSwap(
+  await encodeCurveSwap(
     minUSD0Amount,
     curvePools["usd0usdc"],
     USD0_USDC_USD0_INDEX,
