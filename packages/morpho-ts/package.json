@@ -9,38 +9,14 @@
   ],
   "scripts": {
     "prepublish": "yarn build",
-    "build": "tsc --build tsconfig.build.json",
-    "test": "jest"
+    "build": "tsc --build tsconfig.build.json"
   },
   "devDependencies": {
-    "@types/chai": "^4.3.14",
-    "@types/jest": "^29.5.12",
-    "chai": "^4.3.10",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.2.4",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^2.1.1"
   },
   "publishConfig": {
     "main": "lib/index.js",
     "access": "public"
-  },
-  "jest": {
-    "verbose": true,
-    "testTimeout": 15000,
-    "maxWorkers": 1,
-    "transform": {
-      "^.+\\.tsx?$": [
-        "ts-jest",
-        {
-          "tsconfig": "tsconfig.json"
-        }
-      ]
-    },
-    "testRegex": "(/src/.*|(\\.|/)(test|spec)+)\\.test\\.(jsx?|tsx?)$",
-    "moduleFileExtensions": [
-      "js",
-      "ts"
-    ],
-    "preset": "ts-jest"
   }
 }

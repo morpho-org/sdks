@@ -6,8 +6,8 @@ import {
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
-import { MarketParameters } from "./fetchMarket.js";
-import { VaultParameters } from "./fetchVault.js";
+import { MarketParameters } from "./fetchMarket";
+import { VaultParameters } from "./fetchVault";
 
 export type VaultMarketAllocationParameters = VaultParameters &
   MarketParameters;

@@ -8,7 +8,7 @@ import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import { MarketConfig } from "../src/augment/MarketConfig";
+import { MarketConfig } from "../../src/augment/MarketConfig";
 
 describe("augment/MarketConfig", () => {
   let signer: SignerWithAddress;
@@ -17,7 +17,7 @@ describe("augment/MarketConfig", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  it("should fetch config from cache", async () => {
+  test("should fetch config from cache", async () => {
     const market = await MarketConfig.fetch(
       MAINNET_MARKETS.usdc_wstEth.id,
       signer,
@@ -26,7 +26,7 @@ describe("augment/MarketConfig", () => {
     expect(market).to.eql(MAINNET_MARKETS.usdc_wstEth);
   });
 
-  it("should fetch config from chain", async () => {
+  test("should fetch config from chain", async () => {
     const marketParams = {
       collateralToken: ZeroAddress,
       loanToken: addresses[ChainId.EthMainnet].wNative,

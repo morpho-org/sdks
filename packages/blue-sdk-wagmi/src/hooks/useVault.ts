@@ -6,9 +6,9 @@ import {
   FetchVaultParameters,
   FetchVaultQueryKey,
   fetchVaultQueryOptions,
-} from "../queries/fetchVault.js";
-import { ConfigParameter, QueryParameter } from "../types/properties.js";
-import { useChainId } from "./useChainId.js";
+} from "../queries/fetchVault";
+import { ConfigParameter, QueryParameter } from "../types";
+import { useChainId } from "./useChainId";
 
 export type UseVaultParameters<
   config extends Config = Config,

@@ -3,13 +3,13 @@ import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries";
 import {
   PositionParameters,
   fetchPositionQueryOptions,
-} from "../queries/fetchPosition.js";
-import { useChainId } from "./useChainId.js";
-import { UsePositionParameters } from "./usePosition.js";
+} from "../queries/fetchPosition";
+import { useChainId } from "./useChainId";
+import { UsePositionParameters } from "./usePosition";
 
 export type FetchPositionsParameters = {
   positions: Iterable<Partial<PositionParameters>>;

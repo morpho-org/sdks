@@ -20,7 +20,6 @@
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/blue-sdk-viem-simulation": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "mutative": "^1.0.8",
     "viem": "^2.0.0"
   },
   "devDependencies": {
@@ -33,7 +32,6 @@
     "@nomicfoundation/hardhat-ethers": "^3.0.6",
     "@nomicfoundation/hardhat-network-helpers": "^1.0.9",
     "@types/chai": "^4.3.17",
-    "@types/jest": "^29.5.12",
     "@types/lodash": "^4.17.7",
     "@types/mocha": "^10.0.6",
     "@types/node": "^22.2.0",
@@ -46,12 +44,10 @@
     "hardhat": "^2.22.10",
     "hardhat-deal": "^3.1.0",
     "hardhat-tracer": "^3.1.0",
-    "jest": "^29.6.2",
     "lodash": "^4.17.21",
     "mocha": "^10.4.0",
     "sinon": "^19.0.2",
     "sinon-chai": "^3.7.0",
-    "ts-jest": "^29.2.4",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.2",
     "viem": "^2.21.15"
@@ -59,25 +55,5 @@
   "publishConfig": {
     "access": "public",
     "main": "lib/index.js"
-  },
-  "jest": {
-    "verbose": true,
-    "testTimeout": 15000,
-    "maxWorkers": 1,
-    "transform": {
-      "^.+\\.tsx?$": [
-        "ts-jest",
-        {
-          "tsconfig": "tsconfig.json"
-        }
-      ]
-    },
-    "testMatch": [
-      "**/*.test.ts"
-    ],
-    "testPathIgnorePatterns": [
-      "node_modules/",
-      "tests/e2e/"
-    ]
   }
 }

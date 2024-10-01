@@ -1,11 +1,11 @@
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
 import { maxUint256 } from "viem";
-import { BlueSimulationErrors } from "../../errors.js";
-import { BlueOperations } from "../../operations.js";
-import { handleOperations } from "../dispatchers.js";
-import { handleErc20Operation } from "../erc20/index.js";
-import { OperationHandler } from "../types.js";
+import { BlueSimulationErrors } from "../../errors";
+import { BlueOperations } from "../../operations";
+import { handleOperations } from "../dispatchers";
+import { handleErc20Operation } from "../erc20";
+import { OperationHandler } from "../types";
 
 export const handleBlueSupplyCollateralOperation: OperationHandler<
   BlueOperations["Blue_SupplyCollateral"]

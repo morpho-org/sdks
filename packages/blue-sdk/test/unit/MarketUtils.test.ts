@@ -1,5 +1,6 @@
-import { MathLib } from "../maths";
-import { MarketUtils } from "./MarketUtils";
+import { MarketUtils, MathLib } from "../../src";
+
+import { describe, expect, test } from "vitest";
 
 const market = {
   loanToken: "0x0000000000000000000000000000000000000001",
@@ -10,19 +11,19 @@ const market = {
 } as const;
 
 describe("MarketUtils", () => {
-  it("should calculate the correct market id", () => {
+  test("should calculate the correct market id", () => {
     expect(MarketUtils.getMarketId(market)).toEqual(
       "0x625e29dff74826b71c1f4c74b208a896109cc8ac9910192ce2927a982b0809e6",
     );
   });
 
-  it("should calculate the correct liquidation incentive factor", () => {
+  test("should calculate the correct liquidation incentive factor", () => {
     expect(MarketUtils.getLiquidationIncentiveFactor(market)).toEqual(
       1043841336116910229n,
     );
   });
 
-  it("should calculate the supply volume to reach utilization", () => {
+  test("should calculate the supply volume to reach utilization", () => {
     expect(
       MarketUtils.getSupplyToUtilization(
         { totalSupplyAssets: MathLib.WAD, totalBorrowAssets: MathLib.WAD },
@@ -52,7 +53,7 @@ describe("MarketUtils", () => {
     ).toEqual(MathLib.MAX_UINT_256);
   });
 
-  it("should calculate the withdraw volume to reach utilization", () => {
+  test("should calculate the withdraw volume to reach utilization", () => {
     expect(
       MarketUtils.getWithdrawToUtilization(
         { totalSupplyAssets: MathLib.WAD, totalBorrowAssets: MathLib.WAD },
@@ -75,7 +76,7 @@ describe("MarketUtils", () => {
     ).toEqual(MathLib.WAD);
   });
 
-  it("should calculate the borrow volume to reach utilization", () => {
+  test("should calculate the borrow volume to reach utilization", () => {
     expect(
       MarketUtils.getBorrowToUtilization(
         { totalSupplyAssets: MathLib.WAD, totalBorrowAssets: MathLib.WAD },
@@ -91,7 +92,7 @@ describe("MarketUtils", () => {
     ).toEqual(90_0000000000000000n);
   });
 
-  it("should calculate the repay volume to reach utilization", () => {
+  test("should calculate the repay volume to reach utilization", () => {
     expect(
       MarketUtils.getRepayToUtilization(
         { totalSupplyAssets: MathLib.WAD, totalBorrowAssets: MathLib.WAD },

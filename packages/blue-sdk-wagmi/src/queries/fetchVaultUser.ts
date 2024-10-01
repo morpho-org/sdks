@@ -6,8 +6,8 @@ import {
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
-import { UserParameters } from "./fetchUser.js";
-import { VaultParameters } from "./fetchVault.js";
+import { UserParameters } from "./fetchUser";
+import { VaultParameters } from "./fetchVault";
 
 export type VaultUserParameters = VaultParameters & UserParameters;
 

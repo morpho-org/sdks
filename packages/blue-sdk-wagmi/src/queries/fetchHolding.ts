@@ -6,8 +6,8 @@ import {
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
-import { TokenParameters } from "./fetchToken.js";
-import { UserParameters } from "./fetchUser.js";
+import { TokenParameters } from "./fetchToken";
+import { UserParameters } from "./fetchUser";
 
 export type HoldingParameters = UserParameters & TokenParameters;
 

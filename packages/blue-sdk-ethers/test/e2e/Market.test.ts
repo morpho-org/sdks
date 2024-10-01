@@ -11,7 +11,7 @@ import { ChainId, MarketConfig, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import { Market } from "../src/augment/Market";
+import { Market } from "../../src/augment/Market";
 
 describe("augment/Market", () => {
   let signer: SignerWithAddress;
@@ -20,7 +20,7 @@ describe("augment/Market", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  it("should fetch market data", async () => {
+  test("should fetch market data", async () => {
     const expectedData = {
       config: MAINNET_MARKETS.usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
@@ -38,7 +38,7 @@ describe("augment/Market", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch market data from config", async () => {
+  test("should fetch market data from config", async () => {
     const expectedData = {
       config: MAINNET_MARKETS.usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
@@ -59,7 +59,7 @@ describe("augment/Market", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch price and rate if idle market", async () => {
+  test("should fetch price and rate if idle market", async () => {
     const expectedData = {
       config: MAINNET_MARKETS.idle_usdc,
       totalSupplyAssets: 0n,
@@ -77,7 +77,7 @@ describe("augment/Market", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should not fetch rate at target for unknown irm", async () => {
+  test("should not fetch rate at target for unknown irm", async () => {
     const morpho = MorphoBlue__factory.connect(
       addresses[ChainId.EthMainnet].morpho,
       signer,

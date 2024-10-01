@@ -1,7 +1,7 @@
 import { Address, MarketId } from "@morpho-org/blue-sdk";
 
-import { SimulationState } from "./SimulationState.js";
-import { MaybeDraft } from "./handlers/types.js";
+import { SimulationState } from "./SimulationState";
+import { MaybeDraft } from "./handlers/types";
 
 export interface OperationMetadata<T extends string> {
   type: T;

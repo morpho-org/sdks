@@ -6,10 +6,10 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import { Erc20Operations } from "../../operations.js";
-import { OperationHandler } from "../types.js";
+import { Erc20Operations } from "../../operations";
+import { OperationHandler } from "../types";
 
-import { handleErc20TransferOperation } from "./transfer.js";
+import { handleErc20TransferOperation } from "./transfer";
 
 export const handleErc20UnwrapOperation: OperationHandler<
   Erc20Operations["Erc20_Unwrap"]

@@ -1,15 +1,15 @@
-import { SimulationErrors } from "../../errors.js";
-import { BlueOperation } from "../../operations.js";
-import { OperationHandler } from "../types.js";
+import { SimulationErrors } from "../../errors";
+import { BlueOperation } from "../../operations";
+import { OperationHandler } from "../types";
 
-import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
-import { handleBlueBorrowOperation } from "./borrow.js";
-import { handleBlueRepayOperation } from "./repay.js";
-import { handleBlueSetAuthorizationOperation } from "./setAuthorization.js";
-import { handleBlueSupplyOperation } from "./supply.js";
-import { handleBlueSupplyCollateralOperation } from "./supplyCollateral.js";
-import { handleBlueWithdrawOperation } from "./withdraw.js";
-import { handleBlueWithdrawCollateralOperation } from "./withdrawCollateral.js";
+import { handleBlueAccrueInterestOperation } from "./accrueInterest";
+import { handleBlueBorrowOperation } from "./borrow";
+import { handleBlueRepayOperation } from "./repay";
+import { handleBlueSetAuthorizationOperation } from "./setAuthorization";
+import { handleBlueSupplyOperation } from "./supply";
+import { handleBlueSupplyCollateralOperation } from "./supplyCollateral";
+import { handleBlueWithdrawOperation } from "./withdraw";
+import { handleBlueWithdrawCollateralOperation } from "./withdrawCollateral";
 
 export const handleBlueOperation: OperationHandler<BlueOperation> = (
   operation,

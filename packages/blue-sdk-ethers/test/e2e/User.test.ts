@@ -6,7 +6,7 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-import { User } from "../src/augment/User";
+import { User } from "../../src/augment/User";
 
 describe("augment/User", () => {
   let signer: SignerWithAddress;
@@ -22,7 +22,7 @@ describe("augment/User", () => {
     await morpho.setAuthorization(addresses[ChainId.EthMainnet].bundler, true);
   });
 
-  it("should fetch user data", async () => {
+  test("should fetch user data", async () => {
     const expectedData = new User({
       address: signer.address,
       isBundlerAuthorized: true,

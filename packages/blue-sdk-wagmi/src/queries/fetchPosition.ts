@@ -3,8 +3,8 @@ import { FetchParameters, fetchPosition } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
-import { MarketParameters } from "./fetchMarket.js";
-import { UserParameters } from "./fetchUser.js";
+import { MarketParameters } from "./fetchMarket";
+import { UserParameters } from "./fetchUser";
 
 export type PositionParameters = UserParameters & MarketParameters;
 

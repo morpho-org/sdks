@@ -44,7 +44,7 @@ describe("augment/Holding", () => {
       .extend(testActions({ mode: "hardhat" }));
   });
 
-  it("should fetch user WETH data with deployless", async () => {
+  test("should fetch user WETH data with deployless", async () => {
     const token = MAINNET_MARKETS.eth_wstEth.loanToken;
 
     const expectedData = new Holding({
@@ -127,7 +127,7 @@ describe("augment/Holding", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch user WETH data without deployless", async () => {
+  test("should fetch user WETH data without deployless", async () => {
     const token = MAINNET_MARKETS.eth_wstEth.loanToken;
 
     const expectedData = new Holding({
@@ -212,7 +212,7 @@ describe("augment/Holding", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch native user holding", async () => {
+  test("should fetch native user holding", async () => {
     const token = NATIVE_ADDRESS;
 
     const expectedData = new Holding({
@@ -244,7 +244,7 @@ describe("augment/Holding", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch backed token user holding with deployless", async () => {
+  test("should fetch backed token user holding with deployless", async () => {
     const token = addresses[ChainId.EthMainnet].wbC3M;
 
     const expectedData = new Holding({
@@ -328,7 +328,7 @@ describe("augment/Holding", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch backed token user holding without deployless", async () => {
+  test("should fetch backed token user holding without deployless", async () => {
     const token = addresses[ChainId.EthMainnet].wbC3M;
 
     const expectedData = new Holding({

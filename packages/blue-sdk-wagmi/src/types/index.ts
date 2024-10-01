@@ -1,1 +1,1 @@
-export * from "./properties.js";
+export * from "./properties";

@@ -6,9 +6,9 @@ import {
   FetchMarketParameters,
   FetchMarketQueryKey,
   fetchMarketQueryOptions,
-} from "../queries/fetchMarket.js";
-import { ConfigParameter, QueryParameter } from "../types/properties.js";
-import { useChainId } from "./useChainId.js";
+} from "../queries/fetchMarket";
+import { ConfigParameter, QueryParameter } from "../types";
+import { useChainId } from "./useChainId";
 
 export type UseMarketParameters<
   config extends Config = Config,

@@ -6,9 +6,9 @@ import {
   FetchTokenParameters,
   FetchTokenQueryKey,
   fetchTokenQueryOptions,
-} from "../queries/fetchToken.js";
-import { ConfigParameter, QueryParameter } from "../types/properties.js";
-import { useChainId } from "./useChainId.js";
+} from "../queries/fetchToken";
+import { ConfigParameter, QueryParameter } from "../types";
+import { useChainId } from "./useChainId";
 
 export type UseTokenParameters<
   config extends Config = Config,

@@ -1,1 +1,1 @@
-export * from "./useSimulationState.js";
+export * from "./useSimulationState";

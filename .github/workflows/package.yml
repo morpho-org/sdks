@@ -6,7 +6,7 @@ on:
       name:
         type: string
         required: true
-      jest:
+      vitest:
         type: boolean
       hardhat:
         type: boolean
@@ -26,10 +26,10 @@ jobs:
       - run: yarn install --immutable
       - run: yarn workspace @morpho-org/${{ inputs.name }} build
 
-  jest:
+  vitest:
     runs-on: ubuntu-latest
 
-    if: ${{ inputs.jest == true }}
+    if: ${{ inputs.vitest == true }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +39,7 @@ jobs:
           cache: yarn
 
       - run: yarn install --immutable
-      - run: yarn workspace @morpho-org/${{ inputs.name }} jest --passWithNoTests
+      - run: yarn workspace @morpho-org/${{ inputs.name }} vitest --passWithNoTests
 
   hardhat:
     runs-on: ubuntu-latest

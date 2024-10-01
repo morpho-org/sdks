@@ -3,13 +3,10 @@ import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
-import {
-  TokenParameters,
-  fetchTokenQueryOptions,
-} from "../queries/fetchToken.js";
-import { useChainId } from "./useChainId.js";
-import { UseTokenParameters } from "./useToken.js";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries";
+import { TokenParameters, fetchTokenQueryOptions } from "../queries/fetchToken";
+import { useChainId } from "./useChainId";
+import { UseTokenParameters } from "./useToken";
 
 export type FetchTokensParameters = {
   tokens: Iterable<Address | undefined>;

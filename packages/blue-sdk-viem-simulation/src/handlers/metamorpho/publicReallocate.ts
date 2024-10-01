@@ -4,14 +4,14 @@ import {
   MetaMorphoErrors,
   PublicAllocatorErrors,
   UnknownVaultPublicAllocatorConfigError,
-} from "../../errors.js";
-import { MetaMorphoOperations } from "../../operations.js";
-import { handleBlueOperation } from "../blue/index.js";
-import { handleErc20Operation } from "../erc20/index.js";
-import { OperationHandler } from "../types.js";
+} from "../../errors";
+import { MetaMorphoOperations } from "../../operations";
+import { handleBlueOperation } from "../blue";
+import { handleErc20Operation } from "../erc20";
+import { OperationHandler } from "../types";
 
 import { maxUint256, zeroAddress } from "viem";
-import { handleMetaMorphoReallocateOperation } from "./reallocate.js";
+import { handleMetaMorphoReallocateOperation } from "./reallocate";
 
 export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_PublicReallocate"]

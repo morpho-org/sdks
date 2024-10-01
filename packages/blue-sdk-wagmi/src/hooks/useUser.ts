@@ -6,9 +6,9 @@ import {
   FetchUserParameters,
   FetchUserQueryKey,
   fetchUserQueryOptions,
-} from "../queries/fetchUser.js";
-import { ConfigParameter, QueryParameter } from "../types/properties.js";
-import { useChainId } from "./useChainId.js";
+} from "../queries/fetchUser";
+import { ConfigParameter, QueryParameter } from "../types";
+import { useChainId } from "./useChainId";
 
 export type UseUserParameters<
   config extends Config = Config,

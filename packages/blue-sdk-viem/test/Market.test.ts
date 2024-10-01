@@ -39,7 +39,7 @@ describe("augment/Market", () => {
       .extend(testActions({ mode: "hardhat" }));
   });
 
-  it("should fetch market data", async () => {
+  test("should fetch market data", async () => {
     const expectedData = {
       config: MAINNET_MARKETS.usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
@@ -57,7 +57,7 @@ describe("augment/Market", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch price and rate if idle market", async () => {
+  test("should fetch price and rate if idle market", async () => {
     const expectedData = {
       config: MAINNET_MARKETS.idle_usdc,
       totalSupplyAssets: 0n,
@@ -75,7 +75,7 @@ describe("augment/Market", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should not fetch rate at target for unknown irm", async () => {
+  test("should not fetch rate at target for unknown irm", async () => {
     const { morpho } = addresses[ChainId.EthMainnet];
 
     const owner = await client.readContract({

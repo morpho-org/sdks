@@ -3,13 +3,13 @@ import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries";
 import {
   HoldingParameters,
   fetchHoldingQueryOptions,
-} from "../queries/fetchHolding.js";
-import { useChainId } from "./useChainId.js";
-import { UseHoldingParameters } from "./useHolding.js";
+} from "../queries/fetchHolding";
+import { useChainId } from "./useChainId";
+import { UseHoldingParameters } from "./useHolding";
 
 export type FetchHoldingsParameters = {
   holdings: Iterable<Partial<HoldingParameters>>;

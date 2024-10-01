@@ -82,7 +82,7 @@ describe("augment/VaultMarketConfig", () => {
     });
   });
 
-  it("should fetch vault market data", async () => {
+  test("should fetch vault market data", async () => {
     const expectedData = new VaultMarketConfig({
       vault: steakUsdc.address,
       marketId: MAINNET_MARKETS.usdc_wstEth.id,

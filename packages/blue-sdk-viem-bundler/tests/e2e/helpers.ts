@@ -24,10 +24,10 @@ import {
   encodeBundle,
   finalizeBundle,
   populateBundle,
-} from "../../src/index.js";
+} from "../../src";
 
 import { SimulationState } from "@morpho-org/blue-sdk-viem-simulation";
-import { WITH_SIMPLE_PERMIT } from "./fixtures.js";
+import { WITH_SIMPLE_PERMIT } from "./fixtures";
 
 export const donate =
   (

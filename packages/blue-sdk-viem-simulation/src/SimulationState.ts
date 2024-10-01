@@ -44,14 +44,14 @@ import {
   UnknownVaultMarketConfigError,
   UnknownVaultUserError,
   UnknownWrappedTokenError,
-} from "./errors.js";
+} from "./errors";
 import {
   MaybeDraft,
   produceImmutable,
   simulateOperation,
   simulateOperations,
-} from "./handlers/index.js";
-import { Operation } from "./operations.js";
+} from "./handlers";
+import { Operation } from "./operations";
 
 export interface PublicAllocatorOptions {
   /* The array of vaults to reallocate. Must all have enabled the PublicAllocator. Defaults to all the vaults that have enabled the PublicAllocator. */

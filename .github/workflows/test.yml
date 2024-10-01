@@ -17,30 +17,36 @@ jobs:
       matrix:
         package:
           - name: morpho-ts
-            jest: true
+            vitest: true
             hardhat: false
           - name: morpho-test
-            jest: false
+            vitest: false
             hardhat: false
           - name: blue-api-sdk
-            jest: false
+            vitest: false
             hardhat: false
           - name: blue-sdk
-            jest: true
+            vitest: true
             hardhat: true
           - name: blue-sdk-ethers
-            jest: true
+            vitest: true
             hardhat: true
           - name: blue-sdk-viem
-            jest: false
+            vitest: true
             hardhat: true
+          - name: blue-sdk-viem-simulation
+            vitest: true
+            hardhat: false
+          - name: blue-sdk-viem-bundler
+            vitest: true
+            hardhat: false
           - name: blue-sdk-ethers-liquidation
-            jest: false
+            vitest: false
             hardhat: true
 
     uses: ./.github/workflows/package.yml
     with:
       name: ${{ matrix.package.name }}
-      jest: ${{ matrix.package.jest }}
+      vitest: ${{ matrix.package.vitest }}
       hardhat: ${{ matrix.package.hardhat }}
     secrets: inherit

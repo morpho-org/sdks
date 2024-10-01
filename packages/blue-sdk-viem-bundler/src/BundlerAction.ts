@@ -14,7 +14,7 @@ import {
   transferBundlerAbi,
   urdBundlerAbi,
   wNativeBundlerAbi,
-} from "./abis.js";
+} from "./abis";
 
 import {
   Address,
@@ -23,14 +23,14 @@ import {
   encodeFunctionData,
   parseSignature,
 } from "viem";
-import { BundlerErrors } from "./errors.js";
+import { BundlerErrors } from "./errors";
 import {
   Action,
   Authorization,
   MarketParams,
   Permit2PermitSingle,
   ReallocationWithdrawal,
-} from "./types/actions.js";
+} from "./types";
 
 export type BundlerCall = Hex;
 

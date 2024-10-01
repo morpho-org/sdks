@@ -3,11 +3,11 @@ import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
-import { fetchMarketConfigQueryOptions } from "../queries/fetchMarketConfig.js";
-import { MarketConfigParameters } from "../queries/fetchMarketConfig.js";
-import { useChainId } from "./useChainId.js";
-import { UseMarketConfigParameters } from "./useMarketConfig.js";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries";
+import { fetchMarketConfigQueryOptions } from "../queries/fetchMarketConfig";
+import { MarketConfigParameters } from "../queries/fetchMarketConfig";
+import { useChainId } from "./useChainId";
+import { UseMarketConfigParameters } from "./useMarketConfig";
 
 export type FetchMarketConfigsParameters = {
   marketIds: Iterable<MarketId | undefined>;

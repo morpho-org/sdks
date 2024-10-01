@@ -3,13 +3,13 @@ import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries";
 import {
   VaultConfigParameters,
   fetchVaultConfigQueryOptions,
-} from "../queries/fetchVaultConfig.js";
-import { useChainId } from "./useChainId.js";
-import { UseVaultConfigParameters } from "./useVaultConfig.js";
+} from "../queries/fetchVaultConfig";
+import { useChainId } from "./useChainId";
+import { UseVaultConfigParameters } from "./useVaultConfig";
 
 export type FetchVaultConfigsParameters = {
   vaults: Iterable<Address | undefined>;

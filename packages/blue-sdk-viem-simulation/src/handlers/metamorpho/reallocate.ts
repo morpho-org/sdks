@@ -2,10 +2,10 @@ import { maxUint256, zeroAddress } from "viem";
 
 import { MathLib } from "@morpho-org/blue-sdk";
 
-import { MetaMorphoErrors } from "../../errors.js";
-import { MetaMorphoOperations } from "../../operations.js";
-import { handleBlueOperation } from "../blue/index.js";
-import { OperationHandler } from "../types.js";
+import { MetaMorphoErrors } from "../../errors";
+import { MetaMorphoOperations } from "../../operations";
+import { handleBlueOperation } from "../blue";
+import { OperationHandler } from "../types";
 
 export const handleMetaMorphoReallocateOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_Reallocate"]

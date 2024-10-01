@@ -43,7 +43,7 @@ describe("augment/User", () => {
     });
   });
 
-  it("should fetch user data", async () => {
+  test("should fetch user data", async () => {
     const expectedData = new User({
       address: client.account.address,
       isBundlerAuthorized: true,

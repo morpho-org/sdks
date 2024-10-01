@@ -6,9 +6,9 @@ import {
   FetchPositionParameters,
   FetchPositionQueryKey,
   fetchPositionQueryOptions,
-} from "../queries/fetchPosition.js";
-import { ConfigParameter, QueryParameter } from "../types/properties.js";
-import { useChainId } from "./useChainId.js";
+} from "../queries/fetchPosition";
+import { ConfigParameter, QueryParameter } from "../types";
+import { useChainId } from "./useChainId";
 
 export type UsePositionParameters<
   config extends Config = Config,

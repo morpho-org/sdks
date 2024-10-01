@@ -1,12 +1,12 @@
-import { SimulationErrors } from "../../errors.js";
-import { MetaMorphoOperation } from "../../operations.js";
-import { OperationHandler } from "../types.js";
+import { SimulationErrors } from "../../errors";
+import { MetaMorphoOperation } from "../../operations";
+import { OperationHandler } from "../types";
 
-import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest.js";
-import { handleMetaMorphoDepositOperation } from "./deposit.js";
-import { handleMetaMorphoPublicReallocateOperation } from "./publicReallocate.js";
-import { handleMetaMorphoReallocateOperation } from "./reallocate.js";
-import { handleMetaMorphoWithdrawOperation } from "./withdraw.js";
+import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest";
+import { handleMetaMorphoDepositOperation } from "./deposit";
+import { handleMetaMorphoPublicReallocateOperation } from "./publicReallocate";
+import { handleMetaMorphoReallocateOperation } from "./reallocate";
+import { handleMetaMorphoWithdrawOperation } from "./withdraw";
 
 export const handleMetaMorphoOperation: OperationHandler<
   MetaMorphoOperation

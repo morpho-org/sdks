@@ -1,11 +1,11 @@
 import { BlueErrors, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { BlueSimulationErrors } from "../../errors.js";
-import { BlueOperations } from "../../operations.js";
-import { handleErc20Operation } from "../erc20/index.js";
-import { OperationHandler } from "../types.js";
+import { BlueSimulationErrors } from "../../errors";
+import { BlueOperations } from "../../operations";
+import { handleErc20Operation } from "../erc20";
+import { OperationHandler } from "../types";
 
-import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
+import { handleBlueAccrueInterestOperation } from "./accrueInterest";
 
 export const handleBlueWithdrawOperation: OperationHandler<
   BlueOperations["Blue_Withdraw"]

@@ -1,8 +1,8 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { UnknownAllowanceError } from "../../errors.js";
-import { Erc20Operations } from "../../operations.js";
-import { OperationHandler } from "../types.js";
+import { UnknownAllowanceError } from "../../errors";
+import { Erc20Operations } from "../../operations";
+import { OperationHandler } from "../types";
 
 export const handleErc20ApproveOperation: OperationHandler<
   Erc20Operations["Erc20_Approve"]

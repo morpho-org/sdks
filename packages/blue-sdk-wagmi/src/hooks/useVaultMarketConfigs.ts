@@ -3,13 +3,13 @@ import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
 import { structuralSharing } from "wagmi/query";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries";
 import {
   VaultMarketConfigParameters,
   fetchVaultMarketConfigQueryOptions,
-} from "../queries/fetchVaultMarketConfig.js";
-import { useChainId } from "./useChainId.js";
-import { UseVaultMarketConfigParameters } from "./useVaultMarketConfig.js";
+} from "../queries/fetchVaultMarketConfig";
+import { useChainId } from "./useChainId";
+import { UseVaultMarketConfigParameters } from "./useVaultMarketConfig";
 
 export type FetchVaultMarketConfigsParameters = {
   configs: Iterable<Partial<VaultMarketConfigParameters>>;

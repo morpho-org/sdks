@@ -3,7 +3,7 @@ import { FetchParameters, fetchVaultConfig } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import { Config } from "wagmi";
-import { VaultParameters } from "./fetchVault.js";
+import { VaultParameters } from "./fetchVault";
 
 export type VaultConfigParameters = VaultParameters;
 

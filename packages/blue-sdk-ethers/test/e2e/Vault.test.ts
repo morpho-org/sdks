@@ -9,8 +9,8 @@ import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/
 import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 
-import { Vault } from "../src/augment/Vault";
-import { steakUsdc } from "./fixtures";
+import { Vault } from "../../src/augment/Vault";
+import { steakUsdc } from "../fixtures";
 
 describe("augment/Vault", () => {
   let signer: SignerWithAddress;
@@ -36,7 +36,7 @@ describe("augment/Vault", () => {
     await publicAllocator.setFee(steakUsdc.address, 1);
   });
 
-  it("should fetch vault data", async () => {
+  test("should fetch vault data", async () => {
     const expectedData = new Vault({
       config: steakUsdc,
       curator: ZeroAddress,

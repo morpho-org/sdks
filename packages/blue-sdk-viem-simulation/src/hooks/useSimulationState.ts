@@ -19,7 +19,7 @@ import {
 import { useMemo } from "react";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useReadContract } from "wagmi";
-import { SimulationState } from "../SimulationState.js";
+import { SimulationState } from "../SimulationState";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
   FetchUsersParameters &

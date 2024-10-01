@@ -17,8 +17,8 @@ import {
 import { parseUnits } from "ethers";
 import { ethers } from "hardhat";
 import { deal } from "hardhat-deal";
-import { ChainId, Market, addresses } from "../src";
-import { MAINNET_MARKETS } from "../src/tests/mocks/markets";
+import { ChainId, Market, addresses } from "../../src";
+import { MAINNET_MARKETS } from "../../src/tests/mocks/markets";
 
 describe("Market", () => {
   let signer: SignerWithAddress;
@@ -27,7 +27,7 @@ describe("Market", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  it("should borrow borrowable assets", async () => {
+  test("should borrow borrowable assets", async () => {
     const { morpho: morphoAddress } = addresses[ChainId.EthMainnet];
     const morpho = MorphoBlue__factory.connect(morphoAddress, signer);
 
@@ -99,7 +99,7 @@ describe("Market", () => {
     );
   });
 
-  it("should borrow borrowable assets in an extreme future", async () => {
+  test("should borrow borrowable assets in an extreme future", async () => {
     const { morpho: morphoAddress } = addresses[ChainId.EthMainnet];
     const morpho = MorphoBlue__factory.connect(morphoAddress, signer);
 

@@ -9,7 +9,7 @@ import {
   addresses,
 } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-import { Token } from "../src/augment/Token";
+import { Token } from "../../src/augment/Token";
 
 describe("augment/Token", () => {
   let signer: SignerWithAddress;
@@ -18,7 +18,7 @@ describe("augment/Token", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  it("should fetch token data", async () => {
+  test("should fetch token data", async () => {
     const expectedData = new Token({
       address: addresses[ChainId.EthMainnet].usdc,
       decimals: 6,
@@ -31,7 +31,7 @@ describe("augment/Token", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch wrapped token data", async () => {
+  test("should fetch wrapped token data", async () => {
     const expectedData = new ExchangeRateWrappedToken(
       {
         address: addresses[ChainId.EthMainnet].wstEth,
@@ -51,7 +51,7 @@ describe("augment/Token", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("Should fetch MKR token data", async () => {
+  test("Should fetch MKR token data", async () => {
     const expectedData = new Token({
       address: addresses[ChainId.EthMainnet].mkr,
       decimals: 18,

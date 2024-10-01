@@ -6,9 +6,9 @@ import {
   FetchVaultMarketConfigParameters,
   FetchVaultMarketConfigQueryKey,
   fetchVaultMarketConfigQueryOptions,
-} from "../queries/fetchVaultMarketConfig.js";
-import { ConfigParameter, QueryParameter } from "../types/properties.js";
-import { useChainId } from "./useChainId.js";
+} from "../queries/fetchVaultMarketConfig";
+import { ConfigParameter, QueryParameter } from "../types";
+import { useChainId } from "./useChainId";
 
 export type UseVaultMarketConfigParameters<
   config extends Config = Config,

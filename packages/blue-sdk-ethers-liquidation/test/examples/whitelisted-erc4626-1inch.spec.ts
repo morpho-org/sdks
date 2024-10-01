@@ -449,7 +449,7 @@ describe("erc4626-1inch", () => {
       .get(pendleRedeemApiMatcher, 404, { overwriteRoutes: false });
   };
 
-  it(`should liquidate on standard market`, async () => {
+  test(`should liquidate on standard market`, async () => {
     const collateralPriceUsd = 63_300;
     const ethPriceUsd = 2_600;
 
@@ -558,7 +558,7 @@ describe("erc4626-1inch", () => {
     expect(decimalBalance).to.almost.eq(33_316_586_406n / decimals);
   });
 
-  it(`should liquidate on standard market with bad debt`, async () => {
+  test(`should liquidate on standard market with bad debt`, async () => {
     const collateralPriceUsd = 3_129;
     const ethPriceUsd = 2_653;
 
@@ -687,7 +687,7 @@ describe("erc4626-1inch", () => {
     expect(decimalBalance).to.almost.eq(5976971822403273072470n / decimals);
   });
 
-  it(`should liquidate on a PT standard market before maturity`, async () => {
+  test(`should liquidate on a PT standard market before maturity`, async () => {
     const collateralPriceUsd = 1;
     const ethPriceUsd = 2_644;
 
@@ -805,7 +805,7 @@ describe("erc4626-1inch", () => {
     expect(decimalBalance).to.almost.eq(7369167071383784310757n / decimals);
   });
 
-  it(`should liquidate on a PT standard market after maturity`, async () => {
+  test(`should liquidate on a PT standard market after maturity`, async () => {
     const collateralPriceUsd = 1;
     const ethPriceUsd = 2_644;
 

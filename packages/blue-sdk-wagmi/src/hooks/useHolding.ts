@@ -6,9 +6,9 @@ import {
   FetchHoldingParameters,
   FetchHoldingQueryKey,
   fetchHoldingQueryOptions,
-} from "../queries/fetchHolding.js";
-import { ConfigParameter, QueryParameter } from "../types/properties.js";
-import { useChainId } from "./useChainId.js";
+} from "../queries/fetchHolding";
+import { ConfigParameter, QueryParameter } from "../types";
+import { useChainId } from "./useChainId";
 
 export type UseHoldingParameters<
   config extends Config = Config,

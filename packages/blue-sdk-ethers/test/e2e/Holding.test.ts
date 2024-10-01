@@ -10,7 +10,7 @@ import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 
 import { setUp } from "@morpho-org/morpho-test";
 import { ethers } from "hardhat";
-import { Holding } from "../src/augment/Holding";
+import { Holding } from "../../src/augment/Holding";
 
 describe("augment/Holding", () => {
   let signer: SignerWithAddress;
@@ -19,7 +19,7 @@ describe("augment/Holding", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  it("should fetch user token data", async () => {
+  test("should fetch user token data", async () => {
     const token = MAINNET_MARKETS.eth_wstEth.loanToken;
 
     const erc20 = ERC20__factory.connect(token, signer);

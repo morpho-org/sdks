@@ -34,9 +34,9 @@ import {
   reset,
 } from "@morpho-org/morpho-test";
 
-import { BundlerService } from "../../../src/index.js";
-import { bbETH, bbUSDT, bbUsdc, re7WETH, steakUsdc } from "../fixtures.js";
-import { donate, setupBundle } from "../helpers.js";
+import { BundlerService } from "../../../src";
+import { bbETH, bbUSDT, bbUsdc, re7WETH, steakUsdc } from "../fixtures";
+import { donate, setupBundle } from "../helpers";
 
 const {
   morpho,

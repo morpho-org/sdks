@@ -9,7 +9,7 @@ import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
-import { Position } from "../src/augment/Position";
+import { Position } from "../../src/augment/Position";
 
 const market = MAINNET_MARKETS.usdc_wstEth;
 
@@ -53,7 +53,7 @@ describe("augment/Position", () => {
     );
   });
 
-  it("should fetch position", async () => {
+  test("should fetch position", async () => {
     const expectedData = new Position({
       user: signer.address,
       marketId: market.id,

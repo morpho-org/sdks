@@ -1,9 +1,9 @@
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
 import { maxUint256, zeroAddress } from "viem";
-import { Erc20Errors } from "../../errors.js";
-import { Erc20Operations } from "../../operations.js";
-import { OperationHandler } from "../types.js";
+import { Erc20Errors } from "../../errors";
+import { Erc20Operations } from "../../operations";
+import { OperationHandler } from "../types";
 
 export const handleErc20TransferOperation: OperationHandler<
   Erc20Operations["Erc20_Transfer"]

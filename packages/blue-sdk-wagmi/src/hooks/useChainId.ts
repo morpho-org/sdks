@@ -6,7 +6,7 @@ import {
   ResolvedRegister,
   useChainId as wagmi_useChainId,
 } from "wagmi";
-import { ConfigParameter } from "../types/properties.js";
+import { ConfigParameter } from "../types";
 
 export type UseChainIdParameters<config extends Config = Config> =
   ChainIdParameter<config> & ConfigParameter<config>;

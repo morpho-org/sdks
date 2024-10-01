@@ -31,14 +31,14 @@ import {
   getPermitTypedData,
 } from "@morpho-org/blue-sdk-viem";
 import { sendTransaction, signTypedData } from "viem/actions";
-import BundlerAction from "../BundlerAction.js";
-import { baseBundlerAbi } from "../abis.js";
+import BundlerAction from "../BundlerAction";
+import { baseBundlerAbi } from "../abis";
 import {
   Action,
   ActionBundle,
   BundlerOperation,
   TransactionRequirement,
-} from "../types/index.js";
+} from "../types";
 
 export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<ChainId, Address[]>> = {
   [ChainId.EthMainnet]: [

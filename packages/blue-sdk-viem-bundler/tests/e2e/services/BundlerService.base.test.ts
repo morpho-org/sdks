@@ -14,7 +14,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { mine, reset } from "@morpho-org/morpho-test";
 
-import { setupBundle } from "../helpers.js";
+import { setupBundle } from "../helpers";
 
 const { morpho, bundler, adaptiveCurveIrm, wNative, usdc, verUsdc } =
   addresses[ChainId.BaseMainnet];

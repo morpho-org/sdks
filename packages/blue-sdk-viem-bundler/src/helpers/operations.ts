@@ -28,12 +28,12 @@ import {
 import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
 
 import { maxUint256 } from "viem";
-import { BundlerErrors } from "../errors.js";
+import { BundlerErrors } from "../errors";
 import {
   BundlerOperation,
   CallbackBundlerOperation,
   InputBundlerOperation,
-} from "../types/index.js";
+} from "../types";
 
 export interface BundlingOptions {
   withSimplePermit?: Set<Address>;

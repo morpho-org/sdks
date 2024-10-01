@@ -5,7 +5,7 @@ import {
   UnknownDataError,
 } from "@morpho-org/blue-sdk";
 
-import { Operation } from "./operations.js";
+import { Operation } from "./operations";
 
 export class UnknownMarketError extends UnknownDataError {
   constructor(public readonly marketId: MarketId) {
