@@ -21,8 +21,7 @@ export async function getCurveWithdrawalAmount(
    * @param i Index value of the coin to withdraw
    * @return Amount of coin received
    */
-  // @ts-ignore
-  const result = await contract.calc_withdraw_one_coin(amount, tokenIndex);
+  const result = await contract.calc_withdraw_one_coin!(amount, tokenIndex);
   return result;
 }
 
@@ -47,8 +46,7 @@ export async function getCurveSwapOutputAmountFromInput(
    * @param dx Amount of `i` being exchanged
    * @return Amount of `j` predicted
    */
-  // @ts-ignore
-  const result = await contract.get_dy(
+  const result = await contract.get_dy!(
     inputTokenIndex,
     outputTokenIndex,
     amount,
@@ -77,8 +75,7 @@ export async function getCurveSwapInputAmountFromOutput(
    * @param dy Amount of `j` being received after exchange
    * @return Amount of `i` predicted
    */
-  // @ts-ignore
-  const result = await contract.get_dx(
+  const result = await contract.get_dx!(
     inputTokenIndex,
     outputTokenIndex,
     destAmount,
@@ -104,7 +101,6 @@ export async function encodeRemoveLiquidityFromCurvePool(
    * @param _receiver Address that receives the withdrawn coins
    * @return Amount of coin received
    */
-  // @ts-ignore
   encoder.pushCall(
     curvePool,
     0n,
@@ -136,7 +132,6 @@ export async function encodeCurveSwap(
    * @param _receiver Address that receives `j`
    * @return Actual amount of `j` received
    */
-  // @ts-ignore
   encoder.pushCall(
     curvePool,
     0n,

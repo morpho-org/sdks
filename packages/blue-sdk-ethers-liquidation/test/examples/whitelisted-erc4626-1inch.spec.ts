@@ -985,7 +985,6 @@ describe("erc4626-1inch", () => {
     );
 
     //Deposit coins into the pool as the borrower to get the LP tokens in the cleanest possible way
-    // @ts-ignore
     await curveUSD0USD0PPPool["add_liquidity(uint256[],uint256,address)"]!(
       [collateral, 0n],
       1,

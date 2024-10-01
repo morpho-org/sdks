@@ -398,11 +398,10 @@ export const check = async (
                     },
                   ]);
 
-                  const res = await flashbotsProvider.sendRawBundle(
+                  return await flashbotsProvider.sendRawBundle(
                     signedBundle,
                     block.number + 1,
                   );
-                  return res;
                 } else {
                   return await signer.sendTransaction(transaction);
                 }
