@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-ethers-liquidation",
-  "version": "2.0.0-alpha.1",
+  "version": "2.0.0-alpha.3",
   "author": "Morpho Association <contact@morpho.org>",
   "main": "src/index.ts",
   "files": [
