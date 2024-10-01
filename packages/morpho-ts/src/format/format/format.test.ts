@@ -10,12 +10,22 @@ describe("format", () => {
       it("without option", () => {
         expect(format.hex.of(number)).toEqual((123456789).toString(16));
       });
+      it("with a default value", () => {
+        expect(format.hex.default("default").of(undefined)).toEqual("default");
+        expect(format.hex.default("default").of(null)).toEqual("default");
+      });
     });
     describe("should properly format bigint in hex format", () => {
       it("without option", () => {
         expect(format.hex.of(bigint, decimals)).toEqual(
           (123456789).toString(16),
         );
+      });
+      it("with a default value", () => {
+        expect(format.hex.default("default").of(undefined, 18)).toEqual(
+          "default",
+        );
+        expect(format.hex.default("default").of(null, 18)).toEqual("default");
       });
     });
   });
@@ -60,6 +70,12 @@ describe("format", () => {
         expect(format.number.of(1.234e30)).toEqual("1234" + "0".repeat(27));
         expect(format.number.of(1.234e2)).toEqual("123.4");
       });
+      it("with a default value", () => {
+        expect(format.number.default("default").of(undefined)).toEqual(
+          "default",
+        );
+        expect(format.number.default("default").of(null)).toEqual("default");
+      });
     });
     describe("should properly format bigint in number format", () => {
       it("without option", () => {
@@ -103,6 +119,14 @@ describe("format", () => {
           "12345,6789",
         );
       });
+      it("with a default value", () => {
+        expect(format.number.default("default").of(undefined, 18)).toEqual(
+          "default",
+        );
+        expect(format.number.default("default").of(null, 18)).toEqual(
+          "default",
+        );
+      });
     });
   });
 
@@ -139,6 +163,12 @@ describe("format", () => {
       });
       it("with locale", () => {
         expect(format.short.locale("fr-FR").of(number)).toEqual("12,3456789k");
+      });
+      it("with a default value", () => {
+        expect(format.short.default("default").of(undefined)).toEqual(
+          "default",
+        );
+        expect(format.short.default("default").of(null)).toEqual("default");
       });
     });
     describe("should properly format bigint in short format", () => {
@@ -195,6 +225,12 @@ describe("format", () => {
           // the correct space in fr-FR is narrow no-break space (U+202F)
         ).toEqual("1\u202F234,56789");
       });
+      it("with a default value", () => {
+        expect(format.short.default("default").of(undefined, 18)).toEqual(
+          "default",
+        );
+        expect(format.short.default("default").of(null, 18)).toEqual("default");
+      });
     });
   });
 
@@ -228,6 +264,12 @@ describe("format", () => {
         expect(format.commas.locale("fr-FR").of(number)).toEqual(
           "12\u202F345,6789",
         );
+      });
+      it("with a default value", () => {
+        expect(format.commas.default("default").of(undefined)).toEqual(
+          "default",
+        );
+        expect(format.commas.default("default").of(null)).toEqual("default");
       });
     });
     describe("should properly format bigint in commas format", () => {
@@ -273,6 +315,14 @@ describe("format", () => {
           "12\u202F345,6789",
         );
       });
+      it("with a default value", () => {
+        expect(format.commas.default("default").of(undefined, 18)).toEqual(
+          "default",
+        );
+        expect(format.commas.default("default").of(null, 18)).toEqual(
+          "default",
+        );
+      });
     });
   });
 
@@ -305,6 +355,12 @@ describe("format", () => {
         expect(format.percent.locale("fr-FR").of(number)).toEqual(
           "1234567,8900",
         );
+      });
+      it("with a default value", () => {
+        expect(format.percent.default("default").of(undefined)).toEqual(
+          "default",
+        );
+        expect(format.percent.default("default").of(null)).toEqual("default");
       });
     });
     describe("should properly format bigint in percent format", () => {
@@ -344,6 +400,14 @@ describe("format", () => {
       it("with locale", () => {
         expect(format.percent.locale("fr-FR").of(bigint, decimals)).toEqual(
           "1234567,8900",
+        );
+      });
+      it("with a default value", () => {
+        expect(format.percent.default("default").of(undefined, 18)).toEqual(
+          "default",
+        );
+        expect(format.percent.default("default").of(null, 18)).toEqual(
+          "default",
         );
       });
     });

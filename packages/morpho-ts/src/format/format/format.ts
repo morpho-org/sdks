@@ -8,8 +8,12 @@ enum Format {
   percent = "percent",
 }
 
-interface BaseFormatOptions {
+interface UniversalFormatOptions {
   format: Format;
+  default?: string;
+}
+
+interface BaseFormatOptions extends UniversalFormatOptions {
   digits?: number;
   removeTrailingZero?: boolean;
   min?: number;
@@ -24,7 +28,7 @@ interface FormatShortOptions extends BaseFormatOptions {
   format: Format.short;
   smallValuesWithCommas?: boolean;
 }
-interface FormatHexOptions {
+interface FormatHexOptions extends UniversalFormatOptions {
   format: Format.hex;
   prefix?: boolean;
 }
@@ -260,14 +264,32 @@ function formatBI(
   return formattedValue;
 }
 
+type FormatterWithDefault<F extends BaseFormatter> = {
+  of(value: bigint | null | undefined, decimals: number): string;
+  of(value: number | null | undefined): string;
+} & Omit<F, "of">;
+
 export abstract class BaseFormatter {
   protected abstract _options: FormatOptions;
 
   constructor() {}
 
-  of(value: bigint, decimals: number): string;
-  of(value: number): string;
+  default(_d: string) {
+    this._options.default = _d;
+
+    return this as FormatterWithDefault<this>;
+  }
+
+  of<T extends bigint | null | undefined>(
+    value: T,
+    decimals: number,
+  ): Exclude<T, bigint> | string;
+  of<T extends number | null | undefined>(
+    value: T,
+  ): Exclude<T, number> | string;
   of(value: bigint | number, decimals?: number) {
+    if (value == null) return this._options.default ?? value;
+
     if (typeof value === "number") {
       const str = value.toString();
       const [significant, exp] = str.split(/[eE]/);
