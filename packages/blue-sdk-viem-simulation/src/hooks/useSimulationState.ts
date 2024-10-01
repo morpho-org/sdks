@@ -62,11 +62,15 @@ export type UseSimulationReturnType<T> =
        */
       data: T;
       /**
-       * The errors that occurred while fetching data, if any.
+       * The errors that occurred while fetching each data leaf, indexed the same way as in the simulation state.
        */
       error: SimulationStateLike<ReadContractErrorType | null>;
       /**
-       * Whether data is being fetched.
+       * Whether any piece of data is being fetched.
+       */
+      isFetchingAny: boolean;
+      /**
+       * Whether each data leaf is being fetched, indexed the same way as in the simulation state.
        */
       isFetching: SimulationStateLike<boolean>;
       /**
@@ -84,7 +88,11 @@ export type UseSimulationReturnType<T> =
        */
       error: SimulationStateLike<null>;
       /**
-       * Request is not fetching when pending.
+       * Request is not fetching at all when pending.
+       */
+      isFetchingAny: false;
+      /**
+       * Request is not fetching at all when pending.
        */
       isFetching: SimulationStateLike<false>;
       /**
@@ -274,6 +282,7 @@ export function useSimulationState<
     return {
       data: undefined,
       error: {},
+      isFetchingAny: false,
       isFetching: {},
       isPending: true,
     };
@@ -281,6 +290,16 @@ export function useSimulationState<
   return {
     data: data!,
     error,
+    isFetchingAny:
+      feeRecipient.isFetching ||
+      markets.isFetchingAny ||
+      users.isFetchingAny ||
+      tokens.isFetchingAny ||
+      vaults.isFetchingAny ||
+      positions.isFetchingAny ||
+      holdings.isFetchingAny ||
+      vaultMarketConfigs.isFetchingAny ||
+      vaultUsers.isFetchingAny,
     isFetching: {
       global: { feeRecipient: feeRecipient.isFetching },
       markets: markets.isFetching,

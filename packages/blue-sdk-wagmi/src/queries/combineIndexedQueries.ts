@@ -27,6 +27,7 @@ export type CombineIndexedQueriesReturnType<
   data: NestedRecord<Index, TData>;
   error: NestedRecord<Index, NonNullable<TError>>;
   isFetching: NestedRecord<Index, true>;
+  isFetchingAny: boolean;
 };
 
 export function combineIndexedQueries<
@@ -45,6 +46,7 @@ export function combineIndexedQueries<
       data: {} as NestedRecord<Index, TData>,
       error: {} as NestedRecord<Index, NonNullable<TError>>,
       isFetching: {} as NestedRecord<Index, true>,
+      isFetchingAny: results.some(({ isFetching }) => isFetching),
     };
 
     for (const { data, error, isFetching } of results) {
