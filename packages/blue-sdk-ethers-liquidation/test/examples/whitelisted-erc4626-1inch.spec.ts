@@ -449,7 +449,7 @@ describe("erc4626-1inch", () => {
       .get(pendleRedeemApiMatcher, 404, { overwriteRoutes: false });
   };
 
-  test(`should liquidate on standard market`, async () => {
+  it(`should liquidate on standard market`, async () => {
     const collateralPriceUsd = 63_300;
     const ethPriceUsd = 2_600;
 
@@ -535,7 +535,7 @@ describe("erc4626-1inch", () => {
       });
 
     const accrualPosition = await fetchAccrualPositionFromConfig(
-      borrower.address,
+      borrower.address as Address,
       market.config,
       signer,
     );
@@ -558,7 +558,7 @@ describe("erc4626-1inch", () => {
     expect(decimalBalance).to.almost.eq(33_316_586_406n / decimals);
   });
 
-  test(`should liquidate on standard market with bad debt`, async () => {
+  it(`should liquidate on standard market with bad debt`, async () => {
     const collateralPriceUsd = 3_129;
     const ethPriceUsd = 2_653;
 
@@ -658,7 +658,7 @@ describe("erc4626-1inch", () => {
       });
 
     const accrualPosition = await fetchAccrualPositionFromConfig(
-      borrower.address,
+      borrower.address as Address,
       market.config,
       signer,
     );
@@ -687,7 +687,7 @@ describe("erc4626-1inch", () => {
     expect(decimalBalance).to.almost.eq(5976971822403273072470n / decimals);
   });
 
-  test(`should liquidate on a PT standard market before maturity`, async () => {
+  it(`should liquidate on a PT standard market before maturity`, async () => {
     const collateralPriceUsd = 1;
     const ethPriceUsd = 2_644;
 
@@ -775,7 +775,7 @@ describe("erc4626-1inch", () => {
       });
 
     const accrualPosition = await fetchAccrualPositionFromConfig(
-      borrower.address,
+      borrower.address as Address,
       market.config,
       signer,
     );
@@ -805,7 +805,7 @@ describe("erc4626-1inch", () => {
     expect(decimalBalance).to.almost.eq(7369167071383784310757n / decimals);
   });
 
-  test(`should liquidate on a PT standard market after maturity`, async () => {
+  it(`should liquidate on a PT standard market after maturity`, async () => {
     const collateralPriceUsd = 1;
     const ethPriceUsd = 2_644;
 
@@ -895,7 +895,7 @@ describe("erc4626-1inch", () => {
       });
 
     const accrualPosition = await fetchAccrualPositionFromConfig(
-      borrower.address,
+      borrower.address as Address,
       market.config,
       signer,
     );
