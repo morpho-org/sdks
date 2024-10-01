@@ -30,7 +30,6 @@ import {
   safeGetAddress,
   safeParseNumber,
 } from "@morpho-org/blue-sdk-ethers";
-import { Time } from "@morpho-org/morpho-ts";
 import {
   LiquidationEncoder,
   apiSdk,
@@ -39,7 +38,8 @@ import {
   getPendleSwapCallData,
   pendleMarkets,
   pendleTokens,
-} from "../src";
+} from "@morpho-org/blue-sdk-ethers-liquidation";
+import { Time } from "@morpho-org/morpho-ts";
 
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
