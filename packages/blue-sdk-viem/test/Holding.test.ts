@@ -1,12 +1,11 @@
 import { expect } from "chai";
 import { deal } from "hardhat-deal";
 
-import { ChainId, Holding, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 
 import { setUp } from "@morpho-org/morpho-test";
 import { viem } from "hardhat";
-import "../src/augment/Holding";
 import {
   Account,
   Address,
@@ -22,6 +21,7 @@ import {
   testActions,
 } from "viem";
 import { permit2Abi } from "../src/abis";
+import { Holding } from "../src/augment/Holding";
 
 describe("augment/Holding", () => {
   let client: Client<

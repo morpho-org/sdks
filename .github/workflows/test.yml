@@ -27,7 +27,7 @@ jobs:
             hardhat: false
           - name: blue-sdk
             jest: true
-            hardhat: false
+            hardhat: true
           - name: blue-sdk-ethers
             jest: true
             hardhat: true

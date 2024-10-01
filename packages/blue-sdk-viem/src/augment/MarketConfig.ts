@@ -28,3 +28,5 @@ MarketConfig.prototype.asViem = function () {
     lltv: bigint;
   };
 };
+
+export { MarketConfig };

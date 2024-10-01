@@ -15,16 +15,11 @@ import {
   zeroAddress,
 } from "viem";
 
-import {
-  ChainId,
-  MarketConfig,
-  MarketId,
-  addresses,
-} from "@morpho-org/blue-sdk";
+import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import "../src/augment/MarketConfig";
+import { MarketConfig } from "../src/augment/MarketConfig";
 
 describe("augment/MarketConfig", () => {
   let client: Client<

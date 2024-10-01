@@ -8,3 +8,5 @@ declare module "@morpho-org/blue-sdk" {
 }
 
 Token.fetch = fetchToken;
+
+export { Token };
