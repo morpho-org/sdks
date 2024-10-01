@@ -23,11 +23,6 @@ import sinon from "sinon";
 import "evm-maths";
 
 import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import { mine } from "@nomicfoundation/hardhat-network-helpers";
-import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
-import { BuildTxInput } from "@paraswap/sdk";
-
 import {
   Address,
   ChainId,
@@ -37,6 +32,11 @@ import {
 } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
+import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import { mine } from "@nomicfoundation/hardhat-network-helpers";
+import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
+import { BuildTxInput } from "@paraswap/sdk";
+import hre from "hardhat";
 
 import {
   fetchAccrualPositionFromConfig,
@@ -46,6 +46,8 @@ import {
 import chaiAlmost from "chai-almost";
 import { check } from "../../examples/whitelisted-erc4626-1inch";
 import { SwapMock__factory } from "../../mocks/types";
+import CurveStableSwapNGABI from "../../src/abi/CurveStableSwapNG.json";
+import { curvePools, mainnetAddresses } from "../../src/addresses";
 import { getOneInchSwapApiUrl } from "../../src/swap/1inch";
 import { PARASWAP_API_URL } from "../../src/swap/paraswap";
 import {
@@ -927,6 +929,273 @@ describe("erc4626-1inch", () => {
         executorAddress,
       )) / decimals;
     expect(decimalBalance).to.almost.eq(7325591893360572899357n / decimals);
+  });
+
+  it(`should liquidate a USD0USD0++ market`, async () => {
+    const collateralPriceUsd = 1.02;
+    const ethPriceUsd = 2_644;
+
+    const marketId =
+      "0x864c9b82eb066ae2c038ba763dfc0221001e62fc40925530056349633eb0a259" as MarketId; // USD0USD0++ / USDC (86%)
+
+    const market = await fetchMarket(marketId, signer);
+    const [collateralToken, loanToken] = await Promise.all([
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
+    ]);
+
+    // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
+    const collateral = 100000000000000000000000n;
+
+    const morphoBorrower = MorphoBlue__factory.connect(
+      addresses[ChainId.EthMainnet].morpho,
+      borrower,
+    );
+
+    ///////////////////////////////////////////////////////////////////////////////////////
+    /// Test setup
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //Address of a USD0 holder with a large balance to transfer to our own account
+    const usd0Faucet = "0x224762e69169E425239EeEE0012d1B0e041C123D";
+
+    // Impersonate the USD0 holder
+    await hre.network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: [usd0Faucet],
+    });
+
+    const usd0Signer = await ethers.getSigner(usd0Faucet);
+
+    // Transfer the USD0 tokens to the borrower to be able to get USD0USD0++ LP tokens
+    await ERC20__factory.connect(
+      mainnetAddresses["usd0"]!,
+      usd0Signer,
+    ).transfer(borrower.address, collateral);
+
+    // Approve the USD0USD0++ pool to spend the USD0 tokens
+    await ERC20__factory.connect(mainnetAddresses["usd0"]!, borrower).approve(
+      curvePools["usd0usd0++"],
+      MaxUint256,
+    );
+
+    const curveUSD0USD0PPPool = new ethers.Contract(
+      curvePools["usd0usd0++"],
+      CurveStableSwapNGABI,
+      borrower,
+    );
+
+    //Deposit coins into the pool as the borrower to get the LP tokens in the cleanest possible way
+    // @ts-ignore
+    await curveUSD0USD0PPPool["add_liquidity(uint256[],uint256,address)"]!(
+      [collateral, 0n],
+      1,
+      borrower,
+    );
+
+    // Get the new real value of the collateral
+    const newCollatValue = await ERC20__factory.connect(
+      mainnetAddresses["usd0usd0++"]!,
+      borrower,
+    ).balanceOf(borrower.address);
+
+    await ERC20__factory.connect(collateralToken.address, borrower).approve(
+      addresses[ChainId.EthMainnet].morpho,
+      MaxUint256,
+    );
+
+    await setNextBlockTimestamp(start);
+    await mine(1);
+
+    await morphoBorrower.supplyCollateral(
+      market.config,
+      newCollatValue,
+      borrower.address,
+      "0x",
+    );
+
+    await morphoBorrower.borrow(
+      market.config,
+      market.getMaxBorrowAssets(newCollatValue) - 1n,
+      0n,
+      borrower.address,
+      borrower.address,
+    );
+
+    const newCollateralPriceUsd = collateralPriceUsd * 0.9; // 20% price drop
+
+    nock(BLUE_API_BASE_URL)
+      .post("/graphql")
+      .reply(200, {
+        data: { markets: { items: [{ uniqueKey: marketId }] } },
+      })
+      .post("/graphql")
+      .reply(200, {
+        data: {
+          assetByAddress: {
+            priceUsd: ethPriceUsd,
+            spotPriceEth: 1,
+          },
+          marketPositions: {
+            items: [
+              {
+                user: {
+                  address: borrower.address,
+                },
+                market: {
+                  oracleAddress: market.config.oracle,
+                  irmAddress: market.config.irm,
+                  lltv: market.config.lltv,
+                  collateralAsset: {
+                    address: market.config.collateralToken,
+                    decimals: collateralToken.decimals,
+                    priceUsd: newCollateralPriceUsd,
+                    spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
+                  },
+                  loanAsset: {
+                    address: market.config.loanToken,
+                    decimals: loanToken.decimals,
+                    priceUsd: null,
+                    spotPriceEth: 1 / ethPriceUsd,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+    await setTimestamp(start + delay);
+    await mine(1);
+
+    await check(executorAddress, hardhatSigner, signer, [marketId]);
+
+    const decimals = BigInt.pow10(loanToken.decimals);
+    const decimalBalance =
+      (await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
+        executorAddress,
+      )) / decimals;
+    expect(decimalBalance).to.almost.eq(3777412787n / decimals);
+  });
+
+  it(`should liquidate a USD0++ market`, async () => {
+    const collateralPriceUsd = 1.02;
+    const ethPriceUsd = 2_644;
+
+    const marketId =
+      "0xb48bb53f0f2690c71e8813f2dc7ed6fca9ac4b0ace3faa37b4a8e5ece38fa1a2" as MarketId; // USD0USD0++ / USDC (86%)
+
+    const market = await fetchMarket(marketId, signer);
+    const [collateralToken, loanToken] = await Promise.all([
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
+    ]);
+
+    // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
+    const collateral = 100000000000000000000000n;
+
+    const morphoBorrower = MorphoBlue__factory.connect(
+      addresses[ChainId.EthMainnet].morpho,
+      borrower,
+    );
+
+    ///////////////////////////////////////////////////////////////////////////////////////
+    /// Test setup
+    ///////////////////////////////////////////////////////////////////////////////////////
+    //Address of a USD0++ holder with a large balance to transfer to our own account
+    const usd0PPFaucet = "0x2227b6806339906707b43F36a1f07B52FF7Fa776";
+
+    // Impersonate the USD0 holder
+    await hre.network.provider.request({
+      method: "hardhat_impersonateAccount",
+      params: [usd0PPFaucet],
+    });
+
+    const usd0PPSigner = await ethers.getSigner(usd0PPFaucet);
+
+    // Transfer the USD0 tokens to the borrower for the liquidation
+    await ERC20__factory.connect(
+      mainnetAddresses["usd0++"]!,
+      usd0PPSigner,
+    ).transfer(borrower.address, collateral);
+
+    await ERC20__factory.connect(collateralToken.address, borrower).approve(
+      addresses[ChainId.EthMainnet].morpho,
+      MaxUint256,
+    );
+
+    await setNextBlockTimestamp(start);
+    await mine(1);
+
+    await morphoBorrower.supplyCollateral(
+      market.config,
+      collateral,
+      borrower.address,
+      "0x",
+    );
+
+    await morphoBorrower.borrow(
+      market.config,
+      market.getMaxBorrowAssets(collateral) - 1n,
+      0n,
+      borrower.address,
+      borrower.address,
+    );
+
+    const newCollateralPriceUsd = collateralPriceUsd * 0.9; // 20% price drop
+
+    nock(BLUE_API_BASE_URL)
+      .post("/graphql")
+      .reply(200, {
+        data: { markets: { items: [{ uniqueKey: marketId }] } },
+      })
+      .post("/graphql")
+      .reply(200, {
+        data: {
+          assetByAddress: {
+            priceUsd: ethPriceUsd,
+            spotPriceEth: 1,
+          },
+          marketPositions: {
+            items: [
+              {
+                user: {
+                  address: borrower.address,
+                },
+                market: {
+                  oracleAddress: market.config.oracle,
+                  irmAddress: market.config.irm,
+                  lltv: market.config.lltv,
+                  collateralAsset: {
+                    address: market.config.collateralToken,
+                    decimals: collateralToken.decimals,
+                    priceUsd: newCollateralPriceUsd,
+                    spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
+                  },
+                  loanAsset: {
+                    address: market.config.loanToken,
+                    decimals: loanToken.decimals,
+                    priceUsd: null,
+                    spotPriceEth: 1 / ethPriceUsd,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+    await setTimestamp(start + delay);
+    await mine(1);
+
+    await check(executorAddress, hardhatSigner, signer, [marketId]);
+
+    const decimals = BigInt.pow10(loanToken.decimals);
+
+    const decimalBalance =
+      (await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
+        executorAddress,
+      )) / decimals;
+    expect(decimalBalance).to.almost.eq(3484025090n / decimals);
   });
 
   it.skip(`should liquidate on rehypothecated market with limited swap liquidity`, async () => {

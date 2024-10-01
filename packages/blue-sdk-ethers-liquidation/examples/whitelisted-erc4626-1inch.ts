@@ -239,10 +239,14 @@ export const check = async (
                   case market.config.collateralToken ===
                     mainnetAddresses["usd0usd0++"] &&
                     chainId === ChainId.EthMainnet:
-                    await swapUsd0Usd0PPToUSDC(
+                    dstAmount = await swapUsd0Usd0PPToUSDC(
                       signer,
                       srcAmount,
-                      accrualPosition.collateral,
+                      accrualPosition.market.toBorrowAssets(
+                        accrualPosition.market.getLiquidationRepaidShares(
+                          seizedAssets,
+                        ),
+                      ),
                       encoder,
                       executorAddress,
                     );
@@ -251,10 +255,14 @@ export const check = async (
                   case market.config.collateralToken ===
                     mainnetAddresses["usd0++"] &&
                     chainId === ChainId.EthMainnet: {
-                    await swapUSD0PPToUSDC(
+                    dstAmount = await swapUSD0PPToUSDC(
                       signer,
                       srcAmount,
-                      accrualPosition.collateral,
+                      accrualPosition.market.toBorrowAssets(
+                        accrualPosition.market.getLiquidationRepaidShares(
+                          seizedAssets,
+                        ),
+                      ),
                       encoder,
                       executorAddress,
                     );
@@ -382,10 +390,11 @@ export const check = async (
                     },
                   ]);
 
-                  return await flashbotsProvider.sendRawBundle(
+                  const res = await flashbotsProvider.sendRawBundle(
                     signedBundle,
                     block.number + 1,
                   );
+                  return res;
                 } else {
                   return await signer.sendTransaction(transaction);
                 }

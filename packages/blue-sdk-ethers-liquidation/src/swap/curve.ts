@@ -108,12 +108,10 @@ export async function encodeRemoveLiquidityFromCurvePool(
   encoder.pushCall(
     curvePool,
     0n,
-    iface.encodeFunctionData("remove_liquidity_one_coin", [
-      amount,
-      withdrawnTokenIndex,
-      minReceived,
-      receiver,
-    ]),
+    iface.encodeFunctionData(
+      "remove_liquidity_one_coin(uint256,int128,uint256,address)",
+      [amount, withdrawnTokenIndex, minReceived, receiver],
+    ),
   );
 }
 
@@ -142,12 +140,9 @@ export async function encodeCurveSwap(
   encoder.pushCall(
     curvePool,
     0n,
-    iface.encodeFunctionData("exchange", [
-      inputTokenIndex,
-      outputTokenIndex,
-      amount,
-      minDestAmount,
-      receiver,
-    ]),
+    iface.encodeFunctionData(
+      "exchange(int128,int128,uint256,uint256,address)",
+      [inputTokenIndex, outputTokenIndex, amount, minDestAmount, receiver],
+    ),
   );
 }

@@ -45,6 +45,8 @@ mainnetAddresses["PT-weETH-27JUN2024"] =
   "0xc69Ad9baB1dEE23F4605a82b3354F8E40d1E5966";
 
 mainnetAddresses["usd0"] = "0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5";
+mainnetAddresses["usd0++"] = "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0";
+mainnetAddresses["usd0usd0++"] = "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52";
 
 export const pendleTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([

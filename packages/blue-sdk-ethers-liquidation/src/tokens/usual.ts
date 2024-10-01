@@ -9,6 +9,7 @@ import {
   getCurveSwapOutputAmountFromInput,
   getCurveWithdrawalAmount,
 } from "../swap/curve";
+
 export const USD0_USDC_USD0_INDEX = 0;
 export const USD0_USDC_USDC_INDEX = 1;
 
@@ -59,7 +60,7 @@ export async function swapUsd0Usd0PPToUSDC(
   // Encode the remove liquidity call to the USD0/USD0++ pool
   // go from USD0USD0++ -> USDO
   await encodeRemoveLiquidityFromCurvePool(
-    withdrawableUSD0Amount,
+    amount,
     curvePools["usd0usd0++"],
     USD0_USD0PP_USD0_INDEX,
     minUSD0Amount,
@@ -70,7 +71,7 @@ export async function swapUsd0Usd0PPToUSDC(
   // Encode the swap call to the USD0/USDC pool
   // go from USD0 -> USDC
   await encodeCurveSwap(
-    minUSD0Amount,
+    withdrawableUSD0Amount,
     curvePools["usd0usdc"],
     USD0_USDC_USD0_INDEX,
     USD0_USDC_USDC_INDEX,
