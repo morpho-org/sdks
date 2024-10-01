@@ -17,11 +17,11 @@ import {
   zeroAddress,
 } from "viem";
 
-import { ChainId, MarketId, Vault, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 
-import "../src/augment/Vault";
 import { metaMorphoAbi, publicAllocatorAbi } from "../src/abis";
+import { Vault } from "../src/augment/Vault";
 import { steakUsdc } from "./fixtures";
 
 describe("augment/Vault", () => {

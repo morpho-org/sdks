@@ -17,15 +17,14 @@ import {
 
 import {
   ChainId,
-  VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import "../src/augment/VaultMarketConfig";
 import { metaMorphoAbi, publicAllocatorAbi } from "../src/abis";
+import { VaultMarketConfig } from "../src/augment/VaultMarketConfig";
 import { steakUsdc } from "./fixtures";
 
 describe("augment/VaultMarketConfig", () => {

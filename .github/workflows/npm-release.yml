@@ -48,9 +48,9 @@ jobs:
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           if [ -n "${{ inputs.custom_version }}" ]; then
-            yarn lerna version ${{ inputs.custom_version }} --no-git-tag-version --yes --force-publish
-            yarn run publish --yes --dist-tag unstable
+            yarn lerna version ${{ inputs.custom_version }} --y --force-publish
+            yarn run publish --y --dist-tag unstable
           else
-            yarn lerna version ${{ inputs.version }} --no-private --conventional-commits --create-release github --generate-release-notes --yes
-            yarn run publish --yes
+            yarn lerna version ${{ inputs.version }} --no-private --no-changelog --conventional-commits --y
+            yarn run publish --y
           fi
