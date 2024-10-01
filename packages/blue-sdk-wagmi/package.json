@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-wagmi",
-  "version": "2.0.0-alpha.2",
+  "version": "2.0.0-alpha.3",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "type": "module",
