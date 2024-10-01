@@ -267,7 +267,11 @@ function formatBI(
 type FormatterWithDefault<F extends BaseFormatter> = {
   of(value: bigint | null | undefined, decimals: number): string;
   of(value: number | null | undefined): string;
-} & Omit<F, "of">;
+} & {
+  [K in keyof Omit<F, "of">]: F[K] extends (...args: infer A) => F
+    ? (...args: A) => FormatterWithDefault<F>
+    : F[K];
+};
 
 export abstract class BaseFormatter {
   protected abstract _options: FormatOptions;
