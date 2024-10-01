@@ -5,7 +5,7 @@ import { deal } from "hardhat-deal";
 
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { Address, ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 
 import { setUp } from "@morpho-org/morpho-test";
@@ -19,7 +19,7 @@ describe("augment/Holding", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  test("should fetch user token data", async () => {
+  it("should fetch user token data", async () => {
     const token = MAINNET_MARKETS.eth_wstEth.loanToken;
 
     const erc20 = ERC20__factory.connect(token, signer);
@@ -30,7 +30,7 @@ describe("augment/Holding", () => {
 
     const expectedData = new Holding({
       token,
-      user: signer.address,
+      user: signer.address as Address,
       erc20Allowances: {
         morpho: 1n,
         permit2: 3n,
@@ -79,7 +79,7 @@ describe("augment/Holding", () => {
     );
 
     const value = await Holding.fetch(
-      signer.address,
+      signer.address as Address,
       MAINNET_MARKETS.eth_wstEth.loanToken,
       signer,
     );

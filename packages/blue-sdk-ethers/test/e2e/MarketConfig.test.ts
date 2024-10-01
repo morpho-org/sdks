@@ -17,7 +17,7 @@ describe("augment/MarketConfig", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  test("should fetch config from cache", async () => {
+  it("should fetch config from cache", async () => {
     const market = await MarketConfig.fetch(
       MAINNET_MARKETS.usdc_wstEth.id,
       signer,
@@ -26,7 +26,7 @@ describe("augment/MarketConfig", () => {
     expect(market).to.eql(MAINNET_MARKETS.usdc_wstEth);
   });
 
-  test("should fetch config from chain", async () => {
+  it("should fetch config from chain", async () => {
     const marketParams = {
       collateralToken: ZeroAddress,
       loanToken: addresses[ChainId.EthMainnet].wNative,

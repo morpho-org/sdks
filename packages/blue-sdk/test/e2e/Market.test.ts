@@ -27,7 +27,7 @@ describe("Market", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  test("should borrow borrowable assets", async () => {
+  it("should borrow borrowable assets", async () => {
     const { morpho: morphoAddress } = addresses[ChainId.EthMainnet];
     const morpho = MorphoBlue__factory.connect(morphoAddress, signer);
 
@@ -99,7 +99,7 @@ describe("Market", () => {
     );
   });
 
-  test("should borrow borrowable assets in an extreme future", async () => {
+  it("should borrow borrowable assets in an extreme future", async () => {
     const { morpho: morphoAddress } = addresses[ChainId.EthMainnet];
     const morpho = MorphoBlue__factory.connect(morphoAddress, signer);
 

@@ -32,13 +32,13 @@ jobs:
             vitest: true
             hardhat: true
           - name: blue-sdk-viem
-            vitest: true
+            vitest: false
             hardhat: true
           - name: blue-sdk-viem-simulation
             vitest: true
             hardhat: false
           - name: blue-sdk-viem-bundler
-            vitest: true
+            vitest: false
             hardhat: false
           - name: blue-sdk-ethers-liquidation
             vitest: false

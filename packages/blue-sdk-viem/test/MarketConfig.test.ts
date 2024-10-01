@@ -38,7 +38,7 @@ describe("augment/MarketConfig", () => {
       .extend(testActions({ mode: "hardhat" }));
   });
 
-  test("should fetch config from cache", async () => {
+  it("should fetch config from cache", async () => {
     const market = await MarketConfig.fetch(
       MAINNET_MARKETS.usdc_wstEth.id,
       client,
@@ -47,7 +47,7 @@ describe("augment/MarketConfig", () => {
     expect(market).to.eql(MAINNET_MARKETS.usdc_wstEth);
   });
 
-  test("should fetch config from chain", async () => {
+  it("should fetch config from chain", async () => {
     const marketParams = {
       collateralToken: zeroAddress,
       loanToken: addresses[ChainId.EthMainnet].wNative,

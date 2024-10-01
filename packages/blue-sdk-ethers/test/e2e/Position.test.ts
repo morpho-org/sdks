@@ -6,7 +6,7 @@ import { deal } from "hardhat-deal";
 
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { Address, ChainId, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 import { Position } from "../../src/augment/Position";
@@ -53,16 +53,20 @@ describe("augment/Position", () => {
     );
   });
 
-  test("should fetch position", async () => {
+  it("should fetch position", async () => {
     const expectedData = new Position({
-      user: signer.address,
+      user: signer.address as Address,
       marketId: market.id,
       supplyShares: 0n,
       borrowShares,
       collateral,
     });
 
-    const value = await Position.fetch(signer.address, market.id, signer);
+    const value = await Position.fetch(
+      signer.address as Address,
+      market.id,
+      signer,
+    );
 
     expect(value).to.eql(expectedData);
   });

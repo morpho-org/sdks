@@ -100,7 +100,7 @@ describe("augment/Position", () => {
     });
   });
 
-  test("should fetch position", async () => {
+  it("should fetch position", async () => {
     const expectedData = new Position({
       user: client.account.address,
       marketId: market.id,

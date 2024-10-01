@@ -7,6 +7,8 @@ declare module "ethers" {
   }
 
   namespace ethers {
+    // @ts-ignore
+    const ZeroAddress: Address;
     function getAddress(add: string): Address;
     function isAddress(add: string): add is Address;
     function recoverAddress(

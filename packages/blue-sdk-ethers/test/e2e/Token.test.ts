@@ -18,7 +18,7 @@ describe("augment/Token", () => {
     signer = (await ethers.getSigners())[0]!;
   });
 
-  test("should fetch token data", async () => {
+  it("should fetch token data", async () => {
     const expectedData = new Token({
       address: addresses[ChainId.EthMainnet].usdc,
       decimals: 6,
@@ -31,7 +31,7 @@ describe("augment/Token", () => {
     expect(value).to.eql(expectedData);
   });
 
-  test("should fetch wrapped token data", async () => {
+  it("should fetch wrapped token data", async () => {
     const expectedData = new ExchangeRateWrappedToken(
       {
         address: addresses[ChainId.EthMainnet].wstEth,
@@ -51,7 +51,7 @@ describe("augment/Token", () => {
     expect(value).to.eql(expectedData);
   });
 
-  test("Should fetch MKR token data", async () => {
+  it("Should fetch MKR token data", async () => {
     const expectedData = new Token({
       address: addresses[ChainId.EthMainnet].mkr,
       decimals: 18,

@@ -65,7 +65,7 @@ describe("augment/Vault", () => {
     });
   });
 
-  test("should fetch vault data", async () => {
+  it("should fetch vault data", async () => {
     const expectedData = new Vault({
       config: steakUsdc,
       curator: zeroAddress,
