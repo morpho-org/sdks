@@ -12,6 +12,15 @@
     "prepublish": "yarn build",
     "build": "tsc --build tsconfig.build.json"
   },
+  "peerDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@tanstack/react-query": ">=5.0.0",
+    "react": ">=18",
+    "viem": "^2.0.0",
+    "wagmi": "^2.12.10"
+  },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
@@ -27,16 +36,8 @@
     "ts-node": "^10.9.2",
     "typescript": "^5.6.2",
     "viem": "^2.21.8",
-    "wagmi": "^2.12.12"
-  },
-  "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@tanstack/react-query": ">=5.0.0",
-    "react": ">=18",
-    "viem": "^2.0.0",
-    "wagmi": "^2.12.10"
+    "vitest": "^2.1.1",
+    "wagmi": "^2.12.16"
   },
   "publishConfig": {
     "main": "lib/index.js",

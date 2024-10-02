@@ -52,7 +52,7 @@
     "typescript": "^5.6.2",
     "viem": "^2.21.8",
     "vitest": "^2.1.1",
-    "wagmi": "^2.12.12"
+    "wagmi": "^2.12.16"
   },
   "publishConfig": {
     "main": "lib/index.js",
