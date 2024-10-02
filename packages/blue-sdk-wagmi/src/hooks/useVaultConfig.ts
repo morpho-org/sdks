@@ -1,7 +1,9 @@
 import { VaultConfig } from "@morpho-org/blue-sdk";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
+import { UseQueryReturnType, useQuery } from "wagmi/query";
+import { mergeDeepEqual } from "../utils";
+
 import {
   FetchVaultConfigParameters,
   FetchVaultConfigQueryKey,
@@ -47,6 +49,6 @@ export function useVaultConfig<
     ...query,
     ...options,
     enabled: parameters.vault != null && query.enabled,
-    structuralSharing: query.structuralSharing ?? structuralSharing,
+    structuralSharing: query.structuralSharing ?? mergeDeepEqual,
   });
 }

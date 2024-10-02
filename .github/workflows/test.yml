@@ -34,6 +34,9 @@ jobs:
           - name: blue-sdk-viem
             vitest: false
             hardhat: true
+          - name: blue-sdk-wagmi
+            vitest: true
+            hardhat: false
           - name: blue-sdk-viem-simulation
             vitest: true
             hardhat: false

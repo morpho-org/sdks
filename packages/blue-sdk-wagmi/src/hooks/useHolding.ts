@@ -1,13 +1,14 @@
 import { Holding } from "@morpho-org/blue-sdk";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
+import { UseQueryReturnType, useQuery } from "wagmi/query";
 import {
   FetchHoldingParameters,
   FetchHoldingQueryKey,
   fetchHoldingQueryOptions,
 } from "../queries/fetchHolding";
 import { ConfigParameter, QueryParameter } from "../types";
+import { mergeDeepEqual } from "../utils";
 import { useChainId } from "./useChainId";
 
 export type UseHoldingParameters<
@@ -47,7 +48,7 @@ export function useHolding<
     ...options,
     enabled:
       parameters.user != null && parameters.token != null && query.enabled,
-    structuralSharing: query.structuralSharing ?? structuralSharing,
+    structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
       query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
   });

@@ -2,10 +2,11 @@ import { MarketConfig, MarketId } from "@morpho-org/blue-sdk";
 import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { structuralSharing } from "wagmi/query";
+
 import { combineIndexedQueries } from "../queries/combineIndexedQueries";
 import { fetchMarketConfigQueryOptions } from "../queries/fetchMarketConfig";
 import { MarketConfigParameters } from "../queries/fetchMarketConfig";
+import { mergeDeepEqual } from "../utils";
 import { useChainId } from "./useChainId";
 import { UseMarketConfigParameters } from "./useMarketConfig";
 
@@ -57,7 +58,7 @@ export function useMarketConfigs<
         chainId,
       }),
       enabled: marketId != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? structuralSharing,
+      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     })),
     combine,
   });

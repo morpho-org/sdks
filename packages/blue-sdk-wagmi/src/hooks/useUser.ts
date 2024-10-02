@@ -1,13 +1,14 @@
 import { User } from "@morpho-org/blue-sdk";
 import { ReadContractErrorType } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, structuralSharing, useQuery } from "wagmi/query";
+import { UseQueryReturnType, useQuery } from "wagmi/query";
 import {
   FetchUserParameters,
   FetchUserQueryKey,
   fetchUserQueryOptions,
 } from "../queries/fetchUser";
 import { ConfigParameter, QueryParameter } from "../types";
+import { mergeDeepEqual } from "../utils";
 import { useChainId } from "./useChainId";
 
 export type UseUserParameters<
@@ -41,7 +42,7 @@ export function useUser<
     ...query,
     ...options,
     enabled: parameters.user != null && query.enabled,
-    structuralSharing: query.structuralSharing ?? structuralSharing,
+    structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
       query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
   });

@@ -2,12 +2,12 @@ import { VaultConfig } from "@morpho-org/blue-sdk";
 import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { structuralSharing } from "wagmi/query";
 import { combineIndexedQueries } from "../queries/combineIndexedQueries";
 import {
   VaultConfigParameters,
   fetchVaultConfigQueryOptions,
 } from "../queries/fetchVaultConfig";
+import { mergeDeepEqual } from "../utils";
 import { useChainId } from "./useChainId";
 import { UseVaultConfigParameters } from "./useVaultConfig";
 
@@ -59,7 +59,7 @@ export function useVaultConfigs<
         chainId,
       }),
       enabled: vault != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? structuralSharing,
+      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     })),
     combine,
   });

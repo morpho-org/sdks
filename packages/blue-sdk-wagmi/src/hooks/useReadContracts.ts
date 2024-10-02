@@ -1,11 +1,6 @@
-"use client";
-
 import type { Abi, ContractFunctionArgs, ContractFunctionName } from "viem";
-import {
-  ReadContractData,
-  readContractQueryOptions,
-  structuralSharing,
-} from "wagmi/query";
+import { ReadContractData, readContractQueryOptions } from "wagmi/query";
+import { mergeDeepEqual } from "../utils";
 
 import { useQueries } from "@tanstack/react-query";
 import {
@@ -85,7 +80,7 @@ export function useReadContracts<
         ...query,
         ...options,
         enabled,
-        structuralSharing: query.structuralSharing ?? structuralSharing,
+        structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       };
     }),
   });

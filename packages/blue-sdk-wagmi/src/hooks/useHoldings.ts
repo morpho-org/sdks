@@ -2,12 +2,13 @@ import { Holding } from "@morpho-org/blue-sdk";
 import { UseQueryResult, useQueries } from "@tanstack/react-query";
 import { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { structuralSharing } from "wagmi/query";
+
 import { combineIndexedQueries } from "../queries/combineIndexedQueries";
 import {
   HoldingParameters,
   fetchHoldingQueryOptions,
 } from "../queries/fetchHolding";
+import { mergeDeepEqual } from "../utils";
 import { useChainId } from "./useChainId";
 import { UseHoldingParameters } from "./useHolding";
 
@@ -59,7 +60,7 @@ export function useHoldings<
         chainId,
       }),
       enabled: holding.user != null && holding.token != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? structuralSharing,
+      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
         query.staleTime ?? parameters.blockNumber != null
           ? Infinity
