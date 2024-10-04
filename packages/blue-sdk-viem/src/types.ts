@@ -1,5 +1,5 @@
-import { ChainId } from "@morpho-org/blue-sdk";
-import { CallParameters, UnionPick } from "viem";
+import type { ChainId } from "@morpho-org/blue-sdk";
+import type { CallParameters, UnionPick } from "viem";
 
 export type FetchParameters = UnionPick<
   CallParameters,

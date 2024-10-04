@@ -1,17 +1,24 @@
 import { Time } from "@morpho-org/morpho-ts";
 import { erc20Abi, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { ChainId, Market, addresses } from "../../src";
-import { MAINNET_MARKETS } from "../../src/tests/mocks/markets.js";
+import { ChainId, Market, MarketConfig, addresses } from "../../src/index.js";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "./abis.js";
 import { test } from "./setup.js";
 
+const { morpho, usdc, wstEth, adaptiveCurveIrm } =
+  addresses[ChainId.EthMainnet];
+
+const config = new MarketConfig({
+  // USDC(wstETH, 86%, Chainlink, AdaptiveCurve)
+  loanToken: usdc,
+  collateralToken: wstEth,
+  oracle: "0x48F7E36EB6B826B2dF4B2E630B62Cd25e89E40e2",
+  irm: adaptiveCurveIrm,
+  lltv: parseUnits("86", 16),
+});
+
 describe("Market", () => {
   test("should borrow borrowable assets", async ({ client }) => {
-    const { morpho: morphoAddress } = addresses[ChainId.EthMainnet];
-
-    const config = MAINNET_MARKETS.usdc_wstEth;
-
     const collateral = parseUnits("1", 18);
     await client.deal({
       erc20: config.collateralToken,
@@ -22,17 +29,17 @@ describe("Market", () => {
       abi: erc20Abi,
       address: config.collateralToken,
       functionName: "approve",
-      args: [morphoAddress, collateral],
+      args: [morpho, collateral],
     });
     await client.writeContract({
       abi: blueAbi,
-      address: morphoAddress,
+      address: morpho,
       functionName: "supplyCollateral",
       args: [config, collateral, client.account.address, "0x"],
     });
     await client.writeContract({
       abi: blueAbi,
-      address: morphoAddress,
+      address: morpho,
       functionName: "borrow",
       args: [
         config,
@@ -43,6 +50,8 @@ describe("Market", () => {
       ],
     });
 
+    const timestamp = (await client.timestamp()) + Time.s.from.d(10n);
+
     const [
       totalSupplyAssets,
       totalSupplyShares,
@@ -52,12 +61,129 @@ describe("Market", () => {
       fee,
     ] = await client.readContract({
       abi: blueAbi,
-      address: morphoAddress,
+      address: morpho,
       functionName: "market",
       args: [config.id],
     });
 
-    const timestamp = (await client.timestamp()) + Time.s.from.d(10n);
+    const market = new Market({
+      config,
+      totalSupplyAssets,
+      totalSupplyShares,
+      totalBorrowAssets,
+      totalBorrowShares,
+      lastUpdate,
+      fee,
+      price: await client.readContract({
+        abi: blueOracleAbi,
+        address: config.oracle,
+        functionName: "price",
+      }),
+      rateAtTarget: await client.readContract({
+        abi: adaptiveCurveIrmAbi,
+        address: config.irm,
+        functionName: "rateAtTarget",
+        args: [config.id],
+      }),
+    }).accrueInterest(timestamp);
+
+    await client.setNextBlockTimestamp({ timestamp });
+
+    const [supplyShares, borrowShares] = await client.readContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "position",
+      args: [config.id, client.account.address],
+    });
+
+    const maxBorrowable = market.getMaxBorrowableAssets({
+      supplyShares,
+      borrowShares,
+      collateral,
+    });
+
+    await expect(
+      client.estimateContractGas({
+        abi: blueAbi,
+        address: morpho,
+        functionName: "borrow",
+        args: [
+          config,
+          maxBorrowable + 10n,
+          0n,
+          client.account.address,
+          client.account.address,
+        ],
+      }),
+    ).rejects.toThrow("insufficient collateral");
+
+    const hash = await client.writeContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "borrow",
+      args: [
+        config,
+        maxBorrowable,
+        0n,
+        client.account.address,
+        client.account.address,
+      ],
+    });
+
+    const receipt = await client.getTransactionReceipt({ hash });
+
+    expect(receipt.status).toBe("success");
+  });
+
+  test("should borrow borrowable assets in an extreme future", async ({
+    client,
+  }) => {
+    const collateral = parseUnits("10000000000", 18);
+    await client.deal({
+      erc20: config.collateralToken,
+      recipient: client.account.address,
+      amount: collateral,
+    });
+    await client.writeContract({
+      abi: erc20Abi,
+      address: config.collateralToken,
+      functionName: "approve",
+      args: [morpho, collateral],
+    });
+    await client.writeContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "supplyCollateral",
+      args: [config, collateral, client.account.address, "0x"],
+    });
+    await client.writeContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "borrow",
+      args: [
+        config,
+        parseUnits("1", 6),
+        0n,
+        client.account.address,
+        client.account.address,
+      ],
+    });
+
+    const timestamp = (await client.timestamp()) + Time.s.from.y(1_000n);
+
+    const [
+      totalSupplyAssets,
+      totalSupplyShares,
+      totalBorrowAssets,
+      totalBorrowShares,
+      lastUpdate,
+      fee,
+    ] = await client.readContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "market",
+      args: [config.id],
+    });
 
     const market = new Market({
       config,
@@ -82,12 +208,10 @@ describe("Market", () => {
 
     const [supplyShares, borrowShares] = await client.readContract({
       abi: blueAbi,
-      address: morphoAddress,
+      address: morpho,
       functionName: "position",
       args: [config.id, client.account.address],
     });
-
-    await client.setNextBlockTimestamp({ timestamp });
 
     const maxBorrowable = market.getMaxBorrowableAssets({
       supplyShares,
@@ -95,24 +219,29 @@ describe("Market", () => {
       collateral,
     });
 
-    await expect(
-      client.writeContract({
-        abi: blueAbi,
-        address: morphoAddress,
-        functionName: "borrow",
-        args: [
-          config,
-          maxBorrowable,
-          0n,
-          client.account.address,
-          client.account.address,
-        ],
-      }),
-    ).toThrow("insufficient collateral");
-
+    await client.deal({
+      erc20: config.loanToken,
+      recipient: client.account.address,
+      amount: maxBorrowable,
+    });
+    await client.writeContract({
+      abi: erc20Abi,
+      address: config.loanToken,
+      functionName: "approve",
+      args: [morpho, maxBorrowable],
+    });
     await client.writeContract({
       abi: blueAbi,
-      address: morphoAddress,
+      address: morpho,
+      functionName: "supply",
+      args: [config, maxBorrowable, 0n, client.account.address, "0x"],
+    });
+
+    await client.setNextBlockTimestamp({ timestamp });
+
+    const hash = await client.writeContract({
+      abi: blueAbi,
+      address: morpho,
       functionName: "borrow",
       args: [
         config,
@@ -122,73 +251,9 @@ describe("Market", () => {
         client.account.address,
       ],
     });
-  });
 
-  test.skip("should borrow borrowable assets in an extreme future", async () => {
-    const { morpho: morphoAddress } = addresses[ChainId.EthMainnet];
-    const morpho = MorphoBlue__factory.connect(morphoAddress, signer);
+    const receipt = await client.getTransactionReceipt({ hash });
 
-    const config = MAINNET_MARKETS.usdc_wstEth;
-
-    const collateral = parseUnits("10000000000", 18);
-    await deal(config.collateralToken, signer, collateral);
-    await ERC20__factory.connect(config.collateralToken, signer).approve(
-      morphoAddress,
-      collateral,
-    );
-    await morpho.supplyCollateral(config, collateral, signer.address, "0x");
-    await morpho.borrow(
-      config,
-      parseUnits("1", 6),
-      0n,
-      signer.address,
-      signer.address,
-    );
-
-    const {
-      totalSupplyAssets,
-      totalSupplyShares,
-      totalBorrowAssets,
-      totalBorrowShares,
-      lastUpdate,
-      fee,
-    } = await morpho.market(config.id);
-
-    const timestamp = (await latest()) + Time.s.from.y(10_000);
-
-    const market = new Market({
-      config,
-      totalSupplyAssets,
-      totalSupplyShares,
-      totalBorrowAssets,
-      totalBorrowShares,
-      lastUpdate,
-      fee,
-      price: await BlueOracle__factory.connect(config.oracle, signer).price(),
-      rateAtTarget: await AdaptiveCurveIrm__factory.connect(
-        config.irm,
-        signer,
-      ).rateAtTarget(config.id),
-    }).accrueInterest(timestamp);
-
-    const position = await morpho.position(config.id, signer.address);
-    const maxBorrowable = market.getMaxBorrowableAssets(position);
-
-    await deal(config.loanToken, signer, maxBorrowable);
-    await ERC20__factory.connect(config.loanToken, signer).approve(
-      morphoAddress,
-      maxBorrowable,
-    );
-    await morpho.supply(config, maxBorrowable, 0n, signer.address, "0x");
-
-    await setNextBlockTimestamp(timestamp);
-
-    await morpho.borrow(
-      config,
-      maxBorrowable,
-      0n,
-      signer.address,
-      signer.address,
-    );
+    expect(receipt.status).toBe("success");
   });
 });

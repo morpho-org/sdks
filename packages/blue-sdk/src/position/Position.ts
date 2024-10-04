@@ -1,10 +1,10 @@
-import { BlueErrors } from "../errors";
+import { BlueErrors } from "../errors.js";
 import {
   Market,
   type MaxBorrowOptions,
   type MaxWithdrawCollateralOptions,
-} from "../market";
-import type { Address, BigIntish, MarketId } from "../types";
+} from "../market/index.js";
+import type { Address, BigIntish, MarketId } from "../types.js";
 
 export interface InputPosition {
   user: Address;

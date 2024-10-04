@@ -1,8 +1,8 @@
-import { MathLib, type RoundingDirection } from "../maths";
-import type { Address } from "../types";
+import { MathLib, type RoundingDirection } from "../math/index.js";
+import type { Address } from "../types.js";
 
-import type { InputToken } from "./Token";
-import { WrappedToken } from "./WrappedToken";
+import type { InputToken } from "./Token.js";
+import { WrappedToken } from "./WrappedToken.js";
 
 export class ExchangeRateWrappedToken extends WrappedToken {
   constructor(

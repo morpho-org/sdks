@@ -1,7 +1,7 @@
-import type { RoundingDirection } from "../maths";
-import type { InputVaultConfig } from "../vault/VaultConfig";
-import { VaultUtils } from "../vault/VaultUtils";
-import { WrappedToken } from "./WrappedToken";
+import type { RoundingDirection } from "../math/index.js";
+import type { InputVaultConfig } from "../vault/VaultConfig.js";
+import { VaultUtils } from "../vault/VaultUtils.js";
+import { WrappedToken } from "./WrappedToken.js";
 
 export class VaultToken extends WrappedToken {
   public decimalsOffset: bigint;

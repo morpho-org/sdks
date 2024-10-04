@@ -17,7 +17,7 @@ export const safeParseNumber = (value: number, decimals = 18) =>
 
 export const safeParseUnits = (strValue: string, decimals = 18) => {
   if (!/[-+]?[0-9]*\.?[0-9]+/.test(strValue))
-    throw new Error("invalid number: " + strValue);
+    throw Error(`invalid number: ${strValue}`);
 
   let [whole, dec = ""] = strValue.split(".");
 

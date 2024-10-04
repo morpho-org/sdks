@@ -1,7 +1,7 @@
-import { UnknownMarketConfigError } from "../errors";
-import type { Address, BigIntish, MarketId } from "../types";
+import { UnknownMarketConfigError } from "../errors.js";
+import type { Address, BigIntish, MarketId } from "../types.js";
 
-import { MarketUtils } from "./MarketUtils";
+import { MarketUtils } from "./MarketUtils.js";
 
 export interface MarketParams {
   loanToken: Address;

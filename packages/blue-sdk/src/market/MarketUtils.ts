@@ -5,11 +5,11 @@ import {
   MAX_LIQUIDATION_INCENTIVE_FACTOR,
   ORACLE_PRICE_SCALE,
   SECONDS_PER_YEAR,
-} from "../constants";
-import { MathLib, type RoundingDirection, SharesMath } from "../maths";
-import type { BigIntish, MarketId } from "../types";
+} from "../constants.js";
+import { MathLib, type RoundingDirection, SharesMath } from "../math/index.js";
+import type { BigIntish, MarketId } from "../types.js";
 
-import type { MarketParams } from "./MarketConfig";
+import type { MarketParams } from "./MarketConfig.js";
 
 /**
  * Namespace of utility functions to ease market-related calculations.

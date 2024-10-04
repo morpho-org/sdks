@@ -1,4 +1,4 @@
-import type { Token } from "../token/Token";
+import type { Token } from "../token/Token.js";
 
 export type PeripheralBalanceType =
   | "base" // The balance of the requested token (ETH for ETH, wstETH for wstETH).

@@ -80,8 +80,12 @@ describe("format", () => {
       });
 
       test("with really big numbers", () => {
-        expect(format.number.of(1e30)).toEqual("1" + "0".repeat(30));
-        expect(format.number.of(1.234e30)).toEqual("1234" + "0".repeat(27));
+        expect(format.number.of(1e30)).toEqual(
+          "1000000000000000000000000000000",
+        );
+        expect(format.number.of(1.234e30)).toEqual(
+          "1234000000000000000000000000000",
+        );
         expect(format.number.of(1.234e2)).toEqual("123.4");
       });
 

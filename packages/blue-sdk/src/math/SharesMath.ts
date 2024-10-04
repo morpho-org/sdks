@@ -1,6 +1,6 @@
-import type { BigIntish } from "../types";
+import type { BigIntish } from "../types.js";
 
-import { MathLib, type RoundingDirection } from "./MathLib";
+import { MathLib, type RoundingDirection } from "./MathLib.js";
 
 /**
  * JS implementation of {@link https://github.com/morpho-org/morpho-blue/blob/main/src/libraries/SharesMathLib.sol SharesMathLib} used by Morpho Blue

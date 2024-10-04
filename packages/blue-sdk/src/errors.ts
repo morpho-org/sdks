@@ -1,4 +1,4 @@
-import type { Address, MarketId } from "./types";
+import type { Address, MarketId } from "./types.js";
 
 export class UnknownDataError extends Error {}
 
@@ -77,7 +77,8 @@ export namespace BlueErrors {
 }
 
 export interface ErrorClass<E extends Error> {
-  new (...args: unknown[]): E;
+  // biome-ignore lint/suspicious/noExplicitAny: match any type of arg
+  new (...args: any[]): E;
 }
 
 export function _try<T, E extends Error>(

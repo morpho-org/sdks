@@ -1,45 +1,15 @@
-import { expect } from "chai";
-
-import { viem } from "hardhat";
-import {
-  Account,
-  Chain,
-  Client,
-  PublicActions,
-  TestActions,
-  Transport,
-  WalletActions,
-  WalletRpcSchema,
-  publicActions,
-  testActions,
-} from "viem";
+import { describe, expect } from "vitest";
+import { test } from "./setup.js";
 
 import {
   ChainId,
   ExchangeRateWrappedToken,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { setUp } from "@morpho-org/morpho-test";
-import { Token } from "../src/augment/Token";
+import { Token } from "../src/augment/Token.js";
 
 describe("augment/Token", () => {
-  let client: Client<
-    Transport,
-    Chain,
-    Account,
-    WalletRpcSchema,
-    WalletActions<Chain, Account> &
-      PublicActions<Transport, Chain, Account> &
-      TestActions
-  >;
-
-  setUp(async () => {
-    client = (await viem.getWalletClients())[0]!
-      .extend(publicActions)
-      .extend(testActions({ mode: "hardhat" }));
-  });
-
-  it("should fetch token data", async () => {
+  test("should fetch token data", async ({ client }) => {
     const expectedData = new Token({
       address: addresses[ChainId.EthMainnet].usdc,
       decimals: 6,
@@ -52,7 +22,7 @@ describe("augment/Token", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch wrapped token data", async () => {
+  test("should fetch wrapped token data", async ({ client }) => {
     const expectedData = new ExchangeRateWrappedToken(
       {
         address: addresses[ChainId.EthMainnet].wstEth,
@@ -61,7 +31,7 @@ describe("augment/Token", () => {
         name: "Wrapped liquid staked Ether 2.0",
       },
       addresses[ChainId.EthMainnet].stEth,
-      expect.bigint,
+      expect.any(BigInt),
     );
 
     const value = await Token.fetch(
@@ -72,7 +42,7 @@ describe("augment/Token", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("Should fetch MKR token data", async () => {
+  test("Should fetch MKR token data", async ({ client }) => {
     const expectedData = new Token({
       address: addresses[ChainId.EthMainnet].mkr,
       decimals: 18,

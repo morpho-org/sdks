@@ -1,4 +1,4 @@
-import { MarketUtils, MathLib } from "../../src";
+import { MarketUtils, MathLib } from "../../src/index.js";
 
 import { describe, expect, test } from "vitest";
 

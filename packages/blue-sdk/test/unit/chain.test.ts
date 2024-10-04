@@ -1,7 +1,7 @@
 import { entries } from "@morpho-org/morpho-ts";
 
 import { describe, expect, test } from "vitest";
-import { ChainId, ChainUtils } from "../../src";
+import { ChainId, ChainUtils } from "../../src/index.js";
 
 describe("Network", () => {
   test("Should have consistent chainIds", () => {

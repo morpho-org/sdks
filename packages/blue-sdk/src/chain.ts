@@ -1,4 +1,4 @@
-import { UnsupportedChainIdError } from "./errors";
+import { UnsupportedChainIdError } from "./errors.js";
 
 export enum ChainId {
   EthMainnet = 1,
@@ -65,9 +65,9 @@ export namespace ChainUtils {
   }
 
   export function parseSupportedChainId(candidate: unknown): ChainId {
-    const chainId = Number.parseInt(candidate);
+    const chainId = Number.parseInt(candidate as string); // Force cast to string to silence TS because it works.
 
-    if (!isSupported(chainId)) throw new UnsupportedChainIdError(candidate);
+    if (!isSupported(chainId)) throw new UnsupportedChainIdError(chainId);
 
     return chainId;
   }

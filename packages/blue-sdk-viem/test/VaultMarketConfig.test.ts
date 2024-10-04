@@ -1,53 +1,26 @@
-import { expect } from "chai";
-
-import { viem } from "hardhat";
-import {
-  Account,
-  Chain,
-  Client,
-  PublicActions,
-  TestActions,
-  Transport,
-  WalletActions,
-  WalletRpcSchema,
-  publicActions,
-  testActions,
-} from "viem";
+import { describe, expect } from "vitest";
+import { test } from "./setup.js";
 
 import {
   ChainId,
   VaultMarketPublicAllocatorConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
-import { setUp } from "@morpho-org/morpho-test";
 
-import { metaMorphoAbi, publicAllocatorAbi } from "../src/abis";
-import { VaultMarketConfig } from "../src/augment/VaultMarketConfig";
-import { steakUsdc } from "./fixtures";
+import { markets, vaults } from "@morpho-org/morpho-test";
+import { VaultMarketConfig } from "../src/augment/VaultMarketConfig.js";
+import { metaMorphoAbi, publicAllocatorAbi } from "../src/index.js";
+
+const { usdc_wstEth } = markets[ChainId.EthMainnet];
+const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("augment/VaultMarketConfig", () => {
-  let client: Client<
-    Transport,
-    Chain,
-    Account,
-    WalletRpcSchema,
-    WalletActions<Chain, Account> &
-      PublicActions<Transport, Chain, Account> &
-      TestActions
-  >;
-
-  setUp(async () => {
-    client = (await viem.getWalletClients())[0]!
-      .extend(publicActions)
-      .extend(testActions({ mode: "hardhat" }));
-
+  test("should fetch vault market data", async ({ client }) => {
     const owner = await client.readContract({
       address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "owner",
     });
-    await client.impersonateAccount({ address: owner });
 
     await client.writeContract({
       account: owner,
@@ -74,18 +47,16 @@ describe("augment/VaultMarketConfig", () => {
         steakUsdc.address,
         [
           {
-            id: MAINNET_MARKETS.usdc_wstEth.id,
+            id: usdc_wstEth.id,
             caps: { maxIn: 2n, maxOut: 3n },
           },
         ],
       ],
     });
-  });
 
-  it("should fetch vault market data", async () => {
     const expectedData = new VaultMarketConfig({
       vault: steakUsdc.address,
-      marketId: MAINNET_MARKETS.usdc_wstEth.id,
+      marketId: usdc_wstEth.id,
       cap: 1000000000000000000000000000000n,
       enabled: true,
       pendingCap: {
@@ -94,7 +65,7 @@ describe("augment/VaultMarketConfig", () => {
       },
       publicAllocatorConfig: new VaultMarketPublicAllocatorConfig({
         vault: steakUsdc.address,
-        marketId: MAINNET_MARKETS.usdc_wstEth.id,
+        marketId: usdc_wstEth.id,
         maxIn: 2n,
         maxOut: 3n,
       }),
@@ -103,7 +74,7 @@ describe("augment/VaultMarketConfig", () => {
 
     const value = await VaultMarketConfig.fetch(
       steakUsdc.address,
-      MAINNET_MARKETS.usdc_wstEth.id,
+      usdc_wstEth.id,
       client,
     );
 

@@ -1,14 +1,14 @@
-import { type CapacityLimit, CapacityLimitReason } from "../market";
-import { MathLib, type RoundingDirection } from "../maths";
-import { VaultToken } from "../token";
-import type { Address, BigIntish, MarketId } from "../types";
+import { type CapacityLimit, CapacityLimitReason } from "../market/index.js";
+import { MathLib, type RoundingDirection } from "../math/index.js";
+import { VaultToken } from "../token/index.js";
+import type { Address, BigIntish, MarketId } from "../types.js";
 
-import type { VaultConfig } from "./VaultConfig";
+import type { VaultConfig } from "./VaultConfig.js";
 import {
   type InputVaultMarketAllocation,
   VaultMarketAllocation,
-} from "./VaultMarketAllocation";
-import { VaultUtils } from "./VaultUtils";
+} from "./VaultMarketAllocation.js";
+import { VaultUtils } from "./VaultUtils.js";
 
 export interface Pending<T> {
   value: T;

@@ -1,15 +1,15 @@
 import {
   ChainUtils,
   MarketConfig,
-  MarketId,
+  type MarketId,
   UnknownMarketConfigError,
   _try,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { Client } from "viem";
+import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi } from "../abis";
-import { FetchParameters } from "../types";
+import { blueAbi } from "../abis.js";
+import type { FetchParameters } from "../types.js";
 
 export async function fetchMarketConfig(
   id: MarketId,

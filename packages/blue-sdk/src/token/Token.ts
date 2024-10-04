@@ -1,7 +1,7 @@
-import { NATIVE_ADDRESS } from "../addresses";
-import { type ChainId, ChainUtils } from "../chain";
-import { MathLib, type RoundingDirection } from "../maths";
-import type { Address, BigIntish } from "../types";
+import { NATIVE_ADDRESS } from "../addresses.js";
+import { type ChainId, ChainUtils } from "../chain.js";
+import { MathLib, type RoundingDirection } from "../math/index.js";
+import type { Address, BigIntish } from "../types.js";
 
 export interface InputToken {
   address: Address;

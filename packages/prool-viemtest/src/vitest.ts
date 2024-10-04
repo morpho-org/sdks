@@ -2,6 +2,7 @@ import type { AnvilParameters } from "prool/instances";
 import type {
   Chain,
   Client,
+  HDAccount,
   HttpTransport,
   PublicActions,
   TestActions,
@@ -9,12 +10,14 @@ import type {
   WalletActions,
 } from "viem";
 import { type DealActions, dealActions } from "viem-deal";
+import { mnemonicToAccount } from "viem/accounts";
 import { test } from "vitest";
 
-export interface TestAccount {
-  address: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
-  type: "json-rpc";
-}
+export const testAccount = (accountIndex?: number): HDAccount =>
+  mnemonicToAccount(
+    "test test test test test test test test test test test junk",
+    { accountIndex },
+  );
 
 let port = 8545;
 
@@ -23,27 +26,32 @@ export const createAnvilTest = <
 >(
   parameters: AnvilParameters = {},
   chain?: chain,
-) => {
-  parameters.forkUrl ??= process.env.RPC_URL;
-  parameters.autoImpersonate ??= true;
-  parameters.blockBaseFeePerGas ??= 0n;
-  parameters.order ??= "fifo";
-
-  return test.extend<{
+): ReturnType<
+  typeof test.extend<{
     client: Client<
       HttpTransport,
       chain,
-      TestAccount,
+      HDAccount,
       TestRpcSchema<"anvil">,
       TestActions &
         DealActions &
-        PublicActions<HttpTransport, chain, TestAccount> &
-        WalletActions<chain, TestAccount> & {
+        PublicActions<HttpTransport, chain, HDAccount> &
+        WalletActions<chain, HDAccount> & {
           timestamp(): Promise<bigint>;
         }
     >;
-  }>({
-    // biome-ignore lint/correctness/noEmptyPattern: <explanation>
+  }>
+> => {
+  parameters.forkChainId ??= chain?.id;
+  parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
+  parameters.autoImpersonate ??= true;
+  parameters.order ??= "fifo";
+
+  parameters.gasPrice ??= 0n;
+  parameters.blockBaseFeePerGas ??= 0n;
+
+  return test.extend({
+    // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
     client: async ({}, use) => {
       const { anvil } = await import("prool/instances");
 
@@ -54,7 +62,7 @@ export const createAnvilTest = <
       // instance.on("message", console.debug);
       instance.on("stderr", console.warn);
 
-      const stop = await instance.start();
+      // const stop = await instance.start();
 
       const { createTestClient, http, publicActions, walletActions } =
         await import("viem");
@@ -64,7 +72,7 @@ export const createAnvilTest = <
           chain,
           mode: "anvil",
           transport: http(`http://${instance.host}:${instance.port}`),
-          account: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          account: testAccount(),
         })
           .extend(dealActions)
           .extend(publicActions)
@@ -81,7 +89,7 @@ export const createAnvilTest = <
           })),
       );
 
-      await stop();
+      // await stop();
     },
   });
 };

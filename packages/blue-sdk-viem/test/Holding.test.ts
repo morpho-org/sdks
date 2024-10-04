@@ -4,51 +4,19 @@ import {
   NATIVE_ADDRESS,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
-import { expect } from "chai";
 
-import { setUp } from "@morpho-org/morpho-test";
-import { viem } from "hardhat";
-import { deal } from "hardhat-deal";
-import {
-  Account,
-  Chain,
-  Client,
-  PublicActions,
-  TestActions,
-  Transport,
-  WalletActions,
-  WalletRpcSchema,
-  erc20Abi,
-  maxUint256,
-  publicActions,
-  testActions,
-} from "viem";
-import { permit2Abi } from "../src/abis";
-import { Holding } from "../src/augment/Holding";
+import { erc20Abi, maxUint256 } from "viem";
+import { describe, expect } from "vitest";
+import { Holding } from "../src/augment/Holding.js";
+import { permit2Abi } from "../src/index.js";
+import { test } from "./setup.js";
+
+const { wNative, wbC3M } = addresses[ChainId.EthMainnet];
 
 describe("augment/Holding", () => {
-  let client: Client<
-    Transport,
-    Chain,
-    Account,
-    WalletRpcSchema,
-    WalletActions<Chain, Account> &
-      PublicActions<Transport, Chain, Account> &
-      TestActions
-  >;
-
-  setUp(async () => {
-    client = (await viem.getWalletClients())[0]!
-      .extend(publicActions)
-      .extend(testActions({ mode: "hardhat" }));
-  });
-
-  it("should fetch user WETH data with deployless", async () => {
-    const token = MAINNET_MARKETS.eth_wstEth.loanToken;
-
+  test("should fetch user WETH data with deployless", async ({ client }) => {
     const expectedData = new Holding({
-      token,
+      token: wNative,
       user: client.account.address,
       erc20Allowances: {
         morpho: 1n,
@@ -71,9 +39,13 @@ describe("augment/Holding", () => {
       canTransfer: true,
     });
 
-    await deal(token, client.account.address, expectedData.balance);
+    await client.deal({
+      erc20: wNative,
+      recipient: client.account.address,
+      amount: expectedData.balance,
+    });
     await client.writeContract({
-      address: token,
+      address: wNative,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -82,7 +54,7 @@ describe("augment/Holding", () => {
       ],
     });
     await client.writeContract({
-      address: token,
+      address: wNative,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -91,7 +63,7 @@ describe("augment/Holding", () => {
       ],
     });
     await client.writeContract({
-      address: token,
+      address: wNative,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -104,7 +76,7 @@ describe("augment/Holding", () => {
       abi: permit2Abi,
       functionName: "approve",
       args: [
-        token,
+        wNative,
         addresses[ChainId.EthMainnet].morpho,
         expectedData.permit2Allowances.morpho.amount,
         Number(expectedData.permit2Allowances.morpho.expiration),
@@ -115,23 +87,21 @@ describe("augment/Holding", () => {
       abi: permit2Abi,
       functionName: "approve",
       args: [
-        token,
+        wNative,
         addresses[ChainId.EthMainnet].bundler,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
     });
 
-    const value = await Holding.fetch(client.account.address, token, client);
+    const value = await Holding.fetch(client.account.address, wNative, client);
 
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch user WETH data without deployless", async () => {
-    const token = MAINNET_MARKETS.eth_wstEth.loanToken;
-
+  test("should fetch user WETH data without deployless", async ({ client }) => {
     const expectedData = new Holding({
-      token,
+      token: wNative,
       user: client.account.address,
       erc20Allowances: {
         morpho: 1n,
@@ -154,9 +124,13 @@ describe("augment/Holding", () => {
       canTransfer: true,
     });
 
-    await deal(token, client.account.address, expectedData.balance);
+    await client.deal({
+      erc20: wNative,
+      recipient: client.account.address,
+      amount: expectedData.balance,
+    });
     await client.writeContract({
-      address: token,
+      address: wNative,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -165,7 +139,7 @@ describe("augment/Holding", () => {
       ],
     });
     await client.writeContract({
-      address: token,
+      address: wNative,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -174,7 +148,7 @@ describe("augment/Holding", () => {
       ],
     });
     await client.writeContract({
-      address: token,
+      address: wNative,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -187,7 +161,7 @@ describe("augment/Holding", () => {
       abi: permit2Abi,
       functionName: "approve",
       args: [
-        token,
+        wNative,
         addresses[ChainId.EthMainnet].morpho,
         expectedData.permit2Allowances.morpho.amount,
         Number(expectedData.permit2Allowances.morpho.expiration),
@@ -198,21 +172,21 @@ describe("augment/Holding", () => {
       abi: permit2Abi,
       functionName: "approve",
       args: [
-        token,
+        wNative,
         addresses[ChainId.EthMainnet].bundler,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
     });
 
-    const value = await Holding.fetch(client.account.address, token, client, {
+    const value = await Holding.fetch(client.account.address, wNative, client, {
       deployless: false,
     });
 
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch native user holding", async () => {
+  test("should fetch native user holding", async ({ client }) => {
     const token = NATIVE_ADDRESS;
 
     const expectedData = new Holding({
@@ -244,11 +218,11 @@ describe("augment/Holding", () => {
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch backed token user holding with deployless", async () => {
-    const token = addresses[ChainId.EthMainnet].wbC3M;
-
+  test("should fetch backed token user holding with deployless", async ({
+    client,
+  }) => {
     const expectedData = new Holding({
-      token,
+      token: wbC3M,
       user: client.account.address,
       erc20Allowances: {
         morpho: 6n,
@@ -272,9 +246,13 @@ describe("augment/Holding", () => {
       canTransfer: false,
     });
 
-    await deal(token, client.account.address, expectedData.balance);
+    await client.deal({
+      erc20: wbC3M,
+      recipient: client.account.address,
+      amount: expectedData.balance,
+    });
     await client.writeContract({
-      address: token,
+      address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -283,7 +261,7 @@ describe("augment/Holding", () => {
       ],
     });
     await client.writeContract({
-      address: token,
+      address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -292,7 +270,7 @@ describe("augment/Holding", () => {
       ],
     });
     await client.writeContract({
-      address: token,
+      address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -305,7 +283,7 @@ describe("augment/Holding", () => {
       abi: permit2Abi,
       functionName: "approve",
       args: [
-        token,
+        wbC3M,
         addresses[ChainId.EthMainnet].morpho,
         expectedData.permit2Allowances.morpho.amount,
         Number(expectedData.permit2Allowances.morpho.expiration),
@@ -316,23 +294,23 @@ describe("augment/Holding", () => {
       abi: permit2Abi,
       functionName: "approve",
       args: [
-        token,
+        wbC3M,
         addresses[ChainId.EthMainnet].bundler,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
     });
 
-    const value = await Holding.fetch(client.account.address, token, client);
+    const value = await Holding.fetch(client.account.address, wbC3M, client);
 
     expect(value).to.eql(expectedData);
   });
 
-  it("should fetch backed token user holding without deployless", async () => {
-    const token = addresses[ChainId.EthMainnet].wbC3M;
-
+  test("should fetch backed token user holding without deployless", async ({
+    client,
+  }) => {
     const expectedData = new Holding({
-      token,
+      token: wbC3M,
       user: client.account.address,
       erc20Allowances: {
         morpho: 6n,
@@ -356,9 +334,13 @@ describe("augment/Holding", () => {
       canTransfer: false,
     });
 
-    await deal(token, client.account.address, expectedData.balance);
+    await client.deal({
+      erc20: wbC3M,
+      recipient: client.account.address,
+      amount: expectedData.balance,
+    });
     await client.writeContract({
-      address: token,
+      address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -367,7 +349,7 @@ describe("augment/Holding", () => {
       ],
     });
     await client.writeContract({
-      address: token,
+      address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -376,7 +358,7 @@ describe("augment/Holding", () => {
       ],
     });
     await client.writeContract({
-      address: token,
+      address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
       args: [
@@ -389,7 +371,7 @@ describe("augment/Holding", () => {
       abi: permit2Abi,
       functionName: "approve",
       args: [
-        token,
+        wbC3M,
         addresses[ChainId.EthMainnet].morpho,
         expectedData.permit2Allowances.morpho.amount,
         Number(expectedData.permit2Allowances.morpho.expiration),
@@ -400,14 +382,14 @@ describe("augment/Holding", () => {
       abi: permit2Abi,
       functionName: "approve",
       args: [
-        token,
+        wbC3M,
         addresses[ChainId.EthMainnet].bundler,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
     });
 
-    const value = await Holding.fetch(client.account.address, token, client, {
+    const value = await Holding.fetch(client.account.address, wbC3M, client, {
       deployless: false,
     });
 

@@ -1,52 +1,23 @@
-import { expect } from "chai";
+import { describe, expect } from "vitest";
+import { test } from "./setup.js";
 
-import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
-import { viem } from "hardhat";
-import {
-  Account,
-  Chain,
-  Client,
-  PublicActions,
-  TestActions,
-  Transport,
-  WalletActions,
-  WalletRpcSchema,
-  publicActions,
-  testActions,
-  zeroAddress,
-} from "viem";
+import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
 
-import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
-import { setUp } from "@morpho-org/morpho-test";
+import { vaults } from "@morpho-org/morpho-test";
+import { zeroAddress } from "viem";
+import { Vault } from "../src/augment/Vault.js";
+import { metaMorphoAbi, publicAllocatorAbi } from "../src/index.js";
 
-import { metaMorphoAbi, publicAllocatorAbi } from "../src/abis";
-import { Vault } from "../src/augment/Vault";
-import { steakUsdc } from "./fixtures";
+const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("augment/Vault", () => {
-  let client: Client<
-    Transport,
-    Chain,
-    Account,
-    WalletRpcSchema,
-    WalletActions<Chain, Account> &
-      PublicActions<Transport, Chain, Account> &
-      TestActions
-  >;
-
-  setUp(async (block) => {
-    client = (await viem.getWalletClients())[0]!
-      .extend(publicActions)
-      .extend(testActions({ mode: "hardhat" }));
-
+  test("should fetch vault data", async ({ client }) => {
     const owner = await client.readContract({
       address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "owner",
     });
-    await client.impersonateAccount({ address: owner });
 
-    await setNextBlockTimestamp(block.timestamp);
     await client.writeContract({
       account: owner,
       address: steakUsdc.address,
@@ -55,7 +26,6 @@ describe("augment/Vault", () => {
       args: [addresses[ChainId.EthMainnet].publicAllocator, true],
     });
 
-    await setNextBlockTimestamp(block.timestamp);
     await client.writeContract({
       account: owner,
       address: addresses[ChainId.EthMainnet].publicAllocator,
@@ -63,9 +33,7 @@ describe("augment/Vault", () => {
       functionName: "setFee",
       args: [steakUsdc.address, 1n],
     });
-  });
 
-  it("should fetch vault data", async () => {
     const expectedData = new Vault({
       config: steakUsdc,
       curator: zeroAddress,

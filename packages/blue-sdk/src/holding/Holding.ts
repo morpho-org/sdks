@@ -1,7 +1,7 @@
 import { entries, fromEntries } from "@morpho-org/morpho-ts";
 
-import type { AddressLabel } from "../addresses";
-import type { Address, BigIntish } from "../types";
+import type { AddressLabel } from "../addresses.js";
+import type { Address, BigIntish } from "../types.js";
 
 export const ERC20_ALLOWANCE_RECIPIENTS = [
   "morpho",

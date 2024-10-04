@@ -1,7 +1,7 @@
-import type { Address, MarketId } from "../types";
+import type { Address, MarketId } from "../types.js";
 
-import type { Pending } from "./Vault";
-import type { VaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig";
+import type { Pending } from "./Vault.js";
+import type { VaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
 
 export interface InputVaultMarketConfig {
   vault: Address;

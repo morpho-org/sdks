@@ -1,16 +1,16 @@
 import {
   AccrualPosition,
   ChainUtils,
-  MarketId,
+  type MarketId,
   Position,
   addresses,
 } from "@morpho-org/blue-sdk";
 
-import { Address, Client } from "viem";
+import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi } from "../abis";
-import { DeploylessFetchParameters, FetchParameters } from "../types";
-import { fetchMarket } from "./Market";
+import { blueAbi } from "../abis.js";
+import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
+import { fetchMarket } from "./Market.js";
 
 export async function fetchPosition(
   user: Address,

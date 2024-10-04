@@ -1,53 +1,23 @@
-import { expect } from "chai";
+import { zeroAddress } from "viem";
 
-import { viem } from "hardhat";
-import {
-  Account,
-  Chain,
-  Client,
-  PublicActions,
-  TestActions,
-  Transport,
-  WalletActions,
-  WalletRpcSchema,
-  publicActions,
-  testActions,
-  zeroAddress,
-} from "viem";
+import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
 
-import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
-import { setUp } from "@morpho-org/morpho-test";
+import { MarketConfig } from "../src/augment/MarketConfig.js";
+import { test } from "./setup.js";
 
-import { MarketConfig } from "../src/augment/MarketConfig";
+import { markets } from "@morpho-org/morpho-test";
+import { describe, expect } from "vitest";
+
+const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 describe("augment/MarketConfig", () => {
-  let client: Client<
-    Transport,
-    Chain,
-    Account,
-    WalletRpcSchema,
-    WalletActions<Chain, Account> &
-      PublicActions<Transport, Chain, Account> &
-      TestActions
-  >;
+  test("should fetch config from cache", async ({ client }) => {
+    const market = await MarketConfig.fetch(usdc_wstEth.id, client);
 
-  setUp(async () => {
-    client = (await viem.getWalletClients())[0]!
-      .extend(publicActions)
-      .extend(testActions({ mode: "hardhat" }));
+    expect(market).to.eql(usdc_wstEth);
   });
 
-  it("should fetch config from cache", async () => {
-    const market = await MarketConfig.fetch(
-      MAINNET_MARKETS.usdc_wstEth.id,
-      client,
-    );
-
-    expect(market).to.eql(MAINNET_MARKETS.usdc_wstEth);
-  });
-
-  it("should fetch config from chain", async () => {
+  test("should fetch config from chain", async ({ client }) => {
     const marketParams = {
       collateralToken: zeroAddress,
       loanToken: addresses[ChainId.EthMainnet].wNative,

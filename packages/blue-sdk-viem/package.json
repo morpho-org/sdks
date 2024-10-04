@@ -4,6 +4,7 @@
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
+  "type": "module",
   "files": [
     "lib"
   ],
@@ -13,35 +14,30 @@
     "build": "tsc --build tsconfig.build.json",
     "test": "hardhat test"
   },
-  "devDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-test": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
-    "@nomicfoundation/hardhat-viem": "^2.0.3",
-    "@types/chai": "^4.3.14",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^22.1.0",
-    "@types/sinon": "^17.0.3",
-    "@types/sinon-chai": "^3.2.12",
-    "chai": "^4.3.10",
-    "dotenv": "^16.4.5",
-    "ethers": "^6.13.2",
-    "hardhat": "^2.22.10",
-    "hardhat-deal": "^3.1.0",
-    "mocha": "^10.4.0",
-    "sinon": "^19.0.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.6.2",
-    "viem": "^2.21.18"
-  },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "viem": "^2.0.0"
   },
+  "devDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/prool-viemtest": "workspace:^",
+    "@types/node": "^22.1.0",
+    "typescript": "^5.6.2",
+    "viem": "^2.21.18",
+    "vitest": "^2.1.2"
+  },
   "publishConfig": {
     "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      }
+    },
     "access": "public"
   }
 }

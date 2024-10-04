@@ -1,5 +1,5 @@
-import { MathLib, type RoundingDirection } from "../maths";
-import type { BigIntish } from "../types";
+import { MathLib, type RoundingDirection } from "../math/index.js";
+import type { BigIntish } from "../types.js";
 
 export namespace VaultUtils {
   export const VIRTUAL_ASSETS = 1n;

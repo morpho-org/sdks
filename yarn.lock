@@ -3088,7 +3088,7 @@ __metadata:
     sinon: "npm:^19.0.2"
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.6.2"
-    vitest: "npm:^2.1.1"
+    vitest: "npm:^2.1.2"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
@@ -3169,7 +3169,7 @@ __metadata:
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.6.2"
     viem: "npm:^2.21.18"
-    vitest: "npm:^2.1.1"
+    vitest: "npm:^2.1.2"
     wagmi: "npm:^2.12.16"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
@@ -3192,23 +3192,11 @@ __metadata:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-test": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
-    "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.11"
-    "@nomicfoundation/hardhat-viem": "npm:^2.0.3"
-    "@types/chai": "npm:^4.3.14"
-    "@types/mocha": "npm:^10.0.6"
+    "@morpho-org/prool-viemtest": "workspace:^"
     "@types/node": "npm:^22.1.0"
-    "@types/sinon": "npm:^17.0.3"
-    "@types/sinon-chai": "npm:^3.2.12"
-    chai: "npm:^4.3.10"
-    dotenv: "npm:^16.4.5"
-    ethers: "npm:^6.13.2"
-    hardhat: "npm:^2.22.10"
-    hardhat-deal: "npm:^3.1.0"
-    mocha: "npm:^10.4.0"
-    sinon: "npm:^19.0.2"
-    ts-node: "npm:^10.9.2"
     typescript: "npm:^5.6.2"
     viem: "npm:^2.21.18"
+    vitest: "npm:^2.1.2"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
@@ -3238,7 +3226,7 @@ __metadata:
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.6.2"
     viem: "npm:^2.21.18"
-    vitest: "npm:^2.1.1"
+    vitest: "npm:^2.1.2"
     wagmi: "npm:^2.12.16"
   peerDependencies:
     "@morpho-org/blue-sdk": "workspace:^"
@@ -3255,10 +3243,9 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk@workspace:packages/blue-sdk"
   dependencies:
-    "@morpho-org/morpho-test": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/prool-viemtest": "workspace:^"
     "@types/node": "npm:^22.1.0"
-    dotenv: "npm:^16.4.5"
     keccak256: "npm:^1.0.6"
     typescript: "npm:^5.6.2"
     viem: "npm:^2.21.18"
@@ -3273,40 +3260,14 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@morpho-org/morpho-test@workspace:packages/morpho-test"
   dependencies:
-    "@nomicfoundation/hardhat-ethers": "npm:^3.0.4"
-    "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.9"
-    "@types/chai": "npm:^4.3.17"
-    "@types/chai-as-promised": "npm:^7.1.2"
-    "@types/mocha": "npm:^10.0.6"
-    "@types/node": "npm:^22.1.0"
-    "@types/sinon": "npm:^17.0.3"
-    "@types/sinon-chai": "npm:^3.2.12"
-    chai: "npm:^4.5.0"
-    chai-as-promised: "npm:^7.1.2"
-    dotenv: "npm:^16.3.1"
-    ethers: "npm:^6.13.2"
-    hardhat: "npm:^2.20.1"
-    mocha: "npm:^10.4.0"
-    prool: "npm:^0.0.16"
-    sinon: "npm:^19.0.2"
-    sinon-chai: "npm:^3.7.0"
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/prool-viemtest": "workspace:^"
     typescript: "npm:^5.6.2"
     viem: "npm:^2.21.18"
-    viem-deal: "npm:^1.0.5"
-    vitest: "npm:^2.1.1"
   peerDependencies:
-    "@nomicfoundation/hardhat-ethers": ^3.0.0
-    "@nomicfoundation/hardhat-network-helpers": ^1.0.0
-    chai: ^4.3.0
-    chai-as-promised: ^7.1.2
-    ethers: ^6.0.0
-    hardhat: ^2.20.0
-    prool: ^0.0.16
-    sinon: ^19.0.2
-    sinon-chai: ^3.7.0
-    viem: ^2.21.0
-    viem-deal: ^1.0.5
-    vitest: ^2.1.0
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/prool-viemtest": "workspace:^"
+    viem: ^2.21.18
   languageName: unknown
   linkType: soft
 
@@ -3315,7 +3276,25 @@ __metadata:
   resolution: "@morpho-org/morpho-ts@workspace:packages/morpho-ts"
   dependencies:
     typescript: "npm:^5.6.2"
-    vitest: "npm:^2.1.1"
+    vitest: "npm:^2.1.2"
+  languageName: unknown
+  linkType: soft
+
+"@morpho-org/prool-viemtest@workspace:^, @morpho-org/prool-viemtest@workspace:packages/prool-viemtest":
+  version: 0.0.0-use.local
+  resolution: "@morpho-org/prool-viemtest@workspace:packages/prool-viemtest"
+  dependencies:
+    "@types/node": "npm:^22.7.4"
+    prool: "npm:^0.0.16"
+    typescript: "npm:^5.6.2"
+    viem: "npm:^2.21.18"
+    viem-deal: "npm:^1.0.5"
+    vitest: "npm:^2.1.2"
+  peerDependencies:
+    prool: ^0.0.16
+    viem: ^2.21.18
+    viem-deal: ^1.0.5
+    vitest: ^2.1.0
   languageName: unknown
   linkType: soft
 
@@ -3331,7 +3310,10 @@ __metadata:
     "@vitest/coverage-v8": "npm:^2.1.2"
     dotenv-cli: "npm:^7.4.2"
     husky: "npm:^9.1.6"
+    prool: "npm:^0.0.16"
     typescript: "npm:^5.6.2"
+    viem: "npm:^2.21.18"
+    viem-deal: "npm:^1.0.5"
     vitest: "npm:^2.1.2"
   languageName: unknown
   linkType: soft
@@ -3820,7 +3802,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@nomicfoundation/hardhat-ethers@npm:^3.0.4, @nomicfoundation/hardhat-ethers@npm:^3.0.6":
+"@nomicfoundation/hardhat-ethers@npm:^3.0.6":
   version: 3.0.7
   resolution: "@nomicfoundation/hardhat-ethers@npm:3.0.7"
   dependencies:
@@ -3841,20 +3823,6 @@ __metadata:
   peerDependencies:
     hardhat: ^2.9.5
   checksum: 10c0/67ca879a7fbb5866e9739ee3d4301d7169733f8f4c70affed1a4f15a8da0e8c80e76b1460e9fd4bd713c054714837bf2c3c01da215302609d7ac777033861fe1
-  languageName: node
-  linkType: hard
-
-"@nomicfoundation/hardhat-viem@npm:^2.0.3":
-  version: 2.0.4
-  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.4"
-  dependencies:
-    abitype: "npm:^0.9.8"
-    lodash.memoize: "npm:^4.1.2"
-  peerDependencies:
-    hardhat: ^2.17.0
-    typescript: ~5.0.0
-    viem: ^2.7.6
-  checksum: 10c0/fd9b46f72fd89ce84375b0c7e6a29d506502712db46478b676fe2e95f0dcbafed6986232d283dd10d67f064fa1a49b44c12c0497c7e97513acddb3a5a5be482e
   languageName: node
   linkType: hard
 
@@ -5203,7 +5171,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/chai-as-promised@npm:^7.1.2, @types/chai-as-promised@npm:^7.1.3":
+"@types/chai-as-promised@npm:^7.1.3":
   version: 7.1.8
   resolution: "@types/chai-as-promised@npm:7.1.8"
   dependencies:
@@ -5343,7 +5311,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/node@npm:^22.5.5":
+"@types/node@npm:^22.5.5, @types/node@npm:^22.7.4":
   version: 22.7.4
   resolution: "@types/node@npm:22.7.4"
   dependencies:
@@ -5518,18 +5486,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vitest/expect@npm:2.1.1":
-  version: 2.1.1
-  resolution: "@vitest/expect@npm:2.1.1"
-  dependencies:
-    "@vitest/spy": "npm:2.1.1"
-    "@vitest/utils": "npm:2.1.1"
-    chai: "npm:^5.1.1"
-    tinyrainbow: "npm:^1.2.0"
-  checksum: 10c0/2a467bcd37378b653040cca062a665f382087eb9f69cff670848a0c207a8458f27211c408c75b7e563e069a2e6d533c78f24e1a317c259646b948813342dbf3d
-  languageName: node
-  linkType: hard
-
 "@vitest/expect@npm:2.1.2":
   version: 2.1.2
   resolution: "@vitest/expect@npm:2.1.2"
@@ -5539,26 +5495,6 @@ __metadata:
     chai: "npm:^5.1.1"
     tinyrainbow: "npm:^1.2.0"
   checksum: 10c0/57233a60685f81ff5cb615156ac164608488c584cb62d7cc63d7ac28674e4c954133d4bb0948e88241c0f07d31803c0d1efd88562c4cac8e1bc5a2b24367ec0f
-  languageName: node
-  linkType: hard
-
-"@vitest/mocker@npm:2.1.1":
-  version: 2.1.1
-  resolution: "@vitest/mocker@npm:2.1.1"
-  dependencies:
-    "@vitest/spy": "npm:^2.1.0-beta.1"
-    estree-walker: "npm:^3.0.3"
-    magic-string: "npm:^0.30.11"
-  peerDependencies:
-    "@vitest/spy": 2.1.1
-    msw: ^2.3.5
-    vite: ^5.0.0
-  peerDependenciesMeta:
-    msw:
-      optional: true
-    vite:
-      optional: true
-  checksum: 10c0/e0681bb75bf7255ce49f720d193c9c795a64d42fef13c7af5c157514ebce88a5b89dbf702aa0929d4cefaed3db73351bd3ade3ccabecc09a23a872d9c55be50d
   languageName: node
   linkType: hard
 
@@ -5582,31 +5518,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vitest/pretty-format@npm:2.1.1, @vitest/pretty-format@npm:^2.1.1":
-  version: 2.1.1
-  resolution: "@vitest/pretty-format@npm:2.1.1"
-  dependencies:
-    tinyrainbow: "npm:^1.2.0"
-  checksum: 10c0/21057465a794a037a7af2c48397531eadf9b2d8a7b4d1ee5af9081cf64216cd0039b9e06317319df79aa2240fed1dbb6767b530deae2bd4b42d6fb974297e97d
-  languageName: node
-  linkType: hard
-
 "@vitest/pretty-format@npm:2.1.2, @vitest/pretty-format@npm:^2.1.2":
   version: 2.1.2
   resolution: "@vitest/pretty-format@npm:2.1.2"
   dependencies:
     tinyrainbow: "npm:^1.2.0"
   checksum: 10c0/e2c35dc424450f46794ff420b050e2ce77b3f3d2bdf2509c1adf51d327eeb5cc4ea42fc44919d63b3afdbfcc6da7d7e82962193d0a543c81e0f35ccdfc808835
-  languageName: node
-  linkType: hard
-
-"@vitest/runner@npm:2.1.1":
-  version: 2.1.1
-  resolution: "@vitest/runner@npm:2.1.1"
-  dependencies:
-    "@vitest/utils": "npm:2.1.1"
-    pathe: "npm:^1.1.2"
-  checksum: 10c0/a6d1424d6224d8a60ed0bbf7cdacb165ef36bc71cc957ad2c11ed1989fa5106636173369f0d8e1fa3f319a965091e52c8ce21203fce4bafe772632ccc2bd65a6
   languageName: node
   linkType: hard
 
@@ -5617,17 +5534,6 @@ __metadata:
     "@vitest/utils": "npm:2.1.2"
     pathe: "npm:^1.1.2"
   checksum: 10c0/c6008703ef7b9033b219690a84003c9c078e9de7ace63cefe7c9cd455667d5081c328645e3a538e23fcc221170901d1d1bb0430c4402391d74f8ffab8db62f81
-  languageName: node
-  linkType: hard
-
-"@vitest/snapshot@npm:2.1.1":
-  version: 2.1.1
-  resolution: "@vitest/snapshot@npm:2.1.1"
-  dependencies:
-    "@vitest/pretty-format": "npm:2.1.1"
-    magic-string: "npm:^0.30.11"
-    pathe: "npm:^1.1.2"
-  checksum: 10c0/e9dadee87a2f489883dec0360b55b2776d2a07e460bf2430b34867cd4e9f34b09b3e219a23bc8c3e1359faefdd166072d3305b66a0bea475c7d616470b7d841c
   languageName: node
   linkType: hard
 
@@ -5642,15 +5548,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vitest/spy@npm:2.1.1, @vitest/spy@npm:^2.1.0-beta.1":
-  version: 2.1.1
-  resolution: "@vitest/spy@npm:2.1.1"
-  dependencies:
-    tinyspy: "npm:^3.0.0"
-  checksum: 10c0/b251be1390c105b68aa95270159c4583c3e1a0f7a2e1f82db8b7fadedc3cb459c5ef9286033a1ae764810e00715552fc80afe4507cd8b0065934fb1a64926e06
-  languageName: node
-  linkType: hard
-
 "@vitest/spy@npm:2.1.2":
   version: 2.1.2
   resolution: "@vitest/spy@npm:2.1.2"
@@ -5660,14 +5557,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@vitest/utils@npm:2.1.1":
+"@vitest/spy@npm:^2.1.0-beta.1":
   version: 2.1.1
-  resolution: "@vitest/utils@npm:2.1.1"
+  resolution: "@vitest/spy@npm:2.1.1"
   dependencies:
-    "@vitest/pretty-format": "npm:2.1.1"
-    loupe: "npm:^3.1.1"
-    tinyrainbow: "npm:^1.2.0"
-  checksum: 10c0/b724c7f23591860bd24cd8e6d0cd803405f4fbff746db160a948290742144463287566a05ca400deb56817603b5185c4429707947869c3d453805860b5e3a3e5
+    tinyspy: "npm:^3.0.0"
+  checksum: 10c0/b251be1390c105b68aa95270159c4583c3e1a0f7a2e1f82db8b7fadedc3cb459c5ef9286033a1ae764810e00715552fc80afe4507cd8b0065934fb1a64926e06
   languageName: node
   linkType: hard
 
@@ -6192,21 +6087,6 @@ __metadata:
     zod:
       optional: true
   checksum: 10c0/dc954877fba19e2b7a70f1025807d69fa5aabec8bd58ce94e68d1a5ec1697fff3fe5214b4392508db7191762150f19a2396cf66ffb1d3ba8c1f37a89fd25e598
-  languageName: node
-  linkType: hard
-
-"abitype@npm:^0.9.8":
-  version: 0.9.10
-  resolution: "abitype@npm:0.9.10"
-  peerDependencies:
-    typescript: ">=5.0.4"
-    zod: ^3 >=3.22.0
-  peerDependenciesMeta:
-    typescript:
-      optional: true
-    zod:
-      optional: true
-  checksum: 10c0/084c36e70f8034e2cbf029b6f067b9425dc5b25673341ec659089deb220fd5e61f802dddf2aa875d788969c62aa6975490250e583825372483fdb3a76e222d3f
   languageName: node
   linkType: hard
 
@@ -6945,7 +6825,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"chai-as-promised@npm:^7.1.1, chai-as-promised@npm:^7.1.2":
+"chai-as-promised@npm:^7.1.1":
   version: 7.1.2
   resolution: "chai-as-promised@npm:7.1.2"
   dependencies:
@@ -9503,7 +9383,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hardhat@npm:^2.20.1, hardhat@npm:^2.22.10, hardhat@npm:^2.22.6":
+"hardhat@npm:^2.22.10, hardhat@npm:^2.22.6":
   version: 2.22.10
   resolution: "hardhat@npm:2.22.10"
   dependencies:
@@ -10899,13 +10779,6 @@ __metadata:
   version: 4.5.0
   resolution: "lodash.isequal@npm:4.5.0"
   checksum: 10c0/dfdb2356db19631a4b445d5f37868a095e2402292d59539a987f134a8778c62a2810c2452d11ae9e6dcac71fc9de40a6fedcb20e2952a15b431ad8b29e50e28f
-  languageName: node
-  linkType: hard
-
-"lodash.memoize@npm:^4.1.2":
-  version: 4.1.2
-  resolution: "lodash.memoize@npm:4.1.2"
-  checksum: 10c0/c8713e51eccc650422716a14cece1809cfe34bc5ab5e242b7f8b4e2241c2483697b971a604252807689b9dd69bfe3a98852e19a5b89d506b000b4187a1285df8
   languageName: node
   linkType: hard
 
@@ -14948,20 +14821,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"vite-node@npm:2.1.1":
-  version: 2.1.1
-  resolution: "vite-node@npm:2.1.1"
-  dependencies:
-    cac: "npm:^6.7.14"
-    debug: "npm:^4.3.6"
-    pathe: "npm:^1.1.2"
-    vite: "npm:^5.0.0"
-  bin:
-    vite-node: vite-node.mjs
-  checksum: 10c0/8a8b958df3d48af915e07e7efb042ee4c036ca0b73d2c411dc29254fd3533ada0807ce5096d8339894d3e786418b7d1a9c4ae02718c6aca11b5098de2b14c336
-  languageName: node
-  linkType: hard
-
 "vite-node@npm:2.1.2":
   version: 2.1.2
   resolution: "vite-node@npm:2.1.2"
@@ -15016,55 +14875,6 @@ __metadata:
   bin:
     vite: bin/vite.js
   checksum: 10c0/af70af6d6316a3af71f44ebe3ab343bd66450d4157af73af3b32239e1b6ec43ff6f651d7cc4193b21ed3bff2e9356a3de9e96aee53857f39922e4a2d9fad75a1
-  languageName: node
-  linkType: hard
-
-"vitest@npm:^2.1.1":
-  version: 2.1.1
-  resolution: "vitest@npm:2.1.1"
-  dependencies:
-    "@vitest/expect": "npm:2.1.1"
-    "@vitest/mocker": "npm:2.1.1"
-    "@vitest/pretty-format": "npm:^2.1.1"
-    "@vitest/runner": "npm:2.1.1"
-    "@vitest/snapshot": "npm:2.1.1"
-    "@vitest/spy": "npm:2.1.1"
-    "@vitest/utils": "npm:2.1.1"
-    chai: "npm:^5.1.1"
-    debug: "npm:^4.3.6"
-    magic-string: "npm:^0.30.11"
-    pathe: "npm:^1.1.2"
-    std-env: "npm:^3.7.0"
-    tinybench: "npm:^2.9.0"
-    tinyexec: "npm:^0.3.0"
-    tinypool: "npm:^1.0.0"
-    tinyrainbow: "npm:^1.2.0"
-    vite: "npm:^5.0.0"
-    vite-node: "npm:2.1.1"
-    why-is-node-running: "npm:^2.3.0"
-  peerDependencies:
-    "@edge-runtime/vm": "*"
-    "@types/node": ^18.0.0 || >=20.0.0
-    "@vitest/browser": 2.1.1
-    "@vitest/ui": 2.1.1
-    happy-dom: "*"
-    jsdom: "*"
-  peerDependenciesMeta:
-    "@edge-runtime/vm":
-      optional: true
-    "@types/node":
-      optional: true
-    "@vitest/browser":
-      optional: true
-    "@vitest/ui":
-      optional: true
-    happy-dom:
-      optional: true
-    jsdom:
-      optional: true
-  bin:
-    vitest: vitest.mjs
-  checksum: 10c0/77a67092338613376dadd8f6f6872383db8409402ce400ac1de48efd87a7214183e798484a3eb2310221c03554e37a00f9fdbc91e49194e7c68e009a5589f494
   languageName: node
   linkType: hard
 

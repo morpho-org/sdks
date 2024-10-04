@@ -1,4 +1,4 @@
-import type { Address, MarketId } from "../types";
+import type { Address, MarketId } from "../types.js";
 
 /**
  * The vault's configuration of a market on the PublicAllocator.

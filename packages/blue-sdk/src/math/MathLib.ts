@@ -1,4 +1,5 @@
 import { Time, format } from "@morpho-org/morpho-ts";
+import type { BigIntish } from "../types.js";
 
 export type RoundingDirection = "Up" | "Down";
 
@@ -216,6 +217,6 @@ export namespace MathLib {
     const { unit, duration } = Time.toPeriod(compounding);
     const rate = (BigInt(apr) * BigInt(duration)) / Time[unit].from.y(1n);
 
-    return this.rateToApy(rate, compounding);
+    return rateToApy(rate, compounding);
   }
 }

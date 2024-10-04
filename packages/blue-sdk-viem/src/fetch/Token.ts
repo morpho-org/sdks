@@ -1,6 +1,6 @@
 import {
-  Address,
-  Client,
+  type Address,
+  type Client,
   erc20Abi,
   erc20Abi_bytes32,
   hexToString,
@@ -17,9 +17,9 @@ import {
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { wstEthAbi } from "../abis";
-import { abi, code } from "../queries/GetToken";
-import { DeploylessFetchParameters } from "../types";
+import { wstEthAbi } from "../abis.js";
+import { abi, code } from "../queries/GetToken.js";
+import type { DeploylessFetchParameters } from "../types.js";
 
 export const decodeBytes32String = (hexOrStr: string) => {
   if (isHex(hexOrStr)) return hexToString(hexOrStr, { size: 32 });
@@ -110,7 +110,7 @@ export async function fetchToken(
 
   const token = {
     address,
-    decimals: parseInt(decimals.toString()),
+    decimals: Number.parseInt(decimals.toString()),
     symbol,
     name,
   };

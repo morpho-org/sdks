@@ -1,11 +1,11 @@
 import {
-  Address,
-  ChainId,
+  type Address,
+  type ChainId,
   MathLib,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import { TypedDataDefinition } from "viem";
+import type { TypedDataDefinition } from "viem";
 
 export interface Permit2PermitArgs {
   erc20: Address;

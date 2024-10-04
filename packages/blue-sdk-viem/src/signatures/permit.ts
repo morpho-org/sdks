@@ -1,5 +1,9 @@
-import { Address, ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
-import { TypedDataDefinition } from "viem";
+import {
+  type Address,
+  type ChainId,
+  getChainAddresses,
+} from "@morpho-org/blue-sdk";
+import type { TypedDataDefinition } from "viem";
 
 export interface PermitArgs {
   name: string;

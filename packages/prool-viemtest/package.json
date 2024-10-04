@@ -1,0 +1,40 @@
+{
+  "name": "@morpho-org/prool-viemtest",
+  "version": "1.0.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "type": "module",
+  "main": "src/index.ts",
+  "files": [
+    "lib"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "prepublish": "yarn build",
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "prool": "^0.0.16",
+    "viem": "^2.21.18",
+    "viem-deal": "^1.0.5",
+    "vitest": "^2.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.7.4",
+    "prool": "^0.0.16",
+    "typescript": "^5.6.2",
+    "viem": "^2.21.18",
+    "viem-deal": "^1.0.5",
+    "vitest": "^2.1.2"
+  },
+  "publishConfig": {
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      }
+    },
+    "access": "public"
+  }
+}

@@ -9,7 +9,7 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { Address, Client, erc20Abi, maxUint256 } from "viem";
+import { type Address, type Client, erc20Abi, maxUint256 } from "viem";
 import { getBalance, getChainId, readContract } from "viem/actions";
 
 import { fromEntries } from "@morpho-org/morpho-ts";
@@ -19,9 +19,9 @@ import {
   permit2Abi,
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
-} from "../abis";
-import { abi, code } from "../queries/GetHolding";
-import { DeploylessFetchParameters } from "../types";
+} from "../abis.js";
+import { abi, code } from "../queries/GetHolding.js";
+import type { DeploylessFetchParameters } from "../types.js";
 
 export const optionalBoolean = [undefined, false, true] as const;
 
@@ -53,6 +53,7 @@ export async function fetchHolding(
         ]),
       ),
       balance: await getBalance(client, {
+        // biome-ignore lint/suspicious/noExplicitAny: flattened union type
         ...(parameters as any),
         address: user,
       }),

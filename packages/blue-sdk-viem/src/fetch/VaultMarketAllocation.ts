@@ -1,15 +1,15 @@
-import { Address, Client } from "viem";
+import type { Address, Client } from "viem";
 
 import {
   ChainUtils,
-  MarketId,
+  type MarketId,
   VaultMarketAllocation,
 } from "@morpho-org/blue-sdk";
 
 import { getChainId } from "viem/actions";
-import { DeploylessFetchParameters } from "../types";
-import { fetchAccrualPosition } from "./Position";
-import { fetchVaultMarketConfig } from "./VaultMarketConfig";
+import type { DeploylessFetchParameters } from "../types.js";
+import { fetchAccrualPosition } from "./Position.js";
+import { fetchVaultMarketConfig } from "./VaultMarketConfig.js";
 
 export async function fetchVaultMarketAllocation(
   vault: Address,

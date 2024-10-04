@@ -1,14 +1,14 @@
-import { Address, Client } from "viem";
+import type { Address, Client } from "viem";
 
 import {
   ChainUtils,
-  MarketId,
+  type MarketId,
   VaultMarketPublicAllocatorConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { publicAllocatorAbi } from "../abis";
-import { FetchParameters } from "../types";
+import { publicAllocatorAbi } from "../abis.js";
+import type { FetchParameters } from "../types.js";
 
 export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,

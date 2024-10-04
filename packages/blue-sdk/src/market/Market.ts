@@ -1,9 +1,13 @@
-import { BlueErrors } from "../errors";
-import { AdaptiveCurveIrmLib, MathLib, type RoundingDirection } from "../maths";
-import type { BigIntish } from "../types";
+import { BlueErrors } from "../errors.js";
+import {
+  AdaptiveCurveIrmLib,
+  MathLib,
+  type RoundingDirection,
+} from "../math/index.js";
+import type { BigIntish } from "../types.js";
 
-import type { MarketConfig } from "./MarketConfig";
-import { MarketUtils } from "./MarketUtils";
+import type { MarketConfig } from "./MarketConfig.js";
+import { MarketUtils } from "./MarketUtils.js";
 
 export enum CapacityLimitReason {
   liquidity = "Liquidity",
