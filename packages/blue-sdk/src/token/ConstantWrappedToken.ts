@@ -1,7 +1,7 @@
-import { MathLib, RoundingDirection } from "../maths";
-import { Address, BigIntish } from "../types";
+import { MathLib, type RoundingDirection } from "../maths";
+import type { Address, BigIntish } from "../types";
 
-import { InputToken } from "./Token";
+import type { InputToken } from "./Token";
 import { WrappedToken } from "./WrappedToken";
 
 export class ConstantWrappedToken extends WrappedToken {

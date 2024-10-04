@@ -1,8 +1,8 @@
 import { BlueErrors } from "../errors";
-import { AdaptiveCurveIrmLib, MathLib, RoundingDirection } from "../maths";
-import { BigIntish } from "../types";
+import { AdaptiveCurveIrmLib, MathLib, type RoundingDirection } from "../maths";
+import type { BigIntish } from "../types";
 
-import { MarketConfig } from "./MarketConfig";
+import type { MarketConfig } from "./MarketConfig";
 import { MarketUtils } from "./MarketUtils";
 
 export enum CapacityLimitReason {

@@ -1,5 +1,5 @@
 import { SECONDS_PER_YEAR } from "../constants";
-import { BigIntish } from "../types";
+import type { BigIntish } from "../types";
 
 import { MathLib } from "./MathLib";
 
@@ -80,8 +80,8 @@ export namespace AdaptiveCurveIrmLib {
       errNormFactor,
     );
 
-    let avgRateAtTarget;
-    let endRateAtTarget;
+    let avgRateAtTarget: bigint;
+    let endRateAtTarget: bigint;
 
     if (startRateAtTarget === 0n) {
       // First interaction.

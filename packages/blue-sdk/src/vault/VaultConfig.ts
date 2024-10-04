@@ -1,6 +1,6 @@
-import { ChainId } from "../chain";
+import type { ChainId } from "../chain";
 import { UnknownVaultConfigError } from "../errors";
-import { Address, BigIntish } from "../types";
+import type { Address, BigIntish } from "../types";
 
 export interface InputVaultConfig {
   address: Address;

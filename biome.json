@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
   "files": {
-    "ignore": ["out", "lib", "dist", ".pnp.*", ".vscode", "package.json"]
+    "ignore": ["lib", "dist", ".pnp.*", ".vscode", "package.json"]
   },
   "formatter": {
     "enabled": true,
@@ -15,14 +15,24 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": false,
+      "recommended": true,
+      "complexity": {
+        "noForEach": "off"
+      },
       "correctness": {
         "noUnusedImports": "error",
         "noUnusedVariables": "error",
         "useExhaustiveDependencies": "error"
       },
       "style": {
-        "useBlockStatements": "off"
+        "noParameterAssign": "off",
+        "useBlockStatements": "off",
+        "noUnusedTemplateLiteral": "off",
+        "noNonNullAssertion": "off"
+      },
+      "suspicious": {
+        "useGetterReturn": "off",
+        "noAssignInExpressions": "off"
       }
     }
   }

@@ -1,35 +1,30 @@
 import { Time, format } from "@morpho-org/morpho-ts";
 
-import { BigIntish } from "../types";
-
 export type RoundingDirection = "Up" | "Down";
 
 /**
  * Library to manage fixed-point arithmetic.
- * This library reproduces the behaviour of the solidity library MathLib
- * TODO: add library link
- * @category Maths
- *
+ * https://github.com/morpho-org/morpho-blue/blob/main/src/libraries/MathLib.sol
  */
-export class MathLib {
-  static WAD = 1_000000000000000000n;
+export namespace MathLib {
+  export const WAD = 1_000000000000000000n;
 
-  static MAX_UINT_256 = MathLib.maxUint(256);
-  static MAX_UINT_160 = MathLib.maxUint(160);
-  static MAX_UINT_128 = MathLib.maxUint(128);
-  static MAX_UINT_48 = MathLib.maxUint(48);
+  export const MAX_UINT_256 = maxUint(256);
+  export const MAX_UINT_160 = maxUint(160);
+  export const MAX_UINT_128 = maxUint(128);
+  export const MAX_UINT_48 = maxUint(48);
 
-  static maxUint(nBits: number) {
+  export function maxUint(nBits: number) {
     if (nBits % 4 !== 0) throw new Error(`Invalid number of bits: ${nBits}`);
 
-    return BigInt("0x" + "f".repeat(nBits / 4));
+    return BigInt(`0x${"f".repeat(nBits / 4)}`);
   }
 
   /**
    * Returns the absolute value of a number
    * @param a The number
    */
-  static abs(a: BigIntish) {
+  export function abs(a: BigIntish) {
     a = BigInt(a);
 
     return a >= 0 ? a : -a;
@@ -40,7 +35,7 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static min(...xs: BigIntish[]) {
+  export function min(...xs: BigIntish[]) {
     return xs.map(BigInt).reduce((x, y) => (x <= y ? x : y));
   }
 
@@ -49,7 +44,7 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static max(...xs: BigIntish[]) {
+  export function max(...xs: BigIntish[]) {
     return xs.map(BigInt).reduce((x, y) => (x <= y ? y : x));
   }
 
@@ -58,7 +53,7 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static zeroFloorSub(x: BigIntish, y: BigIntish) {
+  export function zeroFloorSub(x: BigIntish, y: BigIntish) {
     x = BigInt(x);
     y = BigInt(y);
 
@@ -70,7 +65,7 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static wMulDown(x: BigIntish, y: BigIntish) {
+  export function wMulDown(x: BigIntish, y: BigIntish) {
     return MathLib.wMul(x, y, "Down");
   }
 
@@ -79,7 +74,7 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static wMulUp(x: BigIntish, y: BigIntish) {
+  export function wMulUp(x: BigIntish, y: BigIntish) {
     return MathLib.wMul(x, y, "Up");
   }
 
@@ -88,7 +83,11 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static wMul(x: BigIntish, y: BigIntish, rounding: RoundingDirection) {
+  export function wMul(
+    x: BigIntish,
+    y: BigIntish,
+    rounding: RoundingDirection,
+  ) {
     return MathLib.mulDiv(x, y, MathLib.WAD, rounding);
   }
 
@@ -97,7 +96,7 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static wDivDown(x: BigIntish, y: BigIntish) {
+  export function wDivDown(x: BigIntish, y: BigIntish) {
     return MathLib.wDiv(x, y, "Down");
   }
 
@@ -106,7 +105,7 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static wDivUp(x: BigIntish, y: BigIntish) {
+  export function wDivUp(x: BigIntish, y: BigIntish) {
     return MathLib.wDiv(x, y, "Up");
   }
 
@@ -115,7 +114,11 @@ export class MathLib {
    * @param x The first number
    * @param y The second number
    */
-  static wDiv(x: BigIntish, y: BigIntish, rounding: RoundingDirection) {
+  export function wDiv(
+    x: BigIntish,
+    y: BigIntish,
+    rounding: RoundingDirection,
+  ) {
     return MathLib.mulDiv(x, MathLib.WAD, y, rounding);
   }
 
@@ -125,7 +128,11 @@ export class MathLib {
    * @param y The second number
    * @param denominator The denominator
    */
-  static mulDivDown(x: BigIntish, y: BigIntish, denominator: BigIntish) {
+  export function mulDivDown(
+    x: BigIntish,
+    y: BigIntish,
+    denominator: BigIntish,
+  ) {
     x = BigInt(x);
     y = BigInt(y);
     denominator = BigInt(denominator);
@@ -140,7 +147,7 @@ export class MathLib {
    * @param y The second number
    * @param denominator The denominator
    */
-  static mulDivUp(x: BigIntish, y: BigIntish, denominator: BigIntish) {
+  export function mulDivUp(x: BigIntish, y: BigIntish, denominator: BigIntish) {
     x = BigInt(x);
     y = BigInt(y);
     denominator = BigInt(denominator);
@@ -151,7 +158,7 @@ export class MathLib {
     return (x * y) / denominator + roundup;
   }
 
-  static mulDiv(
+  export function mulDiv(
     x: BigIntish,
     y: BigIntish,
     denominator: BigIntish,
@@ -167,7 +174,7 @@ export class MathLib {
    * @param x The base of the exponent
    * @param n The exponent
    */
-  static wTaylorCompounded(x: BigIntish, n: BigIntish) {
+  export function wTaylorCompounded(x: BigIntish, n: BigIntish) {
     const firstTerm = BigInt(x) * BigInt(n);
     const secondTerm = MathLib.mulDivDown(
       firstTerm,
@@ -189,7 +196,7 @@ export class MathLib {
    * @param rate The rate to convert (in WAD)
    * @param period The compounding basis
    */
-  static rateToApy(rate: BigIntish, period: Time.PeriodLike) {
+  export function rateToApy(rate: BigIntish, period: Time.PeriodLike) {
     const { unit, duration } = Time.toPeriod(period);
     const factor = Time[unit].from.y(1) / duration;
 
@@ -205,7 +212,7 @@ export class MathLib {
    * @param apr The apr to convert (in WAD)
    * @param compounding The compounding basis
    */
-  static aprToApy(apr: BigIntish, compounding: Time.PeriodLike) {
+  export function aprToApy(apr: BigIntish, compounding: Time.PeriodLike) {
     const { unit, duration } = Time.toPeriod(compounding);
     const rate = (BigInt(apr) * BigInt(duration)) / Time[unit].from.y(1n);
 

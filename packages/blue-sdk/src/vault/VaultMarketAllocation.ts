@@ -1,7 +1,7 @@
 import { MathLib } from "../maths";
-import { AccrualPosition } from "../position";
+import type { AccrualPosition } from "../position";
 
-import { VaultMarketConfig } from "./VaultMarketConfig";
+import type { VaultMarketConfig } from "./VaultMarketConfig";
 
 export interface InputVaultMarketAllocation {
   config: VaultMarketConfig;

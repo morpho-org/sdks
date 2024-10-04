@@ -1,5 +1,5 @@
-import { RoundingDirection } from "../maths";
-import { InputVaultConfig } from "../vault/VaultConfig";
+import type { RoundingDirection } from "../maths";
+import type { InputVaultConfig } from "../vault/VaultConfig";
 import { VaultUtils } from "../vault/VaultUtils";
 import { WrappedToken } from "./WrappedToken";
 

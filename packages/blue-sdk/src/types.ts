@@ -31,5 +31,5 @@ export function isFetched<T>(v: Fetchable<T>): v is T {
   return v !== undefined && v !== null;
 }
 
-export const isMarketId = (value: any): value is MarketId =>
+export const isMarketId = (value: unknown): value is MarketId =>
   typeof value === "string" && /^0x[0-9A-Fa-f]{64}$/.test(value);

@@ -2,7 +2,7 @@ import { entries } from "@morpho-org/morpho-ts";
 
 import { ChainId } from "./chain";
 import { UnsupportedChainIdError } from "./errors";
-import { Address } from "./types";
+import type { Address } from "./types";
 
 /** Address used to replicate an erc20-behaviour for native token.
  *

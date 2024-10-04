@@ -1,13 +1,25 @@
-import { configDefaults, defineConfig } from "vitest/config";
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    exclude: [
-      ...configDefaults.exclude,
-      "**/lib/**",
-      "**/e2e/**",
-      "packages/blue-sdk-viem/**",
-      "packages/blue-sdk-ethers-liquidation/**",
-    ],
+    include: ["packages/**/test/**/*.test.ts"],
+    exclude: ["packages/*-ethers-*/**"],
+    coverage: {
+      reporter: process.env.CI ? ["lcov"] : ["text", "json", "html"],
+      exclude: [
+        ".yarn",
+        ".pnp.*",
+        "**/lib/**",
+        "**/dist/**",
+        "**/artifacts/**",
+        "**/test/**",
+        "**/*.test-d.ts",
+        "packages/morpho-test/**",
+      ],
+    },
+    sequence: {
+      concurrent: true,
+    },
+    testTimeout: 30_000,
   },
 });

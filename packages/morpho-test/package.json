@@ -1,15 +1,30 @@
 {
   "name": "@morpho-org/morpho-test",
   "version": "2.0.0-alpha.5",
+  "author": "Morpho Association <contact@morpho.org>",
+  "type": "module",
   "main": "src/index.ts",
   "files": [
     "lib"
   ],
-  "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "scripts": {
     "prepublish": "yarn build",
-    "build": "tsc --build tsconfig.build.json"
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+    "chai": "^4.3.0",
+    "chai-as-promised": "^7.1.2",
+    "ethers": "^6.0.0",
+    "hardhat": "^2.20.0",
+    "prool": "^0.0.16",
+    "sinon": "^19.0.2",
+    "sinon-chai": "^3.7.0",
+    "viem": "^2.21.0",
+    "viem-deal": "^1.0.5",
+    "vitest": "^2.1.0"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-ethers": "^3.0.4",
@@ -26,22 +41,23 @@
     "ethers": "^6.13.2",
     "hardhat": "^2.20.1",
     "mocha": "^10.4.0",
+    "prool": "^0.0.16",
     "sinon": "^19.0.2",
     "sinon-chai": "^3.7.0",
-    "typescript": "^5.6.2"
-  },
-  "peerDependencies": {
-    "@nomicfoundation/hardhat-ethers": "^3.0.0",
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
-    "chai": "^4.3.0",
-    "chai-as-promised": "^7.1.2",
-    "ethers": "^6.0.0",
-    "hardhat": "^2.20.0",
-    "sinon": "^19.0.2",
-    "sinon-chai": "^3.7.0"
+    "typescript": "^5.6.2",
+    "viem": "^2.21.18",
+    "viem-deal": "^1.0.5",
+    "vitest": "^2.1.1"
   },
   "publishConfig": {
     "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      }
+    },
     "access": "public"
   }
 }

@@ -1,4 +1,4 @@
-import { Address, MarketId } from "./types";
+import type { Address, MarketId } from "./types";
 
 export class UnknownDataError extends Error {}
 
@@ -77,7 +77,7 @@ export namespace BlueErrors {
 }
 
 export interface ErrorClass<E extends Error> {
-  new (...args: any[]): E;
+  new (...args: unknown[]): E;
 }
 
 export function _try<T, E extends Error>(

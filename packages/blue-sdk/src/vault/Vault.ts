@@ -1,11 +1,11 @@
-import { CapacityLimit, CapacityLimitReason } from "../market";
-import { MathLib, RoundingDirection } from "../maths";
+import { type CapacityLimit, CapacityLimitReason } from "../market";
+import { MathLib, type RoundingDirection } from "../maths";
 import { VaultToken } from "../token";
-import { Address, BigIntish, MarketId } from "../types";
+import type { Address, BigIntish, MarketId } from "../types";
 
-import { VaultConfig } from "./VaultConfig";
+import type { VaultConfig } from "./VaultConfig";
 import {
-  InputVaultMarketAllocation,
+  type InputVaultMarketAllocation,
   VaultMarketAllocation,
 } from "./VaultMarketAllocation";
 import { VaultUtils } from "./VaultUtils";

@@ -1,11 +1,14 @@
-import { MarketId, addresses } from "@morpho-org/blue-sdk";
-import { DeploylessFetchParameters, blueAbi } from "@morpho-org/blue-sdk-viem";
+import { type MarketId, addresses } from "@morpho-org/blue-sdk";
 import {
-  ConfigParameter,
-  FetchMarketsParameters,
-  FetchTokensParameters,
-  FetchUsersParameters,
-  FetchVaultsParameters,
+  type DeploylessFetchParameters,
+  blueAbi,
+} from "@morpho-org/blue-sdk-viem";
+import {
+  type ConfigParameter,
+  type FetchMarketsParameters,
+  type FetchTokensParameters,
+  type FetchUsersParameters,
+  type FetchVaultsParameters,
   useChainId,
   useHoldings,
   useMarkets,
@@ -17,8 +20,8 @@ import {
   useVaults,
 } from "@morpho-org/blue-sdk-wagmi";
 import { useMemo } from "react";
-import { Address, ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useReadContract } from "wagmi";
+import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { type Config, type ResolvedRegister, useReadContract } from "wagmi";
 import { SimulationState } from "../SimulationState";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
@@ -31,6 +34,7 @@ export type UseSimulationStateParameters<config extends Config = Config> =
     UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
     ConfigParameter<config> & {
       block?: SimulationState["block"];
+      accrueInterest?: boolean;
       query?: {
         enabled?: boolean;
         staleTime?: number;
@@ -108,10 +112,13 @@ export function useSimulationState<
   config extends Config = ResolvedRegister["config"],
 >({
   block,
+  accrueInterest = true,
   ...parameters
 }: UseSimulationStateParameters<config>): UseSimulationStateReturnType {
   const staleTime =
-    parameters.query?.staleTime ?? block?.number != null ? Infinity : undefined;
+    (parameters.query?.staleTime ?? block?.number != null)
+      ? Number.POSITIVE_INFINITY
+      : undefined;
 
   const chainId = useChainId(parameters);
 
@@ -136,6 +143,9 @@ export function useSimulationState<
     query: {
       ...parameters.query,
       enabled: block != null && parameters.query?.enabled,
+      select: accrueInterest
+        ? (market) => market.accrueInterest(block?.timestamp)
+        : undefined,
     },
   });
   const users = useUsers({

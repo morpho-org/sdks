@@ -1,5 +1,5 @@
 import { UnknownMarketConfigError } from "../errors";
-import { Address, BigIntish, MarketId } from "../types";
+import type { Address, BigIntish, MarketId } from "../types";
 
 import { MarketUtils } from "./MarketUtils";
 

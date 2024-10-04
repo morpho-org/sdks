@@ -1,7 +1,7 @@
-import { MathLib, RoundingDirection } from "../maths";
-import { Address } from "../types";
+import { MathLib, type RoundingDirection } from "../maths";
+import type { Address } from "../types";
 
-import { InputToken, Token } from "./Token";
+import { type InputToken, Token } from "./Token";
 
 export abstract class WrappedToken extends Token {
   constructor(

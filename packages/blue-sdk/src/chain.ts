@@ -64,8 +64,8 @@ export namespace ChainUtils {
     return BLUE_AVAILABLE_CHAINS.includes(chainId as ChainId);
   }
 
-  export function parseSupportedChainId(candidate: any): ChainId {
-    const chainId = parseInt(candidate);
+  export function parseSupportedChainId(candidate: unknown): ChainId {
+    const chainId = Number.parseInt(candidate);
 
     if (!isSupported(chainId)) throw new UnsupportedChainIdError(candidate);
 
