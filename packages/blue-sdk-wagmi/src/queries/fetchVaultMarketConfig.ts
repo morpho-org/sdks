@@ -1,13 +1,13 @@
-import { VaultMarketConfig } from "@morpho-org/blue-sdk";
+import type { VaultMarketConfig } from "@morpho-org/blue-sdk";
 import {
-  FetchParameters,
+  type FetchParameters,
   fetchVaultMarketConfig,
 } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
-import { Config } from "wagmi";
-import { MarketParameters } from "./fetchMarket";
-import { VaultParameters } from "./fetchVault";
+import type { Config } from "wagmi";
+import type { MarketParameters } from "./fetchMarket.js";
+import type { VaultParameters } from "./fetchVault.js";
 
 export type VaultMarketConfigParameters = VaultParameters & MarketParameters;
 

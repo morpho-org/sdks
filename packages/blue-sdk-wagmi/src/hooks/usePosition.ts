@@ -1,15 +1,15 @@
-import { Position } from "@morpho-org/blue-sdk";
-import { ReadContractErrorType } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, useQuery } from "wagmi/query";
+import type { Position } from "@morpho-org/blue-sdk";
+import type { ReadContractErrorType } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
+import { type UseQueryReturnType, useQuery } from "wagmi/query";
 import {
-  FetchPositionParameters,
-  FetchPositionQueryKey,
+  type FetchPositionParameters,
+  type FetchPositionQueryKey,
   fetchPositionQueryOptions,
-} from "../queries/fetchPosition";
-import { ConfigParameter, QueryParameter } from "../types";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
+} from "../queries/fetchPosition.js";
+import type { ConfigParameter, QueryParameter } from "../types/index.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
 
 export type UsePositionParameters<
   config extends Config = Config,
@@ -53,6 +53,8 @@ export function usePosition<
       parameters.user != null && parameters.marketId != null && query.enabled,
     structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
-      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
+      (query.staleTime ?? parameters.blockNumber != null)
+        ? Number.POSITIVE_INFINITY
+        : undefined,
   });
 }

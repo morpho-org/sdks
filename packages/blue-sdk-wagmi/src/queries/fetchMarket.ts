@@ -1,11 +1,11 @@
-import { Market, MarketId } from "@morpho-org/blue-sdk";
+import type { Market, MarketId } from "@morpho-org/blue-sdk";
 import {
-  DeploylessFetchParameters,
+  type DeploylessFetchParameters,
   fetchMarket,
 } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
-import { Config } from "wagmi";
+import type { Config } from "wagmi";
 
 export type MarketParameters = {
   marketId: MarketId;

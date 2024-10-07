@@ -1,9 +1,12 @@
-import { MarketConfig } from "@morpho-org/blue-sdk";
-import { FetchParameters, fetchMarketConfig } from "@morpho-org/blue-sdk-viem";
+import type { MarketConfig } from "@morpho-org/blue-sdk";
+import {
+  type FetchParameters,
+  fetchMarketConfig,
+} from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
-import { Config } from "wagmi";
-import { MarketParameters } from "./fetchMarket";
+import type { Config } from "wagmi";
+import type { MarketParameters } from "./fetchMarket.js";
 
 export type MarketConfigParameters = MarketParameters;
 

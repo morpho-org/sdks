@@ -1,16 +1,16 @@
-import { VaultUser } from "@morpho-org/blue-sdk";
-import { ReadContractErrorType } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, useQuery } from "wagmi/query";
-import { mergeDeepEqual } from "../utils";
+import type { VaultUser } from "@morpho-org/blue-sdk";
+import type { ReadContractErrorType } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
+import { type UseQueryReturnType, useQuery } from "wagmi/query";
+import { mergeDeepEqual } from "../utils/index.js";
 
 import {
-  FetchVaultUserParameters,
-  FetchVaultUserQueryKey,
+  type FetchVaultUserParameters,
+  type FetchVaultUserQueryKey,
   fetchVaultUserQueryOptions,
-} from "../queries/fetchVaultUser";
-import { ConfigParameter, QueryParameter } from "../types";
-import { useChainId } from "./useChainId";
+} from "../queries/fetchVaultUser.js";
+import type { ConfigParameter, QueryParameter } from "../types/index.js";
+import { useChainId } from "./useChainId.js";
 
 export type UseVaultUserParameters<
   config extends Config = Config,
@@ -54,6 +54,8 @@ export function useVaultUser<
       parameters.vault != null && parameters.user != null && query.enabled,
     structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
-      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
+      (query.staleTime ?? parameters.blockNumber != null)
+        ? Number.POSITIVE_INFINITY
+        : undefined,
   });
 }

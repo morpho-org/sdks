@@ -1,11 +1,11 @@
-import { Token } from "@morpho-org/blue-sdk";
+import type { Token } from "@morpho-org/blue-sdk";
 import {
-  DeploylessFetchParameters,
+  type DeploylessFetchParameters,
   fetchToken,
 } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
-import { Config } from "wagmi";
+import type { Config } from "wagmi";
 
 export type TokenParameters = {
   token: Address;

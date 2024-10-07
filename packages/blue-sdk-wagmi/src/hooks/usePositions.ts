@@ -1,16 +1,16 @@
-import { MarketId, Position } from "@morpho-org/blue-sdk";
-import { UseQueryResult, useQueries } from "@tanstack/react-query";
-import { Address, ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
+import type { MarketId, Position } from "@morpho-org/blue-sdk";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 
-import { combineIndexedQueries } from "../queries/combineIndexedQueries";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
-  PositionParameters,
+  type PositionParameters,
   fetchPositionQueryOptions,
-} from "../queries/fetchPosition";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
-import { UsePositionParameters } from "./usePosition";
+} from "../queries/fetchPosition.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
+import type { UsePositionParameters } from "./usePosition.js";
 
 export type FetchPositionsParameters = {
   positions: Iterable<Partial<PositionParameters>>;
@@ -41,6 +41,7 @@ export function usePositions<
   TCombinedResult = ReturnType<typeof combinePositions>,
 >({
   positions,
+  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
   combine = combinePositions as any,
   query = {},
   ...parameters
@@ -63,8 +64,8 @@ export function usePositions<
         position.user != null && position.marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
-          ? Infinity
+        (query.staleTime ?? parameters.blockNumber != null)
+          ? Number.POSITIVE_INFINITY
           : undefined,
     })),
     combine,

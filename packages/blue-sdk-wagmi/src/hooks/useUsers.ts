@@ -1,13 +1,16 @@
-import { User } from "@morpho-org/blue-sdk";
-import { UseQueryResult, useQueries } from "@tanstack/react-query";
-import { Address, ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
+import type { User } from "@morpho-org/blue-sdk";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 
-import { combineIndexedQueries } from "../queries/combineIndexedQueries";
-import { UserParameters, fetchUserQueryOptions } from "../queries/fetchUser";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
-import { UseUserParameters } from "./useUser";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
+import {
+  type UserParameters,
+  fetchUserQueryOptions,
+} from "../queries/fetchUser.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
+import type { UseUserParameters } from "./useUser.js";
 
 export type FetchUsersParameters = {
   users: Iterable<Address | undefined>;
@@ -38,6 +41,7 @@ export function useUsers<
   TCombinedResult = ReturnType<typeof combineUsers>,
 >({
   users,
+  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
   combine = combineUsers as any,
   query = {},
   ...parameters
@@ -59,8 +63,8 @@ export function useUsers<
       enabled: user != null && query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
-          ? Infinity
+        (query.staleTime ?? parameters.blockNumber != null)
+          ? Number.POSITIVE_INFINITY
           : undefined,
     })),
     combine,

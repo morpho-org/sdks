@@ -1,1 +1,1 @@
-export * from "./mergeDeepEqual";
+export * from "./mergeDeepEqual.js";

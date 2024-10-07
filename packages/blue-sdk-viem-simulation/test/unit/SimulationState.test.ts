@@ -8,7 +8,7 @@ import {
   Token,
   Vault,
 } from "@morpho-org/blue-sdk";
-import { randomAddress } from "@morpho-org/prool-viemtest";
+import { randomAddress } from "@morpho-org/test";
 
 import { SimulationState } from "../../src";
 

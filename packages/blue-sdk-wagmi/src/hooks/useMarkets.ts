@@ -1,16 +1,16 @@
-import { Market, MarketId } from "@morpho-org/blue-sdk";
-import { UseQueryResult, useQueries } from "@tanstack/react-query";
-import { ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
+import type { Market, MarketId } from "@morpho-org/blue-sdk";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import type { ReadContractErrorType, UnionOmit } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 
-import { combineIndexedQueries } from "../queries/combineIndexedQueries";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
-  MarketParameters,
+  type MarketParameters,
   fetchMarketQueryOptions,
-} from "../queries/fetchMarket";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
-import { UseMarketParameters } from "./useMarket";
+} from "../queries/fetchMarket.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
+import type { UseMarketParameters } from "./useMarket.js";
 
 export type FetchMarketsParameters = {
   marketIds: Iterable<MarketId | undefined>;
@@ -41,6 +41,7 @@ export function useMarkets<
   TCombinedResult = ReturnType<typeof combineMarkets>,
 >({
   marketIds,
+  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
   combine = combineMarkets as any,
   query = {},
   ...parameters
@@ -62,8 +63,8 @@ export function useMarkets<
       enabled: marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
-          ? Infinity
+        (query.staleTime ?? parameters.blockNumber != null)
+          ? Number.POSITIVE_INFINITY
           : undefined,
     })),
     combine,

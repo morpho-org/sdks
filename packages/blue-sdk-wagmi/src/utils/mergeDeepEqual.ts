@@ -9,6 +9,7 @@ export function isPlainArray(value: unknown) {
  * It may be unsafe to use with JS classes or other non-plain objects because it will not preserve the prototype chain.
  */
 export function mergeDeepEqual<T>(a: unknown, b: T): T;
+// biome-ignore lint/suspicious/noExplicitAny: safe implementation
 export function mergeDeepEqual(a: any, b: any): any {
   if (a === b) return a;
 

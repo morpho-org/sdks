@@ -4,7 +4,7 @@ import {
   type MarketParams,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { randomAddress } from "@morpho-org/prool-viemtest";
+import { randomAddress } from "@morpho-org/test";
 import { parseEther, parseUnits, zeroAddress } from "viem";
 
 export const markets = {

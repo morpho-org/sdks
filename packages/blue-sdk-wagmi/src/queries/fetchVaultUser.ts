@@ -1,13 +1,13 @@
-import { VaultUser } from "@morpho-org/blue-sdk";
+import type { VaultUser } from "@morpho-org/blue-sdk";
 import {
-  DeploylessFetchParameters,
+  type DeploylessFetchParameters,
   fetchVaultUser,
 } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
-import { Config } from "wagmi";
-import { UserParameters } from "./fetchUser";
-import { VaultParameters } from "./fetchVault";
+import type { Config } from "wagmi";
+import type { UserParameters } from "./fetchUser.js";
+import type { VaultParameters } from "./fetchVault.js";
 
 export type VaultUserParameters = VaultParameters & UserParameters;
 

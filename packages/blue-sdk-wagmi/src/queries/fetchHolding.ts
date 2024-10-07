@@ -1,13 +1,13 @@
-import { Holding } from "@morpho-org/blue-sdk";
+import type { Holding } from "@morpho-org/blue-sdk";
 import {
-  DeploylessFetchParameters,
+  type DeploylessFetchParameters,
   fetchHolding,
 } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
-import { Config } from "wagmi";
-import { TokenParameters } from "./fetchToken";
-import { UserParameters } from "./fetchUser";
+import type { Config } from "wagmi";
+import type { TokenParameters } from "./fetchToken.js";
+import type { UserParameters } from "./fetchUser.js";
 
 export type HoldingParameters = UserParameters & TokenParameters;
 

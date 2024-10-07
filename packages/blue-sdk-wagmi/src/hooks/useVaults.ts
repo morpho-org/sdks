@@ -1,12 +1,15 @@
-import { Vault } from "@morpho-org/blue-sdk";
-import { UseQueryResult, useQueries } from "@tanstack/react-query";
-import { Address, ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries";
-import { VaultParameters, fetchVaultQueryOptions } from "../queries/fetchVault";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
-import { UseVaultParameters } from "./useVault";
+import type { Vault } from "@morpho-org/blue-sdk";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
+import {
+  type VaultParameters,
+  fetchVaultQueryOptions,
+} from "../queries/fetchVault.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
+import type { UseVaultParameters } from "./useVault.js";
 
 export type FetchVaultsParameters = {
   vaults: Iterable<Address | undefined>;
@@ -37,6 +40,7 @@ export function useVaults<
   TCombinedResult = ReturnType<typeof combineVaults>,
 >({
   vaults,
+  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
   combine = combineVaults as any,
   query = {},
   ...parameters
@@ -58,8 +62,8 @@ export function useVaults<
       enabled: vault != null && query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
-          ? Infinity
+        (query.staleTime ?? parameters.blockNumber != null)
+          ? Number.POSITIVE_INFINITY
           : undefined,
     })),
     combine,

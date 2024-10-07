@@ -1,7 +1,7 @@
 import { ChainId, MarketConfig, addresses } from "@morpho-org/blue-sdk";
 
 import { markets } from "@morpho-org/morpho-test";
-import { randomAddress } from "@morpho-org/prool-viemtest";
+import { randomAddress } from "@morpho-org/test";
 import { describe, expect } from "vitest";
 import { Market } from "../src/augment/Market.js";
 import { blueAbi } from "../src/index.js";

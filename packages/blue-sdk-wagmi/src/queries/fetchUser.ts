@@ -1,8 +1,8 @@
-import { User } from "@morpho-org/blue-sdk";
-import { FetchParameters, fetchUser } from "@morpho-org/blue-sdk-viem";
+import type { User } from "@morpho-org/blue-sdk";
+import { type FetchParameters, fetchUser } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
-import { Config } from "wagmi";
+import type { Config } from "wagmi";
 
 export type UserParameters = {
   user: Address;

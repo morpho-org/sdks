@@ -1,13 +1,16 @@
-import { Token } from "@morpho-org/blue-sdk";
-import { UseQueryResult, useQueries } from "@tanstack/react-query";
-import { Address, ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
+import type { Token } from "@morpho-org/blue-sdk";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 
-import { combineIndexedQueries } from "../queries/combineIndexedQueries";
-import { TokenParameters, fetchTokenQueryOptions } from "../queries/fetchToken";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
-import { UseTokenParameters } from "./useToken";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
+import {
+  type TokenParameters,
+  fetchTokenQueryOptions,
+} from "../queries/fetchToken.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
+import type { UseTokenParameters } from "./useToken.js";
 
 export type FetchTokensParameters = {
   tokens: Iterable<Address | undefined>;
@@ -38,6 +41,7 @@ export function useTokens<
   TCombinedResult = ReturnType<typeof combineTokens>,
 >({
   tokens,
+  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
   combine = combineTokens as any,
   query = {},
   ...parameters
@@ -59,8 +63,8 @@ export function useTokens<
       enabled: token != null && query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
-          ? Infinity
+        (query.staleTime ?? parameters.blockNumber != null)
+          ? Number.POSITIVE_INFINITY
           : undefined,
     })),
     combine,

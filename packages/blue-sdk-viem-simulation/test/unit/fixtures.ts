@@ -15,7 +15,7 @@ import {
   unwrappedTokensMapping,
 } from "@morpho-org/blue-sdk";
 import { randomMarket, randomVault } from "@morpho-org/morpho-test";
-import { randomAddress } from "@morpho-org/prool-viemtest";
+import { randomAddress } from "@morpho-org/test";
 
 import { SimulationState } from "../../src";
 

@@ -1,15 +1,15 @@
-import { MarketId, VaultMarketConfig } from "@morpho-org/blue-sdk";
-import { UseQueryResult, useQueries } from "@tanstack/react-query";
-import { Address, ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries";
+import type { MarketId, VaultMarketConfig } from "@morpho-org/blue-sdk";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
-  VaultMarketConfigParameters,
+  type VaultMarketConfigParameters,
   fetchVaultMarketConfigQueryOptions,
-} from "../queries/fetchVaultMarketConfig";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
-import { UseVaultMarketConfigParameters } from "./useVaultMarketConfig";
+} from "../queries/fetchVaultMarketConfig.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
+import type { UseVaultMarketConfigParameters } from "./useVaultMarketConfig.js";
 
 export type FetchVaultMarketConfigsParameters = {
   configs: Iterable<Partial<VaultMarketConfigParameters>>;
@@ -43,6 +43,7 @@ export function useVaultMarketConfigs<
   TCombinedResult = ReturnType<typeof combineVaultMarketConfigs>,
 >({
   configs,
+  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
   combine = combineVaultMarketConfigs as any,
   query = {},
   ...parameters
@@ -67,8 +68,8 @@ export function useVaultMarketConfigs<
         query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
-          ? Infinity
+        (query.staleTime ?? parameters.blockNumber != null)
+          ? Number.POSITIVE_INFINITY
           : undefined,
     })),
     combine,

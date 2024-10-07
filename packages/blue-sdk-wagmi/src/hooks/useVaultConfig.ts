@@ -1,16 +1,16 @@
-import { VaultConfig } from "@morpho-org/blue-sdk";
-import { ReadContractErrorType } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, useQuery } from "wagmi/query";
-import { mergeDeepEqual } from "../utils";
+import type { VaultConfig } from "@morpho-org/blue-sdk";
+import type { ReadContractErrorType } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
+import { type UseQueryReturnType, useQuery } from "wagmi/query";
+import { mergeDeepEqual } from "../utils/index.js";
 
 import {
-  FetchVaultConfigParameters,
-  FetchVaultConfigQueryKey,
+  type FetchVaultConfigParameters,
+  type FetchVaultConfigQueryKey,
   fetchVaultConfigQueryOptions,
-} from "../queries/fetchVaultConfig";
-import { ConfigParameter, QueryParameter } from "../types";
-import { useChainId } from "./useChainId";
+} from "../queries/fetchVaultConfig.js";
+import type { ConfigParameter, QueryParameter } from "../types/index.js";
+import { useChainId } from "./useChainId.js";
 
 export type UseVaultConfigParameters<
   config extends Config = Config,

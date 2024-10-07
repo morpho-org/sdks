@@ -1,7 +1,8 @@
 import { Market, MarketConfig } from "@morpho-org/blue-sdk";
 import { replaceEqualDeep } from "@tanstack/query-core";
-import { describe, expect, test } from "vitest";
-import { mergeDeepEqual } from "../src";
+import { describe, expect } from "vitest";
+import { mergeDeepEqual } from "../../src/index.js";
+import { test } from "../e2e/setup.js";
 
 const prevMarket = new Market({
   config: new MarketConfig({

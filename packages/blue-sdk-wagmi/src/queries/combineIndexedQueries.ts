@@ -1,4 +1,4 @@
-import { DefaultError, UseQueryResult } from "@tanstack/react-query";
+import type { DefaultError, UseQueryResult } from "@tanstack/react-query";
 
 export type DottedPropertyKeys<T> = T extends object | null | undefined
   ? {
@@ -39,9 +39,9 @@ export function combineIndexedQueries<
     TError
   >,
 >(getIndex: (data: TData) => Index) {
-  return function (
+  return (
     results: QueryResult[],
-  ): CombineIndexedQueriesReturnType<TData, TError, Index> {
+  ): CombineIndexedQueriesReturnType<TData, TError, Index> => {
     const combined = {
       data: {} as NestedRecord<Index, TData>,
       error: {} as NestedRecord<Index, NonNullable<TError>>,

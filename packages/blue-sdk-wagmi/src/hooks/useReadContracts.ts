@@ -1,13 +1,13 @@
 import type { Abi, ContractFunctionArgs, ContractFunctionName } from "viem";
-import { ReadContractData, readContractQueryOptions } from "wagmi/query";
-import { mergeDeepEqual } from "../utils";
+import { type ReadContractData, readContractQueryOptions } from "wagmi/query";
+import { mergeDeepEqual } from "../utils/index.js";
 
 import { useQueries } from "@tanstack/react-query";
 import {
-  Config,
-  ResolvedRegister,
-  UseReadContractParameters,
-  UseReadContractReturnType,
+  type Config,
+  type ResolvedRegister,
+  type UseReadContractParameters,
+  type UseReadContractReturnType,
   useChainId,
   useConfig,
 } from "wagmi";
@@ -69,7 +69,11 @@ export function useReadContracts<
       const options = readContractQueryOptions<config, abi, functionName, args>(
         // @ts-ignore
         parameters.config ?? config,
-        { ...(parameters as any), chainId: parameters.chainId ?? chainId },
+        {
+          // biome-ignore lint/suspicious/noExplicitAny: compatible default type
+          ...(parameters as any),
+          chainId: parameters.chainId ?? chainId,
+        },
       );
 
       const enabled = Boolean(

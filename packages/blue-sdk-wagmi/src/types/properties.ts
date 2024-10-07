@@ -1,6 +1,6 @@
-import { DefaultError, QueryKey } from "@tanstack/react-query";
-import { Config } from "wagmi";
-import { UseQueryParameters } from "wagmi/query";
+import type { DefaultError, QueryKey } from "@tanstack/react-query";
+import type { Config } from "wagmi";
+import type { UseQueryParameters } from "wagmi/query";
 
 export type ConfigParameter<config extends Config = Config> = {
   config?: Config | config | undefined;

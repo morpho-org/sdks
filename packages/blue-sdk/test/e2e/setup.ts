@@ -1,4 +1,4 @@
-import { createAnvilTest } from "@morpho-org/prool-viemtest";
+import { createAnvilTest } from "@morpho-org/test";
 import { mainnet } from "viem/chains";
 
 const rpcUrl = process.env.MAINNET_RPC_URL;

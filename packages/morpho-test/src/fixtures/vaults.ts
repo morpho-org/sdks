@@ -4,7 +4,7 @@ import {
   VaultConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { randomAddress } from "@morpho-org/prool-viemtest";
+import { randomAddress } from "@morpho-org/test";
 
 export const vaults = {
   [ChainId.EthMainnet]: {

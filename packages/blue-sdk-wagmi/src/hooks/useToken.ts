@@ -1,15 +1,15 @@
-import { Token } from "@morpho-org/blue-sdk";
-import { ReadContractErrorType } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, useQuery } from "wagmi/query";
+import type { Token } from "@morpho-org/blue-sdk";
+import type { ReadContractErrorType } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
+import { type UseQueryReturnType, useQuery } from "wagmi/query";
 import {
-  FetchTokenParameters,
-  FetchTokenQueryKey,
+  type FetchTokenParameters,
+  type FetchTokenQueryKey,
   fetchTokenQueryOptions,
-} from "../queries/fetchToken";
-import { ConfigParameter, QueryParameter } from "../types";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
+} from "../queries/fetchToken.js";
+import type { ConfigParameter, QueryParameter } from "../types/index.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
 
 export type UseTokenParameters<
   config extends Config = Config,
@@ -44,6 +44,8 @@ export function useToken<
     enabled: parameters.token != null && query.enabled,
     structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
-      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
+      (query.staleTime ?? parameters.blockNumber != null)
+        ? Number.POSITIVE_INFINITY
+        : undefined,
   });
 }

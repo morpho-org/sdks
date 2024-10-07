@@ -1,15 +1,15 @@
-import { Holding } from "@morpho-org/blue-sdk";
-import { ReadContractErrorType } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, useQuery } from "wagmi/query";
+import type { Holding } from "@morpho-org/blue-sdk";
+import type { ReadContractErrorType } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
+import { type UseQueryReturnType, useQuery } from "wagmi/query";
 import {
-  FetchHoldingParameters,
-  FetchHoldingQueryKey,
+  type FetchHoldingParameters,
+  type FetchHoldingQueryKey,
   fetchHoldingQueryOptions,
-} from "../queries/fetchHolding";
-import { ConfigParameter, QueryParameter } from "../types";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
+} from "../queries/fetchHolding.js";
+import type { ConfigParameter, QueryParameter } from "../types/index.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
 
 export type UseHoldingParameters<
   config extends Config = Config,
@@ -50,6 +50,8 @@ export function useHolding<
       parameters.user != null && parameters.token != null && query.enabled,
     structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
-      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
+      (query.staleTime ?? parameters.blockNumber != null)
+        ? Number.POSITIVE_INFINITY
+        : undefined,
   });
 }

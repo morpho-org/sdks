@@ -1,16 +1,16 @@
-import { Holding } from "@morpho-org/blue-sdk";
-import { UseQueryResult, useQueries } from "@tanstack/react-query";
-import { Address, ReadContractErrorType, UnionOmit } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
+import type { Holding } from "@morpho-org/blue-sdk";
+import { type UseQueryResult, useQueries } from "@tanstack/react-query";
+import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 
-import { combineIndexedQueries } from "../queries/combineIndexedQueries";
+import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
-  HoldingParameters,
+  type HoldingParameters,
   fetchHoldingQueryOptions,
-} from "../queries/fetchHolding";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
-import { UseHoldingParameters } from "./useHolding";
+} from "../queries/fetchHolding.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
+import type { UseHoldingParameters } from "./useHolding.js";
 
 export type FetchHoldingsParameters = {
   holdings: Iterable<Partial<HoldingParameters>>;
@@ -41,6 +41,7 @@ export function useHoldings<
   TCombinedResult = ReturnType<typeof combineHoldings>,
 >({
   holdings,
+  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
   combine = combineHoldings as any,
   query = {},
   ...parameters
@@ -62,8 +63,8 @@ export function useHoldings<
       enabled: holding.user != null && holding.token != null && query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
-          ? Infinity
+        (query.staleTime ?? parameters.blockNumber != null)
+          ? Number.POSITIVE_INFINITY
           : undefined,
     })),
     combine,

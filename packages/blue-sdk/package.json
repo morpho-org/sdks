@@ -21,10 +21,10 @@
   },
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/prool-viemtest": "workspace:^",
+    "@morpho-org/test": "workspace:^",
     "@types/node": "^22.1.0",
     "typescript": "^5.6.2",
-    "viem": "^2.21.18",
+    "viem": "^2.21.19",
     "viem-deal": "^1.0.5",
     "vitest": "^2.1.2"
   },

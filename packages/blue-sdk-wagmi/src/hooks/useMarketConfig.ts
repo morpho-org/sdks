@@ -1,15 +1,15 @@
-import { MarketConfig } from "@morpho-org/blue-sdk";
-import { ReadContractErrorType } from "viem";
-import { Config, ResolvedRegister, useConfig } from "wagmi";
-import { UseQueryReturnType, useQuery } from "wagmi/query";
+import type { MarketConfig } from "@morpho-org/blue-sdk";
+import type { ReadContractErrorType } from "viem";
+import { type Config, type ResolvedRegister, useConfig } from "wagmi";
+import { type UseQueryReturnType, useQuery } from "wagmi/query";
 import {
-  FetchMarketConfigParameters,
-  FetchMarketConfigQueryKey,
+  type FetchMarketConfigParameters,
+  type FetchMarketConfigQueryKey,
   fetchMarketConfigQueryOptions,
-} from "../queries/fetchMarketConfig";
-import { ConfigParameter, QueryParameter } from "../types";
-import { mergeDeepEqual } from "../utils";
-import { useChainId } from "./useChainId";
+} from "../queries/fetchMarketConfig.js";
+import type { ConfigParameter, QueryParameter } from "../types/index.js";
+import { mergeDeepEqual } from "../utils/index.js";
+import { useChainId } from "./useChainId.js";
 
 export type UseMarketConfigParameters<
   config extends Config = Config,
