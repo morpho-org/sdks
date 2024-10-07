@@ -30,8 +30,8 @@ __metadata:
   linkType: hard
 
 "@apollo/client@npm:^3.11.1":
-  version: 3.11.5
-  resolution: "@apollo/client@npm:3.11.5"
+  version: 3.11.8
+  resolution: "@apollo/client@npm:3.11.8"
   dependencies:
     "@graphql-typed-document-node/core": "npm:^3.1.1"
     "@wry/caches": "npm:^1.0.0"
@@ -62,7 +62,7 @@ __metadata:
       optional: true
     subscriptions-transport-ws:
       optional: true
-  checksum: 10c0/e3e4449e9aa028ee28db70906f213c959674b518135449437a0a7d249e1a7f74e0c9b33feec5810dc195872579b3ccd3321357e9cd4ac173fd9dac4b8249b2ab
+  checksum: 10c0/a9b697460aa6a5d7e59685132509871675995af14b5fc69213ca22f973600cfe3391b27b7b871579c5b4e18a0d6755ffd1076a2d8dd970a54a43973feaa99ffa
   languageName: node
   linkType: hard
 
@@ -3671,8 +3671,8 @@ __metadata:
   linkType: hard
 
 "@nomicfoundation/hardhat-viem@npm:^2.0.3":
-  version: 2.0.4
-  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.4"
+  version: 2.0.5
+  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.5"
   dependencies:
     abitype: "npm:^0.9.8"
     lodash.memoize: "npm:^4.1.2"
@@ -3680,7 +3680,7 @@ __metadata:
     hardhat: ^2.17.0
     typescript: ~5.0.0
     viem: ^2.7.6
-  checksum: 10c0/fd9b46f72fd89ce84375b0c7e6a29d506502712db46478b676fe2e95f0dcbafed6986232d283dd10d67f064fa1a49b44c12c0497c7e97513acddb3a5a5be482e
+  checksum: 10c0/e69711ab5221042f58079ab8af9d6f066ad79eb2177f72083bbf48685f59450a86a0b1336d7e466d21bf4fef3599017bdec9f103dddf2d01fec216ac023b29f7
   languageName: node
   linkType: hard
 
@@ -4661,12 +4661,12 @@ __metadata:
   linkType: hard
 
 "@types/jest@npm:^29.5.12":
-  version: 29.5.12
-  resolution: "@types/jest@npm:29.5.12"
+  version: 29.5.13
+  resolution: "@types/jest@npm:29.5.13"
   dependencies:
     expect: "npm:^29.0.0"
     pretty-format: "npm:^29.0.0"
-  checksum: 10c0/25fc8e4c611fa6c4421e631432e9f0a6865a8cb07c9815ec9ac90d630271cad773b2ee5fe08066f7b95bebd18bb967f8ce05d018ee9ab0430f9dfd1d84665b6f
+  checksum: 10c0/9c31af0b155387b9860908830de63c6b79011d7c87c8b61b39da124e26e55423dd51b006749aafe4f0ef3a065016619a1f93ef4b055157d43727f448e67824b7
   languageName: node
   linkType: hard
 
@@ -12627,8 +12627,8 @@ __metadata:
   linkType: hard
 
 "viem@npm:^2.18.8":
-  version: 2.21.12
-  resolution: "viem@npm:2.21.12"
+  version: 2.21.16
+  resolution: "viem@npm:2.21.16"
   dependencies:
     "@adraffy/ens-normalize": "npm:1.10.0"
     "@noble/curves": "npm:1.4.0"
@@ -12644,7 +12644,7 @@ __metadata:
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10c0/f7727adae0f621dc6256cf6fdd4e7fc5f3b87392a683d22c87626d4499cb9813be914bb9f63b119226dae46090cb5fca7c4422af0fb0a21d26610c74322c4b4c
+  checksum: 10c0/0f4cc97afea1224c149b455e4c7a7b11ab9c5102b577bba1216b2ebaad76ec0d9d659a537fd74f36448e8c94a2e7e2ed971ef50bca4b1968ac84936d8abcaf17
   languageName: node
   linkType: hard
 
