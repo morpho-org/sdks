@@ -60,6 +60,7 @@ describe("structuralSharing", () => {
     expect(Object.getOwnPropertyDescriptors(merged)).toEqual(
       Object.getOwnPropertyDescriptors(prevMarket),
     );
+    // biome-ignore lint/suspicious/noPrototypeBuiltins: inside test
     expect(merged.constructor.prototype.isPrototypeOf(prevMarket)).toBe(true);
   });
 
@@ -79,6 +80,7 @@ describe("structuralSharing", () => {
     expect(Object.getOwnPropertySymbols(merged)).toEqual(
       Object.getOwnPropertySymbols(prevMarket),
     );
+    // biome-ignore lint/suspicious/noPrototypeBuiltins: inside test
     expect(merged.constructor.prototype.isPrototypeOf(prevMarket)).toBe(true);
   });
 
@@ -98,6 +100,7 @@ describe("structuralSharing", () => {
     expect(Object.getOwnPropertySymbols(merged)).toEqual(
       Object.getOwnPropertySymbols(prevMarket),
     );
+    // biome-ignore lint/suspicious/noPrototypeBuiltins: inside test
     expect(merged.constructor.prototype.isPrototypeOf(prevMarket)).toBe(true);
   });
 });

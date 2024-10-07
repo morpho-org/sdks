@@ -1,4 +1,10 @@
-import { ChainId, VaultConfig, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  type InputVaultConfig,
+  VaultConfig,
+  addresses,
+} from "@morpho-org/blue-sdk";
+import { randomAddress } from "@morpho-org/prool-viemtest";
 
 export const vaults = {
   [ChainId.EthMainnet]: {
@@ -15,3 +21,14 @@ export const vaults = {
     ),
   },
 };
+
+export const randomVault = (config: Partial<InputVaultConfig> = {}) =>
+  new VaultConfig({
+    asset: randomAddress(),
+    decimals: 18,
+    decimalsOffset: 0n,
+    symbol: "TEST",
+    name: "Test vault",
+    address: randomAddress(),
+    ...config,
+  });

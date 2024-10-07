@@ -3147,6 +3147,7 @@ __metadata:
     "@morpho-org/blue-sdk-wagmi": "workspace:^"
     "@morpho-org/morpho-test": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/prool-viemtest": "workspace:^"
     "@tanstack/query-core": "npm:^5.55.4"
     "@tanstack/react-query": "npm:^5.55.4"
     "@types/chai": "npm:^4.3.14"

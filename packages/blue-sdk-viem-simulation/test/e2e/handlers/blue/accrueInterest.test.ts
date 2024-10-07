@@ -1,59 +1,24 @@
-import { expect } from "chai";
-import { MorphoBlue__factory } from "ethers-types";
-import { ethers } from "hardhat";
 import _omit from "lodash/omit";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
-
-import { BlueService, ChainService, getLast } from "@morpho-org/blue-core-sdk";
-import { MetaMorphoService } from "@morpho-org/blue-metamorpho-sdk";
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/lib/tests/mocks/markets";
-import { mine, setUp } from "@morpho-org/morpho-test";
 
-import {
-  Operation,
-  SimulationService,
-  simulateOperations,
-} from "../../../../src";
+import { markets } from "@morpho-org/morpho-test";
+import { getLast } from "@morpho-org/morpho-ts";
+import { describe, expect } from "vitest";
+import { type Operation, simulateOperations } from "../../../../src";
+import { test } from "../../setup";
 
 const { morpho } = addresses[ChainId.EthMainnet];
+const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 describe("Blue_AccrueInterest", () => {
-  let signer: SignerWithAddress;
-
-  let simulationService: SimulationService;
-
-  setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
-  });
-
-  afterEach(async () => {
-    simulationService?.chainService.close();
-    simulationService?.metaMorphoService.blueService.close();
-    simulationService?.metaMorphoService.close();
-    simulationService?.close();
-  });
-
-  test("should accrue interest accurately", async () => {
-    const id = MAINNET_MARKETS.usdc_wstEth.id;
-    simulationService = new SimulationService(
-      new MetaMorphoService(
-        new BlueService(new ChainService(signer), {
-          users: [signer.address],
-          markets: [id],
-        }),
-      ),
-    );
-
+  test("should accrue interest accurately", async ({ client }) => {
     const operations: Operation[] = [
       {
         type: "Blue_AccrueInterest",
-        sender: signer.address,
-        address: morpho,
+        sender: client.account.address,
         args: {
-          id,
+          id: usdc_wstEth.id,
         },
       },
     ];
@@ -64,10 +29,10 @@ describe("Blue_AccrueInterest", () => {
 
     expect(steps.length).to.equal(2);
 
-    await setNextBlockTimestamp(dataBefore.timestamp);
+    await client.setNextBlockTimestamp(dataBefore.timestamp);
 
     await MorphoBlue__factory.connect(morpho, signer).accrueInterest(
-      MAINNET_MARKETS.usdc_wstEth,
+      usdc_wstEth,
     );
     await mine(0);
 

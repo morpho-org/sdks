@@ -1,5 +1,11 @@
-import { ChainId, MarketConfig, addresses } from "@morpho-org/blue-sdk";
-import { parseUnits, zeroAddress } from "viem";
+import {
+  ChainId,
+  MarketConfig,
+  type MarketParams,
+  addresses,
+} from "@morpho-org/blue-sdk";
+import { randomAddress } from "@morpho-org/prool-viemtest";
+import { parseEther, parseUnits, zeroAddress } from "viem";
 
 export const markets = {
   [ChainId.EthMainnet]: {
@@ -135,3 +141,13 @@ export const markets = {
     }),
   },
 };
+
+export const randomMarket = (params: Partial<MarketParams> = {}) =>
+  new MarketConfig({
+    collateralToken: randomAddress(),
+    loanToken: randomAddress(),
+    oracle: randomAddress(),
+    irm: randomAddress(),
+    lltv: parseEther("0.80"),
+    ...params,
+  });

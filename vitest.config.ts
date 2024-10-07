@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["packages/**/test/**/*.test.ts"],
-    exclude: ["packages/*-ethers-*/**"],
+    exclude: ["packages/*-ethers*/**"],
     coverage: {
       reporter: process.env.CI ? ["lcov"] : ["text", "json", "html"],
       exclude: [

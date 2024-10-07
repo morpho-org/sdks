@@ -8,7 +8,7 @@ import {
   Token,
   Vault,
 } from "@morpho-org/blue-sdk";
-import { createRandomAddress } from "@morpho-org/morpho-test";
+import { randomAddress } from "@morpho-org/prool-viemtest";
 
 import { SimulationState } from "../../src";
 
@@ -145,7 +145,7 @@ describe("SimulationState", () => {
 
       const blueFixture = {
         global: {
-          feeRecipient: createRandomAddress(),
+          feeRecipient: randomAddress(),
         },
         users: {},
         markets: {
@@ -184,22 +184,22 @@ describe("SimulationState", () => {
         vaults: {
           [vaultA.address]: new Vault({
             config: vaultA,
-            curator: createRandomAddress(),
+            curator: randomAddress(),
             fee: 0n,
-            feeRecipient: createRandomAddress(),
-            owner: createRandomAddress(),
-            guardian: createRandomAddress(),
-            pendingGuardian: { validAt: 0n, value: createRandomAddress() },
-            pendingOwner: createRandomAddress(),
+            feeRecipient: randomAddress(),
+            owner: randomAddress(),
+            guardian: randomAddress(),
+            pendingGuardian: { validAt: 0n, value: randomAddress() },
+            pendingOwner: randomAddress(),
             pendingTimelock: { validAt: 0n, value: 0n },
-            skimRecipient: createRandomAddress(),
+            skimRecipient: randomAddress(),
             supplyQueue: [idleMarketTokenA.id, marketA1.id],
             withdrawQueue: [idleMarketTokenA.id, marketA1.id],
             timelock: 0n,
             publicAllocatorConfig: {
               fee: 0n,
               accruedFee: 0n,
-              admin: createRandomAddress(),
+              admin: randomAddress(),
             },
             totalSupply: parseUnits("1400", 18),
             totalAssets: parseUnits("10000", 6),

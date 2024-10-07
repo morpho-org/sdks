@@ -5,8 +5,6 @@ import {
   ConstantWrappedToken,
   Holding,
   Market,
-  MarketConfig,
-  MarketParams,
   MathLib,
   NATIVE_ADDRESS,
   Position,
@@ -14,33 +12,12 @@ import {
   Token,
   User,
   Vault,
-  VaultConfig,
   unwrappedTokensMapping,
 } from "@morpho-org/blue-sdk";
-import { createRandomAddress } from "@morpho-org/morpho-test";
+import { randomMarket, randomVault } from "@morpho-org/morpho-test";
+import { randomAddress } from "@morpho-org/prool-viemtest";
 
 import { SimulationState } from "../../src";
-
-export const createRandomMarket = (params: Partial<MarketParams> = {}) =>
-  new MarketConfig({
-    collateralToken: createRandomAddress(),
-    loanToken: createRandomAddress(),
-    oracle: createRandomAddress(),
-    irm: createRandomAddress(),
-    lltv: parseEther("0.80"),
-    ...params,
-  });
-
-export const createRandomVault = (config: Partial<VaultConfig> = {}) =>
-  new VaultConfig({
-    asset: createRandomAddress(),
-    decimals: 18,
-    decimalsOffset: 0n,
-    symbol: "TEST",
-    name: "Test vault",
-    address: createRandomAddress(),
-    ...config,
-  });
 
 export const timestamp = 12345n;
 
@@ -54,7 +31,7 @@ export const tokenB = "0x2222222222222222222222222222222222222222";
 unwrappedTokensMapping[ChainId.EthMainnet][tokenB] = tokenA;
 
 export const marketA1 = new Market({
-  config: createRandomMarket({ loanToken: tokenA }),
+  config: randomMarket({ loanToken: tokenA }),
   totalBorrowAssets: parseUnits("10000", 6),
   totalBorrowShares: parseUnits("10000", 6 + 6),
   totalSupplyAssets: parseUnits("10750", 6),
@@ -65,7 +42,7 @@ export const marketA1 = new Market({
   rateAtTarget: parseEther("0.007") / SECONDS_PER_YEAR,
 });
 export const marketA2 = new Market({
-  config: createRandomMarket({ loanToken: tokenA }),
+  config: randomMarket({ loanToken: tokenA }),
   totalBorrowAssets: parseUnits("10000", 6),
   totalBorrowShares: parseUnits("10000", 6 + 6),
   totalSupplyAssets: parseUnits("20200", 6),
@@ -76,7 +53,7 @@ export const marketA2 = new Market({
   rateAtTarget: parseEther("0.05") / SECONDS_PER_YEAR,
 });
 export const marketA3 = new Market({
-  config: createRandomMarket({ loanToken: tokenA }),
+  config: randomMarket({ loanToken: tokenA }),
   totalBorrowAssets: parseUnits("5000", 6),
   totalBorrowShares: parseUnits("5000", 6 + 6),
   totalSupplyAssets: parseUnits("5300", 6),
@@ -87,7 +64,7 @@ export const marketA3 = new Market({
   rateAtTarget: parseEther("0.04") / SECONDS_PER_YEAR,
 });
 export const marketB1 = new Market({
-  config: createRandomMarket({ loanToken: tokenB }),
+  config: randomMarket({ loanToken: tokenB }),
   totalBorrowAssets: parseEther("10000"),
   totalBorrowShares: parseUnits("10000", 24),
   totalSupplyAssets: parseEther("20000"),
@@ -98,7 +75,7 @@ export const marketB1 = new Market({
   rateAtTarget: parseEther("0.05") / SECONDS_PER_YEAR,
 });
 export const marketB2 = new Market({
-  config: createRandomMarket({ loanToken: tokenB }),
+  config: randomMarket({ loanToken: tokenB }),
   totalBorrowAssets: parseEther("10000"),
   totalBorrowShares: parseUnits("10000", 24),
   totalSupplyAssets: parseEther("20000"),
@@ -109,7 +86,7 @@ export const marketB2 = new Market({
   rateAtTarget: parseEther("0.05") / SECONDS_PER_YEAR,
 });
 export const marketB3 = new Market({
-  config: createRandomMarket({ collateralToken: tokenA, loanToken: tokenB }),
+  config: randomMarket({ collateralToken: tokenA, loanToken: tokenB }),
   totalBorrowAssets: parseEther("1400"),
   totalBorrowShares: parseUnits("1400", 24),
   totalSupplyAssets: parseEther("2000"),
@@ -120,23 +97,23 @@ export const marketB3 = new Market({
   rateAtTarget: parseEther("0.075") / SECONDS_PER_YEAR,
 });
 
-export const vaultA = createRandomVault({
+export const vaultA = randomVault({
   address: "0x000000000000000000000000000000000000000A",
   asset: tokenA,
   decimalsOffset: 12n,
 });
-export const vaultB = createRandomVault({
+export const vaultB = randomVault({
   address: "0x000000000000000000000000000000000000000b",
   asset: tokenB,
 });
-export const vaultC = createRandomVault({
+export const vaultC = randomVault({
   address: "0x000000000000000000000000000000000000000C",
   asset: tokenA,
 });
 
 export const blueFixture = {
   global: {
-    feeRecipient: createRandomAddress(),
+    feeRecipient: randomAddress(),
   },
   users: {
     [userA]: new User({
@@ -1177,22 +1154,22 @@ export const metaMorphoFixture = {
   vaults: {
     [vaultA.address]: new Vault({
       config: vaultA,
-      curator: createRandomAddress(),
+      curator: randomAddress(),
       fee: 0n,
-      feeRecipient: createRandomAddress(),
-      owner: createRandomAddress(),
-      guardian: createRandomAddress(),
-      pendingGuardian: { validAt: 0n, value: createRandomAddress() },
-      pendingOwner: createRandomAddress(),
+      feeRecipient: randomAddress(),
+      owner: randomAddress(),
+      guardian: randomAddress(),
+      pendingGuardian: { validAt: 0n, value: randomAddress() },
+      pendingOwner: randomAddress(),
       pendingTimelock: { validAt: 0n, value: 0n },
-      skimRecipient: createRandomAddress(),
+      skimRecipient: randomAddress(),
       supplyQueue: [marketA1.id, marketA2.id],
       withdrawQueue: [marketA2.id, marketA1.id],
       timelock: 0n,
       publicAllocatorConfig: {
         fee: parseEther("0.005"),
         accruedFee: 0n,
-        admin: createRandomAddress(),
+        admin: randomAddress(),
       },
       totalSupply: parseUnits("1400", 18),
       totalAssets: parseUnits("1400", 6),
@@ -1200,15 +1177,15 @@ export const metaMorphoFixture = {
     }),
     [vaultB.address]: new Vault({
       config: vaultB,
-      curator: createRandomAddress(),
+      curator: randomAddress(),
       fee: 0n,
-      feeRecipient: createRandomAddress(),
-      owner: createRandomAddress(),
-      guardian: createRandomAddress(),
-      pendingGuardian: { validAt: 0n, value: createRandomAddress() },
-      pendingOwner: createRandomAddress(),
+      feeRecipient: randomAddress(),
+      owner: randomAddress(),
+      guardian: randomAddress(),
+      pendingGuardian: { validAt: 0n, value: randomAddress() },
+      pendingOwner: randomAddress(),
       pendingTimelock: { validAt: 0n, value: 0n },
-      skimRecipient: createRandomAddress(),
+      skimRecipient: randomAddress(),
       supplyQueue: [marketB1.id, marketB2.id],
       withdrawQueue: [marketB2.id, marketB1.id],
       timelock: 0n,
@@ -1218,22 +1195,22 @@ export const metaMorphoFixture = {
     }),
     [vaultC.address]: new Vault({
       config: vaultC,
-      curator: createRandomAddress(),
+      curator: randomAddress(),
       fee: 0n,
-      feeRecipient: createRandomAddress(),
-      owner: createRandomAddress(),
-      guardian: createRandomAddress(),
-      pendingGuardian: { validAt: 0n, value: createRandomAddress() },
-      pendingOwner: createRandomAddress(),
+      feeRecipient: randomAddress(),
+      owner: randomAddress(),
+      guardian: randomAddress(),
+      pendingGuardian: { validAt: 0n, value: randomAddress() },
+      pendingOwner: randomAddress(),
       pendingTimelock: { validAt: 0n, value: 0n },
-      skimRecipient: createRandomAddress(),
+      skimRecipient: randomAddress(),
       supplyQueue: [marketA1.id, marketA2.id, marketA3.id],
       withdrawQueue: [marketA3.id, marketA2.id, marketA1.id],
       timelock: 0n,
       publicAllocatorConfig: {
         fee: parseEther("0.001"),
         accruedFee: 0n,
-        admin: createRandomAddress(),
+        admin: randomAddress(),
       },
       totalSupply: parseUnits("1700", 18),
       totalAssets: parseUnits("1700", 6),
