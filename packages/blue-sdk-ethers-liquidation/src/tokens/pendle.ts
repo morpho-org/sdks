@@ -61,13 +61,13 @@ export type PendleSwapCallData = {
   };
 };
 
-interface VersionResponse {
+type VersionResponse = {
   major: number;
   minor: number;
   patch: number;
-}
+};
 
-interface TokenInfoResponse {
+type TokenInfoResponse = {
   chainId: number;
   address: string;
   decimals: number;
@@ -75,14 +75,14 @@ interface TokenInfoResponse {
   symbol: string;
   logoURI: string;
   tags: string[];
-}
+};
 
-interface TagDefinitionResponse {
+type TagDefinitionResponse = {
   name: string;
   description: string;
-}
+};
 
-interface PendleTokenListResponse {
+export type PendleTokenListResponse = {
   name: string;
   timestamp: string;
   version: VersionResponse;
@@ -95,14 +95,14 @@ interface PendleTokenListResponse {
   tags: {
     [key: string]: TagDefinitionResponse;
   };
-}
+};
 
-interface PendleMarketData {
+export type PendleMarketData = {
   total: number;
   limit: number;
   skip: number;
   results: MarketResult[];
-}
+};
 
 interface MarketResult {
   id: string;

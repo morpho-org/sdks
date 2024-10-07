@@ -37,7 +37,6 @@ import {
   pendle,
   swap,
 } from "@morpho-org/blue-sdk-ethers-liquidation";
-import { isPendlePTToken } from "@morpho-org/blue-sdk-ethers-liquidation/src/tokens/pendle";
 import { Time } from "@morpho-org/morpho-ts";
 
 const converter = new BlueSdkConverter({
@@ -171,81 +170,12 @@ export const check = async (
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
-                if (
-                  isPendlePTToken(
-                    market.config.collateralToken,
-                    chainId,
-                    pendleTokens,
-                  )
-                ) {
-                  const pendleMarketResponse =
-                    await pendle.getPendleMarketForPTToken(
-                      chainId,
-                      market.config.collateralToken,
-                    );
-                  if (pendleMarketResponse.total !== 1) {
-                    throw Error("Invalid Pendle market result");
-                  }
-                  const pendleMarketData = pendleMarketResponse.results[0]!;
-                  const maturity = pendleMarketData.pt.expiry!;
-
-                  srcAmount = seizedAssets;
-                  srcToken = pendleMarketData.underlyingAsset.address;
-                  if (new Date(maturity) < new Date()) {
-                    // Pendle market is expired, we can directly redeem the collateral
-                    // If called before YT's expiry, both PT & YT of equal amounts are needed and will be burned. Else, only PT is needed and will be burned.
-                    const redeemCallData = await pendle.getPendleRedeemCallData(
-                      chainId,
-                      {
-                        receiver: executorAddress,
-                        slippage: 0.04,
-                        yt: pendleMarketData.yt.address,
-                        amountIn: seizedAssets.toString(),
-                        tokenOut: pendleMarketData.underlyingAsset.address,
-                        enableAggregator: true,
-                      },
-                    );
-
-                    encoder
-                      .erc20Approve(srcToken, redeemCallData.tx.to, MaxUint256)
-                      .erc20Approve(
-                        market.config.collateralToken,
-                        redeemCallData.tx.to,
-                        MaxUint256,
-                      )
-                      .pushCall(
-                        redeemCallData.tx.to,
-                        redeemCallData.tx.value ? redeemCallData.tx.value : 0n,
-                        redeemCallData.tx.data,
-                      );
-                  } else {
-                    // Pendle market is not expired, we need to swap the collateral token (PT) to the underlying token
-                    const swapCallData = await pendle.getPendleSwapCallData(
-                      chainId,
-                      pendleMarketData.address,
-                      {
-                        receiver: executorAddress,
-                        slippage: 0.04,
-                        tokenIn: market.config.collateralToken,
-                        tokenOut: pendleMarketData.underlyingAsset.address,
-                        amountIn: seizedAssets.toString(),
-                      },
-                    );
-                    encoder
-                      .erc20Approve(srcToken, swapCallData.tx.to, MaxUint256)
-                      .erc20Approve(
-                        market.config.collateralToken,
-                        swapCallData.tx.to,
-                        MaxUint256,
-                      )
-                      .pushCall(
-                        swapCallData.tx.to,
-                        swapCallData.tx.value ? swapCallData.tx.value : 0n,
-                        swapCallData.tx.data,
-                      );
-                    srcAmount = BigInt(swapCallData.data.amountOut);
-                  }
-                }
+                ({ srcAmount, srcToken } = await encoder.handlePendleTokens(
+                  chainId,
+                  market.config.collateralToken,
+                  seizedAssets,
+                  pendleTokens,
+                ));
 
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
