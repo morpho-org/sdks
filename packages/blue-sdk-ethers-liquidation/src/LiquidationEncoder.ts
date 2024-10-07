@@ -1,16 +1,10 @@
-import { ChainId, Market } from "@morpho-org/blue-sdk";
+import { Address, ChainId } from "@morpho-org/blue-sdk";
 import {
   curvePools,
   mainnetAddresses,
   pendleTokens,
 } from "@morpho-org/blue-sdk-ethers-liquidation";
-import {
-  encodeCurveSwap,
-  encodeRemoveLiquidityFromCurvePool,
-  getCurveSwapInputAmountFromOutput,
-  getCurveSwapOutputAmountFromInput,
-  getCurveWithdrawalAmount,
-} from "@morpho-org/blue-sdk-ethers-liquidation/src/swap/curve";
+import { CurveStableSwapNG__factory } from "@morpho-org/blue-sdk-ethers-liquidation/src/contracts/curve";
 import {
   getPendleRedeemCallData,
   getPendleSwapCallData,
@@ -36,19 +30,17 @@ export class LiquidationEncoder extends ExecutorEncoder {
 
   async handlePendleTokens(
     chainId: ChainId,
-    market: Market,
+    collatToken: string,
     seizedAssets: bigint,
-    executorAddress: string,
   ): Promise<{ srcAmount: bigint; srcToken: string }> {
-    if (!pendleTokens[chainId].has(market.config.collateralToken)) {
+    if (!pendleTokens[chainId].has(collatToken)) {
       return {
         srcAmount: seizedAssets,
-        srcToken: market.config.collateralToken,
+        srcToken: collatToken,
       };
     }
 
-    const pendleMarketData =
-      pendleMarkets[chainId][market.config.collateralToken];
+    const pendleMarketData = pendleMarkets[chainId][collatToken];
     const maturity = pendleMarketData?.maturity;
     if (!maturity) {
       throw Error("Pendle market not found");
@@ -60,7 +52,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     if (maturity < new Date()) {
       // Pendle market is expired, we can directly redeem the collateral
       const redeemCallData = await getPendleRedeemCallData(chainId, {
-        receiver: executorAddress,
+        receiver: this.address,
         slippage: 0.04,
         yt: pendleMarketData.yieldTokenAddress,
         amountIn: seizedAssets.toString(),
@@ -68,11 +60,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
         enableAggregator: true,
       });
       this.erc20Approve(srcToken, redeemCallData.tx.to, MaxUint256)
-        .erc20Approve(
-          market.config.collateralToken,
-          redeemCallData.tx.to,
-          MaxUint256,
-        )
+        .erc20Approve(collatToken, redeemCallData.tx.to, MaxUint256)
         .pushCall(
           redeemCallData.tx.to,
           redeemCallData.tx.value ? redeemCallData.tx.value : 0n,
@@ -84,19 +72,15 @@ export class LiquidationEncoder extends ExecutorEncoder {
         chainId,
         pendleMarketData.address,
         {
-          receiver: executorAddress,
+          receiver: this.address,
           slippage: 0.04,
-          tokenIn: market.config.collateralToken,
+          tokenIn: collatToken,
           tokenOut: pendleMarketData.underlyingTokenAddress,
           amountIn: seizedAssets.toString(),
         },
       );
       this.erc20Approve(srcToken, swapCallData.tx.to, MaxUint256)
-        .erc20Approve(
-          market.config.collateralToken,
-          swapCallData.tx.to,
-          MaxUint256,
-        )
+        .erc20Approve(collatToken, swapCallData.tx.to, MaxUint256)
         .pushCall(
           swapCallData.tx.to,
           swapCallData.tx.value ? swapCallData.tx.value : 0n,
@@ -131,16 +115,14 @@ export class LiquidationEncoder extends ExecutorEncoder {
     );
 
     // Get the amount of USD0 that can be withdrawn from the USD0/USD0++ pool with USD0USD0++ tokens
-    const withdrawableUSD0Amount = await getCurveWithdrawalAmount(
-      this.provider,
+    const withdrawableUSD0Amount = await this.getCurveWithdrawalAmount(
       amount,
       USD0_USD0PP_USD0_INDEX,
       curvePools["usd0usd0++"],
     );
 
     // Get the min USD0 amount required to receive the loan expected USDC amount from the USD0/USDC pool
-    const minUSD0Amount = await getCurveSwapInputAmountFromOutput(
-      this.provider,
+    const minUSD0Amount = await this.getCurveSwapInputAmountFromOutput(
       expectedDestAmount,
       USD0_USDC_USD0_INDEX,
       USD0_USDC_USDC_INDEX,
@@ -149,30 +131,27 @@ export class LiquidationEncoder extends ExecutorEncoder {
 
     // Encode the remove liquidity call to the USD0/USD0++ pool
     // go from USD0USD0++ -> USDO
-    await encodeRemoveLiquidityFromCurvePool(
+    await this.encodeRemoveLiquidityFromCurvePool(
       amount,
       curvePools["usd0usd0++"],
       USD0_USD0PP_USD0_INDEX,
       minUSD0Amount,
       receiver,
-      this,
     );
 
     // Encode the swap call to the USD0/USDC pool
     // go from USD0 -> USDC
-    await encodeCurveSwap(
+    await this.encodeCurveSwap(
       withdrawableUSD0Amount,
       curvePools["usd0usdc"],
       USD0_USDC_USD0_INDEX,
       USD0_USDC_USDC_INDEX,
       expectedDestAmount,
       receiver,
-      this,
     );
 
     // Get the amount of USDC that can be swapped from the withdraw USD0 tokens from USD0/USD0++ pool
-    const swappableAmount = await getCurveSwapOutputAmountFromInput(
-      this.provider,
+    const swappableAmount = await this.getCurveSwapOutputAmountFromInput(
       withdrawableUSD0Amount,
       USD0_USD0PP_USDPP_INDEX,
       USD0_USD0PP_USD0_INDEX,
@@ -180,8 +159,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     );
 
     // Get the final amount of USDC that can be swapped from the swappable USD0 amount from USD0/USDC pool
-    const finalUSDCAmount = await getCurveSwapOutputAmountFromInput(
-      this.provider,
+    const finalUSDCAmount = await this.getCurveSwapOutputAmountFromInput(
       swappableAmount,
       USD0_USDC_USD0_INDEX,
       USD0_USDC_USDC_INDEX,
@@ -214,8 +192,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     );
 
     // Get the amount of USD0 that can be swapped from the USD0++ tokens from USD0/USD0++ pool
-    const swappableAmount = await getCurveSwapOutputAmountFromInput(
-      this.provider,
+    const swappableAmount = await this.getCurveSwapOutputAmountFromInput(
       amount,
       USD0_USD0PP_USDPP_INDEX,
       USD0_USD0PP_USD0_INDEX,
@@ -223,8 +200,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     );
 
     // Get the final amount of USDC that can be swapped from the swappable USD0 amount from USD0/USDC pool
-    const finalUSDCAmount = await getCurveSwapOutputAmountFromInput(
-      this.provider,
+    const finalUSDCAmount = await this.getCurveSwapOutputAmountFromInput(
       swappableAmount,
       USD0_USDC_USD0_INDEX,
       USD0_USDC_USDC_INDEX,
@@ -233,8 +209,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
 
     // Get the min USD0 amount required to receive the loan expected USDC amount from the USD0/USDC pool
     // go from USD0 -> USDC
-    const minUSD0Amount = await getCurveSwapInputAmountFromOutput(
-      this.provider,
+    const minUSD0Amount = await this.getCurveSwapInputAmountFromOutput(
       expectedDestAmount,
       USD0_USDC_USD0_INDEX,
       USD0_USDC_USDC_INDEX,
@@ -243,28 +218,162 @@ export class LiquidationEncoder extends ExecutorEncoder {
 
     // Encode the swap call to the USD0/USD0++ pool
     // go from USD0++ -> USD0
-    await encodeCurveSwap(
+    await this.encodeCurveSwap(
       amount,
       curvePools["usd0usd0++"],
       USD0_USD0PP_USDPP_INDEX,
       USD0_USD0PP_USD0_INDEX,
       minUSD0Amount,
       receiver,
-      this,
     );
 
     // Encode the swap call to the USD0/USDC pool
     // go from USD0 -> USDC
-    await encodeCurveSwap(
+    await this.encodeCurveSwap(
       swappableAmount,
       curvePools["usd0usdc"],
       USD0_USDC_USD0_INDEX,
       USD0_USDC_USDC_INDEX,
       expectedDestAmount,
       receiver,
-      this,
     );
 
     return finalUSDCAmount;
+  }
+
+  async getCurveWithdrawalAmount(
+    amount: bigint,
+    tokenIndex: number,
+    curvePool: Address,
+  ): Promise<bigint> {
+    const contract = CurveStableSwapNG__factory.connect(
+      curvePool,
+      this.provider,
+    );
+
+    /**
+     * @notice Calculate the amount received when withdrawing a single coin
+     * @param _burn_amount Amount of LP tokens to burn in the withdrawal
+     * @param i Index value of the coin to withdraw
+     * @return Amount of coin received
+     */
+    const result = await contract.calc_withdraw_one_coin!(amount, tokenIndex);
+    return result;
+  }
+
+  async getCurveSwapOutputAmountFromInput(
+    amount: bigint,
+    inputTokenIndex: number,
+    outputTokenIndex: number,
+    curvePool: Address,
+  ): Promise<bigint> {
+    const contract = CurveStableSwapNG__factory.connect(
+      curvePool,
+      this.provider,
+    );
+
+    /**
+     * @notice Calculate the current output dy given input dx
+     * @dev Index values can be found via the `coins` public getter method
+     * @param i Index value for the coin to send
+     * @param j Index value of the coin to receive
+     * @param dx Amount of `i` being exchanged
+     * @return Amount of `j` predicted
+     */
+    const result = await contract.get_dy!(
+      inputTokenIndex,
+      outputTokenIndex,
+      amount,
+    );
+    return result;
+  }
+
+  async getCurveSwapInputAmountFromOutput(
+    destAmount: bigint,
+    inputTokenIndex: number,
+    outputTokenIndex: number,
+    curvePool: Address,
+  ): Promise<bigint> {
+    const contract = CurveStableSwapNG__factory.connect(
+      curvePool,
+      this.provider,
+    );
+
+    /**
+     * @notice Calculate the current input dx given output dy
+     * @dev Index values can be found via the `coins` public getter method
+     * @param i Index value for the coin to send
+     * @param j Index value of the coin to receive
+     * @param dy Amount of `j` being received after exchange
+     * @return Amount of `i` predicted
+     */
+    const result = await contract.get_dx!(
+      inputTokenIndex,
+      outputTokenIndex,
+      destAmount,
+    );
+    return result;
+  }
+
+  async encodeRemoveLiquidityFromCurvePool(
+    amount: bigint,
+    curvePool: Address,
+    withdrawnTokenIndex: number,
+    minReceived: bigint,
+    receiver: string,
+  ) {
+    const contract = CurveStableSwapNG__factory.connect(
+      curvePool,
+      this.provider,
+    );
+
+    /**
+     * @notice Withdraw a single coin from the pool
+     * @param _burn_amount Amount of LP tokens to burn in the withdrawal
+     * @param i Index value of the coin to withdraw
+     * @param _min_received Minimum amount of coin to receive
+     * @param _receiver Address that receives the withdrawn coins
+     * @return Amount of coin received
+     */
+    this.pushCall(
+      curvePool,
+      0n,
+      contract.interface.encodeFunctionData(
+        "remove_liquidity_one_coin(uint256,int128,uint256,address)",
+        [amount, withdrawnTokenIndex, minReceived, receiver],
+      ),
+    );
+  }
+
+  async encodeCurveSwap(
+    amount: bigint,
+    curvePool: Address,
+    inputTokenIndex: number,
+    outputTokenIndex: number,
+    minDestAmount: bigint,
+    receiver: string,
+  ) {
+    const contract = CurveStableSwapNG__factory.connect(
+      curvePool,
+      this.provider,
+    );
+    /**
+     * @notice Perform an exchange between two coins
+     * @dev Index values can be found via the `coins` public getter method
+     * @param i Index value for the coin to send
+     * @param j Index value of the coin to receive
+     * @param _dx Amount of `i` being exchanged
+     * @param _min_dy Minimum amount of `j` to receive
+     * @param _receiver Address that receives `j`
+     * @return Actual amount of `j` received
+     */
+    this.pushCall(
+      curvePool,
+      0n,
+      contract.interface.encodeFunctionData(
+        "exchange(int128,int128,uint256,uint256,address)",
+        [inputTokenIndex, outputTokenIndex, amount, minDestAmount, receiver],
+      ),
+    );
   }
 }
