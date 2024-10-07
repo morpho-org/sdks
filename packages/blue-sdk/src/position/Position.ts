@@ -125,11 +125,12 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
   }
 
   /**
-   * The variation of the price of the collateral quoted in loan assets that would allow this position to be liquidated,
-   * relative to the current collateral price (scaled by WAD).
+   * The price variation required for the position to reach its liquidation threshold (scaled by WAD).
+   * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
+   * Returns null if the position is not a borrow.
    */
-  get priceVariationToLiquidation() {
-    return this.market.getPriceVariationToLiquidation(this);
+  get priceVariationToLiquidationPrice() {
+    return this.market.getPriceVariationToLiquidationPrice(this);
   }
 
   /**
