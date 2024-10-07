@@ -1,7 +1,6 @@
 import { entries } from "@morpho-org/morpho-ts";
 
-import { ChainId } from "./chain.js";
-import { UnsupportedChainIdError } from "./errors.js";
+import { ChainId, ChainUtils } from "./chain.js";
 import type { Address } from "./types.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
@@ -22,6 +21,7 @@ export const addresses = {
     compoundV2Bundler: "0x26bf52a84360ad3d01d7cdc28fc2ddc04d8c8647",
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
+    metaMorphoFactory: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
 
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     morphoToken: "0x9994E35Db50125E0DF82e4c2dde62496CE330999",
@@ -67,6 +67,7 @@ export const addresses = {
     compoundV3Bundler: "0x1f8076e2EB6f10b12e6886f30D4909A91969F7dA",
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
+    metaMorphoFactory: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
 
     wNative: "0x4200000000000000000000000000000000000006",
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -84,8 +85,9 @@ export interface ChainAddresses {
   aaveV3Bundler?: Address;
   compoundV3Bundler?: Address;
   compoundV2Bundler?: Address;
-  adaptiveCurveIrm?: Address;
-  publicAllocator?: Address;
+  adaptiveCurveIrm: Address;
+  publicAllocator: Address;
+  metaMorphoFactory: Address;
 
   wNative: Address;
   morphoToken?: Address;
@@ -103,11 +105,7 @@ export default addresses as {
 };
 
 export const getChainAddresses = (chainId: number): ChainAddresses => {
-  const chainAddresses = addresses[chainId as ChainId];
-
-  if (!chainAddresses) throw new UnsupportedChainIdError(chainId);
-
-  return chainAddresses;
+  return addresses[ChainUtils.parseSupportedChainId(chainId)];
 };
 
 /**

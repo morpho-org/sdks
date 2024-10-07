@@ -481,14 +481,16 @@ export class Market implements InputMarket {
   }
 
   /**
-   * Returns the price deviation required for the given borrow position to be unhealthy (scaled by WAD).
+   * Returns the price variation required for the given position to reach its liquidation threshold (scaled by WAD).
+   * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
+   * Returns null if the position is not a borrow.
    * @param position The borrow position to consider.
    */
-  public getPriceVariationToLiquidation(position: {
+  public getPriceVariationToLiquidationPrice(position: {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getPriceVariationToLiquidation(
+    return MarketUtils.getPriceVariationToLiquidationPrice(
       position,
       this,
       this.config,

@@ -377,7 +377,7 @@ export namespace MarketUtils {
   /**
    * Returns the price of the collateral quoted in the loan token (e.g. ETH/DAI)
    * that set the user's position to be liquidatable.
-   * Returns null if the user is not a borrower
+   * Returns null if the position is not a borrow.
    */
   export function getLiquidationPrice(
     {
@@ -403,10 +403,11 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the price deviation required for the given borrow position to be unhealthy (scaled by WAD).
-   * @param position The borrow position to consider.
+   * Returns the price variation required for the given position to reach its liquidation threshold (scaled by WAD).
+   * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
+   * Returns null if the position is not a borrow.
    */
-  export function getPriceVariationToLiquidation(
+  export function getPriceVariationToLiquidationPrice(
     position: { collateral: BigIntish; borrowShares: BigIntish },
     market: {
       totalBorrowAssets: BigIntish;
@@ -425,7 +426,7 @@ export namespace MarketUtils {
     );
     if (liquidationPrice == null) return null;
 
-    return MathLib.WAD - MathLib.wDivUp(liquidationPrice, market.price);
+    return MathLib.wDivUp(liquidationPrice, market.price) - MathLib.WAD;
   }
 
   export function getHealthFactor(
