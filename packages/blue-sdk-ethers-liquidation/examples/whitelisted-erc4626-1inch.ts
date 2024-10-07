@@ -35,9 +35,9 @@ import {
   apiSdk,
   mainnetAddresses,
   pendle,
-  pendleTokens,
   swap,
 } from "@morpho-org/blue-sdk-ethers-liquidation";
+import { isPendlePTToken } from "@morpho-org/blue-sdk-ethers-liquidation/src/tokens/pendle";
 import { Time } from "@morpho-org/morpho-ts";
 
 const converter = new BlueSdkConverter({
@@ -80,6 +80,8 @@ export const check = async (
   if (wethPriceUsd == null) return [];
 
   const ethPriceUsd = safeParseNumber(wethPriceUsd, 18);
+
+  const pendleTokens = await pendle.getPendleTokens(chainId);
 
   return Promise.all(
     (positions ?? []).map(async (position) => {
@@ -169,19 +171,27 @@ export const check = async (
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
-                if (pendleTokens[chainId].has(market.config.collateralToken)) {
-                  const pendleMarketData =
-                    pendle.pendleMarkets[chainId][
-                      market.config.collateralToken
-                    ];
-                  const maturity = pendleMarketData?.maturity;
-                  if (!maturity) {
-                    throw Error("Pendle market not found");
+                if (
+                  isPendlePTToken(
+                    market.config.collateralToken,
+                    chainId,
+                    pendleTokens,
+                  )
+                ) {
+                  const pendleMarketResponse =
+                    await pendle.getPendleMarketForPTToken(
+                      chainId,
+                      market.config.collateralToken,
+                    );
+                  if (pendleMarketResponse.total !== 1) {
+                    throw Error("Invalid Pendle market result");
                   }
+                  const pendleMarketData = pendleMarketResponse.results[0]!;
+                  const maturity = pendleMarketData.pt.expiry!;
 
                   srcAmount = seizedAssets;
-                  srcToken = pendleMarketData.underlyingTokenAddress;
-                  if (maturity < new Date()) {
+                  srcToken = pendleMarketData.underlyingAsset.address;
+                  if (new Date(maturity) < new Date()) {
                     // Pendle market is expired, we can directly redeem the collateral
                     // If called before YT's expiry, both PT & YT of equal amounts are needed and will be burned. Else, only PT is needed and will be burned.
                     const redeemCallData = await pendle.getPendleRedeemCallData(
@@ -189,9 +199,9 @@ export const check = async (
                       {
                         receiver: executorAddress,
                         slippage: 0.04,
-                        yt: pendleMarketData.yieldTokenAddress,
+                        yt: pendleMarketData.yt.address,
                         amountIn: seizedAssets.toString(),
-                        tokenOut: pendleMarketData.underlyingTokenAddress,
+                        tokenOut: pendleMarketData.underlyingAsset.address,
                         enableAggregator: true,
                       },
                     );
@@ -217,7 +227,7 @@ export const check = async (
                         receiver: executorAddress,
                         slippage: 0.04,
                         tokenIn: market.config.collateralToken,
-                        tokenOut: pendleMarketData.underlyingTokenAddress,
+                        tokenOut: pendleMarketData.underlyingAsset.address,
                         amountIn: seizedAssets.toString(),
                       },
                     );

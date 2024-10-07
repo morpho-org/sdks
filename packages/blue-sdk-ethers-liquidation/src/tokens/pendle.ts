@@ -11,11 +11,19 @@ export const getPendleSwapApiPath = (chainId: BigNumberish) =>
   `v1/sdk/${chainId}/markets`;
 export const getPendleRedeemApiPath = (chainId: BigNumberish) =>
   `v1/sdk/${chainId}/redeem`;
+export const getPendleTokensApiPath = (chainId: BigNumberish) =>
+  `v1/${chainId}/assets/pendle-token/list`;
+export const getPendleMarketsApiPath = (chainId: BigNumberish) =>
+  `v1/${chainId}/markets`;
 
 export const getPendleSwapApiUrl = (chainId: BigNumberish) =>
   new URL(getPendleSwapApiPath(chainId), PENDLE_API_URL).toString();
 export const getPendleRedeemApiUrl = (chainId: BigNumberish) =>
   new URL(getPendleRedeemApiPath(chainId), PENDLE_API_URL).toString();
+export const getPendleTokensApiUrl = (chainId: BigNumberish) =>
+  new URL(getPendleTokensApiPath(chainId), PENDLE_API_URL).toString();
+export const getPendleMarketsApiUrl = (chainId: BigNumberish) =>
+  new URL(getPendleMarketsApiPath(chainId), PENDLE_API_URL).toString();
 
 export interface PendleMarket {
   maturity: Date;
@@ -53,51 +61,209 @@ export type PendleSwapCallData = {
   };
 };
 
-export const pendleMarkets: Record<ChainId, Record<string, PendleMarket>> = {
-  [ChainId.EthMainnet]: {
-    "0xa0021EF8970104c2d008F38D92f115ad56a9B8e1": {
-      maturity: new Date("2024-07-25T00:00:00.000Z"),
-      address: "0x19588F29f9402Bb508007FeADd415c875Ee3f19F",
-      underlyingTokenAddress: "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
-      yieldTokenAddress: "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
-    },
-    "0xf7906F274c174A52d444175729E3fa98f9bde285": {
-      maturity: new Date("2024-12-26T00:00:00.000Z"),
-      address: "0xD8F12bCDE578c653014F27379a6114F67F0e445f",
-      underlyingTokenAddress: "0xbf5495Efe5DB9ce00f80364C8B423567e58d2110",
-      yieldTokenAddress: "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
-    },
-    "0xAE5099C39f023C91d3dd55244CAFB36225B0850E": {
-      maturity: new Date("2024-10-24T00:00:00.000Z"),
-      address: "0xbBf399db59A845066aAFce9AE55e68c505FA97B7",
-      underlyingTokenAddress: "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497",
-      yieldTokenAddress: "0x279e76FA6310976dc651c5F48EC7e768e9e2CCb4",
-    },
-    "0x6ee2b5E19ECBa773a352E5B21415Dc419A700d1d": {
-      maturity: new Date("2024-12-26T00:00:00.000Z"),
-      address: "0x792b9eDe7a18C26b814f87Eb5E0c8D26AD189780",
-      underlyingTokenAddress: "0x917ceE801a67f933F2e6b33fC0cD1ED2d5909D88",
-      yieldTokenAddress: "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
-    },
-    "0xc69Ad9baB1dEE23F4605a82b3354F8E40d1E5966": {
-      maturity: new Date("2024-06-27T00:00:00.000Z"),
-      address: "0xF32e58F92e60f4b0A37A69b95d642A471365EAe8",
-      underlyingTokenAddress: "0x917ceE801a67f933F2e6b33fC0cD1ED2d5909D88",
-      yieldTokenAddress: "0x4c9EDD5852cd905f086C759E8383e09bff1E68B3",
-    },
-  },
-  [ChainId.BaseMainnet]: {},
-};
+interface VersionResponse {
+  major: number;
+  minor: number;
+  patch: number;
+}
+
+interface TokenInfoResponse {
+  chainId: number;
+  address: string;
+  decimals: number;
+  name: string;
+  symbol: string;
+  logoURI: string;
+  tags: string[];
+}
+
+interface TagDefinitionResponse {
+  name: string;
+  description: string;
+}
+
+interface PendleTokenListResponse {
+  name: string;
+  timestamp: string;
+  version: VersionResponse;
+  tokens: TokenInfoResponse[];
+  tokenMap: {
+    [key: string]: TokenInfoResponse;
+  };
+  keywords: string[];
+  logoURI: string;
+  tags: {
+    [key: string]: TagDefinitionResponse;
+  };
+}
+
+interface PendleMarketData {
+  total: number;
+  limit: number;
+  skip: number;
+  results: MarketResult[];
+}
+
+interface MarketResult {
+  id: string;
+  chainId: number;
+  address: string;
+  symbol: string;
+  expiry: string;
+  pt: Token;
+  yt: Token;
+  sy: Token;
+  lp: Token;
+  accountingAsset: Asset;
+  underlyingAsset: Asset;
+  basePricingAsset: Asset;
+  protocol: string;
+  underlyingPool: string;
+  proSymbol: string;
+  proIcon: string;
+  assetRepresentation: string;
+  isWhitelistedPro: boolean;
+  isWhitelistedSimple: boolean;
+  votable: boolean;
+  isActive: boolean;
+  isWhitelistedLimitOrder: boolean;
+  accentColor: string;
+  totalPt: number;
+  totalSy: number;
+  totalLp: number;
+  liquidity: {
+    usd: number;
+    acc: number;
+  };
+  tradingVolume: {
+    usd: number;
+  };
+  underlyingInterestApy: number;
+  underlyingRewardApy: number;
+  underlyingApy: number;
+  impliedApy: number;
+  ytFloatingApy: number;
+  ptDiscount: number;
+  swapFeeApy: number;
+  pendleApy: number;
+  arbApy: number;
+  aggregatedApy: number;
+  maxBoostedApy: number;
+  lpRewardApy: number;
+  voterApy: number;
+  ytRoi: number;
+  ptRoi: number;
+  dataUpdatedAt: string;
+  categoryIds: string[];
+  timestamp: string;
+  scalarRoot: number;
+  initialAnchor: number;
+  extendedInfo: ExtendedInfo;
+  isFeatured: boolean;
+  isPopular: boolean;
+  tvlThresholdTimestamp: string;
+  isNew: boolean;
+  name: string;
+  simpleName: string;
+  simpleSymbol: string;
+  simpleIcon: string;
+  proName: string;
+  farmName: string;
+  farmSymbol: string;
+  farmSimpleName: string;
+  farmSimpleSymbol: string;
+  farmSimpleIcon: string;
+  farmProName: string;
+  farmProSymbol: string;
+  farmProIcon: string;
+}
+
+interface Token {
+  id: string;
+  chainId: number;
+  address: string;
+  symbol: string;
+  decimals: number;
+  expiry: string | null;
+  accentColor: string;
+  price: {
+    usd: number;
+    acc?: number;
+  };
+  priceUpdatedAt: string;
+  name: string;
+  baseType: string;
+  types: string[];
+  protocol?: string;
+  underlyingPool?: string;
+  proSymbol: string;
+  proIcon: string;
+  zappable: boolean;
+  simpleName: string;
+  simpleSymbol: string;
+  simpleIcon: string;
+  proName: string;
+}
+
+interface Asset {
+  id: string;
+  chainId: number;
+  address: string;
+  symbol: string;
+  decimals: number;
+  expiry: string | null;
+  accentColor: string | null;
+  price: {
+    usd: number;
+  };
+  priceUpdatedAt: string;
+  name: string;
+  baseType: string;
+  types: string[];
+  protocol: string | null;
+  proSymbol: string;
+  proIcon: string;
+  zappable: boolean;
+  simpleName: string;
+  simpleSymbol: string;
+  simpleIcon: string;
+  proName: string;
+}
+
+interface ExtendedInfo {
+  floatingPt: number;
+  floatingSy: number;
+  pyUnit: string;
+  ptEqualsPyUnit: boolean;
+  underlyingAssetWorthMore?: string;
+  nativeWithdrawalURL?: string;
+  movement10Percent: {
+    ptMovementUpUsd: number;
+    ptMovementDownUsd: number;
+    ytMovementUpUsd: number;
+    ytMovementDownUsd: number;
+  };
+  feeRate: number;
+  yieldRange: {
+    min: number;
+    max: number;
+  };
+  sySupplyCap?: number;
+  syCurrentSupply?: number;
+}
 
 async function getPendleApiData<T extends Record<string, any>, U>(
   chainId: number,
   endpoint: string,
   params: T,
+  api: "sdk" | "non-sdk" = "sdk",
 ): Promise<U> {
   const queryParams = new URLSearchParams(
     Object.entries(params).map(([key, value]) => [key, String(value)]),
   ).toString();
-  const url = `${PENDLE_API_URL}v1/sdk/${chainId}${endpoint}?${queryParams}`;
+
+  const apiPath = api === "sdk" ? `v1/sdk/${chainId}` : `v1/${chainId}`;
+  const url = `${PENDLE_API_URL}${apiPath}${endpoint}?${queryParams}`;
 
   const res = await fetch(url, {
     method: "GET",
@@ -130,5 +296,40 @@ export async function getPendleRedeemCallData(
     chainId,
     "/redeem",
     params,
+  );
+}
+
+export async function getPendleTokens(chainId: number) {
+  return getPendleApiData<{}, PendleTokenListResponse>(
+    chainId,
+    "/assets/pendle-token/list",
+    {},
+    "non-sdk",
+  );
+}
+
+export async function getPendleMarketForPTToken(
+  chainId: number,
+  token: string,
+) {
+  return getPendleApiData<{}, PendleMarketData>(
+    chainId,
+    `/markets?pt=${token}`,
+    {},
+    "non-sdk",
+  );
+}
+
+export function isPendlePTToken(
+  token: string,
+  chainId: ChainId,
+  pendleTokens: PendleTokenListResponse,
+) {
+  return (
+    pendleTokens.tokens.find(
+      (tokenInfo) =>
+        tokenInfo.address === token &&
+        Number(chainId) === Number(tokenInfo.chainId),
+    ) != undefined
   );
 }
