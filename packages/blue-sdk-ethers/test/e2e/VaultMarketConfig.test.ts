@@ -2,7 +2,7 @@ import { expect } from "chai";
 import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
 import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 import {
   ChainId,

@@ -96,7 +96,7 @@ describe("augment/Holding", () => {
 
     const value = await Holding.fetch(client.account.address, wNative, client);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
   test("should fetch user WETH data without deployless", async ({ client }) => {
@@ -183,7 +183,7 @@ describe("augment/Holding", () => {
       deployless: false,
     });
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
   test("should fetch native user holding", async ({ client }) => {
@@ -215,7 +215,7 @@ describe("augment/Holding", () => {
 
     const value = await Holding.fetch(client.account.address, token, client);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
   test("should fetch backed token user holding with deployless", async ({
@@ -303,7 +303,7 @@ describe("augment/Holding", () => {
 
     const value = await Holding.fetch(client.account.address, wbC3M, client);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
   test("should fetch backed token user holding without deployless", async ({
@@ -393,6 +393,6 @@ describe("augment/Holding", () => {
       deployless: false,
     });
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

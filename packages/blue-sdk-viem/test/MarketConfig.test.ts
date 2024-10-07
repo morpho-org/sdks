@@ -14,7 +14,7 @@ describe("augment/MarketConfig", () => {
   test("should fetch config from cache", async ({ client }) => {
     const market = await MarketConfig.fetch(usdc_wstEth.id, client);
 
-    expect(market).to.eql(usdc_wstEth);
+    expect(market).toStrictEqual(usdc_wstEth);
   });
 
   test("should fetch config from chain", async ({ client }) => {
@@ -33,6 +33,6 @@ describe("augment/MarketConfig", () => {
       client,
     );
 
-    expect(market).to.eql(marketParams);
+    expect(market).toEqual(marketParams); // Not strict equal because not the same class.
   });
 });

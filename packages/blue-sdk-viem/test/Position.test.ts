@@ -8,6 +8,7 @@ import { Position } from "../src/augment/Position.js";
 import { blueAbi } from "../src/index.js";
 import { test } from "./setup.js";
 
+const { morpho } = addresses[ChainId.EthMainnet];
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 const supplyAssets = parseUnits("10", 6);
@@ -28,11 +29,11 @@ describe("augment/Position", () => {
       address: usdc_wstEth.loanToken,
       abi: erc20Abi,
       functionName: "approve",
-      args: [addresses[ChainId.EthMainnet].morpho, maxUint256],
+      args: [morpho, maxUint256],
     });
     await client.writeContract({
       account: supplier,
-      address: addresses[ChainId.EthMainnet].morpho,
+      address: morpho,
       abi: blueAbi,
       functionName: "supply",
       args: [usdc_wstEth, supplyAssets, 0n, supplier.address, "0x"],
@@ -47,16 +48,16 @@ describe("augment/Position", () => {
       address: usdc_wstEth.collateralToken,
       abi: erc20Abi,
       functionName: "approve",
-      args: [addresses[ChainId.EthMainnet].morpho, maxUint256],
+      args: [morpho, maxUint256],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].morpho,
+      address: morpho,
       abi: blueAbi,
       functionName: "supplyCollateral",
       args: [usdc_wstEth, collateral, client.account.address, "0x"],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].morpho,
+      address: morpho,
       abi: blueAbi,
       functionName: "borrow",
       args: [
@@ -82,6 +83,6 @@ describe("augment/Position", () => {
       client,
     );
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

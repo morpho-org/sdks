@@ -13,13 +13,24 @@ import { type DealActions, dealActions } from "viem-deal";
 import { mnemonicToAccount } from "viem/accounts";
 import { test } from "vitest";
 
-export const testAccount = (accountIndex?: number): HDAccount =>
+export const testAccount = (addressIndex?: number): HDAccount =>
   mnemonicToAccount(
     "test test test test test test test test test test test junk",
-    { accountIndex },
+    { addressIndex },
   );
 
-let port = 8545;
+declare global {
+  namespace NodeJS {
+    interface Process {
+      __tinypool_state__: {
+        isChildProcess: boolean;
+        isTinypoolWorker: boolean;
+        workerData: null;
+        workerId: number;
+      };
+    }
+  }
+}
 
 export const createAnvilTest = <
   chain extends Chain | undefined = Chain | undefined,
@@ -51,18 +62,24 @@ export const createAnvilTest = <
   parameters.blockBaseFeePerGas ??= 0n;
 
   return test.extend({
-    // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
-    client: async ({}, use) => {
+    client: async ({ task }, use) => {
+      // Build an available port for anvil to run.
+      // For record: process.env.VITEST_POOL_ID & process.env.VITEST_WORKER_ID exist too.
+      const taskPort =
+        10000 +
+        process.__tinypool_state__.workerId * 400 +
+        (task.suite?.tasks.indexOf(task) ?? 0);
+
       const { anvil } = await import("prool/instances");
 
       const instance = await anvil(parameters).create({
-        port: port++,
+        port: taskPort,
       });
 
       // instance.on("message", console.debug);
       instance.on("stderr", console.warn);
 
-      // const stop = await instance.start();
+      const stop = await instance.start();
 
       const { createTestClient, http, publicActions, walletActions } =
         await import("viem");
@@ -89,7 +106,7 @@ export const createAnvilTest = <
           })),
       );
 
-      // await stop();
+      await stop();
     },
   });
 };

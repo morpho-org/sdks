@@ -12,7 +12,7 @@ const { usdc_wstEth, idle_usdc, eth_wstEth } = markets[ChainId.EthMainnet];
 
 describe("augment/Market", () => {
   test("should fetch market data", async ({ client }) => {
-    const expectedData = {
+    const expectedData = new Market({
       config: usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
       totalSupplyShares: 31693536738210306937n,
@@ -22,15 +22,15 @@ describe("augment/Market", () => {
       fee: 0n,
       rateAtTarget: 3386101241n,
       price: 4026279734253409453160432114n,
-    };
+    });
 
     const value = await Market.fetch(usdc_wstEth.id, client);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
   test("should fetch price and rate if idle market", async ({ client }) => {
-    const expectedData = {
+    const expectedData = new Market({
       config: idle_usdc,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -40,17 +40,16 @@ describe("augment/Market", () => {
       fee: 0n,
       price: 0n,
       rateAtTarget: undefined,
-    };
+    });
 
     const value = await Market.fetch(idle_usdc.id, client);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
-  test.only("should not fetch rate at target for unknown irm", async ({
+  test("should not fetch rate at target for unknown irm", async ({
     client,
   }) => {
-    console.log(await client.getGasPrice());
     const owner = await client.readContract({
       address: morpho,
       abi: blueAbi,
@@ -62,7 +61,7 @@ describe("augment/Market", () => {
       irm: randomAddress(),
     });
 
-    console.log(await client.getGasPrice());
+    await client.setBalance({ address: owner, value: BigInt(1e18) });
 
     await client.setCode({
       address: config.irm,
@@ -78,7 +77,9 @@ describe("augment/Market", () => {
       args: [config.irm],
     });
 
-    const timestamp = (await client.timestamp()) + 1n;
+    const timestamp = (await client.timestamp()) + 3n;
+
+    await client.setNextBlockTimestamp({ timestamp });
 
     await client.writeContract({
       address: morpho,
@@ -87,7 +88,7 @@ describe("augment/Market", () => {
       args: [{ ...config }],
     });
 
-    const expectedData = {
+    const expectedData = new Market({
       config,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
@@ -97,10 +98,10 @@ describe("augment/Market", () => {
       fee: 0n,
       price: 1160095030000000000000000000000000000n,
       rateAtTarget: undefined,
-    };
+    });
 
     const value = await Market.fetch(config.id, client);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

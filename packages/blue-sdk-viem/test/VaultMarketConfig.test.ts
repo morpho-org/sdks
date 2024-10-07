@@ -22,6 +22,8 @@ describe("augment/VaultMarketConfig", () => {
       functionName: "owner",
     });
 
+    await client.setBalance({ address: owner, value: BigInt(1e18) });
+
     await client.writeContract({
       account: owner,
       address: steakUsdc.address,
@@ -78,6 +80,6 @@ describe("augment/VaultMarketConfig", () => {
       client,
     );
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });
