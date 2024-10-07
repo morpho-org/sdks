@@ -1,4 +1,4 @@
-import { AbstractSigner, MaxUint256, Provider } from "ethers";
+import { MaxUint256 } from "ethers";
 import { LiquidationEncoder } from "../LiquidationEncoder";
 import { curvePools } from "../addresses";
 import { mainnetAddresses } from "../addresses";
@@ -21,8 +21,7 @@ export const USD0_USD0PP_USDPP_INDEX = 1;
  *  Route is USD0USD0++ -> USD0 -> USDC
  * @returns the total swapped USDC amount
  */
-export async function swapUsd0Usd0PPToUSDC(
-  provider: AbstractSigner<Provider>,
+export async function curveSwapUsd0Usd0PPForUsdc(
   amount: bigint,
   expectedDestAmount: bigint,
   encoder: LiquidationEncoder,
@@ -42,7 +41,7 @@ export async function swapUsd0Usd0PPToUSDC(
 
   // Get the amount of USD0 that can be withdrawn from the USD0/USD0++ pool with USD0USD0++ tokens
   const withdrawableUSD0Amount = await getCurveWithdrawalAmount(
-    provider,
+    encoder.provider,
     amount,
     USD0_USD0PP_USD0_INDEX,
     curvePools["usd0usd0++"],
@@ -50,7 +49,7 @@ export async function swapUsd0Usd0PPToUSDC(
 
   // Get the min USD0 amount required to receive the loan expected USDC amount from the USD0/USDC pool
   const minUSD0Amount = await getCurveSwapInputAmountFromOutput(
-    provider,
+    encoder.provider,
     expectedDestAmount,
     USD0_USDC_USD0_INDEX,
     USD0_USDC_USDC_INDEX,
@@ -82,7 +81,7 @@ export async function swapUsd0Usd0PPToUSDC(
 
   // Get the amount of USDC that can be swapped from the withdraw USD0 tokens from USD0/USD0++ pool
   const swappableAmount = await getCurveSwapOutputAmountFromInput(
-    provider,
+    encoder.provider,
     withdrawableUSD0Amount,
     USD0_USD0PP_USDPP_INDEX,
     USD0_USD0PP_USD0_INDEX,
@@ -91,7 +90,7 @@ export async function swapUsd0Usd0PPToUSDC(
 
   // Get the final amount of USDC that can be swapped from the swappable USD0 amount from USD0/USDC pool
   const finalUSDCAmount = await getCurveSwapOutputAmountFromInput(
-    provider,
+    encoder.provider,
     swappableAmount,
     USD0_USDC_USD0_INDEX,
     USD0_USDC_USDC_INDEX,
@@ -107,7 +106,6 @@ export async function swapUsd0Usd0PPToUSDC(
  * @returns the total swapped USDC amount
  */
 export async function swapUSD0PPToUSDC(
-  provider: AbstractSigner<Provider>,
   amount: bigint,
   expectedDestAmount: bigint,
   encoder: LiquidationEncoder,
@@ -127,7 +125,7 @@ export async function swapUSD0PPToUSDC(
 
   // Get the amount of USD0 that can be swapped from the USD0++ tokens from USD0/USD0++ pool
   const swappableAmount = await getCurveSwapOutputAmountFromInput(
-    provider,
+    encoder.provider,
     amount,
     USD0_USD0PP_USDPP_INDEX,
     USD0_USD0PP_USD0_INDEX,
@@ -136,7 +134,7 @@ export async function swapUSD0PPToUSDC(
 
   // Get the final amount of USDC that can be swapped from the swappable USD0 amount from USD0/USDC pool
   const finalUSDCAmount = await getCurveSwapOutputAmountFromInput(
-    provider,
+    encoder.provider,
     swappableAmount,
     USD0_USDC_USD0_INDEX,
     USD0_USDC_USDC_INDEX,
@@ -146,7 +144,7 @@ export async function swapUSD0PPToUSDC(
   // Get the min USD0 amount required to receive the loan expected USDC amount from the USD0/USDC pool
   // go from USD0 -> USDC
   const minUSD0Amount = await getCurveSwapInputAmountFromOutput(
-    provider,
+    encoder.provider,
     expectedDestAmount,
     USD0_USDC_USD0_INDEX,
     USD0_USDC_USDC_INDEX,

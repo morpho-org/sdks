@@ -1,10 +1,10 @@
 import { Address } from "@morpho-org/blue-sdk";
-import { AbstractSigner, Provider, ethers } from "ethers";
+import { Provider, ethers } from "ethers";
 import { LiquidationEncoder } from "../LiquidationEncoder";
 import CurveStableSwapNGABI from "../abi/CurveStableSwapNG.json";
 
 export async function getCurveWithdrawalAmount(
-  provider: AbstractSigner<Provider>,
+  provider: Provider,
   amount: bigint,
   tokenIndex: number,
   curvePool: Address,
@@ -26,7 +26,7 @@ export async function getCurveWithdrawalAmount(
 }
 
 export async function getCurveSwapOutputAmountFromInput(
-  provider: AbstractSigner<Provider>,
+  provider: Provider,
   amount: bigint,
   inputTokenIndex: number,
   outputTokenIndex: number,
@@ -55,7 +55,7 @@ export async function getCurveSwapOutputAmountFromInput(
 }
 
 export async function getCurveSwapInputAmountFromOutput(
-  provider: AbstractSigner<Provider>,
+  provider: Provider,
   destAmount: bigint,
   inputTokenIndex: number,
   outputTokenIndex: number,

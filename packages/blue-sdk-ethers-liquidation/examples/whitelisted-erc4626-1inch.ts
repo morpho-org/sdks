@@ -30,19 +30,16 @@ import {
   safeGetAddress,
   safeParseNumber,
 } from "@morpho-org/blue-sdk-ethers";
-import { Time } from "@morpho-org/morpho-ts";
 import {
   LiquidationEncoder,
   apiSdk,
-  fetchBestSwap,
-  getPendleRedeemCallData,
-  getPendleSwapCallData,
   mainnetAddresses,
-  pendleMarkets,
+  pendle,
   pendleTokens,
-  swapUSD0PPToUSDC,
-  swapUsd0Usd0PPToUSDC,
-} from "../src";
+  swap,
+  usual,
+} from "@morpho-org/blue-sdk-ethers-liquidation";
+import { Time } from "@morpho-org/morpho-ts";
 
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
@@ -175,7 +172,9 @@ export const check = async (
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
                 if (pendleTokens[chainId].has(market.config.collateralToken)) {
                   const pendleMarketData =
-                    pendleMarkets[chainId][market.config.collateralToken];
+                    pendle.pendleMarkets[chainId][
+                      market.config.collateralToken
+                    ];
                   const maturity = pendleMarketData?.maturity;
                   if (!maturity) {
                     throw Error("Pendle market not found");
@@ -186,7 +185,7 @@ export const check = async (
                   if (maturity < new Date()) {
                     // Pendle market is expired, we can directly redeem the collateral
                     // If called before YT's expiry, both PT & YT of equal amounts are needed and will be burned. Else, only PT is needed and will be burned.
-                    const redeemCallData = await getPendleRedeemCallData(
+                    const redeemCallData = await pendle.getPendleRedeemCallData(
                       chainId,
                       {
                         receiver: executorAddress,
@@ -212,7 +211,7 @@ export const check = async (
                       );
                   } else {
                     // Pendle market is not expired, we need to swap the collateral token (PT) to the underlying token
-                    const swapCallData = await getPendleSwapCallData(
+                    const swapCallData = await pendle.getPendleSwapCallData(
                       chainId,
                       pendleMarketData.address,
                       {
@@ -245,8 +244,7 @@ export const check = async (
                   case market.config.collateralToken ===
                     mainnetAddresses["usd0usd0++"] &&
                     chainId === ChainId.EthMainnet:
-                    dstAmount = await swapUsd0Usd0PPToUSDC(
-                      signer,
+                    dstAmount = await usual.curveSwapUsd0Usd0PPForUsdc(
                       srcAmount,
                       accrualPosition.market.toBorrowAssets(
                         accrualPosition.market.getLiquidationRepaidShares(
@@ -261,8 +259,7 @@ export const check = async (
                   case market.config.collateralToken ===
                     mainnetAddresses["usd0++"] &&
                     chainId === ChainId.EthMainnet: {
-                    dstAmount = await swapUSD0PPToUSDC(
-                      signer,
+                    dstAmount = await usual.swapUSD0PPToUSDC(
                       srcAmount,
                       accrualPosition.market.toBorrowAssets(
                         accrualPosition.market.getLiquidationRepaidShares(
@@ -276,7 +273,7 @@ export const check = async (
                   }
                   // Default case, use 1inch/paraswap for other collaterals
                   default: {
-                    const bestSwap = await fetchBestSwap({
+                    const bestSwap = await swap.fetchBestSwap({
                       chainId,
                       src: srcToken,
                       dst: market.config.loanToken,
