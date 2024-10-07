@@ -10,6 +10,7 @@
   "scripts": {
     "prepublish": "yarn build",
     "build": "tsc --build tsconfig.build.json",
+    "build-contract-types": "yarn typechain --target ethers-v6 --out-dir src/contracts/curve \"src/abi/*.json\"",
     "test-jest": "jest",
     "test-hardhat": "hardhat test",
     "codegen": "graphql-codegen --config codegen.ts && prettier -w src/api/"
