@@ -2,10 +2,10 @@ import { maxUint256, zeroAddress } from "viem";
 
 import { MathLib } from "@morpho-org/blue-sdk";
 
-import { MetaMorphoErrors } from "../../errors";
-import { MetaMorphoOperations } from "../../operations";
-import { handleBlueOperation } from "../blue";
-import { OperationHandler } from "../types";
+import { MetaMorphoErrors } from "../../errors.js";
+import type { MetaMorphoOperations } from "../../operations.js";
+import { handleBlueOperation } from "../blue/index.js";
+import type { OperationHandler } from "../types.js";
 
 export const handleMetaMorphoReallocateOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_Reallocate"]
@@ -87,7 +87,7 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
     }
   }
 
-  if (totalWithdrawn != totalSupplied)
+  if (totalWithdrawn !== totalSupplied)
     throw new MetaMorphoErrors.InconsistentReallocation(
       address,
       totalSupplied,

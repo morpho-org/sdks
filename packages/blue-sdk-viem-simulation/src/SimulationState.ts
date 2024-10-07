@@ -1,28 +1,28 @@
 import {
   AccrualPosition,
   AccrualVault,
-  Address,
+  type Address,
   AssetBalances,
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
-  Holding,
-  Market,
-  MarketId,
+  type Holding,
+  type Market,
+  type MarketId,
   MathLib,
-  MaxBorrowOptions,
-  MaxWithdrawCollateralOptions,
+  type MaxBorrowOptions,
+  type MaxWithdrawCollateralOptions,
   NATIVE_ADDRESS,
-  PeripheralBalanceType,
-  Position,
-  Token,
+  type PeripheralBalanceType,
+  type Position,
+  type Token,
   UnknownDataError,
   UnknownTokenError,
-  User,
-  Vault,
-  VaultMarketConfig,
+  type User,
+  type Vault,
+  type VaultMarketConfig,
   VaultToken,
-  VaultUser,
+  type VaultUser,
   WrappedToken,
   _try,
   getChainAddresses,
@@ -34,7 +34,7 @@ import {
   keys,
   values,
 } from "@morpho-org/morpho-ts";
-import { Block, zeroAddress } from "viem";
+import { type Block, zeroAddress } from "viem";
 import {
   UnknownHoldingError,
   UnknownMarketError,
@@ -44,14 +44,14 @@ import {
   UnknownVaultMarketConfigError,
   UnknownVaultUserError,
   UnknownWrappedTokenError,
-} from "./errors";
+} from "./errors.js";
 import {
-  MaybeDraft,
+  type MaybeDraft,
   produceImmutable,
   simulateOperation,
   simulateOperations,
-} from "./handlers";
-import { Operation } from "./operations";
+} from "./handlers/index.js";
+import type { Operation } from "./operations.js";
 
 export interface PublicAllocatorOptions {
   /* The array of vaults to reallocate. Must all have enabled the PublicAllocator. Defaults to all the vaults that have enabled the PublicAllocator. */

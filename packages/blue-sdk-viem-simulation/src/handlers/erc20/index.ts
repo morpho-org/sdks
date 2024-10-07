@@ -1,14 +1,14 @@
-import { SimulationErrors } from "../../errors";
-import { Erc20Operation } from "../../operations";
-import { OperationHandler } from "../types";
+import { SimulationErrors } from "../../errors.js";
+import type { Erc20Operation } from "../../operations.js";
+import type { OperationHandler } from "../types.js";
 
-import { handleErc20ApproveOperation } from "./approve";
-import { handleErc20PermitOperation } from "./permit";
-import { handleErc20Permit2Operation } from "./permit2";
-import { handleErc20TransferOperation } from "./transfer";
-import { handleErc20Transfer2Operation } from "./transfer2";
-import { handleErc20UnwrapOperation } from "./unwrap";
-import { handleErc20WrapOperation } from "./wrap";
+import { handleErc20ApproveOperation } from "./approve.js";
+import { handleErc20PermitOperation } from "./permit.js";
+import { handleErc20Permit2Operation } from "./permit2.js";
+import { handleErc20TransferOperation } from "./transfer.js";
+import { handleErc20Transfer2Operation } from "./transfer2.js";
+import { handleErc20UnwrapOperation } from "./unwrap.js";
+import { handleErc20WrapOperation } from "./wrap.js";
 
 export const handleErc20Operation: OperationHandler<Erc20Operation> = (
   operation,

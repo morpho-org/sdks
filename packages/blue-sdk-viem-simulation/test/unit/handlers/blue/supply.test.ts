@@ -9,7 +9,7 @@ import {
   Erc20Errors,
   SimulationErrors,
   simulateOperation,
-} from "../../../../src";
+} from "../../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -17,7 +17,7 @@ import {
   tokenA,
   userA,
   userB,
-} from "../../fixtures";
+} from "../../fixtures.js";
 
 const type = "Blue_Supply";
 

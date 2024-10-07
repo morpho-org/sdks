@@ -6,7 +6,7 @@ import {
   Erc20Errors,
   MetaMorphoErrors,
   simulateOperation,
-} from "../../../../src";
+} from "../../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -17,7 +17,7 @@ import {
   userC,
   vaultA,
   vaultC,
-} from "../../fixtures";
+} from "../../fixtures.js";
 
 const type = "MetaMorpho_Withdraw";
 

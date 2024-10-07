@@ -1,11 +1,12 @@
 import {
-  Address,
-  ErrorClass,
-  MarketId,
+  type Address,
+  type ErrorClass,
+  type MarketId,
   UnknownDataError,
 } from "@morpho-org/blue-sdk";
 
-import { Operation } from "./operations";
+import { entries } from "@morpho-org/morpho-ts";
+import type { Operation } from "./operations.js";
 
 export class UnknownMarketError extends UnknownDataError {
   constructor(public readonly marketId: MarketId) {
@@ -182,10 +183,10 @@ export namespace SimulationErrors {
     }
   }
 
-  export class InvalidInput extends Error {
-    constructor(public readonly input: Record<PropertyKey, any>) {
+  export class InvalidInput<T> extends Error {
+    constructor(public readonly input: T) {
       super(
-        `invalid input: ${Object.entries(input)
+        `invalid input: ${entries(input)
           .map((entry) => entry.join("="))
           .join(", ")}`,
       );
@@ -390,7 +391,7 @@ export namespace PublicAllocatorErrors {
 }
 
 export function getWrappedInstanceOf<E extends Error>(
-  err: any,
+  err: unknown,
   ...errorClasses: [ErrorClass<E>, ...ErrorClass<E>[]]
 ): E | undefined {
   if (errorClasses.find((errorClass) => err instanceof errorClass))

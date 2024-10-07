@@ -8,8 +8,8 @@ import {
   Erc20Errors,
   UnknownContractError,
   simulateOperation,
-} from "../../../../src";
-import { dataFixture, tokenA, tokenB, userA, userB } from "../../fixtures";
+} from "../../../../src/index.js";
+import { dataFixture, tokenA, tokenB, userA, userB } from "../../fixtures.js";
 
 const type = "Erc20_Transfer2";
 

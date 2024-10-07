@@ -1,11 +1,11 @@
-import _cloneDeep from "lodash/cloneDeep";
+import _ from "lodash";
 
-import { simulateOperation } from "../../../src";
-import { dataFixture, tokenA, userA, userB } from "../fixtures";
+import { simulateOperation } from "../../../src/index.js";
+import { dataFixture, tokenA, userA, userB } from "../fixtures.js";
 
 import { describe, expect, test } from "vitest";
 
-const dataFixtureCopy = _cloneDeep(dataFixture);
+const dataFixtureCopy = _.cloneDeep(dataFixture);
 
 describe("dispatchers", () => {
   test("should not mutate data", async () => {

@@ -1,2 +1,2 @@
-export * from "./dispatchers";
-export * from "./types";
+export * from "./dispatchers.js";
+export * from "./types.js";

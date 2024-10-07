@@ -2,10 +2,10 @@ import { maxUint256, zeroAddress } from "viem";
 
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { Erc20Operations } from "../../operations";
-import { OperationHandler } from "../types";
+import type { Erc20Operations } from "../../operations.js";
+import type { OperationHandler } from "../types.js";
 
-import { handleErc20TransferOperation } from "./transfer";
+import { handleErc20TransferOperation } from "./transfer.js";
 
 export const handleErc20WrapOperation: OperationHandler<
   Erc20Operations["Erc20_Wrap"]

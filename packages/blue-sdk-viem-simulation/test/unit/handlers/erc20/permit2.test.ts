@@ -3,8 +3,8 @@ import _ from "lodash";
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import { simulateOperation } from "../../../../src";
-import { dataFixture, tokenA, userA, userB } from "../../fixtures";
+import { simulateOperation } from "../../../../src/index.js";
+import { dataFixture, tokenA, userA, userB } from "../../fixtures.js";
 
 const type = "Erc20_Permit2";
 

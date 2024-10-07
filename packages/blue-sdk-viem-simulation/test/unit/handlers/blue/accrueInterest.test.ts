@@ -3,8 +3,8 @@ import _ from "lodash";
 import { BlueErrors } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import { simulateOperation } from "../../../../src";
-import { dataFixture, marketA1, userA } from "../../fixtures";
+import { simulateOperation } from "../../../../src/index.js";
+import { dataFixture, marketA1, userA } from "../../fixtures.js";
 
 const type = "Blue_AccrueInterest";
 

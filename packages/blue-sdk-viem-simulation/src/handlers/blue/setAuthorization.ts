@@ -1,5 +1,5 @@
-import { BlueOperations } from "../../operations";
-import { OperationHandler } from "../types";
+import type { BlueOperations } from "../../operations.js";
+import type { OperationHandler } from "../types.js";
 
 export const handleBlueSetAuthorizationOperation: OperationHandler<
   BlueOperations["Blue_SetAuthorization"]

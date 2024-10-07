@@ -3,8 +3,11 @@ import _ from "lodash";
 import { ChainId, NATIVE_ADDRESS, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import { UnknownEIP2612DataError, simulateOperation } from "../../../../src";
-import { dataFixture, tokenA, userA, userB, vaultA } from "../../fixtures";
+import {
+  UnknownEIP2612DataError,
+  simulateOperation,
+} from "../../../../src/index.js";
+import { dataFixture, tokenA, userA, userB, vaultA } from "../../fixtures.js";
 
 const type = "Erc20_Permit";
 

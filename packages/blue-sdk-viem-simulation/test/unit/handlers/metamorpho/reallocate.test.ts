@@ -6,7 +6,7 @@ import {
   MetaMorphoErrors,
   UnknownVaultMarketConfigError,
   simulateOperation,
-} from "../../../../src";
+} from "../../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -15,7 +15,7 @@ import {
   userB,
   vaultA,
   vaultB,
-} from "../../fixtures";
+} from "../../fixtures.js";
 
 const type = "MetaMorpho_Reallocate";
 

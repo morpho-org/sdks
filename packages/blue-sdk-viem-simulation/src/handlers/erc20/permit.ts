@@ -1,8 +1,8 @@
-import { Erc20Errors, UnknownEIP2612DataError } from "../../errors";
-import { Erc20Operations } from "../../operations";
-import { OperationHandler } from "../types";
+import { Erc20Errors, UnknownEIP2612DataError } from "../../errors.js";
+import type { Erc20Operations } from "../../operations.js";
+import type { OperationHandler } from "../types.js";
 
-import { handleErc20ApproveOperation } from "./approve";
+import { handleErc20ApproveOperation } from "./approve.js";
 
 export const handleErc20PermitOperation: OperationHandler<
   Erc20Operations["Erc20_Permit"]

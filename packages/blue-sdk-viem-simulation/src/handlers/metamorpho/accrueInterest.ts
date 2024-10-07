@@ -2,9 +2,9 @@ import { zeroAddress } from "viem";
 
 import { Vault } from "@morpho-org/blue-sdk";
 
-import { MetaMorphoOperations } from "../../operations";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import type { MetaMorphoOperations } from "../../operations.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import type { OperationHandler } from "../types.js";
 
 export const handleMetaMorphoAccrueInterestOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_AccrueInterest"]

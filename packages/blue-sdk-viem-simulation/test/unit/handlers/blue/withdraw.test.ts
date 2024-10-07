@@ -8,8 +8,8 @@ import {
   BlueSimulationErrors,
   SimulationErrors,
   simulateOperation,
-} from "../../../../src";
-import { dataFixture, marketA1, tokenA, userA, userB } from "../../fixtures";
+} from "../../../../src/index.js";
+import { dataFixture, marketA1, tokenA, userA, userB } from "../../fixtures.js";
 
 const type = "Blue_Withdraw";
 

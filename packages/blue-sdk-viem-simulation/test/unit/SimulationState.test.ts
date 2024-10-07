@@ -10,7 +10,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 
-import { SimulationState } from "../../src";
+import { SimulationState } from "../../src/index.js";
 
 import {
   dataFixture,
@@ -23,7 +23,7 @@ import {
   tokenA,
   vaultA,
   vaultC,
-} from "./fixtures";
+} from "./fixtures.js";
 
 import { describe, expect, test } from "vitest";
 

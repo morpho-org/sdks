@@ -6,8 +6,8 @@ import {
   Erc20Errors,
   UnknownWrappedTokenError,
   simulateOperation,
-} from "../../../../src";
-import { tokenA, tokenB, userA, userB, wrapFixtures } from "../../fixtures";
+} from "../../../../src/index.js";
+import { tokenA, tokenB, userA, userB, wrapFixtures } from "../../fixtures.js";
 
 const type = "Erc20_Unwrap";
 

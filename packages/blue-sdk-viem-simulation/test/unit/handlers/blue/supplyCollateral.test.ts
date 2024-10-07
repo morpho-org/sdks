@@ -13,7 +13,7 @@ import {
   Erc20Errors,
   SimulationErrors,
   simulateOperation,
-} from "../../../../src";
+} from "../../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -22,7 +22,7 @@ import {
   userA,
   userB,
   userC,
-} from "../../fixtures";
+} from "../../fixtures.js";
 
 const type = "Blue_SupplyCollateral";
 

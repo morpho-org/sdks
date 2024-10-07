@@ -2,13 +2,13 @@ import { maxUint256, zeroAddress } from "viem";
 
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { MetaMorphoErrors } from "../../errors";
-import { MetaMorphoOperations } from "../../operations";
-import { handleBlueOperation } from "../blue";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+import { MetaMorphoErrors } from "../../errors.js";
+import type { MetaMorphoOperations } from "../../operations.js";
+import { handleBlueOperation } from "../blue/index.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import type { OperationHandler } from "../types.js";
 
-import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest";
+import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleMetaMorphoWithdrawOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_Withdraw"]

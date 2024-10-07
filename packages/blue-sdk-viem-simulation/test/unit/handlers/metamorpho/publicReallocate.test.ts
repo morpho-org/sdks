@@ -4,8 +4,17 @@ import { parseEther, parseUnits } from "viem";
 import { NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import { PublicAllocatorErrors, simulateOperation } from "../../../../src";
-import { dataFixture, marketA1, marketA2, userB, vaultA } from "../../fixtures";
+import {
+  PublicAllocatorErrors,
+  simulateOperation,
+} from "../../../../src/index.js";
+import {
+  dataFixture,
+  marketA1,
+  marketA2,
+  userB,
+  vaultA,
+} from "../../fixtures.js";
 
 const type = "MetaMorpho_PublicReallocate";
 

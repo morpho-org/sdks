@@ -4,8 +4,8 @@ import { parseUnits } from "viem";
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import { Erc20Errors, simulateOperation } from "../../../../src";
-import { dataFixture, tokenA, userA, userB, vaultA } from "../../fixtures";
+import { Erc20Errors, simulateOperation } from "../../../../src/index.js";
+import { dataFixture, tokenA, userA, userB, vaultA } from "../../fixtures.js";
 
 const type = "Erc20_Transfer";
 

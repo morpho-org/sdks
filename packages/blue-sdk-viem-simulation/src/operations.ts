@@ -1,7 +1,7 @@
-import { Address, MarketId } from "@morpho-org/blue-sdk";
+import type { Address, MarketId } from "@morpho-org/blue-sdk";
 
-import { SimulationState } from "./SimulationState";
-import { MaybeDraft } from "./handlers/types";
+import type { SimulationState } from "./SimulationState.js";
+import type { MaybeDraft } from "./handlers/types.js";
 
 export interface OperationMetadata<T extends string> {
   type: T;
@@ -9,8 +9,10 @@ export interface OperationMetadata<T extends string> {
   address: Address;
 }
 
-export interface WithOperationArgs<T extends string, A extends Record<T, any>>
-  extends OperationMetadata<T> {
+export interface WithOperationArgs<
+  T extends string,
+  A extends Record<T, object>,
+> extends OperationMetadata<T> {
   args: A[T];
 }
 
@@ -134,6 +136,7 @@ export const METAMORPHO_OPERATIONS = [
 
 export type MetaMorphoOperationType = (typeof METAMORPHO_OPERATIONS)[number];
 export interface MetaMorphoOperationArgs {
+  // biome-ignore lint/complexity/noBannedTypes: no args
   MetaMorpho_AccrueInterest: {};
   MetaMorpho_Deposit:
     | {

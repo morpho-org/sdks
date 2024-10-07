@@ -5,7 +5,7 @@ import {
   Erc20Errors,
   MetaMorphoErrors,
   simulateOperation,
-} from "../../../../src";
+} from "../../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -14,7 +14,7 @@ import {
   userA,
   userB,
   vaultA,
-} from "../../fixtures";
+} from "../../fixtures.js";
 
 import { describe, expect, test } from "vitest";
 

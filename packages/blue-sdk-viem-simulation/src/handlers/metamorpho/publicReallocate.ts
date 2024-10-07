@@ -1,17 +1,17 @@
-import { MarketId, NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
+import { type MarketId, NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
 
 import {
   MetaMorphoErrors,
   PublicAllocatorErrors,
   UnknownVaultPublicAllocatorConfigError,
-} from "../../errors";
-import { MetaMorphoOperations } from "../../operations";
-import { handleBlueOperation } from "../blue";
-import { handleErc20Operation } from "../erc20";
-import { OperationHandler } from "../types";
+} from "../../errors.js";
+import type { MetaMorphoOperations } from "../../operations.js";
+import { handleBlueOperation } from "../blue/index.js";
+import { handleErc20Operation } from "../erc20/index.js";
+import type { OperationHandler } from "../types.js";
 
 import { maxUint256, zeroAddress } from "viem";
-import { handleMetaMorphoReallocateOperation } from "./reallocate";
+import { handleMetaMorphoReallocateOperation } from "./reallocate.js";
 
 export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_PublicReallocate"]

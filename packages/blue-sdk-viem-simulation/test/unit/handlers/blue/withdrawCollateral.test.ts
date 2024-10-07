@@ -6,8 +6,8 @@ import {
   BlueSimulationErrors,
   SimulationErrors,
   simulateOperation,
-} from "../../../../src";
-import { dataFixture, marketA1, userA, userB } from "../../fixtures";
+} from "../../../../src/index.js";
+import { dataFixture, marketA1, userA, userB } from "../../fixtures.js";
 
 const type = "Blue_WithdrawCollateral";
 

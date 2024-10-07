@@ -3,7 +3,10 @@ import _ from "lodash";
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import { UnknownAllowanceError, simulateOperation } from "../../../../src";
+import {
+  UnknownAllowanceError,
+  simulateOperation,
+} from "../../../../src/index.js";
 import {
   dataFixture,
   tokenA,
@@ -11,7 +14,7 @@ import {
   userA,
   userB,
   vaultB,
-} from "../../fixtures";
+} from "../../fixtures.js";
 
 const type = "Erc20_Approve";
 

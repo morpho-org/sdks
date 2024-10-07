@@ -1,18 +1,18 @@
 import { makeCreator } from "mutative";
 
-import { SimulationState } from "../SimulationState";
-import { SimulationErrors } from "../errors";
+import type { SimulationState } from "../SimulationState.js";
+import { SimulationErrors } from "../errors.js";
 import {
-  Operation,
+  type Operation,
   isBlueOperation,
   isErc20Operation,
   isMetaMorphoOperation,
-} from "../operations";
+} from "../operations.js";
 
-import { handleBlueOperation } from "./blue";
-import { handleErc20Operation } from "./erc20";
-import { handleMetaMorphoOperation } from "./metamorpho";
-import { MaybeDraft } from "./types";
+import { handleBlueOperation } from "./blue/index.js";
+import { handleErc20Operation } from "./erc20/index.js";
+import { handleMetaMorphoOperation } from "./metamorpho/index.js";
+import type { MaybeDraft } from "./types.js";
 
 export type SimulationResult = [
   MaybeDraft<SimulationState>,
@@ -36,7 +36,9 @@ export const handleOperation = (
     else if (isErc20Operation(operation)) handleErc20Operation(operation, data);
 
     return data;
-  } catch (error: any) {
+  } catch (error) {
+    if (!(error instanceof Error)) throw error;
+
     // `error` may be SimulationErrors.Simulation because of a failing callback handle.
     throw new SimulationErrors.Simulation(error, index, operation);
   }
