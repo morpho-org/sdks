@@ -15,6 +15,7 @@ declare module "@morpho-org/blue-sdk" {
     rsEth?: Address;
     usdE?: Address;
     sUsdE?: Address;
+    usd0?: Address;
     "usd0++"?: Address;
     "usd0usd0++"?: Address;
     verUsdc?: Address;
@@ -43,6 +44,10 @@ mainnetAddresses["PT-weETH-26DEC2024"] =
 mainnetAddresses["PT-weETH-27JUN2024"] =
   "0xc69Ad9baB1dEE23F4605a82b3354F8E40d1E5966";
 
+mainnetAddresses["usd0"] = "0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5";
+mainnetAddresses["usd0++"] = "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0";
+mainnetAddresses["usd0usd0++"] = "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52";
+
 export const pendleTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
     mainnetAddresses["PT-USDe-25JUL2024"],
@@ -52,4 +57,9 @@ export const pendleTokens: Record<ChainId, Set<Address>> = {
     mainnetAddresses["PT-weETH-27JUN2024"],
   ]),
   [ChainId.BaseMainnet]: new Set(),
+};
+
+export const curvePools = {
+  "usd0usd0++": "0x1d08e7adc263cfc70b1babe6dc5bb339c16eec52",
+  usd0usdc: "0x14100f81e33c33ecc7cdac70181fb45b6e78569f",
 };

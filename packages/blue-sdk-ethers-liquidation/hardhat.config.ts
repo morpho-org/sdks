@@ -27,6 +27,9 @@ const config: HardhatUserConfig = {
         },
       },
       allowBlocksWithSameTimestamp: true,
+      // Config tweak to be able to easily impersonate accounts without big ETH balance
+      gasPrice: 10,
+      initialBaseFeePerGas: 10,
     },
   },
   solidity: {

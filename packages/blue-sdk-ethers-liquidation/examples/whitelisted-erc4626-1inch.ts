@@ -33,11 +33,10 @@ import {
 import {
   LiquidationEncoder,
   apiSdk,
-  fetchBestSwap,
-  getPendleRedeemCallData,
-  getPendleSwapCallData,
-  pendleMarkets,
+  mainnetAddresses,
+  pendle,
   pendleTokens,
+  swap,
 } from "@morpho-org/blue-sdk-ethers-liquidation";
 import { Time } from "@morpho-org/morpho-ts";
 
@@ -172,7 +171,9 @@ export const check = async (
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
                 if (pendleTokens[chainId].has(market.config.collateralToken)) {
                   const pendleMarketData =
-                    pendleMarkets[chainId][market.config.collateralToken];
+                    pendle.pendleMarkets[chainId][
+                      market.config.collateralToken
+                    ];
                   const maturity = pendleMarketData?.maturity;
                   if (!maturity) {
                     throw Error("Pendle market not found");
@@ -183,7 +184,7 @@ export const check = async (
                   if (maturity < new Date()) {
                     // Pendle market is expired, we can directly redeem the collateral
                     // If called before YT's expiry, both PT & YT of equal amounts are needed and will be burned. Else, only PT is needed and will be burned.
-                    const redeemCallData = await getPendleRedeemCallData(
+                    const redeemCallData = await pendle.getPendleRedeemCallData(
                       chainId,
                       {
                         receiver: executorAddress,
@@ -209,7 +210,7 @@ export const check = async (
                       );
                   } else {
                     // Pendle market is not expired, we need to swap the collateral token (PT) to the underlying token
-                    const swapCallData = await getPendleSwapCallData(
+                    const swapCallData = await pendle.getPendleSwapCallData(
                       chainId,
                       pendleMarketData.address,
                       {
@@ -235,36 +236,74 @@ export const check = async (
                     srcAmount = BigInt(swapCallData.data.amountOut);
                   }
                 }
-                const bestSwap = await fetchBestSwap({
-                  chainId,
-                  src: srcToken,
-                  dst: market.config.loanToken,
-                  amount: srcAmount,
-                  from: executorAddress,
-                  slippage,
-                  includeTokensInfo: false,
-                  includeProtocols: false,
-                  includeGas: false,
-                  allowPartialFill: false,
-                  disableEstimate: true,
-                  usePermit2: false,
-                });
 
-                if (!bestSwap)
-                  throw Error(
-                    "could not fetch swap from both 1inch and paraswap",
-                  );
-                dstAmount = toBigInt(bestSwap.dstAmount);
+                switch (true) {
+                  // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
+                  // Process USD0/USD0++ collateral liquidation with specific process (using curve)
+                  case market.config.collateralToken ===
+                    mainnetAddresses["usd0usd0++"] &&
+                    chainId === ChainId.EthMainnet:
+                    dstAmount = await encoder.curveSwapUsd0Usd0PPForUsdc(
+                      srcAmount,
+                      accrualPosition.market.toBorrowAssets(
+                        accrualPosition.market.getLiquidationRepaidShares(
+                          seizedAssets,
+                        ),
+                      ),
+                      executorAddress,
+                    );
+                    break;
+                  // Process USD0++ colalteral liquidation with specific process (using curve)
+                  case market.config.collateralToken ===
+                    mainnetAddresses["usd0++"] &&
+                    chainId === ChainId.EthMainnet: {
+                    dstAmount = await encoder.swapUSD0PPToUSDC(
+                      srcAmount,
+                      accrualPosition.market.toBorrowAssets(
+                        accrualPosition.market.getLiquidationRepaidShares(
+                          seizedAssets,
+                        ),
+                      ),
+                      executorAddress,
+                    );
+                    break;
+                  }
+                  // Default case, use 1inch/paraswap for other collaterals
+                  default: {
+                    const bestSwap = await swap.fetchBestSwap({
+                      chainId,
+                      src: srcToken,
+                      dst: market.config.loanToken,
+                      amount: srcAmount,
+                      from: executorAddress,
+                      slippage,
+                      includeTokensInfo: false,
+                      includeProtocols: false,
+                      includeGas: false,
+                      allowPartialFill: false,
+                      disableEstimate: true,
+                      usePermit2: false,
+                    });
+                    if (!bestSwap)
+                      throw Error(
+                        "could not fetch swap from both 1inch and paraswap",
+                      );
+                    dstAmount = toBigInt(bestSwap.dstAmount);
 
-                if (dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage))
-                  return;
-                encoder
-                  .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
-                  .pushCall(
-                    bestSwap.tx.to,
-                    bestSwap.tx.value,
-                    bestSwap.tx.data,
-                  );
+                    if (
+                      dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage)
+                    )
+                      return;
+                    encoder
+                      .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
+                      .pushCall(
+                        bestSwap.tx.to,
+                        bestSwap.tx.value,
+                        bestSwap.tx.data,
+                      );
+                    break;
+                  }
+                }
 
                 // Handle ERC20Wrapper collateral tokens.
                 if (
