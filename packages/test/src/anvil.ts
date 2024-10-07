@@ -1,5 +1,20 @@
 import { spawn } from "node:child_process";
-import { http, type HttpTransport } from "viem";
+import {
+  http,
+  type Chain,
+  type Client,
+  type HDAccount,
+  type HttpTransport,
+  type PublicActions,
+  type TestActions,
+  type TestRpcSchema,
+  type WalletActions,
+  createTestClient,
+  publicActions,
+  walletActions,
+} from "viem";
+import { type DealActions, dealActions } from "viem-deal";
+import { testAccount } from "./fixtures.js";
 
 export interface AnvilArgs {
   /**
@@ -296,13 +311,14 @@ const toFlagCase = (str: string) => {
   return `--${keys.join(".")}`;
 };
 
-export const startAnvil = async (
+export const spawnAnvil = async (
   args: AnvilArgs,
   basePort: number,
 ): Promise<{
   transport: HttpTransport;
   stop: () => boolean;
 }> => {
+  // Build an available port to run anvil.
   const port = 10000 + process.__tinypool_state__.workerId * 500 + basePort;
 
   const stop = await new Promise<() => boolean>((resolve, reject) => {
@@ -324,3 +340,40 @@ export const startAnvil = async (
     stop,
   };
 };
+
+export const createAnvilTestClient = <
+  chain extends Chain | undefined = Chain | undefined,
+>(
+  chain: chain,
+  transport: HttpTransport,
+): Client<
+  HttpTransport,
+  chain,
+  HDAccount,
+  TestRpcSchema<"anvil">,
+  TestActions &
+    DealActions &
+    PublicActions<HttpTransport, chain, HDAccount> &
+    WalletActions<chain, HDAccount> & {
+      timestamp(): Promise<bigint>;
+    }
+> =>
+  createTestClient({
+    chain,
+    mode: "anvil",
+    account: testAccount(),
+    transport,
+  })
+    .extend(dealActions)
+    .extend(publicActions)
+    .extend(walletActions)
+    .extend((client) => ({
+      async timestamp() {
+        const latestBlock = await client.getBlock({
+          blockTag: "latest",
+          includeTransactions: false,
+        });
+
+        return latestBlock.timestamp;
+      },
+    }));

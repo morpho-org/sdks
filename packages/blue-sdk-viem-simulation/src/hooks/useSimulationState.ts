@@ -22,7 +22,7 @@ import {
 import { useMemo } from "react";
 import type { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useReadContract } from "wagmi";
-import { SimulationState } from "../SimulationState.js";
+import { type MinimalBlock, SimulationState } from "../SimulationState.js";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
   FetchUsersParameters &
@@ -33,7 +33,7 @@ export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
     UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
     ConfigParameter<config> & {
-      block?: SimulationState["block"];
+      block?: MinimalBlock;
       accrueInterest?: boolean;
       query?: {
         enabled?: boolean;

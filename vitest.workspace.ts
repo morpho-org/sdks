@@ -30,9 +30,8 @@ export default defineWorkspace([
     test: {
       name: "blue-sdk-viem-simulation",
       include: ["packages/blue-sdk-viem-simulation/**/*.test.ts"],
-      // E2E tests not yet working
-      exclude: ["packages/blue-sdk-viem-simulation/test/e2e/**"],
       environmentMatchGlobs: [["**/e2e/**/*.test.ts", "happy-dom"]],
+      testTimeout: 30_000,
     },
   },
 ]);

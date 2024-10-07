@@ -70,9 +70,14 @@ export interface PublicReallocation {
   assets: bigint;
 }
 
+export type MinimalBlock = Pick<
+  Block<bigint, false, "latest">,
+  "number" | "timestamp"
+>;
+
 export interface InputSimulationState {
   chainId: ChainId;
-  block: Pick<Block<bigint, false, "latest">, "number" | "timestamp">;
+  block: MinimalBlock;
   global?: { feeRecipient?: Address };
   markets?: Record<MarketId, Market>;
   users?: Record<Address, User>;
@@ -98,7 +103,7 @@ export interface InputSimulationState {
 
 export class SimulationState implements InputSimulationState {
   public readonly chainId: ChainId;
-  public block: Pick<Block<bigint, false, "latest">, "number" | "timestamp">;
+  public block: MinimalBlock;
 
   public readonly global: { feeRecipient?: Address };
   public readonly markets: Record<MarketId, Market>;

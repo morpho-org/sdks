@@ -1,5 +1,9 @@
 import type { QueryClient } from "@tanstack/react-query";
-import type { RenderHookOptions, RenderOptions } from "@testing-library/react";
+import type {
+  RenderHookOptions,
+  RenderOptions,
+  waitForOptions,
+} from "@testing-library/react";
 import type { Config } from "@wagmi/core";
 import type { FunctionComponent, ReactElement, ReactNode } from "react";
 import type { Chain, Transport } from "viem";
@@ -27,8 +31,8 @@ export async function createWrapper<TComponent extends FunctionComponent<any>>(
 }
 
 export async function renderHook<
-  Props,
   Result,
+  Props,
   chains extends readonly [Chain, ...Chain[]] = readonly [Chain, ...Chain[]],
   transports extends Record<chains[number]["id"], Transport> = Record<
     chains[number]["id"],
@@ -57,7 +61,7 @@ export async function renderHook<
   });
 }
 
-export async function createRender<
+export async function render<
   chains extends readonly [Chain, ...Chain[]] = readonly [Chain, ...Chain[]],
   transports extends Record<chains[number]["id"], Transport> = Record<
     chains[number]["id"],
@@ -84,4 +88,13 @@ export async function createRender<
     ),
     ...options,
   });
+}
+
+export async function waitFor<T>(
+  callback: () => Promise<T> | T,
+  options?: waitForOptions | undefined,
+): Promise<T> {
+  const { waitFor } = await import("@testing-library/react");
+
+  return waitFor(callback, { timeout: 10_000, ...options });
 }
