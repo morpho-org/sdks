@@ -37,7 +37,6 @@ import {
   pendle,
   pendleTokens,
   swap,
-  usual,
 } from "@morpho-org/blue-sdk-ethers-liquidation";
 import { Time } from "@morpho-org/morpho-ts";
 
@@ -244,14 +243,13 @@ export const check = async (
                   case market.config.collateralToken ===
                     mainnetAddresses["usd0usd0++"] &&
                     chainId === ChainId.EthMainnet:
-                    dstAmount = await usual.curveSwapUsd0Usd0PPForUsdc(
+                    dstAmount = await encoder.curveSwapUsd0Usd0PPForUsdc(
                       srcAmount,
                       accrualPosition.market.toBorrowAssets(
                         accrualPosition.market.getLiquidationRepaidShares(
                           seizedAssets,
                         ),
                       ),
-                      encoder,
                       executorAddress,
                     );
                     break;
@@ -259,14 +257,13 @@ export const check = async (
                   case market.config.collateralToken ===
                     mainnetAddresses["usd0++"] &&
                     chainId === ChainId.EthMainnet: {
-                    dstAmount = await usual.swapUSD0PPToUSDC(
+                    dstAmount = await encoder.swapUSD0PPToUSDC(
                       srcAmount,
                       accrualPosition.market.toBorrowAssets(
                         accrualPosition.market.getLiquidationRepaidShares(
                           seizedAssets,
                         ),
                       ),
-                      encoder,
                       executorAddress,
                     );
                     break;
