@@ -31,7 +31,7 @@ import {
   addresses,
 } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
+import { BLUE_API_BASE_URL, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { mine } from "@nomicfoundation/hardhat-network-helpers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
@@ -354,16 +354,16 @@ describe("erc4626-1inch", () => {
                 tokenOut: tokenOut,
                 minTokenOut: srcAmount,
                 tokenRedeemSy: tokenOut,
-                pendleSwap: "0x0000000000000000000000000000000000000000",
+                pendleSwap: ZERO_ADDRESS,
                 swapData: {
                   swapType: "0",
-                  extRouter: "0x0000000000000000000000000000000000000000",
+                  extRouter: ZERO_ADDRESS,
                   extCalldata: "",
                   needScale: false,
                 },
               },
               {
-                limitRouter: "0x0000000000000000000000000000000000000000",
+                limitRouter: ZERO_ADDRESS,
                 epsSkipMarket: "0",
                 normalFills: [],
                 flashFills: [],
@@ -430,10 +430,10 @@ describe("erc4626-1inch", () => {
                 tokenOut: tokenOut,
                 minTokenOut: dstAmount,
                 tokenRedeemSy: tokenOut,
-                pendleSwap: "0x0000000000000000000000000000000000000000",
+                pendleSwap: ZERO_ADDRESS,
                 swapData: {
                   swapType: "0",
-                  extRouter: "0x0000000000000000000000000000000000000000",
+                  extRouter: ZERO_ADDRESS,
                   extCalldata: "",
                   needScale: false,
                 },

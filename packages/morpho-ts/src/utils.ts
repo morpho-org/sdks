@@ -1,6 +1,9 @@
 import { Time } from "./time";
 import type { FieldType, PartialDottedKeys } from "./types";
 
+export const ZERO_ADDRESS =
+  "0x0000000000000000000000000000000000000000" as const;
+
 export const isNotNull = <T>(v: T | null): v is T => v !== null;
 export const isNotUndefined = <T>(v: T | undefined): v is T => v !== undefined;
 

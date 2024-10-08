@@ -40,7 +40,10 @@ jobs:
           - name: blue-sdk-wagmi
             hardhat: false
 
-          - name: blue-sdk-viem-simulation
+          - name: simulation-sdk
+            hardhat: false
+
+          - name: simulation-sdk-wagmi
             hardhat: false
 
           - name: blue-sdk-viem-bundler

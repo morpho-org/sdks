@@ -29,9 +29,15 @@ export default defineWorkspace([
   },
   {
     test: {
-      name: "blue-sdk-viem-simulation",
-      include: ["packages/blue-sdk-viem-simulation/**/*.test.ts"],
-      environmentMatchGlobs: [["**/e2e/**/*.test.ts", "happy-dom"]],
+      name: "simulation-sdk",
+      include: ["packages/simulation-sdk/**/*.test.ts"],
+    },
+  },
+  {
+    test: {
+      name: "simulation-sdk-wagmi",
+      include: ["packages/simulation-sdk-wagmi/**/*.test.ts"],
+      environment: "happy-dom",
       testTimeout: 30_000,
     },
   },

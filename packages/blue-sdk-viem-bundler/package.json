@@ -18,16 +18,16 @@
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/blue-sdk-viem-simulation": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/simulation-sdk-wagmi": "workspace:^",
     "viem": "^2.0.0"
   },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/blue-sdk-viem-simulation": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/simulation-sdk-wagmi": "workspace:^",
     "@types/lodash": "^4.17.7",
     "@types/node": "^22.2.0",
     "lodash": "^4.17.21",

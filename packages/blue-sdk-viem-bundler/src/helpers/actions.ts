@@ -14,14 +14,14 @@ import {
   erc20WrapperTokens,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { Time, getValue } from "@morpho-org/morpho-ts";
 import {
   type MaybeDraft,
   type Operation,
   type SimulationResult,
   type SimulationState,
   simulateOperation,
-} from "@morpho-org/blue-sdk-viem-simulation";
-import { Time, getValue } from "@morpho-org/morpho-ts";
+} from "@morpho-org/simulation-sdk-wagmi";
 
 import {
   blueAbi,

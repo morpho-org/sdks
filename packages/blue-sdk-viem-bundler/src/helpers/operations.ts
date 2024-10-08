@@ -12,6 +12,7 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
+import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
 import {
   type Erc20Operations,
   type MaybeDraft,
@@ -24,8 +25,7 @@ import {
   handleOperations,
   produceImmutable,
   simulateOperation,
-} from "@morpho-org/blue-sdk-viem-simulation";
-import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
+} from "@morpho-org/simulation-sdk-wagmi";
 
 import { maxUint256 } from "viem";
 import { BundlerErrors } from "../errors.js";

@@ -36,8 +36,7 @@
     "mocha": "^10.4.0",
     "sinon": "^19.0.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.2",
-    "vitest": "^2.1.2"
+    "typescript": "^5.6.2"
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",

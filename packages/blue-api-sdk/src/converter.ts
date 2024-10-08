@@ -13,7 +13,7 @@ import {
   VaultMarketPublicAllocatorConfig,
   VaultUtils,
 } from "@morpho-org/blue-sdk";
-import { Time, isDefined } from "@morpho-org/morpho-ts";
+import { Time, ZERO_ADDRESS, isDefined } from "@morpho-org/morpho-ts";
 
 import type {
   Chain as BlueApiChain,
@@ -176,8 +176,7 @@ export class BlueSdkConverter {
   public getMarketConfig(dto: PartialBlueApiMarketConfig) {
     return new MarketConfig({
       collateralToken: this.options.parseAddress(
-        dto.collateralAsset?.address ??
-          "0x0000000000000000000000000000000000000000",
+        dto.collateralAsset?.address ?? ZERO_ADDRESS,
       ),
       loanToken: this.options.parseAddress(dto.loanAsset.address),
       oracle: this.options.parseAddress(dto.oracleAddress),
@@ -318,16 +317,13 @@ export class BlueSdkConverter {
         ...state,
         ...this.getVaultConfig(dto),
         fee: this.options.parseNumber(state.fee, 18),
-        pendingOwner:
-          state.pendingOwner ?? "0x0000000000000000000000000000000000000000",
+        pendingOwner: state.pendingOwner ?? ZERO_ADDRESS,
         pendingTimelock: {
           value: state.pendingTimelock ?? 0n,
           validAt: state.pendingTimelockValidAt ?? 0n,
         },
         pendingGuardian: {
-          value:
-            state.pendingGuardian ??
-            "0x0000000000000000000000000000000000000000",
+          value: state.pendingGuardian ?? ZERO_ADDRESS,
           validAt: state.pendingGuardianValidAt ?? 0n,
         },
         lastTotalAssets: state.totalAssets,

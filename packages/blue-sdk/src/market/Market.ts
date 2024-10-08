@@ -1,3 +1,4 @@
+import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { BlueErrors } from "../errors.js";
 import {
   AdaptiveCurveIrmLib,
@@ -130,10 +131,7 @@ export class Market implements InputMarket {
    * Whether the market satisfies the canonical definition of an idle market (i.e. collateral token is the zero address).
    */
   get isIdle() {
-    return (
-      this.config.collateralToken ===
-      "0x0000000000000000000000000000000000000000"
-    );
+    return this.config.collateralToken === ZERO_ADDRESS;
   }
 
   /**

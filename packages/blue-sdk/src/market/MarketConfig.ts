@@ -1,3 +1,4 @@
+import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { UnknownMarketConfigError } from "../errors.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 
@@ -34,10 +35,10 @@ export class MarketConfig implements MarketParams {
    */
   static idle(token: Address) {
     return new MarketConfig({
-      collateralToken: "0x0000000000000000000000000000000000000000",
+      collateralToken: ZERO_ADDRESS,
       loanToken: token,
-      oracle: "0x0000000000000000000000000000000000000000",
-      irm: "0x0000000000000000000000000000000000000000",
+      oracle: ZERO_ADDRESS,
+      irm: ZERO_ADDRESS,
       lltv: 0n,
     });
   }

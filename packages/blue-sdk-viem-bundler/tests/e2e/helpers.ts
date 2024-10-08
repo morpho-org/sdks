@@ -26,7 +26,7 @@ import {
   populateBundle,
 } from "../../src";
 
-import { SimulationState } from "@morpho-org/blue-sdk-viem-simulation";
+import { SimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { WITH_SIMPLE_PERMIT } from "./fixtures";
 
 export const donate =
