@@ -1,8 +1,12 @@
-import { Address } from "@morpho-org/blue-sdk";
-import { BytesLike, SignatureLike } from "ethers";
+import type { Address } from "@morpho-org/blue-sdk";
+import type { BytesLike, SignatureLike } from "ethers";
 
 declare module "ethers" {
   interface Signer {
+    getAddress(): Promise<Address>;
+  }
+
+  interface Wallet {
     getAddress(): Promise<Address>;
   }
 

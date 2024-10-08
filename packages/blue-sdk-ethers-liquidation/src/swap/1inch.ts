@@ -1,6 +1,6 @@
-import { BigNumberish, toBigInt } from "ethers";
+import { type BigNumberish, toBigInt } from "ethers";
 
-import { SwapParams, SwapResponse } from "./swap";
+import type { SwapParams, SwapResponse } from "./swap";
 
 export const ONE_INCH_API_BASE_URL = "https://api.1inch.dev";
 

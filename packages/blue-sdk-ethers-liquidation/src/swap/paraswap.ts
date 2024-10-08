@@ -1,6 +1,6 @@
 import { SwapSide, constructSimpleSDK } from "@paraswap/sdk";
 
-import { SwapParams, SwapResponse } from "./swap";
+import type { SwapParams, SwapResponse } from "./swap";
 
 export const PARASWAP_API_URL = "https://api.paraswap.io";
 

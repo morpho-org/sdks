@@ -1,7 +1,6 @@
-import { BigNumberish, toBigInt } from "ethers";
+import { type BigNumberish, toBigInt } from "ethers";
 
 import { retryPromiseLinearBackoff } from "@morpho-org/morpho-ts";
-
 import { fetchOneInchSwap } from "./1inch";
 import { fetchParaSwapSwap } from "./paraswap";
 
@@ -44,7 +43,7 @@ export interface SwapResponse {
   srcToken: SwapToken;
   dstToken: SwapToken;
   dstAmount: string;
-  protocols: Array<any>;
+  protocols: {}[];
   tx: {
     from: string;
     to: string;

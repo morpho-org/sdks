@@ -1,7 +1,14 @@
 {
   "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
   "files": {
-    "ignore": ["lib", "dist", ".pnp.*", ".vscode", "package.json"]
+    "ignore": [
+      "lib",
+      "dist",
+      ".pnp.*",
+      ".vscode",
+      "package.json",
+      "packages/blue-sdk-ethers-liquidation/src/types/"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -17,7 +24,8 @@
     "rules": {
       "recommended": true,
       "complexity": {
-        "noForEach": "off"
+        "noForEach": "off",
+        "noBannedTypes": "off"
       },
       "correctness": {
         "noUnusedImports": "error",

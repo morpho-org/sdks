@@ -136,7 +136,6 @@ export const METAMORPHO_OPERATIONS = [
 
 export type MetaMorphoOperationType = (typeof METAMORPHO_OPERATIONS)[number];
 export interface MetaMorphoOperationArgs {
-  // biome-ignore lint/complexity/noBannedTypes: no args
   MetaMorpho_AccrueInterest: {};
   MetaMorpho_Deposit:
     | {

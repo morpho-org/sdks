@@ -1,7 +1,7 @@
 import "dotenv/config";
 import "hardhat-deal";
 import "hardhat-tracer";
-import { HardhatUserConfig } from "hardhat/config";
+import type { HardhatUserConfig } from "hardhat/config";
 
 import "@nomicfoundation/hardhat-chai-matchers";
 import "@nomicfoundation/hardhat-ethers";
@@ -27,6 +27,9 @@ const config: HardhatUserConfig = {
         },
       },
       allowBlocksWithSameTimestamp: true,
+      // Config tweak to be able to easily impersonate accounts without big ETH balance
+      gasPrice: 10,
+      initialBaseFeePerGas: 10,
     },
   },
   solidity: {
