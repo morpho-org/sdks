@@ -4,7 +4,7 @@ import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
 import { ethers } from "hardhat";
 import _omit from "lodash/omit";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
 import { BlueService, ChainService, getLast } from "@morpho-org/blue-core-sdk";
@@ -55,7 +55,7 @@ describe("MetaMorpho_PublicReallocate", () => {
         },
       },
       {
-        id: MAINNET_MARKETS.idle_usdc.id,
+        id: MAINNET_MARKETS.usdc_idle.id,
         caps: {
           maxIn: assets,
           maxOut: 0n,
@@ -82,7 +82,7 @@ describe("MetaMorpho_PublicReallocate", () => {
           address: steakUsdc.address,
           args: {
             withdrawals: [{ id: MAINNET_MARKETS.usdc_wstEth.id, assets }],
-            supplyMarketId: MAINNET_MARKETS.idle_usdc.id,
+            supplyMarketId: MAINNET_MARKETS.usdc_idle.id,
           },
         },
       ],
@@ -97,7 +97,7 @@ describe("MetaMorpho_PublicReallocate", () => {
       .reallocateTo(
         steakUsdc.address,
         [{ marketParams: MAINNET_MARKETS.usdc_wstEth, amount: assets }],
-        MAINNET_MARKETS.idle_usdc,
+        MAINNET_MARKETS.usdc_idle,
         { value: fee },
       );
     await mine(0);

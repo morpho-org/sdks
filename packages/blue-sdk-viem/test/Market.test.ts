@@ -8,7 +8,7 @@ import { blueAbi } from "../src/index.js";
 import { test } from "./setup.js";
 
 const { morpho, adaptiveCurveIrm } = addresses[ChainId.EthMainnet];
-const { usdc_wstEth, idle_usdc, eth_wstEth } = markets[ChainId.EthMainnet];
+const { usdc_wstEth, usdc_idle, eth_wstEth } = markets[ChainId.EthMainnet];
 
 describe("augment/Market", () => {
   test("should fetch market data", async ({ client }) => {
@@ -31,7 +31,7 @@ describe("augment/Market", () => {
 
   test("should fetch price and rate if idle market", async ({ client }) => {
     const expectedData = new Market({
-      config: idle_usdc,
+      config: usdc_idle,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
@@ -42,7 +42,7 @@ describe("augment/Market", () => {
       rateAtTarget: undefined,
     });
 
-    const value = await Market.fetch(idle_usdc.id, client);
+    const value = await Market.fetch(usdc_idle.id, client);
 
     expect(value).toStrictEqual(expectedData);
   });

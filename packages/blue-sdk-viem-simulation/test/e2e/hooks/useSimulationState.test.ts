@@ -7,7 +7,6 @@ import { describe, expect } from "vitest";
 import {
   Erc20Errors,
   type MinimalBlock,
-  type Operation,
   SimulationState,
   simulateOperations,
   useSimulationState,
@@ -15,7 +14,8 @@ import {
 import { test } from "../setup.js";
 
 const { morpho, bundler, permit2, usdc } = addresses[ChainId.EthMainnet];
-const { usdc_wstEth } = markets[ChainId.EthMainnet];
+const { usdc_wbIB01, usdc_wstEth, usdc_wbtc, usdc_idle } =
+  markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("useSimulationState", () => {
@@ -164,20 +164,23 @@ describe("useSimulationState", () => {
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
-    const operations: Operation[] = [
-      {
-        type: "Erc20_Transfer",
-        sender: morpho,
-        address: usdc,
-        args: {
-          amount: 1_000000n,
-          from: client.account.address,
-          to: morpho,
-        },
-      },
-    ];
-
-    expect(() => simulateOperations(operations, result.current.data!)).toThrow(
+    expect(() =>
+      simulateOperations(
+        [
+          {
+            type: "Erc20_Transfer",
+            sender: morpho,
+            address: usdc,
+            args: {
+              amount: 1_000000n,
+              from: client.account.address,
+              to: morpho,
+            },
+          },
+        ],
+        result.current.data!,
+      ),
+    ).toThrow(
       new Erc20Errors.InsufficientBalance(usdc, client.account.address).message,
     );
   });
@@ -207,20 +210,23 @@ describe("useSimulationState", () => {
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
-    const operations: Operation[] = [
-      {
-        type: "Erc20_Transfer",
-        sender: morpho,
-        address: usdc,
-        args: {
-          amount,
-          from: client.account.address,
-          to: morpho,
-        },
-      },
-    ];
-
-    expect(() => simulateOperations(operations, result.current.data!)).toThrow(
+    expect(() =>
+      simulateOperations(
+        [
+          {
+            type: "Erc20_Transfer",
+            sender: morpho,
+            address: usdc,
+            args: {
+              amount,
+              from: client.account.address,
+              to: morpho,
+            },
+          },
+        ],
+        result.current.data!,
+      ),
+    ).toThrow(
       new Erc20Errors.InsufficientAllowance(
         usdc,
         client.account.address,
@@ -255,31 +261,32 @@ describe("useSimulationState", () => {
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
-    const operations: Operation[] = [
-      {
-        type: "Erc20_Approve",
-        sender: client.account.address,
-        address: usdc,
-        args: {
-          spender: morpho,
-          amount,
-        },
-      },
-      {
-        type: "Erc20_Transfer",
-        sender: morpho,
-        address: usdc,
-        args: {
-          amount,
-          from: client.account.address,
-          to: morpho,
-        },
-      },
-    ];
-
     const data0 = result.current.data!;
 
-    const steps = simulateOperations(operations, data0);
+    const steps = simulateOperations(
+      [
+        {
+          type: "Erc20_Approve",
+          sender: client.account.address,
+          address: usdc,
+          args: {
+            spender: morpho,
+            amount,
+          },
+        },
+        {
+          type: "Erc20_Transfer",
+          sender: morpho,
+          address: usdc,
+          args: {
+            amount,
+            from: client.account.address,
+            to: morpho,
+          },
+        },
+      ],
+      data0,
+    );
 
     expect(steps.length).toBe(3);
 
@@ -288,7 +295,7 @@ describe("useSimulationState", () => {
     await client.setNextBlockTimestamp({
       timestamp: data0.block.timestamp + 1n,
     });
-    await client.writeContract({
+    await client.writeContractWait({
       address: usdc,
       abi: erc20Abi,
       functionName: "approve",
@@ -311,7 +318,7 @@ describe("useSimulationState", () => {
       timestamp: data1.block.timestamp + 1n,
     });
     await client.setBalance({ address: morpho, value: BigInt(1e18) });
-    await client.writeContract({
+    await client.writeContractWait({
       account: morpho,
       address: usdc,
       abi: erc20Abi,
@@ -347,9 +354,9 @@ describe("useSimulationState", () => {
 
     const { result } = await renderHook(config, () =>
       useSimulationState({
-        marketIds: [usdc_wstEth.id],
-        users: [client.account.address],
-        tokens: [usdc],
+        marketIds: [usdc_wstEth.id, usdc_idle.id, usdc_wbtc.id, usdc_wbIB01.id],
+        users: [client.account.address, steakUsdc.address, bundler],
+        tokens: [steakUsdc.asset, steakUsdc.address],
         vaults: [steakUsdc.address],
         block,
       }),
@@ -357,122 +364,123 @@ describe("useSimulationState", () => {
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
-    const operations: Operation[] = [
-      {
-        type: "Erc20_Approve",
-        sender: client.account.address,
-        address: steakUsdc.asset,
-        args: {
-          spender: permit2,
-          amount,
-        },
-      },
-      {
-        type: "Erc20_Permit2",
-        sender: client.account.address,
-        address: steakUsdc.asset,
-        args: {
-          amount,
-          spender: bundler,
-          expiration: MathLib.MAX_UINT_48,
-          nonce: 0n,
-        },
-      },
-      {
-        type: "Erc20_Transfer2",
-        sender: bundler,
-        address: steakUsdc.asset,
-        args: {
-          amount,
-          from: client.account.address,
-          to: bundler,
-        },
-      },
-      {
-        type: "MetaMorpho_Deposit",
-        sender: bundler,
-        address: steakUsdc.address,
-        args: {
-          assets: amount,
-          owner: client.account.address,
-        },
-      },
-    ];
-
     const data0 = result.current.data!;
 
-    const steps = simulateOperations(operations, data0);
+    const steps = simulateOperations(
+      [
+        {
+          type: "Erc20_Approve",
+          sender: client.account.address,
+          address: steakUsdc.asset,
+          args: {
+            spender: permit2,
+            amount,
+          },
+        },
+        {
+          type: "Erc20_Permit2",
+          sender: client.account.address,
+          address: steakUsdc.asset,
+          args: {
+            amount,
+            spender: bundler,
+            expiration: MathLib.MAX_UINT_48,
+            nonce: 0n,
+          },
+        },
+        {
+          type: "Erc20_Transfer2",
+          sender: bundler,
+          address: steakUsdc.asset,
+          args: {
+            amount,
+            from: client.account.address,
+            to: bundler,
+          },
+        },
+        {
+          type: "MetaMorpho_Deposit",
+          sender: bundler,
+          address: steakUsdc.address,
+          args: {
+            assets: amount,
+            owner: client.account.address,
+          },
+        },
+      ],
+      data0,
+    );
 
-    expect(steps.length).to.equal(5);
+    expect(steps.length).toBe(5);
 
     expect(
       steps[0].getHolding(client.account.address, steakUsdc.asset).balance,
-    ).to.equal(amount);
+    ).toBe(amount);
     expect(
       steps[0].getVaultUser(steakUsdc.address, client.account.address)
         .allowance,
-    ).to.equal(0);
+    ).toBe(0n);
     expect(
       steps[0].getHolding(client.account.address, steakUsdc.asset)
         .permit2Allowances.bundler.amount,
-    ).to.equal(0);
+    ).toBe(0n);
     expect(
       steps[0].getHolding(client.account.address, steakUsdc.address).balance,
-    ).to.equal(0);
+    ).toBe(0n);
     expect(
       steps[0].getPosition(steakUsdc.address, usdc_wstEth.id).supplyShares,
-    ).to.equal(29_378_343_227455118737n);
+    ).toBe(29_378_343_227455118737n);
 
     const step1 = steps[1]!;
     expect(
       step1.getHolding(client.account.address, steakUsdc.asset).balance,
-    ).to.equal(amount);
+    ).toBe(amount);
     expect(
       step1.getHolding(client.account.address, steakUsdc.asset).erc20Allowances
         .permit2,
-    ).to.equal(amount);
+    ).toBe(amount);
     expect(
       step1.getHolding(client.account.address, steakUsdc.asset)
         .permit2Allowances.bundler.amount,
-    ).to.equal(0);
+    ).toBe(0n);
     expect(
       step1.getHolding(client.account.address, steakUsdc.address).balance,
-    ).to.equal(0);
+    ).toBe(0n);
     expect(
       step1.getPosition(steakUsdc.address, usdc_wstEth.id).supplyShares,
-    ).to.equal(29_378_343_227455118737n);
+    ).toBe(29_378_343_227455118737n);
 
     const step2 = steps[2]!;
     expect(
       step2.getHolding(client.account.address, steakUsdc.asset).balance,
-    ).to.equal(amount);
+    ).toBe(amount);
     expect(
       step2.getHolding(client.account.address, steakUsdc.asset).erc20Allowances
         .permit2,
-    ).to.equal(amount);
+    ).toBe(amount);
     expect(
       step2.getHolding(client.account.address, steakUsdc.asset)
         .permit2Allowances.bundler.amount,
-    ).to.equal(amount);
+    ).toBe(amount);
     expect(
       step2.getHolding(client.account.address, steakUsdc.address).balance,
-    ).to.equal(0);
+    ).toBe(0n);
     expect(
       step2.getPosition(steakUsdc.address, usdc_wstEth.id).supplyShares,
-    ).to.equal(29_378_343_227455118737n);
+    ).toBe(29_378_343_227455118737n);
 
     const step4 = steps[4]!;
     expect(
       step4.getHolding(client.account.address, steakUsdc.asset).balance,
-    ).to.equal(0);
+    ).toBe(0n);
     expect(
       step4.getVaultUser(steakUsdc.address, client.account.address).allowance,
-    ).to.equal(0);
+    ).toBe(0n);
     expect(
       step4.getHolding(client.account.address, steakUsdc.address).balance,
-    ).to.equal(980_675_703_540782945699252n);
+    ).toBe(980_675_703_540782945699252n);
     expect(
       step4.getPosition(steakUsdc.address, usdc_wstEth.id).supplyShares,
-    ).to.equal(30_357_464_135047367671n);
+    ).toBe(30_357_464_135047367671n);
   });
 });

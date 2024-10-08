@@ -119,7 +119,7 @@ export const handleMetaMorphoWithdrawOperation: OperationHandler<
       address: vault.config.asset,
       args: {
         amount: assets,
-        from: zeroAddress, // Bypass the vault balance check.
+        from: address,
         to: receiver,
       },
     },

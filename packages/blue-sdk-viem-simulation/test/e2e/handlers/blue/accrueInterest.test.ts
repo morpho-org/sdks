@@ -1,46 +1,84 @@
-import _omit from "lodash/omit";
-
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";
 import { getLast } from "@morpho-org/morpho-ts";
+import { renderHook, waitFor } from "@morpho-org/test";
 import { describe, expect } from "vitest";
-import { type Operation, simulateOperations } from "../../../../src";
-import { test } from "../../setup";
+import {
+  type MinimalBlock,
+  simulateOperations,
+  useSimulationState,
+} from "../../../../src/index.js";
+import { test } from "../../setup.js";
 
 const { morpho } = addresses[ChainId.EthMainnet];
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 describe("Blue_AccrueInterest", () => {
-  test("should accrue interest accurately", async ({ client }) => {
-    const operations: Operation[] = [
-      {
-        type: "Blue_AccrueInterest",
-        sender: client.account.address,
-        args: {
-          id: usdc_wstEth.id,
-        },
-      },
-    ];
+  test("should accrue interest accurately", async ({
+    wagmi: { config, client },
+  }) => {
+    const block = await client.getBlock();
 
-    const { value: dataBefore } = await simulationService.data;
-
-    const steps = simulateOperations(operations, dataBefore);
-
-    expect(steps.length).to.equal(2);
-
-    await client.setNextBlockTimestamp(dataBefore.timestamp);
-
-    await MorphoBlue__factory.connect(morpho, signer).accrueInterest(
-      usdc_wstEth,
+    const { result, rerender } = await renderHook(
+      config,
+      (block: MinimalBlock) =>
+        useSimulationState({
+          marketIds: [usdc_wstEth.id],
+          users: [],
+          tokens: [],
+          vaults: [],
+          block,
+          accrueInterest: false,
+        }),
+      { initialProps: block },
     );
-    await mine(0);
 
-    const expected = getLast(steps);
-    const { value: data } = await simulationService.data;
+    await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
-    expected.blockNumber += 1n;
+    const dataBefore = result.current.data!;
 
-    expect(_omit(data, "cacheId")).to.eql(_omit(expected, "cacheId"));
+    dataBefore.block.number += 1n;
+    dataBefore.block.timestamp += 1n;
+
+    const steps = simulateOperations(
+      [
+        {
+          type: "Blue_AccrueInterest",
+          sender: client.account.address,
+          args: {
+            id: usdc_wstEth.id,
+          },
+        },
+      ],
+      dataBefore,
+    );
+
+    expect(steps.length).toBe(2);
+
+    await client.setNextBlockTimestamp({
+      timestamp: dataBefore.block.timestamp,
+    });
+
+    await client.writeContractWait({
+      address: morpho,
+      abi: blueAbi,
+      functionName: "accrueInterest",
+      args: [
+        {
+          collateralToken: usdc_wstEth.collateralToken,
+          loanToken: usdc_wstEth.loanToken,
+          oracle: usdc_wstEth.oracle,
+          irm: usdc_wstEth.irm,
+          lltv: usdc_wstEth.lltv,
+        },
+      ],
+    });
+
+    await rerender(await client.getBlock());
+    await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+    expect(result.current.data).toStrictEqual(getLast(steps));
   });
 });

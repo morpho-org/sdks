@@ -1,14 +1,19 @@
 import { spawn } from "node:child_process";
 import {
   http,
+  type Abi,
   type Chain,
   type Client,
+  type ContractFunctionArgs,
+  type ContractFunctionName,
   type HDAccount,
   type HttpTransport,
   type PublicActions,
   type TestActions,
   type TestRpcSchema,
+  type WaitForTransactionReceiptReturnType,
   type WalletActions,
+  type WriteContractParameters,
   createTestClient,
   publicActions,
   walletActions,
@@ -324,15 +329,22 @@ export const spawnAnvil = async (
   const stop = await new Promise<() => boolean>((resolve, reject) => {
     const subprocess = spawn("anvil", toArgs({ ...args, port }));
 
-    // subprocess.stdout.on("data", console.debug);
-    subprocess.stderr.on("stderr", console.warn);
-
     subprocess.stdout.on("data", (data) => {
       const message = data.toString();
+
+      // console.debug(message);
+
       if (message.includes("Listening on"))
         resolve(() => subprocess.kill("SIGINT"));
     });
-    subprocess.stderr.on("data", reject);
+
+    subprocess.stderr.on("data", (data) => {
+      const message = data.toString();
+
+      console.warn(message);
+
+      reject(message);
+    });
   });
 
   return {
@@ -356,6 +368,26 @@ export const createAnvilTestClient = <
     PublicActions<HttpTransport, chain, HDAccount> &
     WalletActions<chain, HDAccount> & {
       timestamp(): Promise<bigint>;
+      writeContractWait<
+        const abi extends Abi | readonly unknown[],
+        functionName extends ContractFunctionName<
+          abi,
+          "payable" | "nonpayable"
+        >,
+        args extends ContractFunctionArgs<
+          abi,
+          "payable" | "nonpayable",
+          functionName
+        >,
+      >(
+        args: WriteContractParameters<
+          abi,
+          functionName,
+          args,
+          chain,
+          HDAccount
+        >,
+      ): Promise<WaitForTransactionReceiptReturnType<chain>>;
     }
 > =>
   createTestClient({
@@ -369,11 +401,32 @@ export const createAnvilTestClient = <
     .extend(walletActions)
     .extend((client) => ({
       async timestamp() {
-        const latestBlock = await client.getBlock({
-          blockTag: "latest",
-          includeTransactions: false,
-        });
+        const latestBlock = await client.getBlock();
 
         return latestBlock.timestamp;
+      },
+      async writeContractWait<
+        const abi extends Abi | readonly unknown[],
+        functionName extends ContractFunctionName<
+          abi,
+          "payable" | "nonpayable"
+        >,
+        args extends ContractFunctionArgs<
+          abi,
+          "payable" | "nonpayable",
+          functionName
+        >,
+      >(
+        args: WriteContractParameters<
+          abi,
+          functionName,
+          args,
+          chain,
+          HDAccount
+        >,
+      ) {
+        const hash = await client.writeContract(args);
+
+        return await client.waitForTransactionReceipt({ hash });
       },
     }));

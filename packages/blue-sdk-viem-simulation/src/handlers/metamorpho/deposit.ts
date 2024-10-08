@@ -73,10 +73,19 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
 
   let toSupply = assets;
   for (const id of vault.supplyQueue) {
-    const { supplyAssets } = data
-      .getAccrualPosition(address, id)
-      .accrueInterest(data.block.timestamp);
     const { cap } = data.getVaultMarketConfig(address, id);
+    if (cap === 0n) continue;
+
+    handleBlueOperation(
+      {
+        type: "Blue_AccrueInterest",
+        sender: address,
+        args: { id },
+      },
+      data,
+    );
+
+    const { supplyAssets } = data.getAccrualPosition(address, id);
 
     const suppliable = MathLib.zeroFloorSub(cap, supplyAssets);
     if (suppliable === 0n) continue;
@@ -86,7 +95,7 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
     handleBlueOperation(
       {
         type: "Blue_Supply",
-        sender: zeroAddress, // Bypass the vault balance check.
+        sender: address,
         args: {
           id,
           assets: toSupplyInMarket,

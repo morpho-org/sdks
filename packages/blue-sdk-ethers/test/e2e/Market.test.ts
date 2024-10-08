@@ -3,7 +3,7 @@ import { Wallet, toBigInt } from "ethers";
 import { MorphoBlue__factory } from "ethers-types";
 import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { setCode, time } from "@nomicfoundation/hardhat-network-helpers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
@@ -61,7 +61,7 @@ describe("augment/Market", () => {
 
   it("should fetch price and rate if idle market", async () => {
     const expectedData = {
-      config: MAINNET_MARKETS.idle_usdc,
+      config: MAINNET_MARKETS.usdc_idle,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
@@ -72,7 +72,7 @@ describe("augment/Market", () => {
       rateAtTarget: undefined,
     };
 
-    const value = await Market.fetch(MAINNET_MARKETS.idle_usdc.id, signer);
+    const value = await Market.fetch(MAINNET_MARKETS.usdc_idle.id, signer);
 
     expect(value).to.eql(expectedData);
   });
