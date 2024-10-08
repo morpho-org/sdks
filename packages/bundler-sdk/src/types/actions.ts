@@ -9,7 +9,7 @@ import type {
 } from "viem";
 
 import type { Address, MarketConfig } from "@morpho-org/blue-sdk";
-import type { SimulationResult } from "@morpho-org/simulation-sdk-wagmi";
+import type { SimulationResult } from "@morpho-org/simulation-sdk";
 
 export type MarketParams = Pick<
   MarketConfig,

@@ -25,7 +25,7 @@ import {
   handleOperations,
   produceImmutable,
   simulateOperation,
-} from "@morpho-org/simulation-sdk-wagmi";
+} from "@morpho-org/simulation-sdk";
 
 import { maxUint256 } from "viem";
 import { BundlerErrors } from "../errors.js";

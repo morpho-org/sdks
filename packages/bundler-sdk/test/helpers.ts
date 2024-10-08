@@ -3,11 +3,11 @@ import { ERC20__factory, MorphoBlue__factory } from "ethers-types";
 import { ethers } from "hardhat";
 import { deal } from "hardhat-deal";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
 
 import {
-  Address,
+  type Address,
   MarketConfig,
   NATIVE_ADDRESS,
   UnknownMarketConfigError,
@@ -19,15 +19,15 @@ import { assertApproxEqAbs, mine } from "@morpho-org/morpho-test";
 import { keys } from "@morpho-org/morpho-ts";
 
 import {
-  BundlingOptions,
-  InputBundlerOperation,
+  type BundlingOptions,
+  type InputBundlerOperation,
   encodeBundle,
   finalizeBundle,
   populateBundle,
-} from "../../src";
+} from "../src/index.js";
 
-import { SimulationState } from "@morpho-org/simulation-sdk-wagmi";
-import { WITH_SIMPLE_PERMIT } from "./fixtures";
+import type { SimulationState } from "@morpho-org/simulation-sdk";
+import { WITH_SIMPLE_PERMIT } from "./fixtures.js";
 
 export const donate =
   (

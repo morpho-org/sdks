@@ -1,5 +1,5 @@
 {
-  "name": "@morpho-org/blue-sdk-viem-bundler",
+  "name": "@morpho-org/bundler-sdk",
   "version": "2.0.0-alpha.6",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
@@ -19,7 +19,7 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk-wagmi": "workspace:^",
+    "@morpho-org/simulation-sdk": "workspace:^",
     "viem": "^2.0.0"
   },
   "devDependencies": {
@@ -27,7 +27,7 @@
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk-wagmi": "workspace:^",
+    "@morpho-org/simulation-sdk": "workspace:^",
     "@types/lodash": "^4.17.7",
     "@types/node": "^22.2.0",
     "lodash": "^4.17.21",

@@ -1,4 +1,4 @@
-import type { SimulationResult } from "@morpho-org/simulation-sdk-wagmi";
+import type { SimulationResult } from "@morpho-org/simulation-sdk";
 
 import type { InputBundlerOperation } from "./types/index.js";
 

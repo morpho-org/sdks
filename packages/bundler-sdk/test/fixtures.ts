@@ -1,4 +1,9 @@
-import { Address, ChainId, VaultConfig, addresses } from "@morpho-org/blue-sdk";
+import {
+  type Address,
+  ChainId,
+  VaultConfig,
+  addresses,
+} from "@morpho-org/blue-sdk";
 
 export const steakUsdc = new VaultConfig({
   address: "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",

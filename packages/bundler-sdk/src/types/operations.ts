@@ -9,7 +9,7 @@ import type {
   OperationArgs,
   OperationType,
   WithOperationArgs,
-} from "@morpho-org/simulation-sdk-wagmi";
+} from "@morpho-org/simulation-sdk";
 
 export const BUNDLER_OPERATIONS = [
   "Blue_SetAuthorization",

@@ -3125,29 +3125,6 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk-viem-bundler@workspace:packages/blue-sdk-viem-bundler":
-  version: 0.0.0-use.local
-  resolution: "@morpho-org/blue-sdk-viem-bundler@workspace:packages/blue-sdk-viem-bundler"
-  dependencies:
-    "@morpho-org/blue-sdk": "workspace:^"
-    "@morpho-org/blue-sdk-viem": "workspace:^"
-    "@morpho-org/morpho-test": "workspace:^"
-    "@morpho-org/morpho-ts": "workspace:^"
-    "@morpho-org/simulation-sdk-wagmi": "workspace:^"
-    "@types/lodash": "npm:^4.17.7"
-    "@types/node": "npm:^22.2.0"
-    lodash: "npm:^4.17.21"
-    typescript: "npm:^5.6.2"
-    viem: "npm:^2.21.19"
-  peerDependencies:
-    "@morpho-org/blue-sdk": "workspace:^"
-    "@morpho-org/blue-sdk-viem": "workspace:^"
-    "@morpho-org/morpho-ts": "workspace:^"
-    "@morpho-org/simulation-sdk-wagmi": "workspace:^"
-    viem: ^2.0.0
-  languageName: unknown
-  linkType: soft
-
 "@morpho-org/blue-sdk-viem@workspace:^, @morpho-org/blue-sdk-viem@workspace:packages/blue-sdk-viem":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-viem@workspace:packages/blue-sdk-viem"
@@ -3218,6 +3195,29 @@ __metadata:
   languageName: unknown
   linkType: soft
 
+"@morpho-org/bundler-sdk@workspace:packages/bundler-sdk":
+  version: 0.0.0-use.local
+  resolution: "@morpho-org/bundler-sdk@workspace:packages/bundler-sdk"
+  dependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/morpho-test": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/simulation-sdk": "workspace:^"
+    "@types/lodash": "npm:^4.17.7"
+    "@types/node": "npm:^22.2.0"
+    lodash: "npm:^4.17.21"
+    typescript: "npm:^5.6.2"
+    viem: "npm:^2.21.19"
+  peerDependencies:
+    "@morpho-org/blue-sdk": "workspace:^"
+    "@morpho-org/blue-sdk-viem": "workspace:^"
+    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/simulation-sdk": "workspace:^"
+    viem: ^2.0.0
+  languageName: unknown
+  linkType: soft
+
 "@morpho-org/morpho-test@workspace:^, @morpho-org/morpho-test@workspace:packages/morpho-test":
   version: 0.0.0-use.local
   resolution: "@morpho-org/morpho-test@workspace:packages/morpho-test"
@@ -3260,7 +3260,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/simulation-sdk-wagmi@workspace:^, @morpho-org/simulation-sdk-wagmi@workspace:packages/simulation-sdk-wagmi":
+"@morpho-org/simulation-sdk-wagmi@workspace:packages/simulation-sdk-wagmi":
   version: 0.0.0-use.local
   resolution: "@morpho-org/simulation-sdk-wagmi@workspace:packages/simulation-sdk-wagmi"
   dependencies:
@@ -3342,6 +3342,7 @@ __metadata:
     typescript: "npm:^5.6.2"
     viem: "npm:^2.21.19"
     viem-deal: "npm:^1.0.5"
+    vitest: "npm:^2.1.2"
     wagmi: "npm:^2.12.17"
   peerDependencies:
     viem: ^2.21.10

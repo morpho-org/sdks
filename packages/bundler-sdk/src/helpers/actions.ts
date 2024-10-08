@@ -21,7 +21,7 @@ import {
   type SimulationResult,
   type SimulationState,
   simulateOperation,
-} from "@morpho-org/simulation-sdk-wagmi";
+} from "@morpho-org/simulation-sdk";
 
 import {
   blueAbi,

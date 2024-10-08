@@ -5,7 +5,7 @@ import { ethers } from "hardhat";
 import { deal } from "hardhat-deal";
 import _omit from "lodash/omit";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 
 import { BlueService, ChainService } from "@morpho-org/blue-core-sdk";
 import { MetaMorphoService } from "@morpho-org/blue-metamorpho-sdk";
@@ -34,7 +34,7 @@ import {
   reset,
 } from "@morpho-org/morpho-test";
 
-import { BundlerService } from "../../../src";
+import { BundlerService } from "../../src/index.js";
 import { bbETH, bbUSDT, bbUsdc, re7WETH, steakUsdc } from "../fixtures";
 import { donate, setupBundle } from "../helpers";
 
