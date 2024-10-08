@@ -14,6 +14,10 @@ describe("format", () => {
         expect(format.hex.default("default").of(undefined)).toEqual("default");
         expect(format.hex.default("default").of(null)).toEqual("default");
       });
+      it("with nullable values", () => {
+        expect(format.hex.of(undefined)).toEqual(undefined);
+        expect(format.hex.of(null)).toEqual(null);
+      });
     });
     describe("should properly format bigint in hex format", () => {
       it("without option", () => {
@@ -26,6 +30,20 @@ describe("format", () => {
           "default",
         );
         expect(format.hex.default("default").of(null, 18)).toEqual("default");
+        expect(format.hex.default("default").of(bigint, undefined)).toEqual(
+          "default",
+        );
+        expect(format.hex.default("default").of(bigint, null)).toEqual(
+          "default",
+        );
+      });
+      it("with nullable values", () => {
+        expect(format.hex.of(undefined, decimals)).toEqual(undefined);
+        expect(format.hex.of(null, decimals)).toEqual(null);
+        expect(format.hex.of(bigint, undefined)).toEqual(undefined);
+        expect(format.hex.of(bigint, null)).toEqual(null);
+        expect(format.hex.of(null, undefined)).toEqual(null);
+        expect(format.hex.of(undefined, null)).toEqual(undefined);
       });
     });
   });
@@ -75,6 +93,10 @@ describe("format", () => {
           "default",
         );
         expect(format.number.default("default").of(null)).toEqual("default");
+      });
+      it("with nullable values", () => {
+        expect(format.number.of(undefined)).toEqual(undefined);
+        expect(format.number.of(null)).toEqual(null);
       });
     });
     describe("should properly format bigint in number format", () => {
@@ -126,6 +148,20 @@ describe("format", () => {
         expect(format.number.default("default").of(null, 18)).toEqual(
           "default",
         );
+        expect(format.number.default("default").of(bigint, undefined)).toEqual(
+          "default",
+        );
+        expect(format.number.default("default").of(bigint, null)).toEqual(
+          "default",
+        );
+      });
+      it("with nullable values", () => {
+        expect(format.number.of(undefined, decimals)).toEqual(undefined);
+        expect(format.number.of(null, decimals)).toEqual(null);
+        expect(format.number.of(bigint, undefined)).toEqual(undefined);
+        expect(format.number.of(bigint, null)).toEqual(null);
+        expect(format.number.of(null, undefined)).toEqual(null);
+        expect(format.number.of(undefined, null)).toEqual(undefined);
       });
     });
   });
@@ -169,6 +205,10 @@ describe("format", () => {
           "default",
         );
         expect(format.short.default("default").of(null)).toEqual("default");
+      });
+      it("with nullable values", () => {
+        expect(format.short.of(undefined)).toEqual(undefined);
+        expect(format.short.of(null)).toEqual(null);
       });
     });
     describe("should properly format bigint in short format", () => {
@@ -230,6 +270,20 @@ describe("format", () => {
           "default",
         );
         expect(format.short.default("default").of(null, 18)).toEqual("default");
+        expect(format.short.default("default").of(bigint, undefined)).toEqual(
+          "default",
+        );
+        expect(format.short.default("default").of(bigint, null)).toEqual(
+          "default",
+        );
+      });
+      it("with nullable values", () => {
+        expect(format.short.of(undefined, decimals)).toEqual(undefined);
+        expect(format.short.of(null, decimals)).toEqual(null);
+        expect(format.short.of(bigint, undefined)).toEqual(undefined);
+        expect(format.short.of(bigint, null)).toEqual(null);
+        expect(format.short.of(null, undefined)).toEqual(null);
+        expect(format.short.of(undefined, null)).toEqual(undefined);
       });
     });
   });
@@ -270,6 +324,10 @@ describe("format", () => {
           "default",
         );
         expect(format.commas.default("default").of(null)).toEqual("default");
+      });
+      it("with nullable values", () => {
+        expect(format.commas.of(undefined)).toEqual(undefined);
+        expect(format.commas.of(null)).toEqual(null);
       });
     });
     describe("should properly format bigint in commas format", () => {
@@ -322,6 +380,20 @@ describe("format", () => {
         expect(format.commas.default("default").of(null, 18)).toEqual(
           "default",
         );
+        expect(format.commas.default("default").of(bigint, undefined)).toEqual(
+          "default",
+        );
+        expect(format.commas.default("default").of(bigint, null)).toEqual(
+          "default",
+        );
+      });
+      it("with nullable values", () => {
+        expect(format.commas.of(undefined, decimals)).toEqual(undefined);
+        expect(format.commas.of(null, decimals)).toEqual(null);
+        expect(format.commas.of(bigint, undefined)).toEqual(undefined);
+        expect(format.commas.of(bigint, null)).toEqual(null);
+        expect(format.commas.of(null, undefined)).toEqual(null);
+        expect(format.commas.of(undefined, null)).toEqual(undefined);
       });
     });
   });
@@ -361,6 +433,10 @@ describe("format", () => {
           "default",
         );
         expect(format.percent.default("default").of(null)).toEqual("default");
+      });
+      it("with nullable values", () => {
+        expect(format.percent.of(undefined)).toEqual(undefined);
+        expect(format.percent.of(null)).toEqual(null);
       });
     });
     describe("should properly format bigint in percent format", () => {
@@ -409,6 +485,20 @@ describe("format", () => {
         expect(format.percent.default("default").of(null, 18)).toEqual(
           "default",
         );
+        expect(format.percent.default("default").of(bigint, undefined)).toEqual(
+          "default",
+        );
+        expect(format.percent.default("default").of(bigint, null)).toEqual(
+          "default",
+        );
+      });
+      it("with nullable values", () => {
+        expect(format.percent.of(undefined, decimals)).toEqual(undefined);
+        expect(format.percent.of(null, decimals)).toEqual(null);
+        expect(format.percent.of(bigint, undefined)).toEqual(undefined);
+        expect(format.percent.of(bigint, null)).toEqual(null);
+        expect(format.percent.of(null, undefined)).toEqual(null);
+        expect(format.percent.of(undefined, null)).toEqual(undefined);
       });
     });
   });
