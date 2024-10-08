@@ -43,6 +43,10 @@ import {
   fetchMarket,
   fetchToken,
 } from "@morpho-org/blue-sdk-ethers";
+import {
+  getPendleMarketsApiUrl,
+  getPendleTokensApiUrl,
+} from "@morpho-org/blue-sdk-ethers-liquidation/src/tokens/pendle";
 import chaiAlmost from "chai-almost";
 import { check } from "../../examples/whitelisted-erc4626-1inch";
 import { SwapMock__factory } from "../../mocks/types";
@@ -53,9 +57,10 @@ import { PARASWAP_API_URL } from "../../src/swap/paraswap";
 import {
   getPendleRedeemApiUrl,
   getPendleSwapApiUrl,
-  pendleMarkets,
 } from "../../src/tokens/pendle";
 import { sendRawBundleMockImpl } from "../mocks";
+import pendleMarketData from "../pendleMockData/pendleMarketData.json";
+import pendleTokens from "../pendleMockData/pendleTokens.json";
 
 //allow for 0.1% tolerance for balance checks
 chai.use(chaiAlmost(0.1));
@@ -71,6 +76,8 @@ const paraSwapTxApiMatcher = new RegExp(
 
 const pendleSwapApiMatcher = new RegExp(getPendleSwapApiUrl(1) + ".*");
 const pendleRedeemApiMatcher = new RegExp(getPendleRedeemApiUrl(1) + ".*");
+const pendleTokensApiMatcher = new RegExp(getPendleTokensApiUrl(1) + ".*");
+const pendleMarketApiMatcher = new RegExp(getPendleMarketsApiUrl(1) + ".*");
 
 // Method 'HardhatEthersSigner.signTransaction' is not implemented.
 const hardhatSigner = Wallet.fromPhrase(
@@ -289,6 +296,22 @@ describe("erc4626-1inch", () => {
     });
   };
 
+  const mockGetPendleToken = () => {
+    fetchMock
+      .get(pendleTokensApiMatcher, async () => {
+        return pendleTokens;
+      })
+      .get(pendleTokensApiMatcher, 404, { overwriteRoutes: false });
+  };
+
+  const mockGetPendleMarket = () => {
+    fetchMock
+      .get(pendleMarketApiMatcher, async () => {
+        return pendleMarketData;
+      })
+      .get(pendleMarketApiMatcher, 404, { overwriteRoutes: false });
+  };
+
   const mockPendleOperations = (
     srcAmount: bigint,
     dstAmount: string,
@@ -497,6 +520,8 @@ describe("erc4626-1inch", () => {
       borrower.address,
     );
 
+    mockGetPendleToken();
+
     nock(BLUE_API_BASE_URL)
       .post("/graphql")
       .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
@@ -621,6 +646,8 @@ describe("erc4626-1inch", () => {
       borrower.address,
     );
 
+    mockGetPendleToken();
+
     nock(BLUE_API_BASE_URL)
       .post("/graphql")
       .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
@@ -736,6 +763,10 @@ describe("erc4626-1inch", () => {
     );
 
     const newCollateralPriceUsd = collateralPriceUsd * 0.5; // 50% price drop
+
+    mockGetPendleToken();
+
+    mockGetPendleMarket();
 
     nock(BLUE_API_BASE_URL)
       .post("/graphql")
@@ -855,6 +886,10 @@ describe("erc4626-1inch", () => {
 
     const newCollateralPriceUsd = collateralPriceUsd * 0.5; // 50% price drop
 
+    mockGetPendleToken();
+
+    mockGetPendleMarket();
+
     nock(BLUE_API_BASE_URL)
       .post("/graphql")
       .reply(200, {
@@ -901,9 +936,8 @@ describe("erc4626-1inch", () => {
       market.config,
       signer,
     );
-    const pendleMarketData =
-      pendleMarkets[ChainId.EthMainnet][market.config.collateralToken];
-    const postMaturity = pendleMarketData!.maturity.getTime() / 1000 + 1;
+    const postMaturity =
+      new Date("2024-10-24T00:00:00.000Z").getTime() / 1000 + 1;
     const accruedPosition = accrualPosition.accrueInterest(postMaturity);
     setTimestamp(postMaturity);
     mockPendleOperations(
@@ -1021,6 +1055,8 @@ describe("erc4626-1inch", () => {
     );
 
     const newCollateralPriceUsd = collateralPriceUsd * 0.9; // 20% price drop
+
+    mockGetPendleToken();
 
     nock(BLUE_API_BASE_URL)
       .post("/graphql")
@@ -1141,6 +1177,8 @@ describe("erc4626-1inch", () => {
     );
 
     const newCollateralPriceUsd = collateralPriceUsd * 0.9; // 20% price drop
+
+    mockGetPendleToken();
 
     nock(BLUE_API_BASE_URL)
       .post("/graphql")
