@@ -3,15 +3,14 @@ import { Wallet, toBigInt } from "ethers";
 import { MorphoBlue__factory } from "ethers-types";
 import { ethers } from "hardhat";
 
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 import { setCode, time } from "@nomicfoundation/hardhat-network-helpers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
 import { ChainId, MarketConfig, addresses } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import { Market } from "../../src/augment/Market";
+import { Market } from "../../src/augment/Market.js";
 
 describe("augment/Market", () => {
   let signer: SignerWithAddress;

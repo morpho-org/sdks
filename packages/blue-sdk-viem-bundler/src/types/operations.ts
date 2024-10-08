@@ -1,4 +1,4 @@
-import {
+import type {
   BlueOperationArgs,
   BlueOperationType,
   CALLBACK_OPERATIONS,

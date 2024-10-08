@@ -1,7 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 
 import {
   ChainId,
@@ -9,7 +9,7 @@ import {
   addresses,
 } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-import { Token } from "../../src/augment/Token";
+import { Token } from "../../src/augment/Token.js";
 
 describe("augment/Token", () => {
   let signer: SignerWithAddress;

@@ -1,12 +1,12 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { MorphoBlue__factory } from "ethers-types";
 
 import {
-  Address,
-  ChainId,
+  type Address,
+  type ChainId,
   ChainUtils,
   MarketConfig,
-  MarketId,
+  type MarketId,
   UnknownMarketConfigError,
   _try,
   getChainAddresses,

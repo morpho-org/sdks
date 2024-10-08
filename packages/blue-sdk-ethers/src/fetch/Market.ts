@@ -1,4 +1,4 @@
-import { Provider, ZeroAddress } from "ethers";
+import { type Provider, ZeroAddress } from "ethers";
 import {
   AdaptiveCurveIrm__factory,
   BlueOracle__factory,
@@ -8,12 +8,12 @@ import {
 import {
   ChainUtils,
   Market,
-  MarketConfig,
-  MarketId,
+  type MarketConfig,
+  type MarketId,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import { FetchOptions } from "../types";
-import { fetchMarketConfig } from "./MarketConfig";
+import type { FetchOptions } from "../types.js";
+import { fetchMarketConfig } from "./MarketConfig.js";
 
 export async function fetchMarket(
   id: MarketId,

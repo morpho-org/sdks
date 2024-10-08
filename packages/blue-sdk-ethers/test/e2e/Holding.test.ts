@@ -3,14 +3,18 @@ import { parseUnits } from "ethers";
 import { ERC20__factory, Permit2__factory } from "ethers-types";
 import { deal } from "hardhat-deal";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 
-import { Address, ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
+import {
+  type Address,
+  ChainId,
+  MathLib,
+  addresses,
+} from "@morpho-org/blue-sdk";
 
 import { setUp } from "@morpho-org/morpho-test";
 import { ethers } from "hardhat";
-import { Holding } from "../../src/augment/Holding";
+import { Holding } from "../../src/augment/Holding.js";
 
 describe("augment/Holding", () => {
   let signer: SignerWithAddress;

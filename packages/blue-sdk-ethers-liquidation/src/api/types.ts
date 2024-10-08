@@ -1,4 +1,4 @@
-import * as Types from "@morpho-org/blue-api-sdk";
+import type * as Types from "@morpho-org/blue-api-sdk";
 
 export type GetLiquidatablePositionsQueryVariables = Types.Exact<{
   chainId: Types.Scalars["Int"]["input"];

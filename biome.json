@@ -6,8 +6,13 @@
       "dist",
       ".pnp.*",
       ".vscode",
+      "cache",
+      "coverage",
+      "artifacts",
       "package.json",
-      "packages/blue-sdk-ethers-liquidation/src/types/"
+      "packages/blue-sdk-viem-bundler/tests/",
+      "packages/blue-sdk-ethers-liquidation/src/types/",
+      "packages/blue-sdk-ethers-liquidation/mocks/types/"
     ]
   },
   "formatter": {

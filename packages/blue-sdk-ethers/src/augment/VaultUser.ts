@@ -1,6 +1,6 @@
 import { VaultUser } from "@morpho-org/blue-sdk";
 
-import { fetchVaultUser, fetchVaultUserFromConfig } from "../fetch";
+import { fetchVaultUser, fetchVaultUserFromConfig } from "../fetch/index.js";
 
 declare module "@morpho-org/blue-sdk" {
   namespace VaultUser {

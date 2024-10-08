@@ -1,22 +1,23 @@
 import {
   Signature,
-  Signer,
-  TypedDataDomain,
+  type Signer,
+  type TypedDataDomain,
   TypedDataEncoder,
-  TypedDataField,
+  type TypedDataField,
   ZeroAddress,
   recoverAddress,
 } from "ethers";
 
-import { Address } from "@morpho-org/blue-sdk";
+import type { Address } from "@morpho-org/blue-sdk";
 
-import { InvalidSignatureError } from "../errors";
-import { SignatureMessage } from "./types";
+import { InvalidSignatureError } from "../errors.js";
+import type { SignatureMessage } from "./types.js";
 
 export async function safeSignTypedData(
   signer: Signer,
   domain: TypedDataDomain,
   types: Record<string, TypedDataField[]>,
+  // biome-ignore lint/suspicious/noExplicitAny: old code
   value: Record<string, any>,
 ) {
   const populated = await TypedDataEncoder.resolveNames(
@@ -56,6 +57,7 @@ export async function safeSignTypedData(
           JSON.stringify(correctedPayload),
         ]),
       );
+      // biome-ignore lint/suspicious/noExplicitAny: old code
     } catch (e: any) {
       if ("reason" in e && e.reason === "rejected") throw e;
     }
@@ -80,6 +82,7 @@ export function verifySignature(
 export function getMessage(
   domain: TypedDataDomain,
   types: Record<string, TypedDataField[]>,
+  // biome-ignore lint/suspicious/noExplicitAny: old code
   value: Record<string, any>,
 ): SignatureMessage {
   const hash = TypedDataEncoder.hash(domain, types, value);

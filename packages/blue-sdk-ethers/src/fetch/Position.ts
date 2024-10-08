@@ -1,17 +1,17 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { MorphoBlue__factory } from "ethers-types";
 
 import {
   AccrualPosition,
-  Address,
+  type Address,
   ChainUtils,
-  MarketConfig,
-  MarketId,
+  type MarketConfig,
+  type MarketId,
   Position,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import { FetchOptions } from "../types";
-import { fetchMarket, fetchMarketFromConfig } from "./Market";
+import type { FetchOptions } from "../types.js";
+import { fetchMarket, fetchMarketFromConfig } from "./Market.js";
 
 export async function fetchPosition(
   user: Address,

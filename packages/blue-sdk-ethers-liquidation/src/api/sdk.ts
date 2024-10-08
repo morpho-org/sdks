@@ -1,7 +1,7 @@
-import { GraphQLClient, RequestOptions } from "graphql-request";
+import type { GraphQLClient, RequestOptions } from "graphql-request";
 import gql from "graphql-tag";
 
-import * as Types from "./types";
+import type * as Types from "./types";
 
 type GraphQLClientRequestHeaders = RequestOptions["requestHeaders"];
 

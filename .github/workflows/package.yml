@@ -6,8 +6,6 @@ on:
       name:
         type: string
         required: true
-      vitest:
-        type: boolean
       hardhat:
         type: boolean
 
@@ -25,21 +23,6 @@ jobs:
 
       - run: yarn install --immutable
       - run: yarn workspace @morpho-org/${{ inputs.name }} build
-
-  vitest:
-    runs-on: ubuntu-latest
-
-    if: ${{ inputs.vitest == true }}
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: yarn
-
-      - run: yarn install --immutable
-      - run: yarn workspace @morpho-org/${{ inputs.name }} vitest --passWithNoTests
 
   hardhat:
     runs-on: ubuntu-latest

@@ -1,12 +1,12 @@
 import {
-  Address,
-  ChainId,
-  Token,
+  type Address,
+  type ChainId,
+  type Token,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import { SignatureMessage } from "./types";
-import { getMessage } from "./utils";
+import type { SignatureMessage } from "./types.js";
+import { getMessage } from "./utils.js";
 
 export interface PermitArgs {
   erc20: Token;

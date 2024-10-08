@@ -4,7 +4,7 @@ import { MorphoBlue__factory } from "ethers-types";
 import { ethers } from "hardhat";
 import { deal } from "hardhat-deal";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 
 import {
   ChainId,

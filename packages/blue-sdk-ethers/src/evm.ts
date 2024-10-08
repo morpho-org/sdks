@@ -1,23 +1,24 @@
 import {
-  Signer,
-  TransactionRequest,
-  TransactionResponse,
+  type Signer,
+  type TransactionRequest,
+  type TransactionResponse,
   parseUnits,
 } from "ethers";
 
-import { ChainId, MathLib } from "@morpho-org/blue-sdk";
+import { type ChainId, MathLib } from "@morpho-org/blue-sdk";
 
 import {
   NotificationProducer,
   NotificationStatus,
   NotificationTopic,
-} from "./notifications";
-import { SignatureUtils } from "./signatures";
-import { SignatureMessage } from "./signatures/types";
+} from "./notifications.js";
+import { SignatureUtils } from "./signatures/index.js";
+import type { SignatureMessage } from "./signatures/types.js";
 
 export interface NotificationOptions<Topic extends NotificationTopic> {
   producer: NotificationProducer<Topic>;
   id: string;
+  // biome-ignore lint/suspicious/noExplicitAny: old code
   args: Record<PropertyKey, any>;
 }
 
@@ -44,7 +45,7 @@ export const sendTransactionWithProducer = async (
         await signer.estimateGas(req),
         parseUnits("1.1"),
       );
-    } catch (error: any) {
+    } catch (error) {
       console.error(error);
       if (defaultGasLimit == null) throw error;
 
@@ -74,11 +75,16 @@ export const sendTransactionWithProducer = async (
       status: NotificationStatus.success,
       context: { args: notificationOptions.args, tx, response, receipt },
     });
-  } catch (error: any) {
+  } catch (error) {
     notificationOptions?.producer.next({
       id: notificationOptions.id,
       status: NotificationStatus.error,
-      context: { args: notificationOptions.args, tx: req, response, error },
+      context: {
+        args: notificationOptions.args,
+        tx: req,
+        response,
+        error: error as Error,
+      },
     });
   }
 };
@@ -97,6 +103,7 @@ export const sendTransaction = (
   tx: TransactionRequest,
   defaultGasLimit?: bigint,
   confirms?: number,
+  // biome-ignore lint/suspicious/noExplicitAny: old code
   args: Record<PropertyKey, any> = {},
 ) => {
   const producer = new NotificationProducer(NotificationTopic.tx);
@@ -139,11 +146,15 @@ export const signMessageWithProducer = async (
       status: NotificationStatus.success,
       context: { message, args: notificationOptions.args, signature },
     });
-  } catch (error: any) {
+  } catch (error) {
     notificationOptions?.producer.next({
       id: notificationOptions.id,
       status: NotificationStatus.error,
-      context: { message, args: notificationOptions.args, error },
+      context: {
+        message,
+        args: notificationOptions.args,
+        error: error as Error,
+      },
     });
   }
 };

@@ -1,4 +1,4 @@
-import { MaxUint256, Provider } from "ethers";
+import { MaxUint256, type Provider } from "ethers";
 import {
   BackedWhitelistControllerAggregatorV2__factory,
   ERC20__factory,
@@ -9,7 +9,7 @@ import {
 } from "ethers-types";
 
 import {
-  Address,
+  type Address,
   ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
@@ -20,7 +20,7 @@ import {
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
 import { fromEntries } from "@morpho-org/morpho-ts";
-import { FetchOptions } from "../types";
+import type { FetchOptions } from "../types.js";
 
 export async function fetchHolding(
   user: Address,

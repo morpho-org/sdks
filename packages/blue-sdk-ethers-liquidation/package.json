@@ -2,6 +2,7 @@
   "name": "@morpho-org/blue-sdk-ethers-liquidation",
   "version": "2.0.0-alpha.6",
   "author": "Morpho Association <contact@morpho.org>",
+  "type": "module",
   "main": "src/index.ts",
   "files": [
     "lib",
@@ -79,7 +80,14 @@
     "evm-maths": "^7.0.0"
   },
   "publishConfig": {
-    "access": "public",
-    "main": "lib/index.js"
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      }
+    },
+    "access": "public"
   }
 }

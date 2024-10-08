@@ -1,14 +1,14 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { PublicAllocator__factory } from "ethers-types";
 
 import {
-  Address,
+  type Address,
   ChainUtils,
-  MarketId,
+  type MarketId,
   VaultMarketPublicAllocatorConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { FetchOptions } from "../types";
+import type { FetchOptions } from "../types.js";
 
 export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,

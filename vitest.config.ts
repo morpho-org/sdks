@@ -7,12 +7,14 @@ export default defineConfig({
       exclude: [
         ".yarn",
         ".pnp.*",
+        "vitest.*.ts",
         "**/lib/**",
         "**/dist/**",
         "**/artifacts/**",
         "**/test/**",
-        "**/*.test-d.ts",
+        "packages/test/**",
         "packages/morpho-test/**",
+        "packages/blue-sdk-ethers*/**",
       ],
     },
     sequence: {

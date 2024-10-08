@@ -1,5 +1,5 @@
 import {
-  Address,
+  type Address,
   encodeFunctionData,
   erc20Abi,
   maxUint256,
@@ -15,10 +15,10 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import {
-  MaybeDraft,
-  Operation,
-  SimulationResult,
-  SimulationState,
+  type MaybeDraft,
+  type Operation,
+  type SimulationResult,
+  type SimulationState,
   simulateOperation,
 } from "@morpho-org/blue-sdk-viem-simulation";
 import { Time, getValue } from "@morpho-org/morpho-ts";
@@ -31,14 +31,14 @@ import {
   getPermitTypedData,
 } from "@morpho-org/blue-sdk-viem";
 import { sendTransaction, signTypedData } from "viem/actions";
-import BundlerAction from "../BundlerAction";
-import { baseBundlerAbi } from "../abis";
-import {
+import BundlerAction from "../BundlerAction.js";
+import { baseBundlerAbi } from "../abis.js";
+import type {
   Action,
   ActionBundle,
   BundlerOperation,
   TransactionRequirement,
-} from "../types";
+} from "../types/index.js";
 
 export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<ChainId, Address[]>> = {
   [ChainId.EthMainnet]: [

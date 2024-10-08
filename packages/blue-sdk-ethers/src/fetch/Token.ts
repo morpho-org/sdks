@@ -1,17 +1,20 @@
 import {
   Contract,
-  ContractRunner,
+  type ContractRunner,
   Interface,
-  Provider,
+  type Provider,
   decodeBytes32String,
   isHexString,
 } from "ethers";
 import { WStEth__factory } from "ethers-types";
 import { ERC20__factory } from "ethers-types";
-import { ERC20, ERC20Interface } from "ethers-types/dist/token/ERC20/ERC20";
+import type {
+  ERC20,
+  ERC20Interface,
+} from "ethers-types/dist/token/ERC20/ERC20.js";
 
 import {
-  Address,
+  type Address,
   ChainId,
   ChainUtils,
   ConstantWrappedToken,
@@ -22,7 +25,7 @@ import {
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
-import { FetchOptions } from "../types";
+import type { FetchOptions } from "../types.js";
 
 export const isBytes32ERC20Metadata = (address: string, chainId: ChainId) => {
   switch (chainId) {
@@ -72,13 +75,14 @@ const _bytes32ERC20Abi = [
   },
 ] as const;
 
-export class Bytes32ERC20__factory {
-  static readonly abi = _bytes32ERC20Abi;
+export namespace Bytes32ERC20__factory {
+  export const abi = _bytes32ERC20Abi;
 
-  static createInterface() {
+  export function createInterface() {
     return new Interface(_bytes32ERC20Abi) as ERC20Interface;
   }
-  static connect(address: string, runner?: ContractRunner | null) {
+
+  export function connect(address: string, runner?: ContractRunner | null) {
     const erc20 = new Contract(
       address,
       _bytes32ERC20Abi,
@@ -102,8 +106,8 @@ export class Bytes32ERC20__factory {
   }
 }
 
-export class ERC20Metadata__factory {
-  static connect(
+export namespace ERC20Metadata__factory {
+  export function connect(
     address: string,
     chainId: ChainId,
     runner?: ContractRunner | null,
@@ -156,7 +160,7 @@ export async function fetchToken(
 
   const token = {
     address,
-    decimals: parseInt(decimals.toString()),
+    decimals: Number.parseInt(decimals.toString()),
     symbol,
     name,
   };

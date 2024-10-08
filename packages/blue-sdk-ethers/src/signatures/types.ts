@@ -1,4 +1,4 @@
-import { TypedDataDomain } from "ethers";
+import type { TypedDataDomain } from "ethers";
 
 export interface SignatureData {
   domain: TypedDataDomain;

@@ -4,12 +4,12 @@ import { ERC20__factory, MorphoBlue__factory } from "ethers-types";
 import { ethers } from "hardhat";
 import { deal } from "hardhat-deal";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 
-import { Address, ChainId, addresses } from "@morpho-org/blue-sdk";
+import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
 import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
-import { Position } from "../../src/augment/Position";
+import { Position } from "../../src/augment/Position.js";
 
 const market = MAINNET_MARKETS.usdc_wstEth;
 

@@ -1,0 +1,27 @@
+name: Test packages
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  vitest:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: yarn
+
+      - uses: foundry-rs/foundry-toolchain@v1
+
+      - run: yarn install --immutable
+
+      - run: yarn test --coverage
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}

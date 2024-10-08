@@ -2,18 +2,16 @@ import { expect } from "chai";
 import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
 import { ethers } from "hardhat";
 
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 
 import {
   ChainId,
   VaultMarketPublicAllocatorConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
 import { setUp } from "@morpho-org/morpho-test";
 
-import { VaultMarketConfig } from "../../src/augment/VaultMarketConfig";
-import { steakUsdc } from "../fixtures";
+import { VaultMarketConfig } from "../../src/augment/VaultMarketConfig.js";
 
 describe("augment/VaultMarketConfig", () => {
   let signer: SignerWithAddress;

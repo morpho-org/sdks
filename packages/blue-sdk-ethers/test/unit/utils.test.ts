@@ -1,4 +1,4 @@
-import { safeParseNumber } from "../../src";
+import { safeParseNumber } from "../../src/index.js";
 
 import { describe, expect, test } from "vitest";
 

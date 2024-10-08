@@ -2,11 +2,11 @@ import { expect } from "chai";
 import { MorphoBlue__factory } from "ethers-types";
 import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 
-import { Address, ChainId, addresses } from "@morpho-org/blue-sdk";
+import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
-import { User } from "../../src/augment/User";
+import { User } from "../../src/augment/User.js";
 
 describe("augment/User", () => {
   let signer: SignerWithAddress;

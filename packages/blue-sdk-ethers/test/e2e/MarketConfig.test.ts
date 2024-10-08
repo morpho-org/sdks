@@ -2,13 +2,12 @@ import { expect } from "chai";
 import { ZeroAddress } from "ethers";
 import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 
-import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
+import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 
-import { MarketConfig } from "../../src/augment/MarketConfig";
+import { MarketConfig } from "../../src/augment/MarketConfig.js";
 
 describe("augment/MarketConfig", () => {
   let signer: SignerWithAddress;

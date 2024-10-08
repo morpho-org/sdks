@@ -1,9 +1,9 @@
-import { TransactionReceipt } from "ethers";
+import type { TransactionReceipt } from "ethers";
 import { ethers } from "hardhat";
 
 import {
   FlashbotsBundleResolution,
-  SimulationResponse,
+  type SimulationResponse,
 } from "@flashbots/ethers-provider-bundle";
 
 export const getFlashbotsSimulationResponse = (

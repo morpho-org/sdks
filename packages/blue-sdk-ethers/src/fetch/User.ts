@@ -1,13 +1,13 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 
 import {
-  Address,
+  type Address,
   ChainUtils,
   User,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { MorphoBlue__factory } from "ethers-types";
-import { FetchOptions } from "../types";
+import type { FetchOptions } from "../types.js";
 
 export async function fetchUser(
   address: Address,

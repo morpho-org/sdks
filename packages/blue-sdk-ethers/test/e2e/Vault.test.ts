@@ -3,14 +3,13 @@ import { ZeroAddress } from "ethers";
 import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
 import { ethers } from "hardhat";
 
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
 import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 
-import { Vault } from "../../src/augment/Vault";
-import { steakUsdc } from "../fixtures";
+import { Vault } from "../../src/augment/Vault.js";
 
 describe("augment/Vault", () => {
   let signer: SignerWithAddress;

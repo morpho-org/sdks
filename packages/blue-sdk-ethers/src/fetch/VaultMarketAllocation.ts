@@ -1,15 +1,15 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 
 import {
-  Address,
+  type Address,
   ChainUtils,
-  MarketId,
+  type MarketId,
   VaultMarketAllocation,
-  VaultMarketConfig,
+  type VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
-import { FetchOptions } from "../types";
-import { fetchAccrualPosition } from "./Position";
-import { fetchVaultMarketConfig } from "./VaultMarketConfig";
+import type { FetchOptions } from "../types.js";
+import { fetchAccrualPosition } from "./Position.js";
+import { fetchVaultMarketConfig } from "./VaultMarketConfig.js";
 
 export async function fetchVaultMarketAllocation(
   vault: Address,

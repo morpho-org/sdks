@@ -1,9 +1,9 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { MetaMorpho__factory } from "ethers-types";
 
 import {
-  Address,
-  ChainId,
+  type Address,
+  type ChainId,
   ChainUtils,
   UnknownVaultConfigError,
   VaultConfig,

@@ -1,6 +1,6 @@
-import { SimulationResult } from "@morpho-org/blue-sdk-viem-simulation";
+import type { SimulationResult } from "@morpho-org/blue-sdk-viem-simulation";
 
-import { InputBundlerOperation } from "./types";
+import type { InputBundlerOperation } from "./types/index.js";
 
 export namespace BundlerErrors {
   export class Bundle extends Error {

@@ -1,4 +1,4 @@
-import {
+import type {
   Account,
   Chain,
   Client,
@@ -8,8 +8,8 @@ import {
   Transport,
 } from "viem";
 
-import { Address, MarketConfig } from "@morpho-org/blue-sdk";
-import { SimulationResult } from "@morpho-org/blue-sdk-viem-simulation";
+import type { Address, MarketConfig } from "@morpho-org/blue-sdk";
+import type { SimulationResult } from "@morpho-org/blue-sdk-viem-simulation";
 
 export type MarketParams = Pick<
   MarketConfig,
