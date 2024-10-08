@@ -1,19 +1,19 @@
-import { Provider, resolveProperties } from "ethers";
+import { type Provider, resolveProperties } from "ethers";
 import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
 
 import {
   AccrualVault,
-  Address,
+  type Address,
   ChainUtils,
-  MarketId,
+  type MarketId,
   Vault,
-  VaultConfig,
-  VaultPublicAllocatorConfig,
+  type VaultConfig,
+  type VaultPublicAllocatorConfig,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import { FetchOptions } from "../types";
-import { fetchVaultConfig } from "./VaultConfig";
-import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
+import type { FetchOptions } from "../types.js";
+import { fetchVaultConfig } from "./VaultConfig.js";
+import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
 export async function fetchVault(
   address: Address,

@@ -40,7 +40,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalSupplyAssets += assets;
     expected.markets[marketA1.id]!.totalSupplyShares += supplyShares;
     expected.positions[vaultA.address]![marketA1.id]!.supplyShares +=
@@ -48,6 +47,8 @@ describe(type, () => {
 
     expected.vaultUsers[vaultA.address]![userB]!.allowance -= assets;
     expected.holdings[userB]![tokenA]!.balance -= assets;
+    expected.holdings[vaultA.address]![tokenA]!.erc20Allowances.morpho -=
+      assets;
 
     const vaultData = expected.vaults[vaultA.address]!;
     vaultData.totalAssets += assets;
@@ -78,7 +79,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalSupplyAssets += assets;
     expected.markets[marketA1.id]!.totalSupplyShares += supplyShares;
     expected.positions[vaultA.address]![marketA1.id]!.supplyShares +=
@@ -86,6 +86,8 @@ describe(type, () => {
 
     expected.vaultUsers[vaultA.address]![userB]!.allowance -= assets;
     expected.holdings[userB]![tokenA]!.balance -= assets;
+    expected.holdings[vaultA.address]![tokenA]!.erc20Allowances.morpho -=
+      assets;
 
     const vaultData = expected.vaults[vaultA.address]!;
     vaultData.totalAssets += assets;
@@ -118,7 +120,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalSupplyAssets += parseUnits("10", 6);
     expected.markets[marketA1.id]!.totalSupplyShares += supplyShares1;
     expected.positions[vaultA.address]![marketA1.id]!.supplyShares +=
@@ -131,6 +132,8 @@ describe(type, () => {
 
     expected.vaultUsers[vaultA.address]![userB]!.allowance -= assets;
     expected.holdings[userB]![tokenA]!.balance -= assets;
+    expected.holdings[vaultA.address]![tokenA]!.erc20Allowances.morpho -=
+      assets;
 
     const vaultData = expected.vaults[vaultA.address]!;
     vaultData.totalAssets += assets;
@@ -162,7 +165,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalSupplyAssets += parseUnits("10", 6);
     expected.markets[marketA1.id]!.totalSupplyShares += supplyShares1;
     expected.positions[vaultA.address]![marketA1.id]!.supplyShares +=
@@ -175,6 +177,8 @@ describe(type, () => {
 
     expected.vaultUsers[vaultA.address]![userB]!.allowance -= assets;
     expected.holdings[userB]![tokenA]!.balance -= assets;
+    expected.holdings[vaultA.address]![tokenA]!.erc20Allowances.morpho -=
+      assets;
 
     const vaultData = expected.vaults[vaultA.address]!;
     vaultData.totalAssets += assets;

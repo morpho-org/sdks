@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import _kebabCase from "lodash.kebabcase";
 import {
   http,
   type Abi,
@@ -132,6 +133,10 @@ export interface AnvilArgs {
    * The gas price.
    */
   gasPrice?: number | bigint | undefined;
+  /**
+   * Disable minimum priority fee to set the gas price to zero.
+   */
+  disableMinPriorityFee?: boolean | undefined;
   /**
    * The EVM hardfork to use.
    */
@@ -274,18 +279,18 @@ function toArgs(obj: AnvilArgs) {
   return Object.entries(obj).flatMap<string>(([key, value]) => {
     if (value === undefined) return [];
 
-    if (Array.isArray(value)) return [toFlagCase(key), value.join(",")];
+    if (Array.isArray(value)) return [`--${_kebabCase(key)}`, value.join(",")];
 
     if (typeof value === "object" && value !== null) {
       return Object.entries(value).flatMap(([subKey, subValue]) => {
         if (subValue === undefined) return [];
 
-        const flag = toFlagCase(`${key}.${subKey}`);
+        const flag = `--${_kebabCase(`${key}.${subKey}`)}`;
         return [flag, Array.isArray(subValue) ? subValue.join(",") : subValue];
       });
     }
 
-    const flag = toFlagCase(key);
+    const flag = `--${_kebabCase(key)}`;
 
     if (value === false) return [flag, "false"];
     if (value === true) return [flag];
@@ -296,25 +301,6 @@ function toArgs(obj: AnvilArgs) {
     return [flag, stringified];
   });
 }
-
-/** Converts to a --flag-case string. */
-const toFlagCase = (str: string) => {
-  const keys = [];
-
-  for (let i = 0; i < str.split(".").length; i++) {
-    const key = str.split(".")[i];
-    if (!key) continue;
-
-    keys.push(
-      key
-        .replace(/\s+/g, "-")
-        .replace(/([a-z])([A-Z])/g, `$1-$2`)
-        .toLowerCase(),
-    );
-  }
-
-  return `--${keys.join(".")}`;
-};
 
 export const spawnAnvil = async (
   args: AnvilArgs,

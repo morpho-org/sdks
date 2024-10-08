@@ -3,10 +3,10 @@ import { ZeroAddress } from "ethers";
 import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
 import { ethers } from "hardhat";
 
-import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
+import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
 
-import { ChainId, MarketId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 
 import { Vault } from "../../src/augment/Vault";

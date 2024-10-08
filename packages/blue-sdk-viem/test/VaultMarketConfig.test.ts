@@ -23,7 +23,6 @@ describe("augment/VaultMarketConfig", () => {
     });
 
     await client.setBalance({ address: owner, value: BigInt(1e18) });
-
     await client.writeContract({
       account: owner,
       address: steakUsdc.address,
@@ -31,7 +30,6 @@ describe("augment/VaultMarketConfig", () => {
       functionName: "setIsAllocator",
       args: [addresses[ChainId.EthMainnet].publicAllocator, true],
     });
-
     await client.writeContract({
       account: owner,
       address: addresses[ChainId.EthMainnet].publicAllocator,
@@ -39,7 +37,6 @@ describe("augment/VaultMarketConfig", () => {
       functionName: "setFee",
       args: [steakUsdc.address, 1n],
     });
-
     await client.writeContract({
       account: owner,
       address: addresses[ChainId.EthMainnet].publicAllocator,

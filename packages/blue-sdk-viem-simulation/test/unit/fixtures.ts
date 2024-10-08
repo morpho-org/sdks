@@ -17,7 +17,7 @@ import {
 import { randomMarket, randomVault } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
 
-import { SimulationState } from "../../src";
+import { SimulationState } from "../../src/index.js";
 
 export const timestamp = 12345n;
 
@@ -1131,7 +1131,682 @@ export const blueFixture = {
         },
         user: userC,
         token: vaultC.address,
-        balance: parseEther("15000"),
+        balance: parseEther("30000"),
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+    },
+    [vaultA.address]: {
+      [NATIVE_ADDRESS]: new Holding({
+        erc20Allowances: {
+          morpho: maxUint256,
+          permit2: maxUint256,
+          bundler: maxUint256,
+        },
+        user: vaultA.address,
+        token: NATIVE_ADDRESS,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [tokenA]: new Holding({
+        erc20Allowances: {
+          morpho: maxUint256,
+          permit2: maxUint256,
+          bundler: maxUint256,
+        },
+        user: vaultA.address,
+        token: tokenA,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [tokenB]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultA.address,
+        token: tokenB,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketA1.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultA.address,
+        token: marketA1.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketA2.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultA.address,
+        token: marketA2.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketB1.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultA.address,
+        token: marketB1.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketB2.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultA.address,
+        token: marketB2.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [vaultA.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultA.address,
+        token: vaultA.address,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+      [vaultB.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultA.address,
+        token: vaultB.address,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+      [vaultC.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultA.address,
+        token: vaultC.address,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+    },
+    [vaultB.address]: {
+      [NATIVE_ADDRESS]: new Holding({
+        erc20Allowances: {
+          morpho: maxUint256,
+          permit2: maxUint256,
+          bundler: maxUint256,
+        },
+        user: vaultB.address,
+        token: NATIVE_ADDRESS,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [tokenA]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultB.address,
+        token: tokenA,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [tokenB]: new Holding({
+        erc20Allowances: {
+          morpho: maxUint256,
+          permit2: maxUint256,
+          bundler: maxUint256,
+        },
+        user: vaultB.address,
+        token: tokenB,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketA1.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultB.address,
+        token: marketA1.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketA2.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultB.address,
+        token: marketA2.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketB1.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultB.address,
+        token: marketB1.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketB2.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultB.address,
+        token: marketB2.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [vaultA.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultB.address,
+        token: vaultA.address,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+      [vaultB.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultB.address,
+        token: vaultB.address,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+      [vaultC.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultB.address,
+        token: vaultC.address,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+    },
+    [vaultC.address]: {
+      [NATIVE_ADDRESS]: new Holding({
+        erc20Allowances: {
+          morpho: maxUint256,
+          permit2: maxUint256,
+          bundler: maxUint256,
+        },
+        user: vaultC.address,
+        token: NATIVE_ADDRESS,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [tokenA]: new Holding({
+        erc20Allowances: {
+          morpho: maxUint256,
+          permit2: maxUint256,
+          bundler: maxUint256,
+        },
+        user: vaultC.address,
+        token: tokenA,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [tokenB]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultC.address,
+        token: tokenB,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketA1.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: maxUint256,
+          permit2: maxUint256,
+          bundler: maxUint256,
+        },
+        user: vaultC.address,
+        token: marketA1.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketA2.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultC.address,
+        token: marketA2.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketB1.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultC.address,
+        token: marketB1.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [marketB2.config.collateralToken]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultC.address,
+        token: marketB2.config.collateralToken,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+      }),
+      [vaultA.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultC.address,
+        token: vaultA.address,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+      [vaultB.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultC.address,
+        token: vaultB.address,
+        balance: 0n,
+        permit2Allowances: {
+          morpho: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+          bundler: {
+            amount: 0n,
+            expiration: 0n,
+            nonce: 0n,
+          },
+        },
+        erc2612Nonce: 0n,
+      }),
+      [vaultC.address]: new Holding({
+        erc20Allowances: {
+          morpho: 0n,
+          permit2: 0n,
+          bundler: 0n,
+        },
+        user: vaultC.address,
+        token: vaultC.address,
+        balance: 0n,
         permit2Allowances: {
           morpho: {
             amount: 0n,
@@ -1153,7 +1828,7 @@ export const blueFixture = {
 export const metaMorphoFixture = {
   vaults: {
     [vaultA.address]: new Vault({
-      config: vaultA,
+      ...vaultA,
       curator: randomAddress(),
       fee: 0n,
       feeRecipient: randomAddress(),
@@ -1176,7 +1851,7 @@ export const metaMorphoFixture = {
       lastTotalAssets: parseUnits("1400", 6),
     }),
     [vaultB.address]: new Vault({
-      config: vaultB,
+      ...vaultB,
       curator: randomAddress(),
       fee: 0n,
       feeRecipient: randomAddress(),
@@ -1194,7 +1869,7 @@ export const metaMorphoFixture = {
       lastTotalAssets: 0n,
     }),
     [vaultC.address]: new Vault({
-      config: vaultC,
+      ...vaultC,
       curator: randomAddress(),
       fee: 0n,
       feeRecipient: randomAddress(),

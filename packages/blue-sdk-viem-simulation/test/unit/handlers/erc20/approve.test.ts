@@ -36,7 +36,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.holdings[userB]![tokenA]!.erc20Allowances.morpho = 1n;
 
     expect(result).toEqual(expected);
@@ -57,7 +56,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.holdings[userA]![tokenB]!.erc20Allowances.permit2 = 1n;
 
     expect(result).toEqual(expected);
@@ -78,7 +76,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.holdings[userA]![tokenB]!.erc20Allowances.bundler = 1n;
 
     expect(result).toEqual(expected);
@@ -99,7 +96,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.vaultUsers[vaultB.address]![userB]!.allowance = 1n;
 
     expect(result).toEqual(expected);

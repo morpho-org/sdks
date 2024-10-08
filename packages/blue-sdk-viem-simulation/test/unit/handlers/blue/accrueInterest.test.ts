@@ -27,7 +27,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixtureCopy);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id] = marketData.accrueInterest(
       dataFixtureCopy.block.timestamp,
     );

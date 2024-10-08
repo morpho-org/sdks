@@ -66,13 +66,10 @@ describe("Blue_AccrueInterest", () => {
       abi: blueAbi,
       functionName: "accrueInterest",
       args: [
-        {
-          collateralToken: usdc_wstEth.collateralToken,
-          loanToken: usdc_wstEth.loanToken,
-          oracle: usdc_wstEth.oracle,
-          irm: usdc_wstEth.irm,
-          lltv: usdc_wstEth.lltv,
-        },
+        usdc_wstEth as Pick<
+          typeof usdc_wstEth,
+          "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
+        >,
       ],
     });
 

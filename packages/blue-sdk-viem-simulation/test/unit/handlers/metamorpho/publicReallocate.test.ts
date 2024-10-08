@@ -12,6 +12,7 @@ import {
   dataFixture,
   marketA1,
   marketA2,
+  tokenA,
   userB,
   vaultA,
 } from "../../fixtures.js";
@@ -42,7 +43,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.positions[vaultA.address]![marketA1.id]!.supplyShares = parseUnits(
       "960",
       6 + 6,
@@ -61,6 +61,9 @@ describe(type, () => {
     expected.holdings[userB]![NATIVE_ADDRESS]!.balance -= parseEther("0.005");
     expected.vaults[vaultA.address]!.publicAllocatorConfig!.accruedFee +=
       parseEther("0.005");
+
+    expected.holdings[vaultA.address]![tokenA]!.erc20Allowances.morpho -=
+      assets;
 
     expected.vaultMarketConfigs[vaultA.address]![marketA1.id]!
       .publicAllocatorConfig!.maxIn += assets;

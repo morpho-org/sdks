@@ -3311,10 +3311,12 @@ __metadata:
     "@tanstack/react-query": "npm:^5.59.0"
     "@testing-library/dom": "npm:^10.4.0"
     "@testing-library/react": "npm:^16.0.1"
+    "@types/lodash.kebabcase": "npm:^4.1.9"
     "@types/node": "npm:^22.7.4"
     "@types/react": "npm:^18.3.1"
     "@types/react-dom": "npm:^18.3.0"
     "@wagmi/core": "npm:^2.13.8"
+    lodash.kebabcase: "npm:^4.1.1"
     react: "npm:^18.3.1"
     react-dom: "npm:^18.3.1"
     typescript: "npm:^5.6.2"
@@ -5295,6 +5297,15 @@ __metadata:
   version: 4.0.9
   resolution: "@types/js-yaml@npm:4.0.9"
   checksum: 10c0/24de857aa8d61526bbfbbaa383aa538283ad17363fcd5bb5148e2c7f604547db36646440e739d78241ed008702a8920665d1add5618687b6743858fae00da211
+  languageName: node
+  linkType: hard
+
+"@types/lodash.kebabcase@npm:^4.1.9":
+  version: 4.1.9
+  resolution: "@types/lodash.kebabcase@npm:4.1.9"
+  dependencies:
+    "@types/lodash": "npm:*"
+  checksum: 10c0/f00fbfb891fd1883e3fab2286fa2b23a013550b3498013c8c8c5e3ed437f52543afe8e8dc899b4f3317bab8db403bb281de863274a6fa12f088667378fd7b475
   languageName: node
   linkType: hard
 
@@ -10804,6 +10815,13 @@ __metadata:
   version: 4.5.0
   resolution: "lodash.isequal@npm:4.5.0"
   checksum: 10c0/dfdb2356db19631a4b445d5f37868a095e2402292d59539a987f134a8778c62a2810c2452d11ae9e6dcac71fc9de40a6fedcb20e2952a15b431ad8b29e50e28f
+  languageName: node
+  linkType: hard
+
+"lodash.kebabcase@npm:^4.1.1":
+  version: 4.1.1
+  resolution: "lodash.kebabcase@npm:4.1.1"
+  checksum: 10c0/da5d8f41dbb5bc723d4bf9203d5096ca8da804d6aec3d2b56457156ba6c8d999ff448d347ebd97490da853cb36696ea4da09a431499f1ee8deb17b094ecf4e33
   languageName: node
   linkType: hard
 

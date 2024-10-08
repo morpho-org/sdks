@@ -61,7 +61,7 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
     {
       type: "Erc20_Transfer",
       sender: address,
-      address: vault.config.asset,
+      address: vault.asset,
       args: {
         amount: assets,
         from: sender,

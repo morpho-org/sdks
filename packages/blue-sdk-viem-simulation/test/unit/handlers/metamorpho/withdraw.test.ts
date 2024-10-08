@@ -42,7 +42,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA2.id]!.totalSupplyAssets -= assets;
     expected.markets[marketA2.id]!.totalSupplyShares -= supplyShares;
     expected.positions[vaultA.address]![marketA2.id]!.supplyShares -=
@@ -80,7 +79,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA2.id]!.totalSupplyAssets -= assets;
     expected.markets[marketA2.id]!.totalSupplyShares -= supplyShares;
     expected.positions[vaultA.address]![marketA2.id]!.supplyShares -=
@@ -120,7 +118,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalSupplyAssets -= parseUnits("30", 6);
     expected.markets[marketA1.id]!.totalSupplyShares -= supplyShares1;
     expected.positions[vaultA.address]![marketA1.id]!.supplyShares -=
@@ -165,7 +162,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalSupplyAssets -= parseUnits("30", 6);
     expected.markets[marketA1.id]!.totalSupplyShares -= supplyShares1;
     expected.positions[vaultA.address]![marketA1.id]!.supplyShares -=

@@ -1,8 +1,8 @@
 import {
-  Address,
+  type Address,
   DEFAULT_SLIPPAGE_TOLERANCE,
   DEFAULT_SUPPLY_TARGET_UTILIZATION,
-  MarketId,
+  type MarketId,
   MarketUtils,
   MathLib,
   NATIVE_ADDRESS,
@@ -13,13 +13,13 @@ import {
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
 import {
-  Erc20Operations,
-  MaybeDraft,
-  Operation,
-  Operations,
-  PublicAllocatorOptions,
-  SimulationResult,
-  SimulationState,
+  type Erc20Operations,
+  type MaybeDraft,
+  type Operation,
+  type Operations,
+  type PublicAllocatorOptions,
+  type SimulationResult,
+  type SimulationState,
   handleOperation,
   handleOperations,
   produceImmutable,
@@ -29,7 +29,7 @@ import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
 
 import { maxUint256 } from "viem";
 import { BundlerErrors } from "../errors";
-import {
+import type {
   BundlerOperation,
   CallbackBundlerOperation,
   InputBundlerOperation,
@@ -273,13 +273,13 @@ export const populateSubBundle = (
 
     const borrowedAssets =
       mainOperation.type === "Blue_Borrow"
-        ? mainOperation.args.assets ??
-          market.toBorrowAssets(mainOperation.args.shares)
+        ? (mainOperation.args.assets ??
+          market.toBorrowAssets(mainOperation.args.shares))
         : 0n;
     const withdrawnAssets =
       mainOperation.type === "Blue_Withdraw"
-        ? mainOperation.args.assets ??
-          market.toSupplyAssets(mainOperation.args.shares)
+        ? (mainOperation.args.assets ??
+          market.toSupplyAssets(mainOperation.args.shares))
         : 0n;
 
     const newTotalSupplyAssets = market.totalSupplyAssets - withdrawnAssets;
@@ -673,7 +673,7 @@ export const finalizeBundle = (
         token = startData.getMarket(operation.args.id).config.collateralToken;
         break;
       case "MetaMorpho_Withdraw":
-        token = startData.getVault(operation.address).config.asset;
+        token = startData.getVault(operation.address).asset;
         break;
       default:
         return;
@@ -836,7 +836,9 @@ export const populateBundle = (
       );
 
       return subBundleOperations;
-    } catch (error: any) {
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+
       throw new BundlerErrors.Bundle(error, index, inputOperation, steps);
     }
   });

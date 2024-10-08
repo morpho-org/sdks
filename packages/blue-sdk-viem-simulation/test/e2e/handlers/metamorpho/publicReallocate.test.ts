@@ -1,112 +1,147 @@
-import { expect } from "chai";
-import { parseEther, parseUnits } from "ethers";
-import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
-import { ethers } from "hardhat";
-import _omit from "lodash/omit";
+import { ChainId, NATIVE_ADDRESS, addresses } from "@morpho-org/blue-sdk";
+import { metaMorphoAbi, publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
+import { markets, vaults } from "@morpho-org/morpho-test";
+import { getLast } from "@morpho-org/morpho-ts";
+import { renderHook, waitFor } from "@morpho-org/test";
+import { parseEther, parseUnits } from "viem";
+import { describe, expect } from "vitest";
+import {
+  type MinimalBlock,
+  simulateOperations,
+  useSimulationState,
+} from "../../../../src/index.js";
+import { test } from "../../setup.js";
 
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
-
-import { BlueService, ChainService, getLast } from "@morpho-org/blue-core-sdk";
-import { MetaMorphoService } from "@morpho-org/blue-metamorpho-sdk";
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/lib/tests/mocks/markets";
-import { mine, setUp } from "@morpho-org/morpho-test";
-
-import { SimulationService, simulateOperations } from "../../../../src";
-import { steakUsdc } from "../../fixtures";
+const { publicAllocator } = addresses[ChainId.EthMainnet];
+const { usdc_wstEth, usdc_idle, usdc_wbtc, usdc_wbIB01 } =
+  markets[ChainId.EthMainnet];
+const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("MetaMorpho_PublicReallocate", () => {
-  let signer: SignerWithAddress;
-
-  let simulationService: SimulationService;
-
-  setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
-  });
-
-  afterEach(async () => {
-    simulationService?.chainService.close();
-    simulationService?.metaMorphoService.blueService.close();
-    simulationService?.metaMorphoService.close();
-    simulationService?.close();
-  });
-
-  test("should simulate public reallocation accurately", async () => {
-    const vault = MetaMorpho__factory.connect(steakUsdc.address, signer);
-
-    const owner = await ethers.getImpersonatedSigner(await vault.owner());
-
-    const publicAllocator = PublicAllocator__factory.connect(
-      addresses[ChainId.EthMainnet].publicAllocator,
-      owner,
-    );
+  test("should simulate public reallocation accurately", async ({
+    wagmi: { config, client },
+  }) => {
+    const owner = await client.readContract({
+      address: steakUsdc.address,
+      abi: metaMorphoAbi,
+      functionName: "owner",
+    });
 
     const fee = parseEther("0.005");
     const assets = parseUnits("1000", 6);
 
-    await publicAllocator.setFee(steakUsdc.address, fee);
-    await publicAllocator.setFlowCaps(steakUsdc.address, [
-      {
-        id: MAINNET_MARKETS.usdc_wstEth.id,
-        caps: {
-          maxIn: 0n,
-          maxOut: assets,
-        },
-      },
-      {
-        id: MAINNET_MARKETS.usdc_idle.id,
-        caps: {
-          maxIn: assets,
-          maxOut: 0n,
-        },
-      },
-    ]);
+    await client.writeContract({
+      account: owner,
+      address: publicAllocator,
+      abi: publicAllocatorAbi,
+      functionName: "setFee",
+      args: [steakUsdc.address, fee],
+    });
+    await client.writeContract({
+      account: owner,
+      address: publicAllocator,
+      abi: publicAllocatorAbi,
+      functionName: "setFlowCaps",
+      args: [
+        steakUsdc.address,
+        [
+          {
+            id: usdc_wstEth.id,
+            caps: {
+              maxIn: 0n,
+              maxOut: assets,
+            },
+          },
+          {
+            id: usdc_idle.id,
+            caps: {
+              maxIn: assets,
+              maxOut: 0n,
+            },
+          },
+        ],
+      ],
+    });
 
-    simulationService = new SimulationService(
-      new MetaMorphoService(
-        new BlueService(new ChainService(signer), {
-          users: [signer.address],
+    const block = await client.getBlock();
+
+    const { result, rerender } = await renderHook(
+      config,
+      (block: MinimalBlock) =>
+        useSimulationState({
+          marketIds: [
+            usdc_wstEth.id,
+            usdc_idle.id,
+            usdc_wbtc.id,
+            usdc_wbIB01.id,
+          ],
+          users: [client.account.address, steakUsdc.address],
+          tokens: [NATIVE_ADDRESS, steakUsdc.asset, steakUsdc.address],
+          vaults: [steakUsdc.address],
+          block,
+          accrueInterest: false,
         }),
-        { vaults: [steakUsdc.address] },
-      ),
+      { initialProps: block },
     );
 
-    const { value: dataBefore } = await simulationService.data;
+    await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+    const dataBefore = result.current.data!;
+
+    dataBefore.block.number += 1n;
+    dataBefore.block.timestamp += 1n;
 
     const steps = simulateOperations(
       [
         {
           type: "MetaMorpho_PublicReallocate",
-          sender: signer.address,
+          sender: client.account.address,
           address: steakUsdc.address,
           args: {
-            withdrawals: [{ id: MAINNET_MARKETS.usdc_wstEth.id, assets }],
-            supplyMarketId: MAINNET_MARKETS.usdc_idle.id,
+            withdrawals: [{ id: usdc_wstEth.id, assets }],
+            supplyMarketId: usdc_idle.id,
           },
         },
       ],
       dataBefore,
     );
 
-    expect(steps.length).to.equal(2);
+    expect(steps.length).toBe(2);
 
-    await setNextBlockTimestamp(dataBefore.timestamp);
-    await publicAllocator
-      .connect(signer)
-      .reallocateTo(
+    await client.setNextBlockTimestamp({
+      timestamp: dataBefore.block.timestamp,
+    });
+    await client.writeContractWait({
+      address: publicAllocator,
+      abi: publicAllocatorAbi,
+      functionName: "reallocateTo",
+      args: [
         steakUsdc.address,
-        [{ marketParams: MAINNET_MARKETS.usdc_wstEth, amount: assets }],
-        MAINNET_MARKETS.usdc_idle,
-        { value: fee },
-      );
-    await mine(0);
+        [
+          {
+            marketParams: usdc_wstEth as Pick<
+              typeof usdc_wstEth,
+              "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
+            >,
+            amount: assets,
+          },
+        ],
+        usdc_idle as Pick<
+          typeof usdc_idle,
+          "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
+        >,
+      ],
+      value: fee,
+    });
 
-    const { value: data } = await simulationService.data;
+    await rerender(await client.getBlock());
+    await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
-    const expected = getLast(steps);
-    expected.blockNumber += 1n;
+    // Hotfix: anvil's effective gas price is not zero for some reason.
+    result.current.data!.holdings[client.account.address]![
+      NATIVE_ADDRESS
+    ]!.balance = expect.any(BigInt);
 
-    expect(_omit(data, "cacheId")).to.eql(_omit(expected, "cacheId"));
+    expect(result.current.data).toStrictEqual(getLast(steps));
   });
 });

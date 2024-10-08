@@ -32,7 +32,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.positions[userB]![marketA1.id]!.collateral -= assets;
     expected.holdings[userA]![marketA1.config.collateralToken]!.balance +=
       assets;

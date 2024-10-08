@@ -317,7 +317,6 @@ describe("useSimulationState", () => {
     await client.setNextBlockTimestamp({
       timestamp: data1.block.timestamp + 1n,
     });
-    await client.setBalance({ address: morpho, value: BigInt(1e18) });
     await client.writeContractWait({
       account: morpho,
       address: usdc,

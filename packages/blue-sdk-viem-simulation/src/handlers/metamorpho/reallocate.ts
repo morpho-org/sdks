@@ -1,4 +1,4 @@
-import { maxUint256, zeroAddress } from "viem";
+import { maxUint256 } from "viem";
 
 import { MathLib } from "@morpho-org/blue-sdk";
 
@@ -38,8 +38,6 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
       handleBlueOperation(
         {
           type: "Blue_Withdraw",
-          // Bypass balance check because the vault's token balance is not stored
-          // and it is checked with invariant `totalWithdrawn == totalSupplied`.
           sender: address,
           args: {
             id,
@@ -71,9 +69,7 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
       handleBlueOperation(
         {
           type: "Blue_Supply",
-          // Bypass balance check because the vault's token balance is not stored
-          // and it is checked with invariant `totalWithdrawn == totalSupplied`.
-          sender: zeroAddress,
+          sender: address,
           args: {
             id,
             assets: suppliedAssets,
@@ -93,4 +89,12 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
       totalSupplied,
       totalWithdrawn,
     );
+
+  // Update totalAssets as soon as the vault is interacted with (onchain, it's a dynamic view function).
+  // But do not accrue vault fee!
+  const accruedVault = data
+    .tryGetAccrualVault(address)
+    ?.accrueInterest(data.block.timestamp);
+  if (accruedVault != null)
+    data.getVault(address).totalAssets = accruedVault.totalAssets;
 };

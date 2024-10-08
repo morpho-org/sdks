@@ -28,7 +28,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.holdings[userB]![tokenA]!.permit2Allowances.morpho.amount = 2n;
     expected.holdings[userB]![tokenA]!.permit2Allowances.morpho.expiration = 5n;
     expected.holdings[userB]![tokenA]!.permit2Allowances.morpho.nonce = 2n;
@@ -53,7 +52,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.holdings[userA]![tokenA]!.permit2Allowances.bundler.amount = 2n;
     expected.holdings[userA]![tokenA]!.permit2Allowances.bundler.expiration =
       5n;

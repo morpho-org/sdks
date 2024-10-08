@@ -40,7 +40,8 @@
       },
       "suspicious": {
         "useGetterReturn": "off",
-        "noAssignInExpressions": "off"
+        "noAssignInExpressions": "off",
+        "noFallthroughSwitchClause": "off"
       }
     }
   }

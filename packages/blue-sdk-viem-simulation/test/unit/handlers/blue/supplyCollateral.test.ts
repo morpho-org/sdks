@@ -42,7 +42,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.positions[userA]![marketA1.id]!.collateral += assets;
     expected.holdings[userB]![marketA1.config.collateralToken]!.balance -=
       assets;
@@ -123,7 +122,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA3.id]!.totalBorrowAssets += collateral;
     expected.markets[marketA3.id]!.totalBorrowShares += borrowShares;
 

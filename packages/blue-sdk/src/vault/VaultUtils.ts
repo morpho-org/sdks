@@ -13,11 +13,12 @@ export namespace VaultUtils {
     {
       totalAssets,
       totalSupply,
+      decimalsOffset,
     }: {
       totalAssets: BigIntish;
       totalSupply: BigIntish;
+      decimalsOffset: BigIntish;
     },
-    { decimalsOffset }: { decimalsOffset: BigIntish },
     rounding: RoundingDirection = "Down",
   ) {
     return MathLib.mulDiv(
@@ -33,11 +34,12 @@ export namespace VaultUtils {
     {
       totalAssets,
       totalSupply,
+      decimalsOffset,
     }: {
       totalAssets: BigIntish;
       totalSupply: BigIntish;
+      decimalsOffset: BigIntish;
     },
-    { decimalsOffset }: { decimalsOffset: BigIntish },
     rounding: RoundingDirection = "Up",
   ) {
     return MathLib.mulDiv(

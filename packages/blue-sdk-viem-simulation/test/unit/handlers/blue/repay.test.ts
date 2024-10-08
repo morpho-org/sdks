@@ -44,7 +44,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalBorrowAssets -= assets;
     expected.markets[marketA1.id]!.totalBorrowShares -= shares;
     expected.positions[userB]![marketA1.id]!.borrowShares -= shares;
@@ -69,7 +68,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalBorrowAssets -= assets;
     expected.markets[marketA1.id]!.totalBorrowShares -= shares;
     expected.positions[userB]![marketA1.id]!.borrowShares -= shares;
@@ -177,7 +175,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.markets[marketA1.id]!.totalBorrowAssets -= assets;
     expected.markets[marketA1.id]!.totalBorrowShares -= shares;
     expected.positions[userC]![marketA1.id]!.borrowShares -= shares;

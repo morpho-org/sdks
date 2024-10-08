@@ -18,7 +18,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.users[userA]!.isBundlerAuthorized = true;
 
     expect(result).toEqual(expected);

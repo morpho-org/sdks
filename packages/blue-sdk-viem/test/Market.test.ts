@@ -61,14 +61,14 @@ describe("augment/Market", () => {
       irm: randomAddress(),
     });
 
-    await client.setBalance({ address: owner, value: BigInt(1e18) });
-
     await client.setCode({
       address: config.irm,
       bytecode: (await client.getCode({
         address: adaptiveCurveIrm,
       }))!,
     });
+
+    await client.setBalance({ address: owner, value: BigInt(1e18) });
     await client.writeContract({
       account: owner,
       address: morpho,

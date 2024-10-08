@@ -12,6 +12,7 @@ import {
   marketA1,
   marketA2,
   marketB1,
+  tokenA,
   userB,
   vaultA,
   vaultB,
@@ -41,7 +42,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    // expected.cacheId = expect.any(String);
     expected.positions[vaultA.address]![marketA1.id]!.supplyShares = parseUnits(
       "950",
       6 + 6,
@@ -50,6 +50,9 @@ describe(type, () => {
       "450",
       6 + 6,
     );
+
+    expected.holdings[vaultA.address]![tokenA]!.erc20Allowances.morpho -=
+      parseUnits("50", 6);
 
     expected.markets[marketA1.id]!.totalSupplyAssets -= parseUnits("50", 6);
     expected.markets[marketA1.id]!.totalSupplyShares -= parseUnits("50", 6 + 6);

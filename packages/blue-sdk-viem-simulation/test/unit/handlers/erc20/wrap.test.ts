@@ -29,7 +29,6 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(wrapFixtures);
-    // expected.cacheId = expect.any(String);
     expected.holdings[userB]![tokenA]!.balance -= amount;
     expected.holdings[userB]![tokenB]!.balance += parseUnits("1", 18);
 

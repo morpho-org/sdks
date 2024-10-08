@@ -6,7 +6,6 @@ export interface InputVaultConfig {
   address: Address;
   decimals: BigIntish;
   decimalsOffset: BigIntish;
-  // TODO: make this not immutable (move to Vault)
   symbol: string;
   name: string;
   asset: Address;

@@ -19,7 +19,6 @@ describe("augment/Vault", () => {
     });
 
     await client.setBalance({ address: owner, value: BigInt(1e18) });
-
     await client.writeContract({
       account: owner,
       address: steakUsdc.address,
@@ -27,7 +26,6 @@ describe("augment/Vault", () => {
       functionName: "setIsAllocator",
       args: [addresses[ChainId.EthMainnet].publicAllocator, true],
     });
-
     await client.writeContract({
       account: owner,
       address: addresses[ChainId.EthMainnet].publicAllocator,
@@ -37,7 +35,7 @@ describe("augment/Vault", () => {
     });
 
     const expectedData = new Vault({
-      config: steakUsdc,
+      ...steakUsdc,
       curator: zeroAddress,
       fee: 50000000000000000n,
       feeRecipient: "0x255c7705e8BB334DfCae438197f7C4297988085a",

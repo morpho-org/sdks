@@ -58,7 +58,7 @@ export async function fetchVault(
       });
 
       return new Vault({
-        config: new VaultConfig({ ...config, address }, parameters.chainId),
+        ...new VaultConfig({ ...config, address }, parameters.chainId),
         owner,
         curator,
         guardian,
@@ -257,7 +257,7 @@ export async function fetchVault(
     ],
   );
   return new Vault({
-    config,
+    ...config,
     owner,
     curator,
     guardian,

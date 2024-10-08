@@ -73,6 +73,7 @@ export const createAnvilWagmiTest = <chain extends Chain = typeof anvil>(
 
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
+  parameters.disableMinPriorityFee ??= true;
 
   let port = 0;
 

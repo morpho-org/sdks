@@ -1,7 +1,7 @@
 import {
   AccrualPosition,
   AccrualVault,
-  Address,
+  type Address,
   Market,
   MarketConfig,
   MathLib,
@@ -15,7 +15,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { Time, isDefined } from "@morpho-org/morpho-ts";
 
-import {
+import type {
   Chain as BlueApiChain,
   Market as BlueApiMarket,
   MarketPosition as BlueApiMarketPosition,
@@ -28,7 +28,7 @@ import {
   VaultAllocation as BlueApiVaultAllocation,
   VaultState as BlueApiVaultState,
   Maybe,
-} from "./types";
+} from "./types.js";
 
 export interface PartialBlueApiTokenPrice {
   priceUsd?: BlueApiToken["priceUsd"];
@@ -316,7 +316,7 @@ export class BlueSdkConverter {
     return new AccrualVault(
       {
         ...state,
-        config: this.getVaultConfig(dto),
+        ...this.getVaultConfig(dto),
         fee: this.options.parseNumber(state.fee, 18),
         pendingOwner:
           state.pendingOwner ?? "0x0000000000000000000000000000000000000000",

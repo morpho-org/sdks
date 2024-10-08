@@ -132,7 +132,7 @@ describe("SimulationState", () => {
 
     test("should calculate reallocatable liquidity on idle market with target 0%", () => {
       // We create a state with only a vault that has all the liquidity in the idle market.
-      const idleMarketTokenA = new Market({
+      const idleMarketA = new Market({
         config: MarketConfig.idle(tokenA),
         totalBorrowAssets: 0n,
         totalBorrowShares: 0n,
@@ -143,13 +143,15 @@ describe("SimulationState", () => {
         price: parseUnits("3", 18),
       });
 
-      const blueFixture = {
+      const customFixture = new SimulationState({
+        chainId: ChainId.EthMainnet,
+        block: { number: 1n, timestamp },
         global: {
           feeRecipient: randomAddress(),
         },
         users: {},
         markets: {
-          [idleMarketTokenA.id]: idleMarketTokenA,
+          [idleMarketA.id]: idleMarketA,
           [marketA1.id]: marketA1,
         },
         tokens: {
@@ -162,9 +164,9 @@ describe("SimulationState", () => {
         },
         positions: {
           [vaultA.address]: {
-            [idleMarketTokenA.id]: new Position({
+            [idleMarketA.id]: new Position({
               user: vaultA.address,
-              marketId: idleMarketTokenA.id,
+              marketId: idleMarketA.id,
               borrowShares: 0n,
               collateral: 0n,
               supplyShares: parseUnits("10000", 6 + 6),
@@ -178,12 +180,14 @@ describe("SimulationState", () => {
             }),
           },
         },
-        holdings: {},
-      };
-      const metaMorphoFixture = {
+        holdings: {
+          [vaultA.address]: {
+            [tokenA]: dataFixture.getHolding(vaultA.address, tokenA),
+          },
+        },
         vaults: {
           [vaultA.address]: new Vault({
-            config: vaultA,
+            ...vaultA,
             curator: randomAddress(),
             fee: 0n,
             feeRecipient: randomAddress(),
@@ -193,8 +197,8 @@ describe("SimulationState", () => {
             pendingOwner: randomAddress(),
             pendingTimelock: { validAt: 0n, value: 0n },
             skimRecipient: randomAddress(),
-            supplyQueue: [idleMarketTokenA.id, marketA1.id],
-            withdrawQueue: [idleMarketTokenA.id, marketA1.id],
+            supplyQueue: [idleMarketA.id, marketA1.id],
+            withdrawQueue: [idleMarketA.id, marketA1.id],
             timelock: 0n,
             publicAllocatorConfig: {
               fee: 0n,
@@ -208,16 +212,16 @@ describe("SimulationState", () => {
         },
         vaultMarketConfigs: {
           [vaultA.address]: {
-            [idleMarketTokenA.id]: {
+            [idleMarketA.id]: {
               vault: vaultA.address,
-              marketId: idleMarketTokenA.id,
+              marketId: idleMarketA.id,
               cap: parseUnits("10000", 6),
               pendingCap: { validAt: 0n, value: 0n },
               removableAt: 0n,
               enabled: true,
               publicAllocatorConfig: {
                 vault: vaultA.address,
-                marketId: idleMarketTokenA.id,
+                marketId: idleMarketA.id,
                 maxIn: parseUnits("10000", 6),
                 maxOut: parseUnits("10000", 6),
               },
@@ -239,15 +243,9 @@ describe("SimulationState", () => {
           },
         },
         vaultUsers: {},
-      };
-
-      const dataFixture = new SimulationState({
-        chainId: ChainId.EthMainnet,
-        block: { number: 1n, timestamp },
-        ...blueFixture,
-        ...metaMorphoFixture,
       });
-      const { withdrawals, data } = dataFixture.getMarketPublicReallocations(
+
+      const { withdrawals, data } = customFixture.getMarketPublicReallocations(
         marketA1.id,
         {
           defaultMaxWithdrawalUtilization: 0n,
@@ -257,17 +255,17 @@ describe("SimulationState", () => {
       expect(withdrawals).toEqual([
         {
           vault: vaultA.address,
-          id: idleMarketTokenA.id,
+          id: idleMarketA.id,
           assets: parseUnits("10000", 6),
         },
       ]);
 
-      expect(data.getMarket(idleMarketTokenA.id).liquidity).toEqual(
-        blueFixture.markets[idleMarketTokenA.id]!.totalSupplyAssets -
+      expect(data.getMarket(idleMarketA.id).liquidity).toEqual(
+        customFixture.markets[idleMarketA.id]!.totalSupplyAssets -
           parseUnits("10000", 6),
       );
       expect(data.getMarket(marketA1.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA1.id).liquidity + parseUnits("10000", 6),
+        customFixture.getMarket(marketA1.id).liquidity + parseUnits("10000", 6),
       );
     });
 
