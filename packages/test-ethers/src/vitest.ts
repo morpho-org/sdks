@@ -1,5 +1,8 @@
 import { type AnvilArgs, spawnAnvil } from "@morpho-org/test";
-import { createAnvilTestClient } from "@morpho-org/test-viem";
+import {
+  type AnvilTestClient,
+  createAnvilTestClient,
+} from "@morpho-org/test-viem";
 import { type HDNodeWallet, JsonRpcProvider } from "ethers";
 import { http, type Chain } from "viem";
 import { anvil } from "viem/chains";
@@ -12,7 +15,7 @@ export const createEthersTest = <chain extends Chain = typeof anvil>(
 ): ReturnType<
   typeof test.extend<{
     ethers: {
-      client: ReturnType<typeof createAnvilTestClient<chain>>;
+      client: AnvilTestClient<chain>;
       wallet: HDNodeWallet & { provider: JsonRpcProvider };
     };
   }>

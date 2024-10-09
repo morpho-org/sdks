@@ -17,14 +17,10 @@ import {
   walletActions,
 } from "viem";
 import { type DealActions, dealActions } from "viem-deal";
+import type { anvil } from "viem/chains";
 import { testAccount } from "./fixtures.js";
 
-export const createAnvilTestClient = <
-  chain extends Chain | undefined = Chain | undefined,
->(
-  chain: chain,
-  transport: HttpTransport,
-): Client<
+export type AnvilTestClient<chain extends Chain = Chain> = Client<
   HttpTransport,
   chain,
   HDAccount,
@@ -55,7 +51,12 @@ export const createAnvilTestClient = <
         >,
       ): Promise<WaitForTransactionReceiptReturnType<chain>>;
     }
-> =>
+>;
+
+export const createAnvilTestClient = <chain extends Chain = typeof anvil>(
+  chain: chain | undefined,
+  transport: HttpTransport,
+): AnvilTestClient<chain> =>
   createTestClient({
     chain,
     mode: "anvil",

@@ -16,7 +16,7 @@ subtask(TASK_COMPILE_SOLIDITY_EMIT_ARTIFACTS).setAction(
           if (sourceName.includes("interfaces")) return;
 
           const source = parse(sourceName).name;
-          const path = join("src", "queries", `${source}.ts`);
+          const path = join("test", "contracts", `${source}.ts`);
 
           const dir = dirname(path);
           if (!existsSync(dir)) mkdirSync(dir, { recursive: true });

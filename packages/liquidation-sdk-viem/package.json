@@ -1,0 +1,69 @@
+{
+  "name": "@morpho-org/liquidation-sdk-viem",
+  "version": "1.12.1",
+  "author": "Morpho Association <contact@morpho.org>",
+  "type": "module",
+  "main": "src/index.ts",
+  "files": [
+    "lib",
+    "examples"
+  ],
+  "scripts": {
+    "prepublish": "yarn build",
+    "compile": "hardhat compile",
+    "build": "tsc --build tsconfig.build.json",
+    "codegen": "graphql-codegen --config codegen.ts"
+  },
+  "dependencies": {
+    "@paraswap/sdk": "^6.10.0",
+    "executooor-viem": "^1.3.1",
+    "graphql": "^16.9.0",
+    "graphql-request": "^6.1.0",
+    "graphql-tag": "2.11.0"
+  },
+  "peerDependencies": {
+    "@morpho-org/blue-api-sdk": "workspace:^",
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "evm-maths": "^7.0.0"
+  },
+  "devDependencies": {
+    "@graphql-codegen/cli": "^5.0.3",
+    "@graphql-codegen/import-types-preset": "^3.0.0",
+    "@graphql-codegen/typescript": "^4.1.0",
+    "@graphql-codegen/typescript-graphql-request": "^6.2.0",
+    "@graphql-codegen/typescript-operations": "^4.3.0",
+    "@morpho-org/blue-api-sdk": "workspace:^",
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/liquidation-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/test": "workspace:^",
+    "@morpho-org/test-viem": "workspace:^",
+    "@types/node": "^22.7.0",
+    "@types/simple-mock": "^0",
+    "evm-maths": "^7.0.0",
+    "executooor-viem": "^1.3.1",
+    "fetch-mock": "^11.1.4",
+    "hardhat": "^2.22.13",
+    "nock": "^13.5.5",
+    "node-fetch": "^3.3.2",
+    "simple-mock": "^0.8.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.3",
+    "viem": "^2.21.19",
+    "vitest": "^2.1.2"
+  },
+  "publishConfig": {
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      }
+    },
+    "access": "public"
+  }
+}

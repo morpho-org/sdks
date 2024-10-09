@@ -12,9 +12,7 @@
       "package.json",
       "packages/blue-sdk-viem-bundler/tests/",
       "packages/blue-api-sdk/src/types.ts",
-      "packages/liquidation-sdk-ethers/src/types/",
-      "packages/liquidation-sdk-ethers/src/api/sdk.ts",
-      "packages/liquidation-sdk-ethers/mocks/types/"
+      "packages/liquidation-sdk-viem/src/api/sdk.ts"
     ]
   },
   "formatter": {

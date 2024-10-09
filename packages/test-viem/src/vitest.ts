@@ -2,14 +2,14 @@ import { type AnvilArgs, spawnAnvil } from "@morpho-org/test";
 import { http, type Chain } from "viem";
 import { anvil } from "viem/chains";
 import { test } from "vitest";
-import { createAnvilTestClient } from "./anvil.js";
+import { type AnvilTestClient, createAnvilTestClient } from "./anvil.js";
 
 export const createViemTest = <chain extends Chain = typeof anvil>(
   parameters: AnvilArgs = {},
   chain: chain = anvil as unknown as chain,
 ): ReturnType<
   typeof test.extend<{
-    client: ReturnType<typeof createAnvilTestClient<chain>>;
+    client: AnvilTestClient<chain>;
   }>
 > => {
   parameters.forkChainId ??= chain?.id;

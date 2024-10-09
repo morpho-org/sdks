@@ -1,5 +1,9 @@
 import { type AnvilArgs, spawnAnvil } from "@morpho-org/test";
-import { createAnvilTestClient, testAccount } from "@morpho-org/test-viem";
+import {
+  type AnvilTestClient,
+  createAnvilTestClient,
+  testAccount,
+} from "@morpho-org/test-viem";
 import { http, type Chain, type HttpTransport } from "viem";
 import { anvil } from "viem/chains";
 import { test } from "vitest";
@@ -12,7 +16,7 @@ export const createWagmiTest = <chain extends Chain = typeof anvil>(
   typeof test.extend<{
     wagmi: {
       config: Config<readonly [chain], Record<chain["id"], HttpTransport>>;
-      client: ReturnType<typeof createAnvilTestClient<chain>>;
+      client: AnvilTestClient<chain>;
     };
   }>
 > => {

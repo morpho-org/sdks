@@ -56,4 +56,11 @@ export default defineWorkspace([
       testTimeout: 30_000,
     },
   },
+  {
+    test: {
+      name: "liquidation-sdk-viem",
+      include: ["packages/liquidation-sdk-viem/**/*.test.ts"],
+      testTimeout: 30_000,
+    },
+  },
 ]);
