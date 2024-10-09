@@ -1,12 +1,7 @@
 import { Address, ChainId } from "@morpho-org/blue-sdk";
-import {
-  addresses,
-  contracts,
-  pendle,
-  usual,
-} from "@morpho-org/blue-sdk-ethers-liquidation";
 import { AbstractSigner, MaxUint256, Provider } from "ethers";
 import { ExecutorEncoder } from "executooor";
+import { addresses, contracts, pendle, usual } from "../src";
 
 export class LiquidationEncoder extends ExecutorEncoder {
   constructor(address: string, runner: AbstractSigner<Provider>) {
