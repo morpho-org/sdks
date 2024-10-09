@@ -1,18 +1,15 @@
 import { Address, ChainId } from "@morpho-org/blue-sdk";
-import {
-  curvePools,
-  mainnetAddresses,
-  pendle,
-} from "@morpho-org/blue-sdk-ethers-liquidation";
-import { CurveStableSwapNG__factory } from "@morpho-org/blue-sdk-ethers-liquidation/src/contracts/curve";
+import { AbstractSigner, MaxUint256, Provider } from "ethers";
+import { ExecutorEncoder } from "executooor";
+import { curvePools, mainnetAddresses } from "./addresses";
+import { CurveStableSwapNG__factory } from "./contracts/curve";
+import * as pendle from "./tokens/pendle";
 import {
   USD0_USD0PP_USD0_INDEX,
   USD0_USD0PP_USDPP_INDEX,
   USD0_USDC_USD0_INDEX,
   USD0_USDC_USDC_INDEX,
-} from "@morpho-org/blue-sdk-ethers-liquidation/src/tokens/usual";
-import { AbstractSigner, MaxUint256, Provider } from "ethers";
-import { ExecutorEncoder } from "executooor";
+} from "./tokens/usual";
 
 export class LiquidationEncoder extends ExecutorEncoder {
   constructor(address: string, runner: AbstractSigner<Provider>) {
