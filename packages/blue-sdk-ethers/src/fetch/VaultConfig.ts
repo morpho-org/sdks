@@ -25,7 +25,11 @@ export async function fetchVaultConfig(
   );
 
   if (!config) {
-    const mm = MetaMorpho__factory.connect(address, runner);
+    const mm = MetaMorpho__factory.connect(
+      address,
+      // @ts-ignore incompatible commonjs type
+      runner,
+    );
 
     // always fetch at latest block because config is immutable
     const [asset, symbol, name, decimals, decimalsOffset] = await Promise.all([

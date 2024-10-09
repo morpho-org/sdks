@@ -19,7 +19,11 @@ export async function fetchUser(
   );
 
   const { morpho, bundler } = getChainAddresses(chainId);
-  const blue = MorphoBlue__factory.connect(morpho, runner);
+  const blue = MorphoBlue__factory.connect(
+    morpho,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
 
   const [isBundlerAuthorized, morphoNonce] = await Promise.all([
     blue.isAuthorized(address, bundler, overrides),

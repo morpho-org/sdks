@@ -52,13 +52,22 @@ export async function fetchMarketFromConfig(
     price,
     rateAtTarget,
   ] = await Promise.all([
-    MorphoBlue__factory.connect(morpho, runner).market(config.id, overrides),
+    MorphoBlue__factory.connect(
+      morpho,
+      // @ts-ignore incompatible commonjs type
+      runner,
+    ).market(config.id, overrides),
     config.oracle !== ZeroAddress
-      ? BlueOracle__factory.connect(config.oracle, runner).price(overrides)
+      ? BlueOracle__factory.connect(
+          config.oracle,
+          // @ts-ignore incompatible commonjs type
+          runner,
+        ).price(overrides)
       : 0n,
     config.irm === adaptiveCurveIrm
       ? await AdaptiveCurveIrm__factory.connect(
           config.irm,
+          // @ts-ignore incompatible commonjs type
           runner,
         ).rateAtTarget(config.id, overrides)
       : undefined,

@@ -1,9 +1,9 @@
-import { createAnvilWagmiTest } from "@morpho-org/test";
+import { createWagmiTest } from "@morpho-org/test-wagmi";
 import { mainnet } from "viem/chains";
 
 const rpcUrl = process.env.MAINNET_RPC_URL;
 
-export const test = createAnvilWagmiTest(
+export const test = createWagmiTest(
   {
     forkUrl: rpcUrl,
     forkBlockNumber: 19_530_000,

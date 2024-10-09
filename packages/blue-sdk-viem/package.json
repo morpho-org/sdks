@@ -24,9 +24,11 @@
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
+    "@morpho-org/test-viem": "workspace:^",
     "@types/node": "^22.1.0",
     "typescript": "^5.6.3",
-    "viem": "^2.21.19"
+    "viem": "^2.21.19",
+    "vitest": "^2.1.2"
   },
   "publishConfig": {
     "main": "lib/index.js",

@@ -15,6 +15,13 @@ export default defineWorkspace([
   },
   {
     test: {
+      name: "blue-sdk-ethers",
+      include: ["packages/blue-sdk-ethers/**/*.test.ts"],
+      testTimeout: 30_000,
+    },
+  },
+  {
+    test: {
       name: "blue-sdk-viem",
       include: ["packages/blue-sdk-viem/**/*.test.ts"],
       testTimeout: 30_000,

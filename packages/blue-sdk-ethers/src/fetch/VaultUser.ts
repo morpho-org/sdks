@@ -1,14 +1,14 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { ERC20__factory, MetaMorpho__factory } from "ethers-types";
 
 import {
-  Address,
+  type Address,
   ChainUtils,
-  VaultConfig,
+  type VaultConfig,
   VaultUser,
 } from "@morpho-org/blue-sdk";
-import { FetchOptions } from "../types";
-import { fetchVaultConfig } from "./VaultConfig";
+import type { FetchOptions } from "../types.js";
+import { fetchVaultConfig } from "./VaultConfig.js";
 
 export async function fetchVaultUser(
   vault: Address,
@@ -36,8 +36,16 @@ export async function fetchVaultUserFromConfig(
   );
   options.overrides ??= {};
 
-  const mm = MetaMorpho__factory.connect(config.address, runner);
-  const erc20 = ERC20__factory.connect(config.asset, runner);
+  const mm = MetaMorpho__factory.connect(
+    config.address,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
+  const erc20 = ERC20__factory.connect(
+    config.asset,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
 
   const [allowance, isAllocator] = await Promise.all([
     erc20.allowance(user, config.address, options.overrides),

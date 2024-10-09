@@ -1,5 +1,5 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
+  "$schema": "https://biomejs.dev/schemas/1.9.3/schema.json",
   "files": {
     "ignore": [
       "lib",
@@ -11,6 +11,7 @@
       "artifacts",
       "package.json",
       "packages/blue-sdk-viem-bundler/tests/",
+      "packages/blue-api-sdk/src/types.ts",
       "packages/liquidation-sdk-ethers/src/types/",
       "packages/liquidation-sdk-ethers/src/api/sdk.ts",
       "packages/liquidation-sdk-ethers/mocks/types/"

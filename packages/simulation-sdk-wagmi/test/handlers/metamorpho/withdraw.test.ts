@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from "@morpho-org/test";
+import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { describe, expect } from "vitest";
 
 import { ChainId } from "@morpho-org/blue-sdk";

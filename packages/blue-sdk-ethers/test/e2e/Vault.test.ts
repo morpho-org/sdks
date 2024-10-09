@@ -1,60 +1,58 @@
-import { expect } from "chai";
-import { ZeroAddress } from "ethers";
-import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
-import { ethers } from "hardhat";
-
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
-import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
+import { describe, expect } from "vitest";
+import { test } from "./setup.js";
 
 import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
-import { setUp } from "@morpho-org/morpho-test";
 
+import { vaults } from "@morpho-org/morpho-test";
+import { zeroAddress } from "viem";
 import { Vault } from "../../src/augment/Vault.js";
+import { metaMorphoAbi, publicAllocatorAbi } from "./abis.js";
+
+const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("augment/Vault", () => {
-  let signer: SignerWithAddress;
+  test("should fetch vault data", async ({ ethers: { client, wallet } }) => {
+    const owner = await client.readContract({
+      address: steakUsdc.address,
+      abi: metaMorphoAbi,
+      functionName: "owner",
+    });
 
-  setUp(async (block) => {
-    signer = (await ethers.getSigners())[0]!;
+    await client.setBalance({ address: owner, value: BigInt(1e18) });
+    await client.writeContract({
+      account: owner,
+      address: steakUsdc.address,
+      abi: metaMorphoAbi,
+      functionName: "setIsAllocator",
+      args: [addresses[ChainId.EthMainnet].publicAllocator, true],
+    });
+    await client.writeContract({
+      account: owner,
+      address: addresses[ChainId.EthMainnet].publicAllocator,
+      abi: publicAllocatorAbi,
+      functionName: "setFee",
+      args: [steakUsdc.address, 1n],
+    });
 
-    const mm = MetaMorpho__factory.connect(steakUsdc.address, signer);
-
-    const owner = await ethers.getImpersonatedSigner(await mm.owner());
-
-    await setNextBlockTimestamp(block.timestamp);
-    await mm
-      .connect(owner)
-      .setIsAllocator(addresses[ChainId.EthMainnet].publicAllocator, true);
-
-    const publicAllocator = PublicAllocator__factory.connect(
-      addresses[ChainId.EthMainnet].publicAllocator,
-      owner,
-    );
-
-    await setNextBlockTimestamp(block.timestamp);
-    await publicAllocator.setFee(steakUsdc.address, 1);
-  });
-
-  it("should fetch vault data", async () => {
     const expectedData = new Vault({
-      config: steakUsdc,
-      curator: ZeroAddress,
+      ...steakUsdc,
+      curator: zeroAddress,
       fee: 50000000000000000n,
       feeRecipient: "0x255c7705e8BB334DfCae438197f7C4297988085a",
       guardian: "0xCF0FE65E39C776D2d6Eb420364A5df776c9cFf5f",
       owner: "0x255c7705e8BB334DfCae438197f7C4297988085a",
       pendingGuardian: {
         validAt: 0n,
-        value: ZeroAddress,
+        value: zeroAddress,
       },
-      pendingOwner: ZeroAddress,
+      pendingOwner: zeroAddress,
       pendingTimelock: {
         validAt: 0n,
         value: 0n,
       },
-      skimRecipient: ZeroAddress,
+      skimRecipient: zeroAddress,
       publicAllocatorConfig: {
-        admin: ZeroAddress,
+        admin: zeroAddress,
         fee: 1n,
         accruedFee: 0n,
       },
@@ -71,12 +69,12 @@ describe("augment/Vault", () => {
         "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49" as MarketId,
       ],
       lastTotalAssets: 26129569140552n,
-      totalAssets: 26138939802936n,
+      totalAssets: 26138940196162n,
       totalSupply: 25752992371062043744406063n,
     });
 
-    const value = await Vault.fetch(steakUsdc.address, signer);
+    const value = await Vault.fetch(steakUsdc.address, wallet);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

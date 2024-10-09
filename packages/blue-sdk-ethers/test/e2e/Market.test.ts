@@ -1,27 +1,19 @@
-import { expect } from "chai";
-import { Wallet, toBigInt } from "ethers";
-import { MorphoBlue__factory } from "ethers-types";
-import { ethers } from "hardhat";
-
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
-import { setCode, time } from "@nomicfoundation/hardhat-network-helpers";
-import { setNextBlockTimestamp } from "@nomicfoundation/hardhat-network-helpers/dist/src/helpers/time";
-
 import { ChainId, MarketConfig, addresses } from "@morpho-org/blue-sdk";
-import { setUp } from "@morpho-org/morpho-test";
 
+import { markets } from "@morpho-org/morpho-test";
+import { randomAddress } from "@morpho-org/test";
+import { describe, expect } from "vitest";
 import { Market } from "../../src/augment/Market.js";
+import { blueAbi } from "./abis.js";
+import { test } from "./setup.js";
+
+const { morpho, adaptiveCurveIrm } = addresses[ChainId.EthMainnet];
+const { usdc_wstEth, usdc_idle, eth_wstEth } = markets[ChainId.EthMainnet];
 
 describe("augment/Market", () => {
-  let signer: SignerWithAddress;
-
-  setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
-  });
-
-  it("should fetch market data", async () => {
-    const expectedData = {
-      config: MAINNET_MARKETS.usdc_wstEth,
+  test("should fetch market data", async ({ ethers: { wallet } }) => {
+    const expectedData = new Market({
+      config: usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
       totalSupplyShares: 31693536738210306937n,
       totalBorrowAssets: 30448219939637n,
@@ -30,37 +22,18 @@ describe("augment/Market", () => {
       fee: 0n,
       rateAtTarget: 3386101241n,
       price: 4026279734253409453160432114n,
-    };
+    });
 
-    const value = await Market.fetch(MAINNET_MARKETS.usdc_wstEth.id, signer);
+    const value = await Market.fetch(usdc_wstEth.id, wallet);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
-  it("should fetch market data from config", async () => {
-    const expectedData = {
-      config: MAINNET_MARKETS.usdc_wstEth,
-      totalSupplyAssets: 32212092216793n,
-      totalSupplyShares: 31693536738210306937n,
-      totalBorrowAssets: 30448219939637n,
-      totalBorrowShares: 29909458369905209203n,
-      lastUpdate: 1711589915n,
-      fee: 0n,
-      rateAtTarget: 3386101241n,
-      price: 4026279734253409453160432114n,
-    };
-
-    const value = await Market.fetchFromConfig(
-      MAINNET_MARKETS.usdc_wstEth,
-      signer,
-    );
-
-    expect(value).to.eql(expectedData);
-  });
-
-  it("should fetch price and rate if idle market", async () => {
-    const expectedData = {
-      config: MAINNET_MARKETS.usdc_idle,
+  test("should fetch price and rate if idle market", async ({
+    ethers: { wallet },
+  }) => {
+    const expectedData = new Market({
+      config: usdc_idle,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
@@ -69,48 +42,68 @@ describe("augment/Market", () => {
       fee: 0n,
       price: 0n,
       rateAtTarget: undefined,
-    };
+    });
 
-    const value = await Market.fetch(MAINNET_MARKETS.usdc_idle.id, signer);
+    const value = await Market.fetch(usdc_idle.id, wallet);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
-  it("should not fetch rate at target for unknown irm", async () => {
-    const morpho = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
-      signer,
-    );
-    const owner = await ethers.getImpersonatedSigner(await morpho.owner());
+  test("should not fetch rate at target for unknown irm", async ({
+    ethers: { client, wallet },
+  }) => {
+    const owner = await client.readContract({
+      address: morpho,
+      abi: blueAbi,
+      functionName: "owner",
+    });
 
     const config = new MarketConfig({
-      ...MAINNET_MARKETS.eth_wstEth,
-      irm: Wallet.createRandom().address,
+      ...eth_wstEth,
+      irm: randomAddress(),
     });
-    await setCode(
-      config.irm,
-      await ethers.provider.getCode(MAINNET_MARKETS.eth_wstEth.irm),
-    );
-    await morpho.connect(owner).enableIrm(config.irm);
 
-    const timestamp = toBigInt(await time.latest());
-    await setNextBlockTimestamp(timestamp);
-    await morpho.createMarket(config);
+    await client.setCode({
+      address: config.irm,
+      bytecode: (await client.getCode({
+        address: adaptiveCurveIrm,
+      }))!,
+    });
 
-    const expectedData = {
+    await client.setBalance({ address: owner, value: BigInt(1e18) });
+    await client.writeContract({
+      account: owner,
+      address: morpho,
+      abi: blueAbi,
+      functionName: "enableIrm",
+      args: [config.irm],
+    });
+
+    const timestamp = (await client.timestamp()) + 3n;
+
+    await client.setNextBlockTimestamp({ timestamp });
+
+    await client.writeContract({
+      address: morpho,
+      abi: blueAbi,
+      functionName: "createMarket",
+      args: [{ ...config }],
+    });
+
+    const expectedData = new Market({
       config,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
       totalBorrowShares: 0n,
-      lastUpdate: timestamp,
+      lastUpdate: BigInt(timestamp),
       fee: 0n,
       price: 1160095030000000000000000000000000000n,
       rateAtTarget: undefined,
-    };
+    });
 
-    const value = await Market.fetch(config.id, signer);
+    const value = await Market.fetch(config.id, wallet);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

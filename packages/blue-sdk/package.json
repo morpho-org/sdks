@@ -3,8 +3,8 @@
   "version": "1.12.1",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
-  "main": "src/index.ts",
   "type": "module",
+  "main": "src/index.ts",
   "files": [
     "lib"
   ],
@@ -22,10 +22,12 @@
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
+    "@morpho-org/test-viem": "workspace:^",
     "@types/node": "^22.1.0",
     "typescript": "^5.6.3",
     "viem": "^2.21.19",
-    "viem-deal": "^1.0.5"
+    "viem-deal": "^1.0.5",
+    "vitest": "^2.1.2"
   },
   "publishConfig": {
     "main": "lib/index.js",

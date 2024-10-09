@@ -12,6 +12,10 @@
     "codegen": "graphql-codegen --config codegen.ts",
     "build": "tsc --build tsconfig.build.json"
   },
+  "peerDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^"
+  },
   "devDependencies": {
     "@apollo/client": "^3.11.1",
     "@graphql-codegen/cli": "^5.0.0",
@@ -25,10 +29,6 @@
     "graphql": "^16.8.1",
     "graphql-tag": "^2.12.6",
     "typescript": "^5.6.3"
-  },
-  "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
   },
   "publishConfig": {
     "main": "lib/index.js",

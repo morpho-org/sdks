@@ -21,7 +21,11 @@ export async function fetchVaultMarketConfig(
   );
   options.overrides ??= {};
 
-  const mm = MetaMorpho__factory.connect(vault, runner);
+  const mm = MetaMorpho__factory.connect(
+    vault,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
 
   const [{ cap, removableAt, enabled }, pendingCap, publicAllocatorConfig] =
     await Promise.all([

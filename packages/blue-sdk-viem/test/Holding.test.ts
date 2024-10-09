@@ -11,7 +11,8 @@ import { Holding } from "../src/augment/Holding.js";
 import { permit2Abi } from "../src/index.js";
 import { test } from "./setup.js";
 
-const { wNative, wbC3M } = addresses[ChainId.EthMainnet];
+const { morpho, bundler, permit2, wNative, wbC3M } =
+  addresses[ChainId.EthMainnet];
 
 describe("augment/Holding", () => {
   test("should fetch user WETH data with deployless", async ({ client }) => {
@@ -48,47 +49,38 @@ describe("augment/Holding", () => {
       address: wNative,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].morpho,
-        expectedData.erc20Allowances.morpho,
-      ],
+      args: [morpho, expectedData.erc20Allowances.morpho],
     });
     await client.writeContract({
       address: wNative,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].bundler,
-        expectedData.erc20Allowances.bundler,
-      ],
+      args: [bundler, expectedData.erc20Allowances.bundler],
     });
     await client.writeContract({
       address: wNative,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].permit2,
-        expectedData.erc20Allowances.permit2,
-      ],
+      args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].permit2,
+      address: permit2,
       abi: permit2Abi,
       functionName: "approve",
       args: [
         wNative,
-        addresses[ChainId.EthMainnet].morpho,
+        morpho,
         expectedData.permit2Allowances.morpho.amount,
         Number(expectedData.permit2Allowances.morpho.expiration),
       ],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].permit2,
+      address: permit2,
       abi: permit2Abi,
       functionName: "approve",
       args: [
         wNative,
-        addresses[ChainId.EthMainnet].bundler,
+        bundler,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
@@ -133,47 +125,38 @@ describe("augment/Holding", () => {
       address: wNative,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].morpho,
-        expectedData.erc20Allowances.morpho,
-      ],
+      args: [morpho, expectedData.erc20Allowances.morpho],
     });
     await client.writeContract({
       address: wNative,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].bundler,
-        expectedData.erc20Allowances.bundler,
-      ],
+      args: [bundler, expectedData.erc20Allowances.bundler],
     });
     await client.writeContract({
       address: wNative,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].permit2,
-        expectedData.erc20Allowances.permit2,
-      ],
+      args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].permit2,
+      address: permit2,
       abi: permit2Abi,
       functionName: "approve",
       args: [
         wNative,
-        addresses[ChainId.EthMainnet].morpho,
+        morpho,
         expectedData.permit2Allowances.morpho.amount,
         Number(expectedData.permit2Allowances.morpho.expiration),
       ],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].permit2,
+      address: permit2,
       abi: permit2Abi,
       functionName: "approve",
       args: [
         wNative,
-        addresses[ChainId.EthMainnet].bundler,
+        bundler,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
@@ -255,47 +238,38 @@ describe("augment/Holding", () => {
       address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].morpho,
-        expectedData.erc20Allowances.morpho,
-      ],
+      args: [morpho, expectedData.erc20Allowances.morpho],
     });
     await client.writeContract({
       address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].bundler,
-        expectedData.erc20Allowances.bundler,
-      ],
+      args: [bundler, expectedData.erc20Allowances.bundler],
     });
     await client.writeContract({
       address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].permit2,
-        expectedData.erc20Allowances.permit2,
-      ],
+      args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].permit2,
+      address: permit2,
       abi: permit2Abi,
       functionName: "approve",
       args: [
         wbC3M,
-        addresses[ChainId.EthMainnet].morpho,
+        morpho,
         expectedData.permit2Allowances.morpho.amount,
         Number(expectedData.permit2Allowances.morpho.expiration),
       ],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].permit2,
+      address: permit2,
       abi: permit2Abi,
       functionName: "approve",
       args: [
         wbC3M,
-        addresses[ChainId.EthMainnet].bundler,
+        bundler,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
@@ -343,47 +317,38 @@ describe("augment/Holding", () => {
       address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].morpho,
-        expectedData.erc20Allowances.morpho,
-      ],
+      args: [morpho, expectedData.erc20Allowances.morpho],
     });
     await client.writeContract({
       address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].bundler,
-        expectedData.erc20Allowances.bundler,
-      ],
+      args: [bundler, expectedData.erc20Allowances.bundler],
     });
     await client.writeContract({
       address: wbC3M,
       abi: erc20Abi,
       functionName: "approve",
-      args: [
-        addresses[ChainId.EthMainnet].permit2,
-        expectedData.erc20Allowances.permit2,
-      ],
+      args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].permit2,
+      address: permit2,
       abi: permit2Abi,
       functionName: "approve",
       args: [
         wbC3M,
-        addresses[ChainId.EthMainnet].morpho,
+        morpho,
         expectedData.permit2Allowances.morpho.amount,
         Number(expectedData.permit2Allowances.morpho.expiration),
       ],
     });
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].permit2,
+      address: permit2,
       abi: permit2Abi,
       functionName: "approve",
       args: [
         wbC3M,
-        addresses[ChainId.EthMainnet].bundler,
+        bundler,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],

@@ -5,4 +5,4 @@ export * from "./fetch/index.js";
 export * from "./ethers/index.js";
 export * from "./types.js";
 
-import "./augment/ethers";
+import "./augment/ethers.js";

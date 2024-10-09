@@ -6,7 +6,7 @@ import {
   type MinimalBlock,
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
-import { renderHook, waitFor } from "@morpho-org/test";
+import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";

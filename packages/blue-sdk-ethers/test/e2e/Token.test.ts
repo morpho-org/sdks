@@ -1,66 +1,56 @@
-import { expect } from "chai";
-import { ethers } from "hardhat";
-
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
+import { describe, expect } from "vitest";
+import { test } from "./setup.js";
 
 import {
   ChainId,
   ExchangeRateWrappedToken,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { setUp } from "@morpho-org/morpho-test";
 import { Token } from "../../src/augment/Token.js";
 
+const { mkr, usdc, stEth, wstEth } = addresses[ChainId.EthMainnet];
+
 describe("augment/Token", () => {
-  let signer: SignerWithAddress;
-
-  setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
-  });
-
-  it("should fetch token data", async () => {
+  test("should fetch token data", async ({ ethers: { wallet } }) => {
     const expectedData = new Token({
-      address: addresses[ChainId.EthMainnet].usdc,
+      address: usdc,
       decimals: 6,
       symbol: "USDC",
       name: "USD Coin",
     });
 
-    const value = await Token.fetch(addresses[ChainId.EthMainnet].usdc, signer);
+    const value = await Token.fetch(usdc, wallet);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
-  it("should fetch wrapped token data", async () => {
+  test("should fetch wrapped token data", async ({ ethers: { wallet } }) => {
     const expectedData = new ExchangeRateWrappedToken(
       {
-        address: addresses[ChainId.EthMainnet].wstEth,
+        address: wstEth,
         decimals: 18,
         symbol: "wstETH",
         name: "Wrapped liquid staked Ether 2.0",
       },
-      addresses[ChainId.EthMainnet].stEth,
-      expect.bigint,
+      stEth,
+      expect.any(BigInt),
     );
 
-    const value = await Token.fetch(
-      addresses[ChainId.EthMainnet].wstEth,
-      signer,
-    );
+    const value = await Token.fetch(wstEth, wallet);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 
-  it("Should fetch MKR token data", async () => {
+  test("Should fetch MKR token data", async ({ ethers: { wallet } }) => {
     const expectedData = new Token({
-      address: addresses[ChainId.EthMainnet].mkr,
+      address: mkr,
       decimals: 18,
       symbol: "MKR",
       name: "Maker",
     });
 
-    const value = await Token.fetch(addresses[ChainId.EthMainnet].mkr, signer);
+    const value = await Token.fetch(mkr, wallet);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

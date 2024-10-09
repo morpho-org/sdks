@@ -6,7 +6,7 @@ import {
   SimulationState,
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
-import { renderHook, waitFor } from "@morpho-org/test";
+import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import _ from "lodash";
 import { erc20Abi, zeroAddress } from "viem";
 import { describe, expect } from "vitest";

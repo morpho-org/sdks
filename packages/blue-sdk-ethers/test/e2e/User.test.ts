@@ -1,36 +1,29 @@
-import { expect } from "chai";
-import { MorphoBlue__factory } from "ethers-types";
-import { ethers } from "hardhat";
+import { describe, expect } from "vitest";
+import { test } from "./setup.js";
 
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
-
-import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
-import { setUp } from "@morpho-org/morpho-test";
+import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { User } from "../../src/augment/User.js";
+import { blueAbi } from "./abis.js";
+
+const { morpho, bundler } = addresses[ChainId.EthMainnet];
 
 describe("augment/User", () => {
-  let signer: SignerWithAddress;
+  test("should fetch user data", async ({ ethers: { client, wallet } }) => {
+    await client.writeContract({
+      address: morpho,
+      abi: blueAbi,
+      functionName: "setAuthorization",
+      args: [bundler, true],
+    });
 
-  setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
-
-    const morpho = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
-      signer,
-    );
-
-    await morpho.setAuthorization(addresses[ChainId.EthMainnet].bundler, true);
-  });
-
-  it("should fetch user data", async () => {
     const expectedData = new User({
-      address: signer.address as Address,
+      address: client.account.address,
       isBundlerAuthorized: true,
       morphoNonce: 0n,
     });
 
-    const value = await User.fetch(signer.address as Address, signer);
+    const value = await User.fetch(client.account.address, wallet);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

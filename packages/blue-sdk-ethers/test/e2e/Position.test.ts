@@ -1,73 +1,88 @@
-import { expect } from "chai";
-import { MaxUint256, parseUnits } from "ethers";
-import { ERC20__factory, MorphoBlue__factory } from "ethers-types";
-import { ethers } from "hardhat";
-import { deal } from "hardhat-deal";
+import { type Address, erc20Abi, maxUint256, parseUnits } from "viem";
 
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
-
-import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
-import { setUp } from "@morpho-org/morpho-test";
+import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { markets } from "@morpho-org/morpho-test";
+import { testWallet } from "@morpho-org/test-ethers";
+import { describe, expect } from "vitest";
 import { Position } from "../../src/augment/Position.js";
+import { blueAbi } from "./abis.js";
+import { test } from "./setup.js";
 
-const market = MAINNET_MARKETS.usdc_wstEth;
+const { morpho } = addresses[ChainId.EthMainnet];
+const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 const supplyAssets = parseUnits("10", 6);
 const borrowShares = parseUnits("7", 12);
-const collateral = parseUnits("1");
+const collateral = parseUnits("1", 18);
 
 describe("augment/Position", () => {
-  let signer: SignerWithAddress;
-  let supplier: SignerWithAddress;
+  test("should fetch position", async ({ ethers: { client, wallet } }) => {
+    const supplier = testWallet(wallet.provider, 1);
 
-  setUp(async () => {
-    const signers = await ethers.getSigners();
-    signer = signers[0]!;
-    supplier = signers[1]!;
+    await client.deal({
+      erc20: usdc_wstEth.loanToken,
+      recipient: supplier.address as Address,
+      amount: supplyAssets,
+    });
+    await client.writeContract({
+      account: supplier.address as Address,
+      address: usdc_wstEth.loanToken,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [morpho, maxUint256],
+    });
+    await client.writeContract({
+      account: supplier.address as Address,
+      address: morpho,
+      abi: blueAbi,
+      functionName: "supply",
+      args: [usdc_wstEth, supplyAssets, 0n, supplier.address as Address, "0x"],
+    });
 
-    const morpho = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
-      signer,
-    );
-    const usdc = ERC20__factory.connect(market.loanToken, signer);
-    const wstEth = ERC20__factory.connect(market.collateralToken, signer);
+    await client.deal({
+      erc20: usdc_wstEth.collateralToken,
+      recipient: client.account.address,
+      amount: collateral,
+    });
+    await client.writeContract({
+      address: usdc_wstEth.collateralToken,
+      abi: erc20Abi,
+      functionName: "approve",
+      args: [morpho, maxUint256],
+    });
+    await client.writeContract({
+      address: morpho,
+      abi: blueAbi,
+      functionName: "supplyCollateral",
+      args: [usdc_wstEth, collateral, client.account.address, "0x"],
+    });
+    await client.writeContract({
+      address: morpho,
+      abi: blueAbi,
+      functionName: "borrow",
+      args: [
+        { ...usdc_wstEth },
+        0n,
+        borrowShares,
+        client.account.address,
+        client.account.address,
+      ],
+    });
 
-    await deal(market.loanToken, supplier.address, supplyAssets);
-    await usdc
-      .connect(supplier)
-      .approve(addresses[ChainId.EthMainnet].morpho, MaxUint256);
-    await morpho
-      .connect(supplier)
-      .supply(market, supplyAssets, 0, supplier.address, "0x");
-
-    await deal(market.collateralToken, signer.address, collateral);
-    await wstEth.approve(addresses[ChainId.EthMainnet].morpho, MaxUint256);
-    await morpho.supplyCollateral(market, collateral, signer.address, "0x");
-    await morpho.borrow(
-      market,
-      0,
-      borrowShares,
-      signer.address,
-      signer.address,
-    );
-  });
-
-  it("should fetch position", async () => {
     const expectedData = new Position({
-      user: signer.address as Address,
-      marketId: market.id,
+      user: client.account.address,
+      marketId: usdc_wstEth.id,
       supplyShares: 0n,
       borrowShares,
       collateral,
     });
 
     const value = await Position.fetch(
-      signer.address as Address,
-      market.id,
-      signer,
+      client.account.address,
+      usdc_wstEth.id,
+      wallet,
     );
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

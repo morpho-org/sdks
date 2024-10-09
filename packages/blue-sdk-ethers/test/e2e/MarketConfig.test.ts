@@ -1,46 +1,38 @@
-import { expect } from "chai";
-import { ZeroAddress } from "ethers";
-import { ethers } from "hardhat";
-
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers.js";
+import { zeroAddress } from "viem";
 
 import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
-import { setUp } from "@morpho-org/morpho-test";
 
 import { MarketConfig } from "../../src/augment/MarketConfig.js";
+import { test } from "./setup.js";
+
+import { markets } from "@morpho-org/morpho-test";
+import { describe, expect } from "vitest";
+
+const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 describe("augment/MarketConfig", () => {
-  let signer: SignerWithAddress;
+  test("should fetch config from cache", async ({ ethers: { wallet } }) => {
+    const market = await MarketConfig.fetch(usdc_wstEth.id, wallet);
 
-  setUp(async () => {
-    signer = (await ethers.getSigners())[0]!;
+    expect(market).toStrictEqual(usdc_wstEth);
   });
 
-  it("should fetch config from cache", async () => {
-    const market = await MarketConfig.fetch(
-      MAINNET_MARKETS.usdc_wstEth.id,
-      signer,
-    );
-
-    expect(market).to.eql(MAINNET_MARKETS.usdc_wstEth);
-  });
-
-  it("should fetch config from chain", async () => {
+  test("should fetch config from chain", async ({ ethers: { wallet } }) => {
     const marketParams = {
-      collateralToken: ZeroAddress,
+      collateralToken: zeroAddress,
       loanToken: addresses[ChainId.EthMainnet].wNative,
       lltv: 0n,
-      irm: ZeroAddress,
-      oracle: ZeroAddress,
+      irm: zeroAddress,
+      oracle: zeroAddress,
       id: "0x58e212060645d18eab6d9b2af3d56fbc906a92ff5667385f616f662c70372284",
       liquidationIncentiveFactor: 1150000000000000000n,
     };
 
     const market = await MarketConfig.fetch(
       "0x58e212060645d18eab6d9b2af3d56fbc906a92ff5667385f616f662c70372284" as MarketId,
-      signer,
+      wallet,
     );
 
-    expect(market).to.eql(marketParams);
+    expect(market).toEqual(marketParams); // Not strict equal because not the same class.
   });
 });

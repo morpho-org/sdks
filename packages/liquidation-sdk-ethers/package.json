@@ -56,7 +56,7 @@
     "@types/simple-mock": "^0",
     "@types/sinon": "^17.0.3",
     "@types/sinon-chai": "^3.2.12",
-    "chai": "^4.3.10",
+    "chai": "^4.5.0",
     "chai-almost": "^1.0.1",
     "dotenv": "^16.4.5",
     "ethers": "^6.13.2",

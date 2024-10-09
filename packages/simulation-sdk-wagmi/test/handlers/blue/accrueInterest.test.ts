@@ -7,7 +7,7 @@ import {
   type MinimalBlock,
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
-import { renderHook, waitFor } from "@morpho-org/test";
+import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
