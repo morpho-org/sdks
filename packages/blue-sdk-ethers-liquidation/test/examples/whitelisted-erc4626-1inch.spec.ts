@@ -23,13 +23,7 @@ import sinon from "sinon";
 import "evm-maths";
 
 import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
-import {
-  Address,
-  ChainId,
-  MarketConfig,
-  MarketId,
-  addresses,
-} from "@morpho-org/blue-sdk";
+import { Address, MarketConfig, MarketId } from "@morpho-org/blue-sdk";
 import { setUp } from "@morpho-org/morpho-test";
 import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
@@ -50,8 +44,6 @@ import {
 import chaiAlmost from "chai-almost";
 import { check } from "../../examples/whitelisted-erc4626-1inch";
 import { SwapMock__factory } from "../../mocks/types";
-import CurveStableSwapNGABI from "../../src/abi/CurveStableSwapNG.json";
-import { curvePools, mainnetAddresses } from "../../src/addresses";
 import { getOneInchSwapApiUrl } from "../../src/swap/1inch";
 import { PARASWAP_API_URL } from "../../src/swap/paraswap";
 import {
@@ -61,6 +53,12 @@ import {
 import { sendRawBundleMockImpl } from "../mocks";
 import pendleMarketData from "../pendleMockData/pendleMarketData.json";
 import pendleTokens from "../pendleMockData/pendleTokens.json";
+
+import {
+  LiquidationEncoder,
+  addresses,
+  contracts,
+} from "@morpho-org/blue-sdk-ethers-liquidation";
 
 //allow for 0.1% tolerance for balance checks
 chai.use(chaiAlmost(0.1));
@@ -490,13 +488,13 @@ describe("erc4626-1inch", () => {
     // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
     const collateral = parseUnits("1", collateralToken.decimals);
     const morpho = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       borrower,
     );
 
     await deal(collateralToken.address, borrower.address, collateral);
     await ERC20__factory.connect(collateralToken.address, borrower).approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
 
@@ -600,13 +598,13 @@ describe("erc4626-1inch", () => {
 
     const collateral = parseUnits("10000", collateralToken.decimals);
     const morpho = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       borrower,
     );
 
     await deal(collateralToken.address, borrower.address, collateral);
     await ERC20__factory.connect(collateralToken.address, borrower).approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
 
@@ -624,7 +622,7 @@ describe("erc4626-1inch", () => {
       borrowed - market.liquidity,
     );
     await ERC20__factory.connect(loanToken.address, borrower).approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
     await morpho.supply(
@@ -733,14 +731,14 @@ describe("erc4626-1inch", () => {
     const collateral = parseUnits("10000", collateralToken.decimals);
 
     const morphoBorrower = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       borrower,
     );
 
     await deal(collateralToken.address, borrower.address, collateral);
 
     await ERC20__factory.connect(collateralToken.address, borrower).approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
 
@@ -855,14 +853,14 @@ describe("erc4626-1inch", () => {
     const collateral = parseUnits("10000", collateralToken.decimals);
 
     const morphoBorrower = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       borrower,
     );
 
     await deal(collateralToken.address, borrower.address, collateral);
 
     await ERC20__factory.connect(collateralToken.address, borrower).approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
 
@@ -982,7 +980,7 @@ describe("erc4626-1inch", () => {
     const collateral = 100000000000000000000000n;
 
     const morphoBorrower = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       borrower,
     );
 
@@ -1002,24 +1000,23 @@ describe("erc4626-1inch", () => {
 
     // Transfer the USD0 tokens to the borrower to be able to get USD0USD0++ LP tokens
     await ERC20__factory.connect(
-      mainnetAddresses["usd0"]!,
+      addresses.mainnetAddresses["usd0"]!,
       usd0Signer,
     ).transfer(borrower.address, collateral);
 
     // Approve the USD0USD0++ pool to spend the USD0 tokens
-    await ERC20__factory.connect(mainnetAddresses["usd0"]!, borrower).approve(
-      curvePools["usd0usd0++"],
-      MaxUint256,
-    );
+    await ERC20__factory.connect(
+      addresses.mainnetAddresses["usd0"]!,
+      borrower,
+    ).approve(addresses.curvePools["usd0usd0++"], MaxUint256);
 
-    const curveUSD0USD0PPPool = new ethers.Contract(
-      curvePools["usd0usd0++"],
-      CurveStableSwapNGABI,
+    const curveUSD0USD0PPPool = contracts.CurveStableSwapNG__factory.connect(
+      addresses.curvePools["usd0usd0++"],
       borrower,
     );
 
     //Deposit coins into the pool as the borrower to get the LP tokens in the cleanest possible way
-    await curveUSD0USD0PPPool["add_liquidity(uint256[],uint256,address)"]!(
+    await curveUSD0USD0PPPool["add_liquidity(uint256[],uint256,address)"](
       [collateral, 0n],
       1,
       borrower,
@@ -1027,12 +1024,12 @@ describe("erc4626-1inch", () => {
 
     // Get the new real value of the collateral
     const newCollatValue = await ERC20__factory.connect(
-      mainnetAddresses["usd0usd0++"]!,
+      addresses.mainnetAddresses["usd0usd0++"]!,
       borrower,
     ).balanceOf(borrower.address);
 
     await ERC20__factory.connect(collateralToken.address, borrower).approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
 
@@ -1129,7 +1126,7 @@ describe("erc4626-1inch", () => {
     const collateral = 100000000000000000000000n;
 
     const morphoBorrower = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       borrower,
     );
 
@@ -1149,12 +1146,12 @@ describe("erc4626-1inch", () => {
 
     // Transfer the USD0 tokens to the borrower for the liquidation
     await ERC20__factory.connect(
-      mainnetAddresses["usd0++"]!,
+      addresses.mainnetAddresses["usd0++"]!,
       usd0PPSigner,
     ).transfer(borrower.address, collateral);
 
     await ERC20__factory.connect(collateralToken.address, borrower).approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
 
@@ -1235,12 +1232,140 @@ describe("erc4626-1inch", () => {
     expect(decimalBalance).to.almost.eq(3484025090n / decimals);
   });
 
+  it(`should liquidate a sUSDS market`, async () => {
+    const collateralPriceUsd = 1.02;
+    const ethPriceUsd = 2_644;
+
+    const marketId =
+      "0xbed21964cf290ab95fa458da6c1f302f2278aec5f897c1b1da3054553ef5e90c" as MarketId; // sUSDS / WETH (86%)
+
+    const market = await fetchMarket(marketId, signer);
+    const [collateralToken, loanToken] = await Promise.all([
+      fetchToken(market.config.collateralToken, signer),
+      fetchToken(market.config.loanToken, signer),
+    ]);
+
+    // The position must be deterministic for the Swap API mock's srcAmount to be deterministic.
+    const collateral = parseUnits("100000", collateralToken.decimals);
+    const loan = market.getMaxBorrowAssets(collateral) + 1n;
+    const morphoLoaner = MorphoBlue__factory.connect(
+      addresses.mainnetAddresses.morpho,
+      signer,
+    );
+    const morpho = MorphoBlue__factory.connect(
+      addresses.mainnetAddresses.morpho,
+      borrower,
+    );
+
+    await deal(loanToken.address, signer.address, loan);
+    await deal(collateralToken.address, borrower.address, collateral);
+    await ERC20__factory.connect(collateralToken.address, borrower).approve(
+      addresses.mainnetAddresses.morpho,
+      MaxUint256,
+    );
+    await ERC20__factory.connect(loanToken.address, signer).approve(
+      addresses.mainnetAddresses.morpho,
+      MaxUint256,
+    );
+
+    await setNextBlockTimestamp(start);
+    await mine(1);
+
+    await morphoLoaner.supply(market.config, loan, 0n, signer.address, "0x");
+    await morpho.supplyCollateral(
+      market.config,
+      collateral,
+      borrower.address,
+      "0x",
+    );
+
+    await morpho.borrow(
+      market.config,
+      market.getMaxBorrowAssets(collateral) - 1n,
+      0n,
+      borrower.address,
+      borrower.address,
+    );
+
+    const newCollateralPriceUsd = collateralPriceUsd * 0.9; // 20% price drop
+
+    mockGetPendleToken();
+
+    nock(BLUE_API_BASE_URL)
+      .post("/graphql")
+      .reply(200, {
+        data: { markets: { items: [{ uniqueKey: marketId }] } },
+      })
+      .post("/graphql")
+      .reply(200, {
+        data: {
+          assetByAddress: {
+            priceUsd: ethPriceUsd,
+            spotPriceEth: 1,
+          },
+          marketPositions: {
+            items: [
+              {
+                user: {
+                  address: borrower.address,
+                },
+                market: {
+                  oracleAddress: market.config.oracle,
+                  irmAddress: market.config.irm,
+                  lltv: market.config.lltv,
+                  collateralAsset: {
+                    address: market.config.collateralToken,
+                    decimals: collateralToken.decimals,
+                    priceUsd: newCollateralPriceUsd,
+                    spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
+                  },
+                  loanAsset: {
+                    address: market.config.loanToken,
+                    decimals: loanToken.decimals,
+                    priceUsd: null,
+                    spotPriceEth: 1 / ethPriceUsd,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+    await setTimestamp(start + delay);
+    await mine(1);
+
+    const accrualPosition = await fetchAccrualPositionFromConfig(
+      borrower.address,
+      market.config,
+      signer,
+    );
+    const accruedPosition = accrualPosition.accrueInterest(start + delay);
+
+    const encoder = new LiquidationEncoder(executorAddress, signer);
+
+    const usdsWithdrawalAmount = await encoder.previewUSDSWithdrawalAmount(
+      accruedPosition.seizableCollateral / 2n,
+    );
+    mockOneInch(usdsWithdrawalAmount, "11669266773005108147656");
+    mockParaSwap(usdsWithdrawalAmount, "11669266773005108147657");
+
+    await check(executorAddress, hardhatSigner, signer, [marketId]);
+
+    const decimals = BigInt.pow10(loanToken.decimals);
+    const decimalBalance =
+      (await ERC20__factory.connect(market.config.loanToken, signer).balanceOf(
+        executorAddress,
+      )) / decimals;
+    expect(decimalBalance).to.almost.eq(11652934372720702068338n / decimals);
+  });
+
   it.skip(`should liquidate on rehypothecated market with limited swap liquidity`, async () => {
     const collateralPriceUsd = 4_000;
     const ethPriceUsd = 3_800;
 
     const morpho = MorphoBlue__factory.connect(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       borrower,
     );
 
@@ -1248,7 +1373,7 @@ describe("erc4626-1inch", () => {
       collateralToken: "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0",
       loanToken: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
       oracle: "0xe9eE579684716c7Bb837224F4c7BeEfA4f1F3d7f",
-      irm: addresses[ChainId.EthMainnet].adaptiveCurveIrm,
+      irm: addresses.mainnetAddresses.adaptiveCurveIrm,
       lltv: parseEther("0.86"),
     });
 
@@ -1282,14 +1407,14 @@ describe("erc4626-1inch", () => {
     );
     await collateralVault.mint(collateral, borrower.address);
     await collateralVault.approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
     await morpho.supplyCollateral(config, collateral, borrower.address, "0x");
 
     await deal(loanToken.address, borrower.address, borrowed);
     await ERC20__factory.connect(loanToken.address, borrower).approve(
-      addresses[ChainId.EthMainnet].morpho,
+      addresses.mainnetAddresses.morpho,
       MaxUint256,
     );
     await morpho.supply(config, borrowed, 0n, borrower.address, "0x");

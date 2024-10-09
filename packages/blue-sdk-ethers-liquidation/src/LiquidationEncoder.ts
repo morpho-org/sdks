@@ -1,16 +1,10 @@
 import { Address, ChainId } from "@morpho-org/blue-sdk";
 import {
-  curvePools,
-  mainnetAddresses,
+  addresses,
+  contracts,
   pendle,
+  usual,
 } from "@morpho-org/blue-sdk-ethers-liquidation";
-import { CurveStableSwapNG__factory } from "@morpho-org/blue-sdk-ethers-liquidation/src/contracts/curve";
-import {
-  USD0_USD0PP_USD0_INDEX,
-  USD0_USD0PP_USDPP_INDEX,
-  USD0_USDC_USD0_INDEX,
-  USD0_USDC_USDC_INDEX,
-} from "@morpho-org/blue-sdk-ethers-liquidation/src/tokens/usual";
 import { AbstractSigner, MaxUint256, Provider } from "ethers";
 import { ExecutorEncoder } from "executooor";
 
@@ -109,37 +103,37 @@ export class LiquidationEncoder extends ExecutorEncoder {
   ) {
     // Approve USD0/USD0++ and USD0/USDC pools to spend the USD0USD0++ and USD0 tokens
     this.erc20Approve(
-      mainnetAddresses["usd0usd0++"]!,
-      curvePools["usd0usd0++"],
+      addresses.mainnetAddresses["usd0usd0++"]!,
+      addresses.curvePools["usd0usd0++"],
       MaxUint256,
     );
     this.erc20Approve(
-      mainnetAddresses["usd0"]!,
-      curvePools["usd0usdc"],
+      addresses.mainnetAddresses["usd0"]!,
+      addresses.curvePools["usd0usdc"],
       MaxUint256,
     );
 
     // Get the amount of USD0 that can be withdrawn from the USD0/USD0++ pool with USD0USD0++ tokens
     const withdrawableUSD0Amount = await this.getCurveWithdrawalAmount(
       amount,
-      USD0_USD0PP_USD0_INDEX,
-      curvePools["usd0usd0++"],
+      usual.USD0_USD0PP_USD0_INDEX,
+      addresses.curvePools["usd0usd0++"],
     );
 
     // Get the min USD0 amount required to receive the loan expected USDC amount from the USD0/USDC pool
     const minUSD0Amount = await this.getCurveSwapInputAmountFromOutput(
       expectedDestAmount,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
-      curvePools["usd0usdc"],
+      usual.USD0_USDC_USD0_INDEX,
+      usual.USD0_USDC_USDC_INDEX,
+      addresses.curvePools["usd0usdc"],
     );
 
     // Encode the remove liquidity call to the USD0/USD0++ pool
     // go from USD0USD0++ -> USDO
     await this.encodeRemoveLiquidityFromCurvePool(
       amount,
-      curvePools["usd0usd0++"],
-      USD0_USD0PP_USD0_INDEX,
+      addresses.curvePools["usd0usd0++"],
+      usual.USD0_USD0PP_USD0_INDEX,
       minUSD0Amount,
       receiver,
     );
@@ -148,9 +142,9 @@ export class LiquidationEncoder extends ExecutorEncoder {
     // go from USD0 -> USDC
     await this.encodeCurveSwap(
       withdrawableUSD0Amount,
-      curvePools["usd0usdc"],
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
+      addresses.curvePools["usd0usdc"],
+      usual.USD0_USDC_USD0_INDEX,
+      usual.USD0_USDC_USDC_INDEX,
       expectedDestAmount,
       receiver,
     );
@@ -158,17 +152,17 @@ export class LiquidationEncoder extends ExecutorEncoder {
     // Get the amount of USDC that can be swapped from the withdraw USD0 tokens from USD0/USD0++ pool
     const swappableAmount = await this.getCurveSwapOutputAmountFromInput(
       withdrawableUSD0Amount,
-      USD0_USD0PP_USDPP_INDEX,
-      USD0_USD0PP_USD0_INDEX,
-      curvePools["usd0usd0++"],
+      usual.USD0_USD0PP_USDPP_INDEX,
+      usual.USD0_USD0PP_USD0_INDEX,
+      addresses.curvePools["usd0usd0++"],
     );
 
     // Get the final amount of USDC that can be swapped from the swappable USD0 amount from USD0/USDC pool
     const finalUSDCAmount = await this.getCurveSwapOutputAmountFromInput(
       swappableAmount,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
-      curvePools["usd0usdc"],
+      usual.USD0_USDC_USD0_INDEX,
+      usual.USD0_USDC_USDC_INDEX,
+      addresses.curvePools["usd0usdc"],
     );
 
     return finalUSDCAmount;
@@ -186,48 +180,48 @@ export class LiquidationEncoder extends ExecutorEncoder {
   ) {
     // Approve USD0/USD0++ and USD0/USDC pools to spend the USD0++ and USD0 tokens
     this.erc20Approve(
-      mainnetAddresses["usd0++"]!,
-      curvePools["usd0usd0++"],
+      addresses.mainnetAddresses["usd0++"]!,
+      addresses.curvePools["usd0usd0++"],
       MaxUint256,
     );
     this.erc20Approve(
-      mainnetAddresses["usd0"]!,
-      curvePools["usd0usdc"],
+      addresses.mainnetAddresses["usd0"]!,
+      addresses.curvePools["usd0usdc"],
       MaxUint256,
     );
 
     // Get the amount of USD0 that can be swapped from the USD0++ tokens from USD0/USD0++ pool
     const swappableAmount = await this.getCurveSwapOutputAmountFromInput(
       amount,
-      USD0_USD0PP_USDPP_INDEX,
-      USD0_USD0PP_USD0_INDEX,
-      curvePools["usd0usd0++"],
+      usual.USD0_USD0PP_USDPP_INDEX,
+      usual.USD0_USD0PP_USD0_INDEX,
+      addresses.curvePools["usd0usd0++"],
     );
 
     // Get the final amount of USDC that can be swapped from the swappable USD0 amount from USD0/USDC pool
     const finalUSDCAmount = await this.getCurveSwapOutputAmountFromInput(
       swappableAmount,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
-      curvePools["usd0usdc"],
+      usual.USD0_USDC_USD0_INDEX,
+      usual.USD0_USDC_USDC_INDEX,
+      addresses.curvePools["usd0usdc"],
     );
 
     // Get the min USD0 amount required to receive the loan expected USDC amount from the USD0/USDC pool
     // go from USD0 -> USDC
     const minUSD0Amount = await this.getCurveSwapInputAmountFromOutput(
       expectedDestAmount,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
-      curvePools["usd0usd0++"],
+      usual.USD0_USDC_USD0_INDEX,
+      usual.USD0_USDC_USDC_INDEX,
+      addresses.curvePools["usd0usd0++"],
     );
 
     // Encode the swap call to the USD0/USD0++ pool
     // go from USD0++ -> USD0
     await this.encodeCurveSwap(
       amount,
-      curvePools["usd0usd0++"],
-      USD0_USD0PP_USDPP_INDEX,
-      USD0_USD0PP_USD0_INDEX,
+      addresses.curvePools["usd0usd0++"],
+      usual.USD0_USD0PP_USDPP_INDEX,
+      usual.USD0_USD0PP_USD0_INDEX,
       minUSD0Amount,
       receiver,
     );
@@ -236,9 +230,9 @@ export class LiquidationEncoder extends ExecutorEncoder {
     // go from USD0 -> USDC
     await this.encodeCurveSwap(
       swappableAmount,
-      curvePools["usd0usdc"],
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
+      addresses.curvePools["usd0usdc"],
+      usual.USD0_USDC_USD0_INDEX,
+      usual.USD0_USDC_USDC_INDEX,
       expectedDestAmount,
       receiver,
     );
@@ -251,7 +245,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     tokenIndex: number,
     curvePool: Address,
   ): Promise<bigint> {
-    const contract = CurveStableSwapNG__factory.connect(
+    const contract = contracts.CurveStableSwapNG__factory.connect(
       curvePool,
       this.provider,
     );
@@ -262,7 +256,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
      * @param i Index value of the coin to withdraw
      * @return Amount of coin received
      */
-    const result = await contract.calc_withdraw_one_coin!(amount, tokenIndex);
+    const result = await contract.calc_withdraw_one_coin(amount, tokenIndex);
     return result;
   }
 
@@ -272,7 +266,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     outputTokenIndex: number,
     curvePool: Address,
   ): Promise<bigint> {
-    const contract = CurveStableSwapNG__factory.connect(
+    const contract = contracts.CurveStableSwapNG__factory.connect(
       curvePool,
       this.provider,
     );
@@ -285,7 +279,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
      * @param dx Amount of `i` being exchanged
      * @return Amount of `j` predicted
      */
-    const result = await contract.get_dy!(
+    const result = await contract.get_dy(
       inputTokenIndex,
       outputTokenIndex,
       amount,
@@ -299,7 +293,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     outputTokenIndex: number,
     curvePool: Address,
   ): Promise<bigint> {
-    const contract = CurveStableSwapNG__factory.connect(
+    const contract = contracts.CurveStableSwapNG__factory.connect(
       curvePool,
       this.provider,
     );
@@ -312,7 +306,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
      * @param dy Amount of `j` being received after exchange
      * @return Amount of `i` predicted
      */
-    const result = await contract.get_dx!(
+    const result = await contract.get_dx(
       inputTokenIndex,
       outputTokenIndex,
       destAmount,
@@ -327,7 +321,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     minReceived: bigint,
     receiver: string,
   ) {
-    const contract = CurveStableSwapNG__factory.connect(
+    const contract = contracts.CurveStableSwapNG__factory.connect(
       curvePool,
       this.provider,
     );
@@ -358,7 +352,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     minDestAmount: bigint,
     receiver: string,
   ) {
-    const contract = CurveStableSwapNG__factory.connect(
+    const contract = contracts.CurveStableSwapNG__factory.connect(
       curvePool,
       this.provider,
     );
@@ -379,6 +373,32 @@ export class LiquidationEncoder extends ExecutorEncoder {
         "exchange(int128,int128,uint256,uint256,address)",
         [inputTokenIndex, outputTokenIndex, amount, minDestAmount, receiver],
       ),
+    );
+  }
+
+  async previewUSDSWithdrawalAmount(amount: bigint): Promise<bigint> {
+    const contract = contracts.SUsds__factory.connect(
+      addresses.mainnetAddresses.sUsds!,
+      this.provider,
+    );
+    const result = await contract.previewWithdraw(amount);
+
+    return result;
+  }
+
+  encodeUSDSWithdrawal(amount: bigint, owner: string, receiver: string) {
+    const contract = contracts.SUsds__factory.connect(
+      addresses.mainnetAddresses.sUsds!,
+      this.provider,
+    );
+    this.pushCall(
+      addresses.mainnetAddresses.sUsds!,
+      0n,
+      contract.interface.encodeFunctionData("withdraw", [
+        amount,
+        receiver,
+        owner,
+      ]),
     );
   }
 }
