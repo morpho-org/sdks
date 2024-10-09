@@ -1,7 +1,10 @@
 import { Address, ChainId } from "@morpho-org/blue-sdk";
 import { AbstractSigner, MaxUint256, Provider } from "ethers";
 import { ExecutorEncoder } from "executooor";
-import { addresses, contracts, pendle, usual } from "../src";
+import * as addresses from "./addresses";
+import * as contracts from "./contracts";
+import * as pendle from "./tokens/pendle";
+import * as usual from "./tokens/usual";
 
 export class LiquidationEncoder extends ExecutorEncoder {
   constructor(address: string, runner: AbstractSigner<Provider>) {
