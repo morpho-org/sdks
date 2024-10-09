@@ -1,18 +1,8 @@
-import type { Address, ChainId } from "@morpho-org/blue-sdk";
-import {
-  curvePools,
-  mainnetAddresses,
-  pendle,
-} from "@morpho-org/blue-sdk-ethers-liquidation";
-import { CurveStableSwapNG__factory } from "@morpho-org/blue-sdk-ethers-liquidation/src/contracts/curve";
-import {
-  USD0_USD0PP_USD0_INDEX,
-  USD0_USD0PP_USDPP_INDEX,
-  USD0_USDC_USD0_INDEX,
-  USD0_USDC_USDC_INDEX,
-} from "@morpho-org/blue-sdk-ethers-liquidation/src/tokens/usual";
-import { MaxUint256 } from "ethers";
+import { type Address, type ChainId, MathLib } from "@morpho-org/blue-sdk";
 import { ExecutorEncoder } from "executooor";
+import { curvePools, mainnetAddresses } from "./addresses.js";
+import { Pendle, Usual } from "./tokens/index.js";
+import { CurveStableSwapNG__factory } from "./types/index.js";
 
 export class LiquidationEncoder extends ExecutorEncoder {
   get provider() {
@@ -23,16 +13,16 @@ export class LiquidationEncoder extends ExecutorEncoder {
     chainId: ChainId,
     collatToken: string,
     seizedAssets: bigint,
-    pendleTokens: pendle.PendleTokenListResponse,
+    pendleTokens: Pendle.TokenListResponse,
   ): Promise<{ srcAmount: bigint; srcToken: string }> {
-    if (!pendle.isPendlePTToken(collatToken, chainId, pendleTokens)) {
+    if (!Pendle.isPTToken(collatToken, chainId, pendleTokens)) {
       return {
         srcAmount: seizedAssets,
         srcToken: collatToken,
       };
     }
 
-    const pendleMarketResponse = await pendle.getPendleMarketForPTToken(
+    const pendleMarketResponse = await Pendle.getMarketForPTToken(
       chainId,
       collatToken,
     );
@@ -51,7 +41,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     if (new Date(maturity) < new Date()) {
       // Pendle market is expired, we can directly redeem the collateral
       // If called before YT's expiry, both PT & YT of equal amounts are needed and will be burned. Else, only PT is needed and will be burned.
-      const redeemCallData = await pendle.getPendleRedeemCallData(chainId, {
+      const redeemCallData = await Pendle.getRedeemCallData(chainId, {
         receiver: this.address,
         slippage: 0.04,
         yt: pendleMarketData.yt.address,
@@ -60,8 +50,8 @@ export class LiquidationEncoder extends ExecutorEncoder {
         enableAggregator: true,
       });
 
-      this.erc20Approve(srcToken, redeemCallData.tx.to, MaxUint256)
-        .erc20Approve(collatToken, redeemCallData.tx.to, MaxUint256)
+      this.erc20Approve(srcToken, redeemCallData.tx.to, MathLib.MAX_UINT_256)
+        .erc20Approve(collatToken, redeemCallData.tx.to, MathLib.MAX_UINT_256)
         .pushCall(
           redeemCallData.tx.to,
           redeemCallData.tx.value ? redeemCallData.tx.value : 0n,
@@ -69,7 +59,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
         );
     } else {
       // Pendle market is not expired, we need to swap the collateral token (PT) to the underlying token
-      const swapCallData = await pendle.getPendleSwapCallData(
+      const swapCallData = await Pendle.getSwapCallData(
         chainId,
         pendleMarketData.address,
         {
@@ -80,8 +70,8 @@ export class LiquidationEncoder extends ExecutorEncoder {
           amountIn: seizedAssets.toString(),
         },
       );
-      this.erc20Approve(srcToken, swapCallData.tx.to, MaxUint256)
-        .erc20Approve(collatToken, swapCallData.tx.to, MaxUint256)
+      this.erc20Approve(srcToken, swapCallData.tx.to, MathLib.MAX_UINT_256)
+        .erc20Approve(collatToken, swapCallData.tx.to, MathLib.MAX_UINT_256)
         .pushCall(
           swapCallData.tx.to,
           swapCallData.tx.value ? swapCallData.tx.value : 0n,
@@ -107,22 +97,26 @@ export class LiquidationEncoder extends ExecutorEncoder {
     this.erc20Approve(
       mainnetAddresses["usd0usd0++"]!,
       curvePools["usd0usd0++"],
-      MaxUint256,
+      MathLib.MAX_UINT_256,
     );
-    this.erc20Approve(mainnetAddresses.usd0!, curvePools.usd0usdc, MaxUint256);
+    this.erc20Approve(
+      mainnetAddresses.usd0!,
+      curvePools.usd0usdc,
+      MathLib.MAX_UINT_256,
+    );
 
     // Get the amount of USD0 that can be withdrawn from the USD0/USD0++ pool with USD0USD0++ tokens
     const withdrawableUSD0Amount = await this.getCurveWithdrawalAmount(
       amount,
-      USD0_USD0PP_USD0_INDEX,
+      Usual.USD0_USD0PP_USD0_INDEX,
       curvePools["usd0usd0++"],
     );
 
     // Get the min USD0 amount required to receive the loan expected USDC amount from the USD0/USDC pool
     const minUSD0Amount = await this.getCurveSwapInputAmountFromOutput(
       expectedDestAmount,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
+      Usual.USD0_USDC_USD0_INDEX,
+      Usual.USD0_USDC_USDC_INDEX,
       curvePools.usd0usdc,
     );
 
@@ -131,7 +125,7 @@ export class LiquidationEncoder extends ExecutorEncoder {
     await this.encodeRemoveLiquidityFromCurvePool(
       amount,
       curvePools["usd0usd0++"],
-      USD0_USD0PP_USD0_INDEX,
+      Usual.USD0_USD0PP_USD0_INDEX,
       minUSD0Amount,
       receiver,
     );
@@ -141,8 +135,8 @@ export class LiquidationEncoder extends ExecutorEncoder {
     await this.encodeCurveSwap(
       withdrawableUSD0Amount,
       curvePools.usd0usdc,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
+      Usual.USD0_USDC_USD0_INDEX,
+      Usual.USD0_USDC_USDC_INDEX,
       expectedDestAmount,
       receiver,
     );
@@ -150,16 +144,16 @@ export class LiquidationEncoder extends ExecutorEncoder {
     // Get the amount of USDC that can be swapped from the withdraw USD0 tokens from USD0/USD0++ pool
     const swappableAmount = await this.getCurveSwapOutputAmountFromInput(
       withdrawableUSD0Amount,
-      USD0_USD0PP_USDPP_INDEX,
-      USD0_USD0PP_USD0_INDEX,
+      Usual.USD0_USD0PP_USDPP_INDEX,
+      Usual.USD0_USD0PP_USD0_INDEX,
       curvePools["usd0usd0++"],
     );
 
     // Get the final amount of USDC that can be swapped from the swappable USD0 amount from USD0/USDC pool
     const finalUSDCAmount = await this.getCurveSwapOutputAmountFromInput(
       swappableAmount,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
+      Usual.USD0_USDC_USD0_INDEX,
+      Usual.USD0_USDC_USDC_INDEX,
       curvePools.usd0usdc,
     );
 
@@ -180,23 +174,27 @@ export class LiquidationEncoder extends ExecutorEncoder {
     this.erc20Approve(
       mainnetAddresses["usd0++"]!,
       curvePools["usd0usd0++"],
-      MaxUint256,
+      MathLib.MAX_UINT_256,
     );
-    this.erc20Approve(mainnetAddresses.usd0!, curvePools.usd0usdc, MaxUint256);
+    this.erc20Approve(
+      mainnetAddresses.usd0!,
+      curvePools.usd0usdc,
+      MathLib.MAX_UINT_256,
+    );
 
     // Get the amount of USD0 that can be swapped from the USD0++ tokens from USD0/USD0++ pool
     const swappableAmount = await this.getCurveSwapOutputAmountFromInput(
       amount,
-      USD0_USD0PP_USDPP_INDEX,
-      USD0_USD0PP_USD0_INDEX,
+      Usual.USD0_USD0PP_USDPP_INDEX,
+      Usual.USD0_USD0PP_USD0_INDEX,
       curvePools["usd0usd0++"],
     );
 
     // Get the final amount of USDC that can be swapped from the swappable USD0 amount from USD0/USDC pool
     const finalUSDCAmount = await this.getCurveSwapOutputAmountFromInput(
       swappableAmount,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
+      Usual.USD0_USDC_USD0_INDEX,
+      Usual.USD0_USDC_USDC_INDEX,
       curvePools.usd0usdc,
     );
 
@@ -204,8 +202,8 @@ export class LiquidationEncoder extends ExecutorEncoder {
     // go from USD0 -> USDC
     const minUSD0Amount = await this.getCurveSwapInputAmountFromOutput(
       expectedDestAmount,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
+      Usual.USD0_USDC_USD0_INDEX,
+      Usual.USD0_USDC_USDC_INDEX,
       curvePools["usd0usd0++"],
     );
 
@@ -214,8 +212,8 @@ export class LiquidationEncoder extends ExecutorEncoder {
     await this.encodeCurveSwap(
       amount,
       curvePools["usd0usd0++"],
-      USD0_USD0PP_USDPP_INDEX,
-      USD0_USD0PP_USD0_INDEX,
+      Usual.USD0_USD0PP_USDPP_INDEX,
+      Usual.USD0_USD0PP_USD0_INDEX,
       minUSD0Amount,
       receiver,
     );
@@ -225,8 +223,8 @@ export class LiquidationEncoder extends ExecutorEncoder {
     await this.encodeCurveSwap(
       swappableAmount,
       curvePools.usd0usdc,
-      USD0_USDC_USD0_INDEX,
-      USD0_USDC_USDC_INDEX,
+      Usual.USD0_USDC_USD0_INDEX,
+      Usual.USD0_USDC_USDC_INDEX,
       expectedDestAmount,
       receiver,
     );

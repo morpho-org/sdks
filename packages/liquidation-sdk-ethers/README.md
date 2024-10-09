@@ -1,15 +1,15 @@
-# @morpho-org/blue-sdk-ethers-liquidation
+# @morpho-org/liquidation-sdk-ethers
 
 A package containing all useful utilities to help build efficient and competitive liquidation bots on Morpho Blue.
 
 ## Getting Started
 
 ```bash
-npm install @morpho-org/blue-sdk-ethers-liquidation
+npm install @morpho-org/liquidation-sdk-ethers
 ```
 
 ```bash
-yarn add @morpho-org/blue-sdk-ethers-liquidation
+yarn add @morpho-org/liquidation-sdk-ethers
 ```
 
 ---

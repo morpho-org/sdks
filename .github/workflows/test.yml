@@ -49,7 +49,7 @@ jobs:
           - name: blue-sdk-viem-bundler
             hardhat: false
 
-          - name: blue-sdk-ethers-liquidation
+          - name: liquidation-sdk-ethers
             hardhat: true
 
     uses: ./.github/workflows/package.yml

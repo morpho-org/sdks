@@ -6,7 +6,7 @@ import { Contract, Interface, type ContractRunner } from "ethers";
 import type {
   CurveStableSwapNG,
   CurveStableSwapNGInterface,
-} from "../CurveStableSwapNG";
+} from "../CurveStableSwapNG.js";
 
 const _abi = [
   {

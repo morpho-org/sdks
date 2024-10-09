@@ -36,7 +36,7 @@ import {
   mainnetAddresses,
   pendle,
   swap,
-} from "@morpho-org/blue-sdk-ethers-liquidation";
+} from "@morpho-org/liquidation-sdk-ethers";
 import { Time } from "@morpho-org/morpho-ts";
 
 const converter = new BlueSdkConverter({

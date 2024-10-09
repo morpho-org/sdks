@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
-  "version": "2.0.0-alpha.6",
+  "version": "1.12.1",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
@@ -25,7 +25,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@types/node": "^22.1.0",
-    "typescript": "^5.6.2",
+    "typescript": "^5.6.3",
     "viem": "^2.21.19"
   },
   "publishConfig": {

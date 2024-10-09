@@ -265,7 +265,10 @@ function formatBI(
 }
 
 type FormatterWithDefault<F extends BaseFormatter> = {
-  of(value: bigint | null | undefined, decimals: number): string;
+  of(
+    value: bigint | null | undefined,
+    decimals: number | null | undefined,
+  ): string;
   of(value: number | null | undefined): string;
 } & {
   [K in keyof Omit<F, "of">]: F[K] extends (...args: infer A) => F
@@ -282,15 +285,19 @@ export abstract class BaseFormatter {
     return this as FormatterWithDefault<this>;
   }
 
-  of<T extends bigint | null | undefined>(
+  of<T extends bigint | null | undefined, D extends number | null | undefined>(
     value: T,
-    decimals: number,
-  ): Exclude<T, bigint> | string;
+    decimals: D,
+  ): Exclude<T, bigint> | Exclude<D, number> | string;
   of<T extends number | null | undefined>(
     value: T,
   ): Exclude<T, number> | string;
-  of(value: bigint | number, decimals?: number) {
-    if (value == null) return this._options.default ?? value;
+  of(
+    value: bigint | number | null | undefined,
+    decimals?: number | null | undefined,
+  ) {
+    if (value == null || (typeof value === "bigint" && decimals == null))
+      return this._options.default ?? (value == null ? value : decimals);
 
     if (typeof value === "number") {
       const str = value.toString();

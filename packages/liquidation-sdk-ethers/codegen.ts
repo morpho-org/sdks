@@ -43,7 +43,7 @@ const config: CodegenConfig = {
       plugins: ["typescript-graphql-request"],
       preset: "import-types",
       presetConfig: {
-        typesPath: "./types",
+        typesPath: "./types.js",
       },
     },
   },

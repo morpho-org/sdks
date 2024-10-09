@@ -46,7 +46,7 @@ import {
 import {
   getPendleMarketsApiUrl,
   getPendleTokensApiUrl,
-} from "@morpho-org/blue-sdk-ethers-liquidation/src/tokens/pendle";
+} from "@morpho-org/liquidation-sdk-ethers/src/tokens/pendle";
 import chaiAlmost from "chai-almost";
 import { check } from "../../examples/whitelisted-erc4626-1inch";
 import { SwapMock__factory } from "../../mocks/types";

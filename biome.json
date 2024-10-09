@@ -11,8 +11,9 @@
       "artifacts",
       "package.json",
       "packages/blue-sdk-viem-bundler/tests/",
-      "packages/blue-sdk-ethers-liquidation/src/types/",
-      "packages/blue-sdk-ethers-liquidation/mocks/types/"
+      "packages/liquidation-sdk-ethers/src/types/",
+      "packages/liquidation-sdk-ethers/src/api/sdk.ts",
+      "packages/liquidation-sdk-ethers/mocks/types/"
     ]
   },
   "formatter": {

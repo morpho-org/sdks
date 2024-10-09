@@ -1,64 +1,19 @@
-import { type BigNumberish, toBigInt } from "ethers";
+import { toBigInt } from "ethers";
 
 import { retryPromiseLinearBackoff } from "@morpho-org/morpho-ts";
-import { fetchOneInchSwap } from "./1inch";
-import { fetchParaSwapSwap } from "./paraswap";
+import { OneInch } from "./1inch.js";
+import { Paraswap } from "./paraswap.js";
+import type { SwapParams, SwapResponse } from "./types.js";
 
-export interface SwapParams {
-  chainId: BigNumberish;
-  src: string;
-  dst: string;
-  amount: BigNumberish;
-  from: string;
-  slippage: BigNumberish;
-  protocols?: string;
-  fee?: BigNumberish;
-  gasPrice?: BigNumberish;
-  complexityLevel?: number;
-  parts?: number;
-  mainRouteParts?: number;
-  gasLimit?: BigNumberish;
-  includeTokensInfo?: boolean;
-  includeProtocols?: boolean;
-  includeGas?: boolean;
-  connectorTokens?: string;
-  excludedProtocols?: string;
-  permit?: string;
-  receiver?: string;
-  referrer?: string;
-  allowPartialFill?: boolean;
-  disableEstimate?: boolean;
-  usePermit2?: boolean;
-}
-
-export interface SwapToken {
-  symbol: string;
-  name: string;
-  decimals: number;
-  address: string;
-  logoURI: string;
-}
-
-export interface SwapResponse {
-  srcToken: SwapToken;
-  dstToken: SwapToken;
-  dstAmount: string;
-  protocols: {}[];
-  tx: {
-    from: string;
-    to: string;
-    data: string;
-    value: string;
-    gasPrice: string;
-    gas: number;
-  };
-}
+export * from "./1inch.js";
+export * from "./paraswap.js";
+export * from "./types.js";
 
 export async function fetchBestSwap(
   swapParams: SwapParams,
 ): Promise<SwapResponse | null> {
   const results = await Promise.allSettled([
-    retryPromiseLinearBackoff(() => fetchOneInchSwap(swapParams), {
+    retryPromiseLinearBackoff(() => OneInch.fetchSwap(swapParams), {
       timeout: 200,
       onError: (error) => {
         if (error instanceof Error) {
@@ -67,7 +22,7 @@ export async function fetchBestSwap(
         return false;
       },
     }),
-    retryPromiseLinearBackoff(() => fetchParaSwapSwap(swapParams), {
+    retryPromiseLinearBackoff(() => Paraswap.fetchSwap(swapParams), {
       timeout: 200,
       onError: (error) => {
         if (error instanceof Error) {
