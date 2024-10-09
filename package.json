@@ -21,9 +21,9 @@
     "publish": "lerna publish from-git"
   },
   "devDependencies": {
-    "@biomejs/biome": "1.8.3",
-    "@lerna-lite/cli": "^3.9.1",
-    "@lerna-lite/publish": "^3.8.0",
+    "@biomejs/biome": "^1.8.3",
+    "@lerna-lite/cli": "3.9.1",
+    "@lerna-lite/publish": "3.9.2",
     "@lerna-lite/version": "^3.7.1",
     "husky": "^9.0.11",
     "typescript": "^5.6.2",

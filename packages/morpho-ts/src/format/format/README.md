@@ -23,7 +23,7 @@ The `format` object provides access to different formatters:
 ### Usage
 
 Each formatter can be accessed through the `format` object and provides chainable methods to customize the output. The formatted value can be obtained calling `.of(value)` for `number` or `.of(value, decimals)` for `bigint`.
-The return value will retain the nullability of the input value, unless a `.default()` method is applied (refer to [Number Formatter](#2-number-formatter) for details).
+The return value will retain the nullability of the input value (giving priority to `value` over `decimals` for bigints, if none is defined), unless a `.default()` method is applied (refer to [Number Formatter](#2-number-formatter) for details).
 
 > [!Tip]
 > You can store the populated `of` function in a custom formatter:
@@ -71,7 +71,7 @@ const numberValue = format.number.of(123.45); // "123.45"
 - `.unit(string)`: Adds a unit to the number (e.g., "$", "%").
 - `.locale(string)`: Formats the number according to the specified locale.
 - `.readable()`: Makes the value more readable for small numbers.
-- `.default(string)`: Sets a default value in case value is `null` or `undefined`.
+- `.default(string)`: Sets a default value in case `value` (or `decimals`) is `null` or `undefined`.
 
 ### 3. Commas Formatter
 
