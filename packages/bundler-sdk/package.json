@@ -10,10 +10,7 @@
   ],
   "scripts": {
     "prepublish": "yarn build",
-    "build": "tsc --build tsconfig.build.json",
-    "test": "hardhat test",
-    "test-ethereum": "NETWORK=ethereum yarn test",
-    "test-base": "NETWORK=base yarn test"
+    "build": "tsc --build tsconfig.build.json"
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
