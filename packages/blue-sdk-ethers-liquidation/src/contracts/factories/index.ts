@@ -2,3 +2,4 @@
 /* tslint:disable */
 /* eslint-disable */
 export { CurveStableSwapNG__factory } from "./CurveStableSwapNG__factory";
+export { SUsds__factory } from "./SUsds__factory";

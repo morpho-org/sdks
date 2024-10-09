@@ -32,13 +32,12 @@ import {
 } from "@morpho-org/blue-sdk-ethers";
 import {
   LiquidationEncoder,
+  addresses,
   apiSdk,
-  mainnetAddresses,
   pendle,
   swap,
 } from "@morpho-org/blue-sdk-ethers-liquidation";
 import { Time } from "@morpho-org/morpho-ts";
-
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
   parseNumber: safeParseNumber,
@@ -177,11 +176,33 @@ export const check = async (
                   pendleTokens,
                 ));
 
+                // As there is no liquidity for sUSDS, we use the sUSDS withdrawal function to get USDS instead
+                if (
+                  market.config.collateralToken ===
+                    addresses.mainnetAddresses["sUsds"] &&
+                  chainId === ChainId.EthMainnet
+                ) {
+                  const usdsWithdrawalAmount =
+                    await encoder.previewUSDSWithdrawalAmount(srcAmount);
+                  encoder.erc20Approve(
+                    addresses.mainnetAddresses["sUsds"],
+                    addresses.mainnetAddresses["sUsds"],
+                    MaxUint256,
+                  );
+                  encoder.encodeUSDSWithdrawal(
+                    usdsWithdrawalAmount,
+                    executorAddress,
+                    executorAddress,
+                  );
+                  srcAmount = usdsWithdrawalAmount;
+                  srcToken = addresses.mainnetAddresses["usds"]!;
+                }
+
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
                   // Process USD0/USD0++ collateral liquidation with specific process (using curve)
                   case market.config.collateralToken ===
-                    mainnetAddresses["usd0usd0++"] &&
+                    addresses.mainnetAddresses["usd0usd0++"] &&
                     chainId === ChainId.EthMainnet:
                     dstAmount = await encoder.curveSwapUsd0Usd0PPForUsdc(
                       srcAmount,
@@ -195,7 +216,7 @@ export const check = async (
                     break;
                   // Process USD0++ colalteral liquidation with specific process (using curve)
                   case market.config.collateralToken ===
-                    mainnetAddresses["usd0++"] &&
+                    addresses.mainnetAddresses["usd0++"] &&
                     chainId === ChainId.EthMainnet: {
                     dstAmount = await encoder.swapUSD0PPToUSDC(
                       srcAmount,
@@ -260,7 +281,11 @@ export const check = async (
                 // which are automatically withdrawn upon liquidation, at an exchange rate of 1.
                 if (
                   collateralUnderlyingAsset != null &&
-                  withdrawnAssets != null
+                  withdrawnAssets != null &&
+                  !(
+                    addresses.mainnetAddresses["sUsds"] &&
+                    chainId === ChainId.EthMainnet
+                  )
                 )
                   encoder.erc4626Redeem(
                     market.config.collateralToken,
