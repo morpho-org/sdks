@@ -111,7 +111,9 @@ export function useSimulationState<
   ...parameters
 }: UseSimulationStateParameters<config>): UseSimulationStateReturnType {
   const staleTime =
-    parameters.query?.staleTime ?? block?.number != null ? Infinity : undefined;
+    (parameters.query?.staleTime ?? block?.number != null)
+      ? Infinity
+      : undefined;
 
   const chainId = useChainId(parameters);
 

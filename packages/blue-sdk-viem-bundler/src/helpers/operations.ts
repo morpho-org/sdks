@@ -273,13 +273,13 @@ export const populateSubBundle = (
 
     const borrowedAssets =
       mainOperation.type === "Blue_Borrow"
-        ? mainOperation.args.assets ??
-          market.toBorrowAssets(mainOperation.args.shares)
+        ? (mainOperation.args.assets ??
+          market.toBorrowAssets(mainOperation.args.shares))
         : 0n;
     const withdrawnAssets =
       mainOperation.type === "Blue_Withdraw"
-        ? mainOperation.args.assets ??
-          market.toSupplyAssets(mainOperation.args.shares)
+        ? (mainOperation.args.assets ??
+          market.toSupplyAssets(mainOperation.args.shares))
         : 0n;
 
     const newTotalSupplyAssets = market.totalSupplyAssets - withdrawnAssets;

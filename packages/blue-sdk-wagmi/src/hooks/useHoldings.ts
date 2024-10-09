@@ -62,7 +62,7 @@ export function useHoldings<
       enabled: holding.user != null && holding.token != null && query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
+        (query.staleTime ?? parameters.blockNumber != null)
           ? Infinity
           : undefined,
     })),

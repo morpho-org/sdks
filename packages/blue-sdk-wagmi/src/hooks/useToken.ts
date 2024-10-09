@@ -44,6 +44,8 @@ export function useToken<
     enabled: parameters.token != null && query.enabled,
     structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
-      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
+      (query.staleTime ?? parameters.blockNumber != null)
+        ? Infinity
+        : undefined,
   });
 }

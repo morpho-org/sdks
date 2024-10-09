@@ -63,7 +63,7 @@ export function usePositions<
         position.user != null && position.marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? mergeDeepEqual,
       staleTime:
-        query.staleTime ?? parameters.blockNumber != null
+        (query.staleTime ?? parameters.blockNumber != null)
           ? Infinity
           : undefined,
     })),

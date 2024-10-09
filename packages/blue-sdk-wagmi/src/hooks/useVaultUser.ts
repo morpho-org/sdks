@@ -54,6 +54,8 @@ export function useVaultUser<
       parameters.vault != null && parameters.user != null && query.enabled,
     structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
-      query.staleTime ?? parameters.blockNumber != null ? Infinity : undefined,
+      (query.staleTime ?? parameters.blockNumber != null)
+        ? Infinity
+        : undefined,
   });
 }
