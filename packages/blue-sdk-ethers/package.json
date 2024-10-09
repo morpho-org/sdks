@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-ethers",
-  "version": "1.0.0",
+  "version": "1.0.0-integ-745.1",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
