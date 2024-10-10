@@ -1,9 +1,14 @@
-import { BlueErrors } from "../errors";
-import { AdaptiveCurveIrmLib, MathLib, RoundingDirection } from "../maths";
-import { BigIntish } from "../types";
+import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { BlueErrors } from "../errors.js";
+import {
+  AdaptiveCurveIrmLib,
+  MathLib,
+  type RoundingDirection,
+} from "../math/index.js";
+import type { BigIntish } from "../types.js";
 
-import { MarketConfig } from "./MarketConfig";
-import { MarketUtils } from "./MarketUtils";
+import type { MarketConfig } from "./MarketConfig.js";
+import { MarketUtils } from "./MarketUtils.js";
 
 export enum CapacityLimitReason {
   liquidity = "Liquidity",
@@ -126,10 +131,7 @@ export class Market implements InputMarket {
    * Whether the market satisfies the canonical definition of an idle market (i.e. collateral token is the zero address).
    */
   get isIdle() {
-    return (
-      this.config.collateralToken ===
-      "0x0000000000000000000000000000000000000000"
-    );
+    return this.config.collateralToken === ZERO_ADDRESS;
   }
 
   /**

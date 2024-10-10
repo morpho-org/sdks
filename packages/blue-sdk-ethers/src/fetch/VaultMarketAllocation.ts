@@ -1,22 +1,21 @@
-import { Provider } from "ethers";
-import { ViewOverrides } from "ethers-types/dist/common";
+import type { Provider } from "ethers";
 
 import {
-  Address,
-  ChainId,
+  type Address,
   ChainUtils,
-  MarketId,
+  type MarketId,
   VaultMarketAllocation,
-  VaultMarketConfig,
+  type VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
-import { fetchAccrualPosition } from "./Position";
-import { fetchVaultMarketConfig } from "./VaultMarketConfig";
+import type { FetchOptions } from "../types.js";
+import { fetchAccrualPosition } from "./Position.js";
+import { fetchVaultMarketConfig } from "./VaultMarketConfig.js";
 
 export async function fetchVaultMarketAllocation(
   vault: Address,
   marketId: MarketId,
   runner: { provider: Provider },
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  options: FetchOptions = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -36,7 +35,7 @@ export async function fetchVaultMarketAllocationFromConfig(
   config: VaultMarketConfig,
   marketId: MarketId,
   runner: { provider: Provider },
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  options: FetchOptions = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,

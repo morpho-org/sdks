@@ -1,4 +1,4 @@
-import { Address, MarketId } from "./types";
+import type { Address, MarketId } from "./types.js";
 
 export class UnknownDataError extends Error {}
 
@@ -76,19 +76,8 @@ export namespace BlueErrors {
   }
 }
 
-export class InvalidSignatureError extends Error {
-  constructor(
-    public readonly hash: string,
-    public readonly signer: Address,
-    public readonly recovered: Address,
-  ) {
-    super(
-      `invalid signature for hash ${hash}: expected ${signer}, recovered ${recovered}`,
-    );
-  }
-}
-
 export interface ErrorClass<E extends Error> {
+  // biome-ignore lint/suspicious/noExplicitAny: match any type of arg
   new (...args: any[]): E;
 }
 

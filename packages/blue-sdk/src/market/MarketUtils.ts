@@ -5,11 +5,11 @@ import {
   MAX_LIQUIDATION_INCENTIVE_FACTOR,
   ORACLE_PRICE_SCALE,
   SECONDS_PER_YEAR,
-} from "../constants";
-import { MathLib, RoundingDirection, SharesMath } from "../maths";
-import { BigIntish, MarketId } from "../types";
+} from "../constants.js";
+import { MathLib, type RoundingDirection, SharesMath } from "../math/index.js";
+import type { BigIntish, MarketId } from "../types.js";
 
-import { MarketParams } from "./MarketConfig";
+import type { MarketParams } from "./MarketConfig.js";
 
 /**
  * Namespace of utility functions to ease market-related calculations.
@@ -21,12 +21,13 @@ export namespace MarketUtils {
    */
   export function getMarketId(market: MarketParams) {
     return `0x${keccak256(
-      "0x" +
+      `0x${
         market.loanToken.substring(2).toLowerCase().padStart(64, "0") +
         market.collateralToken.substring(2).toLowerCase().padStart(64, "0") +
         market.oracle.substring(2).padStart(64, "0") +
         market.irm.substring(2).toLowerCase().padStart(64, "0") +
-        BigInt(market.lltv).toString(16).padStart(64, "0"),
+        BigInt(market.lltv).toString(16).padStart(64, "0")
+      }`,
     ).toString("hex")}` as MarketId;
   }
 

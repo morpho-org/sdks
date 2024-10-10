@@ -16,6 +16,7 @@ type P = {
   ) => T extends number ? number : bigint;
 };
 
+// biome-ignore lint/complexity/noStaticOnlyClass:
 export class Time {
   static ms: { from: P };
   static s: { from: P };
@@ -40,7 +41,7 @@ Object.defineProperties(
               if (iFrom < i)
                 return [
                   unitFrom,
-                  function (value: bigint | number) {
+                  (value: bigint | number) => {
                     const normalizer = Time[unitFrom].from[unit](1n);
                     return toNumberish(BigInt(value) / normalizer, value);
                   },
@@ -48,7 +49,7 @@ Object.defineProperties(
               if (iFrom > i)
                 return [
                   unitFrom,
-                  function (value: bigint | number) {
+                  (value: bigint | number) => {
                     switch (unitFrom) {
                       case "ms":
                         return value;
@@ -87,12 +88,7 @@ Object.defineProperties(
                     }
                   },
                 ];
-              return [
-                unitFrom,
-                function (value: bigint | number) {
-                  return value;
-                },
-              ];
+              return [unitFrom, (value: bigint | number) => value];
             }),
           ),
         },

@@ -31,8 +31,9 @@ import "@morpho-org/blue-sdk-viem/lib/augment/Market";
 import "@morpho-org/blue-sdk-viem/lib/augment/MarketConfig";
 import "@morpho-org/blue-sdk-viem/lib/augment/Position";
 import "@morpho-org/blue-sdk-viem/lib/augment/Token";
-import "@morpho-org/blue-sdk-viem/lib/augment/Vault";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultConfig";
+import "@morpho-org/blue-sdk-viem/lib/augment/Vault";
+import "@morpho-org/blue-sdk-viem/lib/augment/VaultUser";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketAllocation";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketConfig";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultMarketPublicAllocatorConfig";
@@ -73,12 +74,6 @@ const market = await Market.fetch(
   client // viem client.
 );
 
-// Or from a config, to fetch faster (skips fetching the config):
-// const market = Market.fetchFromConfig(
-//   config,
-//   client // viem client.
-// );
-
 market.utilization; // e.g. 92% (scaled by WAD).
 market.liquidity; // e.g. 23_000000n (in loan assets).
 market.apyAtTarget; // e.g. 3% (scaled by WAD).
@@ -103,13 +98,6 @@ const position = await AccrualPosition.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
   client // viem client.
 );
-
-// Or from a config, to fetch faster:
-// const position = AccrualPosition.fetchFromConfig(
-//   "0x7f65e7326F22963e2039734dDfF61958D5d284Ca",
-//   config,
-//   client // viem client.
-// );
 
 position.borrowAssets; // e.g. 23_000000n (in loan assets).
 position.isHealthy; // e.g. true.

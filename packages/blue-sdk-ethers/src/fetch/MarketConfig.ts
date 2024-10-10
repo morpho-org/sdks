@@ -1,11 +1,12 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { MorphoBlue__factory } from "ethers-types";
 
 import {
-  ChainId,
+  type Address,
+  type ChainId,
   ChainUtils,
   MarketConfig,
-  MarketId,
+  type MarketId,
   UnknownMarketConfigError,
   _try,
   getChainAddresses,
@@ -25,10 +26,22 @@ export async function fetchMarketConfig(
 
     const { morpho } = getChainAddresses(chainId);
 
-    config = new MarketConfig(
+    const marketParams = await MorphoBlue__factory.connect(
+      morpho,
+      // @ts-ignore incompatible commonjs type
+      runner,
+    ).idToMarketParams(id, {
       // Always fetch at latest block because config is immutable.
-      await MorphoBlue__factory.connect(morpho, runner).idToMarketParams(id),
-    );
+      blockTag: "latest",
+    });
+
+    config = new MarketConfig({
+      lltv: marketParams.lltv,
+      loanToken: marketParams.loanToken as Address,
+      collateralToken: marketParams.collateralToken as Address,
+      irm: marketParams.irm as Address,
+      oracle: marketParams.oracle as Address,
+    });
   }
 
   return config;

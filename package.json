@@ -5,25 +5,32 @@
   "repository": "git@github.com:morpho-org/sdks.git",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
+  "type": "module",
   "private": true,
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
-  "packageManager": "yarn@4.4.1",
+  "packageManager": "yarn@4.5.0",
   "workspaces": [
     "packages/*"
   ],
   "scripts": {
     "postinstall": "husky install",
     "lint": "biome check",
+    "test": "dotenv -- vitest",
+    "coverage": "vitest run --coverage",
     "publish": "lerna publish from-git"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.8.3",
-    "@lerna-lite/cli": "3.9.1",
-    "@lerna-lite/publish": "3.9.2",
-    "@lerna-lite/version": "^3.7.1",
-    "husky": "^9.0.11",
-    "typescript": "^5.4.5"
+    "@biomejs/biome": "^1.9.3",
+    "@lerna-lite/cli": "^3.9.2",
+    "@lerna-lite/publish": "^3.9.2",
+    "@lerna-lite/version": "^3.9.2",
+    "@vitest/coverage-v8": "^2.1.2",
+    "dotenv-cli": "^7.4.2",
+    "happy-dom": "^15.7.4",
+    "husky": "^9.1.6",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.2"
   }
 }
