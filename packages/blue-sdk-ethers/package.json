@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-ethers",
-  "version": "1.12.1",
+  "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "type": "module",
@@ -22,7 +22,7 @@
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-ethers": "workspace:^",
     "@types/node": "^22.1.0",
-    "ethers": "^6.13.2",
+    "ethers": "^6.13.3",
     "ethers-types": "^3.17.0",
     "typescript": "^5.6.3",
     "viem": "^2.21.19",

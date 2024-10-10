@@ -11,7 +11,6 @@
       "artifacts",
       "package.json",
       "packages/blue-sdk-viem-bundler/tests/",
-      "packages/blue-api-sdk/src/types.ts",
       "packages/liquidation-sdk-viem/src/api/sdk.ts"
     ]
   },

@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/blue-api-sdk",
-  "version": "1.12.1",
+  "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",
   "main": "src/index.ts",
@@ -17,17 +17,11 @@
     "@morpho-org/morpho-ts": "workspace:^"
   },
   "devDependencies": {
-    "@apollo/client": "^3.11.1",
     "@graphql-codegen/cli": "^5.0.0",
-    "@graphql-codegen/client-preset": "^4.2.5",
-    "@graphql-codegen/introspection": "^4.0.3",
     "@graphql-codegen/typescript": "^4.0.1",
-    "@graphql-codegen/typescript-operations": "^4.0.1",
-    "@graphql-codegen/typescript-resolvers": "^4.1.0",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "graphql": "^16.8.1",
-    "graphql-tag": "^2.12.6",
+    "graphql": "^16.9.0",
     "typescript": "^5.6.3"
   },
   "publishConfig": {
