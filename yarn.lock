@@ -7933,7 +7933,7 @@ __metadata:
     aes-js: "npm:4.0.0-beta.5"
     tslib: "npm:2.4.0"
     ws: "npm:8.17.1"
-  checksum: 10c0/3e416ca739149cc286bf6d4abd33a48210fb7048e3238b23082a49be99b1793d8c2ba96ed35861548476ece6fcaba912071784e6e0cdcc53611448fa04663a28
+  checksum: 10c0/5f93ec374189bc2bd93085678e920adddcc2904cb0932712be83060ed1b47b194f18b881932bb3283b18e284afc6bba67edbe57377d59a4f5107d61c54d83743
   languageName: node
   linkType: hard
 
