@@ -412,7 +412,8 @@ export class SimulationState implements InputSimulationState {
           wrappedToken.underlying,
         );
 
-        if (unwrappedBalance != null) {
+        // We don't want to add 0 balances
+        if (unwrappedBalance) {
           const wrappedBalance = wrappedToken.toWrappedExactAmountIn(
             unwrappedBalance,
             slippage,
@@ -434,7 +435,8 @@ export class SimulationState implements InputSimulationState {
         _try(() => {
           const wEthBalance = this.getBundleBalance(user, wNative);
 
-          if (wEthBalance != null) {
+          // We don't want to add 0 balances
+          if (wEthBalance) {
             const stEthToken = this.getWrappedToken(stEth);
             const stEthBalance = stEthToken.toWrappedExactAmountIn(
               wEthBalance,
@@ -457,7 +459,8 @@ export class SimulationState implements InputSimulationState {
         _try(() => {
           const ethBalance = this.getBundleBalance(user, NATIVE_ADDRESS);
 
-          if (ethBalance != null) {
+          // We don't want to add 0 balances
+          if (ethBalance) {
             const stEthToken = this.getWrappedToken(stEth);
             const stEthBalance = stEthToken.toWrappedExactAmountIn(
               ethBalance,
