@@ -19,7 +19,8 @@ const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("MetaMorpho_PublicReallocate", () => {
   test("should simulate public reallocation accurately", async ({
-    wagmi: { config, client },
+    config,
+    client,
   }) => {
     const owner = await client.readContract({
       address: steakUsdc.address,
@@ -111,7 +112,7 @@ describe("MetaMorpho_PublicReallocate", () => {
     await client.setNextBlockTimestamp({
       timestamp: dataBefore.block.timestamp,
     });
-    await client.writeContractWait({
+    await client.writeContract({
       address: publicAllocator,
       abi: publicAllocatorAbi,
       functionName: "reallocateTo",

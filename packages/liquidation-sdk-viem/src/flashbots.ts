@@ -1,3 +1,4 @@
+import {} from "ethers";
 import {
   type Account,
   type Chain,
@@ -55,9 +56,6 @@ export namespace Flashbots {
       nonces[address] = nonce + 1;
       transaction.nonce ??= nonce;
 
-      if (transaction.type == null || transaction.type === "legacy")
-        transaction.gasPrice ??= 0n;
-
       transaction.gas ??= await estimateGas(client, transaction); // TODO: Add target block number and timestamp when supported by geth
 
       signatures.push(await client.signTransaction(transaction));
@@ -92,33 +90,31 @@ export namespace Flashbots {
   ) {
     const body = JSON.stringify({
       method: "eth_sendBundle",
-      params: {
-        txs,
-        blockNumber: `0x${targetBlockNumber.toString(16)}`,
-      },
+      params: [
+        {
+          txs,
+          blockNumber: `0x${targetBlockNumber.toString(16)}`,
+        },
+      ],
       id: nextId++,
       jsonrpc: "2.0",
     });
 
     const response = await fetch(FLASHBOTS_RELAY, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Flashbots-Signature": `${account.address}:${await account.signMessage(
+          { message: keccak256(stringToBytes(body)) },
+        )}`,
+      },
       body,
-      headers: [
-        ["Content-Type", "application/json"],
-        [
-          "X-Flashbots-Signature",
-          `${account.address}:${await account.signMessage({ message: keccak256(stringToBytes(body)) })}`,
-        ],
-      ],
     });
 
-    console.log(response.status);
+    if (!response.ok) {
+      const body = await response.json();
 
-    if (response.error)
-      return {
-        error: {
-          message: response.error.message,
-          code: response.error.code,
-        },
-      };
+      throw Error(body.error ?? body ?? "eth_sendBundle failed");
+    }
   }
 }

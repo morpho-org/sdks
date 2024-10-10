@@ -9,17 +9,17 @@ import { anvil } from "viem/chains";
 import { test } from "vitest";
 import { testWallet } from "./fixtures.js";
 
+export interface EthersTestContext<chain extends Chain = Chain> {
+  ethers: {
+    client: AnvilTestClient<chain>;
+    wallet: HDNodeWallet & { provider: JsonRpcProvider };
+  };
+}
+
 export const createEthersTest = <chain extends Chain = typeof anvil>(
   parameters: AnvilArgs = {},
   chain: chain = anvil as unknown as chain,
-): ReturnType<
-  typeof test.extend<{
-    ethers: {
-      client: AnvilTestClient<chain>;
-      wallet: HDNodeWallet & { provider: JsonRpcProvider };
-    };
-  }>
-> => {
+): ReturnType<typeof test.extend<EthersTestContext<chain>>> => {
   parameters.forkChainId ??= chain?.id;
   parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
   parameters.autoImpersonate ??= true;

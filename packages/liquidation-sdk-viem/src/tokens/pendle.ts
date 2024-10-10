@@ -257,7 +257,7 @@ export namespace Pendle {
     endpoint: string,
     params: T,
     api: "sdk" | "non-sdk" = "sdk",
-  ): Promise<U> {
+  ) {
     const queryParams = new URLSearchParams(
       Object.entries(params).map(([key, value]) => [key, String(value)]),
     ).toString();
@@ -273,6 +273,7 @@ export namespace Pendle {
     });
 
     if (!res.ok) throw new Error(res.statusText);
+
     return res.json() as Promise<U>;
   }
 

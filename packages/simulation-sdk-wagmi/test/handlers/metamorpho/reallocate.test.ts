@@ -18,7 +18,8 @@ const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("MetaMorpho_Reallocate", () => {
   test("should simulate reallocation accurately", async ({
-    wagmi: { config, client },
+    config,
+    client,
   }) => {
     const block = await client.getBlock();
 
@@ -81,7 +82,7 @@ describe("MetaMorpho_Reallocate", () => {
     await client.setNextBlockTimestamp({
       timestamp: dataBefore.block.timestamp,
     });
-    await client.writeContractWait({
+    await client.writeContract({
       account: owner,
       address: steakUsdc.address,
       abi: metaMorphoAbi,

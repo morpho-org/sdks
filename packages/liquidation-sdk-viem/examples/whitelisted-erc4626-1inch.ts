@@ -38,7 +38,7 @@ import {
 import {
   estimateFeesPerGas,
   estimateGas,
-  getBlock,
+  getBlockNumber,
   getTransactionCount,
   readContract,
   sendTransaction,
@@ -112,11 +112,6 @@ export const check = async <
         );
         if (loanToken.price == null)
           throw new UnknownTokenPriceError(loanToken.address);
-
-        // const erc4626 = ERC4626__factory.connect(
-        //   market.config.collateralToken,
-        //   signer.provider,
-        // );
 
         const [
           collateralUnderlyingAsset,
@@ -256,16 +251,19 @@ export const check = async <
                       disableEstimate: true,
                       usePermit2: false,
                     });
+
                     if (!bestSwap)
                       throw Error(
                         "could not fetch swap from both 1inch and paraswap",
                       );
+
                     dstAmount = BigInt(bestSwap.dstAmount);
 
                     if (
                       dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage)
                     )
                       return;
+
                     encoder
                       .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
                       .pushCall(
@@ -273,6 +271,7 @@ export const check = async <
                         BigInt(bestSwap.tx.value),
                         bestSwap.tx.data,
                       );
+
                     break;
                   }
                 }
@@ -320,21 +319,15 @@ export const check = async <
                 );
 
                 const populatedTx = await encoder.encodeExec();
-                const [gasLimit, block, txCount, { maxFeePerGas }] =
+                const [gasLimit, blockNumber, txCount, { maxFeePerGas }] =
                   await Promise.all([
                     estimateGas(client, populatedTx),
-                    getBlock(client),
+                    getBlockNumber(client),
                     getTransactionCount(client, {
                       address: client.account.address,
                     }), // Always use latest committed nonce (not pending) to guarantee tx can be included.
                     estimateFeesPerGas(client),
                   ]);
-
-                if (block == null) throw Error("could not fetch latest block");
-
-                const { baseFeePerGas } = block;
-                if (baseFeePerGas == null)
-                  throw Error("could not fetch latest baseFeePerGas");
 
                 const gasLimitUsd = ethPriceUsd.wadMulDown(
                   gasLimit * maxFeePerGas,
@@ -351,7 +344,7 @@ export const check = async <
                 const transaction = {
                   ...populatedTx,
                   chainId,
-                  nonce: txCount + 1,
+                  nonce: txCount,
                   gas: gasLimit, // Avoid estimating gas again.
                   maxFeePerGas,
                 };
@@ -366,19 +359,17 @@ export const check = async <
 
                   return await Flashbots.sendRawBundle(
                     signedBundle,
-                    block.number + 1n,
+                    blockNumber + 1n,
                     flashbotsAccount,
                   );
                 }
 
                 return await sendTransaction(client, transaction);
               } catch (error) {
-                if (error instanceof Error)
-                  // eslint-disable-next-line no-console
-                  console.warn(
-                    `Tried liquidating "${seizedAssets}" collateral ("${withdrawnAssets}" underlying) from "${user}" on market "${market.id}":`,
-                    error.message,
-                  );
+                console.warn(
+                  `Tried liquidating "${seizedAssets}" collateral ("${withdrawnAssets}" underlying) from "${user}" on market "${market.id}":\n`,
+                  error instanceof Error ? error.stack : error,
+                );
 
                 return;
               }

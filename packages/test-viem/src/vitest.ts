@@ -4,14 +4,14 @@ import { anvil } from "viem/chains";
 import { test } from "vitest";
 import { type AnvilTestClient, createAnvilTestClient } from "./anvil.js";
 
+export interface ViemTestContext<chain extends Chain = Chain> {
+  client: AnvilTestClient<chain>;
+}
+
 export const createViemTest = <chain extends Chain = typeof anvil>(
   parameters: AnvilArgs = {},
   chain: chain = anvil as unknown as chain,
-): ReturnType<
-  typeof test.extend<{
-    client: AnvilTestClient<chain>;
-  }>
-> => {
+) => {
   parameters.forkChainId ??= chain?.id;
   parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
   parameters.autoImpersonate ??= true;
@@ -22,7 +22,7 @@ export const createViemTest = <chain extends Chain = typeof anvil>(
 
   let port = 0;
 
-  return test.extend({
+  return test.extend<ViemTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
     client: async ({}, use) => {
       const { rpcUrl, stop } = await spawnAnvil(parameters, port++);

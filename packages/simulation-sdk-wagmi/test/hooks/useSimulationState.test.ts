@@ -19,9 +19,7 @@ const { usdc_wbIB01, usdc_wstEth, usdc_wbtc, usdc_idle } =
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("useSimulationState", () => {
-  test("should resolve pending when no block requested", async ({
-    wagmi: { config },
-  }) => {
+  test("should resolve pending when no block requested", async ({ config }) => {
     const { result } = await renderHook(config, () =>
       useSimulationState({
         marketIds: [],
@@ -41,7 +39,8 @@ describe("useSimulationState", () => {
   });
 
   test("should resolve empty when requested empty", async ({
-    wagmi: { config, client },
+    config,
+    client,
   }) => {
     const block = await client.getBlock();
 
@@ -148,7 +147,8 @@ describe("useSimulationState", () => {
   });
 
   test("should fail transfer with insufficient balance", async ({
-    wagmi: { config, client },
+    config,
+    client,
   }) => {
     const block = await client.getBlock();
 
@@ -186,7 +186,8 @@ describe("useSimulationState", () => {
   });
 
   test("should fail transfer with insufficient allowance", async ({
-    wagmi: { config, client },
+    config,
+    client,
   }) => {
     const amount = 1_000000n;
 
@@ -235,7 +236,7 @@ describe("useSimulationState", () => {
     );
   });
 
-  test("should simulate transfer", async ({ wagmi: { config, client } }) => {
+  test("should simulate transfer", async ({ config, client }) => {
     const amount = 1_000000n;
 
     await client.deal({
@@ -295,7 +296,7 @@ describe("useSimulationState", () => {
     await client.setNextBlockTimestamp({
       timestamp: data0.block.timestamp + 1n,
     });
-    await client.writeContractWait({
+    await client.writeContract({
       address: usdc,
       abi: erc20Abi,
       functionName: "approve",
@@ -317,7 +318,7 @@ describe("useSimulationState", () => {
     await client.setNextBlockTimestamp({
       timestamp: data1.block.timestamp + 1n,
     });
-    await client.writeContractWait({
+    await client.writeContract({
       account: morpho,
       address: usdc,
       abi: erc20Abi,
@@ -339,7 +340,8 @@ describe("useSimulationState", () => {
   });
 
   test("should simulate steakUSDC deposit via bundler", async ({
-    wagmi: { config, client },
+    config,
+    client,
   }) => {
     const amount = 1_000_000_000000n;
 

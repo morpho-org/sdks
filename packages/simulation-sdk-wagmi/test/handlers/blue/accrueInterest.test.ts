@@ -16,9 +16,7 @@ const { morpho } = addresses[ChainId.EthMainnet];
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 describe("Blue_AccrueInterest", () => {
-  test("should accrue interest accurately", async ({
-    wagmi: { config, client },
-  }) => {
+  test("should accrue interest accurately", async ({ config, client }) => {
     const block = await client.getBlock();
 
     const { result, rerender } = await renderHook(
@@ -61,7 +59,7 @@ describe("Blue_AccrueInterest", () => {
       timestamp: dataBefore.block.timestamp,
     });
 
-    await client.writeContractWait({
+    await client.writeContract({
       address: morpho,
       abi: blueAbi,
       functionName: "accrueInterest",

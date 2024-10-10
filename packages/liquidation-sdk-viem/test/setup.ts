@@ -1,8 +1,21 @@
-import { createViemTest } from "@morpho-org/test-viem";
-import { ExecutorEncoder, bytecode, executorAbi } from "executooor-viem";
-import { mainnet } from "viem/chains";
+import {
+  type AnvilTestClient,
+  type ViemTestContext,
+  createViemTest,
+} from "@morpho-org/test-viem";
+import { bytecode, executorAbi } from "executooor-viem";
+import { type Chain, mainnet } from "viem/chains";
+import { LiquidationEncoder } from "../src/index.js";
 
 const rpcUrl = process.env.MAINNET_RPC_URL;
+
+export interface LiquidationEncoderTestContext<chain extends Chain = Chain> {
+  encoder: LiquidationEncoder<AnvilTestClient<chain>>;
+}
+
+export interface LiquidationTestContext<chain extends Chain = Chain>
+  extends ViemTestContext<chain>,
+    LiquidationEncoderTestContext<chain> {}
 
 export const test = createViemTest(
   {
@@ -10,20 +23,14 @@ export const test = createViemTest(
     forkBlockNumber: 20_818_976,
   },
   mainnet,
-).extend<{
-  encoder: ExecutorEncoder;
-}>({
+).extend<LiquidationEncoderTestContext<typeof mainnet>>({
   encoder: async ({ client }, use) => {
-    const hash = await client.deployContract({
+    const receipt = await client.deployContractWait({
       abi: executorAbi,
       bytecode,
       args: [client.account.address],
     });
 
-    const receipt = await client.waitForTransactionReceipt({ hash });
-
-    if (receipt.contractAddress == null) throw Error("no contract address");
-
-    await use(new ExecutorEncoder(receipt.contractAddress, client));
+    await use(new LiquidationEncoder(receipt.contractAddress, client));
   },
 });

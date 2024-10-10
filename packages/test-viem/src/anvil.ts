@@ -1,12 +1,16 @@
 import {
   type Abi,
-  type Chain,
+  type Address,
   type Client,
   type ContractFunctionArgs,
   type ContractFunctionName,
+  type DeployContractParameters,
   type HDAccount,
   type HttpTransport,
   type PublicActions,
+  type SendRawTransactionParameters,
+  type SendTransactionParameters,
+  type SendTransactionRequest,
   type TestActions,
   type TestRpcSchema,
   type WaitForTransactionReceiptReturnType,
@@ -17,7 +21,12 @@ import {
   walletActions,
 } from "viem";
 import { type DealActions, dealActions } from "viem-deal";
-import type { anvil } from "viem/chains";
+import {
+  sendRawTransaction,
+  sendTransaction,
+  writeContract,
+} from "viem/actions";
+import type { Chain, anvil } from "viem/chains";
 import { testAccount } from "./fixtures.js";
 
 export type AnvilTestClient<chain extends Chain = Chain> = Client<
@@ -30,26 +39,13 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
     PublicActions<HttpTransport, chain, HDAccount> &
     WalletActions<chain, HDAccount> & {
       timestamp(): Promise<bigint>;
-      writeContractWait<
-        const abi extends Abi | readonly unknown[],
-        functionName extends ContractFunctionName<
-          abi,
-          "payable" | "nonpayable"
-        >,
-        args extends ContractFunctionArgs<
-          abi,
-          "payable" | "nonpayable",
-          functionName
-        >,
-      >(
-        args: WriteContractParameters<
-          abi,
-          functionName,
-          args,
-          chain,
-          HDAccount
-        >,
-      ): Promise<WaitForTransactionReceiptReturnType<chain>>;
+      deployContractWait<const abi extends Abi | readonly unknown[]>(
+        args: DeployContractParameters<abi, chain, HDAccount>,
+      ): Promise<
+        WaitForTransactionReceiptReturnType<chain> & {
+          contractAddress: Address;
+        }
+      >;
     }
 >;
 
@@ -66,34 +62,81 @@ export const createAnvilTestClient = <chain extends Chain = typeof anvil>(
     .extend(dealActions)
     .extend(publicActions)
     .extend(walletActions)
-    .extend((client) => ({
-      async timestamp() {
-        const latestBlock = await client.getBlock();
+    .extend((client) => {
+      let automine: boolean;
 
-        return latestBlock.timestamp;
-      },
-      async writeContractWait<
-        const abi extends Abi | readonly unknown[],
-        functionName extends ContractFunctionName<
-          abi,
-          "payable" | "nonpayable"
-        >,
-        args extends ContractFunctionArgs<
-          abi,
-          "payable" | "nonpayable",
-          functionName
-        >,
-      >(
-        args: WriteContractParameters<
-          abi,
-          functionName,
-          args,
-          chain,
-          HDAccount
-        >,
-      ) {
-        const hash = await client.writeContract(args);
+      return {
+        async timestamp() {
+          const latestBlock = await client.getBlock();
 
-        return await client.waitForTransactionReceipt({ hash });
-      },
-    }));
+          return latestBlock.timestamp;
+        },
+        async deployContractWait<const abi extends Abi | readonly unknown[]>(
+          args: DeployContractParameters<abi, chain, HDAccount>,
+        ) {
+          const hash = await client.deployContract(args);
+          const receipt = await client.waitForTransactionReceipt({ hash });
+
+          if (receipt.contractAddress == null)
+            throw Error("no contract address");
+
+          return receipt as typeof receipt & { contractAddress: Address };
+        },
+        async writeContract<
+          const abi extends Abi | readonly unknown[],
+          functionName extends ContractFunctionName<
+            abi,
+            "payable" | "nonpayable"
+          >,
+          args extends ContractFunctionArgs<
+            abi,
+            "payable" | "nonpayable",
+            functionName
+          >,
+          chainOverride extends Chain | undefined = undefined,
+        >(
+          args: WriteContractParameters<
+            abi,
+            functionName,
+            args,
+            chain,
+            HDAccount,
+            chainOverride
+          >,
+        ) {
+          const hash = await writeContract(client, args);
+
+          // Always wait for transaction to be included.
+          if ((automine ??= await client.getAutomine()))
+            await client.waitForTransactionReceipt({ hash });
+
+          return hash;
+        },
+        async sendTransaction<
+          const request extends SendTransactionRequest<chain, chainOverride>,
+          chainOverride extends Chain | undefined = undefined,
+        >(
+          args: SendTransactionParameters<
+            chain,
+            HDAccount,
+            chainOverride,
+            request
+          >,
+        ) {
+          const hash = await sendTransaction(client, args);
+
+          if ((automine ??= await client.getAutomine()))
+            await client.waitForTransactionReceipt({ hash });
+
+          return hash;
+        },
+        async sendRawTransaction(args: SendRawTransactionParameters) {
+          const hash = await sendRawTransaction(client, args);
+
+          if ((automine ??= await client.getAutomine()))
+            await client.waitForTransactionReceipt({ hash });
+
+          return hash;
+        },
+      };
+    });

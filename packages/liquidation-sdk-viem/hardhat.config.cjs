@@ -32,7 +32,7 @@ subtask(TASK_COMPILE_SOLIDITY_EMIT_ARTIFACTS).setAction(
             path,
             `export const abi = ${inspect(abi, false, null)} as const;
 
-export const code = "0x${bytecode}";`,
+export const bytecode = "0x${bytecode}";`,
           );
         },
       ),

@@ -1,5 +1,6 @@
 import { SwapSide, constructSimpleSDK } from "@paraswap/sdk";
 
+import type { Address, Hex } from "viem";
 import type { SwapParams, SwapResponse } from "./types.js";
 
 export namespace Paraswap {
@@ -47,9 +48,9 @@ export namespace Paraswap {
         logoURI: "",
       },
       tx: {
-        from: calldata.from,
-        to: calldata.to,
-        data: calldata.data,
+        from: calldata.from as Address,
+        to: calldata.to as Address,
+        data: calldata.data as Hex,
         value: calldata.value,
         gasPrice: calldata.gasPrice,
         gas: Number(calldata.gas),

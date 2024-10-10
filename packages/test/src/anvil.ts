@@ -289,26 +289,30 @@ export const spawnAnvil = async (
   stop: () => boolean;
 }> => {
   // Build an available port to run anvil.
-  const port = 10000 + process.__tinypool_state__.workerId * 500 + basePort;
+  const port =
+    10000 + (process.__tinypool_state__.workerId - 1) * 100 + basePort;
+
+  let started = false;
 
   const stop = await new Promise<() => boolean>((resolve, reject) => {
     const subprocess = spawn("anvil", toArgs({ ...args, port }));
 
     subprocess.stdout.on("data", (data) => {
-      const message = data.toString();
+      const message = `[port ${port}] ${data.toString()}`;
 
       // console.debug(message);
 
-      if (message.includes("Listening on"))
+      if (message.includes("Listening on")) {
+        started = true;
         resolve(() => subprocess.kill("SIGINT"));
+      }
     });
 
     subprocess.stderr.on("data", (data) => {
-      const message = data.toString();
+      const message = `[port ${port}] ${data.toString()}`;
 
-      console.warn(message);
-
-      reject(message);
+      if (!started) reject(message);
+      else console.warn(message);
     });
   });
 

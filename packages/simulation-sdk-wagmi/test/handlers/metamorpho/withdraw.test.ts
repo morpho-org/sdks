@@ -19,7 +19,8 @@ const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("MetaMorpho_AccrueInterest", () => {
   test("should accrue interest accurately upon withdraw", async ({
-    wagmi: { config, client },
+    config,
+    client,
   }) => {
     const assets = parseUnits("100", 6);
 
@@ -36,7 +37,7 @@ describe("MetaMorpho_AccrueInterest", () => {
       args: [steakUsdc.address, assets * 2n],
     });
 
-    await client.writeContractWait({
+    await client.writeContract({
       address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "deposit",
@@ -92,7 +93,7 @@ describe("MetaMorpho_AccrueInterest", () => {
     await client.setNextBlockTimestamp({
       timestamp: dataBefore.block.timestamp,
     });
-    await client.writeContractWait({
+    await client.writeContract({
       address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "withdraw",

@@ -2985,7 +2985,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/blue-sdk-ethers@workspace:^, @morpho-org/blue-sdk-ethers@workspace:packages/blue-sdk-ethers":
+"@morpho-org/blue-sdk-ethers@workspace:packages/blue-sdk-ethers":
   version: 0.0.0-use.local
   resolution: "@morpho-org/blue-sdk-ethers@workspace:packages/blue-sdk-ethers"
   dependencies:
@@ -3122,7 +3122,6 @@ __metadata:
     "@graphql-codegen/typescript-operations": "npm:^4.3.0"
     "@morpho-org/blue-api-sdk": "workspace:^"
     "@morpho-org/blue-sdk": "workspace:^"
-    "@morpho-org/blue-sdk-ethers": "workspace:^"
     "@morpho-org/blue-sdk-viem": "workspace:^"
     "@morpho-org/liquidation-sdk-viem": "workspace:^"
     "@morpho-org/morpho-test": "workspace:^"
@@ -3131,17 +3130,14 @@ __metadata:
     "@morpho-org/test-viem": "workspace:^"
     "@paraswap/sdk": "npm:^6.10.0"
     "@types/node": "npm:^22.7.0"
-    "@types/simple-mock": "npm:^0"
     evm-maths: "npm:^7.0.0"
     executooor-viem: "npm:^1.3.1"
-    fetch-mock: "npm:^11.1.4"
+    fetch-mock: "npm:^11.1.5"
     graphql: "npm:^16.9.0"
     graphql-request: "npm:^6.1.0"
     graphql-tag: "npm:2.11.0"
     hardhat: "npm:^2.22.13"
-    nock: "npm:^13.5.5"
-    node-fetch: "npm:^3.3.2"
-    simple-mock: "npm:^0.8.0"
+    nock: "npm:beta"
     ts-node: "npm:^10.9.2"
     typescript: "npm:^5.6.3"
     viem: "npm:^2.21.19"
@@ -3149,7 +3145,6 @@ __metadata:
   peerDependencies:
     "@morpho-org/blue-api-sdk": "workspace:^"
     "@morpho-org/blue-sdk": "workspace:^"
-    "@morpho-org/blue-sdk-ethers": "workspace:^"
     "@morpho-org/morpho-ts": "workspace:^"
     evm-maths: ^7.0.0
   languageName: unknown
@@ -3432,6 +3427,20 @@ __metadata:
     "@motionone/dom": "npm:^10.16.4"
     tslib: "npm:^2.3.1"
   checksum: 10c0/0f3096c0956848cb67c4926e65b7034d854cf704573a277679713c5a8045347c3c043f50adad0c84ee3e88c046d35ab88ec4380e5acd729f81900381e0b1fd0d
+  languageName: node
+  linkType: hard
+
+"@mswjs/interceptors@npm:^0.36.4":
+  version: 0.36.4
+  resolution: "@mswjs/interceptors@npm:0.36.4"
+  dependencies:
+    "@open-draft/deferred-promise": "npm:^2.2.0"
+    "@open-draft/logger": "npm:^0.3.0"
+    "@open-draft/until": "npm:^2.0.0"
+    is-node-process: "npm:^1.2.0"
+    outvariant: "npm:^1.4.3"
+    strict-event-emitter: "npm:^0.5.1"
+  checksum: 10c0/28f07c58922ffe6dbcf4c184340c00a28a8025ade0232774081ad6470f01478d12ba12d1e74ae6c7b2b26ffc60127cdccac34fb32e0305b5896d1bac761347ae
   languageName: node
   linkType: hard
 
@@ -4057,6 +4066,30 @@ __metadata:
   dependencies:
     "@octokit/openapi-types": "npm:^22.2.0"
   checksum: 10c0/355ebc6776ce23feace1b1be0927cdda758790fda83068109c4f27b354dcd43d0447d4dc24e5eafdb596465469ea1baed23f3fd63adfec508cc375ccd1dcb0a3
+  languageName: node
+  linkType: hard
+
+"@open-draft/deferred-promise@npm:^2.2.0":
+  version: 2.2.0
+  resolution: "@open-draft/deferred-promise@npm:2.2.0"
+  checksum: 10c0/eafc1b1d0fc8edb5e1c753c5e0f3293410b40dde2f92688211a54806d4136887051f39b98c1950370be258483deac9dfd17cf8b96557553765198ef2547e4549
+  languageName: node
+  linkType: hard
+
+"@open-draft/logger@npm:^0.3.0":
+  version: 0.3.0
+  resolution: "@open-draft/logger@npm:0.3.0"
+  dependencies:
+    is-node-process: "npm:^1.2.0"
+    outvariant: "npm:^1.4.0"
+  checksum: 10c0/90010647b22e9693c16258f4f9adb034824d1771d3baa313057b9a37797f571181005bc50415a934eaf7c891d90ff71dcd7a9d5048b0b6bb438f31bef2c7c5c1
+  languageName: node
+  linkType: hard
+
+"@open-draft/until@npm:^2.0.0":
+  version: 2.1.0
+  resolution: "@open-draft/until@npm:2.1.0"
+  checksum: 10c0/61d3f99718dd86bb393fee2d7a785f961dcaf12f2055f0c693b27f4d0cd5f7a03d498a6d9289773b117590d794a43cd129366fd8e99222e4832f67b1653d54cf
   languageName: node
   linkType: hard
 
@@ -5158,13 +5191,6 @@ __metadata:
   dependencies:
     "@types/node": "npm:*"
   checksum: 10c0/0e391316ae30c218779583b626382a56546ddbefb65f1ff9cf5e078af8a7118f67f3e66e30914399cc6f8710c424d0d8c3f34262ffb1f429c6ad911fd0d0bc26
-  languageName: node
-  linkType: hard
-
-"@types/simple-mock@npm:^0":
-  version: 0.8.6
-  resolution: "@types/simple-mock@npm:0.8.6"
-  checksum: 10c0/af1417f266cae1d3c9bc4aa12ef25a7c4dacb1155359885f0d9b9cc7cf5176acd70c1ec910e2cdd4fcd0c777fff5044271e43e5197dc76f49c4f439d0338a76c
   languageName: node
   linkType: hard
 
@@ -8271,9 +8297,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fetch-mock@npm:^11.1.4":
-  version: 11.1.4
-  resolution: "fetch-mock@npm:11.1.4"
+"fetch-mock@npm:^11.1.5":
+  version: 11.1.5
+  resolution: "fetch-mock@npm:11.1.5"
   dependencies:
     "@types/glob-to-regexp": "npm:^0.4.4"
     dequal: "npm:^2.0.3"
@@ -8283,7 +8309,7 @@ __metadata:
   peerDependenciesMeta:
     node-fetch:
       optional: true
-  checksum: 10c0/06909ac2e9bf6b32aca054d44dc09c94f847e2f67b7d3eaac570dc91e7fc00332eb262ba2af3f2fabc17e1798f069c6e07f7cc08e66dfcc86b3d3120795c5f12
+  checksum: 10c0/f32f1d7879b654a3fab7c3576901193ddd4c63cb9aeae2ed66ff42062400c0937d4696b1a5171e739d5f62470e6554e190f14816789f5e3b2bf1ad90208222e6
   languageName: node
   linkType: hard
 
@@ -9520,6 +9546,13 @@ __metadata:
   dependencies:
     tslib: "npm:^2.0.3"
   checksum: 10c0/c045e6a52dcc7c3857e2f8c850ded604cdc5269ff94625b03881cefc73bfc02f5099a1bc9bafa67793656711a40d4ab3e26e285a848e728506df20ead0ce8e2f
+  languageName: node
+  linkType: hard
+
+"is-node-process@npm:^1.2.0":
+  version: 1.2.0
+  resolution: "is-node-process@npm:1.2.0"
+  checksum: 10c0/5b24fda6776d00e42431d7bcd86bce81cb0b6cabeb944142fe7b077a54ada2e155066ad06dbe790abdb397884bdc3151e04a9707b8cd185099efbc79780573ed
   languageName: node
   linkType: hard
 
@@ -10787,14 +10820,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nock@npm:^13.5.5":
-  version: 13.5.5
-  resolution: "nock@npm:13.5.5"
+"nock@npm:beta":
+  version: 14.0.0-beta.15
+  resolution: "nock@npm:14.0.0-beta.15"
   dependencies:
-    debug: "npm:^4.1.0"
+    "@mswjs/interceptors": "npm:^0.36.4"
     json-stringify-safe: "npm:^5.0.1"
     propagate: "npm:^2.0.0"
-  checksum: 10c0/58be4dda214d6e1914232ae41a3ac4f4e05622f71eb82825816f3030e0343bd54c1001878a6bce8412067c1059730919f3d600069d76f1336da11f47bd3b5d40
+  checksum: 10c0/90971755c2eaaa81d813ec4575009c62fac693f52d5a3097c9bac0a9109f681994de34bd6ec601a7c25696c5d5c300fb70be4f6b513113eb33f2bf4cbd89fe00
   languageName: node
   linkType: hard
 
@@ -11188,6 +11221,13 @@ __metadata:
   version: 1.0.2
   resolution: "os-tmpdir@npm:1.0.2"
   checksum: 10c0/f438450224f8e2687605a8dd318f0db694b6293c5d835ae509a69e97c8de38b6994645337e5577f5001115470414638978cc49da1cdcc25106dad8738dc69990
+  languageName: node
+  linkType: hard
+
+"outvariant@npm:^1.4.0, outvariant@npm:^1.4.3":
+  version: 1.4.3
+  resolution: "outvariant@npm:1.4.3"
+  checksum: 10c0/5976ca7740349cb8c71bd3382e2a762b1aeca6f33dc984d9d896acdf3c61f78c3afcf1bfe9cc633a7b3c4b295ec94d292048f83ea2b2594fae4496656eba992c
   languageName: node
   linkType: hard
 
@@ -12695,13 +12735,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"simple-mock@npm:^0.8.0":
-  version: 0.8.0
-  resolution: "simple-mock@npm:0.8.0"
-  checksum: 10c0/4b0012ed5649a1fdccb25a74b2ed552fe06625c5836b1c6a6a4cda0b36506fe2b18168b639348db0c3a79d232daab72cd604a4c41f431df205ffa6089fcd1bf1
-  languageName: node
-  linkType: hard
-
 "slash@npm:^3.0.0":
   version: 3.0.0
   resolution: "slash@npm:3.0.0"
@@ -12987,6 +13020,13 @@ __metadata:
   version: 1.1.0
   resolution: "streamsearch@npm:1.1.0"
   checksum: 10c0/fbd9aecc2621364384d157f7e59426f4bfd385e8b424b5aaa79c83a6f5a1c8fd2e4e3289e95de1eb3511cb96bb333d6281a9919fafce760e4edb35b2cd2facab
+  languageName: node
+  linkType: hard
+
+"strict-event-emitter@npm:^0.5.1":
+  version: 0.5.1
+  resolution: "strict-event-emitter@npm:0.5.1"
+  checksum: 10c0/f5228a6e6b6393c57f52f62e673cfe3be3294b35d6f7842fc24b172ae0a6e6c209fa83241d0e433fc267c503bc2f4ffdbe41a9990ff8ffd5ac425ec0489417f7
   languageName: node
   linkType: hard
 
