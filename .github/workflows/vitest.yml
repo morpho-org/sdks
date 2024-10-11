@@ -21,6 +21,7 @@ jobs:
       - uses: foundry-rs/foundry-toolchain@v1
 
       - run: yarn install --immutable
+      - run: yarn postinstall # for some reason, postinstall script does not get executed automatically
 
       - run: yarn test --coverage
         env:

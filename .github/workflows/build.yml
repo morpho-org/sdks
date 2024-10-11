@@ -47,4 +47,6 @@ jobs:
           cache: yarn
 
       - run: yarn install --immutable
+      - run: yarn postinstall # for some reason, postinstall script does not get executed automatically
+
       - run: yarn workspace @morpho-org/${{ matrix.package }} build
