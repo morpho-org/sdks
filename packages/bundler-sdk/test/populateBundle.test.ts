@@ -287,6 +287,95 @@ describe("populateBundle", () => {
           ).toBe(0n);
         },
       );
+
+      test[ChainId.EthMainnet](
+        "should borrow with already enough collateral",
+        async () => {
+          const id = MAINNET_MARKETS.usdc_wstEth.id;
+          bundlerService.simulationService.metaMorphoService.addMarkets(id);
+
+          const blue = Morpho__factory.connect(morpho, signer);
+          const erc20 = ERC20__factory.connect(wstEth, signer);
+
+          const collateral = parseUnits("50");
+          const assets = parseUnits("13000", 6);
+          await deal(wstEth, signer.address, collateral);
+          await erc20.approve(morpho, MaxUint256);
+          await blue.supplyCollateral(
+            MAINNET_MARKETS.usdc_wstEth,
+            collateral,
+            signer.address,
+            "0x",
+          );
+          await mine();
+
+          const { operations, bundle } = await setupBundle(
+            bundlerService,
+            signer,
+            [
+              {
+                type: "Blue_Borrow",
+                sender: signer.address,
+                address: morpho,
+                args: {
+                  id,
+                  assets,
+                  onBehalf: signer.address,
+                  receiver: signer.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+          );
+
+          expect(operations.length).to.equal(2);
+          expect(bundle.requirements.txs.length).to.equal(1);
+          expect(bundle.requirements.signatures.length).to.equal(0);
+
+          expect(bundle.requirements.txs[0]!.type).to.equal(
+            "morphoSetAuthorization",
+          );
+          expect(bundle.requirements.txs[0]!.args).to.eql([bundler, true]);
+
+          expect(operations[0]).to.eql({
+            type: "Blue_SetAuthorization",
+            sender: bundler,
+            address: morpho,
+            args: {
+              owner: signer.address,
+              isBundlerAuthorized: true,
+            },
+          });
+          expect(operations[1]).to.eql({
+            type: "Blue_Borrow",
+            sender: bundler,
+            address: morpho,
+            args: {
+              id,
+              assets,
+              onBehalf: signer.address,
+              receiver: signer.address,
+              slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+            },
+          });
+
+          const market = await blue.market(id);
+          const position = await blue.position(id, signer.address);
+
+          expect(await erc20.balanceOf(signer.address)).to.equal(0);
+          expect(position.collateral).to.equal(collateral);
+          expect(position.supplyShares).to.equal(0);
+          expect(
+            MarketUtils.toBorrowAssets(position.borrowShares, market),
+          ).to.equal(assets + 1n);
+
+          expect(await erc20.allowance(signer.address, permit2)).to.equal(0);
+          expect(await erc20.allowance(signer.address, bundler)).to.equal(0);
+          expect(
+            await erc20.allowance(signer.address, steakUsdc.address),
+          ).to.equal(0);
+        },
+      );
     });
 
     describe("base", () => {
