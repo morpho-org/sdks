@@ -2,7 +2,7 @@ import { exec, execSync } from "node:child_process";
 
 export const setup = async () => {
   try {
-    const data = await execSync("lsof -ti tcp:10000-17000");
+    const data = await execSync("lsof -c anvil -t");
 
     const pids = data.toString().split("\n").slice(0, -1);
 

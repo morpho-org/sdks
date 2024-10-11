@@ -144,7 +144,7 @@ export const setupBundle = async <chain extends Chain = Chain>(
         token,
         balance: await client.balanceOf({
           erc20: token,
-          address: account.address,
+          owner: account.address,
         }),
       })),
     );
@@ -183,7 +183,7 @@ export const setupBundle = async <chain extends Chain = Chain>(
     [...tokens].map(async (token) => {
       const balance = await client.balanceOf({
         erc20: token,
-        address: bundler,
+        owner: bundler,
       });
 
       expect(

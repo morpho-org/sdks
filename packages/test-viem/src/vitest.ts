@@ -20,12 +20,10 @@ export const createViemTest = <chain extends Chain>(
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
 
-  let port = 0;
-
   return test.extend<ViemTestContext<chain>>({
-    // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
+    // biome-ignore lint/correctness/noEmptyPattern: require by vitest at runtime
     client: async ({}, use) => {
-      const { rpcUrl, stop } = await spawnAnvil(parameters, port++);
+      const { rpcUrl, stop } = await spawnAnvil(parameters);
 
       await use(createAnvilTestClient(http(rpcUrl), chain));
 

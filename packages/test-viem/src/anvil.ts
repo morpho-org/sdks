@@ -1,8 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { bold, grey, red, yellow } from "colors";
+import "colors";
 import {
   type Abi,
   type Address,
@@ -26,12 +23,10 @@ import {
   type WriteContractParameters,
   type WriteContractReturnType,
   createTestClient,
-  decodeFunctionData,
   erc20Abi,
-  parseAbi,
+  maxUint256,
   publicActions,
   rpcSchema,
-  slice,
   walletActions,
 } from "viem";
 import { type DealActions, dealActions } from "viem-deal";
@@ -39,14 +34,13 @@ import { parseAccount } from "viem/accounts";
 import { sendRawTransaction } from "viem/actions";
 import type { Chain } from "viem/chains";
 import { testAccount } from "./fixtures.js";
-
-const cachePath = join(homedir(), ".foundry", "cache", "signatures");
-const cache: {
-  events: Record<Hex, string>;
-  functions: Record<Hex, string>;
-} = existsSync(cachePath)
-  ? JSON.parse(readFileSync(cachePath, { encoding: "utf8" }))
-  : { events: {}, functions: {} };
+import {
+  type RpcCallTrace,
+  formatCallTrace,
+  getCallTraceUnknownSelectors,
+  signatures,
+  signaturesPath,
+} from "./trace.js";
 
 export type AnvilTestClient<chain extends Chain = Chain> = Client<
   HttpTransport,
@@ -59,7 +53,12 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
     WalletActions<chain, HDAccount> & {
       timestamp(): Promise<bigint>;
       approve(args: ApproveParameters<chain>): Promise<WriteContractReturnType>;
-      balanceOf(args: { erc20?: Address; address?: Address }): Promise<bigint>;
+      balanceOf(args: { erc20?: Address; owner?: Address }): Promise<bigint>;
+      allowance(args: {
+        erc20?: Address;
+        owner?: Address;
+        spender: Address;
+      }): Promise<bigint>;
       deployContractWait<const abi extends Abi | readonly unknown[]>(
         args: DeployContractParameters<abi, chain, HDAccount>,
       ): Promise<
@@ -84,79 +83,6 @@ export type ApproveParameters<
   >,
   "abi" | "functionName"
 >;
-
-export type RpcCallType =
-  | "CALL"
-  | "STATICCALL"
-  | "DELEGATECALL"
-  | "CREATE"
-  | "CREATE2"
-  | "SELFDESTRUCT"
-  | "CALLCODE";
-
-export type RpcCallTrace = {
-  from: Address;
-  gas: Hex;
-  gasUsed: Hex;
-  to: Address;
-  input: Hex;
-  output: Hex;
-  error?: string;
-  revertReason?: string;
-  calls?: RpcCallTrace[];
-  value: Hex;
-  type: RpcCallType;
-};
-
-export const getCallTraceUnknownSigs = (trace: RpcCallTrace): string => {
-  const rest = (trace.calls ?? [])
-    .flatMap((subtrace) => getCallTraceUnknownSigs(subtrace))
-    .join(",");
-
-  if (!trace.input) return rest;
-
-  const sig = slice(trace.input, 0, 4);
-
-  if (cache.functions[sig]) return rest;
-
-  if (!rest) return sig;
-
-  return `${sig},${rest}`;
-};
-
-export const formatCallSignature = (
-  trace: RpcCallTrace,
-  lookup: Record<Hex, string | undefined>,
-) => {
-  const sig = slice(trace.input, 0, 4);
-
-  if (!lookup[sig]) return trace.input;
-
-  const { functionName, args } = decodeFunctionData({
-    abi: parseAbi(
-      // @ts-ignore
-      [`function ${lookup[sig]}`],
-    ),
-    data: trace.input,
-  });
-
-  return `${bold(functionName)}(${grey(args?.join(", ") ?? "")})`;
-};
-
-export const formatCallTrace = (
-  trace: RpcCallTrace,
-  lookup: Record<Hex, string | undefined>,
-  level = 0,
-): string => {
-  const rest = (trace.calls ?? [])
-    .map((subtrace) => formatCallTrace(subtrace, lookup, level + 1))
-    .join("\n");
-
-  const error = trace.revertReason ?? trace.error;
-
-  return `${level === 0 ? `FROM ${grey(trace.from)}\n` : ""}${"  ".repeat(level)}[${yellow(trace.type)}] ${trace.from === trace.to ? grey("self") : `(${trace.to})`}.${formatCallSignature(trace, lookup)}${error ? red(` -> ${error}`) : ""}
-${rest}`;
-};
 
 export const createAnvilTestClient = <chain extends Chain>(
   transport: HttpTransport,
@@ -208,18 +134,33 @@ export const createAnvilTestClient = <chain extends Chain>(
             args,
           );
         },
-        balanceOf({
+        async balanceOf({
           erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
-          address = client.account.address,
-        }: { erc20?: Address; address?: Address }) {
+          owner = client.account.address,
+        }: { erc20?: Address; owner?: Address }) {
           if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
-            return client.getBalance({ address });
+            return client.getBalance({ address: owner });
 
           return client.readContract({
             address: erc20,
             abi: erc20Abi,
             functionName: "balanceOf",
-            args: [address],
+            args: [owner],
+          });
+        },
+        async allowance({
+          erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+          owner = client.account.address,
+          spender,
+        }: { erc20?: Address; owner?: Address; spender: Address }) {
+          if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
+            return maxUint256;
+
+          return client.readContract({
+            address: erc20,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [owner, spender],
           });
         },
         async deployContractWait<const abi extends Abi | readonly unknown[]>(
@@ -247,53 +188,51 @@ export const createAnvilTestClient = <chain extends Chain>(
           const hash = await client
             .sendTransaction(args)
             .catch(async (error) => {
-              client
-                .request(
-                  {
-                    method: "debug_traceCall",
-                    params: [
-                      {
-                        from: parseAccount(args.account ?? client.account)
-                          .address,
-                        ...args,
-                      } as ExactPartial<RpcTransactionRequest>,
-                      "latest",
-                      {
-                        tracer: "callTracer",
-                        tracerConfig: { onlyTopCall: false },
-                      },
-                    ],
-                  },
-                  { retryCount: 0 },
-                )
-                .then(async (trace) => {
-                  const unknownSigs = getCallTraceUnknownSigs(trace);
+              const trace = await client.request(
+                {
+                  method: "debug_traceCall",
+                  params: [
+                    {
+                      from: parseAccount(args.account ?? client.account)
+                        .address,
+                      ...args,
+                    } as ExactPartial<RpcTransactionRequest>,
+                    "latest",
+                    {
+                      tracer: "callTracer",
+                      tracerConfig: { onlyTopCall: false },
+                    },
+                  ],
+                },
+                { retryCount: 0 },
+              );
 
-                  if (unknownSigs) {
-                    const lookupRes = await fetch(
-                      `https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=${unknownSigs}`,
-                    );
+              const unknownSelectors = getCallTraceUnknownSelectors(trace);
 
-                    const lookup = await lookupRes.json();
+              if (unknownSelectors) {
+                const lookupRes = await fetch(
+                  `https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=${unknownSelectors}`,
+                );
 
-                    if (lookup.ok) {
-                      Object.entries<{ name: string; filtered: boolean }[]>(
-                        lookup.result.function,
-                      ).map(([sig, results]) => {
-                        const match = results.find(
-                          ({ filtered }) => !filtered,
-                        )?.name;
-                        if (!match) return;
+                const lookup = await lookupRes.json();
 
-                        cache.functions[sig as Hex] = match;
-                      });
+                if (lookup.ok) {
+                  Object.entries<{ name: string; filtered: boolean }[]>(
+                    lookup.result.function,
+                  ).map(([sig, results]) => {
+                    const match = results.find(
+                      ({ filtered }) => !filtered,
+                    )?.name;
+                    if (!match) return;
 
-                      writeFile(cachePath, JSON.stringify(cache)); // Non blocking.
-                    }
-                  }
+                    signatures.functions[sig as Hex] = match;
+                  });
 
-                  console.debug(formatCallTrace(trace, cache.functions));
-                });
+                  writeFile(signaturesPath, JSON.stringify(signatures)); // Non blocking.
+                }
+              }
+
+              error.message += `\n\nCall trace:\n${formatCallTrace(trace)}`;
 
               throw error;
             });

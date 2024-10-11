@@ -1,4 +1,3 @@
-import {} from "ethers";
 import {
   type Account,
   type Chain,
