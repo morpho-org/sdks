@@ -13,7 +13,7 @@
   "packageManager": "yarn@4.5.0",
   "workspaces": ["packages/*"],
   "scripts": {
-    "postinstall": "husky && yarn lint --write package.json",
+    "postinstall": "husky && yarn lint --write **/*/package.json",
     "lint": "biome check",
     "test": "dotenv -- vitest",
     "coverage": "vitest run --coverage",
