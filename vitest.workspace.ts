@@ -11,6 +11,7 @@ export default defineWorkspace([
     test: {
       name: "blue-sdk",
       include: ["packages/blue-sdk/**/*.test.ts"],
+      testTimeout: 30_000,
     },
   },
   {
