@@ -8,7 +8,7 @@ import {
 } from "@morpho-org/simulation-sdk";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import _ from "lodash";
-import { erc20Abi, zeroAddress } from "viem";
+import { erc20Abi, parseEther, zeroAddress } from "viem";
 import { describe, expect } from "vitest";
 import { useSimulationState } from "../../src/index.js";
 import { test } from "../setup.js";
@@ -296,10 +296,8 @@ describe("useSimulationState", () => {
     await client.setNextBlockTimestamp({
       timestamp: data0.block.timestamp + 1n,
     });
-    await client.writeContract({
+    await client.approve({
       address: usdc,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, amount],
     });
 
@@ -315,6 +313,7 @@ describe("useSimulationState", () => {
 
     expect(data1).toStrictEqual(step1);
 
+    await client.setBalance({ address: morpho, value: parseEther("1") });
     await client.setNextBlockTimestamp({
       timestamp: data1.block.timestamp + 1n,
     });

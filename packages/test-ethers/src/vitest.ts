@@ -1,50 +1,31 @@
-import { type AnvilArgs, spawnAnvil } from "@morpho-org/test";
-import {
-  type AnvilTestClient,
-  createAnvilTestClient,
-} from "@morpho-org/test-viem";
+import type { AnvilArgs } from "@morpho-org/test";
+import { type ViemTestContext, createViemTest } from "@morpho-org/test-viem";
 import { type HDNodeWallet, JsonRpcProvider } from "ethers";
-import { http, type Chain } from "viem";
-import { anvil } from "viem/chains";
-import { test } from "vitest";
+import type { Chain } from "viem";
+import type { test } from "vitest";
 import { testWallet } from "./fixtures.js";
 
-export interface EthersTestContext<chain extends Chain = Chain> {
-  ethers: {
-    client: AnvilTestClient<chain>;
-    wallet: HDNodeWallet & { provider: JsonRpcProvider };
-  };
+export interface EthersWalletTestContext {
+  wallet: HDNodeWallet & { provider: JsonRpcProvider };
 }
 
-export const createEthersTest = <chain extends Chain = typeof anvil>(
-  parameters: AnvilArgs = {},
-  chain: chain = anvil as unknown as chain,
+export interface EthersTestContext<chain extends Chain = Chain>
+  extends ViemTestContext<chain>,
+    EthersWalletTestContext {}
+
+export const createEthersTest = <chain extends Chain>(
+  chain: chain,
+  parameters?: AnvilArgs,
 ): ReturnType<typeof test.extend<EthersTestContext<chain>>> => {
-  parameters.forkChainId ??= chain?.id;
-  parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
-  parameters.autoImpersonate ??= true;
-  parameters.order ??= "fifo";
-
-  parameters.gasPrice ??= 0n;
-  parameters.blockBaseFeePerGas ??= 0n;
-
-  let port = 0;
-
-  return test.extend({
-    // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
-    ethers: async ({}, use) => {
-      const { rpcUrl, stop } = await spawnAnvil(parameters, port++);
-
-      await use({
-        client: createAnvilTestClient(chain, http(rpcUrl)),
-        wallet: testWallet(
-          new JsonRpcProvider(rpcUrl, undefined, {
+  return createViemTest(chain, parameters).extend<EthersWalletTestContext>({
+    wallet: async ({ client }, use) => {
+      await use(
+        testWallet(
+          new JsonRpcProvider(client.transport.url, undefined, {
             staticNetwork: true,
           }),
         ),
-      });
-
-      await stop();
+      );
     },
   });
 };

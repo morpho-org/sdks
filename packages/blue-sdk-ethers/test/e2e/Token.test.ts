@@ -11,7 +11,7 @@ import { Token } from "../../src/augment/Token.js";
 const { mkr, usdc, stEth, wstEth } = addresses[ChainId.EthMainnet];
 
 describe("augment/Token", () => {
-  test("should fetch token data", async ({ ethers: { wallet } }) => {
+  test("should fetch token data", async ({ wallet }) => {
     const expectedData = new Token({
       address: usdc,
       decimals: 6,
@@ -24,7 +24,7 @@ describe("augment/Token", () => {
     expect(value).toStrictEqual(expectedData);
   });
 
-  test("should fetch wrapped token data", async ({ ethers: { wallet } }) => {
+  test("should fetch wrapped token data", async ({ wallet }) => {
     const expectedData = new ExchangeRateWrappedToken(
       {
         address: wstEth,
@@ -41,7 +41,7 @@ describe("augment/Token", () => {
     expect(value).toStrictEqual(expectedData);
   });
 
-  test("Should fetch MKR token data", async ({ ethers: { wallet } }) => {
+  test("Should fetch MKR token data", async ({ wallet }) => {
     const expectedData = new Token({
       address: mkr,
       decimals: 18,

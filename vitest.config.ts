@@ -20,6 +20,7 @@ export default defineConfig({
     sequence: {
       concurrent: true,
     },
+    globalSetup: "vitest.setup.ts",
     testTimeout: 90_000,
   },
 });

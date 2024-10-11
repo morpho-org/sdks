@@ -11,13 +11,13 @@ import { describe, expect } from "vitest";
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 describe("augment/MarketConfig", () => {
-  test("should fetch config from cache", async ({ ethers: { wallet } }) => {
+  test("should fetch config from cache", async ({ wallet }) => {
     const market = await MarketConfig.fetch(usdc_wstEth.id, wallet);
 
     expect(market).toStrictEqual(usdc_wstEth);
   });
 
-  test("should fetch config from chain", async ({ ethers: { wallet } }) => {
+  test("should fetch config from chain", async ({ wallet }) => {
     const marketParams = {
       collateralToken: zeroAddress,
       loanToken: addresses[ChainId.EthMainnet].wNative,

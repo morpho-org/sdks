@@ -1,12 +1,4 @@
-import type {
-  Account,
-  Chain,
-  Client,
-  Hex,
-  RpcSchema,
-  SendTransactionRequest,
-  Transport,
-} from "viem";
+import type { Client, Hex, SendTransactionRequest } from "viem";
 
 import type { Address, MarketConfig } from "@morpho-org/blue-sdk";
 import type { SimulationResult } from "@morpho-org/simulation-sdk";
@@ -264,14 +256,7 @@ export type TransactionRequirement = Requirements[TransactionRequirementType];
 
 export interface SignatureRequirement {
   action: Action;
-  sign: <
-    transport extends Transport = Transport,
-    chain extends Chain | undefined = Chain | undefined,
-    account extends Account | undefined = Account | undefined,
-    rpcSchema extends RpcSchema | undefined = undefined,
-  >(
-    client: Client<transport, chain, account, rpcSchema>,
-  ) => Promise<Hex>;
+  sign: (client: Client) => Promise<Hex>;
 }
 
 export interface ActionBundle {

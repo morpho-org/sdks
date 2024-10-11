@@ -152,7 +152,7 @@ export const markets = {
       lltv: parseUnits("86", 16),
     }),
   },
-};
+} as const;
 
 export const randomMarket = (params: Partial<MarketParams> = {}) =>
   new MarketConfig({

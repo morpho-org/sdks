@@ -7,7 +7,7 @@ import {
 import { describe, expect } from "vitest";
 import { test } from "./setup.js";
 
-import { erc20Abi, maxUint256 } from "viem";
+import { maxUint256 } from "viem";
 import { Holding } from "../../src/augment/Holding.js";
 import { permit2Abi } from "./abis.js";
 
@@ -15,9 +15,7 @@ const { morpho, bundler, permit2, wNative, wbC3M } =
   addresses[ChainId.EthMainnet];
 
 describe("augment/Holding", async () => {
-  test("should fetch user WETH data ", async ({
-    ethers: { client, wallet },
-  }) => {
+  test("should fetch user WETH data ", async ({ client, wallet }) => {
     const expectedData = new Holding({
       token: wNative,
       user: client.account.address,
@@ -47,22 +45,16 @@ describe("augment/Holding", async () => {
       recipient: client.account.address,
       amount: expectedData.balance,
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, expectedData.erc20Allowances.morpho],
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [bundler, expectedData.erc20Allowances.bundler],
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({
@@ -93,9 +85,7 @@ describe("augment/Holding", async () => {
     expect(value).toStrictEqual(expectedData);
   });
 
-  test("should fetch native user holding", async ({
-    ethers: { client, wallet },
-  }) => {
+  test("should fetch native user holding", async ({ client, wallet }) => {
     const token = NATIVE_ADDRESS;
 
     const expectedData = new Holding({
@@ -127,9 +117,7 @@ describe("augment/Holding", async () => {
     expect(value).toStrictEqual(expectedData);
   });
 
-  test("should fetch backed token user holding", async ({
-    ethers: { client, wallet },
-  }) => {
+  test("should fetch backed token user holding", async ({ client, wallet }) => {
     const expectedData = new Holding({
       token: wbC3M,
       user: client.account.address,
@@ -160,22 +148,16 @@ describe("augment/Holding", async () => {
       recipient: client.account.address,
       amount: expectedData.balance,
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, expectedData.erc20Allowances.morpho],
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [bundler, expectedData.erc20Allowances.bundler],
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({

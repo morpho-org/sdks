@@ -7,7 +7,7 @@ import {
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
-import { maxUint256, parseUnits } from "viem";
+import { maxUint256, parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
@@ -54,6 +54,8 @@ describe("MetaMorpho_Reallocate", () => {
       abi: metaMorphoAbi,
       functionName: "owner",
     });
+
+    await client.setBalance({ address: owner, value: parseEther("10000") });
 
     const assets =
       dataBefore.getAccrualPosition(steakUsdc.address, usdc_wstEth.id)

@@ -28,12 +28,12 @@ import {
 } from "@morpho-org/simulation-sdk";
 
 import { maxUint256 } from "viem";
-import { BundlerErrors } from "../errors.js";
+import { BundlerErrors } from "./errors.js";
 import type {
   BundlerOperation,
   CallbackBundlerOperation,
   InputBundlerOperation,
-} from "../types/index.js";
+} from "./types/index.js";
 
 export interface BundlingOptions {
   withSimplePermit?: Set<Address>;

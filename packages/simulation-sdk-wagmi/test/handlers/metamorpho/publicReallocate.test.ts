@@ -28,6 +28,8 @@ describe("MetaMorpho_PublicReallocate", () => {
       functionName: "owner",
     });
 
+    await client.setBalance({ address: owner, value: parseEther("10000") });
+
     const fee = parseEther("0.005");
     const assets = parseUnits("1000", 6);
 

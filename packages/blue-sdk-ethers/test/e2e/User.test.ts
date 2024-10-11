@@ -8,7 +8,7 @@ import { blueAbi } from "./abis.js";
 const { morpho, bundler } = addresses[ChainId.EthMainnet];
 
 describe("augment/User", () => {
-  test("should fetch user data", async ({ ethers: { client, wallet } }) => {
+  test("should fetch user data", async ({ client, wallet }) => {
     await client.writeContract({
       address: morpho,
       abi: blueAbi,

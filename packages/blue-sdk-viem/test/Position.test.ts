@@ -1,4 +1,4 @@
-import { erc20Abi, maxUint256, parseUnits } from "viem";
+import { maxUint256, parseUnits } from "viem";
 
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { markets } from "@morpho-org/morpho-test";
@@ -24,11 +24,9 @@ describe("augment/Position", () => {
       recipient: supplier.address,
       amount: supplyAssets,
     });
-    await client.writeContract({
+    await client.approve({
       account: supplier,
       address: usdc_wstEth.loanToken,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, maxUint256],
     });
     await client.writeContract({
@@ -44,10 +42,8 @@ describe("augment/Position", () => {
       recipient: client.account.address,
       amount: collateral,
     });
-    await client.writeContract({
+    await client.approve({
       address: usdc_wstEth.collateralToken,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, maxUint256],
     });
     await client.writeContract({

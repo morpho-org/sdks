@@ -5,7 +5,6 @@ import {
   testAccount,
 } from "@morpho-org/test-viem";
 import { http, type Chain, type HttpTransport } from "viem";
-import { anvil } from "viem/chains";
 import type { Config } from "wagmi";
 
 export interface WagmiConfigTestContext<chain extends Chain = Chain> {
@@ -16,11 +15,11 @@ export interface WagmiTestContext<chain extends Chain = Chain>
   extends ViemTestContext<chain>,
     WagmiConfigTestContext<chain> {}
 
-export const createWagmiTest = <chain extends Chain = typeof anvil>(
-  parameters: AnvilArgs = {},
-  chain: chain = anvil as unknown as chain,
+export const createWagmiTest = <chain extends Chain>(
+  chain: chain,
+  parameters?: AnvilArgs,
 ) => {
-  return createViemTest(parameters, chain).extend<
+  return createViemTest(chain, parameters).extend<
     WagmiConfigTestContext<chain>
   >({
     config: async ({ client }, use) => {
@@ -33,7 +32,7 @@ export const createWagmiTest = <chain extends Chain = typeof anvil>(
             mock({
               accounts: [
                 testAccount().address,
-                ...new Array(parameters.accounts ?? 9)
+                ...new Array(parameters?.accounts ?? 9)
                   .fill(null)
                   .map((_, i) => testAccount(i + 1).address),
               ],

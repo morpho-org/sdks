@@ -1,5 +1,5 @@
 import { Time } from "@morpho-org/morpho-ts";
-import { erc20Abi, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { ChainId, Market, MarketConfig, addresses } from "../../src/index.js";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "./abis.js";
@@ -25,10 +25,8 @@ describe("Market", () => {
       recipient: client.account.address,
       amount: collateral,
     });
-    await client.writeContract({
-      abi: erc20Abi,
+    await client.approve({
       address: config.collateralToken,
-      functionName: "approve",
       args: [morpho, collateral],
     });
     await client.writeContract({
@@ -89,7 +87,7 @@ describe("Market", () => {
 
     await client.setNextBlockTimestamp({ timestamp });
 
-    const [supplyShares, borrowShares] = await client.readContract({
+    const [, borrowShares] = await client.readContract({
       abi: blueAbi,
       address: morpho,
       functionName: "position",
@@ -97,7 +95,6 @@ describe("Market", () => {
     });
 
     const maxBorrowable = market.getMaxBorrowableAssets({
-      supplyShares,
       borrowShares,
       collateral,
     });
@@ -144,10 +141,8 @@ describe("Market", () => {
       recipient: client.account.address,
       amount: collateral,
     });
-    await client.writeContract({
-      abi: erc20Abi,
+    await client.approve({
       address: config.collateralToken,
-      functionName: "approve",
       args: [morpho, collateral],
     });
     await client.writeContract({
@@ -206,7 +201,7 @@ describe("Market", () => {
       }),
     }).accrueInterest(timestamp);
 
-    const [supplyShares, borrowShares] = await client.readContract({
+    const [, borrowShares] = await client.readContract({
       abi: blueAbi,
       address: morpho,
       functionName: "position",
@@ -214,7 +209,6 @@ describe("Market", () => {
     });
 
     const maxBorrowable = market.getMaxBorrowableAssets({
-      supplyShares,
       borrowShares,
       collateral,
     });
@@ -224,10 +218,8 @@ describe("Market", () => {
       recipient: client.account.address,
       amount: maxBorrowable,
     });
-    await client.writeContract({
-      abi: erc20Abi,
+    await client.approve({
       address: config.loanToken,
-      functionName: "approve",
       args: [morpho, maxBorrowable],
     });
     await client.writeContract({

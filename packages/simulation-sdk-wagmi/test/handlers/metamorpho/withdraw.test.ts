@@ -9,7 +9,7 @@ import {
   type MinimalBlock,
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
-import { erc20Abi, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
 
@@ -30,10 +30,8 @@ describe("MetaMorpho_AccrueInterest", () => {
       amount: assets * 2n,
     });
 
-    await client.writeContract({
+    await client.approve({
       address: steakUsdc.asset,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [steakUsdc.address, assets * 2n],
     });
 

@@ -34,7 +34,7 @@ jobs:
           - simulation-sdk-wagmi
           - bundler-sdk
 
-          - liquidation-sdk-ethers
+          - liquidation-sdk-viem
 
     runs-on: ubuntu-latest
 

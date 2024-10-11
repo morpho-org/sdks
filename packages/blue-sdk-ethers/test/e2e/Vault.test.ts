@@ -11,7 +11,7 @@ import { metaMorphoAbi, publicAllocatorAbi } from "./abis.js";
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("augment/Vault", () => {
-  test("should fetch vault data", async ({ ethers: { client, wallet } }) => {
+  test("should fetch vault data", async ({ client, wallet }) => {
     const owner = await client.readContract({
       address: steakUsdc.address,
       abi: metaMorphoAbi,

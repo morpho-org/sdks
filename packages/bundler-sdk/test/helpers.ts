@@ -1,11 +1,3 @@
-import { ZeroAddress } from "ethers";
-import { ERC20__factory, MorphoBlue__factory } from "ethers-types";
-import { ethers } from "hardhat";
-import { deal } from "hardhat-deal";
-
-import type { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
-import { setBalance } from "@nomicfoundation/hardhat-network-helpers";
-
 import {
   type Address,
   MarketConfig,
@@ -15,8 +7,7 @@ import {
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
-import { assertApproxEqAbs, mine } from "@morpho-org/morpho-test";
-import { keys } from "@morpho-org/morpho-ts";
+import { format, keys } from "@morpho-org/morpho-ts";
 
 import {
   type BundlingOptions,
@@ -26,66 +17,89 @@ import {
   populateBundle,
 } from "../src/index.js";
 
-import type { SimulationState } from "@morpho-org/simulation-sdk";
-import { WITH_SIMPLE_PERMIT } from "./fixtures.js";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { withSimplePermit } from "@morpho-org/morpho-test";
+import {
+  type SimulationState,
+  isBlueOperation,
+  isErc20Operation,
+  isMetaMorphoOperation,
+} from "@morpho-org/simulation-sdk";
+import type { AnvilTestClient } from "@morpho-org/test-viem";
+import { type Account, type Chain, zeroAddress } from "viem";
+import { parseAccount } from "viem/accounts";
+import { expect } from "vitest";
 
 export const donate =
-  (
-    signer: SignerWithAddress,
+  <chain extends Chain>(
+    client: AnvilTestClient<chain>,
     erc20: Address,
     donation: bigint,
     vault: Address,
     morpho: Address,
   ) =>
   async (data: SimulationState) => {
-    await deal(erc20, signer.address, donation);
-    await ERC20__factory.connect(erc20, signer).approve(morpho, donation);
-    await MorphoBlue__factory.connect(morpho, signer).supply(
-      data.getMarket(data.getVault(vault).withdrawQueue[0]!).config,
-      donation,
-      0n,
-      vault,
-      "0x",
-    );
+    await client.deal({
+      erc20,
+      recipient: client.account.address,
+      amount: donation,
+    });
+
+    await client.approve({
+      address: erc20,
+      args: [morpho, donation],
+    });
+    await client.writeContract({
+      address: morpho,
+      abi: blueAbi,
+      functionName: "supply",
+      args: [
+        data.getMarket(data.getVault(vault).withdrawQueue[0]!).config,
+        donation,
+        0n,
+        vault,
+        "0x",
+      ],
+    });
   };
 
-export const setupBundle = async (
-  bundlerService: BundlerService,
-  signer: SignerWithAddress,
+export const setupBundle = async <chain extends Chain = Chain>(
+  client: AnvilTestClient<chain>,
+  startData: SimulationState,
   inputOperations: InputBundlerOperation[],
   {
+    account: account_ = client.account,
+    supportsSignature,
     unwrapTokens,
     unwrapSlippage,
     onBundleTx,
     ...options
   }: BundlingOptions & {
+    account?: Address | Account;
+    supportsSignature?: boolean;
     unwrapTokens?: Set<Address>;
     unwrapSlippage?: bigint;
     onBundleTx?: (data: SimulationState) => Promise<void> | void;
   } = {},
 ) => {
-  const { value: startData } = await bundlerService.simulationService.data;
+  const account = parseAccount(account_);
 
   let { operations } = populateBundle(inputOperations, startData, {
     ...options,
     withSimplePermit: new Set([
-      ...WITH_SIMPLE_PERMIT[startData.chainId],
+      ...withSimplePermit[startData.chainId],
       ...(options?.withSimplePermit ?? []),
     ]),
   });
   operations = finalizeBundle(
     operations,
     startData,
-    signer.address,
+    account.address,
     unwrapTokens,
     unwrapSlippage,
   );
 
-  const bundle = encodeBundle(
-    operations,
-    startData,
-    isSigner(bundlerService.chainService.runner),
-  );
+  const bundle = encodeBundle(operations, startData, supportsSignature);
 
   const tokens = new Set<Address>();
 
@@ -99,10 +113,10 @@ export const setupBundle = async (
       try {
         const marketConfig = MarketConfig.get(operation.args.id);
 
-        if (marketConfig.loanToken !== ZeroAddress)
+        if (marketConfig.loanToken !== zeroAddress)
           tokens.add(marketConfig.loanToken);
 
-        if (marketConfig.collateralToken !== ZeroAddress)
+        if (marketConfig.collateralToken !== zeroAddress)
           tokens.add(marketConfig.collateralToken);
       } catch (error) {
         if (!(error instanceof UnknownMarketConfigError)) throw error;
@@ -126,58 +140,55 @@ export const setupBundle = async (
 
   if (onBundleTx != null) {
     const balancesBefore = await Promise.all(
-      [...tokens, ...keys(startData.blue.tokensData)].map(async (token) => ({
+      [...tokens, ...keys(startData.tokens)].map(async (token) => ({
         token,
-        balance: await (token === NATIVE_ADDRESS
-          ? ethers.provider.getBalance(signer.address)
-          : ERC20__factory.connect(token, signer).balanceOf(signer.address)),
+        balance: await client.balanceOf({
+          erc20: token,
+          address: account.address,
+        }),
       })),
     );
-
-    await onBundleTx(startData)?.then(() => mine(0));
 
     await Promise.all(
       balancesBefore.map(({ token, balance }) =>
         token === NATIVE_ADDRESS
-          ? setBalance(signer.address, balance)
-          : deal(token, signer.address, balance),
+          ? client.setBalance({
+              address: account.address,
+              value: balance,
+            })
+          : client.deal({
+              erc20: token,
+              recipient: account.address,
+              amount: balance,
+            }),
       ),
     );
   }
 
   await Promise.all(
     bundle.requirements.signatures.map((requirement) =>
-      requirement.sign(signer)!.wait(),
+      requirement.sign(client),
     ),
   );
 
   const txs = bundle.requirements.txs.map(({ tx }) => tx).concat([bundle.tx()]);
 
   for (const tx of txs) {
-    await sendTransaction(signer, tx)
-      .wait()
-      .then(({ status, context }) => {
-        if (status !== NotificationStatus.error) return;
-
-        throw context.error; // Bubble up revert reason.
-      });
+    await client.sendTransaction({ ...tx, account });
   }
 
   const { bundler } = getChainAddresses(startData.chainId);
 
   await Promise.all(
     [...tokens].map(async (token) => {
-      const balance =
-        token === NATIVE_ADDRESS
-          ? await ethers.provider.getBalance(bundler)
-          : await ERC20__factory.connect(token, signer).balanceOf(bundler);
+      const balance = await client.balanceOf({
+        erc20: token,
+        address: bundler,
+      });
 
-      assertApproxEqAbs(
-        balance,
-        0n,
-        5n,
-        `non-zero bundler balance for token ${token}: ${balance}`,
-      );
+      expect(
+        format.number.of(balance, startData.getToken(token).decimals),
+      ).toBeCloseTo(0, 8);
     }),
   );
 

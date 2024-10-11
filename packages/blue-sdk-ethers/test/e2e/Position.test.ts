@@ -1,4 +1,4 @@
-import { type Address, erc20Abi, maxUint256, parseUnits } from "viem";
+import { type Address, maxUint256, parseUnits } from "viem";
 
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { markets } from "@morpho-org/morpho-test";
@@ -16,7 +16,7 @@ const borrowShares = parseUnits("7", 12);
 const collateral = parseUnits("1", 18);
 
 describe("augment/Position", () => {
-  test("should fetch position", async ({ ethers: { client, wallet } }) => {
+  test("should fetch position", async ({ client, wallet }) => {
     const supplier = testWallet(wallet.provider, 1);
 
     await client.deal({
@@ -24,11 +24,9 @@ describe("augment/Position", () => {
       recipient: supplier.address as Address,
       amount: supplyAssets,
     });
-    await client.writeContract({
+    await client.approve({
       account: supplier.address as Address,
       address: usdc_wstEth.loanToken,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, maxUint256],
     });
     await client.writeContract({
@@ -44,10 +42,8 @@ describe("augment/Position", () => {
       recipient: client.account.address,
       amount: collateral,
     });
-    await client.writeContract({
+    await client.approve({
       address: usdc_wstEth.collateralToken,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, maxUint256],
     });
     await client.writeContract({

@@ -15,9 +15,7 @@ const { usdc_wstEth } = markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("augment/VaultMarketConfig", () => {
-  test("should fetch vault market data", async ({
-    ethers: { client, wallet },
-  }) => {
+  test("should fetch vault market data", async ({ client, wallet }) => {
     const owner = await client.readContract({
       address: steakUsdc.address,
       abi: metaMorphoAbi,

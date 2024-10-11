@@ -11,7 +11,7 @@ const { morpho, adaptiveCurveIrm } = addresses[ChainId.EthMainnet];
 const { usdc_wstEth, usdc_idle, eth_wstEth } = markets[ChainId.EthMainnet];
 
 describe("augment/Market", () => {
-  test("should fetch market data", async ({ ethers: { wallet } }) => {
+  test("should fetch market data", async ({ wallet }) => {
     const expectedData = new Market({
       config: usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
@@ -29,9 +29,7 @@ describe("augment/Market", () => {
     expect(value).toStrictEqual(expectedData);
   });
 
-  test("should fetch price and rate if idle market", async ({
-    ethers: { wallet },
-  }) => {
+  test("should fetch price and rate if idle market", async ({ wallet }) => {
     const expectedData = new Market({
       config: usdc_idle,
       totalSupplyAssets: 0n,
@@ -50,7 +48,8 @@ describe("augment/Market", () => {
   });
 
   test("should not fetch rate at target for unknown irm", async ({
-    ethers: { client, wallet },
+    client,
+    wallet,
   }) => {
     const owner = await client.readContract({
       address: morpho,

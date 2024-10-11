@@ -5,7 +5,7 @@ import {
   addresses,
 } from "@morpho-org/blue-sdk";
 
-import { erc20Abi, maxUint256 } from "viem";
+import { maxUint256 } from "viem";
 import { describe, expect } from "vitest";
 import { Holding } from "../src/augment/Holding.js";
 import { permit2Abi } from "../src/index.js";
@@ -45,22 +45,16 @@ describe("augment/Holding", () => {
       recipient: client.account.address,
       amount: expectedData.balance,
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, expectedData.erc20Allowances.morpho],
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [bundler, expectedData.erc20Allowances.bundler],
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({
@@ -121,22 +115,16 @@ describe("augment/Holding", () => {
       recipient: client.account.address,
       amount: expectedData.balance,
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, expectedData.erc20Allowances.morpho],
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [bundler, expectedData.erc20Allowances.bundler],
     });
-    await client.writeContract({
+    await client.approve({
       address: wNative,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({
@@ -234,22 +222,16 @@ describe("augment/Holding", () => {
       recipient: client.account.address,
       amount: expectedData.balance,
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, expectedData.erc20Allowances.morpho],
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [bundler, expectedData.erc20Allowances.bundler],
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({
@@ -313,22 +295,16 @@ describe("augment/Holding", () => {
       recipient: client.account.address,
       amount: expectedData.balance,
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [morpho, expectedData.erc20Allowances.morpho],
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [bundler, expectedData.erc20Allowances.bundler],
     });
-    await client.writeContract({
+    await client.approve({
       address: wbC3M,
-      abi: erc20Abi,
-      functionName: "approve",
       args: [permit2, expectedData.erc20Allowances.permit2],
     });
     await client.writeContract({

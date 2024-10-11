@@ -12,6 +12,9 @@
     "prepublish": "yarn build",
     "build": "tsc"
   },
+  "dependencies": {
+    "colors": "^1.4.0"
+  },
   "peerDependencies": {
     "@morpho-org/test": "workspace:^",
     "viem": "^2.21.10",

@@ -459,11 +459,9 @@ describe("erc4626-1inch", () => {
         recipient: borrower.address,
         amount: collateral,
       });
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: collateralToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
@@ -581,11 +579,9 @@ describe("erc4626-1inch", () => {
         recipient: borrower.address,
         amount: collateral,
       });
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: collateralToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
@@ -602,11 +598,9 @@ describe("erc4626-1inch", () => {
         recipient: borrower.address,
         amount: borrowed - market.liquidity,
       });
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: loanToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
@@ -729,11 +723,9 @@ describe("erc4626-1inch", () => {
         recipient: borrower.address,
         amount: collateral,
       });
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: collateralToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
@@ -859,11 +851,9 @@ describe("erc4626-1inch", () => {
         recipient: borrower.address,
         amount: collateral,
       });
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: collateralToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
@@ -1000,11 +990,9 @@ describe("erc4626-1inch", () => {
       });
 
       // Approve the USD0USD0++ pool to spend the USD0 tokens
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: mainnetAddresses.usd0!,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [curvePools["usd0usd0++"], maxUint256],
       });
 
@@ -1024,11 +1012,9 @@ describe("erc4626-1inch", () => {
         functionName: "balanceOf",
         args: [borrower.address],
       });
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: collateralToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
@@ -1166,11 +1152,9 @@ describe("erc4626-1inch", () => {
         args: [borrower.address, collateral],
       });
 
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: collateralToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
@@ -1302,11 +1286,9 @@ describe("erc4626-1inch", () => {
         recipient: borrower.address,
         amount: collateral,
       });
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: collateralToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
@@ -1323,11 +1305,9 @@ describe("erc4626-1inch", () => {
         recipient: borrower.address,
         amount: borrowed,
       });
-      await client.writeContract({
+      await client.approve({
         account: borrower,
         address: loanToken.address,
-        abi: erc20Abi,
-        functionName: "approve",
         args: [morpho, maxUint256],
       });
       await client.writeContract({
