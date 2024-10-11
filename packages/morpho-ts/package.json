@@ -4,9 +4,7 @@
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
-  "files": [
-    "lib"
-  ],
+  "files": ["lib"],
   "scripts": {
     "prepublish": "yarn build",
     "build": "tsc --build tsconfig.build.json"
