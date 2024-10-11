@@ -4,10 +4,7 @@
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",
   "main": "src/index.ts",
-  "files": [
-    "lib",
-    "examples"
-  ],
+  "files": ["lib", "examples"],
   "scripts": {
     "prepublish": "yarn build",
     "compile": "hardhat compile",

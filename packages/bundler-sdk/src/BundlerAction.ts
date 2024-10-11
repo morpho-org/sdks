@@ -408,7 +408,7 @@ export namespace BundlerAction {
     return encodeFunctionData({
       abi: permitBundlerAbi,
       functionName: "permit",
-      args: [asset, amount, deadline, yParity, r, s, skipRevert],
+      args: [asset, amount, deadline, yParity + 27, r, s, skipRevert],
     });
   }
 
@@ -432,7 +432,7 @@ export namespace BundlerAction {
     return encodeFunctionData({
       abi: ethereumPermitBundlerAbi,
       functionName: "permitDai",
-      args: [nonce, expiry, allowed, yParity, r, s, skipRevert],
+      args: [nonce, expiry, allowed, yParity + 27, r, s, skipRevert],
     });
   }
 
@@ -607,7 +607,7 @@ export namespace BundlerAction {
     return encodeFunctionData({
       abi: morphoBundlerAbi,
       functionName: "morphoSetAuthorizationWithSig",
-      args: [authorization, { v: yParity, r, s }, skipRevert],
+      args: [authorization, { v: yParity + 27, r, s }, skipRevert],
     });
   }
 
@@ -1049,7 +1049,13 @@ export namespace BundlerAction {
     return encodeFunctionData({
       abi: aaveV3OptimizerMigrationBundlerAbi,
       functionName: "aaveV3OptimizerApproveManagerWithSig",
-      args: [isApproved, nonce, deadline, { v: yParity, r, s }, skipRevert],
+      args: [
+        isApproved,
+        nonce,
+        deadline,
+        { v: yParity + 27, r, s },
+        skipRevert,
+      ],
     });
   }
 
@@ -1149,7 +1155,16 @@ export namespace BundlerAction {
     return encodeFunctionData({
       abi: compoundV3MigrationBundlerAbi,
       functionName: "compoundV3AllowBySig",
-      args: [instance, isAllowed, nonce, expiry, yParity, r, s, skipRevert],
+      args: [
+        instance,
+        isAllowed,
+        nonce,
+        expiry,
+        yParity + 27,
+        r,
+        s,
+        skipRevert,
+      ],
     });
   }
 }

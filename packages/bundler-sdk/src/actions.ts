@@ -1,8 +1,12 @@
 import {
+  type Account,
   type Address,
+  type Client,
+  type Hex,
   encodeFunctionData,
   erc20Abi,
   maxUint256,
+  verifyTypedData,
   zeroAddress,
 } from "viem";
 
@@ -200,13 +204,22 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client) {
+          async sign(client: Client, account: Account = client.account!) {
             if (action.args[1] != null) return action.args[1];
 
-            return (action.args[1] = await signTypedData(client, {
-              account: sender,
-              ...getAuthorizationTypedData(authorization, chainId),
-            }));
+            const typedData = getAuthorizationTypedData(authorization, chainId);
+            const signature = await signTypedData(client, {
+              ...typedData,
+              account,
+            });
+
+            await verifyTypedData({
+              ...typedData,
+              address: sender, // Verify against the authorization's owner.
+              signature,
+            });
+
+            return (action.args[1] = signature);
           },
         });
 
@@ -269,39 +282,57 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client) {
+          async sign(client: Client, account: Account = client.account!) {
             if (action.args[3] != null) return action.args[3]; // action is already signed
 
-            return (action.args[3] =
-              address === dai
-                ? await signTypedData(client, {
-                    account: sender,
-                    ...getDaiPermitTypedData(
-                      {
-                        owner: sender,
-                        spender,
-                        allowance: amount,
-                        nonce,
-                        deadline,
-                      },
-                      chainId,
-                    ),
-                  })
-                : await signTypedData(client, {
-                    account: sender,
-                    ...getPermitTypedData(
-                      {
-                        name: tokenData.name,
-                        address: tokenData.address,
-                        owner: sender,
-                        spender,
-                        allowance: amount,
-                        nonce,
-                        deadline,
-                      },
-                      chainId,
-                    ),
-                  }));
+            let signature: Hex;
+            if (address === dai) {
+              const typedData = getDaiPermitTypedData(
+                {
+                  owner: sender,
+                  spender,
+                  allowance: amount,
+                  nonce,
+                  deadline,
+                },
+                chainId,
+              );
+              signature = await signTypedData(client, {
+                ...typedData,
+                account,
+              });
+
+              await verifyTypedData({
+                ...typedData,
+                address: account.address,
+                signature,
+              });
+            } else {
+              const typedData = getPermitTypedData(
+                {
+                  name: tokenData.name,
+                  address: tokenData.address,
+                  owner: sender,
+                  spender,
+                  allowance: amount,
+                  nonce,
+                  deadline,
+                },
+                chainId,
+              );
+              signature = await signTypedData(client, {
+                ...typedData,
+                account,
+              });
+
+              await verifyTypedData({
+                ...typedData,
+                address: sender, // Verify against the permit's owner.
+                signature,
+              });
+            }
+
+            return (action.args[3] = signature);
           },
         });
 
@@ -344,25 +375,33 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client) {
+          async sign(client: Client, account: Account = client.account!) {
             const { details, spender, sigDeadline } = action.args[0];
 
             if (action.args[1] != null) return action.args[1]; // action is already signed
+            const typedData = getPermit2PermitTypedData(
+              {
+                spender,
+                allowance: details.amount,
+                erc20: details.token,
+                nonce: details.nonce,
+                deadline: sigDeadline,
+                expiration: details.expiration,
+              },
+              chainId,
+            );
+            const signature = await signTypedData(client, {
+              ...typedData,
+              account,
+            });
 
-            return (action.args[1] = await signTypedData(client, {
-              account: sender,
-              ...getPermit2PermitTypedData(
-                {
-                  spender,
-                  allowance: details.amount,
-                  erc20: details.token,
-                  nonce: details.nonce,
-                  deadline: sigDeadline,
-                  expiration: details.expiration,
-                },
-                chainId,
-              ),
-            }));
+            await verifyTypedData({
+              ...typedData,
+              address: sender, // Verify against the permit's owner.
+              signature,
+            });
+
+            return (action.args[1] = signature);
           },
         });
 

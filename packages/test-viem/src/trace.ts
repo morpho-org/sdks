@@ -54,6 +54,7 @@ export const getSelector = (input: Hex) => slice(input, 0, 4);
 export const getCallTraceUnknownSelectors = (trace: RpcCallTrace): string => {
   const rest = (trace.calls ?? [])
     .flatMap((subtrace) => getCallTraceUnknownSelectors(subtrace))
+    .filter(Boolean)
     .join(",");
 
   if (!trace.input) return rest;
@@ -67,7 +68,8 @@ export const getCallTraceUnknownSelectors = (trace: RpcCallTrace): string => {
   return `${selector},${rest}`;
 };
 
-export const getIndentLevel = (level: number) => "  ".repeat(level);
+export const getIndentLevel = (level: number, index = false) =>
+  `${"  ".repeat(level - 1)}${index ? `${level - 1} ↳ `.cyan : "    "}`;
 
 export const formatAddress = (address: Address) =>
   `${address.slice(0, 6)}...${address.slice(0, 4)}`;
@@ -75,7 +77,9 @@ export const formatAddress = (address: Address) =>
 export const formatArg = (arg: unknown, level: number): string => {
   if (Array.isArray(arg)) {
     const formattedArr = arg
-      .map((arg) => `\n${getIndentLevel(level + 1)}${formatArg(arg, level)},`)
+      .map(
+        (arg) => `\n${getIndentLevel(level + 1)}${formatArg(arg, level + 1)},`,
+      )
       .join("");
 
     return `[${formattedArr ? `${formattedArr}\n` : ""}${getIndentLevel(level)}]`;
@@ -88,11 +92,11 @@ export const formatArg = (arg: unknown, level: number): string => {
       const formattedObj = Object.entries(arg)
         .map(
           ([key, value]) =>
-            `\n${getIndentLevel(level)}${key}: ${formatArg(value, level)},`,
+            `\n${getIndentLevel(level + 1)}${key}: ${formatArg(value, level + 1)},`,
         )
         .join("");
 
-      return `{${formattedObj ? `${formattedObj}\n` : ""}${getIndentLevel(level - 1)}}`;
+      return `{${formattedObj ? `${formattedObj}\n` : ""}${getIndentLevel(level)}}`;
     }
     case "string":
       return isAddress(arg, { strict: false }) ? formatAddress(arg) : arg;
@@ -127,6 +131,6 @@ export const formatCallTrace = (trace: RpcCallTrace, level = 1): string => {
 
   const error = trace.revertReason ?? trace.output;
 
-  return `${level === 1 ? `FROM ${trace.from.grey}\n` : ""}${getIndentLevel(level)}${trace.type.yellow} ${trace.from === trace.to ? ("self").grey : `(${trace.to.white})`}.${formatCallSignature(trace, level)}${error ? ` -> ${error}`.red : ""}
+  return `${level === 1 ? `${getIndentLevel(level, true)}FROM ${trace.from.grey}\n`.cyan : ""}${getIndentLevel(level, true)}${trace.type.yellow} ${trace.from === trace.to ? ("self").grey : `(${trace.to.white})`}.${formatCallSignature(trace, level)}${error ? ` -> ${error}`.red : ""}
 ${rest}`;
 };

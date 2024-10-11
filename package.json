@@ -11,9 +11,7 @@
     "node": ">=22"
   },
   "packageManager": "yarn@4.5.0",
-  "workspaces": [
-    "packages/*"
-  ],
+  "workspaces": ["packages/*"],
   "scripts": {
     "postinstall": "husky install",
     "lint": "biome check",

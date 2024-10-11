@@ -167,14 +167,17 @@ export const setupBundle = async <chain extends Chain = Chain>(
 
   await Promise.all(
     bundle.requirements.signatures.map((requirement) =>
-      requirement.sign(client),
+      requirement.sign(client, account),
     ),
   );
 
   const txs = bundle.requirements.txs.map(({ tx }) => tx).concat([bundle.tx()]);
 
   for (const tx of txs) {
-    await client.sendTransaction({ ...tx, account });
+    await client.sendTransaction(
+      // @ts-ignore
+      { ...tx, account },
+    );
   }
 
   const { bundler } = getChainAddresses(startData.chainId);

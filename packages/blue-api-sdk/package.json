@@ -4,9 +4,7 @@
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",
   "main": "src/index.ts",
-  "files": [
-    "lib"
-  ],
+  "files": ["lib"],
   "scripts": {
     "prepublish": "yarn build",
     "codegen": "graphql-codegen --config codegen.ts",
