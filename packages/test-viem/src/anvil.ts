@@ -35,9 +35,9 @@ import {
 import { type DealActions, dealActions } from "viem-deal";
 import { parseAccount } from "viem/accounts";
 import {
-  sendRawTransaction,
-  sendTransaction,
-  writeContract,
+  sendRawTransaction as viem_sendRawTransaction,
+  sendTransaction as viem_sendTransaction,
+  writeContract as viem_writeContract,
 } from "viem/actions";
 import type { Chain } from "viem/chains";
 import { testAccount } from "./fixtures.js";
@@ -77,6 +77,7 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
         erc4626: Address;
         assets: bigint;
       }): Promise<bigint>;
+      deposit(args: DepositParameters<chain>): Promise<WriteContractReturnType>;
 
       deployContractWait<const abi extends Abi | readonly unknown[]>(
         args: DeployContractParameters<abi, chain, HDAccount>,
@@ -96,6 +97,21 @@ export type ApproveParameters<
     typeof erc20Abi,
     "approve",
     [Address, bigint],
+    chain,
+    HDAccount,
+    chainOverride
+  >,
+  "abi" | "functionName"
+>;
+
+export type DepositParameters<
+  chain extends Chain,
+  chainOverride extends Chain | undefined = undefined,
+> = UnionPartialBy<
+  WriteContractParameters<
+    typeof erc4626Abi,
+    "deposit",
+    [bigint, Address],
     chain,
     HDAccount,
     chainOverride
@@ -217,6 +233,17 @@ export const createAnvilTestClient = <chain extends Chain>(
             args: [assets],
           });
         },
+        async deposit<chainOverride extends Chain | undefined = undefined>(
+          args: DepositParameters<chain, chainOverride>,
+        ) {
+          args.abi = erc4626Abi;
+          args.functionName = "deposit";
+
+          return client.writeContract(
+            // @ts-ignore
+            args,
+          );
+        },
 
         async deployContractWait<const abi extends Abi | readonly unknown[]>(
           args: DeployContractParameters<abi, chain, HDAccount>,
@@ -251,7 +278,7 @@ export const createAnvilTestClient = <chain extends Chain>(
             chainOverride
           >,
         ) {
-          const hash = await writeContract(client, args);
+          const hash = await viem_writeContract(client, args);
 
           if ((automine ??= await client.getAutomine()))
             await client.waitForTransactionReceipt({ hash });
@@ -269,7 +296,7 @@ export const createAnvilTestClient = <chain extends Chain>(
             request
           >,
         ) {
-          const hash = await sendTransaction(client, args).catch(
+          const hash = await viem_sendTransaction(client, args).catch(
             async (error) => {
               const trace = await client.request(
                 {
@@ -332,7 +359,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           return hash;
         },
         async sendRawTransaction(args: SendRawTransactionParameters) {
-          const hash = await sendRawTransaction(client, args);
+          const hash = await viem_sendRawTransaction(client, args);
 
           if ((automine ??= await client.getAutomine()))
             await client.waitForTransactionReceipt({ hash });

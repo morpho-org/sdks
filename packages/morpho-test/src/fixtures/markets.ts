@@ -48,6 +48,34 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("91.5", 16),
     }),
+    eth_ezEth: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0xbf5495Efe5DB9ce00f80364C8B423567e58d2110",
+      oracle: "0x61025e2B0122ac8bE4e37365A4003d87ad888Cc3",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    eth_apxEth: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6",
+      oracle: "0x037D67A5E6F19d0Fb26A6603d2D4fE9d70eC3258",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    eth_osEth: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38",
+      oracle: "0x224F2F1333b45E34fFCfC3bD01cE43C73A914498",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    eth_weEth: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",
+      oracle: "0x3fa58b74e9a8eA8768eb33c8453e9C2Ed089A40a",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
 
     usdt_idle: MarketConfig.idle(usdt),
     usdt_weth_86: new MarketConfig({
