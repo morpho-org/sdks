@@ -21,7 +21,7 @@
   "devDependencies": {
     "@biomejs/biome": "^1.8.3",
     "@lerna-lite/cli": "3.9.1",
-    "@lerna-lite/publish": "3.9.2",
+    "@lerna-lite/publish": "3.9.3",
     "@lerna-lite/version": "^3.7.1",
     "husky": "^9.0.11",
     "typescript": "^5.4.5"
