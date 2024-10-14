@@ -13,7 +13,7 @@ import { format } from "@morpho-org/morpho-ts";
 import { Erc20Errors } from "@morpho-org/simulation-sdk";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
-import { maxUint256, parseEther, parseUnits } from "viem";
+import { maxUint256, parseEther, parseUnits, zeroAddress } from "viem";
 import { describe, expect } from "vitest";
 import { setupBundle } from "./helpers.js";
 import { test } from "./setup.js";
@@ -21,11 +21,22 @@ import { test } from "./setup.js";
 describe("populateBundle", () => {
   describe("with signatures", () => {
     describe("ethereum", () => {
-      const { morpho, permit2, bundler, wNative, wstEth, stEth, usdc } =
+      const { morpho, permit2, bundler, wNative, wstEth, stEth, usdc, usdt } =
         addresses[ChainId.EthMainnet];
-      const { eth_wstEth, usdc_wstEth, usdc_idle, usdc_wbtc, usdc_wbIB01 } =
-        markets[ChainId.EthMainnet];
-      const { steakUsdc } = vaults[ChainId.EthMainnet];
+      const {
+        eth_wstEth,
+        usdc_wstEth,
+        usdc_idle,
+        usdc_wbtc,
+        usdc_wbIB01,
+        usdt_idle,
+        usdt_weth_86,
+        usdt_weth_91_5,
+        usdt_wbtc,
+        usdt_wstEth,
+        usdt_sDai,
+      } = markets[ChainId.EthMainnet];
+      const { steakUsdc, bbUsdt } = vaults[ChainId.EthMainnet];
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
@@ -472,16 +483,303 @@ describe("populateBundle", () => {
           ).toBe(0n);
         },
       );
+
+      test[ChainId.EthMainnet](
+        "should deposit bbUsdt via permit2",
+        async ({ client, config }) => {
+          const amount = parseUnits("1000000", 6);
+          await client.deal({ erc20: usdt, amount });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [
+                usdt_wstEth.id,
+                usdt_idle.id,
+                usdt_wbtc.id,
+                usdt_weth_86.id,
+                usdt_weth_91_5.id,
+                usdt_sDai.id,
+              ],
+              users: [client.account.address, bundler, bbUsdt.address],
+              tokens: [usdt, stEth, wstEth, bbUsdt.address],
+              vaults: [bbUsdt.address],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupBundle(client, data, [
+            {
+              type: "MetaMorpho_Deposit",
+              sender: client.account.address,
+              address: bbUsdt.address,
+              args: {
+                assets: amount,
+                owner: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+          expect(bundle.requirements.signatures.length).toBe(1);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: {
+                to: usdt,
+                data: expect.any(String),
+              },
+              args: [usdt, permit2, MathLib.MAX_UINT_160],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Approve",
+              sender: client.account.address,
+              address: usdt,
+              args: {
+                amount: MathLib.MAX_UINT_160,
+                spender: permit2,
+              },
+            },
+            {
+              type: "Erc20_Permit2",
+              sender: client.account.address,
+              address: usdt,
+              args: {
+                amount,
+                spender: bundler,
+                expiration: MathLib.MAX_UINT_48,
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Transfer2",
+              sender: bundler,
+              address: usdt,
+              args: {
+                amount,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "MetaMorpho_Deposit",
+              sender: bundler,
+              address: bbUsdt.address,
+              args: {
+                assets: amount,
+                owner: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          expect(await client.balanceOf({ erc20: usdt })).toBe(0n);
+          expect(await client.maxWithdraw({ erc4626: bbUsdt.address })).toBe(
+            amount - 1n,
+          );
+
+          expect(
+            await client.allowance({ erc20: usdt, spender: permit2 }),
+          ).toBe(MathLib.MAX_UINT_160 - amount);
+          expect(
+            await client.allowance({ erc20: usdt, spender: bundler }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
+          ).toBe(0n);
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should simulate bbUSDT deposit into supply max collateral without skim",
+        async ({ client, config }) => {
+          const amount = parseUnits("1000000", 6);
+          const expectedShares = await client.convertToShares({
+            erc4626: bbUsdt.address,
+            assets: amount,
+          });
+          await client.deal({ erc20: usdt, amount });
+
+          const marketConfig = new MarketConfig({
+            loanToken: zeroAddress,
+            collateralToken: bbUsdt.address,
+            lltv: 0n,
+            oracle: zeroAddress,
+            irm: zeroAddress,
+          });
+          await client.writeContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "createMarket",
+            args: [marketConfig],
+          });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [
+                marketConfig.id,
+                usdt_wstEth.id,
+                usdt_idle.id,
+                usdt_wbtc.id,
+                usdt_weth_86.id,
+                usdt_weth_91_5.id,
+                usdt_sDai.id,
+              ],
+              users: [client.account.address, bundler, bbUsdt.address],
+              tokens: [usdt, stEth, wstEth, bbUsdt.address],
+              vaults: [bbUsdt.address],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupBundle(client, data, [
+            {
+              type: "MetaMorpho_Deposit",
+              sender: client.account.address,
+              address: bbUsdt.address,
+              args: {
+                assets: amount,
+                owner: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Blue_SupplyCollateral",
+              sender: client.account.address,
+              address: morpho,
+              args: {
+                id: marketConfig.id,
+                assets: maxUint256,
+                onBehalf: client.account.address,
+              },
+            },
+          ]);
+
+          expect(bundle.requirements.signatures.length).toBe(1);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: {
+                to: usdt,
+                data: expect.any(String),
+              },
+              args: [usdt, permit2, MathLib.MAX_UINT_160],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Approve",
+              sender: client.account.address,
+              address: usdt,
+              args: {
+                amount: MathLib.MAX_UINT_160,
+                spender: permit2,
+              },
+            },
+            {
+              type: "Erc20_Permit2",
+              sender: client.account.address,
+              address: usdt,
+              args: {
+                amount,
+                spender: bundler,
+                expiration: MathLib.MAX_UINT_48,
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Transfer2",
+              sender: bundler,
+              address: usdt,
+              args: {
+                amount,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "MetaMorpho_Deposit",
+              sender: bundler,
+              address: bbUsdt.address,
+              args: {
+                assets: amount,
+                owner: bundler,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Blue_SupplyCollateral",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id: marketConfig.id,
+                assets: maxUint256,
+                onBehalf: client.account.address,
+              },
+            },
+          ]);
+
+          expect(await client.balanceOf({ erc20: usdt })).toBe(0n);
+          expect(await client.balanceOf({ erc20: bbUsdt.address })).toBe(0n);
+
+          const { collateral } = await fetchPosition(
+            client.account.address,
+            marketConfig.id,
+            client,
+          );
+          expect(format.number.of(collateral, 18)).toBeCloseTo(
+            Number(format.number.of(expectedShares, 18)),
+            1,
+          );
+
+          expect(
+            await client.allowance({ erc20: usdt, spender: permit2 }),
+          ).toBe(MathLib.MAX_UINT_160 - amount);
+          expect(
+            await client.allowance({ erc20: usdt, spender: bundler }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
+          ).toBe(0n);
+        },
+      );
     });
   });
 
   describe("without signatures", () => {
     describe("ethereum", () => {
-      const { morpho, permit2, bundler, wNative, wstEth, stEth, usdc } =
+      const { morpho, permit2, bundler, wNative, wstEth, stEth, usdc, usdt } =
         addresses[ChainId.EthMainnet];
-      const { eth_wstEth, usdc_wstEth, usdc_idle, usdc_wbtc, usdc_wbIB01 } =
-        markets[ChainId.EthMainnet];
-      const { steakUsdc } = vaults[ChainId.EthMainnet];
+      const {
+        eth_wstEth,
+        usdc_wstEth,
+        usdc_idle,
+        usdc_wbtc,
+        usdc_wbIB01,
+        usdt_idle,
+        usdt_weth_86,
+        usdt_weth_91_5,
+        usdt_wbtc,
+        usdt_wstEth,
+        usdt_sDai,
+      } = markets[ChainId.EthMainnet];
+      const { steakUsdc, bbUsdt } = vaults[ChainId.EthMainnet];
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
@@ -971,6 +1269,292 @@ describe("populateBundle", () => {
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdc, spender: steakUsdc.address }),
+          ).toBe(0n);
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should deposit bbUsdt via permit2",
+        async ({ client, config }) => {
+          const amount = parseUnits("1000000", 6);
+          await client.deal({ erc20: usdt, amount });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [
+                usdt_wstEth.id,
+                usdt_idle.id,
+                usdt_wbtc.id,
+                usdt_weth_86.id,
+                usdt_weth_91_5.id,
+                usdt_sDai.id,
+              ],
+              users: [client.account.address, bundler, bbUsdt.address],
+              tokens: [usdt, stEth, wstEth, bbUsdt.address],
+              vaults: [bbUsdt.address],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupBundle(
+            client,
+            data,
+            [
+              {
+                type: "MetaMorpho_Deposit",
+                sender: client.account.address,
+                address: bbUsdt.address,
+                args: {
+                  assets: amount,
+                  owner: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+            { supportsSignature: false },
+          );
+          expect(bundle.requirements.signatures).toStrictEqual([]);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: {
+                to: usdt,
+                data: expect.any(String),
+              },
+              args: [usdt, bundler, amount],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Approve",
+              sender: client.account.address,
+              address: usdt,
+              args: {
+                amount: MathLib.MAX_UINT_160,
+                spender: permit2,
+              },
+            },
+            {
+              type: "Erc20_Permit2",
+              sender: client.account.address,
+              address: usdt,
+              args: {
+                amount,
+                spender: bundler,
+                expiration: MathLib.MAX_UINT_48,
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Transfer2",
+              sender: bundler,
+              address: usdt,
+              args: {
+                amount,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "MetaMorpho_Deposit",
+              sender: bundler,
+              address: bbUsdt.address,
+              args: {
+                assets: amount,
+                owner: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          expect(await client.balanceOf({ erc20: usdt })).toBe(0n);
+          expect(await client.maxWithdraw({ erc4626: bbUsdt.address })).toBe(
+            amount - 1n,
+          );
+
+          expect(
+            await client.allowance({ erc20: usdt, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdt, spender: bundler }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
+          ).toBe(0n);
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should simulate bbUSDT deposit into supply max collateral without skim",
+        async ({ client, config }) => {
+          const amount = parseUnits("1000000", 6);
+          const expectedShares = await client.convertToShares({
+            erc4626: bbUsdt.address,
+            assets: amount,
+          });
+          await client.deal({ erc20: usdt, amount });
+
+          const marketConfig = new MarketConfig({
+            loanToken: zeroAddress,
+            collateralToken: bbUsdt.address,
+            lltv: 0n,
+            oracle: zeroAddress,
+            irm: zeroAddress,
+          });
+          await client.writeContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "createMarket",
+            args: [marketConfig],
+          });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [
+                marketConfig.id,
+                usdt_wstEth.id,
+                usdt_idle.id,
+                usdt_wbtc.id,
+                usdt_weth_86.id,
+                usdt_weth_91_5.id,
+                usdt_sDai.id,
+              ],
+              users: [client.account.address, bundler, bbUsdt.address],
+              tokens: [usdt, stEth, wstEth, bbUsdt.address],
+              vaults: [bbUsdt.address],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupBundle(
+            client,
+            data,
+            [
+              {
+                type: "MetaMorpho_Deposit",
+                sender: client.account.address,
+                address: bbUsdt.address,
+                args: {
+                  assets: amount,
+                  owner: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+              {
+                type: "Blue_SupplyCollateral",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id: marketConfig.id,
+                  assets: maxUint256,
+                  onBehalf: client.account.address,
+                },
+              },
+            ],
+            { supportsSignature: false },
+          );
+
+          expect(bundle.requirements.signatures).toStrictEqual([]);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: {
+                to: usdt,
+                data: expect.any(String),
+              },
+              args: [usdt, bundler, amount],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Approve",
+              sender: client.account.address,
+              address: usdt,
+              args: {
+                amount: MathLib.MAX_UINT_160,
+                spender: permit2,
+              },
+            },
+            {
+              type: "Erc20_Permit2",
+              sender: client.account.address,
+              address: usdt,
+              args: {
+                amount,
+                spender: bundler,
+                expiration: MathLib.MAX_UINT_48,
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Transfer2",
+              sender: bundler,
+              address: usdt,
+              args: {
+                amount,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "MetaMorpho_Deposit",
+              sender: bundler,
+              address: bbUsdt.address,
+              args: {
+                assets: amount,
+                owner: bundler,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Blue_SupplyCollateral",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id: marketConfig.id,
+                assets: maxUint256,
+                onBehalf: client.account.address,
+              },
+            },
+          ]);
+
+          expect(await client.balanceOf({ erc20: usdt })).toBe(0n);
+          expect(await client.balanceOf({ erc20: bbUsdt.address })).toBe(0n);
+
+          const { collateral } = await fetchPosition(
+            client.account.address,
+            marketConfig.id,
+            client,
+          );
+          expect(format.number.of(collateral, 18)).toBeCloseTo(
+            Number(format.number.of(expectedShares, 18)),
+            1,
+          );
+
+          expect(
+            await client.allowance({ erc20: usdt, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdt, spender: bundler }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
           ).toBe(0n);
         },
       );
