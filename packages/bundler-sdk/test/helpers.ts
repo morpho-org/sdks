@@ -24,10 +24,12 @@ import {
   isErc20Operation,
   isMetaMorphoOperation,
 } from "@morpho-org/simulation-sdk";
-import type { AnvilTestClient } from "@morpho-org/test-viem";
+import { type AnvilTestClient, testAccount } from "@morpho-org/test-viem";
 import { type Account, type Chain, zeroAddress } from "viem";
 import { parseAccount } from "viem/accounts";
 import { expect } from "vitest";
+
+export const donator = testAccount(9);
 
 export const donate =
   <chain extends Chain>(
@@ -40,14 +42,17 @@ export const donate =
   async (data: SimulationState) => {
     await client.deal({
       erc20,
+      account: donator,
       amount: donation,
     });
 
     await client.approve({
+      account: donator,
       address: erc20,
       args: [morpho, donation],
     });
     await client.writeContract({
+      account: donator,
       address: morpho,
       abi: blueAbi,
       functionName: "supply",
@@ -147,6 +152,8 @@ export const setupBundle = async <chain extends Chain = Chain>(
       })),
     );
 
+    await onBundleTx(startData);
+
     await Promise.all(
       balancesBefore.map(({ token, balance }) =>
         client.deal({
@@ -176,10 +183,7 @@ export const setupBundle = async <chain extends Chain = Chain>(
 
   await Promise.all(
     [...tokens].map(async (token) => {
-      const balance = await client.balanceOf({
-        erc20: token,
-        owner: bundler,
-      });
+      const balance = await client.balanceOf({ erc20: token, owner: bundler });
 
       expect(
         format.number.of(balance, startData.getToken(token).decimals),

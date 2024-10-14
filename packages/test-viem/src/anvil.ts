@@ -69,6 +69,10 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
       }): Promise<bigint>;
 
       maxWithdraw(args: { erc4626: Address; owner?: Address }): Promise<bigint>;
+      previewMint(args: {
+        erc4626: Address;
+        shares: bigint;
+      }): Promise<bigint>;
       convertToShares(args: {
         erc4626: Address;
         assets: bigint;
@@ -189,6 +193,17 @@ export const createAnvilTestClient = <chain extends Chain>(
             abi: erc4626Abi,
             functionName: "maxWithdraw",
             args: [owner],
+          });
+        },
+        async previewMint({
+          erc4626,
+          shares,
+        }: { erc4626: Address; shares: bigint }) {
+          return client.readContract({
+            address: erc4626,
+            abi: erc4626Abi,
+            functionName: "previewMint",
+            args: [shares],
           });
         },
         async convertToShares({

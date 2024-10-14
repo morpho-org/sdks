@@ -7,11 +7,12 @@ import {
 import { randomAddress } from "@morpho-org/test";
 import { parseEther, parseUnits } from "viem";
 
-const { adaptiveCurveIrm, wNative, usdc, wstEth, wbIB01, usdt } =
+const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt } =
   addresses[ChainId.EthMainnet];
 
 export const markets = {
   [ChainId.EthMainnet]: {
+    eth_idle: MarketConfig.idle(wNative),
     eth_wstEth: new MarketConfig({
       loanToken: wNative,
       collateralToken: wstEth,
@@ -32,6 +33,20 @@ export const markets = {
       oracle: "0x1b4A3F92e5Fffd1d35A98751c9FE4472483579bB",
       irm: adaptiveCurveIrm,
       lltv: parseUnits("94.5", 16),
+    }),
+    eth_sDai: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: sDai,
+      oracle: "0x0f9bb760D76af1B5Ca89102084E1963F6698AFda",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    eth_wbtc: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+      oracle: "0xc29B3Bc033640baE31ca53F8a0Eb892AdF68e663",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("91.5", 16),
     }),
 
     usdt_idle: MarketConfig.idle(usdt),
@@ -65,7 +80,7 @@ export const markets = {
     }),
     usdt_sDai: new MarketConfig({
       loanToken: usdt,
-      collateralToken: "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
+      collateralToken: sDai,
       oracle: "0x7538C68d863b28E34b986C1E8daFEDa31D824923",
       irm: adaptiveCurveIrm,
       lltv: parseUnits("94.5", 16),
@@ -90,7 +105,7 @@ export const markets = {
     }),
     usdc_sDai: new MarketConfig({
       loanToken: usdc,
-      collateralToken: "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
+      collateralToken: sDai,
       oracle: "0x6CAFE228eC0B0bC2D076577d56D35Fe704318f6d",
       irm: adaptiveCurveIrm,
       lltv: parseUnits("96.5", 16),
