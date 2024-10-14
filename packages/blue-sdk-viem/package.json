@@ -1,11 +1,13 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
-  "version": "1.12.4",
+  "version": "2.0.0-alpha.10",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "main": "src/index.ts",
   "type": "module",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "yarn build",
     "compile": "hardhat compile",
