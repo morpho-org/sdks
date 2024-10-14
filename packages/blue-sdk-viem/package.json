@@ -5,7 +5,9 @@
   "license": "MIT",
   "main": "src/index.ts",
   "type": "module",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "yarn build",
     "compile": "hardhat compile",

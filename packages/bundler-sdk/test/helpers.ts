@@ -1,7 +1,6 @@
 import {
   type Address,
   MarketConfig,
-  NATIVE_ADDRESS,
   UnknownMarketConfigError,
   VaultConfig,
   getChainAddresses,
@@ -41,7 +40,6 @@ export const donate =
   async (data: SimulationState) => {
     await client.deal({
       erc20,
-      recipient: client.account.address,
       amount: donation,
     });
 
@@ -151,16 +149,10 @@ export const setupBundle = async <chain extends Chain = Chain>(
 
     await Promise.all(
       balancesBefore.map(({ token, balance }) =>
-        token === NATIVE_ADDRESS
-          ? client.setBalance({
-              address: account.address,
-              value: balance,
-            })
-          : client.deal({
-              erc20: token,
-              recipient: account.address,
-              amount: balance,
-            }),
+        client.deal({
+          erc20: token,
+          amount: balance,
+        }),
       ),
     );
   }

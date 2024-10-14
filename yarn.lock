@@ -2649,7 +2649,7 @@ __metadata:
     keccak256: "npm:^1.0.6"
     typescript: "npm:^5.6.3"
     viem: "npm:^2.21.19"
-    viem-deal: "npm:^1.0.5"
+    viem-deal: "npm:^2.0.0"
     vitest: "npm:^2.1.2"
   peerDependencies:
     "@morpho-org/morpho-ts": "workspace:^"
@@ -2863,12 +2863,12 @@ __metadata:
     colors: "npm:^1.4.0"
     typescript: "npm:^5.6.3"
     viem: "npm:^2.21.19"
-    viem-deal: "npm:^1.0.5"
+    viem-deal: "npm:^2.0.0"
     vitest: "npm:^2.1.2"
   peerDependencies:
     "@morpho-org/test": "workspace:^"
     viem: ^2.21.10
-    viem-deal: ^1.0.5
+    viem-deal: ^2.0.0
     vitest: ^2.1.0
   languageName: unknown
   linkType: soft
@@ -2892,14 +2892,14 @@ __metadata:
     react-dom: "npm:^18.3.1"
     typescript: "npm:^5.6.3"
     viem: "npm:^2.21.19"
-    viem-deal: "npm:^1.0.5"
+    viem-deal: "npm:^2.0.0"
     vitest: "npm:^2.1.2"
     wagmi: "npm:^2.12.17"
   peerDependencies:
     "@morpho-org/test": "workspace:^"
     "@morpho-org/test-viem": "workspace:^"
     viem: ^2.21.10
-    viem-deal: ^1.0.5
+    viem-deal: ^2.0.0
     vitest: ^2.1.0
   languageName: unknown
   linkType: soft
@@ -13027,12 +13027,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"viem-deal@npm:^1.0.5":
-  version: 1.0.5
-  resolution: "viem-deal@npm:1.0.5"
+"viem-deal@npm:^2.0.0":
+  version: 2.0.0
+  resolution: "viem-deal@npm:2.0.0"
   peerDependencies:
     viem: ^2.21.18
-  checksum: 10c0/4195ca6248cde0fcc5d074767c3e6eca5ba5c96a761a7bd1608203ade64b16d82df5dc31cdabc6203a693599000033f27688c357d0d084b26783952310ecf347
+  checksum: 10c0/66b3531555b71165e2126021580c6b9c4825f77865fd7d8ea188692760124a02e19f677d372650c95441b25f68c62b4be03003dcabfe6e61f2ba6cc791bda74a
   languageName: node
   linkType: hard
 

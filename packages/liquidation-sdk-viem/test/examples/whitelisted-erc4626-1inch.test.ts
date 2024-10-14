@@ -107,7 +107,7 @@ describe("erc4626-1inch", () => {
 
           await encoder.client.deal({
             erc20: dstToken,
-            recipient: swapMockAddress,
+            account: swapMockAddress,
             amount:
               (await encoder.client.readContract({
                 address: dstToken,
@@ -166,7 +166,7 @@ describe("erc4626-1inch", () => {
 
           await encoder.client.deal({
             erc20: destToken,
-            recipient: swapMockAddress,
+            account: swapMockAddress,
             amount:
               (await encoder.client.readContract({
                 address: destToken,
@@ -229,7 +229,7 @@ describe("erc4626-1inch", () => {
 
         await encoder.client.deal({
           erc20: destToken as Address,
-          recipient: swapMockAddress,
+          account: swapMockAddress,
           amount:
             (await encoder.client.readContract({
               address: destToken as Address,
@@ -287,7 +287,7 @@ describe("erc4626-1inch", () => {
 
           await encoder.client.deal({
             erc20: tokenOut,
-            recipient: swapMockAddress,
+            account: swapMockAddress,
             amount:
               (await encoder.client.readContract({
                 address: tokenOut,
@@ -374,7 +374,7 @@ describe("erc4626-1inch", () => {
 
           await encoder.client.deal({
             erc20: tokenOut,
-            recipient: swapMockAddress,
+            account: swapMockAddress,
             amount:
               (await encoder.client.readContract({
                 address: tokenOut,
@@ -456,7 +456,7 @@ describe("erc4626-1inch", () => {
       const collateral = parseUnits("1", collateralToken.decimals);
       await client.deal({
         erc20: collateralToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: collateral,
       });
       await client.approve({
@@ -576,7 +576,7 @@ describe("erc4626-1inch", () => {
       const collateral = parseUnits("10000", collateralToken.decimals);
       await client.deal({
         erc20: collateralToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: collateral,
       });
       await client.approve({
@@ -595,7 +595,7 @@ describe("erc4626-1inch", () => {
       const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
       await client.deal({
         erc20: loanToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: borrowed - market.liquidity,
       });
       await client.approve({
@@ -720,7 +720,7 @@ describe("erc4626-1inch", () => {
       const collateral = parseUnits("10000", collateralToken.decimals);
       await client.deal({
         erc20: collateralToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: collateral,
       });
       await client.approve({
@@ -848,7 +848,7 @@ describe("erc4626-1inch", () => {
       const collateral = parseUnits("10000", collateralToken.decimals);
       await client.deal({
         erc20: collateralToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: collateral,
       });
       await client.approve({
@@ -1283,7 +1283,7 @@ describe("erc4626-1inch", () => {
       const collateral = parseUnits("100000", collateralToken.decimals);
       await client.deal({
         erc20: collateralToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: collateral,
       });
       await client.approve({
@@ -1302,7 +1302,7 @@ describe("erc4626-1inch", () => {
       const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
       await client.deal({
         erc20: loanToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: borrowed,
       });
       await client.approve({

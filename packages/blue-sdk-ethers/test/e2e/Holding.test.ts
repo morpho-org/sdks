@@ -42,7 +42,6 @@ describe("augment/Holding", async () => {
 
     await client.deal({
       erc20: wNative,
-      recipient: client.account.address,
       amount: expectedData.balance,
     });
     await client.approve({
@@ -145,7 +144,6 @@ describe("augment/Holding", async () => {
 
     await client.deal({
       erc20: wbC3M,
-      recipient: client.account.address,
       amount: expectedData.balance,
     });
     await client.approve({

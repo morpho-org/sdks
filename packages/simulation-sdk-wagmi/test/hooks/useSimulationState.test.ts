@@ -193,7 +193,6 @@ describe("useSimulationState", () => {
 
     await client.deal({
       erc20: usdc,
-      recipient: client.account.address,
       amount,
     });
 
@@ -241,7 +240,6 @@ describe("useSimulationState", () => {
 
     await client.deal({
       erc20: usdc,
-      recipient: client.account.address,
       amount,
     });
 
@@ -346,7 +344,6 @@ describe("useSimulationState", () => {
 
     await client.deal({
       erc20: usdc,
-      recipient: client.account.address,
       amount,
     });
 

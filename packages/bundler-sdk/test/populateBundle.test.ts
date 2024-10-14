@@ -36,7 +36,6 @@ describe("populateBundle", () => {
           const balance = await client.getBalance(client.account);
           await client.deal({
             erc20: wNative,
-            recipient: client.account.address,
             amount: wBalance,
           });
 
@@ -91,7 +90,6 @@ describe("populateBundle", () => {
           });
           await client.deal({
             erc20: wstEth,
-            recipient: client.account.address,
             amount: wBalance,
           });
 
@@ -280,7 +278,6 @@ describe("populateBundle", () => {
           const assets = parseUnits("13000", 6);
           await client.deal({
             erc20: wstEth,
-            recipient: client.account.address,
             amount: collateral,
           });
           await client.approve({ address: wstEth, args: [morpho, maxUint256] });
@@ -385,7 +382,6 @@ describe("populateBundle", () => {
           const amount = parseUnits("1000000", 6);
           await client.deal({
             erc20: usdc,
-            recipient: client.account.address,
             amount,
           });
 
@@ -496,7 +492,6 @@ describe("populateBundle", () => {
           const balance = await client.getBalance(client.account);
           await client.deal({
             erc20: wNative,
-            recipient: client.account.address,
             amount: wBalance,
           });
 
@@ -556,7 +551,6 @@ describe("populateBundle", () => {
           });
           await client.deal({
             erc20: wstEth,
-            recipient: client.account.address,
             amount: wBalance,
           });
 
@@ -758,7 +752,6 @@ describe("populateBundle", () => {
           const assets = parseUnits("13000", 6);
           await client.deal({
             erc20: wstEth,
-            recipient: client.account.address,
             amount: collateral,
           });
           await client.approve({ address: wstEth, args: [morpho, maxUint256] });
@@ -877,7 +870,6 @@ describe("populateBundle", () => {
           const amount = parseUnits("1000000", 6);
           await client.deal({
             erc20: usdc,
-            recipient: client.account.address,
             amount,
           });
 
@@ -1011,7 +1003,7 @@ describe("populateBundle", () => {
           const assets = parseUnits("500", 6);
           await client.deal({
             erc20: usdc,
-            recipient: whitelisted,
+            account: whitelisted,
             amount: assets,
           });
 

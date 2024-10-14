@@ -5,7 +5,9 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "yarn build",
     "build": "tsc --build tsconfig.build.json",
@@ -24,7 +26,7 @@
     "@types/node": "^22.1.0",
     "typescript": "^5.6.3",
     "viem": "^2.21.19",
-    "viem-deal": "^1.0.5",
+    "viem-deal": "^2.0.0",
     "vitest": "^2.1.2"
   },
   "publishConfig": {
