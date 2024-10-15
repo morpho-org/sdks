@@ -8,7 +8,7 @@ import {
   type HoldingParameters,
   fetchHoldingQueryOptions,
 } from "../queries/fetchHolding.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { mergeDeepEqual, uniqBy } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type { UseHoldingParameters } from "./useHolding.js";
 
@@ -32,8 +32,8 @@ export type UseHoldingsReturnType<
 
 export const combineHoldings = combineIndexedQueries<
   Holding,
-  ReadContractErrorType,
-  [Address, Address]
+  [Address, Address],
+  ReadContractErrorType
 >((holding) => [holding.user, holding.token]);
 
 export function useHoldings<
@@ -53,20 +53,22 @@ export function useHoldings<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(holdings, (holding) => ({
-      ...query,
-      ...fetchHoldingQueryOptions(config, {
-        ...parameters,
-        ...holding,
-        chainId,
+    queries: uniqBy(holdings, ({ user, token }) => `${user},${token}`).map(
+      (holding) => ({
+        ...query,
+        ...fetchHoldingQueryOptions(config, {
+          ...parameters,
+          ...holding,
+          chainId,
+        }),
+        enabled: holding.user != null && holding.token != null && query.enabled,
+        structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+        staleTime:
+          (query.staleTime ?? parameters.blockNumber != null)
+            ? Number.POSITIVE_INFINITY
+            : undefined,
       }),
-      enabled: holding.user != null && holding.token != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
-      staleTime:
-        (query.staleTime ?? parameters.blockNumber != null)
-          ? Number.POSITIVE_INFINITY
-          : undefined,
-    })),
+    ),
     combine,
   });
 }

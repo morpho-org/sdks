@@ -3,6 +3,7 @@ import { type FetchParameters, fetchUser } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
+import { hashFn } from "wagmi/query";
 
 export type UserParameters = {
   user: Address;
@@ -27,6 +28,7 @@ export function fetchUserQueryOptions<config extends Config>(
       });
     },
     queryKey: fetchUserQueryKey(parameters),
+    queryKeyHashFn: hashFn, // for bigint support
   } as const satisfies QueryOptions<
     User,
     ReadContractErrorType,

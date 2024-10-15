@@ -4,7 +4,8 @@ import {
   createViemTest,
   testAccount,
 } from "@morpho-org/test-viem";
-import { http, type Chain, type HttpTransport } from "viem";
+import { createConfig, mock } from "@wagmi/core";
+import type { Chain, HttpTransport } from "viem";
 import type { Config } from "wagmi";
 
 export interface WagmiConfigTestContext<chain extends Chain = Chain> {
@@ -23,8 +24,6 @@ export const createWagmiTest = <chain extends Chain>(
     WagmiConfigTestContext<chain>
   >({
     config: async ({ client }, use) => {
-      const { createConfig, mock } = await import("@wagmi/core");
-
       await use(
         createConfig({
           chains: [chain],
@@ -38,11 +37,8 @@ export const createWagmiTest = <chain extends Chain>(
               ],
             }),
           ],
-          pollingInterval: 100,
           storage: null,
-          transports: {
-            [chain.id]: http(client.transport.url, client.transport),
-          },
+          client: () => client,
         }),
       );
     },

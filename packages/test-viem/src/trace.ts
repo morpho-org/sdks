@@ -2,15 +2,35 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import "colors";
+import { writeFile } from "node:fs/promises";
 import { red, yellow } from "colors";
 import {
   type Address,
+  type BlockTag,
+  type Client,
+  type ExactPartial,
   type Hex,
+  type RpcTransactionRequest,
   decodeFunctionData,
   isAddress,
   parseAbi,
   slice,
 } from "viem";
+
+export type TraceCallRpcSchema = {
+  Method: "debug_traceCall";
+  Parameters:
+    | [ExactPartial<RpcTransactionRequest>, Hex | BlockTag]
+    | [
+        ExactPartial<RpcTransactionRequest>,
+        BlockTag | Hex,
+        {
+          tracer: "callTracer" | "prestateTracer";
+          tracerConfig?: { onlyTopCall?: boolean };
+        },
+      ];
+  ReturnType: RpcCallTrace;
+};
 
 export const signaturesPath = join(
   homedir(),
@@ -134,3 +154,47 @@ export const formatCallTrace = (trace: RpcCallTrace, level = 1): string => {
   return `${level === 1 ? `${getIndentLevel(level, true)}FROM ${trace.from.grey}\n`.cyan : ""}${getIndentLevel(level, true)}${trace.type.yellow} ${trace.from === trace.to ? ("self").grey : `(${trace.to.white})`}.${formatCallSignature(trace, level)}${error ? ` -> ${error}`.red : ""}
 ${rest}`;
 };
+
+export async function trace(
+  client: Client,
+  tx: ExactPartial<RpcTransactionRequest>,
+  block: Hex | BlockTag = "latest",
+) {
+  const trace = await client.request<TraceCallRpcSchema>(
+    {
+      method: "debug_traceCall",
+      params: [tx, block, { tracer: "callTracer" }],
+    },
+    { retryCount: 0 },
+  );
+
+  const unknownSelectors = getCallTraceUnknownSelectors(trace);
+
+  if (unknownSelectors) {
+    const lookupRes = await fetch(
+      `https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=${unknownSelectors}`,
+    );
+
+    const lookup = await lookupRes.json();
+
+    if (lookup.ok) {
+      Object.entries<{ name: string; filtered: boolean }[]>(
+        lookup.result.function,
+      ).map(([sig, results]) => {
+        const match = results.find(({ filtered }) => !filtered)?.name;
+        if (!match) return;
+
+        signatures.functions[sig as Hex] = match;
+      });
+
+      writeFile(signaturesPath, JSON.stringify(signatures)); // Non blocking.
+    } else {
+      console.warn(
+        `Failed to fetch signatures for unknown selectors: ${unknownSelectors}`,
+        lookup.error,
+      );
+    }
+  }
+
+  return formatCallTrace(trace);
+}

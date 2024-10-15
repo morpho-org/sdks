@@ -6,6 +6,7 @@ import {
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
+import { hashFn } from "wagmi/query";
 import type { UserParameters } from "./fetchUser.js";
 import type { VaultParameters } from "./fetchVault.js";
 
@@ -32,6 +33,7 @@ export function fetchVaultUserQueryOptions<config extends Config>(
       });
     },
     queryKey: fetchVaultUserQueryKey(parameters),
+    queryKeyHashFn: hashFn, // for bigint support
   } as const satisfies QueryOptions<
     VaultUser,
     ReadContractErrorType,

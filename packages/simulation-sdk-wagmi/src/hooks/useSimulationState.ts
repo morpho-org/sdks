@@ -1,4 +1,4 @@
-import { type MarketId, addresses } from "@morpho-org/blue-sdk";
+import { addresses } from "@morpho-org/blue-sdk";
 import {
   type DeploylessFetchParameters,
   blueAbi,
@@ -21,7 +21,7 @@ import {
 } from "@morpho-org/blue-sdk-wagmi";
 import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
 import { useMemo } from "react";
-import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import type { ReadContractErrorType, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useReadContract } from "wagmi";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
@@ -49,14 +49,14 @@ export type UseSimulationStateParameters<config extends Config = Config> =
 
 export interface SimulationStateLike<T> {
   global?: { feeRecipient?: T };
-  markets?: Record<MarketId, T>;
-  users?: Record<Address, T>;
-  tokens?: Record<Address, T>;
-  vaults?: Record<Address, T>;
-  positions?: Record<Address, Record<MarketId, T>>;
-  holdings?: Record<Address, Record<Address, T>>;
-  vaultMarketConfigs?: Record<Address, Record<MarketId, T>>;
-  vaultUsers?: Record<Address, Record<Address, T>>;
+  markets?: T;
+  users?: T;
+  tokens?: T;
+  vaults?: T;
+  positions?: T;
+  holdings?: T;
+  vaultMarketConfigs?: T;
+  vaultUsers?: T;
 }
 
 export type UseSimulationReturnType<T> =
@@ -66,7 +66,7 @@ export type UseSimulationReturnType<T> =
        */
       data: T;
       /**
-       * The errors that occurred while fetching each data leaf, indexed the same way as in the simulation state.
+       * The errors that occurred while fetching each data leaf, indexed by type of entity.
        */
       error: SimulationStateLike<ReadContractErrorType | null>;
       /**
@@ -74,7 +74,7 @@ export type UseSimulationReturnType<T> =
        */
       isFetchingAny: boolean;
       /**
-       * Whether each data leaf is being fetched, indexed the same way as in the simulation state.
+       * Whether each data leaf is being fetched, indexed by type of entity.
        */
       isFetching: SimulationStateLike<boolean>;
       /**
@@ -302,14 +302,14 @@ export function useSimulationState<
     error,
     isFetchingAny:
       feeRecipient.isFetching ||
-      markets.isFetchingAny ||
-      users.isFetchingAny ||
-      tokens.isFetchingAny ||
-      vaults.isFetchingAny ||
-      positions.isFetchingAny ||
-      holdings.isFetchingAny ||
-      vaultMarketConfigs.isFetchingAny ||
-      vaultUsers.isFetchingAny,
+      markets.isFetching ||
+      users.isFetching ||
+      tokens.isFetching ||
+      vaults.isFetching ||
+      positions.isFetching ||
+      holdings.isFetching ||
+      vaultMarketConfigs.isFetching ||
+      vaultUsers.isFetching,
     isFetching: {
       global: { feeRecipient: feeRecipient.isFetching },
       markets: markets.isFetching,

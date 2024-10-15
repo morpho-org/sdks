@@ -333,13 +333,15 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   public accrueInterest(timestamp: BigIntish) {
     const vault = new AccrualVault(
       this,
-      this.allocations
-        .values()
-        .map(({ config, position }) => ({
+      // Keep withdraw queue order.
+      this.withdrawQueue.map((marketId) => {
+        const { config, position } = this.allocations.get(marketId)!;
+
+        return {
           config,
           position: position.accrueInterest(timestamp),
-        }))
-        .toArray(),
+        };
+      }),
     );
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);

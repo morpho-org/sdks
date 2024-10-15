@@ -1,16 +1,13 @@
-import { writeFile } from "node:fs/promises";
 import "colors";
 import {
   type Abi,
   type Address,
-  type BlockTag,
   type Client,
   type ContractFunctionArgs,
   type ContractFunctionName,
   type DeployContractParameters,
   type ExactPartial,
   type HDAccount,
-  type Hex,
   type HttpTransport,
   type PublicActions,
   type RpcTransactionRequest,
@@ -41,13 +38,7 @@ import {
 } from "viem/actions";
 import type { Chain } from "viem/chains";
 import { testAccount } from "./fixtures.js";
-import {
-  type RpcCallTrace,
-  formatCallTrace,
-  getCallTraceUnknownSelectors,
-  signatures,
-  signaturesPath,
-} from "./trace.js";
+import { type TraceCallRpcSchema, trace } from "./trace.js";
 
 export type AnvilTestClient<chain extends Chain = Chain> = Client<
   HttpTransport,
@@ -58,6 +49,12 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
     DealActions &
     PublicActions<HttpTransport, chain, HDAccount> &
     WalletActions<chain, HDAccount> & {
+      tracing: {
+        txs: boolean;
+        calls: boolean;
+        nextCall: boolean;
+      };
+
       timestamp(): Promise<bigint>;
 
       approve(args: ApproveParameters<chain>): Promise<WriteContractReturnType>;
@@ -128,23 +125,7 @@ export const createAnvilTestClient = <chain extends Chain>(
     mode: "anvil",
     account: testAccount(),
     transport,
-    rpcSchema:
-      rpcSchema<
-        [
-          {
-            Method: "debug_traceCall";
-            Parameters: [
-              ExactPartial<RpcTransactionRequest>,
-              BlockTag | Hex,
-              {
-                tracer: "callTracer" | "prestateTracer";
-                tracerConfig: { onlyTopCall: boolean };
-              },
-            ];
-            ReturnType: RpcCallTrace;
-          },
-        ]
-      >(),
+    rpcSchema: rpcSchema<[TraceCallRpcSchema]>(),
   })
     .extend(dealActions)
     .extend(publicActions)
@@ -153,6 +134,12 @@ export const createAnvilTestClient = <chain extends Chain>(
       let automine: boolean;
 
       return {
+        tracing: {
+          txs: true,
+          calls: false,
+          nextCall: false,
+        },
+
         async timestamp() {
           const latestBlock = await client.getBlock();
 
@@ -298,56 +285,16 @@ export const createAnvilTestClient = <chain extends Chain>(
         ) {
           const hash = await viem_sendTransaction(client, args).catch(
             async (error) => {
-              const trace = await client.request(
-                {
-                  method: "debug_traceCall",
-                  params: [
-                    {
-                      from: parseAccount(args.account ?? client.account)
-                        .address,
-                      ...args,
-                    } as ExactPartial<RpcTransactionRequest>,
-                    "latest",
-                    {
-                      tracer: "callTracer",
-                      tracerConfig: { onlyTopCall: false },
-                    },
-                  ],
-                },
-                { retryCount: 0 },
-              );
-
-              const unknownSelectors = getCallTraceUnknownSelectors(trace);
-
-              if (unknownSelectors) {
-                const lookupRes = await fetch(
-                  `https://api.openchain.xyz/signature-database/v1/lookup?filter=false&function=${unknownSelectors}`,
-                );
-
-                const lookup = await lookupRes.json();
-
-                if (lookup.ok) {
-                  Object.entries<{ name: string; filtered: boolean }[]>(
-                    lookup.result.function,
-                  ).map(([sig, results]) => {
-                    const match = results.find(
-                      ({ filtered }) => !filtered,
-                    )?.name;
-                    if (!match) return;
-
-                    signatures.functions[sig as Hex] = match;
-                  });
-
-                  writeFile(signaturesPath, JSON.stringify(signatures)); // Non blocking.
-                } else {
-                  console.warn(
-                    `Failed to fetch signatures for unknown selectors: ${unknownSelectors}`,
-                    lookup.error,
-                  );
+              if (this.tracing.txs) {
+                try {
+                  error.message += `\n\nCall trace:\n${await trace(client, {
+                    from: parseAccount(args.account ?? client.account).address,
+                    ...args,
+                  } as ExactPartial<RpcTransactionRequest>)}`;
+                } catch (err) {
+                  error.message += `\n\nFailed to trace call:\n${err}`;
                 }
               }
-
-              error.message += `\n\nCall trace:\n${formatCallTrace(trace)}`;
 
               throw error;
             },

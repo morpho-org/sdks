@@ -8,7 +8,7 @@ import {
   type PositionParameters,
   fetchPositionQueryOptions,
 } from "../queries/fetchPosition.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { mergeDeepEqual, uniqBy } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type { UsePositionParameters } from "./usePosition.js";
 
@@ -32,8 +32,8 @@ export type UsePositionsReturnType<
 
 export const combinePositions = combineIndexedQueries<
   Position,
-  ReadContractErrorType,
-  [Address, MarketId]
+  [Address, MarketId],
+  ReadContractErrorType
 >((position) => [position.user, position.marketId]);
 
 export function usePositions<
@@ -53,7 +53,10 @@ export function usePositions<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(positions, (position) => ({
+    queries: uniqBy(
+      positions,
+      ({ user, marketId }) => `${user},${marketId}`,
+    ).map((position) => ({
       ...query,
       ...fetchPositionQueryOptions(config, {
         ...parameters,

@@ -30,8 +30,8 @@ export type UseMarketConfigsReturnType<
 
 export const combineMarketConfigs = combineIndexedQueries<
   MarketConfig,
-  ReadContractErrorType,
-  [MarketId]
+  [MarketId],
+  ReadContractErrorType
 >((market) => [market.id]);
 
 export function useMarketConfigs<
@@ -51,7 +51,7 @@ export function useMarketConfigs<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(marketIds, (marketId) => ({
+    queries: Array.from(new Set(marketIds), (marketId) => ({
       ...query,
       ...fetchMarketConfigQueryOptions(config, {
         ...parameters,

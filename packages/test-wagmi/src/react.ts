@@ -1,5 +1,4 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { configure } from "@testing-library/dom";
 import {
   type RenderHookOptions,
   type RenderOptions,
@@ -18,15 +17,18 @@ import {
 import type { Chain, Transport } from "viem";
 import { WagmiProvider } from "wagmi";
 
-configure({
-  asyncUtilTimeout: 5_000,
-});
-
 // biome-ignore lint/suspicious/noExplicitAny: test utility
 export function createWrapper<TComponent extends FunctionComponent<any>>(
   Wrapper: TComponent,
   props: Parameters<TComponent>[0],
-  queryClient = new QueryClient(),
+  queryClient = new QueryClient({
+    defaultOptions: {
+      queries: {
+        retry: false,
+        gcTime: Number.POSITIVE_INFINITY,
+      },
+    },
+  }),
 ) {
   return function CreatedWrapper({ children }: { children?: ReactNode }) {
     return createElement(

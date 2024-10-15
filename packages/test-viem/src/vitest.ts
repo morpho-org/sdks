@@ -2,6 +2,7 @@ import { type AnvilArgs, spawnAnvil } from "@morpho-org/test";
 import { http, type Chain } from "viem";
 import { test } from "vitest";
 import { type AnvilTestClient, createAnvilTestClient } from "./anvil.js";
+import { trace } from "./trace.js";
 
 export interface ViemTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
@@ -25,7 +26,31 @@ export const createViemTest = <chain extends Chain>(
     client: async ({}, use) => {
       const { rpcUrl, stop } = await spawnAnvil(parameters);
 
-      await use(createAnvilTestClient(http(rpcUrl), chain));
+      let client: AnvilTestClient<chain>;
+
+      await use(
+        (client = createAnvilTestClient(
+          http(rpcUrl, {
+            async onFetchRequest(request) {
+              const { method, params } = await request.json();
+
+              if (
+                method === "eth_call" &&
+                (client.tracing.calls || client.tracing.nextCall)
+              ) {
+                client.tracing.nextCall = false;
+
+                try {
+                  console.log(await trace(client, params[0], params[1]));
+                } catch (error) {
+                  console.warn("Failed to trace call:", error);
+                }
+              }
+            },
+          }),
+          chain,
+        )),
+      );
 
       await stop();
     },

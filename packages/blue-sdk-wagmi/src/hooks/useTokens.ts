@@ -32,8 +32,8 @@ export type UseTokensReturnType<
 
 export const combineTokens = combineIndexedQueries<
   Token,
-  ReadContractErrorType,
-  [Address]
+  [Address],
+  ReadContractErrorType
 >((token) => [token.address]);
 
 export function useTokens<
@@ -53,7 +53,7 @@ export function useTokens<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(tokens, (token) => ({
+    queries: Array.from(new Set(tokens), (token) => ({
       ...query,
       ...fetchTokenQueryOptions(config, {
         ...parameters,

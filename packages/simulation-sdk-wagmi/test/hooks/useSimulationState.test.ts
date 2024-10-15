@@ -1,4 +1,4 @@
-import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, Market, MathLib, addresses } from "@morpho-org/blue-sdk";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import {
   Erc20Errors,
@@ -74,27 +74,27 @@ describe("useSimulationState", () => {
         global: {
           feeRecipient: null,
         },
-        markets: {},
-        tokens: {},
-        users: {},
-        positions: {},
-        holdings: {},
-        vaults: {},
-        vaultUsers: {},
-        vaultMarketConfigs: {},
+        markets: null,
+        tokens: null,
+        users: null,
+        positions: null,
+        holdings: null,
+        vaults: null,
+        vaultUsers: null,
+        vaultMarketConfigs: null,
       },
       isFetching: {
         global: {
           feeRecipient: true,
         },
-        markets: {},
-        tokens: {},
-        users: {},
-        positions: {},
-        holdings: {},
-        vaults: {},
-        vaultUsers: {},
-        vaultMarketConfigs: {},
+        markets: false,
+        tokens: false,
+        users: false,
+        positions: false,
+        holdings: false,
+        vaults: false,
+        vaultUsers: false,
+        vaultMarketConfigs: false,
       },
       isFetchingAny: true,
       isPending: false,
@@ -119,18 +119,55 @@ describe("useSimulationState", () => {
         global: {
           feeRecipient: null,
         },
-        markets: {},
-        tokens: {},
-        users: {},
-        positions: {},
-        holdings: {},
-        vaults: {},
-        vaultUsers: {},
-        vaultMarketConfigs: {},
+        markets: null,
+        tokens: null,
+        users: null,
+        positions: null,
+        holdings: null,
+        vaults: null,
+        vaultUsers: null,
+        vaultMarketConfigs: null,
       },
       isFetching: {
         global: {
           feeRecipient: false,
+        },
+        markets: false,
+        tokens: false,
+        users: false,
+        positions: false,
+        holdings: false,
+        vaults: false,
+        vaultUsers: false,
+        vaultMarketConfigs: false,
+      },
+      isFetchingAny: false,
+      isPending: false,
+    });
+  });
+
+  test("should resolve when market requested twice", async ({
+    config,
+    client,
+  }) => {
+    const block = await client.getBlock();
+
+    const { result } = await renderHook(config, () =>
+      useSimulationState({
+        marketIds: [usdc_wstEth.id, usdc_wstEth.id],
+        users: [],
+        tokens: [],
+        vaults: [],
+        block,
+      }),
+    );
+
+    expect(result.current).toStrictEqual({
+      data: new SimulationState({
+        chainId: ChainId.EthMainnet,
+        block,
+        global: {
+          feeRecipient: undefined,
         },
         markets: {},
         tokens: {},
@@ -140,6 +177,89 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+      }),
+      error: {
+        global: {
+          feeRecipient: null,
+        },
+        markets: null,
+        tokens: null,
+        users: null,
+        positions: null,
+        holdings: null,
+        vaults: null,
+        vaultUsers: null,
+        vaultMarketConfigs: null,
+      },
+      isFetching: {
+        global: {
+          feeRecipient: true,
+        },
+        markets: true,
+        tokens: false,
+        users: false,
+        positions: false,
+        holdings: false,
+        vaults: false,
+        vaultUsers: false,
+        vaultMarketConfigs: false,
+      },
+      isFetchingAny: true,
+      isPending: false,
+    });
+
+    await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+    expect(result.current).toStrictEqual({
+      data: new SimulationState({
+        chainId: ChainId.EthMainnet,
+        block,
+        global: {
+          feeRecipient: zeroAddress,
+        },
+        markets: {
+          [usdc_wstEth.id]: new Market({
+            config: usdc_wstEth,
+            fee: 0n,
+            lastUpdate: 1714261175n,
+            price: 3775466720554092397807658269n,
+            rateAtTarget: 1828691863n,
+            totalBorrowAssets: 29412925392245n,
+            totalBorrowShares: 28711075898230454169n,
+            totalSupplyAssets: 37387127980949n,
+            totalSupplyShares: 36606518680974329424n,
+          }),
+        },
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+      }),
+      error: {
+        global: {
+          feeRecipient: null,
+        },
+        markets: null,
+        tokens: null,
+        users: null,
+        positions: null,
+        holdings: null,
+        vaults: null,
+        vaultUsers: null,
+        vaultMarketConfigs: null,
+      },
+      isFetching: {
+        global: {
+          feeRecipient: false,
+        },
+        markets: false,
+        tokens: false,
+        users: false,
+        positions: false,
+        holdings: false,
+        vaults: false,
+        vaultUsers: false,
+        vaultMarketConfigs: false,
       },
       isFetchingAny: false,
       isPending: false,

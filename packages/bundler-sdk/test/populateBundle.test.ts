@@ -7,7 +7,13 @@ import {
   addresses,
 } from "@morpho-org/blue-sdk";
 
-import { blueAbi, fetchMarket, fetchPosition } from "@morpho-org/blue-sdk-viem";
+import {
+  blueAbi,
+  fetchMarket,
+  fetchPosition,
+  metaMorphoAbi,
+  publicAllocatorAbi,
+} from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { format } from "@morpho-org/morpho-ts";
 import { Erc20Errors } from "@morpho-org/simulation-sdk";
@@ -21,8 +27,17 @@ import { test } from "./setup.js";
 describe("populateBundle", () => {
   describe("with signatures", () => {
     describe("ethereum", () => {
-      const { morpho, permit2, bundler, wNative, wstEth, stEth, usdc, usdt } =
-        addresses[ChainId.EthMainnet];
+      const {
+        morpho,
+        permit2,
+        bundler,
+        publicAllocator,
+        wNative,
+        wstEth,
+        stEth,
+        usdc,
+        usdt,
+      } = addresses[ChainId.EthMainnet];
       const {
         eth_idle,
         eth_wstEth,
@@ -45,7 +60,8 @@ describe("populateBundle", () => {
         usdt_wstEth,
         usdt_sDai,
       } = markets[ChainId.EthMainnet];
-      const { steakUsdc, bbUsdt, bbEth, re7Weth } = vaults[ChainId.EthMainnet];
+      const { steakUsdc, bbUsdt, bbUsdc, bbEth, re7Weth } =
+        vaults[ChainId.EthMainnet];
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
@@ -1826,13 +1842,603 @@ describe("populateBundle", () => {
           ]);
         },
       );
+
+      test[ChainId.EthMainnet](
+        "should borrow USDC with shared liquidity and reallocation fee + unwrap remaining WETH",
+        async ({ client, config }) => {
+          const steakUsdcOwner = await client.readContract({
+            address: steakUsdc.address,
+            abi: metaMorphoAbi,
+            functionName: "owner",
+          });
+
+          await client.setBalance({
+            address: steakUsdcOwner,
+            value: parseEther("1000"),
+          });
+          await client.writeContract({
+            account: steakUsdcOwner,
+            address: publicAllocator,
+            abi: publicAllocatorAbi,
+            functionName: "setFlowCaps",
+            args: [
+              steakUsdc.address,
+              [
+                {
+                  id: usdc_wstEth.id,
+                  caps: {
+                    maxIn: parseUnits("10000", 6),
+                    maxOut: 0n,
+                  },
+                },
+                {
+                  id: usdc_wbtc.id,
+                  caps: {
+                    maxIn: 0n,
+                    maxOut: parseUnits("20000", 6), // Less than bbUsdc but more than maxIn.
+                  },
+                },
+              ],
+            ],
+          });
+
+          const bbUsdcFee = parseEther("0.002");
+
+          const bbUsdcOwner = await client.readContract({
+            address: bbUsdc.address,
+            abi: metaMorphoAbi,
+            functionName: "owner",
+          });
+
+          await client.setBalance({
+            address: bbUsdcOwner,
+            value: parseEther("1000"),
+          });
+          await client.writeContract({
+            account: bbUsdcOwner,
+            address: publicAllocator,
+            abi: publicAllocatorAbi,
+            functionName: "setFee",
+            args: [bbUsdc.address, bbUsdcFee],
+          });
+          await client.writeContract({
+            account: bbUsdcOwner,
+            address: publicAllocator,
+            abi: publicAllocatorAbi,
+            functionName: "setFlowCaps",
+            args: [
+              bbUsdc.address,
+              [
+                {
+                  id: usdc_wstEth.id,
+                  caps: {
+                    maxIn: parseUnits("1000000", 6),
+                    maxOut: 0n,
+                  },
+                },
+                {
+                  id: usdc_wbtc.id,
+                  caps: {
+                    maxIn: 0n,
+                    maxOut: parseUnits("100000", 6),
+                  },
+                },
+              ],
+            ],
+          });
+
+          const collateralAssets = parseEther("50000");
+          const depositAssets = parseEther("50");
+          await client.deal({ erc20: wstEth, amount: collateralAssets });
+          await client.deal({ erc20: wNative, amount: depositAssets });
+
+          const { id } = usdc_wstEth;
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [
+                eth_idle.id,
+                eth_rEth.id,
+                eth_sDai.id,
+                eth_wbtc.id,
+                eth_wstEth.id,
+                eth_wstEth_2.id,
+                id,
+                usdc_idle.id,
+                usdc_wbtc.id,
+                usdc_wbIB01.id,
+              ],
+              users: [
+                client.account.address,
+                donator.address,
+                bundler,
+                steakUsdc.address,
+                bbEth.address,
+                bbUsdc.address,
+              ],
+              tokens: [
+                NATIVE_ADDRESS,
+                wNative,
+                usdc,
+                stEth,
+                wstEth,
+                steakUsdc.address,
+                bbEth.address,
+                bbUsdc.address,
+              ],
+              vaults: [steakUsdc.address, bbEth.address, bbUsdc.address],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const loanAssets = data
+            .getMarketPublicReallocations(id)
+            .data.getMarket(id).liquidity;
+
+          const { operations, bundle } = await setupBundle(
+            client,
+            data,
+            [
+              {
+                type: "MetaMorpho_Deposit",
+                sender: client.account.address,
+                address: bbEth.address,
+                args: {
+                  assets: depositAssets,
+                  owner: donator.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+              {
+                type: "Blue_SupplyCollateral",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id,
+                  assets: collateralAssets,
+                  onBehalf: client.account.address,
+                },
+              },
+              {
+                type: "Blue_Borrow",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id,
+                  assets: loanAssets,
+                  onBehalf: client.account.address,
+                  receiver: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+            {
+              unwrapTokens: new Set([wNative]),
+            },
+          );
+
+          expect(bundle.requirements.signatures.length).toBe(3);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: { to: wNative, data: expect.any(String) },
+              args: [wNative, permit2, MathLib.MAX_UINT_160],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Approve",
+              sender: client.account.address,
+              address: wNative,
+              args: {
+                amount: MathLib.MAX_UINT_160,
+                spender: permit2,
+              },
+            },
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: wstEth,
+              args: {
+                amount: collateralAssets,
+                spender: bundler,
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Permit2",
+              sender: client.account.address,
+              address: wNative,
+              args: {
+                amount: depositAssets,
+                spender: bundler,
+                expiration: expect.any(BigInt),
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: bundler,
+              address: wstEth,
+              args: {
+                amount: collateralAssets,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: client.account.address,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: bbUsdcFee,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "Erc20_Transfer2",
+              sender: bundler,
+              address: wNative,
+              args: {
+                amount: depositAssets,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "MetaMorpho_Deposit",
+              sender: bundler,
+              address: bbEth.address,
+              args: {
+                assets: depositAssets,
+                owner: donator.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Blue_SupplyCollateral",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id,
+                assets: collateralAssets,
+                onBehalf: client.account.address,
+              },
+            },
+            {
+              type: "Blue_SetAuthorization",
+              sender: bundler,
+              address: morpho,
+              args: {
+                owner: client.account.address,
+                isBundlerAuthorized: true,
+              },
+            },
+            {
+              type: "MetaMorpho_PublicReallocate",
+              sender: bundler,
+              address: bbUsdc.address,
+              args: {
+                withdrawals: [
+                  {
+                    id: usdc_wbtc.id,
+                    assets: parseUnits("100000", 6),
+                  },
+                ],
+                supplyMarketId: id,
+              },
+            },
+            {
+              type: "MetaMorpho_PublicReallocate",
+              sender: bundler,
+              address: steakUsdc.address,
+              args: {
+                withdrawals: [
+                  {
+                    id: usdc_wbtc.id,
+                    assets: parseUnits("10000", 6),
+                  },
+                ],
+                supplyMarketId: id,
+              },
+            },
+            {
+              type: "Blue_Borrow",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id,
+                assets: loanAssets,
+                onBehalf: client.account.address,
+                receiver: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
+          expect(await client.balanceOf({ erc20: usdc })).toBe(loanAssets);
+
+          expect(
+            await client.allowance({ erc20: wstEth, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: wstEth, spender: bundler }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: wstEth, spender: bbEth.address }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: bundler }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: bbEth.address }),
+          ).toBe(0n);
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should close a WETH/wstETH position + unwrap wstEth + skim WETH",
+        async ({ client, config }) => {
+          const collateralAmount = parseEther("1");
+          const borrowAmount = parseEther("0.5");
+
+          await client.deal({ erc20: wstEth, amount: collateralAmount });
+          await client.deal({ erc20: stEth, amount: 0n });
+
+          await client.approve({ address: wstEth, args: [morpho, maxUint256] });
+          await client.writeContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "supplyCollateral",
+            args: [eth_wstEth, collateralAmount, client.account.address, "0x"],
+          });
+
+          await client.writeContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "borrow",
+            args: [
+              eth_wstEth,
+              borrowAmount,
+              0n,
+              client.account.address,
+              client.account.address,
+            ],
+          });
+
+          const extraWethAmount = parseEther("0.1");
+
+          await client.deal({
+            erc20: wNative,
+            amount: borrowAmount + extraWethAmount,
+          });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [eth_wstEth.id],
+              users: [client.account.address, bundler],
+              tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
+              vaults: [],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const position = data.getAccrualPosition(
+            client.account.address,
+            eth_wstEth.id,
+          );
+
+          const { operations, bundle } = await setupBundle(
+            client,
+            data,
+            [
+              {
+                type: "Blue_Repay",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id: eth_wstEth.id,
+                  shares: position.borrowShares,
+                  onBehalf: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+              {
+                type: "Blue_WithdrawCollateral",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id: eth_wstEth.id,
+                  assets: position.collateral,
+                  receiver: client.account.address,
+                  onBehalf: client.account.address,
+                },
+              },
+            ],
+            { unwrapTokens: new Set([wstEth]) },
+          );
+
+          const repayAmount = MathLib.wMulUp(
+            position.borrowAssets,
+            MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+          );
+
+          expect(bundle.requirements.signatures.length).toBe(2);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: { to: wNative, data: expect.any(String) },
+              args: [wNative, permit2, MathLib.MAX_UINT_160],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Approve",
+              sender: client.account.address,
+              address: wNative,
+              args: {
+                amount: MathLib.MAX_UINT_160,
+                spender: permit2,
+              },
+            },
+            {
+              type: "Erc20_Permit2",
+              sender: client.account.address,
+              address: wNative,
+              args: {
+                amount: repayAmount,
+                spender: bundler,
+                expiration: expect.any(BigInt),
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Transfer2",
+              sender: bundler,
+              address: wNative,
+              args: {
+                amount: repayAmount,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "Blue_Repay",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id: eth_wstEth.id,
+                shares: position.borrowShares,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Blue_SetAuthorization",
+              sender: bundler,
+              address: morpho,
+              args: {
+                owner: client.account.address,
+                isBundlerAuthorized: true,
+              },
+            },
+            {
+              type: "Blue_WithdrawCollateral",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id: eth_wstEth.id,
+                assets: position.collateral,
+                receiver: bundler,
+                onBehalf: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Unwrap",
+              address: wstEth,
+              sender: bundler,
+              args: {
+                amount: maxUint256,
+                receiver: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              address: wNative,
+              sender: bundler,
+              args: {
+                amount: maxUint256,
+                from: bundler,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              address: stEth,
+              sender: bundler,
+              args: {
+                amount: maxUint256,
+                from: bundler,
+                to: client.account.address,
+              },
+            },
+          ]);
+
+          const chainPosition = await fetchPosition(
+            client.account.address,
+            eth_wstEth.id,
+            client,
+          );
+
+          const wstEthToken = data.getWrappedToken(wstEth);
+
+          const latestBlock = await client.getBlock();
+
+          const accruedInterests =
+            position.accrueInterest(latestBlock.timestamp).borrowAssets -
+            borrowAmount;
+
+          expect(chainPosition.collateral).toBe(0n);
+          expect(chainPosition.supplyShares).toBe(0n);
+          expect(chainPosition.borrowShares).toBe(0n);
+
+          expect(
+            await client.balanceOf({ erc20: wstEth, owner: bundler }),
+          ).toBe(0n);
+          expect(await client.balanceOf({ erc20: stEth, owner: bundler })).toBe(
+            1n,
+          ); // 1 stETH is always remaining in the bundler
+          expect(
+            await client.balanceOf({ erc20: wNative, owner: bundler }),
+          ).toBe(0n);
+
+          expect(await client.balanceOf({ erc20: stEth })).toBe(
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 2n,
+          );
+          expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
+          expect(await client.balanceOf({ erc20: wNative })).toBe(
+            extraWethAmount - accruedInterests,
+          ); // we normally didn't experienced any slippage
+        },
+      );
     });
   });
 
   describe("without signatures", () => {
     describe("ethereum", () => {
-      const { morpho, permit2, bundler, wNative, wstEth, stEth, usdc, usdt } =
-        addresses[ChainId.EthMainnet];
+      const {
+        morpho,
+        permit2,
+        bundler,
+        publicAllocator,
+        wNative,
+        wstEth,
+        stEth,
+        usdc,
+        usdt,
+      } = addresses[ChainId.EthMainnet];
       const {
         eth_idle,
         eth_sDai,
@@ -1855,7 +2461,8 @@ describe("populateBundle", () => {
         usdt_wstEth,
         usdt_sDai,
       } = markets[ChainId.EthMainnet];
-      const { steakUsdc, bbUsdt, bbEth, re7Weth } = vaults[ChainId.EthMainnet];
+      const { steakUsdc, bbUsdt, bbEth, bbUsdc, re7Weth } =
+        vaults[ChainId.EthMainnet];
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
@@ -3734,6 +4341,603 @@ describe("populateBundle", () => {
               },
             },
           ]);
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should borrow USDC with shared liquidity and reallocation fee + unwrap remaining WETH",
+        async ({ client, config }) => {
+          const steakUsdcOwner = await client.readContract({
+            address: steakUsdc.address,
+            abi: metaMorphoAbi,
+            functionName: "owner",
+          });
+
+          await client.setBalance({
+            address: steakUsdcOwner,
+            value: parseEther("1000"),
+          });
+          await client.writeContract({
+            account: steakUsdcOwner,
+            address: publicAllocator,
+            abi: publicAllocatorAbi,
+            functionName: "setFlowCaps",
+            args: [
+              steakUsdc.address,
+              [
+                {
+                  id: usdc_wstEth.id,
+                  caps: {
+                    maxIn: parseUnits("10000", 6),
+                    maxOut: 0n,
+                  },
+                },
+                {
+                  id: usdc_wbtc.id,
+                  caps: {
+                    maxIn: 0n,
+                    maxOut: parseUnits("20000", 6), // Less than bbUsdc but more than maxIn.
+                  },
+                },
+              ],
+            ],
+          });
+
+          const bbUsdcFee = parseEther("0.002");
+
+          const bbUsdcOwner = await client.readContract({
+            address: bbUsdc.address,
+            abi: metaMorphoAbi,
+            functionName: "owner",
+          });
+
+          await client.setBalance({
+            address: bbUsdcOwner,
+            value: parseEther("1000"),
+          });
+          await client.writeContract({
+            account: bbUsdcOwner,
+            address: publicAllocator,
+            abi: publicAllocatorAbi,
+            functionName: "setFee",
+            args: [bbUsdc.address, bbUsdcFee],
+          });
+          await client.writeContract({
+            account: bbUsdcOwner,
+            address: publicAllocator,
+            abi: publicAllocatorAbi,
+            functionName: "setFlowCaps",
+            args: [
+              bbUsdc.address,
+              [
+                {
+                  id: usdc_wstEth.id,
+                  caps: {
+                    maxIn: parseUnits("1000000", 6),
+                    maxOut: 0n,
+                  },
+                },
+                {
+                  id: usdc_wbtc.id,
+                  caps: {
+                    maxIn: 0n,
+                    maxOut: parseUnits("100000", 6),
+                  },
+                },
+              ],
+            ],
+          });
+
+          const collateralAssets = parseEther("50000");
+          const depositAssets = parseEther("50");
+          await client.deal({ erc20: wstEth, amount: collateralAssets });
+          await client.deal({ erc20: wNative, amount: depositAssets });
+
+          const { id } = usdc_wstEth;
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [
+                eth_idle.id,
+                eth_rEth.id,
+                eth_sDai.id,
+                eth_wbtc.id,
+                eth_wstEth.id,
+                eth_wstEth_2.id,
+                id,
+                usdc_idle.id,
+                usdc_wbtc.id,
+                usdc_wbIB01.id,
+              ],
+              users: [
+                client.account.address,
+                donator.address,
+                bundler,
+                steakUsdc.address,
+                bbEth.address,
+                bbUsdc.address,
+              ],
+              tokens: [
+                NATIVE_ADDRESS,
+                wNative,
+                usdc,
+                stEth,
+                wstEth,
+                steakUsdc.address,
+                bbEth.address,
+                bbUsdc.address,
+              ],
+              vaults: [steakUsdc.address, bbEth.address, bbUsdc.address],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const loanAssets = data
+            .getMarketPublicReallocations(id)
+            .data.getMarket(id).liquidity;
+
+          const { operations, bundle } = await setupBundle(
+            client,
+            data,
+            [
+              {
+                type: "MetaMorpho_Deposit",
+                sender: client.account.address,
+                address: bbEth.address,
+                args: {
+                  assets: depositAssets,
+                  owner: donator.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+              {
+                type: "Blue_SupplyCollateral",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id,
+                  assets: collateralAssets,
+                  onBehalf: client.account.address,
+                },
+              },
+              {
+                type: "Blue_Borrow",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id,
+                  assets: loanAssets,
+                  onBehalf: client.account.address,
+                  receiver: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+            {
+              supportsSignature: false,
+              unwrapTokens: new Set([wNative]),
+            },
+          );
+
+          expect(bundle.requirements.signatures).toStrictEqual([]);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: { to: wstEth, data: expect.any(String) },
+              args: [wstEth, bundler, collateralAssets],
+            },
+            {
+              type: "erc20Approve",
+              tx: { to: wNative, data: expect.any(String) },
+              args: [wNative, bundler, depositAssets],
+            },
+            {
+              type: "morphoSetAuthorization",
+              tx: { to: morpho, data: expect.any(String) },
+              args: [bundler, true],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Approve",
+              sender: client.account.address,
+              address: wNative,
+              args: {
+                amount: MathLib.MAX_UINT_160,
+                spender: permit2,
+              },
+            },
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: wstEth,
+              args: {
+                amount: collateralAssets,
+                spender: bundler,
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Permit2",
+              sender: client.account.address,
+              address: wNative,
+              args: {
+                amount: depositAssets,
+                spender: bundler,
+                expiration: expect.any(BigInt),
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: bundler,
+              address: wstEth,
+              args: {
+                amount: collateralAssets,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: client.account.address,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: bbUsdcFee,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "Erc20_Transfer2",
+              sender: bundler,
+              address: wNative,
+              args: {
+                amount: depositAssets,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "MetaMorpho_Deposit",
+              sender: bundler,
+              address: bbEth.address,
+              args: {
+                assets: depositAssets,
+                owner: donator.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Blue_SupplyCollateral",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id,
+                assets: collateralAssets,
+                onBehalf: client.account.address,
+              },
+            },
+            {
+              type: "Blue_SetAuthorization",
+              sender: bundler,
+              address: morpho,
+              args: {
+                owner: client.account.address,
+                isBundlerAuthorized: true,
+              },
+            },
+            {
+              type: "MetaMorpho_PublicReallocate",
+              sender: bundler,
+              address: bbUsdc.address,
+              args: {
+                withdrawals: [
+                  {
+                    id: usdc_wbtc.id,
+                    assets: parseUnits("100000", 6),
+                  },
+                ],
+                supplyMarketId: id,
+              },
+            },
+            {
+              type: "MetaMorpho_PublicReallocate",
+              sender: bundler,
+              address: steakUsdc.address,
+              args: {
+                withdrawals: [
+                  {
+                    id: usdc_wbtc.id,
+                    assets: parseUnits("10000", 6),
+                  },
+                ],
+                supplyMarketId: id,
+              },
+            },
+            {
+              type: "Blue_Borrow",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id,
+                assets: loanAssets,
+                onBehalf: client.account.address,
+                receiver: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
+          expect(await client.balanceOf({ erc20: usdc })).toBe(loanAssets);
+
+          expect(
+            await client.allowance({ erc20: wstEth, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: wstEth, spender: bundler }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: wstEth, spender: bbEth.address }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: bundler }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: bbEth.address }),
+          ).toBe(0n);
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should close a WETH/wstETH position + unwrap wstEth + skim WETH",
+        async ({ client, config }) => {
+          const collateralAmount = parseEther("1");
+          const borrowAmount = parseEther("0.5");
+
+          await client.deal({ erc20: wstEth, amount: collateralAmount });
+          await client.deal({ erc20: stEth, amount: 0n });
+
+          await client.approve({ address: wstEth, args: [morpho, maxUint256] });
+          await client.writeContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "supplyCollateral",
+            args: [eth_wstEth, collateralAmount, client.account.address, "0x"],
+          });
+
+          await client.writeContract({
+            address: morpho,
+            abi: blueAbi,
+            functionName: "borrow",
+            args: [
+              eth_wstEth,
+              borrowAmount,
+              0n,
+              client.account.address,
+              client.account.address,
+            ],
+          });
+
+          const extraWethAmount = parseEther("0.1");
+
+          await client.deal({
+            erc20: wNative,
+            amount: borrowAmount + extraWethAmount,
+          });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [eth_wstEth.id],
+              users: [client.account.address, bundler],
+              tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
+              vaults: [],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const position = data.getAccrualPosition(
+            client.account.address,
+            eth_wstEth.id,
+          );
+
+          const { operations, bundle } = await setupBundle(
+            client,
+            data,
+            [
+              {
+                type: "Blue_Repay",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id: eth_wstEth.id,
+                  shares: position.borrowShares,
+                  onBehalf: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+              {
+                type: "Blue_WithdrawCollateral",
+                sender: client.account.address,
+                address: morpho,
+                args: {
+                  id: eth_wstEth.id,
+                  assets: position.collateral,
+                  receiver: client.account.address,
+                  onBehalf: client.account.address,
+                },
+              },
+            ],
+            { supportsSignature: false, unwrapTokens: new Set([wstEth]) },
+          );
+
+          const repayAmount = MathLib.wMulUp(
+            position.borrowAssets,
+            MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+          );
+
+          expect(bundle.requirements.signatures).toStrictEqual([]);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: { to: wNative, data: expect.any(String) },
+              args: [wNative, bundler, expect.any(BigInt)],
+            },
+            {
+              type: "morphoSetAuthorization",
+              tx: { to: morpho, data: expect.any(String) },
+              args: [bundler, true],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Approve",
+              sender: client.account.address,
+              address: wNative,
+              args: {
+                amount: MathLib.MAX_UINT_160,
+                spender: permit2,
+              },
+            },
+            {
+              type: "Erc20_Permit2",
+              sender: client.account.address,
+              address: wNative,
+              args: {
+                amount: repayAmount,
+                spender: bundler,
+                expiration: expect.any(BigInt),
+                nonce: 0n,
+              },
+            },
+            {
+              type: "Erc20_Transfer2",
+              sender: bundler,
+              address: wNative,
+              args: {
+                amount: repayAmount,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "Blue_Repay",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id: eth_wstEth.id,
+                shares: position.borrowShares,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Blue_SetAuthorization",
+              sender: bundler,
+              address: morpho,
+              args: {
+                owner: client.account.address,
+                isBundlerAuthorized: true,
+              },
+            },
+            {
+              type: "Blue_WithdrawCollateral",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id: eth_wstEth.id,
+                assets: position.collateral,
+                receiver: bundler,
+                onBehalf: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Unwrap",
+              address: wstEth,
+              sender: bundler,
+              args: {
+                amount: maxUint256,
+                receiver: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              address: wNative,
+              sender: bundler,
+              args: {
+                amount: maxUint256,
+                from: bundler,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              address: stEth,
+              sender: bundler,
+              args: {
+                amount: maxUint256,
+                from: bundler,
+                to: client.account.address,
+              },
+            },
+          ]);
+
+          const chainPosition = await fetchPosition(
+            client.account.address,
+            eth_wstEth.id,
+            client,
+          );
+
+          const wstEthToken = data.getWrappedToken(wstEth);
+
+          const latestBlock = await client.getBlock();
+
+          const accruedInterests =
+            position.accrueInterest(latestBlock.timestamp).borrowAssets -
+            borrowAmount;
+
+          expect(chainPosition.collateral).toBe(0n);
+          expect(chainPosition.supplyShares).toBe(0n);
+          expect(chainPosition.borrowShares).toBe(0n);
+
+          expect(
+            await client.balanceOf({ erc20: wstEth, owner: bundler }),
+          ).toBe(0n);
+          expect(await client.balanceOf({ erc20: stEth, owner: bundler })).toBe(
+            1n,
+          ); // 1 stETH is always remaining in the bundler
+          expect(
+            await client.balanceOf({ erc20: wNative, owner: bundler }),
+          ).toBe(0n);
+
+          expect(await client.balanceOf({ erc20: stEth })).toBe(
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 2n,
+          );
+          expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
+          expect(await client.balanceOf({ erc20: wNative })).toBe(
+            extraWethAmount - accruedInterests,
+          ); // we normally didn't experienced any slippage
         },
       );
     });
