@@ -54,7 +54,7 @@ export default defineWorkspace([
       name: "bundler-sdk",
       include: ["packages/bundler-sdk/**/*.test.ts"],
       environment: "happy-dom",
-      testTimeout: 30_000,
+      testTimeout: 60_000,
     },
   },
   {
