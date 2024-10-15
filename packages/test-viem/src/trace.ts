@@ -3,7 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import "colors";
 import { writeFile } from "node:fs/promises";
-import { red, yellow } from "colors";
+import { grey, red, yellow } from "colors";
 import {
   type Address,
   type BlockTag,
@@ -149,9 +149,9 @@ export const formatCallTrace = (trace: RpcCallTrace, level = 1): string => {
     .map((subtrace) => formatCallTrace(subtrace, level + 1))
     .join("\n");
 
-  const error = trace.revertReason ?? trace.output;
+  const returnValue = trace.revertReason ?? trace.output;
 
-  return `${level === 1 ? `${getIndentLevel(level, true)}FROM ${trace.from.grey}\n`.cyan : ""}${getIndentLevel(level, true)}${trace.type.yellow} ${trace.from === trace.to ? ("self").grey : `(${trace.to.white})`}.${formatCallSignature(trace, level)}${error ? ` -> ${error}`.red : ""}
+  return `${level === 1 ? `${getIndentLevel(level, true)}FROM ${trace.from.grey}\n`.cyan : ""}${getIndentLevel(level, true)}${trace.type.yellow} ${trace.from === trace.to ? ("self").grey : `(${trace.to.white})`}.${formatCallSignature(trace, level)}${returnValue ? (trace.error ? red : grey)(` -> ${returnValue}`) : ""}
 ${rest}`;
 };
 

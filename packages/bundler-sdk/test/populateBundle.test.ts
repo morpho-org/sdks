@@ -1167,7 +1167,7 @@ describe("populateBundle", () => {
         async ({ client, config }) => {
           const { id } = usdc_wstEth;
           const collateralAssets = parseEther("100");
-          const loanShares = parseUnits("50000", 12);
+          const loanShares = parseUnits("5000", 12);
           const loanAssets = (await fetchMarket(id, client)).toBorrowAssets(
             loanShares,
           );
@@ -3628,7 +3628,7 @@ describe("populateBundle", () => {
         async ({ client, config }) => {
           const { id } = usdc_wstEth;
           const collateralAssets = parseEther("100");
-          const loanShares = parseUnits("50000", 12);
+          const loanShares = parseUnits("5000", 12);
           const loanAssets = (await fetchMarket(id, client)).toBorrowAssets(
             loanShares,
           );
