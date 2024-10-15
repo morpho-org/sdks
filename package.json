@@ -23,9 +23,9 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.3",
-    "@lerna-lite/cli": "^3.9.2",
-    "@lerna-lite/publish": "^3.9.2",
-    "@lerna-lite/version": "^3.9.2",
+    "@lerna-lite/cli": "^3.9.3",
+    "@lerna-lite/publish": "^3.9.3",
+    "@lerna-lite/version": "^3.9.3",
     "@types/kill-port": "^2",
     "@vitest/coverage-v8": "^2.1.2",
     "dotenv-cli": "^7.4.2",

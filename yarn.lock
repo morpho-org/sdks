@@ -2097,7 +2097,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lerna-lite/cli@npm:3.9.3, @lerna-lite/cli@npm:^3.9.2":
+"@lerna-lite/cli@npm:3.9.3, @lerna-lite/cli@npm:^3.9.3":
   version: 3.9.3
   resolution: "@lerna-lite/cli@npm:3.9.3"
   dependencies:
@@ -2193,7 +2193,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lerna-lite/publish@npm:^3.9.2":
+"@lerna-lite/publish@npm:^3.9.3":
   version: 3.9.3
   resolution: "@lerna-lite/publish@npm:3.9.3"
   dependencies:
@@ -2226,7 +2226,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lerna-lite/version@npm:3.9.3, @lerna-lite/version@npm:^3.9.2":
+"@lerna-lite/version@npm:3.9.3, @lerna-lite/version@npm:^3.9.3":
   version: 3.9.3
   resolution: "@lerna-lite/version@npm:3.9.3"
   dependencies:
@@ -2750,9 +2750,9 @@ __metadata:
   resolution: "@morpho-org/sdks@workspace:."
   dependencies:
     "@biomejs/biome": "npm:^1.9.3"
-    "@lerna-lite/cli": "npm:^3.9.2"
-    "@lerna-lite/publish": "npm:^3.9.2"
-    "@lerna-lite/version": "npm:^3.9.2"
+    "@lerna-lite/cli": "npm:^3.9.3"
+    "@lerna-lite/publish": "npm:^3.9.3"
+    "@lerna-lite/version": "npm:^3.9.3"
     "@types/kill-port": "npm:^2"
     "@vitest/coverage-v8": "npm:^2.1.2"
     dotenv-cli: "npm:^7.4.2"
