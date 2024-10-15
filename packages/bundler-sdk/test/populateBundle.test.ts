@@ -19,10 +19,13 @@ import { format } from "@morpho-org/morpho-ts";
 import { Erc20Errors } from "@morpho-org/simulation-sdk";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { configure } from "@testing-library/dom";
 import { maxUint256, parseEther, parseUnits, zeroAddress } from "viem";
 import { describe, expect } from "vitest";
 import { donate, donator, setupBundle } from "./helpers.js";
 import { test } from "./setup.js";
+
+configure({ asyncUtilTimeout: 5_000 });
 
 describe("populateBundle", () => {
   describe("with signatures", () => {

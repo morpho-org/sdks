@@ -2664,6 +2664,7 @@ __metadata:
     "@morpho-org/simulation-sdk-wagmi": "workspace:^"
     "@morpho-org/test-viem": "workspace:^"
     "@morpho-org/test-wagmi": "workspace:^"
+    "@testing-library/dom": "npm:^10.4.0"
     "@types/lodash": "npm:^4.17.7"
     "@types/node": "npm:^22.2.0"
     lodash: "npm:^4.17.21"

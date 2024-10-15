@@ -28,6 +28,7 @@
     "@morpho-org/simulation-sdk-wagmi": "workspace:^",
     "@morpho-org/test-viem": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
+    "@testing-library/dom": "^10.4.0",
     "@types/lodash": "^4.17.7",
     "@types/node": "^22.2.0",
     "lodash": "^4.17.21",
