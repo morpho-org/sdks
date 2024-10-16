@@ -34,7 +34,7 @@
     "access": "public"
   },
   "release": {
-    "branches": ["main"],
+    "branches": ["main", "next"],
     "extends": "semantic-release-monorepo"
   }
 }
