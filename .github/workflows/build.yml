@@ -1,7 +1,9 @@
-name: Build packages
+name: Build
 
 on:
   pull_request:
+    branches-ignore:
+      - next
   workflow_call:
 
 concurrency:
