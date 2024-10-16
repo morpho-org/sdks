@@ -1,9 +1,14 @@
 name: Publish on NPM
 
 on:
-  push:
-    branches:
-      - feat/vitest
+  workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   publish-to-npm:

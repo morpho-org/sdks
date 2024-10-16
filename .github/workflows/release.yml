@@ -1,0 +1,28 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - master
+      - next
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    secrets: inherit
+
+  vitest:
+    uses: ./.github/workflows/vitest.yml
+    secrets: inherit
+
+  release:
+    needs:
+      - build
+      - vitest
+
+    uses: ./.github/workflows/semantic-release.yml
+    secrets: inherit
