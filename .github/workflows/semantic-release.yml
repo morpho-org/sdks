@@ -6,10 +6,6 @@ on:
       NPM_TOKEN:
         required: true
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
-
 jobs:
   publish-to-npm:
     name: Publish to NPM

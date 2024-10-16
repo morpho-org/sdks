@@ -3,10 +3,6 @@ name: Lint
 on:
   workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: false
-
 jobs:
   lint:
     runs-on: ubuntu-latest

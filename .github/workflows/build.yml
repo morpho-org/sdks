@@ -3,14 +3,8 @@ name: Build
 on:
   workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
-
 jobs:
   build:
-    if: github.base_ref != 'refs/heads/main' && github.head_ref != 'refs/heads/next'
-
     strategy:
       fail-fast: false
       matrix:

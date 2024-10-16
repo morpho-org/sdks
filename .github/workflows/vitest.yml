@@ -3,14 +3,8 @@ name: Test
 on:
   workflow_call:
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
-
 jobs:
   vitest:
-    if: github.base_ref != 'refs/heads/main' && github.head_ref != 'refs/heads/next'
-
     runs-on: ubuntu-latest
 
     steps:

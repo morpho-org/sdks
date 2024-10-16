@@ -3,6 +3,10 @@ name: Push
 on:
   push:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   lint:
     uses: ./.github/workflows/lint.yml
