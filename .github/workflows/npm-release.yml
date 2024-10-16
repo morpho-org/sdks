@@ -44,8 +44,7 @@ jobs:
 
       - run: pnpm install
 
-      - name: Version and publish
-        run: |
+      - run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           if [ -n "${{ inputs.custom_version }}" ]; then
             yarn lerna version ${{ inputs.custom_version }} --y --force-publish

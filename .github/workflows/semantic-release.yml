@@ -1,0 +1,23 @@
+name: Publish on NPM
+
+on:
+  push:
+    branches:
+      - feat/vitest
+
+jobs:
+  publish-to-npm:
+    name: Publish to NPM
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install
+
+      - run: pnpm -r exec semantic-release --dry-run
