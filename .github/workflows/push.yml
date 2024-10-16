@@ -16,12 +16,13 @@ jobs:
 
   vitest:
     uses: ./.github/workflows/vitest.yml
+    secrets: inherit
 
   release:
     needs:
       - lint
       - build
-      # - vitest
+      - vitest
 
     uses: ./.github/workflows/semantic-release.yml
     secrets: inherit

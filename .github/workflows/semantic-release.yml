@@ -1,4 +1,4 @@
-name: Publish on NPM
+name: Publish
 
 on:
   workflow_call:
@@ -7,8 +7,32 @@ on:
         required: true
 
 jobs:
-  publish-to-npm:
-    name: Publish to NPM
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - test
+          - test-viem
+          - test-ethers
+          - test-wagmi
+
+          - morpho-ts
+          - morpho-test
+
+          - blue-api-sdk
+          - blue-sdk
+          - blue-sdk-ethers
+          - blue-sdk-viem
+          - blue-sdk-wagmi
+
+          - simulation-sdk
+          - simulation-sdk-wagmi
+          - bundler-sdk-viem
+
+          - liquidation-sdk-viem
+
+    name: "@morpho-org/${{ matrix.package }}"
     runs-on: ubuntu-latest
 
     steps:
@@ -23,7 +47,7 @@ jobs:
 
       - run: pnpm install
 
-      - run: pnpm -r --workspace-concurrency=1 exec semantic-release
+      - run: pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
