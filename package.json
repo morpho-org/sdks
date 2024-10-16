@@ -13,7 +13,6 @@
   "packageManager": "yarn@4.5.0",
   "workspaces": ["packages/*"],
   "scripts": {
-    "postinstall": "husky && yarn lint --write package.json packages/**/package.json",
     "lint": "biome check",
     "test": "dotenv -- vitest",
     "coverage": "vitest run --coverage",
@@ -24,12 +23,9 @@
     "@lerna-lite/cli": "^3.9.3",
     "@lerna-lite/publish": "^3.9.3",
     "@lerna-lite/version": "^3.9.3",
-    "@types/kill-port": "^2",
     "@vitest/coverage-v8": "^2.1.2",
     "dotenv-cli": "^7.4.2",
     "happy-dom": "^15.7.4",
-    "husky": "^9.1.6",
-    "kill-port": "^2.0.1",
     "typescript": "^5.6.3",
     "vitest": "^2.1.2"
   }

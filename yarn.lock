@@ -2652,9 +2652,9 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@morpho-org/bundler-sdk@workspace:packages/bundler-sdk":
+"@morpho-org/bundler-sdk-viem@workspace:packages/bundler-sdk-viem":
   version: 0.0.0-use.local
-  resolution: "@morpho-org/bundler-sdk@workspace:packages/bundler-sdk"
+  resolution: "@morpho-org/bundler-sdk-viem@workspace:packages/bundler-sdk-viem"
   dependencies:
     "@morpho-org/blue-sdk": "workspace:^"
     "@morpho-org/blue-sdk-viem": "workspace:^"
@@ -2754,12 +2754,9 @@ __metadata:
     "@lerna-lite/cli": "npm:^3.9.3"
     "@lerna-lite/publish": "npm:^3.9.3"
     "@lerna-lite/version": "npm:^3.9.3"
-    "@types/kill-port": "npm:^2"
     "@vitest/coverage-v8": "npm:^2.1.2"
     dotenv-cli: "npm:^7.4.2"
     happy-dom: "npm:^15.7.4"
-    husky: "npm:^9.1.6"
-    kill-port: "npm:^2.0.1"
     typescript: "npm:^5.6.3"
     vitest: "npm:^2.1.2"
   languageName: unknown
@@ -4518,16 +4515,6 @@ __metadata:
   version: 4.0.9
   resolution: "@types/js-yaml@npm:4.0.9"
   checksum: 10c0/24de857aa8d61526bbfbbaa383aa538283ad17363fcd5bb5148e2c7f604547db36646440e739d78241ed008702a8920665d1add5618687b6743858fae00da211
-  languageName: node
-  linkType: hard
-
-"@types/kill-port@npm:^2":
-  version: 2.0.3
-  resolution: "@types/kill-port@npm:2.0.3"
-  dependencies:
-    "@types/node": "npm:*"
-    shell-exec: "npm:^1"
-  checksum: 10c0/e48aa96134f01770ec729e0cc0da6388a0fbbf659e69a3e993fad9d12c48a258b3a70741699b51e5b35f664fa065ebde5a2fe25fea98dcc5eed2abdeb2b76c47
   languageName: node
   linkType: hard
 
@@ -7813,13 +7800,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"get-them-args@npm:1.3.2":
-  version: 1.3.2
-  resolution: "get-them-args@npm:1.3.2"
-  checksum: 10c0/a75e26d7369a00f596dc9c3c7b4259a219d4486a0beef51d991867103cc8c07d22814a24210d9c9f56cefb35f9848e16fe120b57b3ec1ea333054e715059d586
-  languageName: node
-  linkType: hard
-
 "git-raw-commits@npm:^4.0.0":
   version: 4.0.0
   resolution: "git-raw-commits@npm:4.0.0"
@@ -8362,15 +8342,6 @@ __metadata:
   version: 5.0.0
   resolution: "human-signals@npm:5.0.0"
   checksum: 10c0/5a9359073fe17a8b58e5a085e9a39a950366d9f00217c4ff5878bd312e09d80f460536ea6a3f260b5943a01fe55c158d1cea3fc7bee3d0520aeef04f6d915c82
-  languageName: node
-  linkType: hard
-
-"husky@npm:^9.1.6":
-  version: 9.1.6
-  resolution: "husky@npm:9.1.6"
-  bin:
-    husky: bin.js
-  checksum: 10c0/705673db4a247c1febd9c5df5f6a3519106cf0335845027bb50a15fba9b1f542cb2610932ede96fd08008f6d9f49db0f15560509861808b0031cdc0e7c798bac
   languageName: node
   linkType: hard
 
@@ -9213,18 +9184,6 @@ __metadata:
   version: 1.0.0
   resolution: "keyvaluestorage-interface@npm:1.0.0"
   checksum: 10c0/0e028ebeda79a4e48c7e36708dbe7ced233c7a1f1bc925e506f150dd2ce43178bee8d20361c445bd915569709d9dc9ea80063b4d3c3cf5d615ab43aa31d3ec3d
-  languageName: node
-  linkType: hard
-
-"kill-port@npm:^2.0.1":
-  version: 2.0.1
-  resolution: "kill-port@npm:2.0.1"
-  dependencies:
-    get-them-args: "npm:1.3.2"
-    shell-exec: "npm:1.0.2"
-  bin:
-    kill-port: cli.js
-  checksum: 10c0/fcbcea8e950f564e0a0b3a986390ecbd8ef1cac00f365cc2bf1f42dd972dc3a714fc2fbe362068deba2bec11cf10a7d3edb7aaf2d12e48390a2c26d73f85b4f7
   languageName: node
   linkType: hard
 
@@ -11738,20 +11697,6 @@ __metadata:
   version: 3.0.0
   resolution: "shebang-regex@npm:3.0.0"
   checksum: 10c0/1dbed0726dd0e1152a92696c76c7f06084eb32a90f0528d11acd764043aacf76994b2fb30aa1291a21bd019d6699164d048286309a278855ee7bec06cf6fb690
-  languageName: node
-  linkType: hard
-
-"shell-exec@npm:1.0.2":
-  version: 1.0.2
-  resolution: "shell-exec@npm:1.0.2"
-  checksum: 10c0/3733ed251bc025340a373da151c44d36e69d37f570e94f5dd6a968427e8d9f751a58dd87c5a01bf0ad1289ad1de963a425aaf14ad3a06f8aee56f776462b63ca
-  languageName: node
-  linkType: hard
-
-"shell-exec@npm:^1":
-  version: 1.1.2
-  resolution: "shell-exec@npm:1.1.2"
-  checksum: 10c0/d03cdcaf1a7462397d70efde4f43df46a6776bff27d46c83a9f985898b738366236185e79958717356f19b54a1766597d86dfab4d1d8dbe18c07cd5586d2d27c
   languageName: node
   linkType: hard
 
