@@ -51,8 +51,8 @@ export default defineWorkspace([
   },
   {
     test: {
-      name: "bundler-sdk",
-      include: ["packages/bundler-sdk/**/*.test.ts"],
+      name: "bundler-sdk-viem",
+      include: ["packages/bundler-sdk-viem/**/*.test.ts"],
       environment: "happy-dom",
       testTimeout: 60_000,
     },
