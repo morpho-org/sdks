@@ -1,10 +1,13 @@
 {
   "name": "@morpho-org/liquidation-sdk-viem",
-  "version": "2.0.0-alpha.10",
+  "version": "2.0.0-stable.0",
   "author": "Morpho Labs <contact@morpho.org>",
   "type": "module",
   "main": "src/index.ts",
-  "files": ["lib", "examples"],
+  "files": [
+    "lib",
+    "examples"
+  ],
   "scripts": {
     "prepublish": "yarn build",
     "compile": "hardhat compile",

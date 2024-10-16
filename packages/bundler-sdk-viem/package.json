@@ -1,11 +1,13 @@
 {
   "name": "@morpho-org/bundler-sdk-viem",
-  "version": "2.0.0-alpha.10",
+  "version": "2.0.0-stable.0",
   "author": "Morpho Labs <contact@morpho.org>",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "yarn build",
     "build": "tsc --build tsconfig.build.json"
