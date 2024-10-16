@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   build:
-    if: github.event_name == 'workflow_call' || github.ref != 'refs/heads/next' && github.base_ref != 'refs/heads/main'
+    if: github.base_ref != 'refs/heads/main' && github.head_ref != 'refs/heads/next'
 
     strategy:
       fail-fast: false
