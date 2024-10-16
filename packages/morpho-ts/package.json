@@ -25,7 +25,7 @@
     "access": "public"
   },
   "release": {
-    "branches": ["main", "next"],
+    "branches": ["main", { "name": "next", "prerelease": true }],
     "extends": "semantic-release-monorepo"
   }
 }
