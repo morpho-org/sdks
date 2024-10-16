@@ -40,18 +40,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: yarn
+          cache: pnpm
 
-      - run: yarn install --immutable
-      - run: yarn lint --write package.json packages/**/package.json # for some reason, postinstall script does not get executed automatically
+      - run: pnpm install
 
       - name: Version and publish
         run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
           if [ -n "${{ inputs.custom_version }}" ]; then
             yarn lerna version ${{ inputs.custom_version }} --y --force-publish
-            yarn run publish --y --dist-tag unstable
+            pnpm -r publish --tag unstable
           else
             yarn lerna version ${{ inputs.version }} --no-private --no-changelog --conventional-commits --y
-            yarn run publish --y
+            pnpm -r publish
           fi

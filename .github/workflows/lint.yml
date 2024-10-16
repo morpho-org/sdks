@@ -17,9 +17,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: yarn
+          cache: pnpm
 
-      - run: yarn install --immutable
-      - run: yarn lint --write package.json packages/**/package.json # for some reason, postinstall script does not get executed automatically
+      - run: pnpm install
 
-      - run: yarn lint
+      - run: pnpm lint

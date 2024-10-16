@@ -6,7 +6,7 @@
   "main": "src/index.ts",
   "files": ["lib"],
   "scripts": {
-    "prepublish": "yarn build",
+    "prepublish": "$npm_execpath build",
     "codegen": "graphql-codegen --config codegen.ts",
     "build": "tsc --build tsconfig.build.json"
   },

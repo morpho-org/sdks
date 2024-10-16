@@ -5,8 +5,6 @@ export default defineConfig({
     coverage: {
       reporter: process.env.CI ? ["lcov"] : ["text", "json", "html"],
       exclude: [
-        ".yarn",
-        ".pnp.*",
         "vitest.*.ts",
         "**/lib/**",
         "**/dist/**",
