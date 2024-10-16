@@ -44,5 +44,9 @@
       }
     },
     "access": "public"
+  },
+  "release": {
+    "branches": ["main", "feat/vitest"],
+    "extends": "semantic-release-monorepo"
   }
 }
