@@ -28,6 +28,8 @@ jobs:
         with:
           app-id: ${{ vars.CD_GITHUB_APP_ID }}
           private-key: ${{ secrets.CD_GITHUB_APP_PRIVATE_KEY }}
+      
+      - uses: pnpm/action-setup@v4
 
       - uses: actions/checkout@v4
         with:
