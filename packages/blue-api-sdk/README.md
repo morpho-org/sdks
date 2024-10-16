@@ -1,11 +1,29 @@
 # @morpho-org/blue-api-sdk
 
-[![npm package][npm-img]][npm-url]
-[![Downloads][downloads-img]][downloads-url]
+<a href="https://www.npmjs.com/package/@morpho-org/blue-api-sdk">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/v/@morpho-org/blue-api-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/v/@morpho-org/blue-api-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
+    </picture>
+</a>
+<a href="https://github.com/wevm/@morpho-org/blue-api-sdk/blob/main/LICENSE">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/blue-api-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/l/@morpho-org/blue-api-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
+    </picture>
+</a>
+<a href="https://www.npmjs.com/package/@morpho-org/blue-api-sdk">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/dm/@morpho-org/blue-api-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/dm/@morpho-org/blue-api-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Downloads per month">
+    </picture>
+</a>
+<br />
+<br />
 
-Useful utility package to easily integrate Morpho's GraphQL API either on a raw client or through Apollo.
+GraphQL SDK that exports types from the [API's GraphQL schema](https://blue-api.morpho.org/graphql) and a useful Apollo cache controller.
 
-## Install
+## Installation
 
 ```bash
 npm install @morpho-org/blue-api-sdk
@@ -15,10 +33,7 @@ npm install @morpho-org/blue-api-sdk
 yarn add @morpho-org/blue-api-sdk
 ```
 
----
-
 ## Getting Started
-
 
 ### Codegen
 
