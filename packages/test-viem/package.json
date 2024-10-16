@@ -1,12 +1,10 @@
 {
   "name": "@morpho-org/test-viem",
   "version": "2.0.0-alpha.10",
-  "author": "Morpho Association <contact@morpho.org>",
+  "author": "Morpho Labs <contact@morpho.org>",
   "type": "module",
   "main": "src/index.ts",
-  "files": [
-    "lib"
-  ],
+  "files": ["lib"],
   "license": "MIT",
   "scripts": {
     "prepublish": "yarn build",

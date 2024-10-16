@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/bundler-sdk-viem",
   "version": "2.0.0-alpha.10",
-  "author": "Morpho Association <contact@morpho.org>",
+  "author": "Morpho Labs <contact@morpho.org>",
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",

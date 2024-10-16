@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Collection of SDKs to interact with Morpho",
   "repository": "git@github.com:morpho-org/sdks.git",
-  "author": "Morpho Association <contact@morpho.org>",
+  "author": "Morpho Labs <contact@morpho.org>",
   "license": "MIT",
   "type": "module",
   "private": true,
@@ -11,9 +11,7 @@
     "node": ">=22"
   },
   "packageManager": "yarn@4.5.0",
-  "workspaces": [
-    "packages/*"
-  ],
+  "workspaces": ["packages/*"],
   "scripts": {
     "postinstall": "husky && yarn lint --write package.json packages/**/package.json",
     "lint": "biome check",
