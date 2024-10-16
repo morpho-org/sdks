@@ -34,6 +34,7 @@ jobs:
 
           - liquidation-sdk-viem
 
+    name: "@morpho-org/${{ matrix.package }}"
     runs-on: ubuntu-latest
 
     steps:
