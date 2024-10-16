@@ -38,7 +38,7 @@
     "extends": ["@commitlint/config-conventional"]
   },
   "release": {
-    "branches": ["main", "next"],
+    "branches": ["main"],
     "extends": "semantic-release-monorepo"
   }
 }
