@@ -64,7 +64,7 @@ The return value will retain the nullability of the input value (giving priority
 > ```
 
 
-#### Hex Formatter
+### Hex Formatter
 
 Formats a value as a hexadecimal string.
 
@@ -81,7 +81,9 @@ format.hex.of(255n); // "ff"
 
 - `.prefix()`: Prepend the result with `0x`
 
-#### Number Formatter
+___
+
+### Number Formatter
 
 Formats a value as a standard number with optional customization.
 
@@ -104,7 +106,9 @@ format.number.of(123.45); // "123.45"
 - `.readable()`: Makes the value more readable for small numbers.
 - `.default(string)`: Sets a default value in case `value` (or `decimals`) is `null` or `undefined`.
 
-#### Commas Formatter
+___
+
+### Commas Formatter
 
 Formats a value as a comma-separated string.
 
@@ -121,7 +125,9 @@ format.commas.digits(2).unit("$").of(1234567); // "$1,234,567.00"
 
 - Same as [Number Formatter](#number-formatter).
 
-#### Short Formatter
+___
+
+### Short Formatter
 
 Formats a value in a short notation with units (e.g., `k`, `M`, `B`).
 
@@ -139,7 +145,9 @@ format.short.digits(2).smallValuesWithCommas().of(1000000_00000000n, 8); // "1.0
 - Same as [Number Formatter](#number-formatter).
 - `.smallValuesWithCommas()`: Formats small values using commas instead of short notation.
 
-#### Percent Formatter
+___
+
+### Percent Formatter
 
 Formats a value as a percentage.
 
@@ -155,6 +163,8 @@ format.percent.digits(1).sign().of(0.123456); // "+12.3%"
 **Customization:**
 
 - Same as [Number Formatter](#number-formatter).
+
+___
 
 ### Time
 
@@ -208,7 +218,9 @@ import { Time } from '@morpho-org/morpho-ts';
 const days = Time.w.from.d(2); // 14
 ```
 
-#### `Time.wait`
+___
+
+### `Time.wait`
 
 Pauses execution for the specified amount of milliseconds, eventually returning a specific value afterwards.
 
@@ -221,7 +233,9 @@ await Time.wait(1000); // Waits for 1 second
 const value = await Time.wait(1000, "Go"); // Waits for 1 second and returns "Go"
 ```
 
-#### `Time.timestamp`
+___
+
+### `Time.timestamp`
 
 Returns the current Unix timestamp in seconds as a bigint.
 
@@ -233,7 +247,9 @@ import { Time } from '@morpho-org/morpho-ts';
 Time.timestamp(); // 1692671241n
 ```
 
-#### Period Types
+___
+
+### Period Types
 
 The `Time` utility also provides types to define periods:
 
