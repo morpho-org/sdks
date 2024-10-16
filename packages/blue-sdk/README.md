@@ -1,11 +1,37 @@
 # @morpho-org/blue-sdk
 
-[![npm package][npm-img]][npm-url]
-[![Downloads][downloads-img]][downloads-url]
+<a href="https://www.npmjs.com/package/@morpho-org/blue-sdk">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/v/@morpho-org/blue-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/v/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
+    </picture>
+</a>
+<a href="https://github.com/wevm/@morpho-org/blue-sdk/blob/main/LICENSE">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/blue-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/l/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
+    </picture>
+</a>
+<a href="https://www.npmjs.com/package/@morpho-org/blue-sdk">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/dm/@morpho-org/blue-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/dm/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Downloads per month">
+    </picture>
+</a>
+<br />
+<br />
 
-Framework-agnostic SDK foundational to Morpho Blue's offchain ecosystem, useful to fetch and interact with Morpho Blue and MetaMorpho.
+Framework-agnostic package that defines Morpho-related entity classes:
+- [**`MarketConfig`**](./src/market/MarketConfig.ts): represents the immutable configuration of a market on Morpho
+- [**`Market`**](./src/market/Market.ts): represents the state of a market on Morpho
+- [**`Token`**](./src/token/Token.ts): represents a ERC20 token
+- [**`User`**](./src/user/User.ts): represents a user of Morpho
+- [**`VaultConfig`**](./src/vault/VaultConfig.ts): represents the configuration of a Morpho Vault
+- [**`Vault`**](./src/vault/Vault.ts): represents the state of a Morpho Vault
+- [**`VaultUser`**](./src/vault/VaultUser.ts): represents the state of a user on a Morpho Vault
+- [**`VaultMarketAllocation`**](./src/vault/VaultMarketAllocation.ts): represents the allocation (and configuration) of a Morpho Vault on a Morpho market
 
-## Install
+## Installation
 
 ```bash
 npm install @morpho-org/blue-sdk
@@ -14,8 +40,6 @@ npm install @morpho-org/blue-sdk
 ```bash
 yarn add @morpho-org/blue-sdk
 ```
-
----
 
 ## Getting Started
 
@@ -99,8 +123,3 @@ const accruedPosition = position.accrueInterest(Time.timestamp()); // Accrue int
 
 position.borrowAssets; // e.g. 20_400000000000000000n (in loan assets).
 ```
-
-[downloads-img]: https://img.shields.io/npm/dt/@morpho-org/blue-sdk
-[downloads-url]: https://www.npmtrends.com/@morpho-org/blue-sdk
-[npm-img]: https://img.shields.io/npm/v/@morpho-org/blue-sdk
-[npm-url]: https://www.npmjs.com/package/@morpho-org/blue-sdk
