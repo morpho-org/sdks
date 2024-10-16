@@ -38,7 +38,7 @@
     "access": "public"
   },
   "release": {
-    "branches": ["main", "feat/vitest"],
+    "branches": ["main"],
     "extends": "semantic-release-monorepo"
   }
 }
