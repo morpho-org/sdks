@@ -1,4 +1,4 @@
-name: Push
+name: Release
 
 on:
   push:
@@ -14,15 +14,15 @@ jobs:
   build:
     uses: ./.github/workflows/build.yml
 
-  vitest:
-    uses: ./.github/workflows/vitest.yml
+  test:
+    uses: ./.github/workflows/test.yml
     secrets: inherit
 
-  release:
+  publish:
     needs:
       - lint
       - build
-      - vitest
+      - test
 
-    uses: ./.github/workflows/semantic-release.yml
+    uses: ./.github/workflows/publish.yml
     secrets: inherit
