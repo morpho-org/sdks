@@ -2,8 +2,6 @@ name: Build
 
 on:
   pull_request:
-    branches-ignore:
-      - next
   workflow_call:
 
 concurrency:
@@ -12,6 +10,8 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name == 'workflow_call' || github.ref != 'refs/heads/next' && github.base_ref != 'refs/heads/main'
+
     strategy:
       fail-fast: false
       matrix:
