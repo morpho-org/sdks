@@ -18,6 +18,8 @@
         <img src="https://img.shields.io/npm/dm/@morpho-org/test-ethers?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Downloads per month">
     </picture>
 </a>
+<br />
+<br />
 
 Ethers-based extension of [`@morpho-org/test-viem`](../test-viem/) that injects a test Ethers wallet as a test fixture alongside viem's anvil client.
 
