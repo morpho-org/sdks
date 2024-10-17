@@ -30,6 +30,7 @@ jobs:
 
       - run: pnpm install
 
+      # First, run versioning to have the correct version referenced in each package.json.
       - run: pnpm -r --parallel -c exec "jq '.release = input.release_version' package.json ../../package.json > tmp.json && mv tmp.json package.json"
 
       # Limit concurrency to avoid semantic-release failing at pushing tags.
