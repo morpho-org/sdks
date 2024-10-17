@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/sdks",
   "version": "0.0.0",
-  "description": "Collection of SDKs to interact with Morpho",
+  "description": "Collection of SDKs to ease interactions with the Morpho protocol and Morpho Vaults",
   "repository": "git@github.com:morpho-org/sdks.git",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
