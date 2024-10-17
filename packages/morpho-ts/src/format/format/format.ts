@@ -126,7 +126,10 @@ const _formatShort = (
   if (formatOptions.smallValuesWithCommas) {
     return _formatCommas(bi, decimals, formatOptions);
   }
-  return _applyOptions(stringValue.insert(-decimals, ".", "0"), formatOptions);
+  return _applyOptions(
+    decimals ? stringValue.insert(-decimals, ".", "0") : stringValue,
+    formatOptions,
+  );
 };
 
 const _formatCommas = (
