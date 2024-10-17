@@ -52,13 +52,6 @@
     "plugins": [
       "@semantic-release/commit-analyzer",
       "@semantic-release/release-notes-generator",
-      [
-        "@semantic-release/exec",
-        {
-          "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version",
-          "publishCmd": "pnpm publish --access public --tag ${nextRelease.channel} --no-git-checks"
-        }
-      ],
       "@semantic-release/github"
     ]
   },

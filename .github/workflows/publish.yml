@@ -34,19 +34,17 @@ jobs:
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@users.noreply.github.com'
 
-      # - run: pnpm -r --parallel -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
-
-      # - run: pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
-
       - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
       - if: github.ref == 'refs/heads/main'
-        run: pnpm lerna publish --no-private --conventional-commits --no-changelog --create-release github --yes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: pnpm lerna publish --no-private --conventional-commits --no-changelog --yes
 
       - if: github.ref == 'refs/heads/next'
-        run: pnpm lerna publish --dist-tag next --exact --no-private --conventional-commits --conventional-prerelease --no-changelog --create-release github --yes
+        run: pnpm lerna publish --dist-tag next --exact --no-private --conventional-commits --conventional-prerelease --no-changelog --yes
+
+      - run: pnpm -r --parallel -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
+
+      - run: pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
