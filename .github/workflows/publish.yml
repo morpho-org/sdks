@@ -30,23 +30,36 @@ jobs:
 
       - run: pnpm install
 
-      - run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@users.noreply.github.com'
-
-      - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-
-      - if: github.ref == 'refs/heads/main'
-        run: |
-          pnpm lerna publish -m "chore(release): publish %s" --no-private --conventional-commits --no-changelog --yes
-
-      - if: github.ref == 'refs/heads/next'
-        run: |
-          pnpm lerna publish -m "chore(release): publish %s" --dist-tag next --exact --no-private --conventional-commits --conventional-prerelease --no-changelog --yes
-
-      - run: pnpm -r --parallel -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
+      - run: pnpm -r --parallel -c exec "jq '.release = input.release_version' package.json ../../package.json > tmp.json && mv tmp.json package.json"
 
       - run: pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: pnpm -r --parallel -c exec "jq '.release = input.release_publish' package.json ../../package.json > tmp.json && mv tmp.json package.json"
+
+      - run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+          pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
+
+      # - run: |
+      #     git config --global user.name 'github-actions'
+      #     git config --global user.email 'github-actions@users.noreply.github.com'
+
+      # - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+      # - if: github.ref == 'refs/heads/main'
+      #   run: |
+      #     pnpm lerna publish -m "chore(release): publish %s" --no-private --conventional-commits --no-changelog --yes
+
+      # - if: github.ref == 'refs/heads/next'
+      #   run: |
+      #     pnpm lerna publish -m "chore(release): publish %s" --dist-tag next --exact --no-private --conventional-commits --conventional-prerelease --no-changelog --yes
+
+      # - run: pnpm -r --parallel -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
+
+      # - run: pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
