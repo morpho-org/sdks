@@ -13,7 +13,7 @@ jobs:
 
   build:
     # Skip build on `main` and `next` branches because it's already done in `publish`.
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next'
+    if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/next'
 
     uses: ./.github/workflows/build.yml
 
@@ -22,7 +22,7 @@ jobs:
     secrets: inherit
 
   publish:
-    if: github.ref != 'refs/heads/main' && github.ref != 'refs/heads/next'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next'
 
     needs:
       - lint
