@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/liquidation-sdk-viem",
-  "version": "1.12.4",
+  "version": "1.12.5-alpha.0",
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",
   "main": "src/index.ts",
