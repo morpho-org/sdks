@@ -1,5 +1,6 @@
 {
   "name": "@morpho-org/test-viem",
+  "description": "(Viem+vitest)-based package that defines utilities to spawn independent, concurrent anvil forks for each test, injecting the corresponding viem client as a test fixture.",
   "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",
