@@ -200,6 +200,10 @@ describe("format", () => {
 
   describe("short", () => {
     describe("should properly format number in short format", () => {
+      test("with small integers", () => {
+        expect(format.short.of(123)).toEqual("123");
+      });
+
       test("without option", () => {
         expect(format.short.of(number)).toEqual("12.3456789k");
       });
@@ -255,6 +259,10 @@ describe("format", () => {
     });
 
     describe("should properly format bigint in short format", () => {
+      test("with small integers", () => {
+        expect(format.short.of(123n, 0)).toEqual("123");
+      });
+
       test("without option", () => {
         expect(format.short.of(bigint, decimals)).toEqual("12.3456789k");
       });
