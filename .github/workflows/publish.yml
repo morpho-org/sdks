@@ -37,7 +37,7 @@ jobs:
 
     # Limit concurrent jobs to avoid semantic-release failing because of out-of-date remote.
     concurrency:
-      group: ${{ github.workflow }}
+      group: semantic-release
 
     steps:
       - uses: actions/checkout@v4
