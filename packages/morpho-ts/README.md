@@ -6,7 +6,7 @@
         <img src="https://img.shields.io/npm/v/@morpho-org/morpho-ts?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
     </picture>
 </a>
-<a href="https://github.com/wevm/@morpho-org/morpho-ts/blob/main/LICENSE">
+<a href="https://github.com/morpho-org/morpho-ts/blob/main/LICENSE">
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/morpho-ts?colorA=21262d&colorB=21262d&style=flat">
         <img src="https://img.shields.io/npm/l/@morpho-org/morpho-ts?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
@@ -54,41 +54,43 @@ The return value will retain the nullability of the input value (giving priority
 
 > [!Tip]
 > You can store the populated `of` function in a custom formatter:
+>
 > ```typescript
-> import { format } from '@morpho-org/morpho-ts';
-> 
-> const formatDollar = format.short.digits(2).smallValuesWithCommas().unit("$").of
-> 
+> import { format } from "@morpho-org/morpho-ts";
+>
+> const formatDollar = format.short
+>   .digits(2)
+>   .smallValuesWithCommas()
+>   .unit("$").of;
+>
 > formatDollar(123456.789); // "$123.45k"
 > formatDollar(123456789n, 4); // "$12.34k"
 > ```
-
 
 ### Hex Formatter
 
 Formats a value as a hexadecimal string.
 
 ```typescript
-import { format } from '@morpho-org/morpho-ts';
+import { format } from "@morpho-org/morpho-ts";
 
 format.hex.of(255n); // "ff"
 ```
 
-> [!NOTE]
-> `decimals` will be ignored if this formatter is used with BigInts
+> [!NOTE] > `decimals` will be ignored if this formatter is used with BigInts
 
 **Customization:**
 
 - `.prefix()`: Prepend the result with `0x`
 
-___
+---
 
 ### Number Formatter
 
 Formats a value as a standard number with optional customization.
 
 ```typescript
-import { format } from '@morpho-org/morpho-ts';
+import { format } from "@morpho-org/morpho-ts";
 
 format.number.of(12345n, 2); // "123.45"
 format.number.of(123.45); // "123.45"
@@ -106,14 +108,14 @@ format.number.of(123.45); // "123.45"
 - `.readable()`: Makes the value more readable for small numbers.
 - `.default(string)`: Sets a default value in case `value` (or `decimals`) is `null` or `undefined`.
 
-___
+---
 
 ### Commas Formatter
 
 Formats a value as a comma-separated string.
 
 ```typescript
-import { format } from '@morpho-org/morpho-ts';
+import { format } from "@morpho-org/morpho-ts";
 
 format.commas.of(123456789n, 2); // "1,234,567.89"
 format.commas.of(1234567.89); // "1,234,567.89"
@@ -125,17 +127,17 @@ format.commas.digits(2).unit("$").of(1234567); // "$1,234,567.00"
 
 - Same as [Number Formatter](#number-formatter).
 
-___
+---
 
 ### Short Formatter
 
 Formats a value in a short notation with units (e.g., `k`, `M`, `B`).
 
 ```typescript
-import { format } from '@morpho-org/morpho-ts';
+import { format } from "@morpho-org/morpho-ts";
 
 format.short.of(1234567890n, 2); // "12.34567890M"
-format.short.of(12345678.90); // "12.34567890M"
+format.short.of(12345678.9); // "12.34567890M"
 
 format.short.digits(2).smallValuesWithCommas().of(1000000_00000000n, 8); // "1.00M"
 ```
@@ -145,14 +147,14 @@ format.short.digits(2).smallValuesWithCommas().of(1000000_00000000n, 8); // "1.0
 - Same as [Number Formatter](#number-formatter).
 - `.smallValuesWithCommas()`: Formats small values using commas instead of short notation.
 
-___
+---
 
 ### Percent Formatter
 
 Formats a value as a percentage.
 
 ```typescript
-import { format } from '@morpho-org/morpho-ts';
+import { format } from "@morpho-org/morpho-ts";
 
 format.percent.of(1000, 4); // "10"
 format.percent.of(0.1); // "10"
@@ -164,7 +166,7 @@ format.percent.digits(1).sign().of(0.123456); // "+12.3%"
 
 - Same as [Number Formatter](#number-formatter).
 
-___
+---
 
 ### Time
 
@@ -174,7 +176,6 @@ The `Time` utility provides a robust way to handle and convert time units in Typ
 - [**Wait**](#timewait): Pause execution for a specified amount of time.
 - [**Timestamp**](#timetimestamp): Get the current Unix timestamp as a bigint.
 - [**Period**](#period-types): Manage time periods
-
 
 #### Converting Time Units
 
@@ -197,7 +198,7 @@ The following units are supported:
 Convert 1 hour to minutes:
 
 ```typescript
-import { Time } from '@morpho-org/morpho-ts';
+import { Time } from "@morpho-org/morpho-ts";
 
 const minutes = Time.h.from.min(1); // 60
 ```
@@ -205,7 +206,7 @@ const minutes = Time.h.from.min(1); // 60
 Convert 5 days to hours:
 
 ```typescript
-import { Time } from '@morpho-org/morpho-ts';
+import { Time } from "@morpho-org/morpho-ts";
 
 const hours = Time.d.from.h(5n); // 120n
 ```
@@ -213,12 +214,12 @@ const hours = Time.d.from.h(5n); // 120n
 Convert 2 weeks to days:
 
 ```typescript
-import { Time } from '@morpho-org/morpho-ts';
+import { Time } from "@morpho-org/morpho-ts";
 
 const days = Time.w.from.d(2); // 14
 ```
 
-___
+---
 
 ### `Time.wait`
 
@@ -227,13 +228,13 @@ Pauses execution for the specified amount of milliseconds, eventually returning 
 **Usage:**
 
 ```typescript
-import { Time } from '@morpho-org/morpho-ts';
+import { Time } from "@morpho-org/morpho-ts";
 
 await Time.wait(1000); // Waits for 1 second
 const value = await Time.wait(1000, "Go"); // Waits for 1 second and returns "Go"
 ```
 
-___
+---
 
 ### `Time.timestamp`
 
@@ -242,12 +243,12 @@ Returns the current Unix timestamp in seconds as a bigint.
 **Usage:**
 
 ```typescript
-import { Time } from '@morpho-org/morpho-ts';
+import { Time } from "@morpho-org/morpho-ts";
 
 Time.timestamp(); // 1692671241n
 ```
 
-___
+---
 
 ### Period Types
 
@@ -260,8 +261,8 @@ The `Time` utility also provides types to define periods:
 You can convert a unit or a period-like object into a `Period`:
 
 ```typescript
-import { Time } from '@morpho-org/morpho-ts';
+import { Time } from "@morpho-org/morpho-ts";
 
-Time.toPeriod('h'); // { unit: 'h', duration: 1 }
-Time.toPeriod({ unit: 'min', duration: 15 }); // { unit: 'min', duration: 15 }
+Time.toPeriod("h"); // { unit: 'h', duration: 1 }
+Time.toPeriod({ unit: "min", duration: 15 }); // { unit: 'min', duration: 15 }
 ```

@@ -6,7 +6,7 @@
         <img src="https://img.shields.io/npm/v/@morpho-org/simulation-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
     </picture>
 </a>
-<a href="https://github.com/wevm/@morpho-org/simulation-sdk/blob/main/LICENSE">
+<a href="https://github.com/morpho-org/simulation-sdk/blob/main/LICENSE">
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/simulation-sdk?colorA=21262d&colorB=21262d&style=flat">
         <img src="https://img.shields.io/npm/l/@morpho-org/simulation-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">

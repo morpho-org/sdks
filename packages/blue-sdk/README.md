@@ -6,7 +6,7 @@
         <img src="https://img.shields.io/npm/v/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
     </picture>
 </a>
-<a href="https://github.com/wevm/@morpho-org/blue-sdk/blob/main/LICENSE">
+<a href="https://github.com/morpho-org/blue-sdk/blob/main/LICENSE">
     <picture>
         <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/blue-sdk?colorA=21262d&colorB=21262d&style=flat">
         <img src="https://img.shields.io/npm/l/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
@@ -22,6 +22,7 @@
 <br />
 
 Framework-agnostic package that defines Morpho-related entity classes:
+
 - [**`MarketConfig`**](./src/market/MarketConfig.ts): represents the immutable configuration of a market on Morpho
 - [**`Market`**](./src/market/Market.ts): represents the state of a market on Morpho
 - [**`Token`**](./src/token/Token.ts): represents a ERC20 token
@@ -51,11 +52,11 @@ Leverage the [`MarketConfig`](./src/market/MarketConfig.ts) class to manipulate 
 import { MarketConfig } from "@morpho-org/blue-sdk";
 
 const config = new MarketConfig({
-  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",       // WETH
+  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
   collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", // wstETH
   oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
-  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",             // AdaptiveCurveIrm
-  lltv: 94_5000000000000000n,                                    // 94.5%
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC", // AdaptiveCurveIrm
+  lltv: 94_5000000000000000n, // 94.5%
 });
 
 config.liquidationIncentiveFactor; // e.g. 1_090000000000000000n (109%).
@@ -71,11 +72,11 @@ import { Time } from "@morpho-org/morpho-ts";
 
 const market = new Market({
   config: new MarketConfig({
-    loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",       // WETH
+    loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
     collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", // wstETH
     oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
-    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",             // AdaptiveCurveIrm
-    lltv: 94_5000000000000000n,                                    // 94.5%
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC", // AdaptiveCurveIrm
+    lltv: 94_5000000000000000n, // 94.5%
   }),
   totalSupplyAssets: 1000_000000000000000000n,
   totalBorrowAssets: 920_000000000000000000n,
@@ -84,7 +85,7 @@ const market = new Market({
   lastUpdate: 1721000000n,
   fee: 0n,
   price: 1_100000000000000000000000000000000000n,
-  rateAtTarget: 94850992095n
+  rateAtTarget: 94850992095n,
 });
 
 market.utilization; // e.g. 92_0000000000000000n (92%).
@@ -110,7 +111,7 @@ const position = new AccrualPosition(
     marketId: market.id,
     supplyShares: 0n,
     borrowShares: 20_000000000000000000000000n,
-    collateral: 27_000000000000000000n
+    collateral: 27_000000000000000000n,
   }),
   market
 );
