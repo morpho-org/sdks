@@ -40,7 +40,7 @@
   "commitlint": {
     "extends": ["@commitlint/config-conventional"]
   },
-  "release_version": {
+  "release": {
     "branches": [
       "main",
       {
@@ -51,29 +51,11 @@
     "extends": "semantic-release-monorepo",
     "plugins": [
       "@semantic-release/commit-analyzer",
-      [
-        "@semantic-release/exec",
-        {
-          "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version"
-        }
-      ]
-    ]
-  },
-  "release_publish": {
-    "branches": [
-      "main",
-      {
-        "name": "next",
-        "prerelease": true
-      }
-    ],
-    "plugins": [
-      "@semantic-release/commit-analyzer",
       "@semantic-release/release-notes-generator",
       [
         "@semantic-release/exec",
         {
-          "publishCmd": "pnpm publish --access public --tag ${nextRelease.channel} --no-git-checks"
+          "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version"
         }
       ],
       [

@@ -11,15 +11,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/create-github-app-token@v1
-        id: app-token
-        with:
-          app-id: ${{ vars.CD_GITHUB_APP_ID }}
-          private-key: ${{ secrets.CD_GITHUB_APP_PRIVATE_KEY }}
-
       - uses: actions/checkout@v4
-        with:
-          token: ${{ steps.app-token.outputs.token }}
 
       - uses: pnpm/action-setup@v4
 
@@ -33,14 +25,15 @@ jobs:
       # First, run versioning to have the correct version referenced in each package.json.
       # Limit concurrency to avoid semantic-release failing at pushing tags.
       - run: |
-          pnpm -r --parallel -c exec "jq '.release = input.release_version' package.json ../../package.json > tmp.json && mv tmp.json package.json"
+          pnpm -r --parallel -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
           pnpm -r --workspace-concurrency=1 --no-reporter-hide-prefix exec semantic-release
-
-      - run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-
-          pnpm -r --parallel -c exec "jq '.release = input.release_publish' package.json ../../package.json > tmp.json && mv tmp.json package.json"
-          pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
+
+      - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+      - if: github.ref_name == 'main'
+        run: pnpm -r --parallel publish --no-git-checks --access public
+
+      - if: github.ref_name == 'next'
+        run: pnpm -r --parallel publish --no-git-checks --access public --tag next
