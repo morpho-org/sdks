@@ -1,5 +1,6 @@
 {
   "name": "@morpho-org/test-wagmi",
+  "description": "Wagmi-based extension of `@morpho-org/test-viem` that injects a test Wagmi config as a test fixture alongside viem's anvil client.",
   "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",
