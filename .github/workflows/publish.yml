@@ -57,7 +57,9 @@ jobs:
 
           echo "$package_json" > packages/${{ matrix.package }}/package.json
 
-      - run: pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release
+      - run: |
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+          pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
