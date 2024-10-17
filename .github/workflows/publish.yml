@@ -37,10 +37,12 @@ jobs:
       - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
       - if: github.ref == 'refs/heads/main'
-        run: pnpm lerna publish --no-private --conventional-commits --no-changelog --yes
+        run: |
+          pnpm lerna publish -m "chore(release): publish %s" --no-private --conventional-commits --no-changelog --yes
 
       - if: github.ref == 'refs/heads/next'
-        run: pnpm lerna publish --dist-tag next --exact --no-private --conventional-commits --conventional-prerelease --no-changelog --yes
+        run: |
+          pnpm lerna publish -m "chore(release): publish %s" --dist-tag next --exact --no-private --conventional-commits --conventional-prerelease --no-changelog --yes
 
       - run: pnpm -r --parallel -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
 
