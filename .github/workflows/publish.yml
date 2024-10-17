@@ -5,6 +5,10 @@ on:
     secrets:
       NPM_TOKEN:
         required: true
+        
+# Limit concurrent jobs to avoid semantic-release failing because of out-of-date remote.
+concurrency:
+  group: ${{ github.workflow }}
 
 jobs:
   publish:
@@ -50,7 +54,7 @@ jobs:
       - run: |
           release_config=$(jq -r '.release' package.json)
 
-          pnpm -r exec echo "$release_config" > .releaserc
+          pnpm --filter @morpho-org/${{ matrix.package }} exec echo "$release_config" > .releaserc
 
       - run: pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release
         env:
