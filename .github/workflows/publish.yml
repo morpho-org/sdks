@@ -6,10 +6,15 @@ on:
       NPM_TOKEN:
         required: true
 
+# Limit concurrent workflows to avoid semantic-release failing because of out-of-date remote.
+concurrency:
+  group: semantic-release
+
 jobs:
   publish:
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         package:
           - test
@@ -35,10 +40,6 @@ jobs:
     name: "@morpho-org/${{ matrix.package }}"
     runs-on: ubuntu-latest
 
-    # Limit concurrent jobs to avoid semantic-release failing because of out-of-date remote.
-    concurrency:
-      group: semantic-release
-
     steps:
       - uses: actions/checkout@v4
       
@@ -56,7 +57,7 @@ jobs:
 
           echo "$package_json" > packages/${{ matrix.package }}/package.json
 
-      - run: pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release --dry-run
+      - run: pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
