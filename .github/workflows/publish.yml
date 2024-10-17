@@ -56,8 +56,9 @@ jobs:
 
           jq --arg value "$release_config" '.release = $value' packages/${{ matrix.package }}/package.json > tmp.json
           mv tmp.json packages/${{ matrix.package }}/package.json
+          cat packages/${{ matrix.package }}/package.json
 
-      - run: pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release
+      - run: pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release --dry-run
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
