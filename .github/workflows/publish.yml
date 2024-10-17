@@ -43,10 +43,10 @@ jobs:
       - if: github.ref == 'refs/heads/main'
         run: pnpm lerna publish --no-private --conventional-commits --no-changelog --create-release github --yes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - if: github.ref == 'refs/heads/next'
         run: pnpm lerna publish --dist-tag next --exact --no-private --conventional-commits --conventional-prerelease --no-changelog --create-release github --yes
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

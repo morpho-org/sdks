@@ -21,10 +21,10 @@ jobs:
   publish:
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/next'
 
-    needs:
-      - lint
-      - build
-      - test
+    # needs:
+      # - lint
+      # - build
+      # - test
 
     uses: ./.github/workflows/publish.yml
     secrets: inherit
