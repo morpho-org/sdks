@@ -33,7 +33,7 @@ jobs:
       - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
       - if: github.ref_name == 'main'
-        run: pnpm -r --parallel publish --no-git-checks --access public
+        run: pnpm -r publish --no-git-checks --access public
 
       - if: github.ref_name == 'next'
-        run: pnpm -r --parallel publish --no-git-checks --access public --tag next
+        run: pnpm -r publish --no-git-checks --access public --tag next
