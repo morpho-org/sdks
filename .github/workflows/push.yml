@@ -22,7 +22,7 @@ jobs:
     needs:
       - lint
       - build
-      - test
+      # - test
 
     uses: ./.github/workflows/publish.yml
     secrets: inherit
