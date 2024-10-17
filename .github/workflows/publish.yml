@@ -22,11 +22,19 @@ jobs:
 
       - run: pnpm install
 
-      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
+      # - run: pnpm -r --parallel -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
 
-      - run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+      # - run: pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
 
-          pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
+      - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+      - if: github.ref == 'refs/heads/main'
+        run: pnpm lerna publish --no-private --conventional-commits --no-changelog --create-release github --yes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - if: github.ref == 'refs/heads/next'
+        run: pnpm lerna publish --dist-tag next --exact --no-private --no-push --conventional-commits --conventional-prerelease --no-changelog --create-release github --yes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

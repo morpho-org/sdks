@@ -26,6 +26,7 @@
     "dotenv-cli": "^7.4.2",
     "happy-dom": "^15.7.4",
     "husky": "^9.1.6",
+    "lerna": "^8.1.8",
     "lint-staged": "^15.2.10",
     "semantic-release": "^24.1.2",
     "semantic-release-monorepo": "^8.0.2",
@@ -40,7 +41,13 @@
     "extends": ["@commitlint/config-conventional"]
   },
   "release": {
-    "branches": ["main", { "name": "next", "prerelease": true }],
+    "branches": [
+      "main",
+      {
+        "name": "next",
+        "prerelease": true
+      }
+    ],
     "extends": "semantic-release-monorepo",
     "plugins": [
       "@semantic-release/commit-analyzer",
@@ -54,5 +61,6 @@
       ],
       "@semantic-release/github"
     ]
-  }
+  },
+  "dependencies": {}
 }
