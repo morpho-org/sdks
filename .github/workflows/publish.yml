@@ -32,7 +32,8 @@ jobs:
 
       - run: pnpm -r --parallel -c exec "jq '.release = input.release_version' package.json ../../package.json > tmp.json && mv tmp.json package.json"
 
-      - run: pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
+      # Limit concurrency to avoid semantic-release failing at pushing tags.
+      - run: pnpm -r --workspace-concurrency=1 --no-reporter-hide-prefix exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
