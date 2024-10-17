@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "description": "Collection of SDKs to interact with Morpho",
   "repository": "git@github.com:morpho-org/sdks.git",
-  "author": "Morpho Labs <contact@morpho.org>",
+  "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",
   "type": "module",
   "private": true,

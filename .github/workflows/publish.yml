@@ -6,38 +6,8 @@ on:
       NPM_TOKEN:
         required: true
 
-# Limit concurrent workflows to avoid semantic-release failing because of out-of-date remote.
-concurrency:
-  group: semantic-release
-
 jobs:
   publish:
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        package:
-          - test
-          - test-viem
-          - test-ethers
-          - test-wagmi
-
-          - morpho-ts
-          - morpho-test
-
-          - blue-api-sdk
-          - blue-sdk
-          - blue-sdk-ethers
-          - blue-sdk-viem
-          - blue-sdk-wagmi
-
-          - simulation-sdk
-          - simulation-sdk-wagmi
-          - bundler-sdk-viem
-
-          - liquidation-sdk-viem
-
-    name: "@morpho-org/${{ matrix.package }}"
     runs-on: ubuntu-latest
 
     steps:
@@ -52,14 +22,11 @@ jobs:
 
       - run: pnpm install
 
-      - run: |
-          package_json=$(jq '.release = input.release' packages/${{ matrix.package }}/package.json package.json)
-
-          echo "$package_json" > packages/${{ matrix.package }}/package.json
+      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
 
       - run: |
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
-          pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release
+          pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
