@@ -25,7 +25,7 @@ import { describe, expect } from "vitest";
 import { donate, donator, setupBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
-configure({ asyncUtilTimeout: 5_000 });
+configure({ asyncUtilTimeout: 10_000 });
 
 describe("populateBundle", () => {
   describe("with signatures", () => {

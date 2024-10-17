@@ -32,8 +32,8 @@
     "vitest": "^2.1.3"
   },
   "lint-staged": {
-    "*.json": "biome check --write",
-    "*.ts*": "biome check --write"
+    "*.json": "biome check --write --no-errors-on-unmatched",
+    "*.ts*": "biome check --write --no-errors-on-unmatched"
   },
   "commitlint": {
     "extends": ["@commitlint/config-conventional"]
