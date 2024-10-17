@@ -50,7 +50,7 @@ jobs:
       - run: |
           release_config=$(jq -r '.release' package.json)
 
-          pnpm -r exec jq --arg value "$release_config" '.release = $value' package.json > tmp.json && mv tmp.json package.json
+          pnpm -r exec echo "$release_config" > .releaserc
 
       - run: pnpm --filter @morpho-org/${{ matrix.package }} exec semantic-release
         env:
