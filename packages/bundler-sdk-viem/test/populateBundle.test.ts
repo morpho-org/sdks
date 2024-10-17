@@ -1167,7 +1167,7 @@ describe("populateBundle", () => {
         async ({ client, config }) => {
           const { id } = usdc_wstEth;
           const collateralAssets = parseEther("100");
-          const loanShares = parseUnits("5000", 12);
+          const loanShares = parseUnits("50000", 12);
           const loanAssets = (await fetchMarket(id, client)).toBorrowAssets(
             loanShares,
           );
@@ -2199,7 +2199,6 @@ describe("populateBundle", () => {
           const borrowAmount = parseEther("0.5");
 
           await client.deal({ erc20: wstEth, amount: collateralAmount });
-          await client.deal({ erc20: stEth, amount: 0n });
 
           await client.approve({ address: wstEth, args: [morpho, maxUint256] });
           await client.writeContract({
@@ -2418,7 +2417,7 @@ describe("populateBundle", () => {
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 2n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 1n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
@@ -3628,7 +3627,7 @@ describe("populateBundle", () => {
         async ({ client, config }) => {
           const { id } = usdc_wstEth;
           const collateralAssets = parseEther("100");
-          const loanShares = parseUnits("5000", 12);
+          const loanShares = parseUnits("50000", 12);
           const loanAssets = (await fetchMarket(id, client)).toBorrowAssets(
             loanShares,
           );
@@ -3824,10 +3823,10 @@ describe("populateBundle", () => {
       test[ChainId.EthMainnet](
         "should redeem all bbETH with slippage + wstETH leverage into bbETH deposit & unwrap remaining WETH",
         async ({ client, config }) => {
-          const id = eth_wstEth.id;
+          const id = eth_wstEth_2.id;
 
           const collateralAssets = parseEther("100");
-          const loanAssets = parseEther("95");
+          const loanAssets = parseEther("5");
 
           await client.deal({ erc20: wstEth, amount: collateralAssets });
           await client.deal({ erc20: wNative, amount: loanAssets });
@@ -3856,7 +3855,7 @@ describe("populateBundle", () => {
                 eth_rEth.id,
                 eth_sDai.id,
                 eth_wbtc.id,
-                eth_wstEth_2.id,
+                eth_wstEth.id,
               ],
               users: [client.account.address, bundler, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
@@ -4935,7 +4934,7 @@ describe("populateBundle", () => {
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 2n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 1n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(

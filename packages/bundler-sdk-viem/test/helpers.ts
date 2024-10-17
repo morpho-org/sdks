@@ -6,7 +6,7 @@ import {
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
-import { format, keys } from "@morpho-org/morpho-ts";
+import { format } from "@morpho-org/morpho-ts";
 
 import {
   type BundlingOptions,
@@ -141,28 +141,7 @@ export const setupBundle = async <chain extends Chain = Chain>(
     }
   });
 
-  if (onBundleTx != null) {
-    const balancesBefore = await Promise.all(
-      [...tokens, ...keys(startData.tokens)].map(async (token) => ({
-        token,
-        balance: await client.balanceOf({
-          erc20: token,
-          owner: account.address,
-        }),
-      })),
-    );
-
-    await onBundleTx(startData);
-
-    await Promise.all(
-      balancesBefore.map(({ token, balance }) =>
-        client.deal({
-          erc20: token,
-          amount: balance,
-        }),
-      ),
-    );
-  }
+  await onBundleTx?.(startData);
 
   await Promise.all(
     bundle.requirements.signatures.map((requirement) =>
