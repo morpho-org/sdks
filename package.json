@@ -58,7 +58,13 @@
           "prepareCmd": "pnpm version ${nextRelease.version} --no-git-tag-version"
         }
       ],
-      "@semantic-release/github"
+      [
+        "@semantic-release/github",
+        {
+          "successComment": false,
+          "failComment": false
+        }
+      ]
     ]
   },
   "release_publish": {
