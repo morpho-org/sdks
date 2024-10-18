@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-test",
   "description": "Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks.",
-  "version": "1.12.4",
+  "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",

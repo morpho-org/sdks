@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/test-ethers",
   "description": "Ethers-based extension of `@morpho-org/test-viem` that injects a test Ethers wallet as a test fixture alongside viem's anvil client.",
-  "version": "1.12.4",
+  "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",
   "main": "src/index.ts",
