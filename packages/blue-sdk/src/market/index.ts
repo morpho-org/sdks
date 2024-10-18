@@ -1,3 +1,3 @@
 export * from "./MarketUtils.js";
-export * from "./MarketConfig.js";
+export * from "./MarketParams.js";
 export * from "./Market.js";

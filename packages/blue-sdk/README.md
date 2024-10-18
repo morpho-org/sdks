@@ -23,7 +23,7 @@
 
 Framework-agnostic package that defines Morpho-related entity classes:
 
-- [**`MarketConfig`**](./src/market/MarketConfig.ts): represents the immutable configuration of a market on Morpho
+- [**`MarketParams`**](./src/market/MarketParams.ts): represents the immutable configuration of a market on Morpho
 - [**`Market`**](./src/market/Market.ts): represents the state of a market on Morpho
 - [**`Token`**](./src/token/Token.ts): represents a ERC20 token
 - [**`User`**](./src/user/User.ts): represents a user of Morpho
@@ -46,12 +46,12 @@ yarn add @morpho-org/blue-sdk
 
 ### Instance of the immutable configuration of a specific market
 
-Leverage the [`MarketConfig`](./src/market/MarketConfig.ts) class to manipulate a given market's immutable configuration:
+Leverage the [`MarketParams`](./src/market/MarketParams.ts) class to manipulate a given market's immutable configuration:
 
 ```typescript
-import { MarketConfig } from "@morpho-org/blue-sdk";
+import { MarketParams } from "@morpho-org/blue-sdk";
 
-const config = new MarketConfig({
+const config = new MarketParams({
   loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
   collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", // wstETH
   oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
@@ -67,11 +67,11 @@ config.liquidationIncentiveFactor; // e.g. 1_090000000000000000n (109%).
 Leverage the [`Market`](./src/market/Market.ts) class to manipulate a specific market:
 
 ```typescript
-import { Market } from "@morpho-org/blue-sdk";
+import { Market, MarketParams } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 
 const market = new Market({
-  config: new MarketConfig({
+  config: new MarketParams({
     loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
     collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", // wstETH
     oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",

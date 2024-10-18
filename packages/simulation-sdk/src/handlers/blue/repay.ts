@@ -34,7 +34,7 @@ export const handleBlueRepayOperation: OperationHandler<
   if (sender === bundler && assets === MathLib.MAX_UINT_256)
     assets = MathLib.min(
       assets,
-      data.getHolding(bundler, market.config.loanToken).balance,
+      data.getHolding(bundler, market.params.loanToken).balance,
     );
 
   if (assets === 0n && shares === 0n) throw new BlueErrors.InconsistentInput();
@@ -66,7 +66,7 @@ export const handleBlueRepayOperation: OperationHandler<
     {
       type: "Erc20_Transfer",
       sender: morpho,
-      address: market.config.loanToken,
+      address: market.params.loanToken,
       args: {
         amount: assets,
         from: sender,

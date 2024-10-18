@@ -1,6 +1,6 @@
 export * from "./Holding.js";
 export * from "./Position.js";
-export * from "./MarketConfig.js";
+export * from "./MarketParams.js";
 export * from "./Market.js";
 export * from "./Token.js";
 export * from "./User.js";

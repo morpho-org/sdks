@@ -31,7 +31,7 @@ export const tokenB = "0x2222222222222222222222222222222222222222";
 unwrappedTokensMapping[ChainId.EthMainnet][tokenB] = tokenA;
 
 export const marketA1 = new Market({
-  config: randomMarket({ loanToken: tokenA }),
+  params: randomMarket({ loanToken: tokenA }),
   totalBorrowAssets: parseUnits("10000", 6),
   totalBorrowShares: parseUnits("10000", 6 + 6),
   totalSupplyAssets: parseUnits("10750", 6),
@@ -42,7 +42,7 @@ export const marketA1 = new Market({
   rateAtTarget: parseEther("0.007") / SECONDS_PER_YEAR,
 });
 export const marketA2 = new Market({
-  config: randomMarket({ loanToken: tokenA }),
+  params: randomMarket({ loanToken: tokenA }),
   totalBorrowAssets: parseUnits("10000", 6),
   totalBorrowShares: parseUnits("10000", 6 + 6),
   totalSupplyAssets: parseUnits("20200", 6),
@@ -53,7 +53,7 @@ export const marketA2 = new Market({
   rateAtTarget: parseEther("0.05") / SECONDS_PER_YEAR,
 });
 export const marketA3 = new Market({
-  config: randomMarket({ loanToken: tokenA }),
+  params: randomMarket({ loanToken: tokenA }),
   totalBorrowAssets: parseUnits("5000", 6),
   totalBorrowShares: parseUnits("5000", 6 + 6),
   totalSupplyAssets: parseUnits("5300", 6),
@@ -64,7 +64,7 @@ export const marketA3 = new Market({
   rateAtTarget: parseEther("0.04") / SECONDS_PER_YEAR,
 });
 export const marketB1 = new Market({
-  config: randomMarket({ loanToken: tokenB }),
+  params: randomMarket({ loanToken: tokenB }),
   totalBorrowAssets: parseEther("10000"),
   totalBorrowShares: parseUnits("10000", 24),
   totalSupplyAssets: parseEther("20000"),
@@ -75,7 +75,7 @@ export const marketB1 = new Market({
   rateAtTarget: parseEther("0.05") / SECONDS_PER_YEAR,
 });
 export const marketB2 = new Market({
-  config: randomMarket({ loanToken: tokenB }),
+  params: randomMarket({ loanToken: tokenB }),
   totalBorrowAssets: parseEther("10000"),
   totalBorrowShares: parseUnits("10000", 24),
   totalSupplyAssets: parseEther("20000"),
@@ -86,7 +86,7 @@ export const marketB2 = new Market({
   rateAtTarget: parseEther("0.05") / SECONDS_PER_YEAR,
 });
 export const marketB3 = new Market({
-  config: randomMarket({ collateralToken: tokenA, loanToken: tokenB }),
+  params: randomMarket({ collateralToken: tokenA, loanToken: tokenB }),
   totalBorrowAssets: parseEther("1400"),
   totalBorrowShares: parseUnits("1400", 24),
   totalSupplyAssets: parseEther("2000"),
@@ -153,26 +153,26 @@ export const blueFixture = {
       symbol: "TBB",
       name: "Token B loan",
     }),
-    [marketA1.config.collateralToken]: new Token({
-      address: marketA1.config.collateralToken,
+    [marketA1.params.collateralToken]: new Token({
+      address: marketA1.params.collateralToken,
       decimals: 18,
       symbol: "TAC",
       name: "Token A collateral",
     }),
-    [marketA2.config.collateralToken]: new Token({
-      address: marketA2.config.collateralToken,
+    [marketA2.params.collateralToken]: new Token({
+      address: marketA2.params.collateralToken,
       decimals: 18,
       symbol: "TBC",
       name: "Token B collateral",
     }),
-    [marketB1.config.collateralToken]: new Token({
-      address: marketB1.config.collateralToken,
+    [marketB1.params.collateralToken]: new Token({
+      address: marketB1.params.collateralToken,
       decimals: 18,
       symbol: "TBC",
       name: "Token B collateral",
     }),
-    [marketB2.config.collateralToken]: new Token({
-      address: marketB2.config.collateralToken,
+    [marketB2.params.collateralToken]: new Token({
+      address: marketB2.params.collateralToken,
       decimals: 18,
       symbol: "TBC",
       name: "Token B collateral",
@@ -537,14 +537,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA1.config.collateralToken]: new Holding({
+      [marketA1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userA,
-        token: marketA1.config.collateralToken,
+        token: marketA1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -559,14 +559,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA2.config.collateralToken]: new Holding({
+      [marketA2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userA,
-        token: marketA2.config.collateralToken,
+        token: marketA2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -581,14 +581,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB1.config.collateralToken]: new Holding({
+      [marketB1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userA,
-        token: marketB1.config.collateralToken,
+        token: marketB1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -603,14 +603,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB2.config.collateralToken]: new Holding({
+      [marketB2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userA,
-        token: marketB2.config.collateralToken,
+        token: marketB2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -763,14 +763,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA1.config.collateralToken]: new Holding({
+      [marketA1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userB,
-        token: marketA1.config.collateralToken,
+        token: marketA1.params.collateralToken,
         balance: parseEther("1000"),
         permit2Allowances: {
           morpho: {
@@ -785,14 +785,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA2.config.collateralToken]: new Holding({
+      [marketA2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userB,
-        token: marketA2.config.collateralToken,
+        token: marketA2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -807,14 +807,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB1.config.collateralToken]: new Holding({
+      [marketB1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userB,
-        token: marketB1.config.collateralToken,
+        token: marketB1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -829,14 +829,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB2.config.collateralToken]: new Holding({
+      [marketB2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userB,
-        token: marketB2.config.collateralToken,
+        token: marketB2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -989,14 +989,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA1.config.collateralToken]: new Holding({
+      [marketA1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userC,
-        token: marketA1.config.collateralToken,
+        token: marketA1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1011,14 +1011,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA2.config.collateralToken]: new Holding({
+      [marketA2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userC,
-        token: marketA2.config.collateralToken,
+        token: marketA2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1033,14 +1033,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB1.config.collateralToken]: new Holding({
+      [marketB1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userC,
-        token: marketB1.config.collateralToken,
+        token: marketB1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1055,14 +1055,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB2.config.collateralToken]: new Holding({
+      [marketB2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: userC,
-        token: marketB2.config.collateralToken,
+        token: marketB2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1214,14 +1214,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA1.config.collateralToken]: new Holding({
+      [marketA1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultA.address,
-        token: marketA1.config.collateralToken,
+        token: marketA1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1236,14 +1236,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA2.config.collateralToken]: new Holding({
+      [marketA2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultA.address,
-        token: marketA2.config.collateralToken,
+        token: marketA2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1258,14 +1258,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB1.config.collateralToken]: new Holding({
+      [marketB1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultA.address,
-        token: marketB1.config.collateralToken,
+        token: marketB1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1280,14 +1280,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB2.config.collateralToken]: new Holding({
+      [marketB2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultA.address,
-        token: marketB2.config.collateralToken,
+        token: marketB2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1439,14 +1439,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA1.config.collateralToken]: new Holding({
+      [marketA1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultB.address,
-        token: marketA1.config.collateralToken,
+        token: marketA1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1461,14 +1461,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA2.config.collateralToken]: new Holding({
+      [marketA2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultB.address,
-        token: marketA2.config.collateralToken,
+        token: marketA2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1483,14 +1483,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB1.config.collateralToken]: new Holding({
+      [marketB1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultB.address,
-        token: marketB1.config.collateralToken,
+        token: marketB1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1505,14 +1505,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB2.config.collateralToken]: new Holding({
+      [marketB2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultB.address,
-        token: marketB2.config.collateralToken,
+        token: marketB2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1664,14 +1664,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA1.config.collateralToken]: new Holding({
+      [marketA1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
           bundler: maxUint256,
         },
         user: vaultC.address,
-        token: marketA1.config.collateralToken,
+        token: marketA1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1686,14 +1686,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketA2.config.collateralToken]: new Holding({
+      [marketA2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultC.address,
-        token: marketA2.config.collateralToken,
+        token: marketA2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1708,14 +1708,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB1.config.collateralToken]: new Holding({
+      [marketB1.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultC.address,
-        token: marketB1.config.collateralToken,
+        token: marketB1.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {
@@ -1730,14 +1730,14 @@ export const blueFixture = {
           },
         },
       }),
-      [marketB2.config.collateralToken]: new Holding({
+      [marketB2.params.collateralToken]: new Holding({
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
           bundler: 0n,
         },
         user: vaultC.address,
-        token: marketB2.config.collateralToken,
+        token: marketB2.params.collateralToken,
         balance: 0n,
         permit2Allowances: {
           morpho: {

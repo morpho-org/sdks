@@ -10,7 +10,7 @@ export const handleBlueSupplyCollateralOperation: OperationHandler<
   BlueOperations["Blue_SupplyCollateral"]
 > = ({ args: { id, assets, onBehalf, callback }, sender }, data) => {
   const {
-    config: { collateralToken },
+    params: { collateralToken },
   } = data.getMarket(id);
   const { morpho, bundler } = getChainAddresses(data.chainId);
 

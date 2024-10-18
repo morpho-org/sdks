@@ -7,11 +7,11 @@ import type {
   Transport,
 } from "viem";
 
-import type { Address, MarketConfig } from "@morpho-org/blue-sdk";
+import type { Address, MarketParams } from "@morpho-org/blue-sdk";
 import type { SimulationResult } from "@morpho-org/simulation-sdk";
 
-export type MarketParams = Pick<
-  MarketConfig,
+export type InputMarketParams = Pick<
+  MarketParams,
   "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
 >;
 
@@ -24,7 +24,7 @@ export interface Authorization {
 }
 
 export interface ReallocationWithdrawal {
-  marketParams: MarketParams;
+  marketParams: InputMarketParams;
   amount: bigint;
 }
 
@@ -116,7 +116,7 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
   morphoSupply: [
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     shares: bigint,
     slippageAmount: bigint,
@@ -124,20 +124,20 @@ export interface ActionArgs {
     onMorphoSupply: Action[],
   ];
   morphoSupplyCollateral: [
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     onBehalf: Address,
     onMorphoSupplyCollateral: Action[],
   ];
   morphoBorrow: [
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     shares: bigint,
     slippageAmount: bigint,
     receiver: Address,
   ];
   morphoRepay: [
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     shares: bigint,
     slippageAmount: bigint,
@@ -145,14 +145,14 @@ export interface ActionArgs {
     onMorphoRepay: Action[],
   ];
   morphoWithdraw: [
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     shares: bigint,
     slippageAmount: bigint,
     receiver: Address,
   ];
   morphoWithdrawCollateral: [
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     receiver: Address,
   ];
@@ -164,7 +164,7 @@ export interface ActionArgs {
     vault: Address,
     value: bigint,
     withdrawals: ReallocationWithdrawal[],
-    supplyMarket: MarketParams,
+    supplyMarket: InputMarketParams,
   ];
 
   /* Universal Rewards Distributor */

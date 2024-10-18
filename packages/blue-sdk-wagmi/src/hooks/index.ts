@@ -1,6 +1,6 @@
 export * from "./useChainId.js";
 export * from "./useMarket.js";
-export * from "./useMarketConfig.js";
+export * from "./useMarketParams.js";
 export * from "./useToken.js";
 export * from "./useUser.js";
 export * from "./useVault.js";
@@ -10,7 +10,7 @@ export * from "./usePosition.js";
 export * from "./useHolding.js";
 export * from "./useVaultMarketConfig.js";
 export * from "./useMarkets.js";
-export * from "./useMarketConfigs.js";
+export * from "./useMarketsParams.js";
 export * from "./useTokens.js";
 export * from "./useUsers.js";
 export * from "./useVaults.js";

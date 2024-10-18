@@ -43,10 +43,10 @@ describe(type, () => {
 
     const expected = _.cloneDeep(dataFixture);
     expected.positions[userA]![marketA1.id]!.collateral += assets;
-    expected.holdings[userB]![marketA1.config.collateralToken]!.balance -=
+    expected.holdings[userB]![marketA1.params.collateralToken]!.balance -=
       assets;
     expected.holdings[userB]![
-      marketA1.config.collateralToken
+      marketA1.params.collateralToken
     ]!.erc20Allowances.morpho -= assets;
 
     expect(result).toEqual(expected);
@@ -85,7 +85,7 @@ describe(type, () => {
       ),
     ).toThrow(
       new Erc20Errors.InsufficientBalance(
-        marketA1.config.collateralToken,
+        marketA1.params.collateralToken,
         userA,
       ),
     );
@@ -129,7 +129,7 @@ describe(type, () => {
     expected.positions[userC]![marketA3.id]!.borrowShares += borrowShares;
 
     expected.holdings[userC]![
-      marketB3.config.collateralToken
+      marketB3.params.collateralToken
     ]!.erc20Allowances.morpho -= collateral;
 
     expect(result).toEqual(expected);

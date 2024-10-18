@@ -120,7 +120,7 @@ export const check = async <
         ] = await Promise.all([
           // Convex staking wrapper tokens expose both EIP-4626's `asset` and OZ's ERC20Wrapper's `underlying` view function.
           readContract(client, {
-            address: market.config.collateralToken,
+            address: market.params.collateralToken,
             abi: erc4626Abi,
             functionName: "asset",
           }).catch(() => undefined),
@@ -146,7 +146,7 @@ export const check = async <
                 repaidShares,
                 repaidAssets: market.toBorrowAssets(repaidShares),
                 withdrawnAssets: await readContract(client, {
-                  address: market.config.collateralToken,
+                  address: market.params.collateralToken,
                   abi: erc4626Abi,
                   functionName: "previewRedeem",
                   args: [seizedAssets],
@@ -161,14 +161,14 @@ export const check = async <
         if (triedLiquidity.length === 0) throw Error("seized zero");
 
         const slippage =
-          (market.config.liquidationIncentiveFactor - BigInt.WAD) / 2n;
+          (market.params.liquidationIncentiveFactor - BigInt.WAD) / 2n;
 
         await Promise.allSettled(
           triedLiquidity.map(
             async ({ seizedAssets, repaidAssets, withdrawnAssets }) => {
               try {
                 let srcToken =
-                  collateralUnderlyingAsset ?? market.config.collateralToken;
+                  collateralUnderlyingAsset ?? market.params.collateralToken;
                 let srcAmount = withdrawnAssets ?? seizedAssets;
 
                 const encoder = new LiquidationEncoder(executorAddress, client);
@@ -177,14 +177,14 @@ export const check = async <
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
                 ({ srcAmount, srcToken } = await encoder.handlePendleTokens(
-                  market.config.collateralToken,
+                  market.params.collateralToken,
                   seizedAssets,
                   pendleTokens,
                 ));
 
                 // As there is no liquidity for sUSDS, we use the sUSDS withdrawal function to get USDS instead
                 if (
-                  market.config.collateralToken === mainnetAddresses.sUsds &&
+                  market.params.collateralToken === mainnetAddresses.sUsds &&
                   chainId === ChainId.EthMainnet
                 ) {
                   const usdsWithdrawalAmount =
@@ -207,7 +207,7 @@ export const check = async <
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
                   // Process USD0/USD0++ collateral liquidation with specific process (using curve)
-                  case market.config.collateralToken ===
+                  case market.params.collateralToken ===
                     mainnetAddresses["usd0usd0++"] &&
                     chainId === ChainId.EthMainnet:
                     dstAmount = await encoder.curveSwapUsd0Usd0PPForUsdc(
@@ -221,7 +221,7 @@ export const check = async <
                     );
                     break;
                   // Process USD0++ colalteral liquidation with specific process (using curve)
-                  case market.config.collateralToken ===
+                  case market.params.collateralToken ===
                     mainnetAddresses["usd0++"] &&
                     chainId === ChainId.EthMainnet: {
                     dstAmount = await encoder.swapUSD0PPToUSDC(
@@ -240,7 +240,7 @@ export const check = async <
                     const bestSwap = await fetchBestSwap({
                       chainId,
                       src: srcToken,
-                      dst: market.config.loanToken,
+                      dst: market.params.loanToken,
                       amount: srcAmount,
                       from: executorAddress,
                       slippage,
@@ -278,10 +278,10 @@ export const check = async <
 
                 // Handle ERC20Wrapper collateral tokens.
                 if (
-                  erc20WrapperTokens[chainId].has(market.config.collateralToken)
+                  erc20WrapperTokens[chainId].has(market.params.collateralToken)
                 )
                   encoder.erc20WrapperWithdrawTo(
-                    market.config.collateralToken,
+                    market.params.collateralToken,
                     executorAddress,
                     seizedAssets,
                   );
@@ -295,7 +295,7 @@ export const check = async <
                   !(mainnetAddresses.sUsds && chainId === ChainId.EthMainnet)
                 )
                   encoder.erc4626Redeem(
-                    market.config.collateralToken,
+                    market.params.collateralToken,
                     seizedAssets,
                     executorAddress,
                     executorAddress,
@@ -304,14 +304,14 @@ export const check = async <
                 if (loanMorphoAllowance === 0n)
                   // Allows to handle changes in repaidAssets due to price changes and saves gas.
                   encoder.erc20Approve(
-                    market.config.loanToken,
+                    market.params.loanToken,
                     morpho,
                     maxUint256,
                   );
 
                 encoder.morphoBlueLiquidate(
                   morpho,
-                  market.config,
+                  market.params,
                   user,
                   seizedAssets,
                   0n,

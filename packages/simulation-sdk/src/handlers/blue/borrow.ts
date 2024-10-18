@@ -64,7 +64,7 @@ export const handleBlueBorrowOperation: OperationHandler<
     {
       type: "Erc20_Transfer",
       sender: morpho,
-      address: market.config.loanToken,
+      address: market.params.loanToken,
       args: {
         amount: assets,
         from: morpho,

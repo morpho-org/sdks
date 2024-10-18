@@ -5,19 +5,19 @@ import {
   type Address,
   type ChainId,
   ChainUtils,
-  MarketConfig,
   type MarketId,
-  UnknownMarketConfigError,
+  MarketParams,
+  UnknownMarketParamsError,
   _try,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-export async function fetchMarketConfig(
+export async function fetchMarketParams(
   id: MarketId,
   runner: { provider: Provider },
   { chainId }: { chainId?: ChainId } = {},
 ) {
-  let config = _try(() => MarketConfig.get(id), UnknownMarketConfigError);
+  let config = _try(() => MarketParams.get(id), UnknownMarketParamsError);
 
   if (!config) {
     chainId = ChainUtils.parseSupportedChainId(
@@ -35,7 +35,7 @@ export async function fetchMarketConfig(
       blockTag: "latest",
     });
 
-    config = new MarketConfig({
+    config = new MarketParams({
       lltv: marketParams.lltv,
       loanToken: marketParams.loanToken as Address,
       collateralToken: marketParams.collateralToken as Address,

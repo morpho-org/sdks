@@ -20,7 +20,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: foundry-rs/foundry-toolchain@v1.2.0
 
       - run: pnpm install
 

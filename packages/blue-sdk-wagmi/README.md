@@ -44,7 +44,7 @@ export function Component({ marketId }: { marketId?: MarketId }) {
 
   return (
     <h1>
-      {market?.config.loanToken} / {market?.config.collateralToken}
+      {market?.params.loanToken} / {market?.params.collateralToken}
     </h1>
   );
 }

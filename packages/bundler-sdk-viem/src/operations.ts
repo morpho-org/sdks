@@ -293,7 +293,7 @@ export const populateSubBundle = (
     } = {};
 
     const supplyTargetUtilization =
-      publicAllocatorOptions?.supplyTargetUtilization?.[market.config.id] ??
+      publicAllocatorOptions?.supplyTargetUtilization?.[market.params.id] ??
       DEFAULT_SUPPLY_TARGET_UTILIZATION;
 
     if (
@@ -667,10 +667,10 @@ export const finalizeBundle = (
     switch (operation.type) {
       case "Blue_Borrow":
       case "Blue_Withdraw":
-        token = startData.getMarket(operation.args.id).config.loanToken;
+        token = startData.getMarket(operation.args.id).params.loanToken;
         break;
       case "Blue_WithdrawCollateral":
-        token = startData.getMarket(operation.args.id).config.collateralToken;
+        token = startData.getMarket(operation.args.id).params.collateralToken;
         break;
       case "MetaMorpho_Withdraw":
         token = startData.getVault(operation.address).asset;

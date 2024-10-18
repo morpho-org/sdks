@@ -1,7 +1,7 @@
 import {
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  MarketConfig,
+  MarketParams,
   MathLib,
   NATIVE_ADDRESS,
   addresses,
@@ -627,7 +627,7 @@ describe("populateBundle", () => {
           });
           await client.deal({ erc20: usdt, amount });
 
-          const marketConfig = new MarketConfig({
+          const marketParams = new MarketParams({
             loanToken: zeroAddress,
             collateralToken: bbUsdt.address,
             lltv: 0n,
@@ -638,7 +638,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketConfig],
+            args: [marketParams],
           });
 
           const block = await client.getBlock();
@@ -646,7 +646,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [
-                marketConfig.id,
+                marketParams.id,
                 usdt_wstEth.id,
                 usdt_idle.id,
                 usdt_wbtc.id,
@@ -681,7 +681,7 @@ describe("populateBundle", () => {
               sender: client.account.address,
               address: morpho,
               args: {
-                id: marketConfig.id,
+                id: marketParams.id,
                 assets: maxUint256,
                 onBehalf: client.account.address,
               },
@@ -744,7 +744,7 @@ describe("populateBundle", () => {
               sender: bundler,
               address: morpho,
               args: {
-                id: marketConfig.id,
+                id: marketParams.id,
                 assets: maxUint256,
                 onBehalf: client.account.address,
               },
@@ -756,7 +756,7 @@ describe("populateBundle", () => {
 
           const { collateral } = await fetchPosition(
             client.account.address,
-            marketConfig.id,
+            marketParams.id,
             client,
           );
           expect(format.number.of(collateral, 18)).toBeCloseTo(
@@ -787,7 +787,7 @@ describe("populateBundle", () => {
           });
           await client.deal({ erc20: usdt, amount });
 
-          const marketConfig = new MarketConfig({
+          const marketParams = new MarketParams({
             loanToken: zeroAddress,
             collateralToken: bbUsdt.address,
             lltv: 0n,
@@ -798,7 +798,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketConfig],
+            args: [marketParams],
           });
 
           const block = await client.getBlock();
@@ -806,7 +806,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [
-                marketConfig.id,
+                marketParams.id,
                 usdt_wstEth.id,
                 usdt_idle.id,
                 usdt_wbtc.id,
@@ -841,7 +841,7 @@ describe("populateBundle", () => {
               sender: client.account.address,
               address: morpho,
               args: {
-                id: marketConfig.id,
+                id: marketParams.id,
                 assets: shares,
                 onBehalf: client.account.address,
               },
@@ -904,7 +904,7 @@ describe("populateBundle", () => {
               sender: bundler,
               address: morpho,
               args: {
-                id: marketConfig.id,
+                id: marketParams.id,
                 assets: shares,
                 onBehalf: client.account.address,
               },
@@ -934,7 +934,7 @@ describe("populateBundle", () => {
 
           const { collateral } = await fetchPosition(
             client.account.address,
-            marketConfig.id,
+            marketParams.id,
             client,
           );
           expect(collateral).toBe(shares);
@@ -3072,7 +3072,7 @@ describe("populateBundle", () => {
           });
           await client.deal({ erc20: usdt, amount });
 
-          const marketConfig = new MarketConfig({
+          const marketParams = new MarketParams({
             loanToken: zeroAddress,
             collateralToken: bbUsdt.address,
             lltv: 0n,
@@ -3083,7 +3083,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketConfig],
+            args: [marketParams],
           });
 
           const block = await client.getBlock();
@@ -3091,7 +3091,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [
-                marketConfig.id,
+                marketParams.id,
                 usdt_wstEth.id,
                 usdt_idle.id,
                 usdt_wbtc.id,
@@ -3129,7 +3129,7 @@ describe("populateBundle", () => {
                 sender: client.account.address,
                 address: morpho,
                 args: {
-                  id: marketConfig.id,
+                  id: marketParams.id,
                   assets: maxUint256,
                   onBehalf: client.account.address,
                 },
@@ -3197,7 +3197,7 @@ describe("populateBundle", () => {
               sender: bundler,
               address: morpho,
               args: {
-                id: marketConfig.id,
+                id: marketParams.id,
                 assets: maxUint256,
                 onBehalf: client.account.address,
               },
@@ -3209,7 +3209,7 @@ describe("populateBundle", () => {
 
           const { collateral } = await fetchPosition(
             client.account.address,
-            marketConfig.id,
+            marketParams.id,
             client,
           );
           expect(format.number.of(collateral, 18)).toBeCloseTo(
@@ -3240,7 +3240,7 @@ describe("populateBundle", () => {
           });
           await client.deal({ erc20: usdt, amount });
 
-          const marketConfig = new MarketConfig({
+          const marketParams = new MarketParams({
             loanToken: zeroAddress,
             collateralToken: bbUsdt.address,
             lltv: 0n,
@@ -3251,7 +3251,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketConfig],
+            args: [marketParams],
           });
 
           const block = await client.getBlock();
@@ -3259,7 +3259,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [
-                marketConfig.id,
+                marketParams.id,
                 usdt_wstEth.id,
                 usdt_idle.id,
                 usdt_wbtc.id,
@@ -3297,7 +3297,7 @@ describe("populateBundle", () => {
                 sender: client.account.address,
                 address: morpho,
                 args: {
-                  id: marketConfig.id,
+                  id: marketParams.id,
                   assets: shares,
                   onBehalf: client.account.address,
                 },
@@ -3362,7 +3362,7 @@ describe("populateBundle", () => {
               sender: bundler,
               address: morpho,
               args: {
-                id: marketConfig.id,
+                id: marketParams.id,
                 assets: shares,
                 onBehalf: client.account.address,
               },
@@ -3392,7 +3392,7 @@ describe("populateBundle", () => {
 
           const { collateral } = await fetchPosition(
             client.account.address,
-            marketConfig.id,
+            marketParams.id,
             client,
           );
           expect(collateral).toBe(shares);
@@ -4951,7 +4951,7 @@ describe("populateBundle", () => {
       test[ChainId.BaseMainnet](
         "should wrap then supply aUSDC",
         async ({ client, config }) => {
-          const marketConfig = new MarketConfig({
+          const marketParams = new MarketParams({
             collateralToken: wNative,
             loanToken: verUsdc,
             oracle: "0xFEa2D58cEfCb9fcb597723c6bAE66fFE4193aFE4",
@@ -4963,7 +4963,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketConfig],
+            args: [marketParams],
           });
 
           const whitelisted = "0x53753098E2660AbD4834A3eD713D11AC1123421A";
@@ -4979,7 +4979,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [marketConfig.id],
+              marketIds: [marketParams.id],
               users: [whitelisted, bundler],
               tokens: [usdc, verUsdc, wNative],
               vaults: [],
@@ -5008,7 +5008,7 @@ describe("populateBundle", () => {
                 sender: whitelisted,
                 address: morpho,
                 args: {
-                  id: marketConfig.id,
+                  id: marketParams.id,
                   assets,
                   onBehalf: whitelisted,
                 },
@@ -5076,7 +5076,7 @@ describe("populateBundle", () => {
               sender: bundler,
               address: morpho,
               args: {
-                id: marketConfig.id,
+                id: marketParams.id,
                 assets,
                 onBehalf: whitelisted,
               },
@@ -5085,7 +5085,7 @@ describe("populateBundle", () => {
 
           const position = await fetchPosition(
             whitelisted,
-            marketConfig.id,
+            marketParams.id,
             client,
           );
 

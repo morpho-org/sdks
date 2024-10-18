@@ -1,11 +1,11 @@
-import { Market, MarketConfig } from "@morpho-org/blue-sdk";
+import { Market, MarketParams } from "@morpho-org/blue-sdk";
 import { replaceEqualDeep } from "@tanstack/query-core";
 import { describe, expect } from "vitest";
 import { mergeDeepEqual } from "../../src/index.js";
 import { test } from "../e2e/setup.js";
 
 const prevMarket = new Market({
-  config: new MarketConfig({
+  params: new MarketParams({
     collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
     irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     lltv: 860000000000000000n,
@@ -23,7 +23,7 @@ const prevMarket = new Market({
 });
 
 const newMarket = new Market({
-  config: new MarketConfig({
+  params: new MarketParams({
     collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
     irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     lltv: 860000000000000000n,
@@ -71,7 +71,7 @@ describe("structuralSharing", () => {
     const merged = mergeDeepEqual(prevMarket, newMarket);
 
     expect(merged).not.toBe(prevMarket);
-    expect(merged.config).toBe(prevMarket.config);
+    expect(merged.params).toBe(prevMarket.params);
     expect(Object.getPrototypeOf(merged)).toBe(
       Object.getPrototypeOf(prevMarket),
     );
@@ -91,7 +91,7 @@ describe("structuralSharing", () => {
     const merged = mergeDeepEqual([prevMarket], [newMarket])[0]!;
 
     expect(merged).not.toBe(prevMarket);
-    expect(merged.config).toBe(prevMarket.config);
+    expect(merged.params).toBe(prevMarket.params);
     expect(Object.getPrototypeOf(merged)).toBe(
       Object.getPrototypeOf(prevMarket),
     );

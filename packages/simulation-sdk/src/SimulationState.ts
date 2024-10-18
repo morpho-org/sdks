@@ -358,7 +358,7 @@ export class SimulationState implements InputSimulationState {
     },
   ) {
     return _try(() => {
-      const { loanToken, collateralToken } = this.getMarket(marketId).config;
+      const { loanToken, collateralToken } = this.getMarket(marketId).params;
 
       const loanBalance = this.getBundleMaxBalance(
         user,

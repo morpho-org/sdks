@@ -46,7 +46,7 @@ export const handleBlueWithdrawCollateralOperation: OperationHandler<
     {
       type: "Erc20_Transfer",
       sender: morpho,
-      address: market.config.collateralToken,
+      address: market.params.collateralToken,
       args: {
         amount: assets,
         from: morpho,

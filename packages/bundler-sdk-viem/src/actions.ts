@@ -595,20 +595,20 @@ export const encodeOperation = (
     case "Blue_Supply": {
       const { id, assets = 0n, shares = 0n, onBehalf } = operation.args;
 
-      const { config } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id);
 
       // Already takes slippage into account.
       const slippageAmount =
         shares === 0n
           ? dataAfter.getPosition(onBehalf, id).supplyShares -
             dataBefore.getPosition(onBehalf, id).supplyShares
-          : dataAfter.getHolding(sender, config.loanToken).balance -
-            dataBefore.getHolding(sender, config.loanToken).balance;
+          : dataAfter.getHolding(sender, params.loanToken).balance -
+            dataBefore.getHolding(sender, params.loanToken).balance;
 
       actions.push({
         type: "morphoSupply",
         args: [
-          config,
+          params,
           assets,
           shares,
           slippageAmount,
@@ -628,19 +628,19 @@ export const encodeOperation = (
         receiver,
       } = operation.args;
 
-      const { config } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id);
 
       // Already takes slippage into account.
       const slippageAmount =
         shares === 0n
           ? dataBefore.getPosition(onBehalf, id).supplyShares -
             dataAfter.getPosition(onBehalf, id).supplyShares
-          : dataBefore.getHolding(sender, config.loanToken).balance -
-            dataAfter.getHolding(sender, config.loanToken).balance;
+          : dataBefore.getHolding(sender, params.loanToken).balance -
+            dataAfter.getHolding(sender, params.loanToken).balance;
 
       actions.push({
         type: "morphoWithdraw",
-        args: [config, assets, shares, slippageAmount, receiver],
+        args: [params, assets, shares, slippageAmount, receiver],
       });
 
       break;
@@ -654,19 +654,19 @@ export const encodeOperation = (
         receiver,
       } = operation.args;
 
-      const { config } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id);
 
       // Already takes slippage into account.
       const slippageAmount =
         shares === 0n
           ? dataAfter.getPosition(onBehalf, id).borrowShares -
             dataBefore.getPosition(onBehalf, id).borrowShares
-          : dataAfter.getHolding(sender, config.loanToken).balance -
-            dataBefore.getHolding(sender, config.loanToken).balance;
+          : dataAfter.getHolding(sender, params.loanToken).balance -
+            dataBefore.getHolding(sender, params.loanToken).balance;
 
       actions.push({
         type: "morphoBorrow",
-        args: [config, assets, shares, slippageAmount, receiver],
+        args: [params, assets, shares, slippageAmount, receiver],
       });
 
       break;
@@ -674,20 +674,20 @@ export const encodeOperation = (
     case "Blue_Repay": {
       const { id, assets = 0n, shares = 0n, onBehalf } = operation.args;
 
-      const { config } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id);
 
       // Already takes slippage into account.
       const slippageAmount =
         shares === 0n
           ? dataBefore.getPosition(onBehalf, id).borrowShares -
             dataAfter.getPosition(onBehalf, id).borrowShares
-          : dataBefore.getHolding(sender, config.loanToken).balance -
-            dataAfter.getHolding(sender, config.loanToken).balance;
+          : dataBefore.getHolding(sender, params.loanToken).balance -
+            dataAfter.getHolding(sender, params.loanToken).balance;
 
       actions.push({
         type: "morphoRepay",
         args: [
-          config,
+          params,
           assets,
           shares,
           slippageAmount,
@@ -701,12 +701,12 @@ export const encodeOperation = (
     case "Blue_SupplyCollateral": {
       const { id, assets, onBehalf } = operation.args;
 
-      const { config } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id);
 
-      if (convexWrapperTokens[chainId].has(config.collateralToken)) {
+      if (convexWrapperTokens[chainId].has(params.collateralToken)) {
         actions.push({
           type: "erc20WrapperDepositFor",
-          args: [config.collateralToken, assets],
+          args: [params.collateralToken, assets],
         });
 
         break;
@@ -714,7 +714,7 @@ export const encodeOperation = (
 
       actions.push({
         type: "morphoSupplyCollateral",
-        args: [config, assets, onBehalf, callbackBundle?.actions ?? []],
+        args: [params, assets, onBehalf, callbackBundle?.actions ?? []],
       });
 
       break;
@@ -722,11 +722,11 @@ export const encodeOperation = (
     case "Blue_WithdrawCollateral": {
       const { id, assets, receiver } = operation.args;
 
-      const { config } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id);
 
       actions.push({
         type: "morphoWithdrawCollateral",
-        args: [config, assets, receiver],
+        args: [params, assets, receiver],
       });
 
       break;
@@ -806,10 +806,10 @@ export const encodeOperation = (
           address,
           fee,
           withdrawals.map(({ id, assets }) => ({
-            marketParams: dataBefore.getMarket(id).config,
+            marketParams: dataBefore.getMarket(id).params,
             amount: assets,
           })),
-          dataBefore.getMarket(supplyMarketId).config,
+          dataBefore.getMarket(supplyMarketId).params,
         ],
       });
 
