@@ -1,6 +1,7 @@
-import { execSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { basename } from "node:path";
 import { Bumper } from "conventional-recommended-bump";
+import { inc } from "semver";
 
 const prefix = `@morpho-org/${basename(process.cwd())}-`;
 const bumper = new Bumper().tag({ prefix });
@@ -37,23 +38,77 @@ if (releaseType) {
     "0",
   );
 
-  console.log(execSync(`pnpm version ${newVersion}`, { encoding: "utf8" }));
+  let { sterr, stdout, error } = spawnSync("pnpm", ["version", newVersion], {
+    encoding: "utf8",
+  });
+  if (error) console.error(error);
+  if (sterr) console.error(sterr);
+  if (stdout) console.log(stdout);
 
-  console.log(
-    execSync(
-      `pnpm publish --no-git-checks --access public --tag ${branch !== "main" ? branch : "latest"}`,
-      { encoding: "utf8" },
-    ),
-  );
+  ({ sterr, stdout, error } = spawnSync(
+    "pnpm",
+    [
+      "publish",
+      "--no-git-checks",
+      "--access",
+      "public",
+      "--tag",
+      branch !== "main" ? branch : "latest",
+    ],
+    { encoding: "utf8" },
+  ));
+  if (error) console.error(error);
+  if (sterr) console.error(sterr);
+  if (stdout) console.log(stdout);
 
   const newTag = `${prefix}v${newVersion}`;
 
-  console.log(
-    execSync(
-      `gh release create ${newTag} --title ${newTag} ${branch === "main" ? "--latest" : "--prerelease"} --generate-notes --notes-start-tag ${tag}`,
-      { encoding: "utf8" },
-    ),
+  // const genReq = await fetch(
+  //   "https://api.github.com/repos/morpho-org/sdks/releases/generate-notes",
+  //   {
+  //     method: "POST",
+  //     headers: {
+  //       Accept: "application/vnd.github+json",
+  //       Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+  //       "X-GitHub-Api-Version": "2022-11-28",
+  //     },
+  //     body: JSON.stringify({
+  //       tag_name: newTag,
+  //       target_commitish: branch,
+  //       previous_tag_name: tag,
+  //     }),
+  //   },
+  // );
+
+  // if (!genReq.ok) {
+  //   console.error(await genReq.text());
+  //   process.exit(1);
+  // }
+
+  const createReq = await fetch(
+    "https://api.github.com/repos/morpho-org/sdks/releases",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({
+        name: newTag,
+        tag_name: newTag,
+        target_commitish: branch,
+        prerelease: branch !== "main",
+        draft: false,
+        generate_release_notes: true,
+      }),
+    },
   );
+
+  if (!createReq.ok) {
+    console.error(await createReq.json());
+    process.exit(1);
+  }
 }
 
 process.exit(0);
