@@ -19,6 +19,7 @@ import {
   Flashbots,
   LiquidationEncoder,
   Pendle,
+  Sky,
   apiSdk,
   fetchBestSwap,
   mainnetAddresses,
@@ -267,26 +268,25 @@ export const check = async <
                         dstAmount <
                         repaidAssets.wadMulDown(BigInt.WAD + slippage)
                       ) {
-                        // If we don't have enough liquidity, we try to swap USDS to DAI or SKY to MKR and retry
+                        // If we don't have enough liquidity, we try to swap to the alternative token and retry
                         if (
                           (srcToken === mainnetAddresses.usds ||
-                            srcToken === mainnetAddresses.sky) &&
+                            srcToken === mainnetAddresses.dai ||
+                            srcToken === mainnetAddresses.sky ||
+                            srcToken === mainnetAddresses.mkr) &&
                           chainId === ChainId.EthMainnet &&
                           tries.length === 0
                         ) {
                           tries.push({ srcAmount, srcToken });
-                          srcToken =
-                            srcToken === mainnetAddresses.usds
-                              ? mainnetAddresses.dai!
-                              : mainnetAddresses.mkr!;
+                          srcToken = Sky.getAlternativeToken(srcToken);
                           retry = true;
                         }
-                        // If even using DAI/MKR we still don't have enough liquidity, we try with both tokens (and half the amount)
+                        // If even using the alternative token we still don't have enough liquidity, we try with both tokens (and half the amount)
                         else if (
-                          (tries[0]?.srcToken === mainnetAddresses.usds &&
-                            tries[1]?.srcToken === mainnetAddresses.dai) ||
-                          (tries[0]?.srcToken === mainnetAddresses.sky &&
-                            tries[1]?.srcToken === mainnetAddresses.mkr)
+                          Sky.isTokenPair(
+                            tries[0]?.srcToken,
+                            tries[1]?.srcToken,
+                          )
                         ) {
                           const halfAmount = srcAmount / 2n;
                           const firstToken = tries[0]?.srcToken;
@@ -362,16 +362,24 @@ export const check = async <
                       }
 
                       if (
-                        (tries[0]?.srcToken === mainnetAddresses.usds &&
-                          tries[1]?.srcToken === mainnetAddresses.dai) ||
-                        (tries[0]?.srcToken === mainnetAddresses.sky &&
-                          tries[1]?.srcToken === mainnetAddresses.mkr)
+                        Sky.isTokenPair(tries[0]?.srcToken, tries[1]?.srcToken)
                       ) {
-                        if (tries[0]?.srcToken === mainnetAddresses.usds) {
-                          encoder.usdsToDai(srcAmount, executorAddress);
-                        } else {
-                          encoder.skyToMkr(srcAmount, executorAddress);
-                        }
+                        const conversionFunction = Sky.getConversionFunction(
+                          tries[0]?.srcToken!,
+                          tries[1]?.srcToken!,
+                        );
+                        encoder.erc20Approve(
+                          tries[0]?.srcToken!,
+                          bestSwap.tx.to,
+                          srcAmount,
+                        );
+                        encoder.erc20Approve(
+                          tries[1]?.srcToken!,
+                          bestSwap.tx.to,
+                          srcAmount,
+                        );
+
+                        encoder[conversionFunction](srcAmount, executorAddress);
                       }
 
                       encoder

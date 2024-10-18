@@ -19,21 +19,14 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import {
   Flashbots,
-  LiquidationEncoder,
+  type LiquidationEncoder,
 } from "@morpho-org/liquidation-sdk-viem";
-import { curveStableSwapNGAbi } from "@morpho-org/liquidation-sdk-viem/src/abis.js";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test-viem";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelisted-erc4626-1inch.js";
-import {
-  OneInch,
-  Paraswap,
-  Pendle,
-  curvePools,
-  mainnetAddresses,
-} from "../../src/index.js";
+import { OneInch, Paraswap, Pendle } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import pendleMarketData from "../pendleMockData/pendleMarketData.json";
 import pendleTokens from "../pendleMockData/pendleTokens.json";
@@ -1405,6 +1398,170 @@ describe("erc4626-1inch", () => {
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
         11652.93471896,
         8,
+      );
+    },
+  );
+
+  test.sequential(
+    `should liquidate a sUSDS market using DAI when USDS lacks liquidity`,
+    async ({ client, encoder }) => {
+      const usdsPriceUsd = 1.0;
+      const ethPriceUsd = 2_644;
+
+      const marketId =
+        "0xbed21964cf290ab95fa458da6c1f302f2278aec5f897c1b1da3054553ef5e90c" as MarketId; // USDS / WETH market
+
+      const market = await fetchMarket(marketId, client);
+      const [collateralToken, loanToken] = await Promise.all([
+        fetchToken(market.config.collateralToken, client),
+        fetchToken(market.config.loanToken, client),
+      ]);
+
+      // Set up the borrower's position
+      const collateral = parseUnits("100000", collateralToken.decimals);
+
+      await client.deal({
+        erc20: collateralToken.address,
+        recipient: borrower.address,
+        amount: collateral,
+      });
+      await client.approve({
+        account: borrower,
+        address: collateralToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supplyCollateral",
+        args: [market.config, collateral, borrower.address, "0x"],
+      });
+
+      const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
+      await client.deal({
+        erc20: loanToken.address,
+        recipient: borrower.address,
+        amount: borrowed,
+      });
+      await client.approve({
+        account: borrower,
+        address: loanToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supply",
+        args: [market.config, borrowed, 0n, borrower.address, "0x"],
+      });
+
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "borrow",
+        args: [
+          market.config as Pick<
+            typeof market.config,
+            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
+          >,
+          market.getMaxBorrowAssets(collateral) - 1n,
+          0n,
+          borrower.address,
+          borrower.address,
+        ],
+      });
+
+      const newUsdsPriceUsd = usdsPriceUsd * 0.9; // 10% price drop
+
+      // Mock API responses
+      nock(BLUE_API_BASE_URL)
+        .post("/graphql")
+        .reply(200, {
+          data: { markets: { items: [{ uniqueKey: marketId }] } },
+        })
+        .post("/graphql")
+        .reply(200, {
+          data: {
+            assetByAddress: {
+              priceUsd: ethPriceUsd,
+              spotPriceEth: 1,
+            },
+            marketPositions: {
+              items: [
+                {
+                  user: {
+                    address: borrower.address,
+                  },
+                  market: {
+                    uniqueKey: marketId,
+                    collateralAsset: {
+                      address: market.config.collateralToken,
+                      decimals: collateralToken.decimals,
+                      priceUsd: newUsdsPriceUsd,
+                      spotPriceEth: newUsdsPriceUsd / ethPriceUsd,
+                    },
+                    loanAsset: {
+                      address: market.config.loanToken,
+                      decimals: loanToken.decimals,
+                      priceUsd: null,
+                      spotPriceEth: 1 / ethPriceUsd,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        });
+
+      const timestamp = await syncTimestamp(client);
+
+      const accrualPosition = await fetchAccrualPosition(
+        borrower.address,
+        marketId,
+        client,
+      );
+      const accruedPosition = accrualPosition.accrueInterest(timestamp);
+
+      const usdsWithdrawalAmount = await encoder.previewUSDSWithdrawalAmount(
+        accruedPosition.seizableCollateral / 2n,
+      );
+
+      // Mock 1inch and ParaSwap responses
+      // First, mock insufficient liquidity for USDS
+      mockOneInch(encoder, usdsWithdrawalAmount, "0");
+      mockParaSwap(encoder, usdsWithdrawalAmount, "0");
+
+      // Then, mock sufficient liquidity for DAI
+      const daiAmount = usdsWithdrawalAmount; // Assuming 1:1 exchange rate
+      mockOneInch(encoder, daiAmount, "11669266773005108147656");
+      mockParaSwap(encoder, daiAmount, "11669266773005108147657");
+
+      // Mock USDS to DAI conversion
+      encoder.usdsToDai = vi.fn().mockResolvedValue(daiAmount);
+
+      await check(encoder.address, client, client.account, [marketId]);
+
+      const decimals = Number(loanToken.decimals);
+
+      const decimalBalance = await client.readContract({
+        address: market.config.loanToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [encoder.address],
+      });
+
+      expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
+        11652.93471896,
+        8,
+      );
+
+      // Verify that USDS to DAI conversion was called
+      expect(encoder.usdsToDai).toHaveBeenCalledWith(
+        usdsWithdrawalAmount,
+        encoder.address,
       );
     },
   );
