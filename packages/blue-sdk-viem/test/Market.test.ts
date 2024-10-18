@@ -56,13 +56,13 @@ describe("augment/Market", () => {
       functionName: "owner",
     });
 
-    const config = new MarketParams({
+    const params = new MarketParams({
       ...eth_wstEth,
       irm: randomAddress(),
     });
 
     await client.setCode({
-      address: config.irm,
+      address: params.irm,
       bytecode: (await client.getCode({
         address: adaptiveCurveIrm,
       }))!,
@@ -74,7 +74,7 @@ describe("augment/Market", () => {
       address: morpho,
       abi: blueAbi,
       functionName: "enableIrm",
-      args: [config.irm],
+      args: [params.irm],
     });
 
     const timestamp = (await client.timestamp()) + 3n;
@@ -85,11 +85,11 @@ describe("augment/Market", () => {
       address: morpho,
       abi: blueAbi,
       functionName: "createMarket",
-      args: [{ ...config }],
+      args: [{ ...params }],
     });
 
     const expectedData = new Market({
-      config,
+      params,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
@@ -100,7 +100,7 @@ describe("augment/Market", () => {
       rateAtTarget: undefined,
     });
 
-    const value = await Market.fetch(config.id, client);
+    const value = await Market.fetch(params.id, client);
 
     expect(value).toStrictEqual(expectedData);
   });
