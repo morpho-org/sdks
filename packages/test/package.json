@@ -1,5 +1,6 @@
 {
   "name": "@morpho-org/test",
+  "description": "Framework-agnostic package that exports utilities to build test fixtures and spawn anvil forks as child processes.",
   "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",

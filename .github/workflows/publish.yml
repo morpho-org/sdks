@@ -12,6 +12,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Fetch all history so that we can determine the version to release.
+          fetch-depth: 0 
 
       - uses: pnpm/action-setup@v4
 
@@ -22,11 +25,12 @@ jobs:
 
       - run: pnpm install
 
-      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
+      # First, set version of each package to the latest tagged so they are referenced correclty in dependencies.
+      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec 'node ../../scripts/release/version.js'
 
-      - run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+      - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
-          pnpm -r --parallel --no-reporter-hide-prefix exec semantic-release
+      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec 'node ../../scripts/release/publish.js'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
