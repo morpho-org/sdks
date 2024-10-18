@@ -49,7 +49,7 @@ if (releaseType) {
   ));
   if (stdout) console.log(stdout);
   if (error) {
-    console.error(error);
+    console.error("pnpm publish error:", error);
     process.exit(1);
   }
   if (stderr) {
@@ -98,7 +98,7 @@ if (releaseType) {
   );
 
   if (!createReq.ok) {
-    console.error(await createReq.json());
+    console.error("github release error:", await createReq.text());
     process.exit(1);
   }
 } else console.debug(`No version bump from ${version} on branch ${branch}`);
