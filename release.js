@@ -4,6 +4,7 @@ import { Bumper } from "conventional-recommended-bump";
 import { inc } from "semver";
 
 const prefix = `@morpho-org/${basename(process.cwd())}-`;
+console.log("prefix", prefix);
 const bumper = new Bumper().tag({ prefix });
 
 const getLastSemverTag = bumper.getLastSemverTag.bind(bumper);
@@ -34,7 +35,7 @@ let { releaseType } = await bumper.bump((commits) => {
 });
 
 if (releaseType) {
-  const version = await bumper.gitClient.getVersionFromTags();
+  const version = (await bumper.gitClient.getVersionFromTags()) ?? "1.0.0";
 
   console.log("version", version);
   // const tag = `${prefix}v${version}`;
@@ -49,12 +50,16 @@ if (releaseType) {
     "0",
   );
 
+  console.log("newVersion", newVersion);
+
   let { sterr, stdout, error } = spawnSync("pnpm", ["version", newVersion], {
     encoding: "utf8",
   });
   if (error) console.error(error);
   if (sterr) console.error(sterr);
   if (stdout) console.log(stdout);
+
+  process.exit(1);
 
   ({ sterr, stdout, error } = spawnSync(
     "pnpm",
