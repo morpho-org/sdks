@@ -1,10 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { writeChangelogString } from "conventional-changelog-writer";
-import { inc } from "semver";
+import { gt, inc } from "semver";
 import {
   branch,
   bumper,
+  channel,
   commits,
+  packageName,
   prefix,
   tag,
   version,
@@ -17,8 +19,14 @@ let { releaseType } = await bumper.bump(whatBump);
 if (releaseType) {
   if (branch !== "main") releaseType = "prerelease";
 
+  const npmReq = await fetch(
+    `https://registry.npmjs.org/${packageName}/${channel}`,
+  );
+  const npmPackage = await npmReq.json();
+  const npmVersion = npmPackage.version;
+
   const newVersion = inc(
-    version,
+    gt(version, npmVersion) ? version : npmVersion,
     releaseType,
     branch !== "main" ? branch : undefined,
     "0",
@@ -37,18 +45,11 @@ if (releaseType) {
   if (error) console.log("pnpm version error:", error);
   if (stderr) console.log(stderr);
 
-  console.debug(`Publish version ${newVersion}`);
+  console.debug(`Publish version ${newVersion} on channel ${channel}`);
 
   ({ stderr, stdout, error } = spawnSync(
     "pnpm",
-    [
-      "publish",
-      "--no-git-checks",
-      "--access",
-      "public",
-      "--tag",
-      branch !== "main" ? branch : "latest",
-    ],
+    ["publish", "--no-git-checks", "--access", "public", "--tag", channel],
     { encoding: "utf8" },
   ));
   if (stdout) console.log(stdout);

@@ -4,7 +4,8 @@ import { Bumper } from "conventional-recommended-bump";
 
 export const { commits: commitOpts, parser, writer } = createPreset();
 
-export const prefix = `@morpho-org/${basename(process.cwd())}-`;
+export const packageName = `@morpho-org/${basename(process.cwd())}`;
+export const prefix = `${packageName}-`;
 export const bumper = new Bumper()
   .tag({ prefix })
   .commits({ ...commitOpts, path: "." }, parser);
@@ -41,3 +42,4 @@ if (!version) {
 }
 
 export const tag = `${prefix}v${version}`;
+export const channel = branch !== "main" ? branch : "latest";
