@@ -20,7 +20,7 @@ describe("time", () => {
     expect(Time.ms.from.s(s)).toBe(123456789444000n);
   });
 
-  test("should convert period to s", () => {
+  test("should convert periods", () => {
     expect(Time.ms.fromPeriod("s")).toBe(1000);
     expect(Time.ms.fromPeriod({ unit: "s", duration: 123 })).toBe(123000);
     expect(Time.min.fromPeriod({ unit: "s", duration: 123 })).toBe(2);
