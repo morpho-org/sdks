@@ -51,9 +51,8 @@ if (releaseType) {
   let { stderr, stdout, error } = spawnSync("pnpm", ["version", newVersion], {
     encoding: "utf8",
   });
-  if (error) console.error(error);
-  if (stderr) console.error(stderr);
   if (stdout) console.log(stdout);
+  if (stderr) console.log(stderr); // Ignore versioning errors.
 
   ({ stderr, stdout, error } = spawnSync(
     "pnpm",
@@ -67,14 +66,18 @@ if (releaseType) {
     ],
     { encoding: "utf8" },
   ));
-  if (error) console.error(error);
-  if (stderr) console.error(stderr);
   if (stdout) console.log(stdout);
+  if (error) {
+    console.error(error);
+    process.exit(1);
+  }
+  if (stderr) {
+    console.error(stderr);
+    process.exit(1);
+  }
 
   const tag = `${prefix}v${version}`;
   const newTag = `${prefix}v${newVersion}`;
-
-  process.exit(1);
 
   const notesReq = await fetch(
     "https://api.github.com/repos/morpho-org/sdks/releases/generate-notes",

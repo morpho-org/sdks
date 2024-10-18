@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-api-sdk",
   "description": "GraphQL SDK that exports types from the [API's GraphQL schema](https://blue-api.morpho.org/graphql) and a useful Apollo cache controller.",
-  "version": "2.0.0-next.4",
+  "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",
