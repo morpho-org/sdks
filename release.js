@@ -24,12 +24,14 @@ let { releaseType } = await bumper.bump((commits) => {
   return { level };
 });
 
+const version = await bumper.gitClient.getVersionFromTags({ prefix });
+
+if (!version) {
+  console.error("Cannot find version from tags");
+  process.exit(1);
+}
+
 if (releaseType) {
-  const version =
-    (await bumper.gitClient.getVersionFromTags({ prefix })) ?? "1.0.0";
-
-  // const tag = `${prefix}v${version}`;
-
   const branch = await bumper.gitClient.getCurrentBranch();
   if (branch !== "main") releaseType = "prerelease";
 
@@ -67,29 +69,31 @@ if (releaseType) {
   if (stderr) console.error(stderr);
   if (stdout) console.log(stdout);
 
+  const tag = `${prefix}v${version}`;
   const newTag = `${prefix}v${newVersion}`;
 
-  // const genReq = await fetch(
-  //   "https://api.github.com/repos/morpho-org/sdks/releases/generate-notes",
-  //   {
-  //     method: "POST",
-  //     headers: {
-  //       Accept: "application/vnd.github+json",
-  //       Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-  //       "X-GitHub-Api-Version": "2022-11-28",
-  //     },
-  //     body: JSON.stringify({
-  //       tag_name: newTag,
-  //       target_commitish: branch,
-  //       previous_tag_name: tag,
-  //     }),
-  //   },
-  // );
+  const notesReq = await fetch(
+    "https://api.github.com/repos/morpho-org/sdks/releases/generate-notes",
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/vnd.github+json",
+        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      body: JSON.stringify({
+        tag_name: newTag,
+        target_commitish: branch,
+        previous_tag_name: tag,
+      }),
+    },
+  );
 
-  // if (!genReq.ok) {
-  //   console.error(await genReq.text());
-  //   process.exit(1);
-  // }
+  const notes = await notesReq.json();
+  if (!notesReq.ok) {
+    console.error(notes);
+    process.exit(1);
+  }
 
   const createReq = await fetch(
     "https://api.github.com/repos/morpho-org/sdks/releases",
@@ -101,12 +105,11 @@ if (releaseType) {
         "X-GitHub-Api-Version": "2022-11-28",
       },
       body: JSON.stringify({
-        name: newTag,
+        ...notes,
         tag_name: newTag,
         target_commitish: branch,
         prerelease: branch !== "main",
         draft: false,
-        generate_release_notes: true,
       }),
     },
   );
@@ -115,6 +118,9 @@ if (releaseType) {
     console.error(await createReq.json());
     process.exit(1);
   }
-}
+} else
+  console.debug(
+    `No version bump from ${version} on branch ${branch} (release type: ${releaseType})`,
+  );
 
 process.exit(0);
