@@ -4,19 +4,9 @@ import { Bumper } from "conventional-recommended-bump";
 import { inc } from "semver";
 
 const prefix = `@morpho-org/${basename(process.cwd())}-`;
-console.log("prefix", prefix);
 const bumper = new Bumper().tag({ prefix });
 
-const getLastSemverTag = bumper.getLastSemverTag.bind(bumper);
-
-bumper.getLastSemverTag = async (...params) => {
-  const tag = await getLastSemverTag(...params);
-  console.log("tag", tag);
-  return tag;
-};
-
 let { releaseType } = await bumper.bump((commits) => {
-  console.log(commits);
   if (commits.length === 0) return;
 
   let level = 2;
@@ -38,7 +28,7 @@ if (releaseType) {
   const version =
     (await bumper.gitClient.getVersionFromTags({ prefix })) ?? "1.0.0";
 
-  console.log("version", version);
+  console.debug("version", version);
   // const tag = `${prefix}v${version}`;
 
   const branch = await bumper.gitClient.getCurrentBranch();
@@ -51,18 +41,18 @@ if (releaseType) {
     "0",
   );
 
-  console.log("newVersion", newVersion);
+  console.debug("newVersion", newVersion);
 
-  let { sterr, stdout, error } = spawnSync("pnpm", ["version", newVersion], {
+  let { stderr, stdout, error } = spawnSync("pnpm", ["version", newVersion], {
     encoding: "utf8",
   });
   if (error) console.error(error);
-  if (sterr) console.error(sterr);
+  if (stderr) console.error(stderr);
   if (stdout) console.log(stdout);
 
   process.exit(1);
 
-  ({ sterr, stdout, error } = spawnSync(
+  ({ stderr, stdout, error } = spawnSync(
     "pnpm",
     [
       "publish",
@@ -75,7 +65,7 @@ if (releaseType) {
     { encoding: "utf8" },
   ));
   if (error) console.error(error);
-  if (sterr) console.error(sterr);
+  if (stderr) console.error(stderr);
   if (stdout) console.log(stdout);
 
   const newTag = `${prefix}v${newVersion}`;
