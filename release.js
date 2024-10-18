@@ -40,8 +40,9 @@ if (releaseType) {
     "0",
   );
 
-  console.debug("version", version);
-  console.debug("newVersion", newVersion);
+  console.debug(
+    `Version bump from ${version} to ${newVersion} on branch ${branch} (release type: ${releaseType})`,
+  );
 
   let { stderr, stdout, error } = spawnSync("pnpm", ["version", newVersion], {
     encoding: "utf8",
@@ -49,8 +50,6 @@ if (releaseType) {
   if (error) console.error(error);
   if (stderr) console.error(stderr);
   if (stdout) console.log(stdout);
-
-  process.exit(0);
 
   ({ stderr, stdout, error } = spawnSync(
     "pnpm",
