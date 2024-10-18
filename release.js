@@ -28,7 +28,6 @@ if (releaseType) {
   const version =
     (await bumper.gitClient.getVersionFromTags({ prefix })) ?? "1.0.0";
 
-  console.debug("version", version);
   // const tag = `${prefix}v${version}`;
 
   const branch = await bumper.gitClient.getCurrentBranch();
@@ -41,6 +40,7 @@ if (releaseType) {
     "0",
   );
 
+  console.debug("version", version);
   console.debug("newVersion", newVersion);
 
   let { stderr, stdout, error } = spawnSync("pnpm", ["version", newVersion], {
@@ -50,7 +50,7 @@ if (releaseType) {
   if (stderr) console.error(stderr);
   if (stdout) console.log(stdout);
 
-  process.exit(1);
+  process.exit(0);
 
   ({ stderr, stdout, error } = spawnSync(
     "pnpm",
