@@ -51,10 +51,10 @@ jobs:
       - run: pnpm install
 
       - id: release
-        run: node ../../scripts/release/publish.js
+        run: node ../../scripts/release/release.js
         working-directory: packages/${{ matrix.package }}
 
-      # First, set version of each package to the latest tagged so they are referenced correctly in dependencies.
+      # First, set version of each package to the most recent so they are referenced correctly in dependencies.
       - run: |
           pnpm -r -c exec 'node ../../scripts/release/version.js'
           echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
