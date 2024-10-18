@@ -1,9 +1,5 @@
-export * from "./abis";
-export * from "./fetch";
-export * from "./types";
-export * from "./utils";
-
-export * as abis from "./abis";
-export * as fetch from "./fetch";
-export * as types from "./types";
-export * as utils from "./utils";
+export * from "./abis.js";
+export * from "./fetch/index.js";
+export * from "./signatures/index.js";
+export * from "./types.js";
+export * from "./utils.js";

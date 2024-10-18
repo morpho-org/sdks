@@ -1,20 +1,20 @@
 import {
-  ChainId,
   ChainUtils,
   MarketConfig,
-  MarketId,
+  type MarketId,
   UnknownMarketConfigError,
   _try,
-  getChainAddresses,
+  addresses,
 } from "@morpho-org/blue-sdk";
-import { Address, Client } from "viem";
+import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi } from "../abis";
+import { blueAbi } from "../abis.js";
+import type { FetchParameters } from "../types.js";
 
 export async function fetchMarketConfig(
   id: MarketId,
   client: Client,
-  { chainId }: { chainId?: ChainId } = {},
+  { chainId }: Pick<FetchParameters, "chainId"> = {},
 ) {
   let config = _try(() => MarketConfig.get(id), UnknownMarketConfigError);
 
@@ -23,16 +23,19 @@ export async function fetchMarketConfig(
       chainId ?? (await getChainId(client)),
     );
 
-    const { morpho } = getChainAddresses(chainId);
+    const { morpho } = addresses[chainId];
 
-    const [loanToken, collateralToken, oracle, irm, lltv] =
-      // Always fetch at latest block because config is immutable.
-      await readContract(client, {
-        address: morpho as Address,
+    const [loanToken, collateralToken, oracle, irm, lltv] = await readContract(
+      client,
+      {
+        address: morpho,
         abi: blueAbi,
         functionName: "idToMarketParams",
         args: [id],
-      });
+        // Always fetch at latest block because config is immutable.
+        blockTag: "latest",
+      },
+    );
 
     config = new MarketConfig({
       loanToken,

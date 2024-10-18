@@ -4,7 +4,7 @@ export function formatLongString(str: string, maxLength?: number) {
 
   const nChar = maxLength - 3;
 
-  if (nChar === 1) return str.slice(0, 1) + "...";
+  if (nChar === 1) return `${str.slice(0, 1)}...`;
 
-  return str.slice(0, Math.round(nChar / 2)) + "..." + str.slice(-nChar / 2);
+  return `${str.slice(0, Math.round(nChar / 2))}...${str.slice(-nChar / 2)}`;
 }

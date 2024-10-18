@@ -1,7 +1,7 @@
-import { Address, MarketId } from "../types";
+import type { Address, MarketId } from "../types.js";
 
-import { Pending } from "./Vault";
-import { VaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig";
+import type { Pending } from "./Vault.js";
+import type { VaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
 
 export interface InputVaultMarketConfig {
   vault: Address;
@@ -10,19 +10,19 @@ export interface InputVaultMarketConfig {
   pendingCap: Pending<bigint>;
   removableAt: bigint;
   enabled: boolean;
-  publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
+  publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
 }
 
 export class VaultMarketConfig implements InputVaultMarketConfig {
   /**
    * The vault's address.
    */
-  public vault: Address;
+  public readonly vault: Address;
 
   /**
    * The market's id.
    */
-  public marketId: MarketId;
+  public readonly marketId: MarketId;
 
   /**
    * The maximum amount of tokens that can be allocated to this market.
@@ -47,7 +47,7 @@ export class VaultMarketConfig implements InputVaultMarketConfig {
   /**
    * The vault's PublicAllocator configuration on the corresponding market.
    */
-  public publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
+  public readonly publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
 
   constructor({
     vault,

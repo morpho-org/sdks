@@ -1,9 +1,9 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { MetaMorpho__factory } from "ethers-types";
 
 import {
-  Address,
-  ChainId,
+  type Address,
+  type ChainId,
   ChainUtils,
   UnknownVaultConfigError,
   VaultConfig,
@@ -25,11 +25,15 @@ export async function fetchVaultConfig(
   );
 
   if (!config) {
-    const mm = MetaMorpho__factory.connect(address, runner);
+    const mm = MetaMorpho__factory.connect(
+      address,
+      // @ts-ignore incompatible commonjs type
+      runner,
+    );
 
     // always fetch at latest block because config is immutable
     const [asset, symbol, name, decimals, decimalsOffset] = await Promise.all([
-      mm.asset(),
+      mm.asset() as Promise<Address>,
       mm.symbol(),
       mm.name(),
       mm.decimals(),

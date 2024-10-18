@@ -1,4 +1,4 @@
-import { MarketStateReward, VaultAllocation } from "./types";
+import type { MarketStateReward, VaultAllocation } from "./types.js";
 
 type ReadFieldFunction = <T, K extends keyof T = keyof T>(
   fieldName: K,
