@@ -1,38 +1,8 @@
 import { spawnSync } from "node:child_process";
-import { basename } from "node:path";
-import { Bumper } from "conventional-recommended-bump";
 import { inc } from "semver";
+import { branch, bumper, prefix, version, whatBump } from "./bumper.js";
 
-const prefix = `@morpho-org/${basename(process.cwd())}-`;
-const bumper = new Bumper().tag({ prefix }).commits({ path: "." });
-
-let { releaseType } = await bumper.bump((commits) => {
-  if (commits.length === 0) return;
-
-  let level = 2;
-
-  commits.forEach((commit) => {
-    if (commit.notes.length > 0) {
-      level = 0;
-    } else if (commit.type === "feat") {
-      if (level === 2) {
-        level = 1;
-      }
-    }
-  });
-
-  return { level };
-});
-
-const [branch, version] = await Promise.all([
-  bumper.gitClient.getCurrentBranch(),
-  bumper.gitClient.getVersionFromTags({ prefix }),
-]);
-
-if (!version) {
-  console.error("Cannot find version from tags");
-  process.exit(1);
-}
+let { releaseType } = await bumper.bump(whatBump);
 
 if (releaseType) {
   if (branch !== "main") releaseType = "prerelease";
@@ -51,8 +21,7 @@ if (releaseType) {
   let { stderr, stdout, error } = spawnSync("pnpm", ["version", newVersion], {
     encoding: "utf8",
   });
-  if (stdout) console.log(stdout);
-  if (stderr) console.log(stderr); // Ignore versioning errors.
+  if (stdout) console.log(stdout); // Ignore versioning errors.
 
   ({ stderr, stdout, error } = spawnSync(
     "pnpm",
@@ -126,5 +95,3 @@ if (releaseType) {
     process.exit(1);
   }
 } else console.debug(`No version bump from ${version} on branch ${branch}`);
-
-process.exit(0);

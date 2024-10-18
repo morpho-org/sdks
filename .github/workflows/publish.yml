@@ -25,9 +25,12 @@ jobs:
 
       - run: pnpm install
 
+      # First, set version of each package to the latest tagged so they are referenced correclty in dependencies.
+      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec 'node ../../scripts/release/version.js'
+
       - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
-      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec 'node ../../release.js'
+      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec 'node ../../scripts/release/publish.js'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
