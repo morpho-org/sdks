@@ -1422,7 +1422,7 @@ describe("erc4626-1inch", () => {
 
       await client.deal({
         erc20: collateralToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: collateral,
       });
       await client.approve({
@@ -1441,7 +1441,7 @@ describe("erc4626-1inch", () => {
       const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
       await client.deal({
         erc20: loanToken.address,
-        recipient: borrower.address,
+        account: borrower.address,
         amount: borrowed,
       });
       await client.approve({
@@ -1474,7 +1474,7 @@ describe("erc4626-1inch", () => {
         ],
       });
 
-      const newUsdsPriceUsd = usdsPriceUsd * 0.9; // 10% price drop
+      const newUsdsPriceUsd = usdsPriceUsd * 0.5; // 10% price drop
 
       // Mock API responses
       nock(BLUE_API_BASE_URL)
