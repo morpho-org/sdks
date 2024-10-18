@@ -22,18 +22,9 @@ jobs:
 
       - run: pnpm install
 
-      # First, run versioning to have the correct version referenced in each package.json.
-      # Limit concurrency to avoid semantic-release failing at pushing tags.
-      - run: |
-          pnpm -r --parallel -c exec "jq '.release = input.release' package.json ../../package.json > tmp.json && mv tmp.json package.json"
-          pnpm -r --workspace-concurrency=1 --no-reporter-hide-prefix exec semantic-release
+      - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+
+      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec 'node ../../release.js'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-
-      - if: github.ref_name == 'main'
-        run: pnpm -r publish --no-git-checks --access public
-
-      - if: github.ref_name == 'next'
-        run: pnpm -r publish --no-git-checks --access public --tag next
