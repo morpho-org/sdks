@@ -1,5 +1,7 @@
 import { execSync } from "node:child_process";
 import { basename } from "node:path";
+import { Bumper } from "conventional-recommended-bump";
+
 const prefix = `@morpho-org/${basename(process.cwd())}-`;
 const bumper = new Bumper().tag({ prefix });
 
