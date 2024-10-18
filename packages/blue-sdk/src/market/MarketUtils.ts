@@ -9,7 +9,7 @@ import {
 import { MathLib, type RoundingDirection, SharesMath } from "../math/index.js";
 import type { BigIntish, MarketId } from "../types.js";
 
-import type { MarketParams } from "./MarketConfig.js";
+import type { InputMarketParams } from "./MarketParams.js";
 
 /**
  * Namespace of utility functions to ease market-related calculations.
@@ -19,7 +19,7 @@ export namespace MarketUtils {
    * Returns the id of a market based on its params.
    * @param market The market params.
    */
-  export function getMarketId(market: MarketParams) {
+  export function getMarketId(market: InputMarketParams) {
     return `0x${keccak256(
       `0x${
         market.loanToken.substring(2).toLowerCase().padStart(64, "0") +
@@ -261,10 +261,10 @@ export namespace MarketUtils {
       totalBorrowShares: BigIntish;
       price: BigIntish;
     },
-    marketConfig: { lltv: BigIntish },
+    marketParams: { lltv: BigIntish },
   ) {
     return MathLib.zeroFloorSub(
-      getMaxBorrowAssets(collateral, market, marketConfig),
+      getMaxBorrowAssets(collateral, market, marketParams),
       toBorrowAssets(borrowShares, market),
     );
   }
@@ -366,10 +366,10 @@ export namespace MarketUtils {
       totalBorrowShares: BigIntish;
       price: BigIntish;
     },
-    marketConfig: { lltv: BigIntish },
+    marketParams: { lltv: BigIntish },
   ) {
     return (
-      getMaxBorrowAssets(collateral, market, marketConfig) >=
+      getMaxBorrowAssets(collateral, market, marketParams) >=
       toBorrowAssets(borrowShares, market)
     );
   }
@@ -388,13 +388,13 @@ export namespace MarketUtils {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
     },
-    marketConfig: { lltv: BigIntish },
+    marketParams: { lltv: BigIntish },
   ) {
     borrowShares = BigInt(borrowShares);
     market.totalBorrowShares = BigInt(market.totalBorrowShares);
     if (borrowShares === 0n || market.totalBorrowShares === 0n) return null;
 
-    const collateralPower = getCollateralPower(collateral, marketConfig);
+    const collateralPower = getCollateralPower(collateral, marketParams);
     if (collateralPower === 0n) return MathLib.MAX_UINT_256;
 
     const borrowAssets = toBorrowAssets(borrowShares, market);
@@ -414,7 +414,7 @@ export namespace MarketUtils {
       totalBorrowShares: BigIntish;
       price: BigIntish;
     },
-    marketConfig: { lltv: BigIntish },
+    marketParams: { lltv: BigIntish },
   ) {
     market.price = BigInt(market.price);
     if (market.price === 0n) return null;
@@ -422,7 +422,7 @@ export namespace MarketUtils {
     const liquidationPrice = getLiquidationPrice(
       position,
       market,
-      marketConfig,
+      marketParams,
     );
     if (liquidationPrice == null) return null;
 
@@ -439,7 +439,7 @@ export namespace MarketUtils {
       totalBorrowShares: BigIntish;
       price: BigIntish;
     },
-    marketConfig: { lltv: BigIntish },
+    marketParams: { lltv: BigIntish },
   ) {
     borrowShares = BigInt(borrowShares);
     market.totalBorrowShares = BigInt(market.totalBorrowShares);
@@ -451,7 +451,7 @@ export namespace MarketUtils {
     const maxBorrowAssets = getMaxBorrowAssets(
       collateral,
       market,
-      marketConfig,
+      marketParams,
     );
 
     return MathLib.wDivDown(maxBorrowAssets, borrowAssets);
@@ -488,9 +488,9 @@ export namespace MarketUtils {
       totalBorrowShares: BigIntish;
       price: BigIntish;
     },
-    marketConfig: { lltv: BigIntish },
+    marketParams: { lltv: BigIntish },
   ) {
-    const hf = getHealthFactor(position, market, marketConfig);
+    const hf = getHealthFactor(position, market, marketParams);
     if (hf === null) return null;
     if (hf === 0n) return MathLib.MAX_UINT_256;
 

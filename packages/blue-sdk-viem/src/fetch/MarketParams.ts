@@ -1,8 +1,8 @@
 import {
   ChainUtils,
-  MarketConfig,
   type MarketId,
-  UnknownMarketConfigError,
+  MarketParams,
+  UnknownMarketParamsError,
   _try,
   addresses,
 } from "@morpho-org/blue-sdk";
@@ -11,12 +11,12 @@ import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
 
-export async function fetchMarketConfig(
+export async function fetchMarketParams(
   id: MarketId,
   client: Client,
   { chainId }: Pick<FetchParameters, "chainId"> = {},
 ) {
-  let config = _try(() => MarketConfig.get(id), UnknownMarketConfigError);
+  let config = _try(() => MarketParams.get(id), UnknownMarketParamsError);
 
   if (!config) {
     chainId = ChainUtils.parseSupportedChainId(
@@ -37,7 +37,7 @@ export async function fetchMarketConfig(
       },
     );
 
-    config = new MarketConfig({
+    config = new MarketParams({
       loanToken,
       collateralToken,
       oracle,

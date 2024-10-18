@@ -7,7 +7,7 @@ import {
 } from "../math/index.js";
 import type { BigIntish } from "../types.js";
 
-import type { MarketConfig } from "./MarketConfig.js";
+import type { MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
 
 export enum CapacityLimitReason {
@@ -40,7 +40,7 @@ export interface MaxPositionCapacities {
 }
 
 export interface InputMarket {
-  config: MarketConfig;
+  params: MarketParams;
   totalSupplyAssets: bigint;
   totalBorrowAssets: bigint;
   totalSupplyShares: bigint;
@@ -56,9 +56,9 @@ export interface InputMarket {
  */
 export class Market implements InputMarket {
   /**
-   * The market's config.
+   * The market's params.
    */
-  public readonly config: MarketConfig;
+  public readonly params: MarketParams;
 
   /**
    * The amount of loan assets supplied in total on the market.
@@ -98,7 +98,7 @@ export class Market implements InputMarket {
   public rateAtTarget?: bigint;
 
   constructor({
-    config,
+    params,
     totalSupplyAssets,
     totalBorrowAssets,
     totalSupplyShares,
@@ -108,7 +108,7 @@ export class Market implements InputMarket {
     price,
     rateAtTarget,
   }: InputMarket) {
-    this.config = config;
+    this.params = params;
     this.totalSupplyAssets = totalSupplyAssets;
     this.totalBorrowAssets = totalBorrowAssets;
     this.totalSupplyShares = totalSupplyShares;
@@ -124,14 +124,14 @@ export class Market implements InputMarket {
    * The market's hex-encoded id, defined as the hash of the market params.
    */
   get id() {
-    return this.config.id;
+    return this.params.id;
   }
 
   /**
    * Whether the market satisfies the canonical definition of an idle market (i.e. collateral token is the zero address).
    */
   get isIdle() {
-    return this.config.collateralToken === ZERO_ADDRESS;
+    return this.params.collateralToken === ZERO_ADDRESS;
   }
 
   /**
@@ -390,10 +390,10 @@ export class Market implements InputMarket {
    */
   public getMaxBorrowAssets(
     collateral: bigint,
-    { maxLtv = this.config.lltv }: MaxBorrowOptions = {},
+    { maxLtv = this.params.lltv }: MaxBorrowOptions = {},
   ) {
     return MarketUtils.getMaxBorrowAssets(collateral, this, {
-      lltv: MathLib.min(maxLtv, this.config.lltv),
+      lltv: MathLib.min(maxLtv, this.params.lltv),
     });
   }
 
@@ -405,7 +405,7 @@ export class Market implements InputMarket {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getMaxBorrowableAssets(position, this, this.config);
+    return MarketUtils.getMaxBorrowableAssets(position, this, this.params);
   }
 
   /**
@@ -416,7 +416,7 @@ export class Market implements InputMarket {
     return MarketUtils.getLiquidationSeizedAssets(
       repaidShares,
       this,
-      this.config,
+      this.params,
     );
   }
 
@@ -428,7 +428,7 @@ export class Market implements InputMarket {
     return MarketUtils.getLiquidationRepaidShares(
       seizedAssets,
       this,
-      this.config,
+      this.params,
     );
   }
 
@@ -440,7 +440,7 @@ export class Market implements InputMarket {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getSeizableCollateral(position, this, this.config);
+    return MarketUtils.getSeizableCollateral(position, this, this.params);
   }
 
   /**
@@ -452,10 +452,10 @@ export class Market implements InputMarket {
       collateral: bigint;
       borrowShares: bigint;
     },
-    { maxLtv = this.config.lltv }: MaxWithdrawCollateralOptions = {},
+    { maxLtv = this.params.lltv }: MaxWithdrawCollateralOptions = {},
   ) {
     return MarketUtils.getWithdrawableCollateral(position, this, {
-      lltv: MathLib.min(maxLtv, this.config.lltv),
+      lltv: MathLib.min(maxLtv, this.params.lltv),
     });
   }
 
@@ -464,7 +464,7 @@ export class Market implements InputMarket {
    * @param position The borrow position to check.
    */
   public isHealthy(position: { collateral: bigint; borrowShares: bigint }) {
-    return MarketUtils.isHealthy(position, this, this.config);
+    return MarketUtils.isHealthy(position, this, this.params);
   }
 
   /**
@@ -475,7 +475,7 @@ export class Market implements InputMarket {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getLiquidationPrice(position, this, this.config);
+    return MarketUtils.getLiquidationPrice(position, this, this.params);
   }
 
   /**
@@ -491,7 +491,7 @@ export class Market implements InputMarket {
     return MarketUtils.getPriceVariationToLiquidationPrice(
       position,
       this,
-      this.config,
+      this.params,
     );
   }
 
@@ -503,7 +503,7 @@ export class Market implements InputMarket {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getHealthFactor(position, this, this.config);
+    return MarketUtils.getHealthFactor(position, this, this.params);
   }
 
   /**
@@ -522,7 +522,7 @@ export class Market implements InputMarket {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getBorrowCapacityUsage(position, this, this.config);
+    return MarketUtils.getBorrowCapacityUsage(position, this, this.params);
   }
 
   /**

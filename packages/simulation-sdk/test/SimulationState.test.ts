@@ -3,7 +3,7 @@ import { parseEther, parseUnits } from "viem";
 import {
   ChainId,
   Market,
-  MarketConfig,
+  MarketParams,
   Position,
   Token,
   Vault,
@@ -133,7 +133,7 @@ describe("SimulationState", () => {
     test("should calculate reallocatable liquidity on idle market with target 0%", () => {
       // We create a state with only a vault that has all the liquidity in the idle market.
       const idleMarketA = new Market({
-        config: MarketConfig.idle(tokenA),
+        params: MarketParams.idle(tokenA),
         totalBorrowAssets: 0n,
         totalBorrowShares: 0n,
         totalSupplyAssets: parseUnits("100000", 6),

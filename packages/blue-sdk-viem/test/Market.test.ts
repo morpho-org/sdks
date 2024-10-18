@@ -1,4 +1,4 @@
-import { ChainId, MarketConfig, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MarketParams, addresses } from "@morpho-org/blue-sdk";
 
 import { markets } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
@@ -13,7 +13,7 @@ const { usdc_wstEth, usdc_idle, eth_wstEth } = markets[ChainId.EthMainnet];
 describe("augment/Market", () => {
   test("should fetch market data", async ({ client }) => {
     const expectedData = new Market({
-      config: usdc_wstEth,
+      params: usdc_wstEth,
       totalSupplyAssets: 32212092216793n,
       totalSupplyShares: 31693536738210306937n,
       totalBorrowAssets: 30448219939637n,
@@ -31,7 +31,7 @@ describe("augment/Market", () => {
 
   test("should fetch price and rate if idle market", async ({ client }) => {
     const expectedData = new Market({
-      config: usdc_idle,
+      params: usdc_idle,
       totalSupplyAssets: 0n,
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
@@ -56,7 +56,7 @@ describe("augment/Market", () => {
       functionName: "owner",
     });
 
-    const config = new MarketConfig({
+    const config = new MarketParams({
       ...eth_wstEth,
       irm: randomAddress(),
     });
