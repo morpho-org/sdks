@@ -1,6 +1,16 @@
 import { spawnSync } from "node:child_process";
+import { writeChangelogString } from "conventional-changelog-writer";
 import { inc } from "semver";
-import { branch, bumper, prefix, version, whatBump } from "./bumper.js";
+import {
+  branch,
+  bumper,
+  commits,
+  prefix,
+  tag,
+  version,
+  whatBump,
+  writer,
+} from "./bumper.js";
 
 let { releaseType } = await bumper.bump(whatBump);
 
@@ -13,6 +23,8 @@ if (releaseType) {
     branch !== "main" ? branch : undefined,
     "0",
   );
+
+  const newTag = `${prefix}v${newVersion}`;
 
   console.debug(
     `Version bump from ${version} to ${newVersion} on branch ${branch} (release type: ${releaseType})`,
@@ -45,32 +57,6 @@ if (releaseType) {
     process.exit(1);
   }
 
-  const tag = `${prefix}v${version}`;
-  const newTag = `${prefix}v${newVersion}`;
-
-  const notesReq = await fetch(
-    "https://api.github.com/repos/morpho-org/sdks/releases/generate-notes",
-    {
-      method: "POST",
-      headers: {
-        Accept: "application/vnd.github+json",
-        Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
-        "X-GitHub-Api-Version": "2022-11-28",
-      },
-      body: JSON.stringify({
-        tag_name: newTag,
-        target_commitish: branch,
-        previous_tag_name: tag,
-      }),
-    },
-  );
-
-  const notes = await notesReq.json();
-  if (!notesReq.ok) {
-    console.error(notes);
-    process.exit(1);
-  }
-
   const createReq = await fetch(
     "https://api.github.com/repos/morpho-org/sdks/releases",
     {
@@ -81,7 +67,28 @@ if (releaseType) {
         "X-GitHub-Api-Version": "2022-11-28",
       },
       body: JSON.stringify({
-        ...notes,
+        name: newTag,
+        body: await writeChangelogString(
+          commits,
+          {
+            version: `[${newTag}](https://github.com/morpho-org/sdks/compare/${tag}...${newTag})`,
+            host: "https://github.com",
+            owner: "morpho-org",
+            repository: "sdks",
+            commit: "commit",
+            types: [
+              { type: "feat", section: "Features" },
+              { type: "fix", section: "Bug Fixes" },
+              { type: "chore", hidden: true },
+              { type: "docs", hidden: true },
+              { type: "style", hidden: true },
+              { type: "refactor", hidden: true },
+              { type: "perf", hidden: true },
+              { type: "test", hidden: true },
+            ],
+          },
+          writer,
+        ),
         tag_name: newTag,
         target_commitish: branch,
         prerelease: branch !== "main",
@@ -95,3 +102,5 @@ if (releaseType) {
     process.exit(1);
   }
 } else console.debug(`No version bump from ${version} on branch ${branch}`);
+
+process.exit(0); // Sometimes hangs.
