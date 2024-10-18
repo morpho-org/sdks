@@ -64,7 +64,7 @@ jobs:
         working-directory: packages/${{ matrix.package }}
         if: steps.release.outputs.version
 
-      - run: gh release create ${{ steps.release.outputs.tag }} --notes '${{ steps.release.outputs.changelog }}' --title '${{ steps.release.outputs.tag }}' ${{ steps.release.outputs.channel == 'latest' && '--latest' || '--prerelease' }}
+      - run: gh release create ${{ steps.release.outputs.tag }} --target ${{ steps.release.outputs.branch }} --notes '${{ steps.release.outputs.changelog }}' --title '${{ steps.release.outputs.tag }}' ${{ steps.release.outputs.channel == 'latest' && '--latest' || '--prerelease' }}
         if: steps.release.outputs.version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

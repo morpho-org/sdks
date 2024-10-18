@@ -16,6 +16,8 @@ export let commits;
 export const whatBump = async (_commits) => {
   commits = _commits;
 
+  console.log(commits);
+
   if (commits.length === 0) return;
 
   let level = 2;
