@@ -6,6 +6,7 @@ import {
   type ContractFunctionArgs,
   type ContractFunctionName,
   type DeployContractParameters,
+  type EstimateGasParameters,
   type ExactPartial,
   type HDAccount,
   type HttpTransport,
@@ -32,6 +33,7 @@ import {
 import { type DealActions, dealActions } from "viem-deal";
 import { parseAccount } from "viem/accounts";
 import {
+  estimateGas as viem_estimateGas,
   sendRawTransaction as viem_sendRawTransaction,
   sendTransaction as viem_sendTransaction,
   writeContract as viem_writeContract,
@@ -271,6 +273,26 @@ export const createAnvilTestClient = <chain extends Chain>(
             await client.waitForTransactionReceipt({ hash });
 
           return hash;
+        },
+        async estimateGas(args: EstimateGasParameters<chain>) {
+          const gas = await viem_estimateGas(client, args).catch(
+            async (error) => {
+              if (this.tracing.txs) {
+                try {
+                  error.message += `\n\nCall trace:\n${await trace(client, {
+                    from: parseAccount(args.account ?? client.account).address,
+                    ...args,
+                  } as ExactPartial<RpcTransactionRequest>)}`;
+                } catch (err) {
+                  error.message += `\n\nFailed to trace call:\n${err}`;
+                }
+              }
+
+              throw error;
+            },
+          );
+
+          return gas;
         },
         async sendTransaction<
           const request extends SendTransactionRequest<chain, chainOverride>,
