@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-ts",
   "description": "TypeScript package to handle all things time & format-related.",
-  "version": "1.12.5",
+  "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",
