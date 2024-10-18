@@ -16,16 +16,18 @@ type P = {
   ) => T extends number ? number : bigint;
 };
 
+type Converters = { from: P; fromPeriod(period: Time.PeriodLike): number };
+
 // biome-ignore lint/complexity/noStaticOnlyClass:
 export class Time {
-  static ms: { from: P };
-  static s: { from: P };
-  static min: { from: P };
-  static h: { from: P };
-  static d: { from: P };
-  static w: { from: P };
-  static mo: { from: P };
-  static y: { from: P };
+  static ms: Converters;
+  static s: Converters;
+  static min: Converters;
+  static h: Converters;
+  static d: Converters;
+  static w: Converters;
+  static mo: Converters;
+  static y: Converters;
 }
 
 Object.defineProperties(
@@ -36,6 +38,10 @@ Object.defineProperties(
       {
         writable: false,
         value: {
+          fromPeriod(period: Time.PeriodLike) {
+            const { unit: unitFrom, duration } = Time.toPeriod(period);
+            return Time[unit].from[unitFrom](duration);
+          },
           from: Object.fromEntries(
             UNITS.map((unitFrom, iFrom) => {
               if (iFrom < i)
