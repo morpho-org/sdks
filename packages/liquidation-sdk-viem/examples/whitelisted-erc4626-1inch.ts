@@ -237,41 +237,152 @@ export const check = async <
                   }
                   // Default case, use 1inch/paraswap for other collaterals
                   default: {
-                    const bestSwap = await fetchBestSwap({
-                      chainId,
-                      src: srcToken,
-                      dst: market.config.loanToken,
-                      amount: srcAmount,
-                      from: executorAddress,
-                      slippage,
-                      includeTokensInfo: false,
-                      includeProtocols: false,
-                      includeGas: false,
-                      allowPartialFill: false,
-                      disableEstimate: true,
-                      usePermit2: false,
-                    });
+                    let retry = true;
+                    const tries: { srcAmount: bigint; srcToken: Address }[] =
+                      [];
+                    while (retry) {
+                      const bestSwap = await fetchBestSwap({
+                        chainId,
+                        src: srcToken,
+                        dst: market.config.loanToken,
+                        amount: srcAmount,
+                        from: executorAddress,
+                        slippage,
+                        includeTokensInfo: false,
+                        includeProtocols: false,
+                        includeGas: false,
+                        allowPartialFill: false,
+                        disableEstimate: true,
+                        usePermit2: false,
+                      });
 
-                    if (!bestSwap)
-                      throw Error(
-                        "could not fetch swap from both 1inch and paraswap",
-                      );
+                      if (!bestSwap)
+                        throw Error(
+                          "could not fetch swap from both 1inch and paraswap",
+                        );
 
-                    dstAmount = BigInt(bestSwap.dstAmount);
+                      dstAmount = BigInt(bestSwap.dstAmount);
 
-                    if (
-                      dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage)
-                    )
-                      return;
+                      if (
+                        dstAmount <
+                        repaidAssets.wadMulDown(BigInt.WAD + slippage)
+                      ) {
+                        // If we don't have enough liquidity, we try to swap USDS to DAI or SKY to MKR and retry
+                        if (
+                          (srcToken === mainnetAddresses.usds ||
+                            srcToken === mainnetAddresses.sky) &&
+                          chainId === ChainId.EthMainnet &&
+                          tries.length === 0
+                        ) {
+                          tries.push({ srcAmount, srcToken });
+                          srcToken =
+                            srcToken === mainnetAddresses.usds
+                              ? mainnetAddresses.dai!
+                              : mainnetAddresses.mkr!;
+                          retry = true;
+                        }
+                        // If even using DAI/MKR we still don't have enough liquidity, we try with both tokens (and half the amount)
+                        else if (
+                          (tries[0]?.srcToken === mainnetAddresses.usds &&
+                            tries[1]?.srcToken === mainnetAddresses.dai) ||
+                          (tries[0]?.srcToken === mainnetAddresses.sky &&
+                            tries[1]?.srcToken === mainnetAddresses.mkr)
+                        ) {
+                          const halfAmount = srcAmount / 2n;
+                          const firstToken = tries[0]?.srcToken;
+                          const secondToken = tries[1]?.srcToken;
 
-                    encoder
-                      .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
-                      .pushCall(
-                        bestSwap.tx.to,
-                        BigInt(bestSwap.tx.value),
-                        bestSwap.tx.data,
-                      );
+                          // We'll retry with both tokens and half the amount
+                          const firstSwap = await fetchBestSwap({
+                            chainId,
+                            src: firstToken!,
+                            dst: market.config.loanToken,
+                            amount: halfAmount,
+                            from: executorAddress,
+                            slippage,
+                            includeTokensInfo: false,
+                            includeProtocols: false,
+                            includeGas: false,
+                            allowPartialFill: false,
+                            disableEstimate: true,
+                            usePermit2: false,
+                          });
+                          if (!firstSwap) return;
 
+                          const secondSwap = await fetchBestSwap({
+                            chainId,
+                            src: secondToken!,
+                            dst: market.config.loanToken,
+                            amount: halfAmount,
+                            from: executorAddress,
+                            slippage,
+                            includeTokensInfo: false,
+                            includeProtocols: false,
+                            includeGas: false,
+                            allowPartialFill: false,
+                            disableEstimate: true,
+                            usePermit2: false,
+                          });
+                          if (!secondSwap) return;
+
+                          if (
+                            BigInt(firstSwap.dstAmount) +
+                              BigInt(secondSwap.dstAmount) <
+                            repaidAssets.wadMulDown(BigInt.WAD + slippage)
+                          ) {
+                            return;
+                          }
+
+                          encoder
+                            .erc20Approve(
+                              firstToken!,
+                              firstSwap.tx.to,
+                              halfAmount,
+                            )
+                            .pushCall(
+                              firstSwap.tx.to,
+                              BigInt(firstSwap.tx.value),
+                              firstSwap.tx.data,
+                            );
+
+                          encoder
+                            .erc20Approve(
+                              secondToken!,
+                              secondSwap.tx.to,
+                              halfAmount,
+                            )
+                            .pushCall(
+                              secondSwap.tx.to,
+                              BigInt(secondSwap.tx.value),
+                              secondSwap.tx.data,
+                            );
+                        } else {
+                          return;
+                        }
+                      }
+
+                      if (
+                        (tries[0]?.srcToken === mainnetAddresses.usds &&
+                          tries[1]?.srcToken === mainnetAddresses.dai) ||
+                        (tries[0]?.srcToken === mainnetAddresses.sky &&
+                          tries[1]?.srcToken === mainnetAddresses.mkr)
+                      ) {
+                        if (tries[0]?.srcToken === mainnetAddresses.usds) {
+                          encoder.usdsToDai(srcAmount, executorAddress);
+                        } else {
+                          encoder.skyToMkr(srcAmount, executorAddress);
+                        }
+                      }
+
+                      encoder
+                        .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
+                        .pushCall(
+                          bestSwap.tx.to,
+                          BigInt(bestSwap.tx.value),
+                          bestSwap.tx.data,
+                        );
+                      retry = false;
+                    }
                     break;
                   }
                 }

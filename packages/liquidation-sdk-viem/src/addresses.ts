@@ -24,6 +24,7 @@ declare module "@morpho-org/blue-sdk" {
     rsweth?: Address;
     bsdEth?: Address;
     re7Weth?: Address;
+    sky?: Address;
     "PT-USDe-25JUL2024"?: Address;
     "PT-ezETH-26DEC2024"?: Address;
     "PT-sUSDE-24OCT2024"?: Address;
@@ -40,6 +41,7 @@ mainnetAddresses["usd0++"] = "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0";
 mainnetAddresses["usd0usd0++"] = "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52";
 mainnetAddresses.sUsds = "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD";
 mainnetAddresses.usds = "0xdC035D45d973E3EC169d2276DDab16f1e407384F";
+mainnetAddresses.sky = "0x56072C95FAA701256059aa122697B133aDEd9279";
 
 export const curvePools = {
   "usd0usd0++": "0x1d08e7adc263cfc70b1babe6dc5bb339c16eec52",
