@@ -27,7 +27,7 @@ jobs:
 
       - run: echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
 
-      - run: pnpm --filter '@morpho-org/test*' --no-reporter-hide-prefix -c exec 'node ../../release.js'
+      - run: pnpm -r --parallel --no-reporter-hide-prefix -c exec 'node ../../release.js'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

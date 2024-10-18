@@ -4,7 +4,7 @@ import { Bumper } from "conventional-recommended-bump";
 import { inc } from "semver";
 
 const prefix = `@morpho-org/${basename(process.cwd())}-`;
-const bumper = new Bumper().tag({ prefix });
+const bumper = new Bumper().tag({ prefix }).commits({ path: "." });
 
 let { releaseType } = await bumper.bump((commits) => {
   if (commits.length === 0) return;
@@ -24,7 +24,10 @@ let { releaseType } = await bumper.bump((commits) => {
   return { level };
 });
 
-const version = await bumper.gitClient.getVersionFromTags({ prefix });
+const [branch, version] = await Promise.all([
+  bumper.gitClient.getCurrentBranch(),
+  bumper.gitClient.getVersionFromTags({ prefix }),
+]);
 
 if (!version) {
   console.error("Cannot find version from tags");
@@ -32,7 +35,6 @@ if (!version) {
 }
 
 if (releaseType) {
-  const branch = await bumper.gitClient.getCurrentBranch();
   if (branch !== "main") releaseType = "prerelease";
 
   const newVersion = inc(
@@ -71,6 +73,8 @@ if (releaseType) {
 
   const tag = `${prefix}v${version}`;
   const newTag = `${prefix}v${newVersion}`;
+
+  process.exit(1);
 
   const notesReq = await fetch(
     "https://api.github.com/repos/morpho-org/sdks/releases/generate-notes",
@@ -118,9 +122,6 @@ if (releaseType) {
     console.error(await createReq.json());
     process.exit(1);
   }
-} else
-  console.debug(
-    `No version bump from ${version} on branch ${branch} (release type: ${releaseType})`,
-  );
+} else console.debug(`No version bump from ${version} on branch ${branch}`);
 
 process.exit(0);

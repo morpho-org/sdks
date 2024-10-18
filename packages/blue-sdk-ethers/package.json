@@ -1,5 +1,6 @@
 {
   "name": "@morpho-org/blue-sdk-ethers",
+  "description": "Ethers-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) ethers-based fetch methods.",
   "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
   "license": "MIT",

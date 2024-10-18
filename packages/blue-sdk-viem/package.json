@@ -1,7 +1,15 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
+  "description": "Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods.",
   "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
   "license": "MIT",
   "main": "src/index.ts",
   "type": "module",
