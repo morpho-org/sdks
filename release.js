@@ -6,7 +6,16 @@ import { inc } from "semver";
 const prefix = `@morpho-org/${basename(process.cwd())}-`;
 const bumper = new Bumper().tag({ prefix });
 
+const getLastSemverTag = bumper.getLastSemverTag.bind(bumper);
+
+bumper.getLastSemverTag = async (...params) => {
+  const tag = await getLastSemverTag(...params);
+  console.log("tag", tag);
+  return tag;
+};
+
 let { releaseType } = await bumper.bump((commits) => {
+  console.log(commits);
   if (commits.length === 0) return;
 
   let level = 2;
@@ -25,8 +34,10 @@ let { releaseType } = await bumper.bump((commits) => {
 });
 
 if (releaseType) {
-  const tag = await bumper.tagGetter();
-  const version = tag.replace(prefix, "");
+  const version = await bumper.gitClient.getVersionFromTags();
+
+  console.log("version", version);
+  // const tag = `${prefix}v${version}`;
 
   const branch = await bumper.gitClient.getCurrentBranch();
   if (branch !== "main") releaseType = "prerelease";
