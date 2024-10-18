@@ -34,6 +34,10 @@ if (releaseType) {
     encoding: "utf8",
   });
   if (stdout) console.log(stdout); // Ignore versioning errors.
+  if (error) console.log("pnpm version error:", error);
+  if (stderr) console.log(stderr);
+
+  console.debug(`Publish version ${newVersion}`);
 
   ({ stderr, stdout, error } = spawnSync(
     "pnpm",
@@ -56,6 +60,8 @@ if (releaseType) {
     console.error(stderr);
     process.exit(1);
   }
+
+  console.debug(`Create release ${newTag}`);
 
   const createReq = await fetch(
     "https://api.github.com/repos/morpho-org/sdks/releases",
