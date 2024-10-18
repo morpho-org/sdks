@@ -35,7 +35,8 @@ let { releaseType } = await bumper.bump((commits) => {
 });
 
 if (releaseType) {
-  const version = (await bumper.gitClient.getVersionFromTags()) ?? "1.0.0";
+  const version =
+    (await bumper.gitClient.getVersionFromTags({ prefix })) ?? "1.0.0";
 
   console.log("version", version);
   // const tag = `${prefix}v${version}`;
