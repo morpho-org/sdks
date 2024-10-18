@@ -200,6 +200,7 @@ export async function fetchVault(
         args: [publicAllocator],
       }),
   ]);
+
   let publicAllocatorConfigPromise:
     | Promise<VaultPublicAllocatorConfig>
     | undefined;
@@ -227,6 +228,7 @@ export async function fetchVault(
         args: [address],
       }),
     ]).then(([admin, fee, accruedFee]) => ({ admin, fee, accruedFee }));
+
   const [supplyQueue, withdrawQueue, publicAllocatorConfig] = await Promise.all(
     [
       Promise.all(
@@ -256,6 +258,7 @@ export async function fetchVault(
       publicAllocatorConfigPromise,
     ],
   );
+
   return new Vault({
     ...config,
     owner,
@@ -284,13 +287,13 @@ export async function fetchAccrualVault(
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
   );
+
   const vault = await fetchVault(address, client, parameters);
   const allocations = await Promise.all(
-    Array.from(
-      new Set(vault.supplyQueue.concat(vault.withdrawQueue)),
-      (marketId) =>
-        fetchVaultMarketAllocation(vault.address, marketId, client, parameters),
+    Array.from(vault.withdrawQueue, (marketId) =>
+      fetchVaultMarketAllocation(vault.address, marketId, client, parameters),
     ),
   );
+
   return new AccrualVault(vault, allocations);
 }

@@ -21,7 +21,7 @@ describe("augment/Position", () => {
 
     await client.deal({
       erc20: usdc_wstEth.loanToken,
-      recipient: supplier.address as Address,
+      account: supplier.address as Address,
       amount: supplyAssets,
     });
     await client.approve({
@@ -39,7 +39,6 @@ describe("augment/Position", () => {
 
     await client.deal({
       erc20: usdc_wstEth.collateralToken,
-      recipient: client.account.address,
       amount: collateral,
     });
     await client.approve({

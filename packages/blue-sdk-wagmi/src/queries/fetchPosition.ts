@@ -3,6 +3,7 @@ import { type FetchParameters, fetchPosition } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
+import { hashFn } from "wagmi/query";
 import type { MarketParameters } from "./fetchMarket.js";
 import type { UserParameters } from "./fetchUser.js";
 
@@ -29,6 +30,7 @@ export function fetchPositionQueryOptions<config extends Config>(
       });
     },
     queryKey: fetchPositionQueryKey(parameters),
+    queryKeyHashFn: hashFn, // for bigint support
   } as const satisfies QueryOptions<
     Position,
     ReadContractErrorType,

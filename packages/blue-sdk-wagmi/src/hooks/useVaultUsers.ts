@@ -7,7 +7,7 @@ import {
   type VaultUserParameters,
   fetchVaultUserQueryOptions,
 } from "../queries/fetchVaultUser.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { mergeDeepEqual, uniqBy } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type { UseVaultUserParameters } from "./useVaultUser.js";
 
@@ -31,8 +31,8 @@ export type UseVaultUsersReturnType<
 
 export const combineVaultUsers = combineIndexedQueries<
   VaultUser,
-  ReadContractErrorType,
-  [Address, Address]
+  [Address, Address],
+  ReadContractErrorType
 >((vaultUser) => [vaultUser.vault, vaultUser.user]);
 
 export function useVaultUsers<
@@ -52,21 +52,23 @@ export function useVaultUsers<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(vaultUsers, ({ vault, user }) => ({
-      ...query,
-      ...fetchVaultUserQueryOptions(config, {
-        ...parameters,
-        vault,
-        user,
-        chainId,
+    queries: uniqBy(vaultUsers, ({ vault, user }) => `${vault},${user}`).map(
+      ({ vault, user }) => ({
+        ...query,
+        ...fetchVaultUserQueryOptions(config, {
+          ...parameters,
+          vault,
+          user,
+          chainId,
+        }),
+        enabled: vault != null && user != null && query.enabled,
+        structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+        staleTime:
+          (query.staleTime ?? parameters.blockNumber != null)
+            ? Number.POSITIVE_INFINITY
+            : undefined,
       }),
-      enabled: vault != null && user != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
-      staleTime:
-        (query.staleTime ?? parameters.blockNumber != null)
-          ? Number.POSITIVE_INFINITY
-          : undefined,
-    })),
+    ),
     combine,
   });
 }

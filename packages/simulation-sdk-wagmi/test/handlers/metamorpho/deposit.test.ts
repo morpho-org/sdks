@@ -26,7 +26,6 @@ describe("MetaMorpho_AccrueInterest", () => {
 
     await client.deal({
       erc20: steakUsdc.asset,
-      recipient: client.account.address,
       amount: assets,
     });
 

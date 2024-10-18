@@ -1,17 +1,25 @@
 {
   "name": "@morpho-org/morpho-ts",
+  "description": "TypeScript package to handle all things time & format-related.",
   "version": "1.12.4",
   "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
   "license": "MIT",
   "main": "src/index.ts",
   "files": ["lib"],
   "scripts": {
-    "prepublish": "yarn build",
+    "prepublish": "$npm_execpath build",
     "build": "tsc --build tsconfig.build.json"
   },
   "devDependencies": {
     "typescript": "^5.6.3",
-    "vitest": "^2.1.2"
+    "vitest": "^2.1.3"
   },
   "publishConfig": {
     "main": "lib/index.js",
@@ -21,7 +29,6 @@
         "types": "./lib/index.d.ts",
         "default": "./lib/index.js"
       }
-    },
-    "access": "public"
+    }
   }
 }

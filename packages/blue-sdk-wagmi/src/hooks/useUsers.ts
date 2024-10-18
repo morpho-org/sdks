@@ -32,8 +32,8 @@ export type UseUsersReturnType<
 
 export const combineUsers = combineIndexedQueries<
   User,
-  ReadContractErrorType,
-  [Address]
+  [Address],
+  ReadContractErrorType
 >((user) => [user.address]);
 
 export function useUsers<
@@ -53,7 +53,7 @@ export function useUsers<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(users, (user) => ({
+    queries: Array.from(new Set(users), (user) => ({
       ...query,
       ...fetchUserQueryOptions(config, {
         ...parameters,

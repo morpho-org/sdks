@@ -6,6 +6,7 @@ import {
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
+import { hashFn } from "wagmi/query";
 import type { MarketParameters } from "./fetchMarket.js";
 import type { VaultParameters } from "./fetchVault.js";
 
@@ -37,6 +38,7 @@ export function fetchVaultMarketConfigQueryOptions<config extends Config>(
       );
     },
     queryKey: fetchVaultMarketConfigQueryKey(parameters),
+    queryKeyHashFn: hashFn, // for bigint support
   } as const satisfies QueryOptions<
     VaultMarketConfig,
     ReadContractErrorType,

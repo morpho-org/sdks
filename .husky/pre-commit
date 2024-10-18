@@ -1,6 +1,1 @@
-STAGED_TS_FILES=$(git diff --staged --name-only --diff-filter=d | grep '\.tsx\?$' | xargs)
-
-if [ -n "$STAGED_TS_FILES" ]; then
-    yarn lint --write $STAGED_TS_FILES
-    git add $STAGED_TS_FILES
-fi
+pnpm exec lint-staged

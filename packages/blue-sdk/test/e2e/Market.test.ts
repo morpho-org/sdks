@@ -22,7 +22,6 @@ describe("Market", () => {
     const collateral = parseUnits("1", 18);
     await client.deal({
       erc20: config.collateralToken,
-      recipient: client.account.address,
       amount: collateral,
     });
     await client.approve({
@@ -138,7 +137,6 @@ describe("Market", () => {
     const collateral = parseUnits("10000000000", 18);
     await client.deal({
       erc20: config.collateralToken,
-      recipient: client.account.address,
       amount: collateral,
     });
     await client.approve({
@@ -215,7 +213,6 @@ describe("Market", () => {
 
     await client.deal({
       erc20: config.loanToken,
-      recipient: client.account.address,
       amount: maxBorrowable,
     });
     await client.approve({

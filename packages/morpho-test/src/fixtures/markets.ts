@@ -5,13 +5,14 @@ import {
   addresses,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
-import { parseEther, parseUnits, zeroAddress } from "viem";
+import { parseEther, parseUnits } from "viem";
 
-const { adaptiveCurveIrm, wNative, usdc, wstEth, wbIB01 } =
+const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt } =
   addresses[ChainId.EthMainnet];
 
 export const markets = {
   [ChainId.EthMainnet]: {
+    eth_idle: MarketConfig.idle(wNative),
     eth_wstEth: new MarketConfig({
       loanToken: wNative,
       collateralToken: wstEth,
@@ -19,7 +20,6 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("94.5", 16),
     }),
-
     eth_wstEth_2: new MarketConfig({
       loanToken: wNative,
       collateralToken: wstEth,
@@ -27,7 +27,6 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("94.5", 16),
     }),
-
     eth_rEth: new MarketConfig({
       loanToken: wNative,
       collateralToken: "0xae78736Cd615f374D3085123A210448E74Fc6393",
@@ -35,23 +34,87 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("94.5", 16),
     }),
+    eth_sDai: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: sDai,
+      oracle: "0x0f9bb760D76af1B5Ca89102084E1963F6698AFda",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    eth_wbtc: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
+      oracle: "0xc29B3Bc033640baE31ca53F8a0Eb892AdF68e663",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("91.5", 16),
+    }),
+    eth_ezEth: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0xbf5495Efe5DB9ce00f80364C8B423567e58d2110",
+      oracle: "0x61025e2B0122ac8bE4e37365A4003d87ad888Cc3",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    eth_apxEth: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0x9Ba021B0a9b958B5E75cE9f6dff97C7eE52cb3E6",
+      oracle: "0x037D67A5E6F19d0Fb26A6603d2D4fE9d70eC3258",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    eth_osEth: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38",
+      oracle: "0x224F2F1333b45E34fFCfC3bD01cE43C73A914498",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    eth_weEth: new MarketConfig({
+      loanToken: wNative,
+      collateralToken: "0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee",
+      oracle: "0x3fa58b74e9a8eA8768eb33c8453e9C2Ed089A40a",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
 
+    usdt_idle: MarketConfig.idle(usdt),
+    usdt_weth_86: new MarketConfig({
+      loanToken: usdt,
+      collateralToken: wNative,
+      oracle: "0xe9eE579684716c7Bb837224F4c7BeEfA4f1F3d7f",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+    usdt_weth_91_5: new MarketConfig({
+      loanToken: usdt,
+      collateralToken: wNative,
+      oracle: "0xe9eE579684716c7Bb837224F4c7BeEfA4f1F3d7f",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("91.5", 16),
+    }),
     usdt_wbtc: new MarketConfig({
-      loanToken: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      loanToken: usdt,
       collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599",
       oracle: "0x008bF4B1cDA0cc9f0e882E0697f036667652E1ef",
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
-
     usdt_wstEth: new MarketConfig({
-      loanToken: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
+      loanToken: usdt,
       collateralToken: wstEth,
       oracle: "0x95DB30fAb9A3754e42423000DF27732CB2396992",
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
+    usdt_sDai: new MarketConfig({
+      loanToken: usdt,
+      collateralToken: sDai,
+      oracle: "0x7538C68d863b28E34b986C1E8daFEDa31D824923",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("94.5", 16),
+    }),
 
+    usdc_idle: MarketConfig.idle(usdc),
     usdc_wbtc: new MarketConfig({
       // USDC(wBTC, 86%, Chainlink, AdaptiveCurve)
       loanToken: usdc,
@@ -60,7 +123,6 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
-
     usdc_wstEth: new MarketConfig({
       // USDC(wstETH, 86%, Chainlink, AdaptiveCurve)
       loanToken: usdc,
@@ -69,16 +131,13 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
-
     usdc_sDai: new MarketConfig({
-      // USDC(wstETH, 86%, Chainlink, AdaptiveCurve)
       loanToken: usdc,
-      collateralToken: "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
+      collateralToken: sDai,
       oracle: "0x6CAFE228eC0B0bC2D076577d56D35Fe704318f6d",
       irm: adaptiveCurveIrm,
       lltv: parseUnits("96.5", 16),
     }),
-
     usdc_wbIB01: new MarketConfig({
       // USDC(wbIB01, 96.5%, Chainlink, AdaptiveCurve)
       loanToken: usdc,
@@ -88,14 +147,6 @@ export const markets = {
       lltv: parseUnits("96.5", 16),
     }),
 
-    usdc_idle: new MarketConfig({
-      loanToken: usdc,
-      collateralToken: zeroAddress,
-      oracle: zeroAddress,
-      irm: zeroAddress,
-      lltv: 0n,
-    }),
-
     crvUsd_stkcvxcrvUSDTWBTCWETH: new MarketConfig({
       loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
       collateralToken: "0xb0Ce26C88e4e7DCa51968b6047f44646f5064278",
@@ -103,7 +154,6 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
-
     crvUsd_stkcvxcrvUSDCWBTCWETH: new MarketConfig({
       loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
       collateralToken: "0x0ea1a65A2c255f24Ee8D81eA6AaC54Decd9d269e",
@@ -111,7 +161,6 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
-
     crvUsd_stkcvxcrvCRVUSDTBTCWSTETH: new MarketConfig({
       loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
       collateralToken: "0x3ce8Ec9f3d89aD0A2DdbCC3FDB8991BD241Fc82E",
@@ -119,7 +168,6 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
-
     crvUsd_stkcvxTryLSD: new MarketConfig({
       loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
       collateralToken: "0x6BA072F0d22806F2C52e9792AF47f2D59103BEBE",
@@ -127,7 +175,6 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
-
     crvUsd_stkcvxcrvUSDETHCRV: new MarketConfig({
       loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
       collateralToken: "0xAc904BAfBb5FB04Deb2b6198FdCEedE75a78Ce5a",
@@ -135,7 +182,6 @@ export const markets = {
       irm: adaptiveCurveIrm,
       lltv: parseUnits("86", 16),
     }),
-
     crvUsd_stkcvx2BTC: new MarketConfig({
       loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
       collateralToken: "0x385E12cf4040543Bc8C18e05C1298Be5B04f3f5e",

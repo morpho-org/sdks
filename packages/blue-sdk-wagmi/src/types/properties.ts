@@ -19,3 +19,5 @@ export type QueryParameter<
       >
     | undefined;
 };
+
+export type IterableElement<T> = T extends Iterable<infer U> ? U : never;

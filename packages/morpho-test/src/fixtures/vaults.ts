@@ -34,7 +34,7 @@ export const vaults = {
       ChainId.EthMainnet,
     ),
 
-    bbETH: new VaultConfig(
+    bbEth: new VaultConfig(
       {
         address: "0x38989BBA00BDF8181F4082995b3DEAe96163aC5D",
         decimals: 18,
@@ -46,7 +46,7 @@ export const vaults = {
       ChainId.EthMainnet,
     ),
 
-    bbUSDT: new VaultConfig(
+    bbUsdt: new VaultConfig(
       {
         address: "0x2C25f6C25770fFEC5959D34B94Bf898865e5D6b1",
         decimals: 18,
@@ -58,7 +58,7 @@ export const vaults = {
       ChainId.EthMainnet,
     ),
 
-    re7WETH: new VaultConfig(
+    re7Weth: new VaultConfig(
       {
         address: "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0",
         decimals: 18,

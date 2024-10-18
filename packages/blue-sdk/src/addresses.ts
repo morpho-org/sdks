@@ -40,6 +40,7 @@ export const addresses = {
     // Currently, wbC3M is considered to have simple permit.
     wbC3M: "0x95D7337d43340E2721960Dc402D9b9117f0d81a2",
     usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    usdt: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
     crvUsd: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
 
     "stkcvxcrvUSDTWBTCWETH-morpho":

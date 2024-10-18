@@ -1,11 +1,29 @@
 # @morpho-org/blue-sdk-ethers
 
-[![npm package][npm-img]][npm-url]
-[![Downloads][downloads-img]][downloads-url]
+<a href="https://www.npmjs.com/package/@morpho-org/blue-sdk-ethers">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/v/@morpho-org/blue-sdk-ethers?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/v/@morpho-org/blue-sdk-ethers?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
+    </picture>
+</a>
+<a href="https://github.com/morpho-org/blue-sdk-ethers/blob/main/LICENSE">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/blue-sdk-ethers?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/l/@morpho-org/blue-sdk-ethers?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
+    </picture>
+</a>
+<a href="https://www.npmjs.com/package/@morpho-org/blue-sdk-ethers">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/dm/@morpho-org/blue-sdk-ethers?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/dm/@morpho-org/blue-sdk-ethers?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Downloads per month">
+    </picture>
+</a>
+<br />
+<br />
 
-Ethers-based SDK to augment [`@morpho-org/blue-sdk`](../blue-sdk/) with fetchers using a Ethers Provider.
+Ethers-based augmentation of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports (and optionally injects) ethers-based fetch methods.
 
-## Install
+## Installation
 
 ```bash
 npm install @morpho-org/blue-sdk-ethers
@@ -14,8 +32,6 @@ npm install @morpho-org/blue-sdk-ethers
 ```bash
 yarn add @morpho-org/blue-sdk-ethers
 ```
-
----
 
 ## Getting Started
 

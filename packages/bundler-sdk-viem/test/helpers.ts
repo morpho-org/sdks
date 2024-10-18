@@ -1,13 +1,12 @@
 import {
   type Address,
   MarketConfig,
-  NATIVE_ADDRESS,
   UnknownMarketConfigError,
   VaultConfig,
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
-import { format, keys } from "@morpho-org/morpho-ts";
+import { format } from "@morpho-org/morpho-ts";
 
 import {
   type BundlingOptions,
@@ -25,10 +24,12 @@ import {
   isErc20Operation,
   isMetaMorphoOperation,
 } from "@morpho-org/simulation-sdk";
-import type { AnvilTestClient } from "@morpho-org/test-viem";
+import { type AnvilTestClient, testAccount } from "@morpho-org/test-viem";
 import { type Account, type Chain, zeroAddress } from "viem";
 import { parseAccount } from "viem/accounts";
 import { expect } from "vitest";
+
+export const donator = testAccount(9);
 
 export const donate =
   <chain extends Chain>(
@@ -41,15 +42,17 @@ export const donate =
   async (data: SimulationState) => {
     await client.deal({
       erc20,
-      recipient: client.account.address,
+      account: donator,
       amount: donation,
     });
 
     await client.approve({
+      account: donator,
       address: erc20,
       args: [morpho, donation],
     });
     await client.writeContract({
+      account: donator,
       address: morpho,
       abi: blueAbi,
       functionName: "supply",
@@ -138,32 +141,7 @@ export const setupBundle = async <chain extends Chain = Chain>(
     }
   });
 
-  if (onBundleTx != null) {
-    const balancesBefore = await Promise.all(
-      [...tokens, ...keys(startData.tokens)].map(async (token) => ({
-        token,
-        balance: await client.balanceOf({
-          erc20: token,
-          owner: account.address,
-        }),
-      })),
-    );
-
-    await Promise.all(
-      balancesBefore.map(({ token, balance }) =>
-        token === NATIVE_ADDRESS
-          ? client.setBalance({
-              address: account.address,
-              value: balance,
-            })
-          : client.deal({
-              erc20: token,
-              recipient: account.address,
-              amount: balance,
-            }),
-      ),
-    );
-  }
+  await onBundleTx?.(startData);
 
   await Promise.all(
     bundle.requirements.signatures.map((requirement) =>
@@ -184,10 +162,7 @@ export const setupBundle = async <chain extends Chain = Chain>(
 
   await Promise.all(
     [...tokens].map(async (token) => {
-      const balance = await client.balanceOf({
-        erc20: token,
-        owner: bundler,
-      });
+      const balance = await client.balanceOf({ erc20: token, owner: bundler });
 
       expect(
         format.number.of(balance, startData.getToken(token).decimals),

@@ -7,7 +7,7 @@ import {
   type VaultMarketConfigParameters,
   fetchVaultMarketConfigQueryOptions,
 } from "../queries/fetchVaultMarketConfig.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { mergeDeepEqual, uniqBy } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type { UseVaultMarketConfigParameters } from "./useVaultMarketConfig.js";
 
@@ -34,8 +34,8 @@ export type UseVaultMarketConfigsReturnType<
 
 export const combineVaultMarketConfigs = combineIndexedQueries<
   VaultMarketConfig,
-  ReadContractErrorType,
-  [Address, MarketId]
+  [Address, MarketId],
+  ReadContractErrorType
 >((config) => [config.vault, config.marketId]);
 
 export function useVaultMarketConfigs<
@@ -55,7 +55,10 @@ export function useVaultMarketConfigs<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(configs, (vaultMarketConfig) => ({
+    queries: uniqBy(
+      configs,
+      ({ vault, marketId }) => `${vault},${marketId}`,
+    ).map((vaultMarketConfig) => ({
       ...query,
       ...fetchVaultMarketConfigQueryOptions(config, {
         ...parameters,

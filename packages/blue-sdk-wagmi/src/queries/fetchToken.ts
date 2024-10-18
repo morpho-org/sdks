@@ -6,6 +6,7 @@ import {
 import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
+import { hashFn } from "wagmi/query";
 
 export type TokenParameters = {
   token: Address;
@@ -31,6 +32,7 @@ export function fetchTokenQueryOptions<config extends Config>(
       });
     },
     queryKey: fetchTokenQueryKey(parameters),
+    queryKeyHashFn: hashFn, // for bigint support
   } as const satisfies QueryOptions<
     Token,
     ReadContractErrorType,

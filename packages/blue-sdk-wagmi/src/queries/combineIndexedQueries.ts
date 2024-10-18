@@ -1,3 +1,4 @@
+import { isDefined } from "@morpho-org/morpho-ts";
 import type { DefaultError, UseQueryResult } from "@tanstack/react-query";
 
 export type DottedPropertyKeys<T> = T extends object | null | undefined
@@ -25,64 +26,47 @@ export type CombineIndexedQueriesReturnType<
   Index extends PropertyKey[] = PropertyKey[],
 > = {
   data: NestedRecord<Index, TData>;
-  error: NestedRecord<Index, NonNullable<TError>>;
-  isFetching: NestedRecord<Index, true>;
-  isFetchingAny: boolean;
+  error: TError | null;
+  isFetching: boolean;
 };
 
 export function combineIndexedQueries<
   TData,
+  Index extends PropertyKey[],
   TError = DefaultError,
-  Index extends PropertyKey[] = PropertyKey[],
   QueryResult extends UseQueryResult<TData, TError> = UseQueryResult<
     TData,
     TError
   >,
->(getIndex: (data: TData) => Index) {
+>(
+  getIndex: (
+    data: NonNullable<TData>,
+  ) => Index extends (infer V)[] ? (V | null | undefined)[] : never,
+) {
   return (
     results: QueryResult[],
   ): CombineIndexedQueriesReturnType<TData, TError, Index> => {
     const combined = {
       data: {} as NestedRecord<Index, TData>,
-      error: {} as NestedRecord<Index, NonNullable<TError>>,
-      isFetching: {} as NestedRecord<Index, true>,
-      isFetchingAny: results.some(({ isFetching }) => isFetching),
+      error: results.map(({ error }) => error).find(isDefined) ?? null,
+      isFetching: results.some(({ isFetching }) => isFetching),
     };
 
-    for (const { data, error, isFetching } of results) {
+    for (const { data } of results) {
       if (data == null) continue;
 
       const index = getIndex(data);
-      if (index.length === 0) continue;
 
-      const isError = error != null;
-
-      let {
-        data: levelData,
-        error: levelError,
-        isFetching: levelIsFetching,
-      } = combined;
+      let { data: levelData } = combined;
       for (const subIndex of index.slice(0, -1)) {
         // @ts-ignore
         levelData = levelData[subIndex] ??= {};
-        if (isError)
-          // @ts-ignore
-          levelError = levelError[subIndex] ??= {};
-        if (isFetching)
-          // @ts-ignore
-          levelIsFetching = levelIsFetching[subIndex] ??= {};
       }
 
       const lastSubIndex = index[index.length - 1]!;
 
       // @ts-ignore
       levelData[lastSubIndex] = data;
-      if (isError)
-        // @ts-ignore
-        levelError[lastSubIndex] = error;
-      if (isFetching)
-        // @ts-ignore
-        levelIsFetching[lastSubIndex] = isFetching;
     }
 
     return combined;

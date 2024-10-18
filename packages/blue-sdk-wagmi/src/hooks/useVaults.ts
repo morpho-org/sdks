@@ -31,8 +31,8 @@ export type UseVaultsReturnType<
 
 export const combineVaults = combineIndexedQueries<
   Vault,
-  ReadContractErrorType,
-  [Address]
+  [Address],
+  ReadContractErrorType
 >((vault) => [vault.address]);
 
 export function useVaults<
@@ -52,7 +52,7 @@ export function useVaults<
   const chainId = useChainId(parameters);
 
   return useQueries({
-    queries: Array.from(vaults, (vault) => ({
+    queries: Array.from(new Set(vaults), (vault) => ({
       ...query,
       ...fetchVaultQueryOptions(config, {
         ...parameters,

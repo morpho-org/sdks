@@ -1,25 +1,22 @@
-name: Lint code
+name: Lint
 
 on:
-  push:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false
+  workflow_call:
 
 jobs:
-  lint:
+  biome:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: yarn
+          cache: pnpm
 
-      - run: yarn install --immutable
-      - run: yarn postinstall # for some reason, postinstall script does not get executed automatically
+      - run: pnpm install
 
-      - run: yarn lint
+      - run: pnpm lint

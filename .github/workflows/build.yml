@@ -1,52 +1,22 @@
-name: Build packages
+name: Build
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  workflow_call:
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - test
-          - test-viem
-          - test-ethers
-          - test-wagmi
-
-          - morpho-ts
-          - morpho-test
-
-          - blue-api-sdk
-          - blue-sdk
-          - blue-sdk-ethers
-          - blue-sdk-viem
-          - blue-sdk-wagmi
-
-          - simulation-sdk
-          - simulation-sdk-wagmi
-          - bundler-sdk
-
-          - liquidation-sdk-viem
-
+  packages:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
-          cache: yarn
+          cache: pnpm
 
-      - run: yarn install --immutable
-      - run: yarn postinstall # for some reason, postinstall script does not get executed automatically
+      - run: pnpm install
 
-      - run: yarn workspace @morpho-org/${{ matrix.package }} build
+      - run: pnpm -r --parallel --no-reporter-hide-prefix build

@@ -6,6 +6,7 @@ import {
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
+import { hashFn } from "wagmi/query";
 
 export type MarketParameters = {
   marketId: MarketId;
@@ -31,6 +32,7 @@ export function fetchMarketQueryOptions<config extends Config>(
       });
     },
     queryKey: fetchMarketQueryKey(parameters),
+    queryKeyHashFn: hashFn, // for bigint support
   } as const satisfies QueryOptions<
     Market,
     ReadContractErrorType,
