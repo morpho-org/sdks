@@ -71,14 +71,12 @@ export class MarketParams implements InputMarketParams {
   /**
    * The market's hex-encoded id, defined as the hash of the market params.
    */
-  // Cached because params are readonly.
-  public readonly id: MarketId;
+  public readonly id: MarketId; // Cached because params are readonly.
 
   /**
    * The market's liquidation incentive factor.
    */
-  // Cached because lltv is readonly.
-  public readonly liquidationIncentiveFactor: bigint;
+  public readonly liquidationIncentiveFactor: bigint; // Cached because lltv is readonly.
 
   constructor(params: InputMarketParams) {
     const { collateralToken, loanToken, oracle, irm, lltv } = params;
