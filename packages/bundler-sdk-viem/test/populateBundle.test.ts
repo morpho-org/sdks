@@ -638,7 +638,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketParams.asArg],
+            args: [{ ...marketParams }],
           });
 
           const block = await client.getBlock();
@@ -798,7 +798,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketParams.asArg],
+            args: [{ ...marketParams }],
           });
 
           const block = await client.getBlock();
@@ -1601,7 +1601,7 @@ describe("populateBundle", () => {
             abi: blueAbi,
             functionName: "borrow",
             args: [
-              eth_wstEth.asArg,
+              { ...eth_wstEth },
               loanAssets,
               0n,
               client.account.address,
@@ -2213,7 +2213,7 @@ describe("populateBundle", () => {
             abi: blueAbi,
             functionName: "borrow",
             args: [
-              eth_wstEth.asArg,
+              { ...eth_wstEth },
               borrowAmount,
               0n,
               client.account.address,
@@ -3083,7 +3083,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketParams.asArg],
+            args: [{ ...marketParams }],
           });
 
           const block = await client.getBlock();
@@ -3251,7 +3251,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketParams.asArg],
+            args: [{ ...marketParams }],
           });
 
           const block = await client.getBlock();
@@ -4090,7 +4090,7 @@ describe("populateBundle", () => {
             abi: blueAbi,
             functionName: "borrow",
             args: [
-              eth_wstEth.asArg,
+              { ...eth_wstEth },
               loanAssets,
               0n,
               client.account.address,
@@ -4725,7 +4725,7 @@ describe("populateBundle", () => {
             abi: blueAbi,
             functionName: "borrow",
             args: [
-              eth_wstEth.asArg,
+              { ...eth_wstEth },
               borrowAmount,
               0n,
               client.account.address,
@@ -4963,7 +4963,7 @@ describe("populateBundle", () => {
             address: morpho,
             abi: blueAbi,
             functionName: "createMarket",
-            args: [marketParams.asArg],
+            args: [{ ...marketParams }],
           });
 
           const whitelisted = "0x53753098E2660AbD4834A3eD713D11AC1123421A";
