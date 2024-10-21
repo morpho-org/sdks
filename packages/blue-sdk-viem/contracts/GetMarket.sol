@@ -8,6 +8,7 @@ import {IAdaptiveCurveIrm} from "./interfaces/IAdaptiveCurveIrm.sol";
 struct MarketResponse {
     MarketParams marketParams;
     Market market;
+    bool hasPrice;
     uint256 price;
     uint256 rateAtTarget;
 }
@@ -22,7 +23,10 @@ contract GetMarket {
         res.market = morpho.market(id);
 
         if (res.marketParams.oracle != address(0)) {
-            res.price = IOracle(res.marketParams.oracle).price();
+            try IOracle(res.marketParams.oracle).price() returns (uint256 price) {
+                res.hasPrice = true;
+                res.price = price;
+            } catch {}
         }
 
         if (res.marketParams.irm == address(adaptiveCurveIrm)) {

@@ -37,6 +37,7 @@ export async function fetchMarket(
           lastUpdate,
           fee,
         },
+        hasPrice,
         price,
         rateAtTarget,
       } = await readContract(client, {
@@ -55,7 +56,7 @@ export async function fetchMarket(
         totalBorrowShares,
         lastUpdate,
         fee,
-        price,
+        price: hasPrice ? price : undefined,
         rateAtTarget:
           marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
       });
@@ -120,6 +121,7 @@ export async function fetchMarket(
         })
       : undefined,
   ]);
+
   return new Market({
     params,
     totalSupplyAssets,

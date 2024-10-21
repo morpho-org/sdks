@@ -1,5 +1,5 @@
 import { Time } from "@morpho-org/morpho-ts";
-import { type Address, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { ChainId, Market, MarketParams, addresses } from "../../src/index.js";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "./abis.js";
@@ -15,24 +15,6 @@ const params = new MarketParams({
   oracle: "0x48F7E36EB6B826B2dF4B2E630B62Cd25e89E40e2",
   irm: adaptiveCurveIrm,
   lltv: parseUnits("86", 16),
-});
-
-declare module "../../src/index.js" {
-  interface MarketParams {
-    asArg: {
-      collateralToken: Address;
-      loanToken: Address;
-      oracle: Address;
-      irm: Address;
-      lltv: bigint;
-    };
-  }
-}
-
-Object.defineProperty(MarketParams.prototype, "asArg", {
-  get() {
-    return this;
-  },
 });
 
 describe("Market", () => {
@@ -57,7 +39,7 @@ describe("Market", () => {
       address: morpho,
       functionName: "borrow",
       args: [
-        params.asArg,
+        { ...params },
         parseUnits("1", 6),
         0n,
         client.account.address,
@@ -122,7 +104,7 @@ describe("Market", () => {
         address: morpho,
         functionName: "borrow",
         args: [
-          params.asArg,
+          { ...params },
           maxBorrowable + 10n,
           0n,
           client.account.address,
@@ -136,7 +118,7 @@ describe("Market", () => {
       address: morpho,
       functionName: "borrow",
       args: [
-        params.asArg,
+        { ...params },
         maxBorrowable,
         0n,
         client.account.address,
@@ -172,7 +154,7 @@ describe("Market", () => {
       address: morpho,
       functionName: "borrow",
       args: [
-        params.asArg,
+        { ...params },
         parseUnits("1", 6),
         0n,
         client.account.address,
@@ -251,7 +233,7 @@ describe("Market", () => {
       address: morpho,
       functionName: "borrow",
       args: [
-        params.asArg,
+        { ...params },
         maxBorrowable,
         0n,
         client.account.address,

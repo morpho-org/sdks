@@ -1,5 +1,4 @@
 import {
-  type Address,
   ChainId,
   type InputMarketParams,
   MarketParams,
@@ -210,21 +209,3 @@ export const randomMarket = (params: Partial<InputMarketParams> = {}) =>
     lltv: parseEther("0.80"),
     ...params,
   });
-
-declare module "@morpho-org/blue-sdk" {
-  interface MarketParams {
-    asArg: {
-      collateralToken: Address;
-      loanToken: Address;
-      oracle: Address;
-      irm: Address;
-      lltv: bigint;
-    };
-  }
-}
-
-Object.defineProperty(MarketParams.prototype, "asArg", {
-  get() {
-    return this;
-  },
-});
