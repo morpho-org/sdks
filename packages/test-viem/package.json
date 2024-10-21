@@ -29,9 +29,9 @@
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
-    "@types/node": "^22.7.4",
+    "@types/node": "^22.7.7",
     "typescript": "^5.6.3",
-    "viem": "^2.21.29",
+    "viem": "^2.21.32",
     "viem-deal": "^2.0.1",
     "vitest": "^2.1.3"
   },

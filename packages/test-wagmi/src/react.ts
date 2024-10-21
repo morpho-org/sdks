@@ -9,7 +9,6 @@ import {
   waitFor as rtl_waitFor,
   type waitForOptions,
 } from "@testing-library/react";
-import type { Config } from "@wagmi/core";
 import {
   type FunctionComponent,
   type ReactElement,
@@ -17,7 +16,7 @@ import {
   createElement,
 } from "react";
 import type { Chain, Transport } from "viem";
-import { WagmiProvider } from "wagmi";
+import { type Config, WagmiProvider } from "wagmi";
 
 // biome-ignore lint/suspicious/noExplicitAny: test utility
 export function createWrapper<TComponent extends FunctionComponent<any>>(
