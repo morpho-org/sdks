@@ -8,7 +8,8 @@ import { blueAbi } from "../src/index.js";
 import { test } from "./setup.js";
 
 const { morpho, adaptiveCurveIrm } = addresses[ChainId.EthMainnet];
-const { usdc_wstEth, usdc_idle, eth_wstEth } = markets[ChainId.EthMainnet];
+const { usdc_wstEth, usdc_idle, eth_wstEth, crvUsd_stkcvx2BTC } =
+  markets[ChainId.EthMainnet];
 
 describe("augment/Market", () => {
   test("should fetch market data", async ({ client }) => {
@@ -38,8 +39,6 @@ describe("augment/Market", () => {
       totalBorrowShares: 0n,
       lastUpdate: 1711558175n,
       fee: 0n,
-      price: 0n,
-      rateAtTarget: undefined,
     });
 
     const value = await Market.fetch(usdc_idle.id, client);
@@ -98,6 +97,38 @@ describe("augment/Market", () => {
       fee: 0n,
       price: 1160095030000000000000000000000000000n,
       rateAtTarget: undefined,
+    });
+
+    const value = await Market.fetch(params.id, client);
+
+    expect(value).toStrictEqual(expectedData);
+  });
+
+  test("should fetch market with incorrect oracle", async ({ client }) => {
+    const params = new MarketParams({
+      ...crvUsd_stkcvx2BTC,
+      oracle: randomAddress(),
+    });
+
+    const timestamp = (await client.timestamp()) + 3n;
+
+    await client.setNextBlockTimestamp({ timestamp });
+    await client.writeContract({
+      address: morpho,
+      abi: blueAbi,
+      functionName: "createMarket",
+      args: [{ ...params }],
+    });
+
+    const expectedData = new Market({
+      params,
+      totalSupplyAssets: 0n,
+      totalSupplyShares: 0n,
+      totalBorrowAssets: 0n,
+      totalBorrowShares: 0n,
+      lastUpdate: 1711597274n,
+      fee: 0n,
+      rateAtTarget: 1268391679n,
     });
 
     const value = await Market.fetch(params.id, client);
