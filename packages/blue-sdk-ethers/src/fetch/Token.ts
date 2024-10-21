@@ -158,16 +158,16 @@ export async function fetchToken(
   const erc20 = ERC20Metadata__factory.connect(address, chainId, runner);
 
   const [decimals, symbol, name] = await Promise.all([
-    erc20.decimals(overrides),
-    erc20.symbol(overrides),
-    erc20.name(overrides),
+    erc20.decimals(overrides).catch(() => undefined),
+    erc20.symbol(overrides).catch(() => undefined),
+    erc20.name(overrides).catch(() => undefined),
   ]);
 
   const token = {
     address,
-    decimals: Number.parseInt(decimals.toString()),
-    symbol,
     name,
+    symbol,
+    decimals,
   };
 
   const { wstEth, stEth } = getChainAddresses(chainId);

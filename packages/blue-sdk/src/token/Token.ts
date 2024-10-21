@@ -5,9 +5,10 @@ import type { Address, BigIntish } from "../types.js";
 
 export interface InputToken {
   address: Address;
-  decimals: BigIntish;
-  symbol: string;
   name?: string;
+  symbol?: string;
+  decimals?: BigIntish;
+  price?: BigIntish;
 }
 
 export class Token implements InputToken {
@@ -23,46 +24,40 @@ export class Token implements InputToken {
   public readonly address: Address;
 
   /**
-   * The token's number of decimals.
+   * The token's name.
    */
-  public readonly decimals: number;
+  public readonly name?: string;
 
   /**
    * The token's symbol.
    */
-  public readonly symbol: string;
+  public readonly symbol?: string;
 
   /**
-   * The name of the token (defaults to the symbol).
+   * The token's number of decimals. Defaults to 0.
    */
-  public readonly name: string;
+  public readonly decimals: number;
 
-  constructor({ address, decimals, symbol, name }: InputToken) {
-    this.address = address;
-    this.decimals = Number(decimals);
-    this.symbol = symbol;
-    this.name = name ?? symbol;
-  }
-}
-
-export class TokenWithPrice extends Token {
   /**
    * Price of the token in USD (scaled by WAD).
    */
   public price?: bigint;
 
-  constructor(token: InputToken, price?: bigint) {
-    super(token);
-
-    this.price = price;
+  constructor({ address, decimals = 0, symbol, name, price }: InputToken) {
+    this.address = address;
+    this.name = name;
+    this.symbol = symbol;
+    this.decimals = Number(decimals);
+    if (price != null) this.price = BigInt(price);
   }
 
   /**
    * Quotes an amount in USD (scaled by WAD) in this token.
+   * Returns undefined iff the token's price is undefined.
    * @param amount The amount of USD to quote.
    */
   fromUsd(amount: bigint, rounding: RoundingDirection = "Down") {
-    if (this.price == null) return null;
+    if (this.price == null) return;
 
     return MathLib.mulDiv(
       amount,
@@ -74,10 +69,11 @@ export class TokenWithPrice extends Token {
 
   /**
    * Quotes an amount of tokens in USD (scaled by WAD).
+   * Returns undefined iff the token's price is undefined.
    * @param amount The amount of tokens to quote.
    */
   toUsd(amount: bigint, rounding: RoundingDirection = "Down") {
-    if (this.price == null) return null;
+    if (this.price == null) return;
 
     return MathLib.mulDiv(
       amount,
