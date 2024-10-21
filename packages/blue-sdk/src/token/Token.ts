@@ -43,17 +43,18 @@ export class Token implements InputToken {
    */
   public price?: bigint;
 
-  constructor({ address, decimals = 0, symbol, name, price }: InputToken) {
+  constructor({ address, name, symbol, decimals = 0, price }: InputToken) {
     this.address = address;
     this.name = name;
     this.symbol = symbol;
     this.decimals = Number(decimals);
+
     if (price != null) this.price = BigInt(price);
   }
 
   /**
    * Quotes an amount in USD (scaled by WAD) in this token.
-   * Returns undefined iff the token's price is undefined.
+   * Returns `undefined` iff the token's price is undefined.
    * @param amount The amount of USD to quote.
    */
   fromUsd(amount: bigint, rounding: RoundingDirection = "Down") {
@@ -69,7 +70,7 @@ export class Token implements InputToken {
 
   /**
    * Quotes an amount of tokens in USD (scaled by WAD).
-   * Returns undefined iff the token's price is undefined.
+   * Returns `undefined` iff the token's price is undefined.
    * @param amount The amount of tokens to quote.
    */
   toUsd(amount: bigint, rounding: RoundingDirection = "Down") {

@@ -6,7 +6,7 @@ import {
 import type { TypedDataDefinition } from "viem";
 
 export interface PermitArgs {
-  name: string;
+  name?: string;
   address: Address;
   owner: Address;
   spender: Address;
@@ -36,7 +36,7 @@ export const getPermitTypedData = (
   const { usdc } = getChainAddresses(chainId);
 
   const domain = {
-    name: name,
+    name,
     version: address === usdc ? "2" : "1",
     chainId,
     verifyingContract: address,
