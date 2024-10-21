@@ -27,7 +27,7 @@ import { BundlerErrors } from "./errors.js";
 import type {
   Action,
   Authorization,
-  MarketParams,
+  InputMarketParams,
   Permit2PermitSingle,
   ReallocationWithdrawal,
 } from "./types/index.js";
@@ -621,7 +621,7 @@ export namespace BundlerAction {
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
    */
   export function morphoSupply(
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     shares: bigint,
     slippageAmount: bigint,
@@ -650,7 +650,7 @@ export namespace BundlerAction {
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupplyCollateral` callback.
    */
   export function morphoSupplyCollateral(
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     onBehalf: Address,
     callbackCalls: BundlerCall[],
@@ -676,7 +676,7 @@ export namespace BundlerAction {
    * @param receiver The address to send borrowed tokens to.
    */
   export function morphoBorrow(
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     shares: bigint,
     slippageAmount: bigint,
@@ -699,7 +699,7 @@ export namespace BundlerAction {
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
    */
   export function morphoRepay(
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     shares: bigint,
     slippageAmount: bigint,
@@ -729,7 +729,7 @@ export namespace BundlerAction {
    * @param receiver The address to send withdrawn tokens to.
    */
   export function morphoWithdraw(
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     shares: bigint,
     slippageAmount: bigint,
@@ -749,7 +749,7 @@ export namespace BundlerAction {
    * @param receiver The address to send withdrawn tokens to.
    */
   export function morphoWithdrawCollateral(
-    market: MarketParams,
+    market: InputMarketParams,
     assets: bigint,
     receiver: Address,
   ): BundlerCall {
@@ -795,7 +795,7 @@ export namespace BundlerAction {
     vault: Address,
     value: bigint,
     withdrawals: ReallocationWithdrawal[],
-    supplyMarketParams: MarketParams,
+    supplyMarketParams: InputMarketParams,
   ): BundlerCall {
     return encodeFunctionData({
       abi: morphoBundlerAbi,

@@ -1,7 +1,7 @@
-import type { MarketConfig } from "@morpho-org/blue-sdk";
+import type { MarketParams } from "@morpho-org/blue-sdk";
 import {
   type FetchParameters,
-  fetchMarketConfig,
+  fetchMarketParams,
 } from "@morpho-org/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
@@ -9,14 +9,14 @@ import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
 import type { MarketParameters } from "./fetchMarket.js";
 
-export type MarketConfigParameters = MarketParameters;
+export type MarketParamsParameters = MarketParameters;
 
-export type FetchMarketConfigParameters = Partial<MarketConfigParameters> &
+export type FetchMarketParamsParameters = Partial<MarketParamsParameters> &
   Pick<FetchParameters, "chainId">;
 
-export function fetchMarketConfigQueryOptions<config extends Config>(
+export function fetchMarketParamsQueryOptions<config extends Config>(
   config: config,
-  parameters: FetchMarketConfigParameters,
+  parameters: FetchMarketParamsParameters,
 ) {
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
@@ -25,34 +25,34 @@ export function fetchMarketConfigQueryOptions<config extends Config>(
       const { marketId, chainId } = queryKey[1];
       if (!marketId) throw Error("marketId is required");
 
-      return fetchMarketConfig(marketId, config.getClient({ chainId }), {
+      return fetchMarketParams(marketId, config.getClient({ chainId }), {
         chainId,
       });
     },
-    queryKey: fetchMarketConfigQueryKey(parameters),
+    queryKey: fetchMarketParamsQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support
   } as const satisfies QueryOptions<
-    MarketConfig,
+    MarketParams,
     ReadContractErrorType,
-    MarketConfig,
-    FetchMarketConfigQueryKey
+    MarketParams,
+    FetchMarketParamsQueryKey
   >;
 }
 
-export function fetchMarketConfigQueryKey({
+export function fetchMarketParamsQueryKey({
   marketId,
   chainId,
-}: FetchMarketConfigParameters) {
+}: FetchMarketParamsParameters) {
   return [
-    "fetchMarketConfig",
+    "fetchMarketParams",
     // Ignore all other irrelevant parameters.
     {
       marketId,
       chainId,
-    } as FetchMarketConfigParameters,
+    } as FetchMarketParamsParameters,
   ] as const;
 }
 
-export type FetchMarketConfigQueryKey = ReturnType<
-  typeof fetchMarketConfigQueryKey
+export type FetchMarketParamsQueryKey = ReturnType<
+  typeof fetchMarketParamsQueryKey
 >;

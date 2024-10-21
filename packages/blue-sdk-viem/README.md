@@ -44,7 +44,7 @@ Opt in classes augmentation to easily fetch an entire entity of the Morpho Blue 
 import "@morpho-org/blue-sdk-viem/lib/augment/AccrualPosition";
 import "@morpho-org/blue-sdk-viem/lib/augment/Holding";
 import "@morpho-org/blue-sdk-viem/lib/augment/Market";
-import "@morpho-org/blue-sdk-viem/lib/augment/MarketConfig";
+import "@morpho-org/blue-sdk-viem/lib/augment/MarketParams";
 import "@morpho-org/blue-sdk-viem/lib/augment/Position";
 import "@morpho-org/blue-sdk-viem/lib/augment/Token";
 import "@morpho-org/blue-sdk-viem/lib/augment/VaultConfig";
@@ -60,14 +60,14 @@ import "@morpho-org/blue-sdk-viem/lib/augment";
 
 ### Fetch the config of a specific market
 
-Leverage the [`MarketConfig`](./src/market/MarketConfig.ts) class to fetch information on a given market's immutable configuration:
+Leverage the [`MarketParams`](./src/market/MarketParams.ts) class to fetch information on a given market's immutable configuration:
 
 ```typescript
 import { MarketId } from "@morpho-org/blue-sdk";
 // /!\ Import AccrualPosition from the augmentation file (or simply import the file)
-import { MarketConfig } from "@morpho-org/blue-sdk-viem/lib/augment/MarketConfig";
+import { MarketParams } from "@morpho-org/blue-sdk-viem/lib/augment/MarketParams";
 
-const config = await MarketConfig.fetch(
+const config = await MarketParams.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
   client // viem client.
 );

@@ -3,8 +3,8 @@ import { type Client, zeroAddress } from "viem";
 import {
   ChainUtils,
   Market,
-  MarketConfig,
   type MarketId,
+  MarketParams,
   addresses,
 } from "@morpho-org/blue-sdk";
 
@@ -48,7 +48,7 @@ export async function fetchMarket(
       });
 
       return new Market({
-        config: new MarketConfig(marketParams),
+        params: new MarketParams(marketParams),
         totalSupplyAssets,
         totalBorrowAssets,
         totalSupplyShares,
@@ -75,7 +75,7 @@ export async function fetchMarket(
     },
   );
 
-  const config = new MarketConfig({
+  const params = new MarketParams({
     loanToken,
     collateralToken,
     oracle,
@@ -100,28 +100,28 @@ export async function fetchMarket(
       address: morpho,
       abi: blueAbi,
       functionName: "market",
-      args: [config.id],
+      args: [params.id],
     }),
-    config.oracle !== zeroAddress
+    params.oracle !== zeroAddress
       ? readContract(client, {
           ...parameters,
-          address: config.oracle,
+          address: params.oracle,
           abi: blueOracleAbi,
           functionName: "price",
         })
       : 0n,
-    config.irm === adaptiveCurveIrm
+    params.irm === adaptiveCurveIrm
       ? await readContract(client, {
           ...parameters,
           address: adaptiveCurveIrm,
           abi: adaptiveCurveIrmAbi,
           functionName: "rateAtTarget",
-          args: [config.id],
+          args: [params.id],
         })
       : undefined,
   ]);
   return new Market({
-    config,
+    params,
     totalSupplyAssets,
     totalBorrowAssets,
     totalSupplyShares,

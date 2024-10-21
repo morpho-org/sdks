@@ -1,5 +1,5 @@
 export * from "./fetchMarket.js";
-export * from "./fetchMarketConfig.js";
+export * from "./fetchMarketParams.js";
 export * from "./fetchToken.js";
 export * from "./fetchUser.js";
 export * from "./fetchVault.js";

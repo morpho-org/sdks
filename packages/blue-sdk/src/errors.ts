@@ -14,7 +14,7 @@ export class UnknownTokenPriceError extends UnknownDataError {
   }
 }
 
-export class UnknownMarketConfigError extends UnknownDataError {
+export class UnknownMarketParamsError extends UnknownDataError {
   constructor(public readonly marketId: MarketId) {
     super(`unknown config for market ${marketId}`);
   }
