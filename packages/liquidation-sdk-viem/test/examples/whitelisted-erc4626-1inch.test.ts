@@ -482,7 +482,7 @@ describe("erc4626-1inch", () => {
             typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 10n,
+          market.getMaxBorrowAssets(collateral)! - 10n,
           0n,
           borrower.address,
           borrower.address,
@@ -534,7 +534,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       mockOneInch(encoder, seizedCollateral, "60475733900");
       mockParaSwap(encoder, seizedCollateral, "60475733901");
@@ -592,7 +592,7 @@ describe("erc4626-1inch", () => {
         args: [market.params, collateral, borrower.address, "0x"],
       });
 
-      const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
+      const borrowed = market.getMaxBorrowAssets(collateral)! - 1n;
       await client.deal({
         erc20: loanToken.address,
         account: borrower.address,
@@ -678,7 +678,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       mockOneInch(encoder, seizedCollateral, "11669266773005108147659");
       mockParaSwap(encoder, seizedCollateral, "11669266773005108147658");
@@ -746,7 +746,7 @@ describe("erc4626-1inch", () => {
             typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 1n,
+          market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
           borrower.address,
@@ -800,7 +800,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       mockPendleOperations(
         encoder,
@@ -874,7 +874,7 @@ describe("erc4626-1inch", () => {
             typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 1n,
+          market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
           borrower.address,
@@ -933,7 +933,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(postMaturity);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       mockPendleOperations(
         encoder,
@@ -1035,7 +1035,7 @@ describe("erc4626-1inch", () => {
             typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(newCollatValue) - 1n,
+          market.getMaxBorrowAssets(newCollatValue)! - 1n,
           0n,
           borrower.address,
           borrower.address,
@@ -1091,7 +1091,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       const { morphoBlueLiquidate } = LiquidationEncoder.prototype;
       vi.spyOn(
@@ -1175,7 +1175,7 @@ describe("erc4626-1inch", () => {
             typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 1n,
+          market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
           borrower.address,
@@ -1231,7 +1231,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       const { morphoBlueLiquidate } = LiquidationEncoder.prototype;
       vi.spyOn(
@@ -1299,7 +1299,7 @@ describe("erc4626-1inch", () => {
         args: [market.params, collateral, borrower.address, "0x"],
       });
 
-      const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
+      const borrowed = market.getMaxBorrowAssets(collateral)! - 1n;
       await client.deal({
         erc20: loanToken.address,
         account: borrower.address,
@@ -1386,7 +1386,7 @@ describe("erc4626-1inch", () => {
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
 
       const usdsWithdrawalAmount = await encoder.previewUSDSWithdrawalAmount(
-        accruedPosition.seizableCollateral / 2n,
+        accruedPosition.seizableCollateral! / 2n,
       );
       mockOneInch(encoder, usdsWithdrawalAmount, "11669266773005108147656");
       mockParaSwap(encoder, usdsWithdrawalAmount, "11669266773005108147657");
