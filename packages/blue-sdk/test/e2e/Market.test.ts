@@ -96,7 +96,7 @@ describe("Market", () => {
     const maxBorrowable = market.getMaxBorrowableAssets({
       borrowShares,
       collateral,
-    });
+    })!;
 
     await expect(
       client.estimateContractGas({
@@ -209,7 +209,7 @@ describe("Market", () => {
     const maxBorrowable = market.getMaxBorrowableAssets({
       borrowShares,
       collateral,
-    });
+    })!;
 
     await client.deal({
       erc20: params.loanToken,

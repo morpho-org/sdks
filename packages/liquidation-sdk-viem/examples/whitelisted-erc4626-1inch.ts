@@ -98,6 +98,9 @@ export const check = async <
       const { user, market, seizableCollateral } =
         accrualPosition.accrueInterest(Time.timestamp());
 
+      if (seizableCollateral == null)
+        return console.warn(`Unknown oracle price for market "${market.id}"`);
+
       try {
         const collateralToken = converter.getTokenWithPrice(
           position.market.collateralAsset,
@@ -139,7 +142,7 @@ export const check = async <
             )
             .map(async (seizedAssets) => {
               const repaidShares =
-                market.getLiquidationRepaidShares(seizedAssets);
+                market.getLiquidationRepaidShares(seizedAssets)!;
 
               return {
                 seizedAssets,
@@ -215,7 +218,7 @@ export const check = async <
                       accrualPosition.market.toBorrowAssets(
                         accrualPosition.market.getLiquidationRepaidShares(
                           seizedAssets,
-                        ),
+                        )!,
                       ),
                       executorAddress,
                     );
@@ -229,7 +232,7 @@ export const check = async <
                       accrualPosition.market.toBorrowAssets(
                         accrualPosition.market.getLiquidationRepaidShares(
                           seizedAssets,
-                        ),
+                        )!,
                       ),
                       executorAddress,
                     );

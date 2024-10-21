@@ -37,6 +37,7 @@ export async function fetchMarket(
           lastUpdate,
           fee,
         },
+        hasPrice,
         price,
         rateAtTarget,
       } = await readContract(client, {
@@ -55,7 +56,7 @@ export async function fetchMarket(
         totalBorrowShares,
         lastUpdate,
         fee,
-        price,
+        price: hasPrice ? price : undefined,
         rateAtTarget:
           marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
       });
@@ -108,8 +109,8 @@ export async function fetchMarket(
           address: params.oracle,
           abi: blueOracleAbi,
           functionName: "price",
-        })
-      : 0n,
+        }).catch(() => undefined)
+      : undefined,
     params.irm === adaptiveCurveIrm
       ? await readContract(client, {
           ...parameters,
@@ -120,6 +121,7 @@ export async function fetchMarket(
         })
       : undefined,
   ]);
+
   return new Market({
     params,
     totalSupplyAssets,

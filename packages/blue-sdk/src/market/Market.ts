@@ -33,10 +33,10 @@ export interface MaxWithdrawCollateralOptions {
 export interface MaxPositionCapacities {
   supply: CapacityLimit;
   withdraw: CapacityLimit;
-  borrow: CapacityLimit;
+  borrow: CapacityLimit | undefined;
   repay: CapacityLimit;
   supplyCollateral: CapacityLimit;
-  withdrawCollateral: CapacityLimit;
+  withdrawCollateral: CapacityLimit | undefined;
 }
 
 export interface InputMarket {
@@ -47,7 +47,7 @@ export interface InputMarket {
   totalBorrowShares: bigint;
   lastUpdate: bigint;
   fee: bigint;
-  price: bigint;
+  price?: bigint;
   rateAtTarget?: bigint;
 }
 
@@ -88,8 +88,9 @@ export class Market implements InputMarket {
 
   /**
    * The price as returned by the market's oracle.
+   * `undefined` if the oracle is undefined or reverts.
    */
-  public price: bigint;
+  public price?: bigint;
 
   /**
    * If the market uses the Adaptive Curve IRM, the rate at target utilization.
@@ -377,6 +378,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns the value of a given amount of collateral quoted in loan assets.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param collateral The amount of collateral to quote.
    */
   public getCollateralValue(collateral: bigint) {
@@ -385,6 +387,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns the maximum debt allowed given a certain amount of collateral.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * To calculate the amount of loan assets that can be borrowed, use `getMaxBorrowableAssets`.
    * @param collateral The amount of collateral to consider.
    */
@@ -399,6 +402,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param position The borrow position to consider.
    */
   public getMaxBorrowableAssets(position: {
@@ -410,6 +414,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns the amount of collateral that would be seized in a liquidation given a certain amount of repaid shares.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param repaidShares The amount of shares hypothetically repaid.
    */
   public getLiquidationSeizedAssets(repaidShares: bigint) {
@@ -422,6 +427,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns the amount of borrow shares that would be repaid in a liquidation given a certain amount of seized collateral.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param seizedAssets The amount of collateral hypothetically seized.
    */
   public getLiquidationRepaidShares(seizedAssets: bigint) {
@@ -434,6 +440,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns the maximum amount of collateral that is worth being seized in a liquidation given a certain borrow position.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param position The borrow position to consider.
    */
   public getSeizableCollateral(position: {
@@ -445,6 +452,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns the amount of collateral that can be withdrawn given a certain borrow position.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param position The borrow position to consider.
    */
   public getWithdrawableCollateral(
@@ -461,6 +469,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns whether a given borrow position is healthy.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param position The borrow position to check.
    */
   public isHealthy(position: { collateral: bigint; borrowShares: bigint }) {
@@ -481,6 +490,7 @@ export class Market implements InputMarket {
   /**
    * Returns the price variation required for the given position to reach its liquidation threshold (scaled by WAD).
    * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
+   * Returns `undefined` iff the market's price is undefined.
    * Returns null if the position is not a borrow.
    * @param position The borrow position to consider.
    */
@@ -528,6 +538,7 @@ export class Market implements InputMarket {
   /**
    * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position
    * and the reason for the limit.
+   * Returns `undefined` iff the market's price is undefined.
    * @param position The borrow position to consider.
    */
   public getBorrowCapacityLimit(
@@ -539,10 +550,13 @@ export class Market implements InputMarket {
       borrowShares?: bigint;
     },
     options?: MaxBorrowOptions,
-  ): CapacityLimit {
+  ): CapacityLimit | undefined {
+    const maxBorrowAssets = this.getMaxBorrowAssets(collateral, options);
+    if (maxBorrowAssets == null) return;
+
     // handle edge cases when the user is liquidatable (maxBorrow < borrow)
     const maxBorrowableAssets = MathLib.zeroFloorSub(
-      this.getMaxBorrowAssets(collateral, options),
+      maxBorrowAssets,
       this.toBorrowAssets(borrowShares),
     );
 
@@ -611,6 +625,7 @@ export class Market implements InputMarket {
   /**
    * Returns the maximum amount of collateral assets that can be withdrawn given a certain borrow position
    * and the reason for the limit.
+   * Returns `undefined` iff the market's price is undefined.
    * @param position The borrow position to consider.
    */
   public getWithdrawCollateralCapacityLimit(
@@ -619,11 +634,12 @@ export class Market implements InputMarket {
       borrowShares: bigint;
     },
     options?: MaxWithdrawCollateralOptions,
-  ): CapacityLimit {
+  ): CapacityLimit | undefined {
     const withdrawableCollateral = this.getWithdrawableCollateral(
       position,
       options,
     );
+    if (withdrawableCollateral == null) return;
 
     if (position.collateral > withdrawableCollateral)
       return {

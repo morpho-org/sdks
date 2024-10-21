@@ -4,11 +4,7 @@ import { parseUnits } from "viem";
 import { BlueErrors } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import {
-  BlueSimulationErrors,
-  SimulationErrors,
-  simulateOperation,
-} from "../../../src/index.js";
+import { SimulationErrors, simulateOperation } from "../../../src/index.js";
 import { dataFixture, marketA1, tokenA, userA, userB } from "../../fixtures.js";
 
 const type = "Blue_Withdraw";
@@ -137,8 +133,6 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new BlueSimulationErrors.InsufficientPosition(userA, marketA1.id),
-    );
+    ).toThrow(new BlueErrors.InsufficientPosition(userA, marketA1.id));
   });
 });

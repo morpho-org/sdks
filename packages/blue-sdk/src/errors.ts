@@ -57,6 +57,12 @@ export namespace BlueErrors {
     }
   }
 
+  export class UnknownOraclePrice extends Error {
+    constructor(public readonly marketId: MarketId) {
+      super(`unknown oracle price of market "${marketId}"`);
+    }
+  }
+
   export class InsufficientPosition extends Error {
     constructor(
       public readonly user: Address,
