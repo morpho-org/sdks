@@ -108,8 +108,8 @@ export async function fetchMarket(
           address: params.oracle,
           abi: blueOracleAbi,
           functionName: "price",
-        })
-      : 0n,
+        }).catch(() => undefined)
+      : undefined,
     params.irm === adaptiveCurveIrm
       ? await readContract(client, {
           ...parameters,

@@ -62,8 +62,10 @@ export async function fetchMarketFromConfig(
           params.oracle,
           // @ts-ignore incompatible commonjs type
           runner,
-        ).price(overrides)
-      : 0n,
+        )
+          .price(overrides)
+          .catch(() => undefined)
+      : undefined,
     params.irm === adaptiveCurveIrm
       ? await AdaptiveCurveIrm__factory.connect(
           params.irm,

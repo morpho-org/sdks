@@ -236,21 +236,39 @@ export namespace MarketUtils {
     return MathLib.wMulDown(collateral, lltv);
   }
 
+  /**
+   * Returns the value of a given amount of collateral quoted in loan assets.
+   * Return undefined iff the market's price is undefined.
+   */
   export function getCollateralValue(
     collateral: BigIntish,
-    { price }: { price: BigIntish },
+    { price }: { price?: BigIntish },
   ) {
+    if (price == null) return;
+
     return MathLib.mulDivDown(collateral, price, ORACLE_PRICE_SCALE);
   }
 
+  /**
+   * Returns the maximum debt allowed given a certain amount of collateral.
+   * Return undefined iff the market's price is undefined.
+   * To calculate the amount of loan assets that can be borrowed, use `getMaxBorrowableAssets`.
+   */
   export function getMaxBorrowAssets(
     collateral: BigIntish,
-    market: { price: BigIntish },
+    market: { price?: BigIntish },
     { lltv }: { lltv: BigIntish },
   ) {
-    return MathLib.wMulDown(getCollateralValue(collateral, market), lltv);
+    const collateralValue = getCollateralValue(collateral, market);
+    if (collateralValue == null) return;
+
+    return MathLib.wMulDown(collateralValue, lltv);
   }
 
+  /**
+   * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position.
+   * Return undefined iff the market's price is undefined.
+   */
   export function getMaxBorrowableAssets(
     {
       collateral,
@@ -259,25 +277,38 @@ export namespace MarketUtils {
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     marketParams: { lltv: BigIntish },
   ) {
+    const maxBorrowAssets = getMaxBorrowAssets(
+      collateral,
+      market,
+      marketParams,
+    );
+    if (maxBorrowAssets == null) return;
+
     return MathLib.zeroFloorSub(
-      getMaxBorrowAssets(collateral, market, marketParams),
+      maxBorrowAssets,
       toBorrowAssets(borrowShares, market),
     );
   }
 
+  /**
+   * Returns the amount of collateral that would be seized in a liquidation given a certain amount of repaid shares.
+   * Return undefined iff the market's price is undefined.
+   */
   export function getLiquidationSeizedAssets(
     repaidShares: BigIntish,
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     config: { lltv: BigIntish },
   ) {
+    if (market.price == null) return;
+
     market.price = BigInt(market.price);
     if (market.price === 0n) return 0n;
 
@@ -291,15 +322,21 @@ export namespace MarketUtils {
     );
   }
 
+  /**
+   * Returns the amount of borrow shares that would be repaid in a liquidation given a certain amount of seized collateral.
+   * Return undefined iff the market's price is undefined.
+   */
   export function getLiquidationRepaidShares(
     seizedAssets: BigIntish,
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     config: { lltv: BigIntish },
   ) {
+    if (market.price == null) return;
+
     return toBorrowShares(
       MathLib.wDivUp(
         MathLib.mulDivUp(seizedAssets, market.price, ORACLE_PRICE_SCALE),
@@ -310,24 +347,34 @@ export namespace MarketUtils {
     );
   }
 
+  /**
+   * Returns the maximum amount of collateral that is worth being seized in a liquidation given a certain borrow position.
+   * Return undefined iff the market's price is undefined.
+   */
   export function getSeizableCollateral(
     position: { collateral: BigIntish; borrowShares: BigIntish },
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     config: { lltv: BigIntish },
   ) {
+    if (market.price == null) return; // Must be checked before calling `isHealthy`.
+
     market.price = BigInt(market.price);
     if (market.price === 0n || isHealthy(position, market, config)) return 0n;
 
     return MathLib.min(
       position.collateral,
-      getLiquidationSeizedAssets(position.borrowShares, market, config),
+      getLiquidationSeizedAssets(position.borrowShares, market, config)!,
     );
   }
 
+  /**
+   * Returns the amount of collateral that can be withdrawn given a certain borrow position.
+   * Return undefined iff the market's price is undefined.
+   */
   export function getWithdrawableCollateral(
     {
       collateral,
@@ -336,10 +383,12 @@ export namespace MarketUtils {
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     { lltv }: { lltv: BigIntish },
   ) {
+    if (market.price == null) return;
+
     market.price = BigInt(market.price);
     if (market.price === 0n) return 0n;
 
@@ -356,6 +405,11 @@ export namespace MarketUtils {
     );
   }
 
+  /**
+   * Returns whether a given borrow position is healthy.
+   * Return undefined iff the market's price is undefined.
+   * @param position The borrow position to check.
+   */
   export function isHealthy(
     {
       collateral,
@@ -364,14 +418,18 @@ export namespace MarketUtils {
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     marketParams: { lltv: BigIntish },
   ) {
-    return (
-      getMaxBorrowAssets(collateral, market, marketParams) >=
-      toBorrowAssets(borrowShares, market)
+    const maxBorrowAssets = getMaxBorrowAssets(
+      collateral,
+      market,
+      marketParams,
     );
+    if (maxBorrowAssets == null) return;
+
+    return maxBorrowAssets >= toBorrowAssets(borrowShares, market);
   }
 
   /**
@@ -405,6 +463,7 @@ export namespace MarketUtils {
   /**
    * Returns the price variation required for the given position to reach its liquidation threshold (scaled by WAD).
    * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
+   * Returns undefined iff the market's price is undefined.
    * Returns null if the position is not a borrow.
    */
   export function getPriceVariationToLiquidationPrice(
@@ -412,10 +471,12 @@ export namespace MarketUtils {
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     marketParams: { lltv: BigIntish },
   ) {
+    if (market.price == null) return;
+
     market.price = BigInt(market.price);
     if (market.price === 0n) return null;
 
@@ -429,6 +490,11 @@ export namespace MarketUtils {
     return MathLib.wDivUp(liquidationPrice, market.price) - MathLib.WAD;
   }
 
+  /**
+   * Returns the health factor of a given borrow position (scaled by WAD).
+   * Returns undefined iff the market's price is undefined.
+   * Returns null if the position is not a borrow.
+   */
   export function getHealthFactor(
     {
       collateral,
@@ -437,7 +503,7 @@ export namespace MarketUtils {
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     marketParams: { lltv: BigIntish },
   ) {
@@ -453,10 +519,16 @@ export namespace MarketUtils {
       market,
       marketParams,
     );
+    if (maxBorrowAssets == null) return;
 
     return MathLib.wDivDown(maxBorrowAssets, borrowAssets);
   }
 
+  /**
+   * Returns the loan-to-value ratio of a given borrow position (scaled by WAD).
+   * Returns undefined iff the market's price is undefined.
+   * Returns null if the position is not a borrow.
+   */
   export function getLtv(
     {
       collateral,
@@ -465,7 +537,7 @@ export namespace MarketUtils {
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
   ) {
     borrowShares = BigInt(borrowShares);
@@ -473,6 +545,7 @@ export namespace MarketUtils {
     if (borrowShares === 0n || market.totalBorrowShares === 0n) return null;
 
     const collateralValue = getCollateralValue(collateral, market);
+    if (collateralValue == null) return;
     if (collateralValue === 0n) return MathLib.MAX_UINT_256;
 
     return MathLib.wDivUp(
@@ -481,17 +554,22 @@ export namespace MarketUtils {
     );
   }
 
+  /**
+   * Returns the usage ratio of the maximum borrow capacity given a certain borrow position (scaled by WAD).
+   * Returns undefined iff the market's price is undefined.
+   */
   export function getBorrowCapacityUsage(
     position: { collateral: BigIntish; borrowShares: BigIntish },
     market: {
       totalBorrowAssets: BigIntish;
       totalBorrowShares: BigIntish;
-      price: BigIntish;
+      price?: BigIntish;
     },
     marketParams: { lltv: BigIntish },
   ) {
     const hf = getHealthFactor(position, market, marketParams);
-    if (hf === null) return null;
+    if (hf === undefined) return;
+    if (hf === null) return 0n;
     if (hf === 0n) return MathLib.MAX_UINT_256;
 
     return MathLib.wDivUp(MathLib.WAD, hf);
