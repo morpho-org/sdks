@@ -57,7 +57,7 @@ export const donate =
       abi: blueAbi,
       functionName: "supply",
       args: [
-        data.getMarket(data.getVault(vault).withdrawQueue[0]!).params,
+        data.getMarket(data.getVault(vault).withdrawQueue[0]!).params.asArg,
         donation,
         0n,
         vault,
