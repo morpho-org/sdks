@@ -1,6 +1,9 @@
 # Morpho SDKs
 
-A collection of Software Development Kits to ease interactions with the Morpho protocol and Morpho Vaults.
+![image](https://github.com/user-attachments/assets/c77d5054-5342-4c1b-81ae-b8c002c2fd8d)
+
+<p align="center"><i>A collection of Software Development Kits to ease interactions with the Morpho protocol and Morpho Vaults.</i></p>
+<br />
 
 ## Getting Started
 
