@@ -238,7 +238,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the value of a given amount of collateral quoted in loan assets.
-   * Return undefined iff the market's price is undefined.
+   * Return `undefined` iff the market's price is undefined.
    */
   export function getCollateralValue(
     collateral: BigIntish,
@@ -251,7 +251,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the maximum debt allowed given a certain amount of collateral.
-   * Return undefined iff the market's price is undefined.
+   * Return `undefined` iff the market's price is undefined.
    * To calculate the amount of loan assets that can be borrowed, use `getMaxBorrowableAssets`.
    */
   export function getMaxBorrowAssets(
@@ -267,7 +267,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position.
-   * Return undefined iff the market's price is undefined.
+   * Return `undefined` iff the market's price is undefined.
    */
   export function getMaxBorrowableAssets(
     {
@@ -296,7 +296,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the amount of collateral that would be seized in a liquidation given a certain amount of repaid shares.
-   * Return undefined iff the market's price is undefined.
+   * Return `undefined` iff the market's price is undefined.
    */
   export function getLiquidationSeizedAssets(
     repaidShares: BigIntish,
@@ -324,7 +324,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the amount of borrow shares that would be repaid in a liquidation given a certain amount of seized collateral.
-   * Return undefined iff the market's price is undefined.
+   * Return `undefined` iff the market's price is undefined.
    */
   export function getLiquidationRepaidShares(
     seizedAssets: BigIntish,
@@ -349,7 +349,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the maximum amount of collateral that is worth being seized in a liquidation given a certain borrow position.
-   * Return undefined iff the market's price is undefined.
+   * Return `undefined` iff the market's price is undefined.
    */
   export function getSeizableCollateral(
     position: { collateral: BigIntish; borrowShares: BigIntish },
@@ -373,7 +373,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the amount of collateral that can be withdrawn given a certain borrow position.
-   * Return undefined iff the market's price is undefined.
+   * Return `undefined` iff the market's price is undefined.
    */
   export function getWithdrawableCollateral(
     {
@@ -407,7 +407,7 @@ export namespace MarketUtils {
 
   /**
    * Returns whether a given borrow position is healthy.
-   * Return undefined iff the market's price is undefined.
+   * Return `undefined` iff the market's price is undefined.
    * @param position The borrow position to check.
    */
   export function isHealthy(
@@ -463,7 +463,7 @@ export namespace MarketUtils {
   /**
    * Returns the price variation required for the given position to reach its liquidation threshold (scaled by WAD).
    * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
-   * Returns undefined iff the market's price is undefined.
+   * Returns `undefined` iff the market's price is undefined.
    * Returns null if the position is not a borrow.
    */
   export function getPriceVariationToLiquidationPrice(
@@ -492,7 +492,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the health factor of a given borrow position (scaled by WAD).
-   * Returns undefined iff the market's price is undefined.
+   * Returns `undefined` iff the market's price is undefined.
    * Returns null if the position is not a borrow.
    */
   export function getHealthFactor(
@@ -526,7 +526,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the loan-to-value ratio of a given borrow position (scaled by WAD).
-   * Returns undefined iff the market's price is undefined.
+   * Returns `undefined` iff the market's price is undefined.
    * Returns null if the position is not a borrow.
    */
   export function getLtv(
@@ -556,7 +556,7 @@ export namespace MarketUtils {
 
   /**
    * Returns the usage ratio of the maximum borrow capacity given a certain borrow position (scaled by WAD).
-   * Returns undefined iff the market's price is undefined.
+   * Returns `undefined` iff the market's price is undefined.
    */
   export function getBorrowCapacityUsage(
     position: { collateral: BigIntish; borrowShares: BigIntish },
