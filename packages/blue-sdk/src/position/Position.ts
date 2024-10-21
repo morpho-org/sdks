@@ -181,29 +181,28 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
     let { market } = this;
     ({ market, assets, shares } = market.supply(assets, shares, timestamp));
 
-    this.supplyShares += shares;
+    const position = new AccrualPosition(this, market);
 
-    return {
-      position: new AccrualPosition(this, market),
-      assets,
-      shares,
-    };
+    position.supplyShares += shares;
+
+    return { position, assets, shares };
   }
 
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
     ({ market, assets, shares } = market.withdraw(assets, shares, timestamp));
 
-    this.supplyShares -= shares;
+    const position = new AccrualPosition(this, market);
 
-    if (this.supplyShares < 0n)
-      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+    position.supplyShares -= shares;
 
-    return {
-      position: new AccrualPosition(this, market),
-      assets,
-      shares,
-    };
+    if (position.supplyShares < 0n)
+      throw new BlueErrors.InsufficientPosition(
+        position.user,
+        position.marketId,
+      );
+
+    return { position, assets, shares };
   }
 
   public supplyCollateral(assets: bigint) {
@@ -213,49 +212,60 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
   }
 
   public withdrawCollateral(assets: bigint, timestamp?: BigIntish) {
-    const market = this.market.accrueInterest(timestamp);
+    if (this.market.price == null)
+      throw new BlueErrors.UnknownOraclePrice(this.marketId);
 
-    this.collateral -= assets;
+    const position = this.accrueInterest(timestamp);
 
-    if (this.collateral < 0n)
-      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+    position.collateral -= assets;
 
-    if (!market.isHealthy(this))
-      throw new BlueErrors.InsufficientCollateral(this.user, this.marketId);
+    if (position.collateral < 0n)
+      throw new BlueErrors.InsufficientPosition(
+        position.user,
+        position.marketId,
+      );
 
-    return new AccrualPosition(this, market);
+    if (!position.isHealthy!)
+      throw new BlueErrors.InsufficientCollateral(
+        position.user,
+        position.marketId,
+      );
+
+    return position;
   }
 
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
+    if (market.price == null)
+      throw new BlueErrors.UnknownOraclePrice(market.id);
+
     ({ market, assets, shares } = market.borrow(assets, shares, timestamp));
 
-    this.borrowShares += shares;
+    const position = new AccrualPosition(this, market);
 
-    if (!market.isHealthy(this))
+    position.borrowShares += shares;
+
+    if (!position.isHealthy!)
       throw new BlueErrors.InsufficientCollateral(this.user, this.marketId);
 
-    return {
-      position: new AccrualPosition(this, market),
-      assets,
-      shares,
-    };
+    return { position, assets, shares };
   }
 
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
     ({ market, assets, shares } = market.repay(assets, shares, timestamp));
 
-    this.borrowShares -= shares;
+    const position = new AccrualPosition(this, market);
 
-    if (this.borrowShares < 0n)
-      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+    position.borrowShares -= shares;
 
-    return {
-      position: new AccrualPosition(this, market),
-      assets,
-      shares,
-    };
+    if (position.borrowShares < 0n)
+      throw new BlueErrors.InsufficientPosition(
+        position.user,
+        position.marketId,
+      );
+
+    return { position, assets, shares };
   }
 
   public getRepayCapacityLimit(loanTokenBalance: bigint) {

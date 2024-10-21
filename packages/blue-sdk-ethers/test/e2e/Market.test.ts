@@ -38,8 +38,6 @@ describe("augment/Market", () => {
       totalBorrowShares: 0n,
       lastUpdate: 1711558175n,
       fee: 0n,
-      price: 0n,
-      rateAtTarget: undefined,
     });
 
     const value = await Market.fetch(usdc_idle.id, wallet);

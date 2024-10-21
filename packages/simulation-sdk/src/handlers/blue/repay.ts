@@ -1,6 +1,4 @@
 import { BlueErrors, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
-
-import { BlueSimulationErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";
 import { handleOperations } from "../dispatchers.js";
 import { handleErc20Operation } from "../erc20/index.js";
@@ -57,7 +55,7 @@ export const handleBlueRepayOperation: OperationHandler<
   position.borrowShares -= shares;
 
   if (position.borrowShares < 0n)
-    throw new BlueSimulationErrors.InsufficientPosition(onBehalf, market.id);
+    throw new BlueErrors.InsufficientPosition(onBehalf, market.id);
 
   if (callback) handleOperations(callback(data), data);
 

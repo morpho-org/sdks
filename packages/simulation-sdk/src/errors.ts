@@ -212,26 +212,6 @@ export namespace BlueSimulationErrors {
       super(`unauthorized bundler for user "${user}"`);
     }
   }
-
-  export class InsufficientPosition extends Error {
-    constructor(
-      public readonly user: Address,
-      public readonly marketId: MarketId,
-    ) {
-      super(`insufficient position for user "${user}" on market "${marketId}"`);
-    }
-  }
-
-  export class InsufficientCollateral extends Error {
-    constructor(
-      public readonly user: Address,
-      public readonly marketId: MarketId,
-    ) {
-      super(
-        `insufficient collateral for user "${user}" on market "${marketId}"`,
-      );
-    }
-  }
 }
 
 export namespace MetaMorphoErrors {

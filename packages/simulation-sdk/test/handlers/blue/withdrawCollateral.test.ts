@@ -1,12 +1,9 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
+import { BlueErrors } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
-import {
-  BlueSimulationErrors,
-  SimulationErrors,
-  simulateOperation,
-} from "../../../src/index.js";
+import { SimulationErrors, simulateOperation } from "../../../src/index.js";
 import { dataFixture, marketA1, userA, userB } from "../../fixtures.js";
 
 const type = "Blue_WithdrawCollateral";
@@ -72,9 +69,7 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new BlueSimulationErrors.InsufficientPosition(userB, marketA1.id),
-    );
+    ).toThrow(new BlueErrors.InsufficientPosition(userB, marketA1.id));
   });
 
   test("should throw if not healthy", () => {
@@ -92,8 +87,6 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new BlueSimulationErrors.InsufficientCollateral(userB, marketA1.id),
-    );
+    ).toThrow(new BlueErrors.InsufficientCollateral(userB, marketA1.id));
   });
 });
