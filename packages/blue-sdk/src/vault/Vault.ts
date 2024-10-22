@@ -50,6 +50,16 @@ export interface InputVault extends InputVaultConfig {
 
 export class Vault extends VaultToken implements InputVault {
   /**
+   * The vault's share token's name.
+   */
+  public declare readonly name: string;
+
+  /**
+   * The vault's share token's symbol.
+   */
+  public declare readonly symbol: string;
+
+  /**
    * The MetaMorpho vault's owner address.
    */
   public owner: Address;

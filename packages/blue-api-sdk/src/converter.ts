@@ -6,7 +6,7 @@ import {
   MarketParams,
   MathLib,
   Position,
-  TokenWithPrice,
+  Token,
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
@@ -160,17 +160,15 @@ export class BlueSdkConverter {
     return price;
   }
 
-  public getTokenWithPrice(
+  public getToken(
     dto: PartialBlueApiToken,
     ethPriceUsd?: BlueApiToken["priceUsd"],
   ) {
-    return new TokenWithPrice(
-      {
-        ...dto,
-        address: this.options.parseAddress(dto.address),
-      },
-      this.getPriceUsd(dto, ethPriceUsd),
-    );
+    return new Token({
+      ...dto,
+      address: this.options.parseAddress(dto.address),
+      price: this.getPriceUsd(dto, ethPriceUsd),
+    });
   }
 
   public getMarketParams(dto: PartialBlueApiMarketParams) {
