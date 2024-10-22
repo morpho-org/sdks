@@ -19,7 +19,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "colors": "^1.4.0"
+    "viem-tracer": "^1.2.0"
   },
   "peerDependencies": {
     "@morpho-org/test": "workspace:^",

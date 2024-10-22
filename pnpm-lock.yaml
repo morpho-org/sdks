@@ -558,9 +558,9 @@ importers:
 
   packages/test-viem:
     dependencies:
-      colors:
-        specifier: ^1.4.0
-        version: 1.4.0
+      viem-tracer:
+        specifier: ^1.2.0
+        version: 1.2.0(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
     devDependencies:
       '@morpho-org/test':
         specifier: workspace:^
@@ -6456,6 +6456,11 @@ packages:
     resolution: {integrity: sha512-oNiCD28q3PguviZuh1YLd/h+3mHuhK8l822d5uT0dBzHtF7odaKhotNd78pAogPG8QAOFdrMeualYpWqcSOxfw==}
     peerDependencies:
       viem: ^2.21.18
+
+  viem-tracer@1.2.0:
+    resolution: {integrity: sha512-3tHDxPitC1USSW1RmxRJcUr1UJmYYRTvKtScGbAaJixf3/0kMqLCbsei9bY1zF+b04JX5mR6XV4PK5klKWPBvQ==}
+    peerDependencies:
+      viem: ^2.21.0
 
   viem@2.21.32:
     resolution: {integrity: sha512-2oXt5JNIb683oy7C8wuIJ/SeL3XtHVMEQpy1U2TA6WMnJQ4ScssRvyPwYLcaP6mKlrGXE/cR/V7ncWpvLUVPYQ==}
@@ -13973,6 +13978,11 @@ snapshots:
 
   viem-deal@2.0.1(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)):
     dependencies:
+      viem: 2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
+
+  viem-tracer@1.2.0(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)):
+    dependencies:
+      colors: 1.4.0
       viem: 2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
 
   viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10):

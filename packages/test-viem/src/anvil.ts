@@ -1,4 +1,3 @@
-import "colors";
 import {
   type Abi,
   type Address,
@@ -6,12 +5,9 @@ import {
   type ContractFunctionArgs,
   type ContractFunctionName,
   type DeployContractParameters,
-  type EstimateGasParameters,
-  type ExactPartial,
   type HDAccount,
   type HttpTransport,
   type PublicActions,
-  type RpcTransactionRequest,
   type SendRawTransactionParameters,
   type SendTransactionParameters,
   type SendTransactionRequest,
@@ -27,29 +23,26 @@ import {
   erc4626Abi,
   maxUint256,
   publicActions,
-  rpcSchema,
   walletActions,
 } from "viem";
 import { type DealActions, dealActions } from "viem-deal";
-import { parseAccount } from "viem/accounts";
+import { type TracedTransport, traceActions, traced } from "viem-tracer";
 import {
-  estimateGas as viem_estimateGas,
   sendRawTransaction as viem_sendRawTransaction,
   sendTransaction as viem_sendTransaction,
   writeContract as viem_writeContract,
 } from "viem/actions";
 import type { Chain } from "viem/chains";
 import { testAccount } from "./fixtures.js";
-import { type TraceCallRpcSchema, trace } from "./trace.js";
 
 export type AnvilTestClient<chain extends Chain = Chain> = Client<
-  HttpTransport,
+  TracedTransport<HttpTransport>,
   chain,
   HDAccount,
   TestRpcSchema<"anvil">,
   TestActions &
     DealActions &
-    PublicActions<HttpTransport, chain, HDAccount> &
+    PublicActions<TracedTransport<HttpTransport>, chain, HDAccount> &
     WalletActions<chain, HDAccount> & {
       tracing: {
         txs: boolean;
@@ -126,10 +119,10 @@ export const createAnvilTestClient = <chain extends Chain>(
     chain,
     mode: "anvil",
     account: testAccount(),
-    transport,
-    rpcSchema: rpcSchema<[TraceCallRpcSchema]>(),
+    transport: traced(transport),
   })
     .extend(dealActions)
+    .extend(traceActions)
     .extend(publicActions)
     .extend(walletActions)
     .extend((client) => {
@@ -274,26 +267,6 @@ export const createAnvilTestClient = <chain extends Chain>(
 
           return hash;
         },
-        async estimateGas(args: EstimateGasParameters<chain>) {
-          const gas = await viem_estimateGas(client, args).catch(
-            async (error) => {
-              if (this.tracing.txs) {
-                try {
-                  error.message += `\n\nCall trace:\n${await trace(client, {
-                    from: parseAccount(args.account ?? client.account).address,
-                    ...args,
-                  } as ExactPartial<RpcTransactionRequest>)}`;
-                } catch (err) {
-                  error.message += `\n\nFailed to trace call:\n${err}`;
-                }
-              }
-
-              throw error;
-            },
-          );
-
-          return gas;
-        },
         async sendTransaction<
           const request extends SendTransactionRequest<chain, chainOverride>,
           chainOverride extends Chain | undefined = undefined,
@@ -305,22 +278,7 @@ export const createAnvilTestClient = <chain extends Chain>(
             request
           >,
         ) {
-          const hash = await viem_sendTransaction(client, args).catch(
-            async (error) => {
-              if (this.tracing.txs) {
-                try {
-                  error.message += `\n\nCall trace:\n${await trace(client, {
-                    from: parseAccount(args.account ?? client.account).address,
-                    ...args,
-                  } as ExactPartial<RpcTransactionRequest>)}`;
-                } catch (err) {
-                  error.message += `\n\nFailed to trace call:\n${err}`;
-                }
-              }
-
-              throw error;
-            },
-          );
+          const hash = await viem_sendTransaction(client, args);
 
           if ((automine ??= await client.getAutomine()))
             await client.waitForTransactionReceipt({ hash });
