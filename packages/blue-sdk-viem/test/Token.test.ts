@@ -6,6 +6,7 @@ import {
   ExchangeRateWrappedToken,
   addresses,
 } from "@morpho-org/blue-sdk";
+import { randomAddress } from "@morpho-org/test";
 import { Token } from "../src/augment/Token.js";
 
 const { mkr, usdc, stEth, wstEth } = addresses[ChainId.EthMainnet];
@@ -41,7 +42,7 @@ describe("augment/Token", () => {
     expect(value).toStrictEqual(expectedData);
   });
 
-  test("Should fetch MKR token data", async ({ client }) => {
+  test("should fetch MKR token data", async ({ client }) => {
     const expectedData = new Token({
       address: mkr,
       decimals: 18,
@@ -50,6 +51,14 @@ describe("augment/Token", () => {
     });
 
     const value = await Token.fetch(mkr, client);
+
+    expect(value).toStrictEqual(expectedData);
+  });
+
+  test("should fetch invalid ERC20", async ({ client }) => {
+    const expectedData = new Token({ address: randomAddress() });
+
+    const value = await Token.fetch(expectedData.address, client);
 
     expect(value).toStrictEqual(expectedData);
   });

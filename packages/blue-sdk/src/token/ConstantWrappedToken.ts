@@ -10,7 +10,7 @@ export class ConstantWrappedToken extends WrappedToken {
   constructor(
     token: InputToken,
     underlying: Address,
-    underlyingDecimals: BigIntish = 18n,
+    underlyingDecimals: BigIntish = 0,
   ) {
     super(token, underlying);
 

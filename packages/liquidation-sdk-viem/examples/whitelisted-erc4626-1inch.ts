@@ -102,14 +102,14 @@ export const check = async <
         return console.warn(`Unknown oracle price for market "${market.id}"`);
 
       try {
-        const collateralToken = converter.getTokenWithPrice(
+        const collateralToken = converter.getToken(
           position.market.collateralAsset,
           wethPriceUsd,
         );
         if (collateralToken.price == null)
           throw new UnknownTokenPriceError(collateralToken.address);
 
-        const loanToken = converter.getTokenWithPrice(
+        const loanToken = converter.getToken(
           position.market.loanAsset,
           wethPriceUsd,
         );

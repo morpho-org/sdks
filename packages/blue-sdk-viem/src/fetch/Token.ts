@@ -64,7 +64,7 @@ export async function fetchToken(
         return new ConstantWrappedToken(
           { ...token, address },
           unwrapToken,
-          Number(token.decimals),
+          token.decimals,
         );
 
       return new Token({ ...token, address });
@@ -79,7 +79,7 @@ export async function fetchToken(
       address,
       abi: erc20Abi,
       functionName: "decimals",
-    }),
+    }).catch(() => undefined),
     readContract(client, {
       ...parameters,
       address,
@@ -91,7 +91,9 @@ export async function fetchToken(
         address,
         abi: erc20Abi_bytes32,
         functionName: "symbol",
-      }).then(decodeBytes32String),
+      })
+        .then(decodeBytes32String)
+        .catch(() => undefined),
     ),
     readContract(client, {
       ...parameters,
@@ -104,15 +106,17 @@ export async function fetchToken(
         address,
         abi: erc20Abi_bytes32,
         functionName: "name",
-      }).then(decodeBytes32String),
+      })
+        .then(decodeBytes32String)
+        .catch(() => undefined),
     ),
   ]);
 
   const token = {
     address,
-    decimals: Number.parseInt(decimals.toString()),
-    symbol,
     name,
+    symbol,
+    decimals,
   };
 
   switch (address) {

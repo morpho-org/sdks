@@ -1,5 +1,5 @@
-import keccak256 from "keccak256";
-
+import { keccak_256 } from "@noble/hashes/sha3";
+import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import {
   LIQUIDATION_CURSOR,
   MAX_LIQUIDATION_INCENTIVE_FACTOR,
@@ -8,7 +8,6 @@ import {
 } from "../constants.js";
 import { MathLib, type RoundingDirection, SharesMath } from "../math/index.js";
 import type { BigIntish, MarketId } from "../types.js";
-
 import type { InputMarketParams } from "./MarketParams.js";
 
 /**
@@ -20,15 +19,22 @@ export namespace MarketUtils {
    * @param market The market params.
    */
   export function getMarketId(market: InputMarketParams) {
-    return `0x${keccak256(
-      `0x${
-        market.loanToken.substring(2).toLowerCase().padStart(64, "0") +
-        market.collateralToken.substring(2).toLowerCase().padStart(64, "0") +
-        market.oracle.substring(2).padStart(64, "0") +
-        market.irm.substring(2).toLowerCase().padStart(64, "0") +
-        BigInt(market.lltv).toString(16).padStart(64, "0")
-      }`,
-    ).toString("hex")}` as MarketId;
+    return `0x${bytesToHex(
+      keccak_256(
+        hexToBytes(
+          `${
+            market.loanToken.substring(2).toLowerCase().padStart(64, "0") +
+            market.collateralToken
+              .substring(2)
+              .toLowerCase()
+              .padStart(64, "0") +
+            market.oracle.substring(2).padStart(64, "0") +
+            market.irm.substring(2).toLowerCase().padStart(64, "0") +
+            BigInt(market.lltv).toString(16).padStart(64, "0")
+          }`,
+        ),
+      ),
+    )}` as MarketId;
   }
 
   /**
