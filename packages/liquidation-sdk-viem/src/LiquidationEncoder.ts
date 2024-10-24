@@ -1,4 +1,8 @@
 import { type Address, MathLib } from "@morpho-org/blue-sdk";
+import {
+  daiUsdsConverterAbi,
+  mkrSkyConverterAbi,
+} from "@morpho-org/liquidation-sdk-viem/src/abis.js";
 import { ExecutorEncoder } from "executooor-viem";
 import {
   type Account,
@@ -11,6 +15,7 @@ import { readContract } from "viem/actions";
 import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { Pendle, Usual } from "./tokens/index.js";
+import { Sky } from "./tokens/sky.js";
 
 export class LiquidationEncoder<
   client extends Client<Transport, Chain, Account> = Client<
@@ -391,6 +396,54 @@ export class LiquidationEncoder<
         abi: sUsdsAbi,
         functionName: "withdraw",
         args: [amount, receiver, owner],
+      }),
+    );
+  }
+
+  public mkrToSky(amount: bigint, user: Address) {
+    this.pushCall(
+      Sky.MKR_SKY_CONVERTER,
+      0n,
+      encodeFunctionData({
+        abi: mkrSkyConverterAbi,
+        functionName: "mkrToSky",
+        args: [user, amount],
+      }),
+    );
+  }
+
+  public skyToMkr(amount: bigint, user: Address) {
+    this.pushCall(
+      Sky.MKR_SKY_CONVERTER,
+      0n,
+      encodeFunctionData({
+        abi: mkrSkyConverterAbi,
+        functionName: "skyToMkr",
+        args: [user, amount],
+      }),
+    );
+  }
+
+  public daiToUsds(amount: bigint, user: Address) {
+    this.pushCall(
+      Sky.DAI_USDS_CONVERTER,
+      0n,
+      encodeFunctionData({
+        abi: daiUsdsConverterAbi,
+        functionName: "daiToUsds",
+        args: [user, amount],
+      }),
+    );
+  }
+
+  public usdsToDai(amount: bigint, user: Address) {
+    this.pushCall(
+      Sky.DAI_USDS_CONVERTER,
+      0n,
+      encodeFunctionData({
+        abi: daiUsdsConverterAbi,
+        functionName: "usdsToDai",
+        args: [user, amount],
       }),
     );
   }
