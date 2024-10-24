@@ -98,8 +98,10 @@ describe("Market", () => {
       collateral,
     })!;
 
+    client.transport.tracer.next = false;
+
     await expect(
-      client.estimateContractGas({
+      client.writeContract({
         abi: blueAbi,
         address: morpho,
         functionName: "borrow",

@@ -44,12 +44,6 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
     DealActions &
     PublicActions<TracedTransport<HttpTransport>, chain, HDAccount> &
     WalletActions<chain, HDAccount> & {
-      tracing: {
-        txs: boolean;
-        calls: boolean;
-        nextCall: boolean;
-      };
-
       timestamp(): Promise<bigint>;
 
       approve(args: ApproveParameters<chain>): Promise<WriteContractReturnType>;
@@ -129,12 +123,6 @@ export const createAnvilTestClient = <chain extends Chain>(
       let automine: boolean;
 
       return {
-        tracing: {
-          txs: true,
-          calls: false,
-          nextCall: false,
-        },
-
         async timestamp() {
           const latestBlock = await client.getBlock();
 
