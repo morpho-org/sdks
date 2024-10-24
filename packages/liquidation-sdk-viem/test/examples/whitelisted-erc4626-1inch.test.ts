@@ -19,10 +19,7 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import {
   Flashbots,
-  LiquidationEncoder,
-  curvePools,
-  curveStableSwapNGAbi,
-  mainnetAddresses,
+  type LiquidationEncoder,
 } from "@morpho-org/liquidation-sdk-viem";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test-viem";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
@@ -96,12 +93,12 @@ describe("erc4626-1inch", () => {
 
   const mockOneInch = (
     encoder: LiquidationEncoder<AnvilTestClient>,
-    amountConfigs: SwapAmountConfig[],
+    configs: SwapAmountConfig[],
   ) => {
-    let mockChain = fetchMock;
+    let chain = fetchMock;
 
-    amountConfigs.forEach((config) => {
-      mockChain = mockChain.get(
+    for (const config of configs) {
+      chain = chain.get(
         oneInchSwapApiMatcher,
         async (uri) => {
           const url = new URL(uri);
@@ -150,20 +147,20 @@ describe("erc4626-1inch", () => {
           },
         },
       );
-    });
+    }
 
-    mockChain.mock(oneInchSwapApiMatcher, 404);
+    chain.mock(oneInchSwapApiMatcher, 404);
   };
 
   const mockParaSwap = (
     encoder: LiquidationEncoder<AnvilTestClient>,
-    amountConfigs: SwapAmountConfig[],
+    configs: SwapAmountConfig[],
   ) => {
-    let priceMockChain = fetchMock;
-    let txMockChain = fetchMock;
+    let priceChain = fetchMock;
+    let txChain = fetchMock;
 
-    amountConfigs.forEach((config) => {
-      priceMockChain = priceMockChain.get(
+    for (const config of configs) {
+      priceChain = priceChain.get(
         paraSwapPriceApiMatcher,
         async (uri) => {
           const url = new URL(uri);
@@ -228,65 +225,49 @@ describe("erc4626-1inch", () => {
         },
       );
 
-      txMockChain = txMockChain.post(
-        paraSwapTxApiMatcher,
-        async (_uri, body) => {
-          const { srcToken, destToken } = body as BuildTxInput;
+      txChain = txChain.post(paraSwapTxApiMatcher, async (_uri, body) => {
+        const { srcToken, destToken } = body as BuildTxInput;
 
-          const amount = await encoder.client.readContract({
-            address: destToken as Address,
-            abi: erc20Abi,
-            functionName: "balanceOf",
-            args: [swapMockAddress],
-          });
-          await encoder.client.deal({
-            erc20: destToken as Address,
-            account: swapMockAddress,
-            amount: amount + BigInt(config.dstAmount),
-          });
+        const amount = await encoder.client.readContract({
+          address: destToken as Address,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [swapMockAddress],
+        });
+        await encoder.client.deal({
+          erc20: destToken as Address,
+          account: swapMockAddress,
+          amount: amount + BigInt(config.dstAmount),
+        });
 
-          return {
-            from: encoder.address,
-            to: swapMockAddress,
-            value: "0",
-            data: encodeFunctionData({
-              abi: swapMock.abi,
-              functionName: "swap",
-              args: [
-                {
-                  token: srcToken as Address,
-                  amount: config.srcAmount,
-                },
-                {
-                  token: destToken as Address,
-                  amount: BigInt(config.dstAmount),
-                },
-              ],
-            }),
-            gasPrice: "0",
-            chainId: 1,
-            gas: "0",
-          };
-        },
-      );
-    });
+        return {
+          from: encoder.address,
+          to: swapMockAddress,
+          value: "0",
+          data: encodeFunctionData({
+            abi: swapMock.abi,
+            functionName: "swap",
+            args: [
+              {
+                token: srcToken as Address,
+                amount: config.srcAmount,
+              },
+              {
+                token: destToken as Address,
+                amount: BigInt(config.dstAmount),
+              },
+            ],
+          }),
+          gasPrice: "0",
+          chainId: 1,
+          gas: "0",
+        };
+      });
+    }
 
-    priceMockChain.mock(paraSwapPriceApiMatcher, 404);
-    txMockChain.mock(paraSwapTxApiMatcher, 404);
+    priceChain.mock(paraSwapPriceApiMatcher, 404);
+    txChain.mock(paraSwapTxApiMatcher, 404);
   };
-
-  // Example usage:
-  /*
-mockOneInch(encoder, [
-  { srcAmount: fullAmount, dstAmount: "1000000" },
-  { srcAmount: fullAmount / 2n, dstAmount: "500000" }
-]);
-
-mockParaSwap(encoder, [
-  { srcAmount: fullAmount, dstAmount: "1000000" },
-  { srcAmount: fullAmount / 2n, dstAmount: "500000" }
-]);
-*/
 
   const mockPendleOperations = (
     encoder: LiquidationEncoder<AnvilTestClient>,
@@ -1603,10 +1584,18 @@ mockParaSwap(encoder, [
           srcAmount: usdsWithdrawalAmount,
           dstAmount: (borrowed / 2n + 1n).toString(),
         },
+        {
+          srcAmount: usdsWithdrawalAmount / 2n,
+          dstAmount: (borrowed / 2n + 1n).toString(),
+        },
       ]);
       mockParaSwap(encoder, [
         {
           srcAmount: usdsWithdrawalAmount,
+          dstAmount: (borrowed / 2n + 1n).toString(),
+        },
+        {
+          srcAmount: usdsWithdrawalAmount / 2n,
           dstAmount: (borrowed / 2n + 1n).toString(),
         },
       ]);
