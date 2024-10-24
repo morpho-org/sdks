@@ -1,4 +1,4 @@
-import { format } from "../src";
+import { createFormat, format } from "../src";
 
 import { describe, expect, test } from "vitest";
 
@@ -6,6 +6,82 @@ describe("format", () => {
   const number = 12345.6789;
   const bigint = 123456789n;
   const decimals = 4;
+
+  describe("createFormat", () => {
+    test("should properly initialize format options", () => {
+      const customFormat = createFormat({
+        all: { digits: 2, sign: true },
+        hex: { default: "default hex" },
+        number: {
+          sign: false,
+          unit: "number",
+        },
+        short: {
+          sign: false,
+          unit: "short",
+          smallValuesWithCommas: true,
+        },
+        percent: {
+          sign: false,
+          unit: "percent",
+        },
+        commas: {
+          sign: false,
+          unit: "commas",
+        },
+      });
+
+      //@ts-ignore
+      const hexOptions = customFormat.hex._options;
+      expect(hexOptions.format).toBe("hex");
+      expect(hexOptions.default).toBe("default hex");
+      expect(hexOptions.prefix).toBe(false);
+
+      //@ts-ignore
+      const numberOptions = customFormat.number._options;
+      expect(numberOptions.format).toBe("number");
+      expect(numberOptions.unit).toBe("number");
+      expect(numberOptions.sign).toBe(false);
+      expect(numberOptions.digits).toBe(2);
+      expect(numberOptions.default).toBe(undefined);
+
+      //@ts-ignore
+      const shortOptions = customFormat.short._options;
+      expect(shortOptions.format).toBe("short");
+      expect(shortOptions.unit).toBe("short");
+      expect(shortOptions.sign).toBe(false);
+      expect(shortOptions.digits).toBe(2);
+      expect(shortOptions.default).toBe(undefined);
+      expect(shortOptions.smallValuesWithCommas).toBe(true);
+
+      //@ts-ignore
+      const percentOptions = customFormat.percent._options;
+      expect(percentOptions.format).toBe("percent");
+      expect(percentOptions.unit).toBe("percent");
+      expect(percentOptions.sign).toBe(false);
+      expect(percentOptions.digits).toBe(2);
+      expect(percentOptions.default).toBe(undefined);
+
+      //@ts-ignore
+      const commasOptions = customFormat.commas._options;
+      expect(commasOptions.format).toBe("commas");
+      expect(commasOptions.unit).toBe("commas");
+      expect(commasOptions.sign).toBe(false);
+      expect(commasOptions.digits).toBe(2);
+      expect(commasOptions.default).toBe(undefined);
+    });
+  });
+
+  describe("createOf", () => {
+    test("should allow creating a function from formatter", () => {
+      const formatter = format.number.digits(2);
+      const formatFunction = formatter.createOf();
+
+      expect(formatFunction(number)).toEqual("12345.67");
+      formatter.digits(4);
+      expect(formatFunction(number)).toEqual("12345.67");
+    });
+  });
 
   describe("hex", () => {
     describe("should properly format number in hex format", () => {
