@@ -7,7 +7,7 @@ import {
 } from "../math/index.js";
 import type { BigIntish } from "../types.js";
 
-import type { MarketConfig } from "./MarketConfig.js";
+import type { MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
 
 export enum CapacityLimitReason {
@@ -33,21 +33,21 @@ export interface MaxWithdrawCollateralOptions {
 export interface MaxPositionCapacities {
   supply: CapacityLimit;
   withdraw: CapacityLimit;
-  borrow: CapacityLimit;
+  borrow: CapacityLimit | undefined;
   repay: CapacityLimit;
   supplyCollateral: CapacityLimit;
-  withdrawCollateral: CapacityLimit;
+  withdrawCollateral: CapacityLimit | undefined;
 }
 
 export interface InputMarket {
-  config: MarketConfig;
+  params: MarketParams;
   totalSupplyAssets: bigint;
   totalBorrowAssets: bigint;
   totalSupplyShares: bigint;
   totalBorrowShares: bigint;
   lastUpdate: bigint;
   fee: bigint;
-  price: bigint;
+  price?: bigint;
   rateAtTarget?: bigint;
 }
 
@@ -56,9 +56,9 @@ export interface InputMarket {
  */
 export class Market implements InputMarket {
   /**
-   * The market's config.
+   * The market's params.
    */
-  public readonly config: MarketConfig;
+  public readonly params: MarketParams;
 
   /**
    * The amount of loan assets supplied in total on the market.
@@ -88,8 +88,9 @@ export class Market implements InputMarket {
 
   /**
    * The price as returned by the market's oracle.
+   * `undefined` if the oracle is undefined or reverts.
    */
-  public price: bigint;
+  public price?: bigint;
 
   /**
    * If the market uses the Adaptive Curve IRM, the rate at target utilization.
@@ -98,7 +99,7 @@ export class Market implements InputMarket {
   public rateAtTarget?: bigint;
 
   constructor({
-    config,
+    params,
     totalSupplyAssets,
     totalBorrowAssets,
     totalSupplyShares,
@@ -108,7 +109,7 @@ export class Market implements InputMarket {
     price,
     rateAtTarget,
   }: InputMarket) {
-    this.config = config;
+    this.params = params;
     this.totalSupplyAssets = totalSupplyAssets;
     this.totalBorrowAssets = totalBorrowAssets;
     this.totalSupplyShares = totalSupplyShares;
@@ -124,14 +125,14 @@ export class Market implements InputMarket {
    * The market's hex-encoded id, defined as the hash of the market params.
    */
   get id() {
-    return this.config.id;
+    return this.params.id;
   }
 
   /**
    * Whether the market satisfies the canonical definition of an idle market (i.e. collateral token is the zero address).
    */
   get isIdle() {
-    return this.config.collateralToken === ZERO_ADDRESS;
+    return this.params.collateralToken === ZERO_ADDRESS;
   }
 
   /**
@@ -377,6 +378,7 @@ export class Market implements InputMarket {
 
   /**
    * Returns the value of a given amount of collateral quoted in loan assets.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param collateral The amount of collateral to quote.
    */
   public getCollateralValue(collateral: bigint) {
@@ -385,66 +387,72 @@ export class Market implements InputMarket {
 
   /**
    * Returns the maximum debt allowed given a certain amount of collateral.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * To calculate the amount of loan assets that can be borrowed, use `getMaxBorrowableAssets`.
    * @param collateral The amount of collateral to consider.
    */
   public getMaxBorrowAssets(
     collateral: bigint,
-    { maxLtv = this.config.lltv }: MaxBorrowOptions = {},
+    { maxLtv = this.params.lltv }: MaxBorrowOptions = {},
   ) {
     return MarketUtils.getMaxBorrowAssets(collateral, this, {
-      lltv: MathLib.min(maxLtv, this.config.lltv),
+      lltv: MathLib.min(maxLtv, this.params.lltv),
     });
   }
 
   /**
    * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param position The borrow position to consider.
    */
   public getMaxBorrowableAssets(position: {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getMaxBorrowableAssets(position, this, this.config);
+    return MarketUtils.getMaxBorrowableAssets(position, this, this.params);
   }
 
   /**
    * Returns the amount of collateral that would be seized in a liquidation given a certain amount of repaid shares.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param repaidShares The amount of shares hypothetically repaid.
    */
   public getLiquidationSeizedAssets(repaidShares: bigint) {
     return MarketUtils.getLiquidationSeizedAssets(
       repaidShares,
       this,
-      this.config,
+      this.params,
     );
   }
 
   /**
    * Returns the amount of borrow shares that would be repaid in a liquidation given a certain amount of seized collateral.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param seizedAssets The amount of collateral hypothetically seized.
    */
   public getLiquidationRepaidShares(seizedAssets: bigint) {
     return MarketUtils.getLiquidationRepaidShares(
       seizedAssets,
       this,
-      this.config,
+      this.params,
     );
   }
 
   /**
    * Returns the maximum amount of collateral that is worth being seized in a liquidation given a certain borrow position.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param position The borrow position to consider.
    */
   public getSeizableCollateral(position: {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getSeizableCollateral(position, this, this.config);
+    return MarketUtils.getSeizableCollateral(position, this, this.params);
   }
 
   /**
    * Returns the amount of collateral that can be withdrawn given a certain borrow position.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param position The borrow position to consider.
    */
   public getWithdrawableCollateral(
@@ -452,19 +460,20 @@ export class Market implements InputMarket {
       collateral: bigint;
       borrowShares: bigint;
     },
-    { maxLtv = this.config.lltv }: MaxWithdrawCollateralOptions = {},
+    { maxLtv = this.params.lltv }: MaxWithdrawCollateralOptions = {},
   ) {
     return MarketUtils.getWithdrawableCollateral(position, this, {
-      lltv: MathLib.min(maxLtv, this.config.lltv),
+      lltv: MathLib.min(maxLtv, this.params.lltv),
     });
   }
 
   /**
    * Returns whether a given borrow position is healthy.
+   * `undefined` iff the market's oracle is undefined or reverts.
    * @param position The borrow position to check.
    */
   public isHealthy(position: { collateral: bigint; borrowShares: bigint }) {
-    return MarketUtils.isHealthy(position, this, this.config);
+    return MarketUtils.isHealthy(position, this, this.params);
   }
 
   /**
@@ -475,12 +484,13 @@ export class Market implements InputMarket {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getLiquidationPrice(position, this, this.config);
+    return MarketUtils.getLiquidationPrice(position, this, this.params);
   }
 
   /**
    * Returns the price variation required for the given position to reach its liquidation threshold (scaled by WAD).
    * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
+   * Returns `undefined` iff the market's price is undefined.
    * Returns null if the position is not a borrow.
    * @param position The borrow position to consider.
    */
@@ -491,7 +501,7 @@ export class Market implements InputMarket {
     return MarketUtils.getPriceVariationToLiquidationPrice(
       position,
       this,
-      this.config,
+      this.params,
     );
   }
 
@@ -503,7 +513,7 @@ export class Market implements InputMarket {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getHealthFactor(position, this, this.config);
+    return MarketUtils.getHealthFactor(position, this, this.params);
   }
 
   /**
@@ -522,12 +532,13 @@ export class Market implements InputMarket {
     collateral: bigint;
     borrowShares: bigint;
   }) {
-    return MarketUtils.getBorrowCapacityUsage(position, this, this.config);
+    return MarketUtils.getBorrowCapacityUsage(position, this, this.params);
   }
 
   /**
    * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position
    * and the reason for the limit.
+   * Returns `undefined` iff the market's price is undefined.
    * @param position The borrow position to consider.
    */
   public getBorrowCapacityLimit(
@@ -539,10 +550,13 @@ export class Market implements InputMarket {
       borrowShares?: bigint;
     },
     options?: MaxBorrowOptions,
-  ): CapacityLimit {
+  ): CapacityLimit | undefined {
+    const maxBorrowAssets = this.getMaxBorrowAssets(collateral, options);
+    if (maxBorrowAssets == null) return;
+
     // handle edge cases when the user is liquidatable (maxBorrow < borrow)
     const maxBorrowableAssets = MathLib.zeroFloorSub(
-      this.getMaxBorrowAssets(collateral, options),
+      maxBorrowAssets,
       this.toBorrowAssets(borrowShares),
     );
 
@@ -611,6 +625,7 @@ export class Market implements InputMarket {
   /**
    * Returns the maximum amount of collateral assets that can be withdrawn given a certain borrow position
    * and the reason for the limit.
+   * Returns `undefined` iff the market's price is undefined.
    * @param position The borrow position to consider.
    */
   public getWithdrawCollateralCapacityLimit(
@@ -619,11 +634,12 @@ export class Market implements InputMarket {
       borrowShares: bigint;
     },
     options?: MaxWithdrawCollateralOptions,
-  ): CapacityLimit {
+  ): CapacityLimit | undefined {
     const withdrawableCollateral = this.getWithdrawableCollateral(
       position,
       options,
     );
+    if (withdrawableCollateral == null) return;
 
     if (position.collateral > withdrawableCollateral)
       return {

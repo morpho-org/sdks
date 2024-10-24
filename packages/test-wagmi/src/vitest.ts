@@ -4,9 +4,9 @@ import {
   createViemTest,
   testAccount,
 } from "@morpho-org/test-viem";
-import { createConfig, mock } from "@wagmi/core";
+import { mock } from "@wagmi/core";
 import type { Chain, HttpTransport } from "viem";
-import type { Config } from "wagmi";
+import { type Config, createConfig } from "wagmi";
 
 export interface WagmiConfigTestContext<chain extends Chain = Chain> {
   config: Config<readonly [chain], Record<chain["id"], HttpTransport>>;

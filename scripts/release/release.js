@@ -1,6 +1,7 @@
 import { setOutput } from "@actions/core";
 import { writeChangelogString } from "conventional-changelog-writer";
 import {
+  branch,
   channel,
   commits,
   lastTag,
@@ -15,6 +16,7 @@ if (releaseType) {
 
   setOutput("tag", tag);
   setOutput("version", version);
+  setOutput("branch", branch);
   setOutput("channel", channel);
   setOutput(
     "changelog",

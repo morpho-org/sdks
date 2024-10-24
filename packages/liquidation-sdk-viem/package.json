@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/liquidation-sdk-viem",
   "description": "Viem-based package that provides utilities to build viem-based liquidation bots on Morpho and examples using Flashbots and Morpho's GraphQL API.",
-  "version": "1.12.4",
+  "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",
@@ -16,7 +16,7 @@
   "scripts": {
     "prepublish": "$npm_execpath build",
     "compile": "hardhat compile",
-    "build": "tsc --build tsconfig.build.json",
+    "build": "tsc --noEmit && tsc --build tsconfig.build.json",
     "codegen": "graphql-codegen --config codegen.ts"
   },
   "dependencies": {
@@ -46,7 +46,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-viem": "workspace:^",
-    "@types/node": "^22.7.0",
+    "@types/node": "^22.7.8",
     "evm-maths": "^7.0.0",
     "executooor-viem": "^1.3.3",
     "fetch-mock": "^11.1.5",
@@ -54,7 +54,7 @@
     "nock": "beta",
     "ts-node": "^10.9.2",
     "typescript": "^5.6.3",
-    "viem": "^2.21.19",
+    "viem": "^2.21.32",
     "vitest": "^2.1.3"
   },
   "publishConfig": {

@@ -25,10 +25,10 @@ jobs:
   publish:
     if: github.ref_name == 'main' || github.ref_name == 'next'
 
-    # needs:
-    #   - lint
-    #   - build
-    #   - test
+    needs:
+      - lint
+      - build
+      - test
 
     uses: ./.github/workflows/publish.yml
     secrets: inherit

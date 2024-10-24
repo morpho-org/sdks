@@ -593,8 +593,8 @@ describe("erc4626-1inch", () => {
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
-        fetchToken(market.config.collateralToken, client),
-        fetchToken(market.config.loanToken, client),
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
       ]);
 
       const collateral = parseUnits("1", collateralToken.decimals);
@@ -613,7 +613,7 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supplyCollateral",
-        args: [market.config, collateral, borrower.address, "0x"],
+        args: [market.params, collateral, borrower.address, "0x"],
       });
 
       await client.writeContract({
@@ -622,11 +622,11 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.config as Pick<
-            typeof market.config,
+          market.params as Pick<
+            typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 10n,
+          market.getMaxBorrowAssets(collateral)! - 10n,
           0n,
           borrower.address,
           borrower.address,
@@ -654,13 +654,13 @@ describe("erc4626-1inch", () => {
                   market: {
                     uniqueKey: marketId,
                     collateralAsset: {
-                      address: market.config.collateralToken,
+                      address: market.params.collateralToken,
                       decimals: collateralToken.decimals,
                       priceUsd: collateralPriceUsd,
                       spotPriceEth: collateralPriceUsd / ethPriceUsd,
                     },
                     loanAsset: {
-                      address: market.config.loanToken,
+                      address: market.params.loanToken,
                       decimals: loanToken.decimals,
                       priceUsd: null,
                       spotPriceEth: 1 / ethPriceUsd,
@@ -678,7 +678,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       mockOneInch(encoder, seizedCollateral, "60475733900");
       mockParaSwap(encoder, seizedCollateral, "60475733901");
@@ -688,7 +688,7 @@ describe("erc4626-1inch", () => {
       const decimals = Number(loanToken.decimals);
 
       const decimalBalance = await client.readContract({
-        address: market.config.loanToken,
+        address: market.params.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [encoder.address],
@@ -713,8 +713,8 @@ describe("erc4626-1inch", () => {
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
-        fetchToken(market.config.collateralToken, client),
-        fetchToken(market.config.loanToken, client),
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
       ]);
 
       const collateral = parseUnits("10000", collateralToken.decimals);
@@ -733,10 +733,10 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supplyCollateral",
-        args: [market.config, collateral, borrower.address, "0x"],
+        args: [market.params, collateral, borrower.address, "0x"],
       });
 
-      const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
+      const borrowed = market.getMaxBorrowAssets(collateral)! - 1n;
       await client.deal({
         erc20: loanToken.address,
         account: borrower.address,
@@ -753,7 +753,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "supply",
         args: [
-          market.config,
+          market.params,
           borrowed - market.liquidity, // 100% utilization after borrow.
           0n,
           borrower.address,
@@ -767,8 +767,8 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.config as Pick<
-            typeof market.config,
+          market.params as Pick<
+            typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
           borrowed,
@@ -799,12 +799,12 @@ describe("erc4626-1inch", () => {
                   market: {
                     uniqueKey: marketId,
                     collateralAsset: {
-                      address: market.config.collateralToken,
+                      address: market.params.collateralToken,
                       decimals: collateralToken.decimals,
                       priceUsd: collateralPriceUsd,
                     },
                     loanAsset: {
-                      address: market.config.loanToken,
+                      address: market.params.loanToken,
                       decimals: loanToken.decimals,
                       priceUsd: null,
                       spotPriceEth: 1 / ethPriceUsd,
@@ -822,7 +822,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       mockOneInch(encoder, seizedCollateral, "11669266773005108147659");
       mockParaSwap(encoder, seizedCollateral, "11669266773005108147658");
@@ -832,7 +832,7 @@ describe("erc4626-1inch", () => {
       const decimals = Number(loanToken.decimals);
 
       const decimalBalance = await client.readContract({
-        address: market.config.loanToken,
+        address: market.params.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [encoder.address],
@@ -857,8 +857,8 @@ describe("erc4626-1inch", () => {
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
-        fetchToken(market.config.collateralToken, client),
-        fetchToken(market.config.loanToken, client),
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
       ]);
 
       const collateral = parseUnits("10000", collateralToken.decimals);
@@ -877,7 +877,7 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supplyCollateral",
-        args: [market.config, collateral, borrower.address, "0x"],
+        args: [market.params, collateral, borrower.address, "0x"],
       });
 
       await client.writeContract({
@@ -886,11 +886,11 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.config as Pick<
-            typeof market.config,
+          market.params as Pick<
+            typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 1n,
+          market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
           borrower.address,
@@ -920,13 +920,13 @@ describe("erc4626-1inch", () => {
                   market: {
                     uniqueKey: marketId,
                     collateralAsset: {
-                      address: market.config.collateralToken,
+                      address: market.params.collateralToken,
                       decimals: collateralToken.decimals,
                       priceUsd: newCollateralPriceUsd,
                       spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
                     },
                     loanAsset: {
-                      address: market.config.loanToken,
+                      address: market.params.loanToken,
                       decimals: loanToken.decimals,
                       priceUsd: null,
                       spotPriceEth: 1 / ethPriceUsd,
@@ -944,13 +944,13 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       mockPendleOperations(
         encoder,
         seizedCollateral,
         "60475733901",
-        market.config.collateralToken,
+        market.params.collateralToken,
       );
       mockOneInch(encoder, seizedCollateral, "11669266773005108147657");
       mockParaSwap(encoder, seizedCollateral, "11669266773005108147656");
@@ -960,7 +960,7 @@ describe("erc4626-1inch", () => {
       const decimals = Number(loanToken.decimals);
 
       const decimalBalance = await client.readContract({
-        address: market.config.loanToken,
+        address: market.params.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [encoder.address],
@@ -985,8 +985,8 @@ describe("erc4626-1inch", () => {
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
-        fetchToken(market.config.collateralToken, client),
-        fetchToken(market.config.loanToken, client),
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
       ]);
 
       const collateral = parseUnits("10000", collateralToken.decimals);
@@ -1005,7 +1005,7 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supplyCollateral",
-        args: [market.config, collateral, borrower.address, "0x"],
+        args: [market.params, collateral, borrower.address, "0x"],
       });
 
       await client.writeContract({
@@ -1014,11 +1014,11 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.config as Pick<
-            typeof market.config,
+          market.params as Pick<
+            typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 1n,
+          market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
           borrower.address,
@@ -1053,13 +1053,13 @@ describe("erc4626-1inch", () => {
                   market: {
                     uniqueKey: marketId,
                     collateralAsset: {
-                      address: market.config.collateralToken,
+                      address: market.params.collateralToken,
                       decimals: collateralToken.decimals,
                       priceUsd: newCollateralPriceUsd,
                       spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
                     },
                     loanAsset: {
-                      address: market.config.loanToken,
+                      address: market.params.loanToken,
                       decimals: loanToken.decimals,
                       priceUsd: null,
                       spotPriceEth: 1 / ethPriceUsd,
@@ -1077,13 +1077,13 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(postMaturity);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       mockPendleOperations(
         encoder,
         seizedCollateral,
         "11669266773005108147657",
-        market.config.collateralToken,
+        market.params.collateralToken,
       );
       mockOneInch(encoder, seizedCollateral, "11669266773005108147657");
       mockParaSwap(encoder, seizedCollateral, "11669266773005108147656");
@@ -1093,7 +1093,7 @@ describe("erc4626-1inch", () => {
       const decimals = Number(loanToken.decimals);
 
       const decimalBalance = await client.readContract({
-        address: market.config.loanToken,
+        address: market.params.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [encoder.address],
@@ -1118,8 +1118,8 @@ describe("erc4626-1inch", () => {
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
-        fetchToken(market.config.collateralToken, client),
-        fetchToken(market.config.loanToken, client),
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
       ]);
 
       const collateral = 100000000000000000000000n;
@@ -1166,7 +1166,7 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supplyCollateral",
-        args: [market.config, newCollatValue, borrower.address, "0x"],
+        args: [market.params, newCollatValue, borrower.address, "0x"],
       });
 
       await client.writeContract({
@@ -1175,11 +1175,11 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.config as Pick<
-            typeof market.config,
+          market.params as Pick<
+            typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(newCollatValue) - 1n,
+          market.getMaxBorrowAssets(newCollatValue)! - 1n,
           0n,
           borrower.address,
           borrower.address,
@@ -1211,13 +1211,13 @@ describe("erc4626-1inch", () => {
                   market: {
                     uniqueKey: marketId,
                     collateralAsset: {
-                      address: market.config.collateralToken,
+                      address: market.params.collateralToken,
                       decimals: collateralToken.decimals,
                       priceUsd: newCollateralPriceUsd,
                       spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
                     },
                     loanAsset: {
-                      address: market.config.loanToken,
+                      address: market.params.loanToken,
                       decimals: loanToken.decimals,
                       priceUsd: null,
                       spotPriceEth: 1 / ethPriceUsd,
@@ -1235,7 +1235,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       const { morphoBlueLiquidate } = LiquidationEncoder.prototype;
       vi.spyOn(
@@ -1256,7 +1256,7 @@ describe("erc4626-1inch", () => {
       const decimals = Number(loanToken.decimals);
 
       const decimalBalance = await client.readContract({
-        address: market.config.loanToken,
+        address: market.params.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [encoder.address],
@@ -1281,8 +1281,8 @@ describe("erc4626-1inch", () => {
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
-        fetchToken(market.config.collateralToken, client),
-        fetchToken(market.config.loanToken, client),
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
       ]);
 
       const collateral = 100000000000000000000000n;
@@ -1306,7 +1306,7 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supplyCollateral",
-        args: [market.config, collateral, borrower.address, "0x"],
+        args: [market.params, collateral, borrower.address, "0x"],
       });
 
       await client.writeContract({
@@ -1315,11 +1315,11 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.config as Pick<
-            typeof market.config,
+          market.params as Pick<
+            typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 1n,
+          market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
           borrower.address,
@@ -1351,13 +1351,13 @@ describe("erc4626-1inch", () => {
                   market: {
                     uniqueKey: marketId,
                     collateralAsset: {
-                      address: market.config.collateralToken,
+                      address: market.params.collateralToken,
                       decimals: collateralToken.decimals,
                       priceUsd: newCollateralPriceUsd,
                       spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
                     },
                     loanAsset: {
-                      address: market.config.loanToken,
+                      address: market.params.loanToken,
                       decimals: loanToken.decimals,
                       priceUsd: null,
                       spotPriceEth: 1 / ethPriceUsd,
@@ -1375,7 +1375,7 @@ describe("erc4626-1inch", () => {
         client,
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
-      const seizedCollateral = accruedPosition.seizableCollateral / 2n;
+      const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
       const { morphoBlueLiquidate } = LiquidationEncoder.prototype;
       vi.spyOn(
@@ -1396,7 +1396,7 @@ describe("erc4626-1inch", () => {
       const decimals = Number(loanToken.decimals);
 
       const decimalBalance = await client.readContract({
-        address: market.config.loanToken,
+        address: market.params.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [encoder.address],
@@ -1420,8 +1420,8 @@ describe("erc4626-1inch", () => {
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
-        fetchToken(market.config.collateralToken, client),
-        fetchToken(market.config.loanToken, client),
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
       ]);
 
       const collateral = parseUnits("100000", collateralToken.decimals);
@@ -1440,10 +1440,10 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supplyCollateral",
-        args: [market.config, collateral, borrower.address, "0x"],
+        args: [market.params, collateral, borrower.address, "0x"],
       });
 
-      const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
+      const borrowed = market.getMaxBorrowAssets(collateral)! - 1n;
       await client.deal({
         erc20: loanToken.address,
         account: borrower.address,
@@ -1459,7 +1459,7 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supply",
-        args: [market.config, borrowed, 0n, borrower.address, "0x"],
+        args: [market.params, borrowed, 0n, borrower.address, "0x"],
       });
 
       await client.writeContract({
@@ -1468,8 +1468,8 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.config as Pick<
-            typeof market.config,
+          market.params as Pick<
+            typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
           borrowed,
@@ -1502,13 +1502,13 @@ describe("erc4626-1inch", () => {
                   market: {
                     uniqueKey: marketId,
                     collateralAsset: {
-                      address: market.config.collateralToken,
+                      address: market.params.collateralToken,
                       decimals: collateralToken.decimals,
                       priceUsd: newCollateralPriceUsd,
                       spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
                     },
                     loanAsset: {
-                      address: market.config.loanToken,
+                      address: market.params.loanToken,
                       decimals: loanToken.decimals,
                       priceUsd: null,
                       spotPriceEth: 1 / ethPriceUsd,
@@ -1530,7 +1530,7 @@ describe("erc4626-1inch", () => {
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
 
       const usdsWithdrawalAmount = await encoder.previewUSDSWithdrawalAmount(
-        accruedPosition.seizableCollateral / 2n,
+        accruedPosition.seizableCollateral! / 2n,
       );
       mockOneInch(encoder, usdsWithdrawalAmount, "11669266773005108147656");
       mockParaSwap(encoder, usdsWithdrawalAmount, "11669266773005108147657");
@@ -1540,7 +1540,7 @@ describe("erc4626-1inch", () => {
       const decimals = Number(loanToken.decimals);
 
       const decimalBalance = await client.readContract({
-        address: market.config.loanToken,
+        address: market.params.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [encoder.address],

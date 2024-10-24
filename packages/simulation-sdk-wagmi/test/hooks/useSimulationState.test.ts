@@ -219,7 +219,7 @@ describe("useSimulationState", () => {
         },
         markets: {
           [usdc_wstEth.id]: new Market({
-            config: usdc_wstEth,
+            params: usdc_wstEth,
             fee: 0n,
             lastUpdate: 1714261175n,
             price: 3775466720554092397807658269n,

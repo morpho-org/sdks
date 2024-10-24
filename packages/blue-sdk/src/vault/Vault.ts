@@ -50,6 +50,16 @@ export interface InputVault extends InputVaultConfig {
 
 export class Vault extends VaultToken implements InputVault {
   /**
+   * The vault's share token's name.
+   */
+  public declare readonly name: string;
+
+  /**
+   * The vault's share token's symbol.
+   */
+  public declare readonly symbol: string;
+
+  /**
    * The MetaMorpho vault's owner address.
    */
   public owner: Address;
@@ -216,7 +226,7 @@ export class AccrualVault extends Vault implements InputAccrualVault {
     this.collateralAllocations = new Map<Address, CollateralAllocation>();
 
     for (const { marketId, position } of this.allocations.values()) {
-      const address = position.market.config.collateralToken;
+      const address = position.market.params.collateralToken;
 
       let exposure = this.collateralAllocations.get(address);
       if (!exposure)
@@ -231,8 +241,8 @@ export class AccrualVault extends Vault implements InputAccrualVault {
           }),
         );
 
-      exposure.lltvs.add(position.market.config.lltv);
-      exposure.oracles.add(position.market.config.oracle);
+      exposure.lltvs.add(position.market.params.lltv);
+      exposure.oracles.add(position.market.params.oracle);
       exposure.markets.add(marketId);
       exposure.proportion += this.getAllocationProportion(marketId);
     }

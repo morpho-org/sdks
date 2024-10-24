@@ -6,16 +6,28 @@ import {IWstEth} from "./interfaces/IWstEth.sol";
 
 struct TokenResponse {
     uint256 decimals;
+    bool hasSymbol;
     string symbol;
+    bool hasName;
     string name;
     uint256 stEthPerWstEth;
 }
 
 contract GetToken {
     function query(IERC20 token, bool isWstEth) external view returns (TokenResponse memory res) {
-        res.decimals = token.decimals();
-        res.symbol = token.symbol();
-        res.name = token.name();
+        try token.name() returns (string memory name) {
+            res.hasName = true;
+            res.name = name;
+        } catch {}
+
+        try token.symbol() returns (string memory symbol) {
+            res.hasSymbol = true;
+            res.symbol = symbol;
+        } catch {}
+
+        try token.decimals() returns (uint8 decimals) {
+            res.decimals = decimals;
+        } catch {}
 
         if (isWstEth) res.stEthPerWstEth = IWstEth(address(token)).stEthPerToken();
     }

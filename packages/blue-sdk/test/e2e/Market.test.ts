@@ -1,14 +1,14 @@
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { ChainId, Market, MarketConfig, addresses } from "../../src/index.js";
+import { ChainId, Market, MarketParams, addresses } from "../../src/index.js";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "./abis.js";
 import { test } from "./setup.js";
 
 const { morpho, usdc, wstEth, adaptiveCurveIrm } =
   addresses[ChainId.EthMainnet];
 
-const config = new MarketConfig({
+const params = new MarketParams({
   // USDC(wstETH, 86%, Chainlink, AdaptiveCurve)
   loanToken: usdc,
   collateralToken: wstEth,
@@ -21,25 +21,25 @@ describe("Market", () => {
   test("should borrow borrowable assets", async ({ client }) => {
     const collateral = parseUnits("1", 18);
     await client.deal({
-      erc20: config.collateralToken,
+      erc20: params.collateralToken,
       amount: collateral,
     });
     await client.approve({
-      address: config.collateralToken,
+      address: params.collateralToken,
       args: [morpho, collateral],
     });
     await client.writeContract({
       abi: blueAbi,
       address: morpho,
       functionName: "supplyCollateral",
-      args: [config, collateral, client.account.address, "0x"],
+      args: [params, collateral, client.account.address, "0x"],
     });
     await client.writeContract({
       abi: blueAbi,
       address: morpho,
       functionName: "borrow",
       args: [
-        config,
+        { ...params },
         parseUnits("1", 6),
         0n,
         client.account.address,
@@ -60,11 +60,11 @@ describe("Market", () => {
       abi: blueAbi,
       address: morpho,
       functionName: "market",
-      args: [config.id],
+      args: [params.id],
     });
 
     const market = new Market({
-      config,
+      params,
       totalSupplyAssets,
       totalSupplyShares,
       totalBorrowAssets,
@@ -73,14 +73,14 @@ describe("Market", () => {
       fee,
       price: await client.readContract({
         abi: blueOracleAbi,
-        address: config.oracle,
+        address: params.oracle,
         functionName: "price",
       }),
       rateAtTarget: await client.readContract({
         abi: adaptiveCurveIrmAbi,
-        address: config.irm,
+        address: params.irm,
         functionName: "rateAtTarget",
-        args: [config.id],
+        args: [params.id],
       }),
     }).accrueInterest(timestamp);
 
@@ -90,13 +90,13 @@ describe("Market", () => {
       abi: blueAbi,
       address: morpho,
       functionName: "position",
-      args: [config.id, client.account.address],
+      args: [params.id, client.account.address],
     });
 
     const maxBorrowable = market.getMaxBorrowableAssets({
       borrowShares,
       collateral,
-    });
+    })!;
 
     await expect(
       client.estimateContractGas({
@@ -104,7 +104,7 @@ describe("Market", () => {
         address: morpho,
         functionName: "borrow",
         args: [
-          config,
+          { ...params },
           maxBorrowable + 10n,
           0n,
           client.account.address,
@@ -118,7 +118,7 @@ describe("Market", () => {
       address: morpho,
       functionName: "borrow",
       args: [
-        config,
+        { ...params },
         maxBorrowable,
         0n,
         client.account.address,
@@ -136,25 +136,25 @@ describe("Market", () => {
   }) => {
     const collateral = parseUnits("10000000000", 18);
     await client.deal({
-      erc20: config.collateralToken,
+      erc20: params.collateralToken,
       amount: collateral,
     });
     await client.approve({
-      address: config.collateralToken,
+      address: params.collateralToken,
       args: [morpho, collateral],
     });
     await client.writeContract({
       abi: blueAbi,
       address: morpho,
       functionName: "supplyCollateral",
-      args: [config, collateral, client.account.address, "0x"],
+      args: [params, collateral, client.account.address, "0x"],
     });
     await client.writeContract({
       abi: blueAbi,
       address: morpho,
       functionName: "borrow",
       args: [
-        config,
+        { ...params },
         parseUnits("1", 6),
         0n,
         client.account.address,
@@ -175,11 +175,11 @@ describe("Market", () => {
       abi: blueAbi,
       address: morpho,
       functionName: "market",
-      args: [config.id],
+      args: [params.id],
     });
 
     const market = new Market({
-      config,
+      params,
       totalSupplyAssets,
       totalSupplyShares,
       totalBorrowAssets,
@@ -188,14 +188,14 @@ describe("Market", () => {
       fee,
       price: await client.readContract({
         abi: blueOracleAbi,
-        address: config.oracle,
+        address: params.oracle,
         functionName: "price",
       }),
       rateAtTarget: await client.readContract({
         abi: adaptiveCurveIrmAbi,
-        address: config.irm,
+        address: params.irm,
         functionName: "rateAtTarget",
-        args: [config.id],
+        args: [params.id],
       }),
     }).accrueInterest(timestamp);
 
@@ -203,27 +203,27 @@ describe("Market", () => {
       abi: blueAbi,
       address: morpho,
       functionName: "position",
-      args: [config.id, client.account.address],
+      args: [params.id, client.account.address],
     });
 
     const maxBorrowable = market.getMaxBorrowableAssets({
       borrowShares,
       collateral,
-    });
+    })!;
 
     await client.deal({
-      erc20: config.loanToken,
+      erc20: params.loanToken,
       amount: maxBorrowable,
     });
     await client.approve({
-      address: config.loanToken,
+      address: params.loanToken,
       args: [morpho, maxBorrowable],
     });
     await client.writeContract({
       abi: blueAbi,
       address: morpho,
       functionName: "supply",
-      args: [config, maxBorrowable, 0n, client.account.address, "0x"],
+      args: [params, maxBorrowable, 0n, client.account.address, "0x"],
     });
 
     await client.setNextBlockTimestamp({ timestamp });
@@ -233,7 +233,7 @@ describe("Market", () => {
       address: morpho,
       functionName: "borrow",
       args: [
-        config,
+        { ...params },
         maxBorrowable,
         0n,
         client.account.address,

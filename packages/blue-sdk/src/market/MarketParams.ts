@@ -1,10 +1,10 @@
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
-import { UnknownMarketConfigError } from "../errors.js";
+import { UnknownMarketParamsError } from "../errors.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 
 import { MarketUtils } from "./MarketUtils.js";
 
-export interface MarketParams {
+export interface InputMarketParams {
   loanToken: Address;
   collateralToken: Address;
   oracle: Address;
@@ -15,26 +15,26 @@ export interface MarketParams {
 /**
  * Represents a market's configuration (also called market params).
  */
-export class MarketConfig implements MarketParams {
-  private static readonly _CACHE: Record<MarketId, MarketConfig> = {};
+export class MarketParams implements InputMarketParams {
+  private static readonly _CACHE: Record<MarketId, MarketParams> = {};
 
   /**
    * Returns the previously cached market config for the given id, if any.
-   * @throws {UnknownMarketConfigError} If no market config is cached.
+   * @throws {UnknownMarketParamsError} If no market config is cached.
    */
   static get(id: MarketId) {
-    const marketConfig = MarketConfig._CACHE[id];
+    const marketParams = MarketParams._CACHE[id];
 
-    if (!marketConfig) throw new UnknownMarketConfigError(id);
+    if (!marketParams) throw new UnknownMarketParamsError(id);
 
-    return marketConfig;
+    return marketParams;
   }
 
   /**
    * Returns the canonical idle market configuration for the given loan token.
    */
   static idle(token: Address) {
-    return new MarketConfig({
+    return new MarketParams({
       collateralToken: ZERO_ADDRESS,
       loanToken: token,
       oracle: ZERO_ADDRESS,
@@ -71,16 +71,14 @@ export class MarketConfig implements MarketParams {
   /**
    * The market's hex-encoded id, defined as the hash of the market params.
    */
-  // Cached because params are readonly.
-  public readonly id: MarketId;
+  public readonly id: MarketId; // Cached because params are readonly.
 
   /**
    * The market's liquidation incentive factor.
    */
-  // Cached because lltv is readonly.
-  public readonly liquidationIncentiveFactor: bigint;
+  public readonly liquidationIncentiveFactor: bigint; // Cached because lltv is readonly.
 
-  constructor(params: MarketParams) {
+  constructor(params: InputMarketParams) {
     const { collateralToken, loanToken, oracle, irm, lltv } = params;
 
     this.collateralToken = collateralToken;
@@ -93,6 +91,6 @@ export class MarketConfig implements MarketParams {
     this.liquidationIncentiveFactor =
       MarketUtils.getLiquidationIncentiveFactor(params);
 
-    MarketConfig._CACHE[this.id] = this;
+    MarketParams._CACHE[this.id] = this;
   }
 }

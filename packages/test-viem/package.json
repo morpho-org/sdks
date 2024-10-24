@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/test-viem",
   "description": "(Viem+vitest)-based package that defines utilities to spawn independent, concurrent anvil forks for each test, injecting the corresponding viem client as a test fixture.",
-  "version": "1.12.4",
+  "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",
@@ -19,7 +19,7 @@
     "build": "tsc"
   },
   "dependencies": {
-    "colors": "^1.4.0"
+    "viem-tracer": "^1.2.0"
   },
   "peerDependencies": {
     "@morpho-org/test": "workspace:^",
@@ -29,9 +29,9 @@
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
-    "@types/node": "^22.7.4",
+    "@types/node": "^22.7.8",
     "typescript": "^5.6.3",
-    "viem": "^2.21.19",
+    "viem": "^2.21.32",
     "viem-deal": "^2.0.1",
     "vitest": "^2.1.3"
   },

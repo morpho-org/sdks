@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { BlueErrors, ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import {
@@ -125,9 +125,7 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new BlueSimulationErrors.InsufficientPosition(userB, marketA1.id),
-    );
+    ).toThrow(new BlueErrors.InsufficientPosition(userB, marketA1.id));
   });
 
   test("should throw if insufficient wallet balance", () => {

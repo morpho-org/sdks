@@ -35,6 +35,7 @@ export const handleBlueBorrowOperation: OperationHandler<
   );
 
   const market = data.getMarket(id);
+  if (market.price == null) throw new BlueErrors.UnknownOraclePrice(id);
 
   if (shares === 0n)
     shares = MathLib.wMulUp(
@@ -58,13 +59,13 @@ export const handleBlueBorrowOperation: OperationHandler<
   position.borrowShares += shares;
 
   if (!market.isHealthy(position))
-    throw new BlueSimulationErrors.InsufficientCollateral(onBehalf, id);
+    throw new BlueErrors.InsufficientCollateral(onBehalf, id);
 
   handleErc20Operation(
     {
       type: "Erc20_Transfer",
       sender: morpho,
-      address: market.config.loanToken,
+      address: market.params.loanToken,
       args: {
         amount: assets,
         from: morpho,

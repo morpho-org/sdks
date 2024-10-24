@@ -172,14 +172,34 @@ format.percent.digits(1).sign().of(0.123456); // "+12.3%"
 
 The `Time` utility provides a robust way to handle and convert time units in TypeScript, making it easier to work with various time durations.
 
+- [**Period**](#period-types): Manage time periods
 - [**Time Unit Conversion**](#converting-time-units): Convert between different time units such as milliseconds, seconds, minutes, hours, days, weeks, months, and years.
 - [**Wait**](#timewait): Pause execution for a specified amount of time.
 - [**Timestamp**](#timetimestamp): Get the current Unix timestamp as a bigint.
-- [**Period**](#period-types): Manage time periods
+
+
+### Period Types
+
+The `Time` utility also provides types to define periods:
+
+- `Unit`: A type representing supported time units (`ms`, `s`, `min`, etc.).
+- `Period`: An object with `unit` and `duration` properties, defining a specific time period.
+- `PeriodLike`: A type that can either be a `Period` object or a `Unit`.
+
+You can convert a unit or a period-like object into a `Period`:
+
+```typescript
+import { Time } from "@morpho-org/morpho-ts";
+
+Time.toPeriod("h"); // { unit: 'h', duration: 1 }
+Time.toPeriod({ unit: "min", duration: 15 }); // { unit: 'min', duration: 15 }
+```
+
+---
 
 #### Converting Time Units
 
-Each time unit has a `.from` method that allows you to convert from one unit to another.
+Each time unit has a `.from` and a `.fromPeriod` method that allows you to convert from one unit to another.
 
 The following units are supported:
 
@@ -200,7 +220,8 @@ Convert 1 hour to minutes:
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
 
-const minutes = Time.h.from.min(1); // 60
+const minutes = Time.min.from.h(1); // 60
+const minutesFromPeriod = Time.min.fromPeriod("h"); // 60
 ```
 
 Convert 5 days to hours:
@@ -208,7 +229,8 @@ Convert 5 days to hours:
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
 
-const hours = Time.d.from.h(5n); // 120n
+const hours = Time.h.from.d(5n); // 120n
+const hoursFromPeriod = Time.h.fromPeriod({unit: "d", duration: 5}); // 120
 ```
 
 Convert 2 weeks to days:
@@ -216,8 +238,10 @@ Convert 2 weeks to days:
 ```typescript
 import { Time } from "@morpho-org/morpho-ts";
 
-const days = Time.w.from.d(2); // 14
+const days = Time.d.from.w(2); // 14
+const daysFromPeriod = Time.w.fromPeriod({unit: "w", duration: 2}); // 14
 ```
+
 
 ---
 
@@ -248,21 +272,3 @@ import { Time } from "@morpho-org/morpho-ts";
 Time.timestamp(); // 1692671241n
 ```
 
----
-
-### Period Types
-
-The `Time` utility also provides types to define periods:
-
-- `Unit`: A type representing supported time units (`ms`, `s`, `min`, etc.).
-- `Period`: An object with `unit` and `duration` properties, defining a specific time period.
-- `PeriodLike`: A type that can either be a `Period` object or a `Unit`.
-
-You can convert a unit or a period-like object into a `Period`:
-
-```typescript
-import { Time } from "@morpho-org/morpho-ts";
-
-Time.toPeriod("h"); // { unit: 'h', duration: 1 }
-Time.toPeriod({ unit: "min", duration: 15 }); // { unit: 'min', duration: 15 }
-```

@@ -57,14 +57,14 @@ export const handleBlueWithdrawOperation: OperationHandler<
   position.supplyShares -= shares;
 
   if (position.supplyShares < 0n)
-    throw new BlueSimulationErrors.InsufficientPosition(onBehalf, id);
+    throw new BlueErrors.InsufficientPosition(onBehalf, id);
 
   // Transfer loan.
   handleErc20Operation(
     {
       type: "Erc20_Transfer",
       sender: morpho,
-      address: market.config.loanToken,
+      address: market.params.loanToken,
       args: {
         amount: assets,
         from: morpho,

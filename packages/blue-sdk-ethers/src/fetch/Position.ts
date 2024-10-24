@@ -5,8 +5,8 @@ import {
   AccrualPosition,
   type Address,
   ChainUtils,
-  type MarketConfig,
   type MarketId,
+  type MarketParams,
   Position,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -61,7 +61,7 @@ export async function fetchAccrualPosition(
 
 export async function fetchAccrualPositionFromConfig(
   user: Address,
-  config: MarketConfig,
+  config: MarketParams,
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {

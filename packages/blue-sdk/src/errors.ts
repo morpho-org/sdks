@@ -14,7 +14,7 @@ export class UnknownTokenPriceError extends UnknownDataError {
   }
 }
 
-export class UnknownMarketConfigError extends UnknownDataError {
+export class UnknownMarketParamsError extends UnknownDataError {
   constructor(public readonly marketId: MarketId) {
     super(`unknown config for market ${marketId}`);
   }
@@ -54,6 +54,12 @@ export namespace BlueErrors {
   export class InsufficientLiquidity extends Error {
     constructor(public readonly marketId: MarketId) {
       super(`insufficient liquidity on market ${marketId}`);
+    }
+  }
+
+  export class UnknownOraclePrice extends Error {
+    constructor(public readonly marketId: MarketId) {
+      super(`unknown oracle price of market "${marketId}"`);
     }
   }
 

@@ -1,7 +1,7 @@
 import {
   type Address,
-  MarketConfig,
-  UnknownMarketConfigError,
+  MarketParams,
+  UnknownMarketParamsError,
   VaultConfig,
   getChainAddresses,
   getUnwrappedToken,
@@ -57,7 +57,7 @@ export const donate =
       abi: blueAbi,
       functionName: "supply",
       args: [
-        data.getMarket(data.getVault(vault).withdrawQueue[0]!).config,
+        { ...data.getMarket(data.getVault(vault).withdrawQueue[0]!).params },
         donation,
         0n,
         vault,
@@ -114,15 +114,15 @@ export const setupBundle = async <chain extends Chain = Chain>(
       operation.type !== "Blue_SetAuthorization"
     ) {
       try {
-        const marketConfig = MarketConfig.get(operation.args.id);
+        const marketParams = MarketParams.get(operation.args.id);
 
-        if (marketConfig.loanToken !== zeroAddress)
-          tokens.add(marketConfig.loanToken);
+        if (marketParams.loanToken !== zeroAddress)
+          tokens.add(marketParams.loanToken);
 
-        if (marketConfig.collateralToken !== zeroAddress)
-          tokens.add(marketConfig.collateralToken);
+        if (marketParams.collateralToken !== zeroAddress)
+          tokens.add(marketParams.collateralToken);
       } catch (error) {
-        if (!(error instanceof UnknownMarketConfigError)) throw error;
+        if (!(error instanceof UnknownMarketParamsError)) throw error;
       }
     }
 

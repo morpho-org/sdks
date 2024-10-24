@@ -1,4 +1,4 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
+import { BlueErrors, getChainAddresses } from "@morpho-org/blue-sdk";
 
 import { BlueSimulationErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";
@@ -31,22 +31,24 @@ export const handleBlueWithdrawCollateralOperation: OperationHandler<
   );
 
   const market = data.getMarket(id);
+  if (market.price == null) throw new BlueErrors.UnknownOraclePrice(id);
+
   const position = data.getPosition(onBehalf, id);
 
   position.collateral -= assets;
 
   if (position.collateral < 0n)
-    throw new BlueSimulationErrors.InsufficientPosition(onBehalf, id);
+    throw new BlueErrors.InsufficientPosition(onBehalf, id);
 
   if (!market.isHealthy(position))
-    throw new BlueSimulationErrors.InsufficientCollateral(onBehalf, id);
+    throw new BlueErrors.InsufficientCollateral(onBehalf, id);
 
   // Transfer collateral.
   handleErc20Operation(
     {
       type: "Erc20_Transfer",
       sender: morpho,
-      address: market.config.collateralToken,
+      address: market.params.collateralToken,
       args: {
         amount: assets,
         from: morpho,

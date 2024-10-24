@@ -3,10 +3,10 @@ import {
   AccrualVault,
   type Address,
   Market,
-  MarketConfig,
+  MarketParams,
   MathLib,
   Position,
-  TokenWithPrice,
+  Token,
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
@@ -41,14 +41,14 @@ export interface PartialBlueApiToken
   name?: BlueApiToken["name"];
 }
 
-export interface PartialBlueApiMarketConfig
+export interface PartialBlueApiMarketParams
   extends Pick<BlueApiMarket, "oracleAddress" | "irmAddress" | "lltv"> {
   collateralAsset: Maybe<Pick<BlueApiToken, "address">>;
   loanAsset: Pick<BlueApiToken, "address">;
 }
 
 export interface PartialBlueApiMarket
-  extends PartialBlueApiMarketConfig,
+  extends PartialBlueApiMarketParams,
     Pick<BlueApiMarket, "collateralPrice"> {
   state: Maybe<
     Pick<
@@ -160,21 +160,19 @@ export class BlueSdkConverter {
     return price;
   }
 
-  public getTokenWithPrice(
+  public getToken(
     dto: PartialBlueApiToken,
     ethPriceUsd?: BlueApiToken["priceUsd"],
   ) {
-    return new TokenWithPrice(
-      {
-        ...dto,
-        address: this.options.parseAddress(dto.address),
-      },
-      this.getPriceUsd(dto, ethPriceUsd),
-    );
+    return new Token({
+      ...dto,
+      address: this.options.parseAddress(dto.address),
+      price: this.getPriceUsd(dto, ethPriceUsd),
+    });
   }
 
-  public getMarketConfig(dto: PartialBlueApiMarketConfig) {
-    return new MarketConfig({
+  public getMarketParams(dto: PartialBlueApiMarketParams) {
+    return new MarketParams({
       collateralToken: this.options.parseAddress(
         dto.collateralAsset?.address ?? ZERO_ADDRESS,
       ),
@@ -188,7 +186,7 @@ export class BlueSdkConverter {
   public getMarket(dto: PartialBlueApiMarket) {
     if (dto.state == null) return null;
 
-    const config = this.getMarketConfig(dto);
+    const params = this.getMarketParams(dto);
     const fee = this.options.parseNumber(dto.state.fee, 18);
     const price = dto.collateralPrice ?? 1n;
 
@@ -201,7 +199,7 @@ export class BlueSdkConverter {
         : undefined;
 
     return new Market({
-      config,
+      params,
       totalSupplyAssets: dto.state.supplyAssets,
       totalBorrowAssets: dto.state.borrowAssets,
       totalSupplyShares: dto.state.supplyShares,
