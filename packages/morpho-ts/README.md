@@ -53,18 +53,18 @@ Each formatter can be accessed through the `format` object and provides chainabl
 The return value will retain the nullability of the input value (giving priority to `value` over `decimals` for bigints, if none is defined), unless a `.default()` method is applied (refer to [Number Formatter](#2-number-formatter) for details).
 
 > [!Tip]
-> You can store the populated `of` function in a custom formatter:
+> You can store the partially populated formatter as a custom formatter:
 >
 > ```typescript
 > import { format } from "@morpho-org/morpho-ts";
 >
-> const formatDollar = format.short
+> const dollarFormatter = format.short
 >   .digits(2)
 >   .smallValuesWithCommas()
->   .unit("$").of;
+>   .unit("$");
 >
-> formatDollar(123456.789); // "$123.45k"
-> formatDollar(123456789n, 4); // "$12.34k"
+> dollarFormatter.of(123456.789); // "$123.45k"
+> dollarFormatter.of(123456789n, 4); // "$12.34k"
 > ```
 
 ### Hex Formatter
