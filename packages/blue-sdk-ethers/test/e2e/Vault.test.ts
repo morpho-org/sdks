@@ -69,7 +69,7 @@ describe("augment/Vault", () => {
         "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49" as MarketId,
       ],
       lastTotalAssets: 26129569140552n,
-      totalAssets: 26138939802936n,
+      totalAssets: 26138940196162n,
       totalSupply: 25752992371062043744406063n,
     });
 

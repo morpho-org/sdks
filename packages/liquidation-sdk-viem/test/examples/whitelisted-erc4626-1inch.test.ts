@@ -990,8 +990,8 @@ describe("erc4626-1inch", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        7325.591825,
-        4,
+        7325.591893,
+        6,
       );
     },
   );
