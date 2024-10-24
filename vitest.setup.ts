@@ -1,4 +1,13 @@
 import { exec, execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+
+console.log(
+  readFileSync(join(homedir(), ".foundry", "cache", "signatures"), {
+    encoding: "utf8",
+  }),
+);
 
 export const setup = async () => {
   try {
