@@ -19,9 +19,12 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import {
   Flashbots,
-  type LiquidationEncoder,
+  LiquidationEncoder,
+  curvePools,
+  mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test-viem";
+import { curveStableSwapNGAbi } from "src/abis.js";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
@@ -1563,8 +1566,8 @@ describe("erc4626-1inch", () => {
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
-        fetchToken(market.config.collateralToken, client),
-        fetchToken(market.config.loanToken, client),
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
       ]);
 
       // Set up the borrower's position
@@ -1585,10 +1588,10 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supplyCollateral",
-        args: [market.config, collateral, borrower.address, "0x"],
+        args: [market.params, collateral, borrower.address, "0x"],
       });
 
-      const borrowed = market.getMaxBorrowAssets(collateral);
+      const borrowed = market.getMaxBorrowAssets(collateral)!;
       await client.deal({
         erc20: loanToken.address,
         account: borrower.address,
@@ -1604,7 +1607,7 @@ describe("erc4626-1inch", () => {
         address: morpho,
         abi: blueAbi,
         functionName: "supply",
-        args: [market.config, borrowed, 0n, borrower.address, "0x"],
+        args: [market.params, borrowed, 0n, borrower.address, "0x"],
       });
 
       await client.writeContract({
@@ -1613,8 +1616,8 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.config as Pick<
-            typeof market.config,
+          market.params as Pick<
+            typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
           borrowed,
@@ -1648,13 +1651,13 @@ describe("erc4626-1inch", () => {
                   market: {
                     uniqueKey: marketId,
                     collateralAsset: {
-                      address: market.config.collateralToken,
+                      address: market.params.collateralToken,
                       decimals: collateralToken.decimals,
                       priceUsd: newUsdsPriceUsd,
                       spotPriceEth: newUsdsPriceUsd / ethPriceUsd,
                     },
                     loanAsset: {
-                      address: market.config.loanToken,
+                      address: market.params.loanToken,
                       decimals: loanToken.decimals,
                       priceUsd: null,
                       spotPriceEth: 1 / ethPriceUsd,
@@ -1676,7 +1679,7 @@ describe("erc4626-1inch", () => {
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
 
       const usdsWithdrawalAmount = await encoder.previewUSDSWithdrawalAmount(
-        accruedPosition.seizableCollateral / 2n,
+        accruedPosition.seizableCollateral! / 2n,
       );
 
       console.log("usdsWithdrawalAmount", usdsWithdrawalAmount);
@@ -1701,7 +1704,7 @@ describe("erc4626-1inch", () => {
       const decimals = Number(loanToken.decimals);
 
       const decimalBalance = await client.readContract({
-        address: market.config.loanToken,
+        address: market.params.loanToken,
         abi: erc20Abi,
         functionName: "balanceOf",
         args: [encoder.address],
