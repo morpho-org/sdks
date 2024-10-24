@@ -1,46 +1,29 @@
-name: Build & test packages
+name: Test
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
-  cancel-in-progress: true
+  workflow_call:
+    secrets:
+      MAINNET_RPC_URL:
+        required: true
 
 jobs:
-  packages:
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - name: morpho-ts
-            jest: true
-            hardhat: false
-          - name: morpho-test
-            jest: false
-            hardhat: false
-          - name: blue-api-sdk
-            jest: false
-            hardhat: false
-          - name: blue-sdk
-            jest: true
-            hardhat: true
-          - name: blue-sdk-ethers
-            jest: true
-            hardhat: true
-          - name: blue-sdk-viem
-            jest: false
-            hardhat: true
-          - name: blue-sdk-ethers-liquidation
-            jest: false
-            hardhat: true
+  vitest:
+    runs-on: ubuntu-latest
 
-    uses: ./.github/workflows/package.yml
-    with:
-      name: ${{ matrix.package.name }}
-      jest: ${{ matrix.package.jest }}
-      hardhat: ${{ matrix.package.hardhat }}
-    secrets: inherit
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: foundry-rs/foundry-toolchain@v1.2.0
+
+      - run: pnpm install
+
+      - run: pnpm run test --coverage
+        env:
+          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}

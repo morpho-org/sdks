@@ -1,4 +1,4 @@
-import { Address, MarketId } from "./types";
+import type { Address, MarketId } from "./types.js";
 
 export class UnknownDataError extends Error {}
 
@@ -14,7 +14,7 @@ export class UnknownTokenPriceError extends UnknownDataError {
   }
 }
 
-export class UnknownMarketConfigError extends UnknownDataError {
+export class UnknownMarketParamsError extends UnknownDataError {
   constructor(public readonly marketId: MarketId) {
     super(`unknown config for market ${marketId}`);
   }
@@ -57,6 +57,12 @@ export namespace BlueErrors {
     }
   }
 
+  export class UnknownOraclePrice extends Error {
+    constructor(public readonly marketId: MarketId) {
+      super(`unknown oracle price of market "${marketId}"`);
+    }
+  }
+
   export class InsufficientPosition extends Error {
     constructor(
       public readonly user: Address,
@@ -76,19 +82,8 @@ export namespace BlueErrors {
   }
 }
 
-export class InvalidSignatureError extends Error {
-  constructor(
-    public readonly hash: string,
-    public readonly signer: Address,
-    public readonly recovered: Address,
-  ) {
-    super(
-      `invalid signature for hash ${hash}: expected ${signer}, recovered ${recovered}`,
-    );
-  }
-}
-
 export interface ErrorClass<E extends Error> {
+  // biome-ignore lint/suspicious/noExplicitAny: match any type of arg
   new (...args: any[]): E;
 }
 

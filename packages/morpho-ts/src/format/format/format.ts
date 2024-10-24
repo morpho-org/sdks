@@ -126,7 +126,10 @@ const _formatShort = (
   if (formatOptions.smallValuesWithCommas) {
     return _formatCommas(bi, decimals, formatOptions);
   }
-  return _applyOptions(stringValue.insert(-decimals, ".", "0"), formatOptions);
+  return _applyOptions(
+    decimals ? stringValue.insert(-decimals, ".", "0") : stringValue,
+    formatOptions,
+  );
 };
 
 const _formatCommas = (
@@ -147,7 +150,7 @@ const _formatCommas = (
         (formattedNumber, digit, i, arr) =>
           `${formattedNumber}${!i || (arr.length - i) % 3 ? "" : ","}${digit}`,
         "",
-      ) + (decimalPart ? "." + decimalPart : ""),
+      ) + (decimalPart ? `.${decimalPart}` : ""),
     formatOptions,
   );
 };
@@ -192,7 +195,7 @@ const _applyOptions = (
     decimalPart = decimalPart.replace(/\.?0+$/, "");
   }
 
-  value = (wholePart || "0") + (decimalPart ? "." + decimalPart : "");
+  value = (wholePart || "0") + (decimalPart ? `.${decimalPart}` : "");
 
   const { value: _value, decimalSymbol } = getEnUSNumberToLocalParts(
     value,
@@ -279,8 +282,6 @@ type FormatterWithDefault<F extends BaseFormatter> = {
 export abstract class BaseFormatter {
   protected abstract _options: FormatOptions;
 
-  constructor() {}
-
   default(_d: string) {
     this._options.default = _d;
 
@@ -314,11 +315,7 @@ export abstract class BaseFormatter {
         const newDigits =
           digits + "0".repeat(Math.max(0, numberExp - digits.length));
 
-        const strValue =
-          whole +
-          newDigits.slice(0, numberExp) +
-          "." +
-          newDigits.slice(numberExp);
+        const strValue = `${whole}${newDigits.slice(0, numberExp)}.${newDigits.slice(numberExp)}`;
 
         decimals = strValue.split(".")[1]?.length ?? 0;
         value = BigInt(strValue.replace(".", ""));

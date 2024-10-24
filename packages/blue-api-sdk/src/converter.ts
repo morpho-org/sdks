@@ -1,21 +1,21 @@
 import {
   AccrualPosition,
   AccrualVault,
-  Address,
+  type Address,
   Market,
-  MarketConfig,
+  MarketParams,
   MathLib,
   Position,
-  TokenWithPrice,
+  Token,
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
   VaultUtils,
 } from "@morpho-org/blue-sdk";
-import { Time, isDefined } from "@morpho-org/morpho-ts";
+import { Time, ZERO_ADDRESS, isDefined } from "@morpho-org/morpho-ts";
 
-import {
+import type {
   Chain as BlueApiChain,
   Market as BlueApiMarket,
   MarketPosition as BlueApiMarketPosition,
@@ -28,7 +28,7 @@ import {
   VaultAllocation as BlueApiVaultAllocation,
   VaultState as BlueApiVaultState,
   Maybe,
-} from "./types";
+} from "./types.js";
 
 export interface PartialBlueApiTokenPrice {
   priceUsd?: BlueApiToken["priceUsd"];
@@ -41,14 +41,14 @@ export interface PartialBlueApiToken
   name?: BlueApiToken["name"];
 }
 
-export interface PartialBlueApiMarketConfig
+export interface PartialBlueApiMarketParams
   extends Pick<BlueApiMarket, "oracleAddress" | "irmAddress" | "lltv"> {
   collateralAsset: Maybe<Pick<BlueApiToken, "address">>;
   loanAsset: Pick<BlueApiToken, "address">;
 }
 
 export interface PartialBlueApiMarket
-  extends PartialBlueApiMarketConfig,
+  extends PartialBlueApiMarketParams,
     Pick<BlueApiMarket, "collateralPrice"> {
   state: Maybe<
     Pick<
@@ -160,24 +160,21 @@ export class BlueSdkConverter {
     return price;
   }
 
-  public getTokenWithPrice(
+  public getToken(
     dto: PartialBlueApiToken,
     ethPriceUsd?: BlueApiToken["priceUsd"],
   ) {
-    return new TokenWithPrice(
-      {
-        ...dto,
-        address: this.options.parseAddress(dto.address),
-      },
-      this.getPriceUsd(dto, ethPriceUsd),
-    );
+    return new Token({
+      ...dto,
+      address: this.options.parseAddress(dto.address),
+      price: this.getPriceUsd(dto, ethPriceUsd),
+    });
   }
 
-  public getMarketConfig(dto: PartialBlueApiMarketConfig) {
-    return new MarketConfig({
+  public getMarketParams(dto: PartialBlueApiMarketParams) {
+    return new MarketParams({
       collateralToken: this.options.parseAddress(
-        dto.collateralAsset?.address ??
-          "0x0000000000000000000000000000000000000000",
+        dto.collateralAsset?.address ?? ZERO_ADDRESS,
       ),
       loanToken: this.options.parseAddress(dto.loanAsset.address),
       oracle: this.options.parseAddress(dto.oracleAddress),
@@ -189,7 +186,7 @@ export class BlueSdkConverter {
   public getMarket(dto: PartialBlueApiMarket) {
     if (dto.state == null) return null;
 
-    const config = this.getMarketConfig(dto);
+    const params = this.getMarketParams(dto);
     const fee = this.options.parseNumber(dto.state.fee, 18);
     const price = dto.collateralPrice ?? 1n;
 
@@ -202,7 +199,7 @@ export class BlueSdkConverter {
         : undefined;
 
     return new Market({
-      config,
+      params,
       totalSupplyAssets: dto.state.supplyAssets,
       totalBorrowAssets: dto.state.borrowAssets,
       totalSupplyShares: dto.state.supplyShares,
@@ -288,9 +285,10 @@ export class BlueSdkConverter {
         validAt: dto.pendingSupplyCapValidAt ?? 0n,
       },
       removableAt: dto.removableAt,
-      publicAllocatorConfig: flowCaps
-        ? this.getVaultMarketPublicAllocatorConfig(vault, flowCaps)
-        : undefined,
+      publicAllocatorConfig: this.getVaultMarketPublicAllocatorConfig(
+        vault,
+        flowCaps ?? { ...dto, maxIn: 0n, maxOut: 0n },
+      ),
     });
   }
 
@@ -315,18 +313,15 @@ export class BlueSdkConverter {
     return new AccrualVault(
       {
         ...state,
-        config: this.getVaultConfig(dto),
+        ...this.getVaultConfig(dto),
         fee: this.options.parseNumber(state.fee, 18),
-        pendingOwner:
-          state.pendingOwner ?? "0x0000000000000000000000000000000000000000",
+        pendingOwner: state.pendingOwner ?? ZERO_ADDRESS,
         pendingTimelock: {
           value: state.pendingTimelock ?? 0n,
           validAt: state.pendingTimelockValidAt ?? 0n,
         },
         pendingGuardian: {
-          value:
-            state.pendingGuardian ??
-            "0x0000000000000000000000000000000000000000",
+          value: state.pendingGuardian ?? ZERO_ADDRESS,
           validAt: state.pendingGuardianValidAt ?? 0n,
         },
         lastTotalAssets: state.totalAssets,

@@ -1,4 +1,5 @@
-import { MarketId } from "@morpho-org/blue-sdk";
+import type { Address } from "@morpho-org/blue-sdk";
+import type { MarketId } from "@morpho-org/blue-sdk";
 export type Maybe<T> = T | null;
 export type InputMaybe<T> = Maybe<T>;
 export type Exact<T extends { [key: string]: unknown }> = {
@@ -26,9 +27,9 @@ export type Scalars = {
   Boolean: { input: boolean; output: boolean };
   Int: { input: number; output: number };
   Float: { input: number; output: number };
-  Address: { input: string; output: string };
+  Address: { input: string; output: Address };
   BigInt: { input: string | number; output: bigint };
-  HexString: { input: string; output: string };
+  HexString: { input: string; output: `0x${string}` };
   MarketId: { input: string; output: MarketId };
 };
 
@@ -50,6 +51,8 @@ export type Asset = {
   /** Historical spot price in ETH */
   historicalSpotPriceEth: Maybe<Array<FloatDataPoint>>;
   id: Scalars["ID"]["output"];
+  /** Token logo URI, for display purpose */
+  logoURI: Maybe<Scalars["String"]["output"]>;
   name: Scalars["String"]["output"];
   /** Current oracle price in USD, for display purpose. */
   oraclePriceUsd: Maybe<Scalars["Float"]["output"]>;
@@ -752,6 +755,8 @@ export type MarketPosition = {
   healthFactor: Maybe<Scalars["Float"]["output"]>;
   id: Scalars["ID"]["output"];
   market: Market;
+  /** Price variation required for the given position to reach its liquidation threshold (scaled by WAD) */
+  priceVariationToLiquidationPrice: Maybe<Scalars["Float"]["output"]>;
   /** Amount of loan asset supplied, in underlying token units. */
   supplyAssets: Scalars["BigInt"]["output"];
   /** Amount of loan asset supplied, in USD for display purpose. */
@@ -1898,7 +1903,7 @@ export type VaultAllocator = {
 /** Vault APY aggregates */
 export type VaultApyAggregates = {
   __typename?: "VaultApyAggregates";
-  /** Average vault apy */
+  /** Average vault apy excluding rewards */
   apy: Maybe<Scalars["Float"]["output"]>;
   /** Average vault APY including rewards */
   netApy: Maybe<Scalars["Float"]["output"]>;
@@ -1907,6 +1912,8 @@ export type VaultApyAggregates = {
 export type VaultFilters = {
   /** Filter by MetaMorpho vault address */
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter out by MetaMorpho vault address */
+  address_not_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by greater than or equal to given APY. */
   apy_gte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by lower than or equal to given APY. */
@@ -1917,6 +1924,8 @@ export type VaultFilters = {
   assetId_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by asset symbol */
   assetSymbol_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by asset tags. */
+  assetTags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by chain id */
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
   countryCode?: InputMaybe<Scalars["String"]["input"]>;
@@ -1938,6 +1947,10 @@ export type VaultFilters = {
   netApy_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by MetaMorpho current owner address */
   ownerAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by lower than or equal to given public allocator fee in dollar. */
+  publicAllocatorFeeUsd_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by lower than or equal to given public allocator fee. */
+  publicAllocatorFee_lte?: InputMaybe<Scalars["Float"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by MetaMorpho vault symbol */
   symbol_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -1959,22 +1972,38 @@ export type VaultFilters = {
 /** Meta-Morpho vault history */
 export type VaultHistory = {
   __typename?: "VaultHistory";
+  /** All Time Vault APY excluding rewards */
+  allTimeApy: Maybe<Array<FloatDataPoint>>;
+  /** All Time Vault APY including rewards */
+  allTimeNetApy: Maybe<Array<FloatDataPoint>>;
   /** Vault allocation on Morpho Blue markets. */
   allocation: Maybe<Array<VaultAllocationHistory>>;
-  /** Vault APY. */
+  /** Vault APY excluding rewards. */
   apy: Maybe<Array<FloatDataPoint>>;
   /** Vault curator. */
   curator: Maybe<Array<AddressDataPoint>>;
+  /** Daily Vault APY excluding rewards */
+  dailyApy: Maybe<Array<FloatDataPoint>>;
+  /** Daily Vault APY including rewards */
+  dailyNetApy: Maybe<Array<FloatDataPoint>>;
   /** Vault performance fee. */
   fee: Maybe<Array<FloatDataPoint>>;
   /** Fee recipient. */
   feeRecipient: Maybe<Array<AddressDataPoint>>;
   /** Guardian. */
   guardian: Maybe<Array<AddressDataPoint>>;
+  /** Monthly Vault APY excluding rewards */
+  monthlyApy: Maybe<Array<FloatDataPoint>>;
+  /** Monthly Vault APY including rewards */
+  monthlyNetApy: Maybe<Array<FloatDataPoint>>;
   /** Vault APY including rewards. */
   netApy: Maybe<Array<FloatDataPoint>>;
   /** Owner. */
   owner: Maybe<Array<AddressDataPoint>>;
+  /** Quarterly Vault APY excluding rewards */
+  quarterlyApy: Maybe<Array<FloatDataPoint>>;
+  /** Quarterly Vault APY including rewards */
+  quarterlyNetApy: Maybe<Array<FloatDataPoint>>;
   /** Skim recipient. */
   skimRecipient: Maybe<Array<AddressDataPoint>>;
   /** Total value of vault holdings, in underlying token units. */
@@ -1983,6 +2012,24 @@ export type VaultHistory = {
   totalAssetsUsd: Maybe<Array<FloatDataPoint>>;
   /** Vault shares total supply. */
   totalSupply: Maybe<Array<BigIntDataPoint>>;
+  /** Weekly Vault APY excluding rewards */
+  weeklyApy: Maybe<Array<FloatDataPoint>>;
+  /** Weekly Vault APY including rewards */
+  weeklyNetApy: Maybe<Array<FloatDataPoint>>;
+  /** Yearly Vault APY excluding rewards */
+  yearlyApy: Maybe<Array<FloatDataPoint>>;
+  /** Yearly Vault APY including rewards */
+  yearlyNetApy: Maybe<Array<FloatDataPoint>>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryAllTimeApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryAllTimeNetApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
 };
 
 /** Meta-Morpho vault history */
@@ -1992,6 +2039,16 @@ export type VaultHistoryApyArgs = {
 
 /** Meta-Morpho vault history */
 export type VaultHistoryCuratorArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryDailyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryDailyNetApyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2011,12 +2068,32 @@ export type VaultHistoryGuardianArgs = {
 };
 
 /** Meta-Morpho vault history */
+export type VaultHistoryMonthlyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryMonthlyNetApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
 export type VaultHistoryNetApyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
 /** Meta-Morpho vault history */
 export type VaultHistoryOwnerArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryQuarterlyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryQuarterlyNetApyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2037,6 +2114,26 @@ export type VaultHistoryTotalAssetsUsdArgs = {
 
 /** Meta-Morpho vault history */
 export type VaultHistoryTotalSupplyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryWeeklyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryWeeklyNetApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryYearlyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistoryYearlyNetApyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2071,6 +2168,8 @@ export enum VaultOrderBy {
   Address = "Address",
   Apy = "Apy",
   Curator = "Curator",
+  DailyApy = "DailyApy",
+  DailyNetApy = "DailyNetApy",
   Fee = "Fee",
   Name = "Name",
   NetApy = "NetApy",
@@ -2184,12 +2283,20 @@ export enum VaultReallocateType {
 /** MetaMorpho vault state */
 export type VaultState = {
   __typename?: "VaultState";
+  /** All Time Vault APY excluding rewards */
+  allTimeApy: Maybe<Scalars["Float"]["output"]>;
+  /** All Time Vault APY including rewards */
+  allTimeNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Vault allocation on Morpho Blue markets. */
   allocation: Maybe<Array<VaultAllocation>>;
-  /** Vault APY. */
+  /** Vault APY excluding rewards. */
   apy: Scalars["Float"]["output"];
   /** Vault curator address. */
   curator: Scalars["Address"]["output"];
+  /** Daily Vault APY excluding rewards */
+  dailyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Daily Vault APY including rewards */
+  dailyNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Vault performance fee. */
   fee: Scalars["Float"]["output"];
   /** Fee recipient address. */
@@ -2199,6 +2306,10 @@ export type VaultState = {
   id: Scalars["ID"]["output"];
   /** Stores the total assets managed by this vault when the fee was last accrued, in underlying token units. */
   lastTotalAssets: Scalars["BigInt"]["output"];
+  /** Monthly Vault APY excluding rewards */
+  monthlyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Monthly Vault APY including rewards */
+  monthlyNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Vault APY including rewards. */
   netApy: Maybe<Scalars["Float"]["output"]>;
   /** Owner address. */
@@ -2213,6 +2324,10 @@ export type VaultState = {
   pendingTimelock: Maybe<Scalars["BigInt"]["output"]>;
   /** Pending timelock apply timestamp. */
   pendingTimelockValidAt: Maybe<Scalars["BigInt"]["output"]>;
+  /** Quarterly Vault APY excluding rewards */
+  quarterlyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Quarterly Vault APY including rewards */
+  quarterlyNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Vault state rewards */
   rewards: Maybe<Array<VaultStateReward>>;
   /** Skim recipient address. */
@@ -2227,6 +2342,14 @@ export type VaultState = {
   totalAssetsUsd: Maybe<Scalars["Float"]["output"]>;
   /** Vault shares total supply. */
   totalSupply: Scalars["BigInt"]["output"];
+  /** Weekly Vault APY excluding rewards */
+  weeklyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Weekly Vault APY including rewards */
+  weeklyNetApy: Maybe<Scalars["Float"]["output"]>;
+  /** Yearly Vault APY excluding rewards */
+  yearlyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Yearly Vault APY including rewards */
+  yearlyNetApy: Maybe<Scalars["Float"]["output"]>;
 };
 
 /** MetaMorpho vault state rewards */
