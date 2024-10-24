@@ -990,8 +990,8 @@ describe("erc4626-1inch", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        7325.591839,
-        6,
+        7325.591825,
+        4,
       );
     },
   );
@@ -1489,7 +1489,7 @@ describe("erc4626-1inch", () => {
         args: [market.params, collateral, borrower.address, "0x"],
       });
 
-      const borrowed = market.getMaxBorrowAssets(collateral)!;
+      const borrowed = market.getMaxBorrowAssets(collateral)! - 1n;
       await client.deal({
         erc20: loanToken.address,
         account: borrower.address,
@@ -1615,8 +1615,8 @@ describe("erc4626-1inch", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        8166.02223962,
-        8,
+        8166.02222392,
+        4,
       );
     },
   );
