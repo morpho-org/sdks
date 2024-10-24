@@ -242,7 +242,6 @@ export const check = async <
                     const tries: { srcAmount: bigint; srcToken: Address }[] =
                       [];
                     while (retry) {
-                      console.log("trying swap", srcToken, srcAmount);
                       const bestSwap = await fetchBestSwap({
                         chainId,
                         src: srcToken,
@@ -292,12 +291,6 @@ export const check = async <
                           const halfAmount = srcAmount / 2n;
                           const firstToken = tries[0]?.srcToken;
                           const secondToken = tries[1]?.srcToken;
-                          console.log(
-                            "trying half swap",
-                            firstToken,
-                            secondToken,
-                            halfAmount,
-                          );
 
                           // We'll retry with both tokens and half the amount
                           const firstSwap = await fetchBestSwap({
@@ -315,11 +308,6 @@ export const check = async <
                             usePermit2: false,
                           });
                           if (!firstSwap) return;
-                          console.log(
-                            "trying half swap",
-                            secondToken,
-                            halfAmount,
-                          );
 
                           const secondSwap = await fetchBestSwap({
                             chainId,

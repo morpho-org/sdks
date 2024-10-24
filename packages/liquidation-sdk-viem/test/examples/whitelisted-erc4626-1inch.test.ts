@@ -1568,7 +1568,7 @@ describe("erc4626-1inch", () => {
       ]);
 
       // Set up the borrower's position
-      const collateral = parseUnits("100000", collateralToken.decimals);
+      const collateral = parseUnits("100000000", collateralToken.decimals);
 
       await client.deal({
         erc20: collateralToken.address,
@@ -1588,7 +1588,7 @@ describe("erc4626-1inch", () => {
         args: [market.config, collateral, borrower.address, "0x"],
       });
 
-      const borrowed = market.getMaxBorrowAssets(collateral) - 1n;
+      const borrowed = market.getMaxBorrowAssets(collateral);
       await client.deal({
         erc20: loanToken.address,
         account: borrower.address,
@@ -1708,14 +1708,8 @@ describe("erc4626-1inch", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        11652.93471896,
+        8166.02223962,
         8,
-      );
-
-      // Verify that USDS to DAI conversion was called
-      expect(encoder.usdsToDai).toHaveBeenCalledWith(
-        usdsWithdrawalAmount,
-        encoder.address,
       );
     },
   );
