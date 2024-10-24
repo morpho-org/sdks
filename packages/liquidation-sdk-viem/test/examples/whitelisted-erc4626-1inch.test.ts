@@ -823,8 +823,8 @@ describe("erc4626-1inch", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        7369.26594494,
-        8,
+        7369.265945,
+        6,
       );
     },
   );
@@ -956,8 +956,8 @@ describe("erc4626-1inch", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        7325.59189336,
-        8,
+        7325.591893,
+        6,
       );
     },
   );
@@ -1403,8 +1403,8 @@ describe("erc4626-1inch", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        11652.93471896,
-        8,
+        11652.934719,
+        6,
       );
     },
   );

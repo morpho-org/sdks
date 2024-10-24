@@ -25,9 +25,12 @@ export const createViemTest = <chain extends Chain>(
     client: async ({}, use) => {
       const { rpcUrl, stop } = await spawnAnvil(parameters);
 
-      let client: AnvilTestClient<chain>;
+      const client = createAnvilTestClient(http(rpcUrl), chain);
 
-      await use((client = createAnvilTestClient(http(rpcUrl), chain)));
+      // Make block timestamp 100% predictable.
+      await client.setBlockTimestampInterval({ interval: 1 });
+
+      await use(client);
 
       await stop();
     },

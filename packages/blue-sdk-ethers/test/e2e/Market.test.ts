@@ -76,11 +76,6 @@ describe("augment/Market", () => {
       functionName: "enableIrm",
       args: [params.irm],
     });
-
-    const timestamp = (await client.timestamp()) + 3n;
-
-    await client.setNextBlockTimestamp({ timestamp });
-
     await client.writeContract({
       address: morpho,
       abi: blueAbi,
@@ -94,7 +89,7 @@ describe("augment/Market", () => {
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
       totalBorrowShares: 0n,
-      lastUpdate: BigInt(timestamp),
+      lastUpdate: await client.timestamp(),
       fee: 0n,
       price: 1160095030000000000000000000000000000n,
       rateAtTarget: undefined,
@@ -113,10 +108,6 @@ describe("augment/Market", () => {
       ...crvUsd_stkcvx2BTC,
       oracle: randomAddress(),
     });
-
-    const timestamp = (await client.timestamp()) + 3n;
-
-    await client.setNextBlockTimestamp({ timestamp });
     await client.writeContract({
       address: morpho,
       abi: blueAbi,
@@ -130,7 +121,7 @@ describe("augment/Market", () => {
       totalSupplyShares: 0n,
       totalBorrowAssets: 0n,
       totalBorrowShares: 0n,
-      lastUpdate: 1711597274n,
+      lastUpdate: 1711597272n,
       fee: 0n,
       rateAtTarget: 1268391679n,
     });
