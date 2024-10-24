@@ -98,16 +98,16 @@ describe("erc4626-1inch", () => {
           const url = new URL(uri);
           const dstToken = url.searchParams.get("dst") as Address;
 
+          const amount = await encoder.client.readContract({
+            address: dstToken,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [swapMockAddress],
+          });
           await encoder.client.deal({
             erc20: dstToken,
             account: swapMockAddress,
-            amount:
-              (await encoder.client.readContract({
-                address: dstToken,
-                abi: erc20Abi,
-                functionName: "balanceOf",
-                args: [swapMockAddress],
-              })) + BigInt(dstAmount),
+            amount: amount + BigInt(dstAmount),
           });
 
           return {
@@ -141,6 +141,55 @@ describe("erc4626-1inch", () => {
           },
         },
       )
+      .get(
+        oneInchSwapApiMatcher,
+        async (uri) => {
+          const url = new URL(uri);
+          const dstToken = url.searchParams.get("dst") as Address;
+
+          const amount = await encoder.client.readContract({
+            address: dstToken,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [swapMockAddress],
+          });
+          await encoder.client.deal({
+            erc20: dstToken,
+            account: swapMockAddress,
+            amount: amount + BigInt(dstAmount),
+          });
+
+          return {
+            dstAmount,
+            tx: {
+              from: encoder.address,
+              to: swapMockAddress,
+              data: encodeFunctionData({
+                abi: swapMock.abi,
+                functionName: "swap",
+                args: [
+                  {
+                    token: url.searchParams.get("src")! as Address,
+                    amount: BigInt(url.searchParams.get("amount")!),
+                  },
+                  {
+                    token: dstToken,
+                    amount: BigInt(dstAmount), // TODO: simulate positive & negative slippage
+                  },
+                ],
+              }),
+              value: "0",
+              gas: 0,
+              gasPrice: "0",
+            },
+          };
+        },
+        {
+          query: {
+            amount: (srcAmount / 2n).toString(),
+          },
+        },
+      )
       .mock(oneInchSwapApiMatcher, 404);
   };
 
@@ -157,16 +206,16 @@ describe("erc4626-1inch", () => {
           const srcToken = url.searchParams.get("srcToken") as Address;
           const destToken = url.searchParams.get("destToken") as Address;
 
+          const amount = await encoder.client.readContract({
+            address: destToken,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [swapMockAddress],
+          });
           await encoder.client.deal({
             erc20: destToken,
             account: swapMockAddress,
-            amount:
-              (await encoder.client.readContract({
-                address: destToken,
-                abi: erc20Abi,
-                functionName: "balanceOf",
-                args: [swapMockAddress],
-              })) + BigInt(dstAmount),
+            amount: amount + BigInt(dstAmount),
           });
 
           return {
@@ -214,22 +263,124 @@ describe("erc4626-1inch", () => {
           },
         },
       )
+      .get(
+        paraSwapPriceApiMatcher,
+        async (uri) => {
+          const url = new URL(uri);
+          const srcToken = url.searchParams.get("srcToken") as Address;
+          const destToken = url.searchParams.get("destToken") as Address;
+
+          const amount = await encoder.client.readContract({
+            address: destToken,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [swapMockAddress],
+          });
+          await encoder.client.deal({
+            erc20: destToken,
+            account: swapMockAddress,
+            amount: amount + BigInt(dstAmount),
+          });
+
+          return {
+            priceRoute: {
+              blockNumber: 12345678,
+              network: 1,
+              srcToken,
+              srcDecimals: 18,
+              srcAmount: srcAmount,
+              destToken,
+              destDecimals: 18,
+              destAmount: dstAmount,
+              bestRoute: [
+                {
+                  percent: 100,
+                  swaps: [
+                    {
+                      srcToken,
+                      srcDecimals: 18,
+                      destToken,
+                      destDecimals: 18,
+                      swapExchanges: [
+                        {
+                          exchange: "MockExchange",
+                          srcAmount: srcAmount,
+                          destAmount: dstAmount,
+                          percent: 100,
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+              gasCostUSD: "5",
+              gasCost: "100000",
+              side: "SELL",
+              tokenTransferProxy: "0x216B4B4Ba9F3e719726886d34a177484278Bfcae",
+              contractAddress: "0xDEF171Fe48CF0115B1d80b88dc8eAB59176FEe57",
+            },
+          };
+        },
+        {
+          query: {
+            amount: (srcAmount / 2n).toString(),
+          },
+        },
+      )
       .mock(paraSwapPriceApiMatcher, 404);
 
     fetchMock
       .post(paraSwapTxApiMatcher, async (_uri, body) => {
         const { srcToken, destToken } = body as BuildTxInput;
 
+        const amount = await encoder.client.readContract({
+          address: destToken as Address,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [swapMockAddress],
+        });
         await encoder.client.deal({
           erc20: destToken as Address,
           account: swapMockAddress,
-          amount:
-            (await encoder.client.readContract({
-              address: destToken as Address,
-              abi: erc20Abi,
-              functionName: "balanceOf",
-              args: [swapMockAddress],
-            })) + BigInt(dstAmount),
+          amount: amount + BigInt(dstAmount),
+        });
+
+        return {
+          from: encoder.address,
+          to: swapMockAddress,
+          value: "0",
+          data: encodeFunctionData({
+            abi: swapMock.abi,
+            functionName: "swap",
+            args: [
+              {
+                token: srcToken as Address,
+                amount: srcAmount,
+              },
+              {
+                token: destToken as Address,
+                amount: BigInt(dstAmount), // TODO: simulate positive & negative slippage
+              },
+            ],
+          }),
+          gasPrice: "0",
+          chainId: 1,
+          gas: "0",
+        };
+      })
+      .post(paraSwapTxApiMatcher, async (_uri, body) => {
+        const { srcToken, destToken } = body as BuildTxInput;
+
+        const amount = await encoder.client.readContract({
+          address: destToken as Address,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [swapMockAddress],
+        });
+        await encoder.client.deal({
+          erc20: destToken as Address,
+          account: swapMockAddress,
+          amount: amount + BigInt(dstAmount),
         });
 
         return {
@@ -1407,9 +1558,8 @@ describe("erc4626-1inch", () => {
     async ({ client, encoder }) => {
       const usdsPriceUsd = 1.0;
       const ethPriceUsd = 2_644;
-
       const marketId =
-        "0xbed21964cf290ab95fa458da6c1f302f2278aec5f897c1b1da3054553ef5e90c" as MarketId; // USDS / WETH market
+        "0xbed21964cf290ab95fa458da6c1f302f2278aec5f897c1b1da3054553ef5e90c" as MarketId; // sUSDS / WETH (86%)
 
       const market = await fetchMarket(marketId, client);
       const [collateralToken, loanToken] = await Promise.all([
@@ -1467,14 +1617,14 @@ describe("erc4626-1inch", () => {
             typeof market.config,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral) - 1n,
+          borrowed,
           0n,
           borrower.address,
           borrower.address,
         ],
       });
 
-      const newUsdsPriceUsd = usdsPriceUsd * 0.5; // 10% price drop
+      const newUsdsPriceUsd = usdsPriceUsd * 0.5; // 50% price drop
 
       // Mock API responses
       nock(BLUE_API_BASE_URL)
@@ -1529,18 +1679,22 @@ describe("erc4626-1inch", () => {
         accruedPosition.seizableCollateral / 2n,
       );
 
+      console.log("usdsWithdrawalAmount", usdsWithdrawalAmount);
+
+      console.log("usdsWithdrawalAmount / 2", usdsWithdrawalAmount / 2n);
+
       // Mock 1inch and ParaSwap responses
       // First, mock insufficient liquidity for USDS
-      mockOneInch(encoder, usdsWithdrawalAmount, "0");
-      mockParaSwap(encoder, usdsWithdrawalAmount, "0");
-
-      // Then, mock sufficient liquidity for DAI
-      const daiAmount = usdsWithdrawalAmount; // Assuming 1:1 exchange rate
-      mockOneInch(encoder, daiAmount, "11669266773005108147656");
-      mockParaSwap(encoder, daiAmount, "11669266773005108147657");
-
-      // Mock USDS to DAI conversion
-      encoder.usdsToDai = vi.fn().mockResolvedValue(daiAmount);
+      mockOneInch(
+        encoder,
+        usdsWithdrawalAmount,
+        (borrowed / 2n + 1n).toString(),
+      );
+      mockParaSwap(
+        encoder,
+        usdsWithdrawalAmount,
+        (borrowed / 2n + 1n).toString(),
+      );
 
       await check(encoder.address, client, client.account, [marketId]);
 

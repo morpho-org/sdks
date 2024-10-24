@@ -242,6 +242,7 @@ export const check = async <
                     const tries: { srcAmount: bigint; srcToken: Address }[] =
                       [];
                     while (retry) {
+                      console.log("trying swap", srcToken, srcAmount);
                       const bestSwap = await fetchBestSwap({
                         chainId,
                         src: srcToken,
@@ -256,6 +257,7 @@ export const check = async <
                         disableEstimate: true,
                         usePermit2: false,
                       });
+                      tries.push({ srcAmount, srcToken });
 
                       if (!bestSwap)
                         throw Error(
@@ -275,9 +277,8 @@ export const check = async <
                             srcToken === mainnetAddresses.sky ||
                             srcToken === mainnetAddresses.mkr) &&
                           chainId === ChainId.EthMainnet &&
-                          tries.length === 0
+                          tries.length === 1
                         ) {
-                          tries.push({ srcAmount, srcToken });
                           srcToken = Sky.getAlternativeToken(srcToken);
                           retry = true;
                         }
@@ -291,6 +292,12 @@ export const check = async <
                           const halfAmount = srcAmount / 2n;
                           const firstToken = tries[0]?.srcToken;
                           const secondToken = tries[1]?.srcToken;
+                          console.log(
+                            "trying half swap",
+                            firstToken,
+                            secondToken,
+                            halfAmount,
+                          );
 
                           // We'll retry with both tokens and half the amount
                           const firstSwap = await fetchBestSwap({
@@ -308,6 +315,11 @@ export const check = async <
                             usePermit2: false,
                           });
                           if (!firstSwap) return;
+                          console.log(
+                            "trying half swap",
+                            secondToken,
+                            halfAmount,
+                          );
 
                           const secondSwap = await fetchBestSwap({
                             chainId,
@@ -356,12 +368,11 @@ export const check = async <
                               BigInt(secondSwap.tx.value),
                               secondSwap.tx.data,
                             );
+                          retry = false;
                         } else {
                           return;
                         }
-                      }
-
-                      if (
+                      } else if (
                         Sky.isTokenPair(tries[0]?.srcToken, tries[1]?.srcToken)
                       ) {
                         const conversionFunction = Sky.getConversionFunction(
@@ -380,16 +391,17 @@ export const check = async <
                         );
 
                         encoder[conversionFunction](srcAmount, executorAddress);
+                        retry = false;
+                      } else {
+                        encoder
+                          .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
+                          .pushCall(
+                            bestSwap.tx.to,
+                            BigInt(bestSwap.tx.value),
+                            bestSwap.tx.data,
+                          );
+                        retry = false;
                       }
-
-                      encoder
-                        .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
-                        .pushCall(
-                          bestSwap.tx.to,
-                          BigInt(bestSwap.tx.value),
-                          bestSwap.tx.data,
-                        );
-                      retry = false;
                     }
                     break;
                   }
