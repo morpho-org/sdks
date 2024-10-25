@@ -2,7 +2,7 @@ import { maxUint256, parseUnits } from "viem";
 
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { markets } from "@morpho-org/morpho-test";
-import { testAccount } from "@morpho-org/test-viem";
+import { testAccount } from "@morpho-org/test";
 import { describe, expect } from "vitest";
 import { Position } from "../src/augment/Position.js";
 import { blueAbi } from "../src/index.js";

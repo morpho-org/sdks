@@ -22,7 +22,7 @@ import {
   LiquidationEncoder,
 } from "@morpho-org/liquidation-sdk-viem";
 import { curveStableSwapNGAbi } from "@morpho-org/liquidation-sdk-viem/src/abis.js";
-import { type AnvilTestClient, testAccount } from "@morpho-org/test-viem";
+import { type AnvilTestClient, testAccount } from "@morpho-org/test";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";

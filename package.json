@@ -19,7 +19,7 @@
   },
   "scripts": {
     "prepare": "husky",
-    "lint": "biome check && lint:address",
+    "lint": "biome check && $npm_execpath lint:address",
     "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
     "test": "dotenv -- vitest",
     "coverage": "vitest run --coverage"
