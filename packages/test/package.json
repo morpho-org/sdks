@@ -1,11 +1,26 @@
 {
   "name": "@morpho-org/test",
-  "description": "Viem-based package that exports utilities to build Vitest & Playwright fixtures and spawn anvil forks as child processes.",
+  "description": "Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes.",
   "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "MIT",
   "main": "src/index.ts",
   "files": ["lib"],
-  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./vitest": "./src/vitest/index.ts",
+    "./vitest/ethers": "./src/vitest/ethers.ts",
+    "./fixtures": "./src/fixtures/index.ts",
+    "./fixtures/ethers": "./src/fixtures/ethers.ts",
+    "./playwright": "./src/playwright.ts"
+  },
   "scripts": {
     "prepublish": "$npm_execpath build",
     "build": "tsc"
@@ -17,11 +32,15 @@
   },
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
+    "ethers": "^6.13.0",
     "viem": "^2.21.10",
     "vitest": "^2.1.0"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
+      "optional": true
+    },
+    "ethers": {
       "optional": true
     },
     "vitest": {
@@ -32,12 +51,40 @@
     "@playwright/test": "^1.48.1",
     "@types/lodash.kebabcase": "^4.1.9",
     "@types/node": "^22.7.8",
+    "ethers": "^6.13.4",
     "typescript": "^5.6.3",
     "viem": "^2.21.32",
-    "vitest": "^2.1.3"
+    "vitest": "^2.1.3",
+    "wagmi": "^2.12.22"
   },
   "publishConfig": {
     "main": "lib/index.js",
-    "types": "lib/index.d.ts"
+    "types": "lib/index.d.ts",
+    "exports": {
+      ".": {
+        "types": "./lib/index.d.ts",
+        "default": "./lib/index.js"
+      },
+      "./vitest": {
+        "types": "./lib/vitest/index.d.ts",
+        "default": "./lib/vitest/index.js"
+      },
+      "./vitest/ethers": {
+        "types": "./lib/vitest/ethers.d.ts",
+        "default": "./lib/vitest/ethers.js"
+      },
+      "./fixtures": {
+        "types": "./lib/fixtures/index.d.ts",
+        "default": "./lib/fixtures/index.js"
+      },
+      "./fixtures/ethers": {
+        "types": "./lib/fixtures/ethers.d.ts",
+        "default": "./lib/fixtures/ethers.js"
+      },
+      "./playwright": {
+        "types": "./lib/playwright.d.ts",
+        "default": "./lib/playwright.js"
+      }
+    }
   }
 }

@@ -10,7 +10,6 @@
     "url": "https://github.com/morpho-org/sdks/issues",
     "email": "contact@morpho.org"
   },
-  "type": "module",
   "main": "src/index.ts",
   "files": ["lib"],
   "license": "MIT",

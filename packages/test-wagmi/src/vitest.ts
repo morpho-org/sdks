@@ -1,9 +1,5 @@
-import {
-  type AnvilArgs,
-  type ViemTestContext,
-  createViemTest,
-  testAccount,
-} from "@morpho-org/test";
+import { type AnvilArgs, testAccount } from "@morpho-org/test";
+import { type ViemTestContext, createViemTest } from "@morpho-org/test/vitest";
 import { mock } from "@wagmi/core";
 import type { Chain, HttpTransport } from "viem";
 import { type Config, createConfig } from "wagmi";
@@ -16,13 +12,13 @@ export interface WagmiTestContext<chain extends Chain = Chain>
   extends ViemTestContext<chain>,
     WagmiConfigTestContext<chain> {}
 
-export const createWagmiTest = async <chain extends Chain>(
+export const createWagmiTest = <chain extends Chain>(
   chain: chain,
   parameters?: AnvilArgs,
 ) => {
-  const test = await createViemTest(chain, parameters);
-
-  return test.extend<WagmiConfigTestContext<chain>>({
+  return createViemTest(chain, parameters).extend<
+    WagmiConfigTestContext<chain>
+  >({
     config: async ({ client }, use) => {
       await use(
         createConfig({

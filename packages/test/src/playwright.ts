@@ -1,3 +1,4 @@
+import { test } from "@playwright/test";
 import { http, type Chain } from "viem";
 import { type AnvilArgs, spawnAnvil } from "./anvil";
 import { type AnvilTestClient, createAnvilTestClient } from "./client";
@@ -6,7 +7,7 @@ export interface PlaywrightTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
 }
 
-export const createPlaywrightTest = async <chain extends Chain>(
+export const createViemTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
 ) => {
@@ -18,8 +19,6 @@ export const createPlaywrightTest = async <chain extends Chain>(
 
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
-
-  const { test } = await import("@playwright/test");
 
   return test.extend<PlaywrightTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by playwright at runtime

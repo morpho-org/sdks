@@ -1,5 +1,5 @@
 import type { AnvilTestClient } from "@morpho-org/test";
-import { type ViemTestContext, createViemTest } from "@morpho-org/test";
+import { type ViemTestContext, createViemTest } from "@morpho-org/test/vitest";
 import { bytecode, executorAbi } from "executooor-viem";
 import { type Chain, mainnet } from "viem/chains";
 import { LiquidationEncoder } from "../src/index.js";
@@ -12,12 +12,10 @@ export interface LiquidationTestContext<chain extends Chain = Chain>
   extends ViemTestContext<chain>,
     LiquidationEncoderTestContext<chain> {}
 
-export const test = (
-  await createViemTest(mainnet, {
-    forkUrl: process.env.MAINNET_RPC_URL,
-    forkBlockNumber: 20_818_976,
-  })
-).extend<LiquidationEncoderTestContext<typeof mainnet>>({
+export const test = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  forkBlockNumber: 20_818_976,
+}).extend<LiquidationEncoderTestContext<typeof mainnet>>({
   encoder: async ({ client }, use) => {
     const receipt = await client.deployContractWait({
       abi: executorAbi,

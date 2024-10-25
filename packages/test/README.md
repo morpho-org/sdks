@@ -21,7 +21,7 @@
 <br />
 <br />
 
-Viem-based package that exports utilities to build Vitest & Playwright fixtures and spawn anvil forks as child processes.
+Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes.
 
 Heavily inspired by [`prool`](https://github.com/wevm/prool), but lighter & faster.
 
@@ -36,6 +36,54 @@ yarn add @morpho-org/test
 ```
 
 ## Getting Started
+
+### Vitest (viem)
+
+Export an extended vitest `test`:
+
+```typescript
+import { createViemTest } from "@morpho-org/test/vitest";
+import { mainnet } from "viem/chains";
+
+export const test = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  forkBlockNumber: 19_530_000,
+});
+```
+
+See more on its internal usage for [viem-based E2E tests here](../blue-sdk-viem/test/).
+
+### Vitest (ethers)
+
+Export an extended Vitest `test`:
+
+```typescript
+import { createEthersTest } from "@morpho-org/test/vitest/ethers";
+import { mainnet } from "viem/chains";
+
+export const test = createEthersTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  forkBlockNumber: 19_530_000,
+});
+```
+
+See more on its internal usage for [ethers-based E2E tests here](../blue-sdk-ethers/test/e2e/).
+
+### Playwright
+
+Export an extended Playwright `test`:
+
+```typescript
+import { createViemTest } from "@morpho-org/test/playwright";
+import { mainnet } from "viem/chains";
+
+export const test = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  forkBlockNumber: 19_530_000,
+});
+```
+
+### Spawn anvil instances
 
 ```typescript
 import { mainnet } from "viem/chains";

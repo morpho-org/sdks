@@ -1,7 +1,7 @@
-import { createEthersTest } from "@morpho-org/test-ethers";
+import { createEthersTest } from "@morpho-org/test/vitest/ethers";
 import { mainnet } from "viem/chains";
 
-export const test = await createEthersTest(mainnet, {
+export const test = createEthersTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 19_530_000,
 });
