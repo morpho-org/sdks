@@ -1,8 +1,9 @@
-import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import {
-  daiUsdsConverterAbi,
-  mkrSkyConverterAbi,
-} from "@morpho-org/liquidation-sdk-viem/src/abis.js";
+  type Address,
+  ChainId,
+  type MarketParams,
+  MathLib,
+} from "@morpho-org/blue-sdk";
 import { ExecutorEncoder } from "executooor-viem";
 import {
   type Account,
@@ -12,9 +13,16 @@ import {
   encodeFunctionData,
 } from "viem";
 import { readContract } from "viem/actions";
+import { daiUsdsConverterAbi, mkrSkyConverterAbi } from "./abis.js";
 import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
-import { Pendle, Usual } from "./tokens/index.js";
+import { fetchBestSwap } from "./swap/index.js";
+import { Pendle, Sky, Usual } from "./tokens/index.js";
+
+interface SwapAttempt {
+  srcAmount: bigint;
+  srcToken: Address;
+}
 
 export class LiquidationEncoder<
   client extends Client<Transport, Chain, Account> = Client<
@@ -445,5 +453,135 @@ export class LiquidationEncoder<
         args: [user, amount],
       }),
     );
+  }
+
+  public async handleTokenSwap(
+    chainId: ChainId,
+    initialSrcToken: Address,
+    initialSrcAmount: bigint,
+    marketParams: MarketParams,
+    slippage: bigint,
+    repaidAssets: bigint,
+  ) {
+    let srcToken = initialSrcToken;
+    const srcAmount = initialSrcAmount;
+    const tries: SwapAttempt[] = [];
+    let dstAmount = 0n;
+
+    while (true) {
+      const bestSwap = await fetchBestSwap({
+        chainId,
+        src: srcToken,
+        dst: marketParams.loanToken,
+        amount: srcAmount,
+        from: this.address,
+        slippage,
+        includeTokensInfo: false,
+        includeProtocols: false,
+        includeGas: false,
+        allowPartialFill: false,
+        disableEstimate: true,
+        usePermit2: false,
+      });
+
+      tries.push({ srcAmount, srcToken });
+
+      if (!bestSwap)
+        throw Error("could not fetch swap from both 1inch and paraswap");
+
+      dstAmount = BigInt(bestSwap.dstAmount);
+
+      if (dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage)) {
+        // If we don't have enough liquidity, we try to swap to the alternative token and retry
+        if (
+          Sky.isSkyToken(srcToken) &&
+          chainId === ChainId.EthMainnet &&
+          tries.length === 1
+        ) {
+          srcToken = Sky.getAlternativeToken(srcToken);
+        }
+        // If even using the alternative token we still don't have enough liquidity, we try with both tokens (and half the amount)
+        else if (Sky.isTokenPair(tries[0]?.srcToken, tries[1]?.srcToken)) {
+          const halfAmount = srcAmount / 2n;
+          const firstToken = tries[0]?.srcToken;
+          const secondToken = tries[1]?.srcToken;
+
+          // We'll retry with both tokens and half the amount
+          const firstSwap = await fetchBestSwap({
+            chainId,
+            src: firstToken!,
+            dst: marketParams.loanToken,
+            amount: halfAmount,
+            from: this.address,
+            slippage,
+            includeTokensInfo: false,
+            includeProtocols: false,
+            includeGas: false,
+            allowPartialFill: false,
+            disableEstimate: true,
+            usePermit2: false,
+          });
+          if (!firstSwap) return;
+
+          const secondSwap = await fetchBestSwap({
+            chainId,
+            src: secondToken!,
+            dst: marketParams.loanToken,
+            amount: halfAmount,
+            from: this.address,
+            slippage,
+            includeTokensInfo: false,
+            includeProtocols: false,
+            includeGas: false,
+            allowPartialFill: false,
+            disableEstimate: true,
+            usePermit2: false,
+          });
+          if (!secondSwap) return;
+
+          if (
+            BigInt(firstSwap.dstAmount) + BigInt(secondSwap.dstAmount) <
+            repaidAssets.wadMulDown(BigInt.WAD + slippage)
+          )
+            return;
+
+          this.erc20Approve(firstToken!, firstSwap.tx.to, halfAmount)
+            .pushCall(
+              firstSwap.tx.to,
+              BigInt(firstSwap.tx.value),
+              firstSwap.tx.data,
+            )
+            .erc20Approve(secondToken!, secondSwap.tx.to, halfAmount)
+            .pushCall(
+              secondSwap.tx.to,
+              BigInt(secondSwap.tx.value),
+              secondSwap.tx.data,
+            );
+
+          break;
+        } else return;
+      } else if (Sky.isTokenPair(tries[0]?.srcToken, tries[1]?.srcToken)) {
+        const conversionFunction = Sky.getConversionFunction(
+          tries[0]?.srcToken!,
+          tries[1]?.srcToken!,
+        );
+
+        this.erc20Approve(tries[0]?.srcToken!, bestSwap.tx.to, srcAmount)
+          .erc20Approve(tries[1]?.srcToken!, bestSwap.tx.to, srcAmount)
+          [conversionFunction](srcAmount, this.address);
+
+        break;
+      } else {
+        this.erc20Approve(srcToken, bestSwap.tx.to, srcAmount).pushCall(
+          bestSwap.tx.to,
+          BigInt(bestSwap.tx.value),
+          bestSwap.tx.data,
+        );
+
+        break;
+      }
+    }
+
+    return { dstAmount };
   }
 }

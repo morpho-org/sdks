@@ -20,7 +20,6 @@ import {
   LiquidationEncoder,
   Pendle,
   apiSdk,
-  handleTokenSwap,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
@@ -175,7 +174,7 @@ export const check = async <
                   collateralUnderlyingAsset ?? market.params.collateralToken;
                 let srcAmount = withdrawnAssets ?? seizedAssets;
 
-                let encoder: LiquidationEncoder<
+                const encoder: LiquidationEncoder<
                   Client<Transport, Chain, Account>
                 > = new LiquidationEncoder(executorAddress, client);
 
@@ -243,20 +242,17 @@ export const check = async <
                   }
                   // Default case, use 1inch/paraswap for other collaterals
                   default: {
-                    const result = await handleTokenSwap(
+                    const result = await encoder.handleTokenSwap(
                       chainId,
                       srcToken,
                       srcAmount,
-                      market,
-                      executorAddress,
+                      market.params,
                       slippage,
                       repaidAssets,
-                      encoder,
                     );
 
                     if (result) {
                       dstAmount = result.dstAmount;
-                      encoder = result.encoder;
                     } else {
                       return;
                     }
