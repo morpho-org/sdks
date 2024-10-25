@@ -285,7 +285,16 @@ export const MAX_TEST_PER_WORKER = 512;
 
 const basePort =
   10000 +
-  (process.__tinypool_state__ ? process.__tinypool_state__.workerId - 1 : 0) *
+  ("__tinypool_state__" in process
+    ? (
+        process.__tinypool_state__ as {
+          isChildProcess: boolean;
+          isTinypoolWorker: boolean;
+          workerData: null;
+          workerId: number;
+        }
+      ).workerId - 1
+    : 0) *
     MAX_TEST_PER_WORKER;
 
 let workerInstances = 0;
