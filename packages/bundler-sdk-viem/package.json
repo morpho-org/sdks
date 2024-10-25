@@ -32,7 +32,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/simulation-sdk-wagmi": "workspace:^",
-    "@morpho-org/test-viem": "workspace:^",
+    "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
     "@testing-library/dom": "^10.4.0",
     "@types/lodash": "^4.17.12",

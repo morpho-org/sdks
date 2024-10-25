@@ -45,7 +45,6 @@
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "@morpho-org/test-viem": "workspace:^",
     "@types/node": "^22.7.8",
     "evm-maths": "^7.0.0",
     "executooor-viem": "^1.3.3",

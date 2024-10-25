@@ -21,7 +21,7 @@
 <br />
 <br />
 
-Wagmi-based extension of [`@morpho-org/test-viem`](../test-viem/) that injects a test Wagmi config as a test fixture alongside viem's anvil client.
+Wagmi-based extension of [`@morpho-org/test`](../test/) that injects a test Wagmi config as a test fixture alongside viem's anvil client.
 
 ## Installation
 
@@ -41,7 +41,7 @@ Export an extended vitest `test`:
 import { createWagmiTest } from "@morpho-org/test-wagmi";
 import { mainnet } from "viem/chains";
 
-export const test = createWagmiTest(mainnet, {
+export const test = await createWagmiTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 19_530_000,
 });

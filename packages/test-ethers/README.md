@@ -21,7 +21,7 @@
 <br />
 <br />
 
-Ethers-based extension of [`@morpho-org/test-viem`](../test-viem/) that injects a test Ethers wallet as a test fixture alongside viem's anvil client.
+Ethers-based extension of [`@morpho-org/test`](../test/) that injects a test Ethers wallet as a test fixture alongside viem's anvil client.
 
 ## Installation
 
@@ -41,7 +41,7 @@ Export an extended vitest `test`:
 import { createEthersTest } from "@morpho-org/test-ethers";
 import { mainnet } from "viem/chains";
 
-export const test = createEthersTest(mainnet, {
+export const test = await createEthersTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 19_530_000,
 });

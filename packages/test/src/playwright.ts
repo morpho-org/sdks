@@ -1,17 +1,12 @@
-import {
-  type AnvilArgs,
-  type AnvilTestClient,
-  createAnvilTestClient,
-  spawnAnvil,
-} from "@morpho-org/test";
-import { test } from "@playwright/test";
 import { http, type Chain } from "viem";
+import { type AnvilArgs, spawnAnvil } from "./anvil.js";
+import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 
 export interface PlaywrightTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
 }
 
-export const createPlaywrightTest = <chain extends Chain>(
+export const createPlaywrightTest = async <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
 ) => {
@@ -24,10 +19,15 @@ export const createPlaywrightTest = <chain extends Chain>(
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
 
+  const { test } = await import("@playwright/test");
+
   return test.extend<PlaywrightTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by playwright at runtime
     client: async ({}, use) => {
-      const { rpcUrl, stop } = await spawnAnvil(parameters);
+      const { rpcUrl, stop } = await spawnAnvil(
+        parameters,
+        test.info().workerIndex,
+      );
 
       const client = createAnvilTestClient(http(rpcUrl), chain);
 

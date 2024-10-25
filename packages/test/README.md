@@ -21,11 +21,9 @@
 <br />
 <br />
 
-Framework-agnostic package that exports utilities to build test fixtures and spawn anvil forks as child processes.
+Viem-based package that exports utilities to build Vitest & Playwright fixtures and spawn anvil forks as child processes.
 
 Heavily inspired by [`prool`](https://github.com/wevm/prool), but lighter & faster.
-
-Internally used by [`@morpho-org/test-viem`](../test-viem/) to spawn independent, concurrent anvil forks for each test.
 
 ## Installation
 

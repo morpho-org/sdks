@@ -24,7 +24,7 @@ import {
   isErc20Operation,
   isMetaMorphoOperation,
 } from "@morpho-org/simulation-sdk";
-import { type AnvilTestClient, testAccount } from "@morpho-org/test-viem";
+import { type AnvilTestClient, testAccount } from "@morpho-org/test";
 import { type Account, type Chain, zeroAddress } from "viem";
 import { parseAccount } from "viem/accounts";
 import { expect } from "vitest";

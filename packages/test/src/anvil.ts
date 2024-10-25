@@ -281,26 +281,31 @@ function toArgs(obj: AnvilArgs) {
   });
 }
 
-export const MAX_TEST_PER_THREAD = 512;
+export const MAX_TEST_PER_WORKER = 512;
 
-let port =
-  10000 + (process.__tinypool_state__.workerId - 1) * MAX_TEST_PER_THREAD;
+const basePort =
+  10000 +
+  (process.__tinypool_state__ ? process.__tinypool_state__.workerId - 1 : 0) *
+    MAX_TEST_PER_WORKER;
+
+let workerInstances = 0;
 
 export const spawnAnvil = async (
   args: AnvilArgs,
+  index = workerInstances++,
 ): Promise<{
   rpcUrl: `http://localhost:${number}`;
   stop: () => boolean;
 }> => {
-  const instancePort = port++;
+  const port = basePort + index;
 
   let started = false;
 
   const stop = await new Promise<() => boolean>((resolve, reject) => {
-    const subprocess = spawn("anvil", toArgs({ ...args, port: instancePort }));
+    const subprocess = spawn("anvil", toArgs({ ...args, port }));
 
     subprocess.stdout.on("data", (data) => {
-      const message = `[port ${instancePort}] ${data.toString()}`;
+      const message = `[port ${port}] ${data.toString()}`;
 
       // console.debug(message);
 
@@ -311,7 +316,7 @@ export const spawnAnvil = async (
     });
 
     subprocess.stderr.on("data", (data) => {
-      const message = `[port ${instancePort}] ${data.toString()}`;
+      const message = `[port ${port}] ${data.toString()}`;
 
       if (!started) reject(message);
       else console.warn(message);
@@ -319,7 +324,7 @@ export const spawnAnvil = async (
   });
 
   return {
-    rpcUrl: `http://localhost:${instancePort}`,
+    rpcUrl: `http://localhost:${port}`,
     stop,
   };
 };

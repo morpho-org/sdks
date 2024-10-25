@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/test-ethers",
-  "description": "Ethers-based extension of `@morpho-org/test-viem` that injects a test Ethers wallet as a test fixture alongside viem's anvil client.",
+  "description": "Ethers-based extension of `@morpho-org/test` that injects a test Ethers wallet as a test fixture alongside viem's anvil client.",
   "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "type": "module",
@@ -13,14 +13,12 @@
   },
   "peerDependencies": {
     "@morpho-org/test": "workspace:^",
-    "@morpho-org/test-viem": "workspace:^",
     "ethers": "^6.13.0",
     "viem": "^2.21.10",
     "vitest": "^2.1.0"
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
-    "@morpho-org/test-viem": "workspace:^",
     "@types/node": "^22.7.8",
     "ethers": "^6.13.4",
     "typescript": "^5.6.3",

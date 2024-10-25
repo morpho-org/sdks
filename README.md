@@ -27,12 +27,10 @@
 
 ### Testing
 
-- [**`@morpho-org/test`**](./packages/test/): Framework-agnostic package that exports utilities to build test fixtures and spawn anvil forks as child processes
+- [**`@morpho-org/test`**](./packages/test/): Viem-based package that exports utilities to build Vitest & Playwright fixtures and spawn anvil forks as child processes
 
-- [**`@morpho-org/test-viem`**](./packages/test-viem/): (Viem+vitest)-based package that defines utilities to spawn independent, concurrent anvil forks for each test, injecting the corresponding viem client as a test fixture
-- [**`@morpho-org/test-ethers`**](./packages/test-ethers/): Ethers-based extension of `@morpho-org/test-viem` that injects a test Ethers wallet as a test fixture alongside viem's anvil client
-- [**`@morpho-org/test-wagmi`**](./packages/test-wagmi/): Wagmi-based extension of `@morpho-org/test-viem` that injects a test Wagmi config as a test fixture alongside viem's anvil client
-- [**`@morpho-org/test-playwright`**](./packages/test-playwright/): (Viem+Playwright)-based package that defines utilities to spawn independent, concurrent anvil forks for each test, injecting the corresponding viem client as a test fixture
+- [**`@morpho-org/test-ethers`**](./packages/test-ethers/): Ethers-based extension of `@morpho-org/test` that injects a test Ethers wallet as a test fixture alongside viem's anvil client
+- [**`@morpho-org/test-wagmi`**](./packages/test-wagmi/): Wagmi-based extension of `@morpho-org/test` that injects a test Wagmi config as a test fixture alongside viem's anvil client
 
 - [**`@morpho-org/morpho-test`**](./packages/morpho-test/): Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks
 
