@@ -411,9 +411,6 @@ describe("useSimulationState", () => {
 
     expect(data0).toBe(steps[0]);
 
-    await client.setNextBlockTimestamp({
-      timestamp: data0.block.timestamp + 1n,
-    });
     await client.approve({
       address: usdc,
       args: [morpho, amount],
@@ -432,9 +429,6 @@ describe("useSimulationState", () => {
     expect(data1).toStrictEqual(step1);
 
     await client.setBalance({ address: morpho, value: parseEther("1") });
-    await client.setNextBlockTimestamp({
-      timestamp: data1.block.timestamp + 1n,
-    });
     await client.writeContract({
       account: morpho,
       address: usdc,
