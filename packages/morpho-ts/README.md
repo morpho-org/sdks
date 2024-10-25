@@ -53,19 +53,37 @@ Each formatter can be accessed through the `format` object and provides chainabl
 The return value will retain the nullability of the input value (giving priority to `value` over `decimals` for bigints, if none is defined), unless a `.default()` method is applied (refer to [Number Formatter](#2-number-formatter) for details).
 
 > [!Tip]
-> You can store the populated `of` function in a custom formatter:
+> You can store the partially populated formatter as a custom formatter:
 >
 > ```typescript
 > import { format } from "@morpho-org/morpho-ts";
 >
-> const formatDollar = format.short
->   .digits(2)
+> const dollarFormatter = format.short
 >   .smallValuesWithCommas()
->   .unit("$").of;
+>   .unit("$");
 >
-> formatDollar(123456.789); // "$123.45k"
-> formatDollar(123456789n, 4); // "$12.34k"
+> dollarFormatter
+>   .digits(2).of(123456.789); // "$123.45k"
+> dollarFormatter
+>   .digits(4).of(123456789n, 4); // "$12.3456k"
 > ```
+
+
+#### `createOf`
+Alternatively, you can create a standalone formatting function by calling `createOf` on your populated formatter.
+
+```typescript
+import { format } from "@morpho-org/morpho-ts";
+
+const formatDollar = format.short
+  .smallValuesWithCommas()
+  .digits(2)
+  .unit("$")
+  .createOf();
+
+formatDollar(123456.789); // "$123.45k"
+formatDollar(123456789n, 4); // "$12.34k"
+```
 
 ### Hex Formatter
 
@@ -165,6 +183,29 @@ format.percent.digits(1).sign().of(0.123456); // "+12.3%"
 **Customization:**
 
 - Same as [Number Formatter](#number-formatter).
+
+---
+
+### Create custom formatters
+
+You can create a custom `format` object with default options that will be applied to all formatters created from it.
+
+```typescript
+import { createFormat } from "@morpho-org/morpho-ts";
+
+const customFormat = createFormat({
+    all: { digits: 2 }, // all formatters will format with 2 digits
+    short: { digits: 3 }, // all short formatters will format with 3 digits
+    number: { sign: true }, // all number formatters will display signed values
+    ...
+})
+
+customFormat.short.of(1234.5678); // "1234.567"
+customFormat.number.of(1234.5678); // "+1234.56"
+
+// Default options can be normally overriden
+customFormat.short.digits(1).of(1234.5678); // "1234.5"
+```
 
 ---
 

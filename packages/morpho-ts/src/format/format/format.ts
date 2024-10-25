@@ -288,6 +288,10 @@ export abstract class BaseFormatter {
     return this as FormatterWithDefault<this>;
   }
 
+  createOf() {
+    return this.of.bind({ _options: { ...this._options } });
+  }
+
   of<T extends bigint | null | undefined, D extends number | null | undefined>(
     value: T,
     decimals: D,
@@ -330,6 +334,12 @@ export abstract class BaseFormatter {
 
 export class HexFormatter extends BaseFormatter {
   protected _options: FormatHexOptions = { format: Format.hex, prefix: false };
+
+  constructor(__options: Partial<FormatHexOptions> = {}) {
+    super();
+    this._options = { ...this._options, ...__options };
+  }
+
   prefix() {
     this._options.prefix = true;
     return this;
@@ -382,14 +392,29 @@ export abstract class CommonFormatter extends BaseFormatter {
 
 export class NumberFormatter extends CommonFormatter {
   protected _options: FormatNumberOptions = { format: Format.number };
+
+  constructor(__options: Partial<FormatNumberOptions> = {}) {
+    super();
+    this._options = { ...this._options, ...__options };
+  }
 }
 
 export class CommasFormatter extends CommonFormatter {
   protected _options: FormatCommasOptions = { format: Format.commas };
+
+  constructor(__options: Partial<FormatCommasOptions> = {}) {
+    super();
+    this._options = { ...this._options, ...__options };
+  }
 }
 
 export class ShortFormatter extends CommonFormatter {
   protected _options: FormatShortOptions = { format: Format.short };
+
+  constructor(__options: Partial<FormatShortOptions> = {}) {
+    super();
+    this._options = { ...this._options, ...__options };
+  }
 
   smallValuesWithCommas() {
     this._options.smallValuesWithCommas = true;
@@ -399,37 +424,67 @@ export class ShortFormatter extends CommonFormatter {
 
 export class PercentFormatter extends CommonFormatter {
   protected _options: FormatPercentOptions = { format: Format.percent };
+
+  constructor(__options: Partial<FormatPercentOptions> = {}) {
+    super();
+    this._options = { ...this._options, ...__options };
+  }
 }
 
-export const format = {
-  /**
-   * Return the value as an integer in hex format
-   */
-  get hex() {
-    return new HexFormatter();
-  },
-  /**
-   * Return the value as a stringified number (12345.6789)
-   */
-  get number() {
-    return new NumberFormatter();
-  },
-  /**
-   * Return the value as a commas-separated stringified number (12,345.6789)
-   */
-  get commas() {
-    return new CommasFormatter();
-  },
-  /**
-   * Return the value as a shorted stringified number (12.3456789k)
-   */
-  get short() {
-    return new ShortFormatter();
-  },
-  /**
-   * Return the value as a percent based stringified number (10.00 instead of 0.1)
-   */
-  get percent() {
-    return new PercentFormatter();
-  },
-};
+export function createFormat(
+  defaultOptions: {
+    all?: Partial<Omit<BaseFormatOptions, "format">>;
+    number?: Partial<Omit<FormatNumberOptions, "format">>;
+    short?: Partial<Omit<FormatShortOptions, "format">>;
+    percent?: Partial<Omit<FormatPercentOptions, "format">>;
+    commas?: Partial<Omit<FormatCommasOptions, "format">>;
+    hex?: Partial<Omit<FormatHexOptions, "format">>;
+  } = {},
+) {
+  return {
+    /**
+     * Return the value as an integer in hex format
+     */
+    get hex() {
+      return new HexFormatter({ ...defaultOptions.all, ...defaultOptions.hex });
+    },
+    /**
+     * Return the value as a stringified number (12345.6789)
+     */
+    get number() {
+      return new NumberFormatter({
+        ...defaultOptions.all,
+        ...defaultOptions.number,
+      });
+    },
+    /**
+     * Return the value as a commas-separated stringified number (12,345.6789)
+     */
+    get commas() {
+      return new CommasFormatter({
+        ...defaultOptions.all,
+        ...defaultOptions.commas,
+      });
+    },
+    /**
+     * Return the value as a shorted stringified number (12.3456789k)
+     */
+    get short() {
+      return new ShortFormatter({
+        ...defaultOptions.all,
+        ...defaultOptions.short,
+      });
+    },
+    /**
+     * Return the value as a percent based stringified number (10.00 instead of 0.1)
+     */
+    get percent() {
+      return new PercentFormatter({
+        ...defaultOptions.all,
+        ...defaultOptions.percent,
+      });
+    },
+  };
+}
+
+export const format = createFormat();
