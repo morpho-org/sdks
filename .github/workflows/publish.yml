@@ -16,6 +16,7 @@ jobs:
           - test-viem
           - test-ethers
           - test-wagmi
+          - test-playwright
 
           - morpho-ts
           - morpho-test

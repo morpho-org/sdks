@@ -1,4 +1,5 @@
 import { checksumAddress } from "viem";
+import { mnemonicToAccount } from "viem/accounts";
 
 export const randomAddress = (chainId?: number) =>
   checksumAddress(
@@ -7,4 +8,10 @@ export const randomAddress = (chainId?: number) =>
       .map(() => Math.floor(Math.random() * 16).toString(16))
       .join("")}`,
     chainId,
+  );
+
+export const testAccount = (addressIndex?: number) =>
+  mnemonicToAccount(
+    "test test test test test test test test test test test junk",
+    { addressIndex },
   );

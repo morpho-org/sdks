@@ -4,14 +4,14 @@ import {
   createAnvilTestClient,
   spawnAnvil,
 } from "@morpho-org/test";
+import { test } from "@playwright/test";
 import { http, type Chain } from "viem";
-import { test } from "vitest";
 
-export interface ViemTestContext<chain extends Chain = Chain> {
+export interface PlaywrightTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
 }
 
-export const createViemTest = <chain extends Chain>(
+export const createPlaywrightTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
 ) => {
@@ -24,8 +24,8 @@ export const createViemTest = <chain extends Chain>(
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
 
-  return test.extend<ViemTestContext<chain>>({
-    // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
+  return test.extend<PlaywrightTestContext<chain>>({
+    // biome-ignore lint/correctness/noEmptyPattern: required by playwright at runtime
     client: async ({}, use) => {
       const { rpcUrl, stop } = await spawnAnvil(parameters);
 
