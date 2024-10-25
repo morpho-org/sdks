@@ -19,15 +19,15 @@ import {
   Flashbots,
   LiquidationEncoder,
   Pendle,
-  Sky,
   apiSdk,
-  fetchBestSwap,
+  handleTokenSwap,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import {
   type Account,
   type Chain,
+  type Client,
   type LocalAccount,
   type Transport,
   type WalletClient,
@@ -175,7 +175,9 @@ export const check = async <
                   collateralUnderlyingAsset ?? market.params.collateralToken;
                 let srcAmount = withdrawnAssets ?? seizedAssets;
 
-                const encoder = new LiquidationEncoder(executorAddress, client);
+                let encoder: LiquidationEncoder<
+                  Client<Transport, Chain, Account>
+                > = new LiquidationEncoder(executorAddress, client);
 
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
@@ -241,160 +243,23 @@ export const check = async <
                   }
                   // Default case, use 1inch/paraswap for other collaterals
                   default: {
-                    let retry = true;
-                    const tries: { srcAmount: bigint; srcToken: Address }[] =
-                      [];
-                    while (retry) {
-                      const bestSwap = await fetchBestSwap({
-                        chainId,
-                        src: srcToken,
-                        dst: market.params.loanToken,
-                        amount: srcAmount,
-                        from: executorAddress,
-                        slippage,
-                        includeTokensInfo: false,
-                        includeProtocols: false,
-                        includeGas: false,
-                        allowPartialFill: false,
-                        disableEstimate: true,
-                        usePermit2: false,
-                      });
-                      tries.push({ srcAmount, srcToken });
+                    const result = await handleTokenSwap(
+                      chainId,
+                      srcToken,
+                      srcAmount,
+                      market,
+                      executorAddress,
+                      slippage,
+                      repaidAssets,
+                      encoder,
+                    );
 
-                      if (!bestSwap)
-                        throw Error(
-                          "could not fetch swap from both 1inch and paraswap",
-                        );
-
-                      dstAmount = BigInt(bestSwap.dstAmount);
-
-                      if (
-                        dstAmount <
-                        repaidAssets.wadMulDown(BigInt.WAD + slippage)
-                      ) {
-                        // If we don't have enough liquidity, we try to swap to the alternative token and retry
-                        if (
-                          (srcToken === mainnetAddresses.usds ||
-                            srcToken === mainnetAddresses.dai ||
-                            srcToken === mainnetAddresses.sky ||
-                            srcToken === mainnetAddresses.mkr) &&
-                          chainId === ChainId.EthMainnet &&
-                          tries.length === 1
-                        ) {
-                          srcToken = Sky.getAlternativeToken(srcToken);
-                          retry = true;
-                        }
-                        // If even using the alternative token we still don't have enough liquidity, we try with both tokens (and half the amount)
-                        else if (
-                          Sky.isTokenPair(
-                            tries[0]?.srcToken,
-                            tries[1]?.srcToken,
-                          )
-                        ) {
-                          const halfAmount = srcAmount / 2n;
-                          const firstToken = tries[0]?.srcToken;
-                          const secondToken = tries[1]?.srcToken;
-
-                          // We'll retry with both tokens and half the amount
-                          const firstSwap = await fetchBestSwap({
-                            chainId,
-                            src: firstToken!,
-                            dst: market.params.loanToken,
-                            amount: halfAmount,
-                            from: executorAddress,
-                            slippage,
-                            includeTokensInfo: false,
-                            includeProtocols: false,
-                            includeGas: false,
-                            allowPartialFill: false,
-                            disableEstimate: true,
-                            usePermit2: false,
-                          });
-                          if (!firstSwap) return;
-
-                          const secondSwap = await fetchBestSwap({
-                            chainId,
-                            src: secondToken!,
-                            dst: market.params.loanToken,
-                            amount: halfAmount,
-                            from: executorAddress,
-                            slippage,
-                            includeTokensInfo: false,
-                            includeProtocols: false,
-                            includeGas: false,
-                            allowPartialFill: false,
-                            disableEstimate: true,
-                            usePermit2: false,
-                          });
-                          if (!secondSwap) return;
-
-                          if (
-                            BigInt(firstSwap.dstAmount) +
-                              BigInt(secondSwap.dstAmount) <
-                            repaidAssets.wadMulDown(BigInt.WAD + slippage)
-                          ) {
-                            return;
-                          }
-
-                          encoder
-                            .erc20Approve(
-                              firstToken!,
-                              firstSwap.tx.to,
-                              halfAmount,
-                            )
-                            .pushCall(
-                              firstSwap.tx.to,
-                              BigInt(firstSwap.tx.value),
-                              firstSwap.tx.data,
-                            );
-
-                          encoder
-                            .erc20Approve(
-                              secondToken!,
-                              secondSwap.tx.to,
-                              halfAmount,
-                            )
-                            .pushCall(
-                              secondSwap.tx.to,
-                              BigInt(secondSwap.tx.value),
-                              secondSwap.tx.data,
-                            );
-                          retry = false;
-                        } else {
-                          return;
-                        }
-                      } else if (
-                        Sky.isTokenPair(tries[0]?.srcToken, tries[1]?.srcToken)
-                      ) {
-                        const conversionFunction = Sky.getConversionFunction(
-                          tries[0]?.srcToken!,
-                          tries[1]?.srcToken!,
-                        );
-                        encoder.erc20Approve(
-                          tries[0]?.srcToken!,
-                          bestSwap.tx.to,
-                          srcAmount,
-                        );
-                        encoder.erc20Approve(
-                          tries[1]?.srcToken!,
-                          bestSwap.tx.to,
-                          srcAmount,
-                        );
-
-                        encoder[conversionFunction](srcAmount, executorAddress);
-                        retry = false;
-                      } else {
-                        encoder
-                          .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
-                          .pushCall(
-                            bestSwap.tx.to,
-                            BigInt(bestSwap.tx.value),
-                            bestSwap.tx.data,
-                          );
-                        retry = false;
-                      }
+                    if (result) {
+                      dstAmount = result.dstAmount;
+                      encoder = result.encoder;
+                    } else {
+                      return;
                     }
-                    break;
                   }
                 }
 

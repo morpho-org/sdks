@@ -15,7 +15,6 @@ import { readContract } from "viem/actions";
 import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { Pendle, Usual } from "./tokens/index.js";
-import { Sky } from "./tokens/sky.js";
 
 export class LiquidationEncoder<
   client extends Client<Transport, Chain, Account> = Client<
@@ -402,7 +401,7 @@ export class LiquidationEncoder<
 
   public mkrToSky(amount: bigint, user: Address) {
     this.pushCall(
-      Sky.MKR_SKY_CONVERTER,
+      mainnetAddresses.mkrSkyConverter!,
       0n,
       encodeFunctionData({
         abi: mkrSkyConverterAbi,
@@ -414,7 +413,7 @@ export class LiquidationEncoder<
 
   public skyToMkr(amount: bigint, user: Address) {
     this.pushCall(
-      Sky.MKR_SKY_CONVERTER,
+      mainnetAddresses.mkrSkyConverter!,
       0n,
       encodeFunctionData({
         abi: mkrSkyConverterAbi,
@@ -426,7 +425,7 @@ export class LiquidationEncoder<
 
   public daiToUsds(amount: bigint, user: Address) {
     this.pushCall(
-      Sky.DAI_USDS_CONVERTER,
+      mainnetAddresses.daiUsdsConverter!,
       0n,
       encodeFunctionData({
         abi: daiUsdsConverterAbi,
@@ -438,7 +437,7 @@ export class LiquidationEncoder<
 
   public usdsToDai(amount: bigint, user: Address) {
     this.pushCall(
-      Sky.DAI_USDS_CONVERTER,
+      mainnetAddresses.daiUsdsConverter!,
       0n,
       encodeFunctionData({
         abi: daiUsdsConverterAbi,

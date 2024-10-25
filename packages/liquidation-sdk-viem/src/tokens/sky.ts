@@ -2,10 +2,6 @@ import { mainnetAddresses } from "@morpho-org/liquidation-sdk-viem";
 import type { Address } from "viem";
 
 export namespace Sky {
-  export const MKR_SKY_CONVERTER = "0xBDcFCA946b6CDd965f99a839e4435Bcdc1bc470B";
-  export const DAI_USDS_CONVERTER =
-    "0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A";
-
   export type ConversionFunction =
     | "usdsToDai"
     | "daiToUsds"
@@ -38,6 +34,15 @@ export namespace Sky {
       (token1 === mainnetAddresses.sky && token2 === mainnetAddresses.mkr) ||
       (token1 === mainnetAddresses.mkr && token2 === mainnetAddresses.sky)
     );
+  }
+
+  export function isSkyToken(token: Address): boolean {
+    return [
+      mainnetAddresses.mkr,
+      mainnetAddresses.sky,
+      mainnetAddresses.usds,
+      mainnetAddresses.dai,
+    ].includes(token);
   }
 
   export function getConversionFunction(
