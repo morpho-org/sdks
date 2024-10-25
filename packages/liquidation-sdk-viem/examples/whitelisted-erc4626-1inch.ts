@@ -26,7 +26,6 @@ import { Time } from "@morpho-org/morpho-ts";
 import {
   type Account,
   type Chain,
-  type Client,
   type LocalAccount,
   type Transport,
   type WalletClient,
