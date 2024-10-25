@@ -99,9 +99,6 @@ importers:
       viem:
         specifier: ^2.21.32
         version: 2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
-      viem-deal:
-        specifier: ^2.0.1
-        version: 2.0.1(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
       vitest:
         specifier: ^2.1.3
         version: 2.1.3(@types/node@22.7.8)(happy-dom@15.7.4)(terser@5.36.0)
@@ -503,6 +500,12 @@ importers:
       lodash.kebabcase:
         specifier: ^4.1.1
         version: 4.1.1
+      viem-deal:
+        specifier: ^2.0.2
+        version: 2.0.3(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
+      viem-tracer:
+        specifier: ^1.3.2
+        version: 1.3.2(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
     devDependencies:
       '@playwright/test':
         specifier: ^1.48.1
@@ -519,12 +522,6 @@ importers:
       viem:
         specifier: ^2.21.32
         version: 2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
-      viem-deal:
-        specifier: ^2.0.1
-        version: 2.0.1(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
-      viem-tracer:
-        specifier: ^1.3.1
-        version: 1.3.1(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
       vitest:
         specifier: ^2.1.3
         version: 2.1.3(@types/node@22.7.8)(happy-dom@15.7.4)(terser@5.36.0)
@@ -6432,13 +6429,13 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
-  viem-deal@2.0.1:
-    resolution: {integrity: sha512-oNiCD28q3PguviZuh1YLd/h+3mHuhK8l822d5uT0dBzHtF7odaKhotNd78pAogPG8QAOFdrMeualYpWqcSOxfw==}
+  viem-deal@2.0.3:
+    resolution: {integrity: sha512-u913WiX6AaPbxYuJu9qkPuN6zTnTmbY0WZUEHXZFQzs3ZUc+6OeenXzc8xLmOYX4+wHBhMv/u09DItXrm6Cvcw==}
     peerDependencies:
       viem: ^2.21.18
 
-  viem-tracer@1.3.1:
-    resolution: {integrity: sha512-KvvpUwi8ieKqnhGBHfjjiZ4DpC+P4b2xZodN7ee0UeRuO8fGegHlpl1yR9JEslTGINEPP/i3XmClaMXBq8m7kw==}
+  viem-tracer@1.3.2:
+    resolution: {integrity: sha512-TFRe1m9+VDf3IVxjvV16QpD6FpQqnfDaJKRZTHVp8hKsu2npNsJBDekhXLiY945pIriCME6UA3r553fu/3VChg==}
     peerDependencies:
       viem: ^2.21.0
 
@@ -13965,11 +13962,11 @@ snapshots:
 
   vary@1.1.2: {}
 
-  viem-deal@2.0.1(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)):
+  viem-deal@2.0.3(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)):
     dependencies:
       viem: 2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
 
-  viem-tracer@1.3.1(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)):
+  viem-tracer@1.3.2(viem@2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)):
     dependencies:
       colors: 1.4.0
       viem: 2.21.32(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)

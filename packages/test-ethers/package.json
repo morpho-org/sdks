@@ -3,7 +3,6 @@
   "description": "Ethers-based extension of `@morpho-org/test` that injects a test Ethers wallet as a test fixture alongside viem's anvil client.",
   "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "type": "module",
   "main": "src/index.ts",
   "files": ["lib"],
   "license": "MIT",
@@ -27,12 +26,6 @@
   },
   "publishConfig": {
     "main": "lib/index.js",
-    "types": "lib/index.d.ts",
-    "exports": {
-      ".": {
-        "types": "./lib/index.d.ts",
-        "default": "./lib/index.js"
-      }
-    }
+    "types": "lib/index.d.ts"
   }
 }

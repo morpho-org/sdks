@@ -1,6 +1,6 @@
 import { http, type Chain } from "viem";
-import { type AnvilArgs, spawnAnvil } from "./anvil.js";
-import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
+import { type AnvilArgs, spawnAnvil } from "./anvil";
+import { type AnvilTestClient, createAnvilTestClient } from "./client";
 
 export interface PlaywrightTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
