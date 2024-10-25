@@ -174,9 +174,7 @@ export const check = async <
                   collateralUnderlyingAsset ?? market.params.collateralToken;
                 let srcAmount = withdrawnAssets ?? seizedAssets;
 
-                const encoder: LiquidationEncoder<
-                  Client<Transport, Chain, Account>
-                > = new LiquidationEncoder(executorAddress, client);
+                const encoder = new LiquidationEncoder(executorAddress, client);
 
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
