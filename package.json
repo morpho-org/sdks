@@ -19,7 +19,8 @@
   },
   "scripts": {
     "prepare": "husky",
-    "lint": "biome check",
+    "lint": "biome check && lint:address",
+    "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
     "test": "dotenv -- vitest",
     "coverage": "vitest run --coverage"
   },
@@ -38,11 +39,13 @@
     "lint-staged": "^15.2.10",
     "semver": "^7.6.3",
     "typescript": "^5.6.3",
+    "viem": "^2.21.32",
     "vitest": "^2.1.3"
   },
   "lint-staged": {
     "*.json": "biome check --write --no-errors-on-unmatched",
-    "*.ts*": "biome check --write --no-errors-on-unmatched"
+    "*.ts*": "biome check --write --no-errors-on-unmatched && lint:address",
+    "*.js*": "biome check --write --no-errors-on-unmatched && lint:address"
   },
   "commitlint": {
     "extends": ["@commitlint/config-conventional"]

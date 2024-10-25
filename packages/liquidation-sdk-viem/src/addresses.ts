@@ -42,6 +42,6 @@ mainnetAddresses.sUsds = "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD";
 mainnetAddresses.usds = "0xdC035D45d973E3EC169d2276DDab16f1e407384F";
 
 export const curvePools = {
-  "usd0usd0++": "0x1d08e7adc263cfc70b1babe6dc5bb339c16eec52",
-  usd0usdc: "0x14100f81e33c33ecc7cdac70181fb45b6e78569f",
+  "usd0usd0++": "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52",
+  usd0usdc: "0x14100f81e33C33Ecc7CDac70181Fb45B6E78569F",
 } as const;
