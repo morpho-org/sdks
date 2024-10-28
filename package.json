@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.8.3",
-    "@lerna-lite/cli": "3.9.1",
+    "@lerna-lite/cli": "3.10.0",
     "@lerna-lite/publish": "3.9.2",
     "@lerna-lite/version": "^3.7.1",
     "husky": "^9.0.11",
