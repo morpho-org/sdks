@@ -3,13 +3,10 @@
   "files": {
     "ignore": [
       "lib",
-      "dist",
-      ".pnp.*",
       ".vscode",
       "cache",
       "coverage",
       "artifacts",
-      "packages/blue-sdk-viem-bundler/tests/",
       "packages/liquidation-sdk-viem/src/api/sdk.ts"
     ]
   },

@@ -1,9 +1,5 @@
-import type { AnvilArgs } from "@morpho-org/test";
-import {
-  type ViemTestContext,
-  createViemTest,
-  testAccount,
-} from "@morpho-org/test-viem";
+import { type AnvilArgs, testAccount } from "@morpho-org/test";
+import { type ViemTestContext, createViemTest } from "@morpho-org/test/vitest";
 import { mock } from "@wagmi/core";
 import type { Chain, HttpTransport } from "viem";
 import { type Config, createConfig } from "wagmi";

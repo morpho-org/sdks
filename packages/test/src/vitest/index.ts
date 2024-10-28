@@ -1,7 +1,14 @@
-import { type AnvilArgs, spawnAnvil } from "@morpho-org/test";
 import { http, type Chain } from "viem";
 import { test } from "vitest";
-import { type AnvilTestClient, createAnvilTestClient } from "./anvil.js";
+import { type AnvilArgs, spawnAnvil } from "../anvil";
+import { type AnvilTestClient, createAnvilTestClient } from "../client";
+
+// Vitest needs to serialize BigInts to JSON, so we need to add a toJSON method to BigInt.prototype.
+// https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt#use_within_json
+// @ts-ignore
+BigInt.prototype.toJSON = function () {
+  return this.toString();
+};
 
 export interface ViemTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
@@ -21,7 +28,7 @@ export const createViemTest = <chain extends Chain>(
   parameters.blockBaseFeePerGas ??= 0n;
 
   return test.extend<ViemTestContext<chain>>({
-    // biome-ignore lint/correctness/noEmptyPattern: require by vitest at runtime
+    // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
     client: async ({}, use) => {
       const { rpcUrl, stop } = await spawnAnvil(parameters);
 
@@ -36,3 +43,17 @@ export const createViemTest = <chain extends Chain>(
     },
   });
 };
+
+// TODO: if uncommented, TS loads the global augmentation everywhere, even when the file is not imported...
+// declare global {
+//   namespace NodeJS {
+//     interface Process {
+//       __tinypool_state__: {
+//         isChildProcess: boolean;
+//         isTinypoolWorker: boolean;
+//         workerData: null;
+//         workerId: number;
+//       };
+//     }
+//   }
+// }

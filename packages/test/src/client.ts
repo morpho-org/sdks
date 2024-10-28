@@ -33,7 +33,7 @@ import {
   writeContract as viem_writeContract,
 } from "viem/actions";
 import type { Chain } from "viem/chains";
-import { testAccount } from "./fixtures.js";
+import { testAccount } from "./fixtures";
 
 export type AnvilTestClient<chain extends Chain = Chain> = Client<
   TracedTransport<HttpTransport>,

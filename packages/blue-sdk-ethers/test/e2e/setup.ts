@@ -1,4 +1,4 @@
-import { createEthersTest } from "@morpho-org/test-ethers";
+import { createEthersTest } from "@morpho-org/test/vitest/ethers";
 import { mainnet } from "viem/chains";
 
 export const test = createEthersTest(mainnet, {

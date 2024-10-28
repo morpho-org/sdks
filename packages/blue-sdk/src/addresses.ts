@@ -18,7 +18,7 @@ export const addresses = {
     aaveV2Bundler: "0xb3dCc75DB379925edFd3007511A8CE0cB4aa8e76",
     aaveV3Bundler: "0x98ccB155E86bb478d514a827d16f58c6912f9BDC",
     compoundV3Bundler: "0x3a0e2E9FB9c95fBc843daF166276C90B6C479558",
-    compoundV2Bundler: "0x26bf52a84360ad3d01d7cdc28fc2ddc04d8c8647",
+    compoundV2Bundler: "0x26bF52a84360Ad3d01d7CDc28FC2dDC04d8c8647",
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
     metaMorphoFactory: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",

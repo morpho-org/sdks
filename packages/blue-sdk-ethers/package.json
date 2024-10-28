@@ -19,7 +19,6 @@
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "@morpho-org/test-ethers": "workspace:^",
     "@types/node": "^22.7.8",
     "ethers": "^6.13.4",
     "ethers-types": "^3.17.2",
@@ -35,12 +34,6 @@
   },
   "publishConfig": {
     "main": "lib/index.js",
-    "types": "lib/index.d.ts",
-    "exports": {
-      ".": {
-        "types": "./lib/index.d.ts",
-        "default": "./lib/index.js"
-      }
-    }
+    "types": "lib/index.d.ts"
   }
 }

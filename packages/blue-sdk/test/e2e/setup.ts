@@ -1,4 +1,4 @@
-import { createViemTest } from "@morpho-org/test-viem";
+import { createViemTest } from "@morpho-org/test/vitest";
 import { mainnet } from "viem/chains";
 
 export const test = createViemTest(mainnet, {

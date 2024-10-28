@@ -24,7 +24,7 @@ import {
   curveStableSwapNGAbi,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
-import { type AnvilTestClient, testAccount } from "@morpho-org/test-viem";
+import { type AnvilTestClient, testAccount } from "@morpho-org/test";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";

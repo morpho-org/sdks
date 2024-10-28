@@ -1,3 +1,3 @@
-export * from "./fixtures.js";
-export * from "./vitest.js";
-export * from "./anvil.js";
+export * from "./client";
+export * from "./fixtures";
+export * from "./anvil";

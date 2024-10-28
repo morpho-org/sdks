@@ -13,8 +13,6 @@ jobs:
       matrix:
         package:
           - test
-          - test-viem
-          - test-ethers
           - test-wagmi
 
           - morpho-ts
