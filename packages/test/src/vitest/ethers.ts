@@ -1,8 +1,8 @@
 import type { AnvilArgs } from "@morpho-org/test";
 import { type HDNodeWallet, JsonRpcProvider } from "ethers";
 import type { Chain } from "viem";
-import { type ViemTestContext, createViemTest } from ".";
 import { testWallet } from "../fixtures/ethers";
+import { type ViemTestContext, createViemTest } from "./index";
 
 export interface EthersWalletTestContext {
   wallet: HDNodeWallet & { provider: JsonRpcProvider };

@@ -43,17 +43,3 @@ export const createViemTest = <chain extends Chain>(
     },
   });
 };
-
-// TODO: if uncommented, TS loads the global augmentation everywhere, even when the file is not imported...
-// declare global {
-//   namespace NodeJS {
-//     interface Process {
-//       __tinypool_state__: {
-//         isChildProcess: boolean;
-//         isTinypoolWorker: boolean;
-//         workerData: null;
-//         workerId: number;
-//       };
-//     }
-//   }
-// }
