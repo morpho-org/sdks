@@ -20,7 +20,6 @@ import {
   LiquidationEncoder,
   Pendle,
   apiSdk,
-  fetchBestSwap,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
@@ -240,42 +239,20 @@ export const check = async <
                   }
                   // Default case, use 1inch/paraswap for other collaterals
                   default: {
-                    const bestSwap = await fetchBestSwap({
+                    const result = await encoder.handleTokenSwap(
                       chainId,
-                      src: srcToken,
-                      dst: market.params.loanToken,
-                      amount: srcAmount,
-                      from: executorAddress,
+                      srcToken,
+                      srcAmount,
+                      market.params,
                       slippage,
-                      includeTokensInfo: false,
-                      includeProtocols: false,
-                      includeGas: false,
-                      allowPartialFill: false,
-                      disableEstimate: true,
-                      usePermit2: false,
-                    });
+                      repaidAssets,
+                    );
 
-                    if (!bestSwap)
-                      throw Error(
-                        "could not fetch swap from both 1inch and paraswap",
-                      );
-
-                    dstAmount = BigInt(bestSwap.dstAmount);
-
-                    if (
-                      dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage)
-                    )
+                    if (result) {
+                      dstAmount = result.dstAmount;
+                    } else {
                       return;
-
-                    encoder
-                      .erc20Approve(srcToken, bestSwap.tx.to, srcAmount)
-                      .pushCall(
-                        bestSwap.tx.to,
-                        BigInt(bestSwap.tx.value),
-                        bestSwap.tx.data,
-                      );
-
-                    break;
+                    }
                   }
                 }
 

@@ -20,24 +20,25 @@ import {
 import {
   Flashbots,
   LiquidationEncoder,
+  curvePools,
+  curveStableSwapNGAbi,
+  mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
-import { curveStableSwapNGAbi } from "@morpho-org/liquidation-sdk-viem/src/abis.js";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelisted-erc4626-1inch.js";
-import {
-  OneInch,
-  Paraswap,
-  Pendle,
-  curvePools,
-  mainnetAddresses,
-} from "../../src/index.js";
+import { OneInch, Paraswap, Pendle } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import pendleMarketData from "../pendleMockData/pendleMarketData.json";
 import pendleTokens from "../pendleMockData/pendleTokens.json";
 import { type LiquidationTestContext, test } from "../setup.js";
+
+interface SwapAmountConfig {
+  srcAmount: bigint;
+  dstAmount: string;
+}
 
 fetchMock.config.fallbackToNetwork = true;
 fetchMock.config.overwriteRoutes = false;
@@ -95,30 +96,31 @@ describe("erc4626-1inch", () => {
 
   const mockOneInch = (
     encoder: LiquidationEncoder<AnvilTestClient>,
-    srcAmount: bigint,
-    dstAmount: string,
+    configs: SwapAmountConfig[],
   ) => {
-    fetchMock
-      .get(
+    let chain = fetchMock;
+
+    for (const config of configs) {
+      chain = chain.get(
         oneInchSwapApiMatcher,
         async (uri) => {
           const url = new URL(uri);
           const dstToken = url.searchParams.get("dst") as Address;
 
+          const amount = await encoder.client.readContract({
+            address: dstToken,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [swapMockAddress],
+          });
           await encoder.client.deal({
             erc20: dstToken,
             account: swapMockAddress,
-            amount:
-              (await encoder.client.readContract({
-                address: dstToken,
-                abi: erc20Abi,
-                functionName: "balanceOf",
-                args: [swapMockAddress],
-              })) + BigInt(dstAmount),
+            amount: amount + BigInt(config.dstAmount),
           });
 
           return {
-            dstAmount,
+            dstAmount: config.dstAmount,
             tx: {
               from: encoder.address,
               to: swapMockAddress,
@@ -132,7 +134,7 @@ describe("erc4626-1inch", () => {
                   },
                   {
                     token: dstToken,
-                    amount: BigInt(dstAmount), // TODO: simulate positive & negative slippage
+                    amount: BigInt(config.dstAmount),
                   },
                 ],
               }),
@@ -144,36 +146,40 @@ describe("erc4626-1inch", () => {
         },
         {
           query: {
-            amount: srcAmount.toString(),
+            amount: config.srcAmount.toString(),
           },
         },
-      )
-      .mock(oneInchSwapApiMatcher, 404);
+      );
+    }
+
+    chain.mock(oneInchSwapApiMatcher, 404);
   };
 
   const mockParaSwap = (
     encoder: LiquidationEncoder<AnvilTestClient>,
-    srcAmount: bigint,
-    dstAmount: string,
+    configs: SwapAmountConfig[],
   ) => {
-    fetchMock
-      .get(
+    let priceChain = fetchMock;
+    let txChain = fetchMock;
+
+    for (const config of configs) {
+      priceChain = priceChain.get(
         paraSwapPriceApiMatcher,
         async (uri) => {
           const url = new URL(uri);
           const srcToken = url.searchParams.get("srcToken") as Address;
           const destToken = url.searchParams.get("destToken") as Address;
 
+          const amount = await encoder.client.readContract({
+            address: destToken,
+            abi: erc20Abi,
+            functionName: "balanceOf",
+            args: [swapMockAddress],
+          });
           await encoder.client.deal({
             erc20: destToken,
             account: swapMockAddress,
-            amount:
-              (await encoder.client.readContract({
-                address: destToken,
-                abi: erc20Abi,
-                functionName: "balanceOf",
-                args: [swapMockAddress],
-              })) + BigInt(dstAmount),
+            amount: amount + BigInt(config.dstAmount),
           });
 
           return {
@@ -182,10 +188,10 @@ describe("erc4626-1inch", () => {
               network: 1,
               srcToken,
               srcDecimals: 18,
-              srcAmount: srcAmount,
+              srcAmount: config.srcAmount,
               destToken,
               destDecimals: 18,
-              destAmount: dstAmount,
+              destAmount: config.dstAmount,
               bestRoute: [
                 {
                   percent: 100,
@@ -198,8 +204,8 @@ describe("erc4626-1inch", () => {
                       swapExchanges: [
                         {
                           exchange: "MockExchange",
-                          srcAmount: srcAmount,
-                          destAmount: dstAmount,
+                          srcAmount: config.srcAmount,
+                          destAmount: config.dstAmount,
                           percent: 100,
                         },
                       ],
@@ -217,26 +223,24 @@ describe("erc4626-1inch", () => {
         },
         {
           query: {
-            amount: srcAmount.toString(),
+            amount: config.srcAmount.toString(),
           },
         },
-      )
-      .mock(paraSwapPriceApiMatcher, 404);
+      );
 
-    fetchMock
-      .post(paraSwapTxApiMatcher, async (_uri, body) => {
+      txChain = txChain.post(paraSwapTxApiMatcher, async (_uri, body) => {
         const { srcToken, destToken } = body as BuildTxInput;
 
+        const amount = await encoder.client.readContract({
+          address: destToken as Address,
+          abi: erc20Abi,
+          functionName: "balanceOf",
+          args: [swapMockAddress],
+        });
         await encoder.client.deal({
           erc20: destToken as Address,
           account: swapMockAddress,
-          amount:
-            (await encoder.client.readContract({
-              address: destToken as Address,
-              abi: erc20Abi,
-              functionName: "balanceOf",
-              args: [swapMockAddress],
-            })) + BigInt(dstAmount),
+          amount: amount + BigInt(config.dstAmount),
         });
 
         return {
@@ -249,11 +253,11 @@ describe("erc4626-1inch", () => {
             args: [
               {
                 token: srcToken as Address,
-                amount: srcAmount,
+                amount: config.srcAmount,
               },
               {
                 token: destToken as Address,
-                amount: BigInt(dstAmount), // TODO: simulate positive & negative slippage
+                amount: BigInt(config.dstAmount),
               },
             ],
           }),
@@ -261,8 +265,11 @@ describe("erc4626-1inch", () => {
           chainId: 1,
           gas: "0",
         };
-      })
-      .mock(paraSwapTxApiMatcher, 404);
+      });
+    }
+
+    priceChain.mock(paraSwapPriceApiMatcher, 404);
+    txChain.mock(paraSwapTxApiMatcher, 404);
   };
 
   const mockPendleOperations = (
@@ -536,8 +543,12 @@ describe("erc4626-1inch", () => {
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
       const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
-      mockOneInch(encoder, seizedCollateral, "60475733900");
-      mockParaSwap(encoder, seizedCollateral, "60475733901");
+      mockOneInch(encoder, [
+        { srcAmount: seizedCollateral, dstAmount: "60475733900" },
+      ]);
+      mockParaSwap(encoder, [
+        { srcAmount: seizedCollateral, dstAmount: "60475733901" },
+      ]);
 
       await check(encoder.address, client, client.account, [marketId]);
 
@@ -680,8 +691,15 @@ describe("erc4626-1inch", () => {
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
       const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
-      mockOneInch(encoder, seizedCollateral, "11669266773005108147659");
-      mockParaSwap(encoder, seizedCollateral, "11669266773005108147658");
+      mockOneInch(encoder, [
+        {
+          srcAmount: seizedCollateral,
+          dstAmount: "11669266773005108147659",
+        },
+      ]);
+      mockParaSwap(encoder, [
+        { srcAmount: seizedCollateral, dstAmount: "11669266773005108147658" },
+      ]);
 
       await check(encoder.address, client, client.account, [marketId]);
 
@@ -808,8 +826,16 @@ describe("erc4626-1inch", () => {
         "60475733901",
         market.params.collateralToken,
       );
-      mockOneInch(encoder, seizedCollateral, "11669266773005108147657");
-      mockParaSwap(encoder, seizedCollateral, "11669266773005108147656");
+
+      mockOneInch(encoder, [
+        {
+          srcAmount: seizedCollateral,
+          dstAmount: "11669266773005108147657",
+        },
+      ]);
+      mockParaSwap(encoder, [
+        { srcAmount: seizedCollateral, dstAmount: "11669266773005108147656" },
+      ]);
 
       await check(encoder.address, client, client.account, [marketId]);
 
@@ -941,8 +967,16 @@ describe("erc4626-1inch", () => {
         "11669266773005108147657",
         market.params.collateralToken,
       );
-      mockOneInch(encoder, seizedCollateral, "11669266773005108147657");
-      mockParaSwap(encoder, seizedCollateral, "11669266773005108147656");
+
+      mockOneInch(encoder, [
+        {
+          srcAmount: seizedCollateral,
+          dstAmount: "11669266773005108147657",
+        },
+      ]);
+      mockParaSwap(encoder, [
+        { srcAmount: seizedCollateral, dstAmount: "11669266773005108147656" },
+      ]);
 
       await check(encoder.address, client, client.account, [marketId]);
 
@@ -1388,8 +1422,19 @@ describe("erc4626-1inch", () => {
       const usdsWithdrawalAmount = await encoder.previewUSDSWithdrawalAmount(
         accruedPosition.seizableCollateral! / 2n,
       );
-      mockOneInch(encoder, usdsWithdrawalAmount, "11669266773005108147656");
-      mockParaSwap(encoder, usdsWithdrawalAmount, "11669266773005108147657");
+
+      mockOneInch(encoder, [
+        {
+          srcAmount: usdsWithdrawalAmount,
+          dstAmount: "11669266773005108147657",
+        },
+      ]);
+      mockParaSwap(encoder, [
+        {
+          srcAmount: usdsWithdrawalAmount,
+          dstAmount: "11669266773005108147656",
+        },
+      ]);
 
       await check(encoder.address, client, client.account, [marketId]);
 
@@ -1405,6 +1450,173 @@ describe("erc4626-1inch", () => {
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
         11652.934719,
         6,
+      );
+    },
+  );
+
+  test.sequential(
+    `should liquidate a sUSDS market using DAI when USDS lacks liquidity`,
+    async ({ client, encoder }) => {
+      const usdsPriceUsd = 1.0;
+      const ethPriceUsd = 2_644;
+      const marketId =
+        "0xbed21964cf290ab95fa458da6c1f302f2278aec5f897c1b1da3054553ef5e90c" as MarketId; // sUSDS / WETH (86%)
+
+      const market = await fetchMarket(marketId, client);
+      const [collateralToken, loanToken] = await Promise.all([
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
+      ]);
+
+      // Set up the borrower's position
+      const collateral = parseUnits("100000000", collateralToken.decimals);
+
+      await client.deal({
+        erc20: collateralToken.address,
+        account: borrower.address,
+        amount: collateral,
+      });
+      await client.approve({
+        account: borrower,
+        address: collateralToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supplyCollateral",
+        args: [market.params, collateral, borrower.address, "0x"],
+      });
+
+      const borrowed = market.getMaxBorrowAssets(collateral)! - 1n;
+      await client.deal({
+        erc20: loanToken.address,
+        account: borrower.address,
+        amount: borrowed,
+      });
+      await client.approve({
+        account: borrower,
+        address: loanToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supply",
+        args: [market.params, borrowed, 0n, borrower.address, "0x"],
+      });
+
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "borrow",
+        args: [
+          market.params as Pick<
+            typeof market.params,
+            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
+          >,
+          borrowed,
+          0n,
+          borrower.address,
+          borrower.address,
+        ],
+      });
+
+      const newUsdsPriceUsd = usdsPriceUsd * 0.5; // 50% price drop
+
+      // Mock API responses
+      nock(BLUE_API_BASE_URL)
+        .post("/graphql")
+        .reply(200, {
+          data: { markets: { items: [{ uniqueKey: marketId }] } },
+        })
+        .post("/graphql")
+        .reply(200, {
+          data: {
+            assetByAddress: {
+              priceUsd: ethPriceUsd,
+              spotPriceEth: 1,
+            },
+            marketPositions: {
+              items: [
+                {
+                  user: {
+                    address: borrower.address,
+                  },
+                  market: {
+                    uniqueKey: marketId,
+                    collateralAsset: {
+                      address: market.params.collateralToken,
+                      decimals: collateralToken.decimals,
+                      priceUsd: newUsdsPriceUsd,
+                      spotPriceEth: newUsdsPriceUsd / ethPriceUsd,
+                    },
+                    loanAsset: {
+                      address: market.params.loanToken,
+                      decimals: loanToken.decimals,
+                      priceUsd: null,
+                      spotPriceEth: 1 / ethPriceUsd,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        });
+
+      const timestamp = await syncTimestamp(client);
+
+      const accrualPosition = await fetchAccrualPosition(
+        borrower.address,
+        marketId,
+        client,
+      );
+      const accruedPosition = accrualPosition.accrueInterest(timestamp);
+
+      const usdsWithdrawalAmount = await encoder.previewUSDSWithdrawalAmount(
+        accruedPosition.seizableCollateral! / 2n,
+      );
+
+      // Mock 1inch and ParaSwap responses
+      // First, mock insufficient liquidity for USDS
+      mockOneInch(encoder, [
+        {
+          srcAmount: usdsWithdrawalAmount,
+          dstAmount: (borrowed / 2n + 1n).toString(),
+        },
+        {
+          srcAmount: usdsWithdrawalAmount / 2n,
+          dstAmount: (borrowed / 2n + 1n).toString(),
+        },
+      ]);
+      mockParaSwap(encoder, [
+        {
+          srcAmount: usdsWithdrawalAmount,
+          dstAmount: (borrowed / 2n + 1n).toString(),
+        },
+        {
+          srcAmount: usdsWithdrawalAmount / 2n,
+          dstAmount: (borrowed / 2n + 1n).toString(),
+        },
+      ]);
+
+      await check(encoder.address, client, client.account, [marketId]);
+
+      const decimals = Number(loanToken.decimals);
+
+      const decimalBalance = await client.readContract({
+        address: market.params.loanToken,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [encoder.address],
+      });
+
+      expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
+        8166.022224,
+        4,
       );
     },
   );
