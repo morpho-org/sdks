@@ -188,7 +188,7 @@ format.percent.digits(1).sign().of(0.123456); // "+12.3%"
 
 ### Create custom formatters
 
-You can create a custom `format` object with default options that will be applied to all formatters created from it.
+You can create a custom `format` object with default options that will be applied to all formatters created from it. You can also create custom formatters with specific names and options using the second argument.
 
 ```typescript
 import { createFormat } from "@morpho-org/morpho-ts";
@@ -198,14 +198,19 @@ const customFormat = createFormat({
     short: { digits: 3 }, // all short formatters will format with 3 digits
     number: { sign: true }, // all number formatters will display signed values
     ...
+}, {
+    custom: { format: Format.number, unit: "$" }, // this will add a `custom` key in `customFormat` that creates a formatter with these options
 })
 
 customFormat.short.of(1234.5678); // "1234.567"
 customFormat.number.of(1234.5678); // "+1234.56"
+customFormat.custom.of(1234.5678); // "$1234.56"
 
 // Default options can be normally overriden
 customFormat.short.digits(1).of(1234.5678); // "1234.5"
 ```
+
+> [!NOTE] > custom formatters will be impacted by `all` default options but not by type-specific default options
 
 ---
 
