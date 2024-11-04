@@ -1,4 +1,4 @@
-import { createFormat, format } from "../src";
+import { Format, createFormat, format } from "../src";
 
 import { describe, expect, test } from "vitest";
 
@@ -9,37 +9,40 @@ describe("format", () => {
 
   describe("createFormat", () => {
     test("should properly initialize format options", () => {
-      const customFormat = createFormat({
-        all: { digits: 2, sign: true },
-        hex: { default: "default hex" },
-        number: {
-          sign: false,
-          unit: "number",
+      const customFormat = createFormat(
+        {
+          all: { digits: 2, sign: true },
+          hex: { default: "default hex" },
+          number: {
+            sign: false,
+            unit: "number",
+          },
+          short: {
+            sign: false,
+            unit: "short",
+            smallValuesWithCommas: true,
+          },
+          percent: {
+            sign: false,
+            unit: "percent",
+          },
+          commas: {
+            sign: false,
+            unit: "commas",
+          },
         },
-        short: {
-          sign: false,
-          unit: "short",
-          smallValuesWithCommas: true,
-        },
-        percent: {
-          sign: false,
-          unit: "percent",
-        },
-        commas: {
-          sign: false,
-          unit: "commas",
-        },
-      });
+        { custom: { format: Format.number, digits: 10, unit: "custom" } },
+      );
 
       //@ts-ignore
       const hexOptions = customFormat.hex._options;
-      expect(hexOptions.format).toBe("hex");
+      expect(hexOptions.format).toBe(Format.hex);
       expect(hexOptions.default).toBe("default hex");
       expect(hexOptions.prefix).toBe(false);
 
       //@ts-ignore
       const numberOptions = customFormat.number._options;
-      expect(numberOptions.format).toBe("number");
+      expect(numberOptions.format).toBe(Format.number);
       expect(numberOptions.unit).toBe("number");
       expect(numberOptions.sign).toBe(false);
       expect(numberOptions.digits).toBe(2);
@@ -47,7 +50,7 @@ describe("format", () => {
 
       //@ts-ignore
       const shortOptions = customFormat.short._options;
-      expect(shortOptions.format).toBe("short");
+      expect(shortOptions.format).toBe(Format.short);
       expect(shortOptions.unit).toBe("short");
       expect(shortOptions.sign).toBe(false);
       expect(shortOptions.digits).toBe(2);
@@ -56,7 +59,7 @@ describe("format", () => {
 
       //@ts-ignore
       const percentOptions = customFormat.percent._options;
-      expect(percentOptions.format).toBe("percent");
+      expect(percentOptions.format).toBe(Format.percent);
       expect(percentOptions.unit).toBe("percent");
       expect(percentOptions.sign).toBe(false);
       expect(percentOptions.digits).toBe(2);
@@ -64,11 +67,39 @@ describe("format", () => {
 
       //@ts-ignore
       const commasOptions = customFormat.commas._options;
-      expect(commasOptions.format).toBe("commas");
+      expect(commasOptions.format).toBe(Format.commas);
       expect(commasOptions.unit).toBe("commas");
       expect(commasOptions.sign).toBe(false);
       expect(commasOptions.digits).toBe(2);
       expect(commasOptions.default).toBe(undefined);
+
+      const customFormatter = customFormat.custom;
+      //@ts-ignore
+      const customOptions = customFormatter._options;
+      expect(customOptions.format).toBe(Format.number);
+      expect(customOptions.unit).toBe("custom");
+      expect(customOptions.sign).toBe(true);
+      expect(customOptions.digits).toBe(10);
+      expect(customOptions.default).toBe(undefined);
+    });
+
+    test("shouldn't create conflicts between formatters", () => {
+      const formatters = createFormat();
+
+      const formatter1 = formatters.number.digits(10);
+      const formatter2 = formatters.number.digits(0);
+      const formatter3 = formatter1.digits(5);
+
+      //@ts-ignore
+      const options1 = formatter1._options;
+      //@ts-ignore
+      const options2 = formatter2._options;
+      //@ts-ignore
+      const options3 = formatter3._options;
+
+      expect(options1.digits).toBe(10);
+      expect(options2.digits).toBe(0);
+      expect(options3.digits).toBe(5);
     });
   });
 
@@ -83,7 +114,7 @@ describe("format", () => {
     });
   });
 
-  describe("hex", () => {
+  describe(Format.hex, () => {
     describe("should properly format number in hex format", () => {
       test("without option", () => {
         expect(format.hex.of(number)).toEqual((123456789).toString(16));
