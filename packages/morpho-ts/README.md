@@ -95,7 +95,8 @@ import { format } from "@morpho-org/morpho-ts";
 format.hex.of(255n); // "ff"
 ```
 
-> [!NOTE] > `decimals` will be ignored if this formatter is used with BigInts
+> [!NOTE]
+> `decimals` will be ignored if this formatter is used with BigInts
 
 **Customization:**
 
@@ -210,7 +211,8 @@ customFormat.custom.of(1234.5678); // "$1234.56"
 customFormat.short.digits(1).of(1234.5678); // "1234.5"
 ```
 
-> [!NOTE] > custom formatters will be impacted by `all` default options but not by type-specific default options
+> [!NOTE]
+> Custom formatters will be impacted by `all` default options but not by type-specific default options
 
 ---
 
