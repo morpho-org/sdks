@@ -280,12 +280,14 @@ type FormatterWithDefault<F extends BaseFormatter> = {
 };
 
 export abstract class BaseFormatter {
-  protected abstract _options: FormatOptions;
+  protected abstract _options: Readonly<FormatOptions>;
+
+  protected abstract _clone(_options: FormatOptions): this;
 
   default(_d: string) {
-    this._options.default = _d;
+    const newOptions = { ...this._options, default: _d };
 
-    return this as FormatterWithDefault<this>;
+    return this._clone(newOptions) as FormatterWithDefault<this>;
   }
 
   createOf() {
@@ -333,7 +335,7 @@ export abstract class BaseFormatter {
 }
 
 export class HexFormatter extends BaseFormatter {
-  protected _options: FormatHexOptions = {
+  protected _options: Readonly<FormatHexOptions> = {
     format: Format.hex,
     prefix: false,
   };
@@ -344,75 +346,96 @@ export class HexFormatter extends BaseFormatter {
   }
 
   prefix() {
-    this._options.prefix = true;
-    return this;
+    const newOptions = { ...this._options, prefix: true };
+
+    return this._clone(newOptions);
+  }
+
+  _clone(_options: FormatHexOptions) {
+    return new HexFormatter(_options) as this;
   }
 }
 
 export abstract class CommonFormatter extends BaseFormatter {
-  protected abstract _options: BaseFormatOptions;
+  protected abstract _options: Readonly<BaseFormatOptions>;
 
   digits(_d: number) {
-    this._options.digits = _d;
-    return this;
+    const newOptions = { ...this._options, digits: _d };
+
+    return this._clone(newOptions);
   }
 
   removeTrailingZero() {
-    this._options.removeTrailingZero = true;
-    return this;
+    const newOptions = { ...this._options, removeTrailingZero: true };
+
+    return this._clone(newOptions);
   }
 
   readable() {
-    this._options.readable = true;
-    return this;
+    const newOptions = { ...this._options, readable: true };
+
+    return this._clone(newOptions);
   }
 
   min(_m: number) {
-    this._options.min = _m;
-    return this;
+    const newOptions = { ...this._options, min: _m };
+
+    return this._clone(newOptions);
   }
 
   max(_m: number) {
-    this._options.max = _m;
-    return this;
+    const newOptions = { ...this._options, max: _m };
+
+    return this._clone(newOptions);
   }
 
   sign() {
-    this._options.sign = true;
-    return this;
+    const newOptions = { ...this._options, sign: true };
+
+    return this._clone(newOptions);
   }
 
   unit(_u: string) {
-    this._options.unit = _u;
-    return this;
+    const newOptions = { ...this._options, unit: _u };
+
+    return this._clone(newOptions);
   }
 
   locale(_l: string) {
-    this._options.locale = _l;
-    return this;
+    const newOptions = { ...this._options, locale: _l };
+
+    return this._clone(newOptions);
   }
 }
 
 export class NumberFormatter extends CommonFormatter {
-  protected _options: FormatNumberOptions = { format: Format.number };
+  protected _options: Readonly<FormatNumberOptions> = { format: Format.number };
 
   constructor(__options: Partial<FormatNumberOptions> = {}) {
     super();
     this._options = { ...this._options, ...__options };
   }
+
+  _clone(_options: FormatNumberOptions) {
+    return new NumberFormatter(_options) as this;
+  }
 }
 
 export class CommasFormatter extends CommonFormatter {
-  protected _options: FormatCommasOptions = { format: Format.commas };
+  protected _options: Readonly<FormatCommasOptions> = { format: Format.commas };
 
   constructor(__options: Partial<FormatCommasOptions> = {}) {
     super();
     this._options = { ...this._options, ...__options };
   }
+
+  _clone(_options: FormatCommasOptions) {
+    return new CommasFormatter(_options) as this;
+  }
 }
 
 export class ShortFormatter extends CommonFormatter {
-  protected _options: FormatShortOptions = { format: Format.short };
+  protected _options: Readonly<FormatShortOptions> = { format: Format.short };
 
   constructor(__options: Partial<FormatShortOptions> = {}) {
     super();
@@ -420,19 +443,28 @@ export class ShortFormatter extends CommonFormatter {
   }
 
   smallValuesWithCommas() {
-    this._options.smallValuesWithCommas = true;
-    return this;
+    const newOptions = { ...this._options, smallValuesWithCommas: true };
+
+    return this._clone(newOptions);
+  }
+
+  _clone(_options: FormatShortOptions) {
+    return new ShortFormatter(_options) as this;
   }
 }
 
 export class PercentFormatter extends CommonFormatter {
-  protected _options: FormatPercentOptions = {
+  protected _options: Readonly<FormatPercentOptions> = {
     format: Format.percent,
   };
 
   constructor(__options: Partial<FormatPercentOptions> = {}) {
     super();
     this._options = { ...this._options, ...__options };
+  }
+
+  _clone(_options: FormatPercentOptions) {
+    return new PercentFormatter(_options) as this;
   }
 }
 
