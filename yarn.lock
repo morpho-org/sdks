@@ -4142,18 +4142,18 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@paraswap/core@npm:2.2.0":
-  version: 2.2.0
-  resolution: "@paraswap/core@npm:2.2.0"
-  checksum: 10c0/8a62ef1c6bfa9a6b7f9326315263a7c5b77d27aa6624ec846c6308f6e3fb8fe1661a6f7845182c0b7d2c17f15f8c5d2f40ccf6853980fcd8d69caa6bfd21883c
+"@paraswap/core@npm:2.4.0":
+  version: 2.4.0
+  resolution: "@paraswap/core@npm:2.4.0"
+  checksum: 10c0/12d032e838182ff6736ab6b5baac82608bf8a73b70c8dbe76c99f7b9ed6eaea4e4e65245dc6c979dd4fc8f4420fe50407d10f561ec6d3aba892429eee0b14b5b
   languageName: node
   linkType: hard
 
 "@paraswap/sdk@npm:^6.10.0":
-  version: 6.10.0
-  resolution: "@paraswap/sdk@npm:6.10.0"
+  version: 6.12.0
+  resolution: "@paraswap/sdk@npm:6.12.0"
   dependencies:
-    "@paraswap/core": "npm:2.2.0"
+    "@paraswap/core": "npm:2.4.0"
     bignumber.js: "npm:^9.0.2"
     ts-essentials: "npm:^9.1.2"
   peerDependencies:
@@ -4167,7 +4167,7 @@ __metadata:
       optional: true
     web3:
       optional: true
-  checksum: 10c0/ac097956363648c776ecf4aa3148b75d191e7c96485f339f4e69aab6fe678b5a6d2e40c75b17c7ea9ffc1825aea9af1859ec8c819e3536611621dc055c5e21eb
+  checksum: 10c0/00d10b8b993663b4937b657f335989baf46c9bcf0febec322fb1c9044a9d35be21136b9b2369bc470044b71d9508f3d998f42dc30fa7988f88a49d48471265d0
   languageName: node
   linkType: hard
 
