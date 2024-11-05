@@ -22,7 +22,7 @@ importers:
         version: 19.5.0
       '@vitest/coverage-v8':
         specifier: ^2.1.4
-        version: 2.1.4(vitest@2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0))
+        version: 2.1.4(vitest@2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0))
       conventional-changelog-conventionalcommits:
         specifier: ^8.0.0
         version: 8.0.0
@@ -36,8 +36,8 @@ importers:
         specifier: ^7.4.2
         version: 7.4.2
       happy-dom:
-        specifier: ^15.8.3
-        version: 15.8.3
+        specifier: ^15.9.0
+        version: 15.9.0
       husky:
         specifier: ^9.1.6
         version: 9.1.6
@@ -55,7 +55,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
 
   packages/blue-api-sdk:
     devDependencies:
@@ -101,7 +101,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
 
   packages/blue-sdk-ethers:
     dependencies:
@@ -138,7 +138,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
 
   packages/blue-sdk-viem:
     devDependencies:
@@ -171,7 +171,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
 
   packages/blue-sdk-wagmi:
     devDependencies:
@@ -225,7 +225,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
       wagmi:
         specifier: ^2.12.25
         version: 2.12.25(@tanstack/query-core@5.59.13)(@tanstack/react-query@5.59.15(react@18.3.1))(@types/react@18.3.11)(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react-native@0.75.4(@babel/core@7.26.0)(@babel/preset-env@7.25.8(@babel/core@7.26.0))(@types/react@18.3.11)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(typescript@5.6.3)(utf-8-validate@5.0.10))(react@18.3.1)(typescript@5.6.3)(utf-8-validate@5.0.10)(viem@2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
@@ -301,7 +301,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
 
   packages/liquidation-sdk-viem:
     dependencies:
@@ -383,7 +383,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
 
   packages/morpho-test:
     devDependencies:
@@ -413,7 +413,7 @@ importers:
         version: 5.6.3
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
 
   packages/simulation-sdk:
     devDependencies:
@@ -449,7 +449,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
 
   packages/simulation-sdk-wagmi:
     devDependencies:
@@ -512,7 +512,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
       wagmi:
         specifier: ^2.12.25
         version: 2.12.25(@tanstack/query-core@5.59.13)(@tanstack/react-query@5.59.15(react@18.3.1))(@types/react@18.3.11)(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react-native@0.75.4(@babel/core@7.26.0)(@babel/preset-env@7.25.8(@babel/core@7.26.0))(@types/react@18.3.11)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(typescript@5.6.3)(utf-8-validate@5.0.10))(react@18.3.1)(typescript@5.6.3)(utf-8-validate@5.0.10)(viem@2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
@@ -549,7 +549,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
       wagmi:
         specifier: ^2.12.25
         version: 2.12.25(@tanstack/query-core@5.59.13)(@tanstack/react-query@5.59.15(react@18.3.1))(@types/react@18.3.11)(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react-native@0.75.4(@babel/core@7.26.0)(@babel/preset-env@7.25.8(@babel/core@7.26.0))(@types/react@18.3.11)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(typescript@5.6.3)(utf-8-validate@5.0.10))(react@18.3.1)(typescript@5.6.3)(utf-8-validate@5.0.10)(viem@2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
@@ -594,7 +594,7 @@ importers:
         version: 2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.4
-        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+        version: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
       wagmi:
         specifier: ^2.12.25
         version: 2.12.25(@tanstack/query-core@5.59.13)(@tanstack/react-query@5.59.15(react@18.3.1))(@types/react@18.3.11)(bufferutil@4.0.8)(encoding@0.1.13)(react-dom@18.3.1(react@18.3.1))(react-native@0.75.4(@babel/core@7.26.0)(@babel/preset-env@7.25.8(@babel/core@7.26.0))(@types/react@18.3.11)(bufferutil@4.0.8)(encoding@0.1.13)(react@18.3.1)(typescript@5.6.3)(utf-8-validate@5.0.10))(react@18.3.1)(typescript@5.6.3)(utf-8-validate@5.0.10)(viem@2.21.40(bufferutil@4.0.8)(typescript@5.6.3)(utf-8-validate@5.0.10))
@@ -4550,8 +4550,8 @@ packages:
     engines: {node: '>=0.4.7'}
     hasBin: true
 
-  happy-dom@15.8.3:
-    resolution: {integrity: sha512-YR9nUWN/T2bH7pPLEYMhTp4DQExPH+mC4KulJDgimCb+FY3Er0Vp6SOOcBXrNfMTri3lAk9uSZqUTG2hgZOYwg==}
+  happy-dom@15.9.0:
+    resolution: {integrity: sha512-p+6ySXcpvjVW0Xetv6e8ccT2txbDpHE0RfZOEE84tQ8ESL1nlzCjvS6fZD77DkYXE540D+2N20hhFeBN6B/CJA==}
     engines: {node: '>=18.0.0'}
 
   hardhat@2.22.15:
@@ -10440,7 +10440,7 @@ snapshots:
     dependencies:
       '@types/yargs-parser': 21.0.3
 
-  '@vitest/coverage-v8@2.1.4(vitest@2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0))':
+  '@vitest/coverage-v8@2.1.4(vitest@2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0))':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
@@ -10454,7 +10454,7 @@ snapshots:
       std-env: 3.7.0
       test-exclude: 7.0.1
       tinyrainbow: 1.2.0
-      vitest: 2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0)
+      vitest: 2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -12388,7 +12388,7 @@ snapshots:
     optionalDependencies:
       uglify-js: 3.19.3
 
-  happy-dom@15.8.3:
+  happy-dom@15.9.0:
     dependencies:
       entities: 4.5.0
       webidl-conversions: 7.0.0
@@ -14799,7 +14799,7 @@ snapshots:
       fsevents: 2.3.3
       terser: 5.36.0
 
-  vitest@2.1.4(@types/node@22.9.0)(happy-dom@15.8.3)(terser@5.36.0):
+  vitest@2.1.4(@types/node@22.9.0)(happy-dom@15.9.0)(terser@5.36.0):
     dependencies:
       '@vitest/expect': 2.1.4
       '@vitest/mocker': 2.1.4(vite@5.4.10(@types/node@22.9.0)(terser@5.36.0))
@@ -14823,7 +14823,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.9.0
-      happy-dom: 15.8.3
+      happy-dom: 15.9.0
     transitivePeerDependencies:
       - less
       - lightningcss
