@@ -27,7 +27,6 @@
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "@types/node": "^22.9.0",
     "typescript": "^5.6.3",
     "viem": "^2.21.40",
     "vitest": "^2.1.4"
