@@ -26,6 +26,8 @@ jobs:
 
           - simulation-sdk
           - simulation-sdk-wagmi
+
+          - bundler-sdk-ethers
           - bundler-sdk-viem
 
           - liquidation-sdk-viem
