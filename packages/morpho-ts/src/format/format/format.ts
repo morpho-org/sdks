@@ -1,6 +1,6 @@
 import { getEnUSNumberToLocalParts } from "../locale";
 
-enum Format {
+export enum Format {
   number = "number",
   commas = "commas",
   short = "short",
@@ -280,12 +280,14 @@ type FormatterWithDefault<F extends BaseFormatter> = {
 };
 
 export abstract class BaseFormatter {
-  protected abstract _options: FormatOptions;
+  protected abstract _options: Readonly<FormatOptions>;
+
+  protected abstract _clone(_options: FormatOptions): this;
 
   default(_d: string) {
-    this._options.default = _d;
+    const newOptions = { ...this._options, default: _d };
 
-    return this as FormatterWithDefault<this>;
+    return this._clone(newOptions) as FormatterWithDefault<this>;
   }
 
   createOf() {
@@ -333,7 +335,10 @@ export abstract class BaseFormatter {
 }
 
 export class HexFormatter extends BaseFormatter {
-  protected _options: FormatHexOptions = { format: Format.hex, prefix: false };
+  protected _options: Readonly<FormatHexOptions> = {
+    format: Format.hex,
+    prefix: false,
+  };
 
   constructor(__options: Partial<FormatHexOptions> = {}) {
     super();
@@ -341,75 +346,96 @@ export class HexFormatter extends BaseFormatter {
   }
 
   prefix() {
-    this._options.prefix = true;
-    return this;
+    const newOptions = { ...this._options, prefix: true };
+
+    return this._clone(newOptions);
+  }
+
+  _clone(_options: FormatHexOptions) {
+    return new HexFormatter(_options) as this;
   }
 }
 
 export abstract class CommonFormatter extends BaseFormatter {
-  protected abstract _options: BaseFormatOptions;
+  protected abstract _options: Readonly<BaseFormatOptions>;
 
   digits(_d: number) {
-    this._options.digits = _d;
-    return this;
+    const newOptions = { ...this._options, digits: _d };
+
+    return this._clone(newOptions);
   }
 
   removeTrailingZero() {
-    this._options.removeTrailingZero = true;
-    return this;
+    const newOptions = { ...this._options, removeTrailingZero: true };
+
+    return this._clone(newOptions);
   }
 
   readable() {
-    this._options.readable = true;
-    return this;
+    const newOptions = { ...this._options, readable: true };
+
+    return this._clone(newOptions);
   }
 
   min(_m: number) {
-    this._options.min = _m;
-    return this;
+    const newOptions = { ...this._options, min: _m };
+
+    return this._clone(newOptions);
   }
 
   max(_m: number) {
-    this._options.max = _m;
-    return this;
+    const newOptions = { ...this._options, max: _m };
+
+    return this._clone(newOptions);
   }
 
   sign() {
-    this._options.sign = true;
-    return this;
+    const newOptions = { ...this._options, sign: true };
+
+    return this._clone(newOptions);
   }
 
   unit(_u: string) {
-    this._options.unit = _u;
-    return this;
+    const newOptions = { ...this._options, unit: _u };
+
+    return this._clone(newOptions);
   }
 
   locale(_l: string) {
-    this._options.locale = _l;
-    return this;
+    const newOptions = { ...this._options, locale: _l };
+
+    return this._clone(newOptions);
   }
 }
 
 export class NumberFormatter extends CommonFormatter {
-  protected _options: FormatNumberOptions = { format: Format.number };
+  protected _options: Readonly<FormatNumberOptions> = { format: Format.number };
 
   constructor(__options: Partial<FormatNumberOptions> = {}) {
     super();
     this._options = { ...this._options, ...__options };
   }
+
+  _clone(_options: FormatNumberOptions) {
+    return new NumberFormatter(_options) as this;
+  }
 }
 
 export class CommasFormatter extends CommonFormatter {
-  protected _options: FormatCommasOptions = { format: Format.commas };
+  protected _options: Readonly<FormatCommasOptions> = { format: Format.commas };
 
   constructor(__options: Partial<FormatCommasOptions> = {}) {
     super();
     this._options = { ...this._options, ...__options };
   }
+
+  _clone(_options: FormatCommasOptions) {
+    return new CommasFormatter(_options) as this;
+  }
 }
 
 export class ShortFormatter extends CommonFormatter {
-  protected _options: FormatShortOptions = { format: Format.short };
+  protected _options: Readonly<FormatShortOptions> = { format: Format.short };
 
   constructor(__options: Partial<FormatShortOptions> = {}) {
     super();
@@ -417,67 +443,83 @@ export class ShortFormatter extends CommonFormatter {
   }
 
   smallValuesWithCommas() {
-    this._options.smallValuesWithCommas = true;
-    return this;
+    const newOptions = { ...this._options, smallValuesWithCommas: true };
+
+    return this._clone(newOptions);
+  }
+
+  _clone(_options: FormatShortOptions) {
+    return new ShortFormatter(_options) as this;
   }
 }
 
 export class PercentFormatter extends CommonFormatter {
-  protected _options: FormatPercentOptions = { format: Format.percent };
+  protected _options: Readonly<FormatPercentOptions> = {
+    format: Format.percent,
+  };
 
   constructor(__options: Partial<FormatPercentOptions> = {}) {
     super();
     this._options = { ...this._options, ...__options };
   }
+
+  _clone(_options: FormatPercentOptions) {
+    return new PercentFormatter(_options) as this;
+  }
 }
 
-export function createFormat(
-  defaultOptions: {
-    all?: Partial<Omit<BaseFormatOptions, "format">>;
-    number?: Partial<Omit<FormatNumberOptions, "format">>;
-    short?: Partial<Omit<FormatShortOptions, "format">>;
-    percent?: Partial<Omit<FormatPercentOptions, "format">>;
-    commas?: Partial<Omit<FormatCommasOptions, "format">>;
-    hex?: Partial<Omit<FormatHexOptions, "format">>;
-  } = {},
+type TDefaultOptions = {
+  all: Partial<Omit<BaseFormatOptions, "format">>;
+  number: Partial<Omit<FormatNumberOptions, "format">>;
+  short: Partial<Omit<FormatShortOptions, "format">>;
+  percent: Partial<Omit<FormatPercentOptions, "format">>;
+  commas: Partial<Omit<FormatCommasOptions, "format">>;
+  hex: Partial<Omit<FormatHexOptions, "format">>;
+};
+
+type TFormatters = {
+  [Format.hex]: HexFormatter;
+  [Format.number]: NumberFormatter;
+  [Format.commas]: CommasFormatter;
+  [Format.short]: ShortFormatter;
+  [Format.percent]: PercentFormatter;
+};
+
+export function createFormat<
+  TCustom extends Record<
+    string,
+    | FormatNumberOptions
+    | FormatShortOptions
+    | FormatPercentOptions
+    | FormatCommasOptions
+    | FormatHexOptions
+  > & { [K in keyof TDefaultOptions]?: never } = {},
+>(
+  defaultOptions: Partial<TDefaultOptions> = {},
+  customFormatters: TCustom = {} as TCustom,
 ) {
-  return {
-    /**
-     * Return the value as an integer in hex format
-     */
+  const formatters = {
     get hex() {
       return new HexFormatter({ ...defaultOptions.all, ...defaultOptions.hex });
     },
-    /**
-     * Return the value as a stringified number (12345.6789)
-     */
     get number() {
       return new NumberFormatter({
         ...defaultOptions.all,
         ...defaultOptions.number,
       });
     },
-    /**
-     * Return the value as a commas-separated stringified number (12,345.6789)
-     */
     get commas() {
       return new CommasFormatter({
         ...defaultOptions.all,
         ...defaultOptions.commas,
       });
     },
-    /**
-     * Return the value as a shorted stringified number (12.3456789k)
-     */
     get short() {
       return new ShortFormatter({
         ...defaultOptions.all,
         ...defaultOptions.short,
       });
     },
-    /**
-     * Return the value as a percent based stringified number (10.00 instead of 0.1)
-     */
     get percent() {
       return new PercentFormatter({
         ...defaultOptions.all,
@@ -485,6 +527,48 @@ export function createFormat(
       });
     },
   };
+
+  Object.entries(customFormatters).forEach(([name, options]) => {
+    Object.defineProperty(formatters, name, {
+      get() {
+        switch (options.format) {
+          case Format.hex:
+            return new HexFormatter({ ...defaultOptions.all, ...options });
+          case Format.number:
+            return new NumberFormatter({ ...defaultOptions.all, ...options });
+          case Format.commas:
+            return new CommasFormatter({ ...defaultOptions.all, ...options });
+          case Format.percent:
+            return new PercentFormatter({ ...defaultOptions.all, ...options });
+          case Format.short:
+            return new ShortFormatter({ ...defaultOptions.all, ...options });
+        }
+      },
+    });
+  });
+
+  return formatters as {
+    /**
+     * Return the value as an integer in hex format
+     */
+    readonly hex: HexFormatter;
+    /**
+     * Return the value as a stringified number (12345.6789)
+     */
+    readonly number: NumberFormatter;
+    /**
+     * Return the value as a commas-separated stringified number (12,345.6789)
+     */
+    readonly commas: CommasFormatter;
+    /**
+     * Return the value as a shorted stringified number (12.3456789k)
+     */
+    readonly short: ShortFormatter;
+    /**
+     * Return the value as a percent based stringified number (10.00 instead of 0.1)
+     */
+    readonly percent: PercentFormatter;
+  } & { readonly [K in keyof TCustom]: TFormatters[TCustom[K]["format"]] };
 }
 
 export const format = createFormat();
