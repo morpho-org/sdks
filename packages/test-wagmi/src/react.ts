@@ -3,6 +3,7 @@ import {
   type Queries,
   type RenderHookOptions,
   type RenderOptions,
+  configure,
   type queries,
   render as rtl_render,
   renderHook as rtl_renderHook,
@@ -17,6 +18,8 @@ import {
 } from "react";
 import type { Chain, Transport } from "viem";
 import { type Config, WagmiProvider } from "wagmi";
+
+configure({ asyncUtilTimeout: 5_000 });
 
 // biome-ignore lint/suspicious/noExplicitAny: test utility
 export function createWrapper<TComponent extends FunctionComponent<any>>(

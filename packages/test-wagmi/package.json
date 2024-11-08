@@ -20,6 +20,9 @@
   },
   "peerDependencies": {
     "@morpho-org/test": "workspace:^",
+    "@tanstack/react-query": "^5.59.0",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.0.0",
     "viem": "^2.21.10",
     "vitest": "^2.1.0",
     "wagmi": "^2.12.0"
