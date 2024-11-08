@@ -58,7 +58,9 @@ if (releaseType) {
   const npmVersion = npmPackage.version;
 
   version = inc(
-    gt(lastVersion, npmVersion) ? lastVersion : npmVersion,
+    npmVersion == null || gt(lastVersion, npmVersion)
+      ? lastVersion
+      : npmVersion,
     releaseType,
     branch !== "main" ? branch : undefined,
     "0",
