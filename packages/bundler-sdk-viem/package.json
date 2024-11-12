@@ -41,7 +41,7 @@
     "@types/lodash": "^4.17.12",
     "lodash": "^4.17.21",
     "typescript": "^5.6.3",
-    "viem": "^2.21.40",
+    "viem": "^2.21.44",
     "vitest": "^2.1.4"
   },
   "publishConfig": {
