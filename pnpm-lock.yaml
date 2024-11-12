@@ -358,8 +358,8 @@ importers:
         specifier: ^7.0.0
         version: 7.0.0
       fetch-mock:
-        specifier: ^12.1.0
-        version: 12.1.0
+        specifier: ^11.1.5
+        version: 11.1.5
       hardhat:
         specifier: ^2.22.15
         version: 2.22.15(bufferutil@4.0.8)(ts-node@10.9.2(@types/node@22.9.0)(typescript@5.6.3))(typescript@5.6.3)(utf-8-validate@5.0.10)
@@ -4310,9 +4310,14 @@ packages:
   fbjs@3.0.5:
     resolution: {integrity: sha512-ztsSx77JBtkuMrEypfhgc3cI0+0h+svqeie7xHbh1k/IKdcydnvadp/mUaGgjAOXQmQSxsqgaRhS3q9fy+1kxg==}
 
-  fetch-mock@12.1.0:
-    resolution: {integrity: sha512-xKcKpS9JIfA/vtYRGZtNXIYVHM7Ta/06e6tClSrJoOlU/46pribn1wmW2lDZkqY6MtloUSpeRzy+TbwSKxcvmQ==}
-    engines: {node: '>=18.11.0'}
+  fetch-mock@11.1.5:
+    resolution: {integrity: sha512-KHmZDnZ1ry0pCTrX4YG5DtThHi0MH+GNI9caESnzX/nMJBrvppUHMvLx47M0WY9oAtKOMiPfZDRpxhlHg89BOA==}
+    engines: {node: '>=8.0.0'}
+    peerDependencies:
+      node-fetch: '*'
+    peerDependenciesMeta:
+      node-fetch:
+        optional: true
 
   figures@3.2.0:
     resolution: {integrity: sha512-yaduQFRKLXYOGgEn6AZau90j3ggSOyiqXU0F9JZfeXYhNa+Jk4X+s45A2zg5jns87GAFa34BBm2kXw4XpNcbdg==}
@@ -4848,9 +4853,8 @@ packages:
     resolution: {integrity: sha512-LnQR4bZ9IADDRSkvpqMGvt/tEJWclzklNgSw48V5EAaAeDd6qGvN8ei6k5p0tvxSR171VmGyHuTiAOfxAbr8kA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
-  is-subset-of@3.1.10:
-    resolution: {integrity: sha512-avvaYgVmYWyaZ1NDFiv4y9JGkrE2je3op1Po4VYKKJKR8H2qVPsg1GZuuXl5elCTxTlwAIsrAjWAs4BVrISFRw==}
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
+  is-subset@0.1.1:
+    resolution: {integrity: sha512-6Ybun0IkarhmEqxXCNw/C0bna6Zb/TkfUX9UbwJtK6ObwAVCxmAP308WWTHviM/zAqXk05cdhYsUsZeGQh99iw==}
 
   is-text-path@2.0.0:
     resolution: {integrity: sha512-+oDTluR6WEjdXEJMnC2z6A4FRwFoYuvShVVEGsS7ewc0UTi2QtAKMDJuL4BDEVt+5T7MjFo12RP8ghOM75oKJw==}
@@ -6575,10 +6579,6 @@ packages:
     hasBin: true
     peerDependencies:
       typescript: '>=4.3.0'
-
-  typedescriptor@3.0.2:
-    resolution: {integrity: sha512-hyVbaCUd18UiXk656g/imaBLMogpdijIEpnhWYrSda9rhvO4gOU16n2nh7xG5lv/rjumnZzGOdz0CEGTmFe0fQ==}
-    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
 
   typescript@5.6.3:
     resolution: {integrity: sha512-hjcS1mhfuyi4WW8IWtjP7brDrG2cuDZukyrYrSauoXGNgx0S7zceP07adYkJycEr56BOUTNPzbInooiN3fn1qw==}
@@ -12114,12 +12114,12 @@ snapshots:
     transitivePeerDependencies:
       - encoding
 
-  fetch-mock@12.1.0:
+  fetch-mock@11.1.5:
     dependencies:
       '@types/glob-to-regexp': 0.4.4
       dequal: 2.0.3
       glob-to-regexp: 0.4.1
-      is-subset-of: 3.1.10
+      is-subset: 0.1.1
       regexparam: 3.0.0
 
   figures@3.2.0:
@@ -12717,9 +12717,7 @@ snapshots:
 
   is-stream@3.0.0: {}
 
-  is-subset-of@3.1.10:
-    dependencies:
-      typedescriptor: 3.0.2
+  is-subset@0.1.1: {}
 
   is-text-path@2.0.0:
     dependencies:
@@ -14632,8 +14630,6 @@ snapshots:
       typescript: 5.6.3
     transitivePeerDependencies:
       - supports-color
-
-  typedescriptor@3.0.2: {}
 
   typescript@5.6.3: {}
 
