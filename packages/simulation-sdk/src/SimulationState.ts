@@ -673,7 +673,7 @@ export class SimulationState implements InputSimulationState {
     const bundlerTokenDiffs = holders
       .flatMap((holder) =>
         keys(virtualBundlerData.holdings[holder]).map(
-          (token) => [holder, token] as [Address, Address],
+          (token) => [holder, token] as const,
         ),
       )
       .map(([holder, token]) => ({

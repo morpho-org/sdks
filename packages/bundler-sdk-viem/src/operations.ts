@@ -428,12 +428,12 @@ export const populateSubBundle = (
 
   const requirementOperations =
     getRequirementOperations?.(requiredTokenAmounts) ?? [];
-  requiredTokenAmounts = data.simulateWithUnlimitedBalances(
+  ({ requiredTokenAmounts } = data.simulateWithUnlimitedBalances(
     requirementOperations
       .concat(allOperations)
       .map((operation) => getSimulatedBundlerOperation(operation)),
     [bundler],
-  ).requiredTokenAmounts;
+  ));
 
   // Append required input transfers.
   requiredTokenAmounts.forEach(({ token, required }) => {
