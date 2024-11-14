@@ -47,6 +47,7 @@ import {
 } from "./errors.js";
 import {
   type MaybeDraft,
+  type SimulationResult,
   produceImmutable,
   simulateOperation,
   simulateOperations,
@@ -659,20 +660,20 @@ export class SimulationState implements InputSimulationState {
     operations: Operation[],
     holders: Address[],
   ) {
-    const virtualBundlerData = produceImmutable(this, (draft) => {
+    const virtualHoldersData = produceImmutable(this, (draft) => {
       holders
         .flatMap((holder) => Object.values(draft.holdings[holder] ?? {}))
-        .forEach((bundlerTokenData) => {
+        .forEach((holderTokenData) => {
           // Virtual balance to calculate the amount required.
-          bundlerTokenData.balance += MathLib.MAX_UINT_160;
+          holderTokenData.balance += MathLib.MAX_UINT_160;
         });
     });
 
-    const steps = simulateOperations(operations, virtualBundlerData);
+    const steps = simulateOperations(operations, virtualHoldersData);
 
-    const bundlerTokenDiffs = holders
+    const holdersTokenDiffs = holders
       .flatMap((holder) =>
-        keys(virtualBundlerData.holdings[holder]).map(
+        keys(virtualHoldersData.holdings[holder]).map(
           (token) => [holder, token] as const,
         ),
       )
@@ -700,10 +701,22 @@ export class SimulationState implements InputSimulationState {
       }));
 
     return {
-      requiredTokenAmounts: bundlerTokenDiffs.filter(
+      requiredTokenAmounts: holdersTokenDiffs.filter(
         ({ required }) => required > 0n,
       ),
-      steps,
+      steps: steps.map((step) =>
+        produceImmutable(step, (draft) =>
+          holders
+            .flatMap((holder) => Object.values(draft.holdings[holder] ?? {}))
+            .forEach((holderTokenData) => {
+              // Change virtual balance back to real value
+              holderTokenData.balance = MathLib.max(
+                0n,
+                holderTokenData.balance - MathLib.MAX_UINT_160,
+              );
+            }),
+        ),
+      ) as SimulationResult,
     };
   }
 }
