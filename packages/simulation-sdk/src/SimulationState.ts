@@ -655,22 +655,29 @@ export class SimulationState implements InputSimulationState {
     return _getMarketPublicReallocations();
   }
 
-  public simulateRequiredTokenAmounts(operations: Operation[]) {
-    const { bundler } = getChainAddresses(this.chainId);
-
+  public simulateWithUnlimitedBalances(
+    operations: Operation[],
+    holders: Address[],
+  ) {
     const virtualBundlerData = produceImmutable(this, (draft) => {
-      Object.values(draft.holdings[bundler] ?? {}).forEach(
-        (bundlerTokenData) => {
+      holders
+        .flatMap((holder) => Object.values(draft.holdings[holder] ?? {}))
+        .forEach((bundlerTokenData) => {
           // Virtual balance to calculate the amount required.
           bundlerTokenData.balance += MathLib.MAX_UINT_160;
-        },
-      );
+        });
     });
 
     const steps = simulateOperations(operations, virtualBundlerData);
 
-    const bundlerTokenDiffs = keys(virtualBundlerData.holdings[bundler]).map(
-      (token) => ({
+    const bundlerTokenDiffs = holders
+      .flatMap((holder) =>
+        keys(virtualBundlerData.holdings[holder]).map(
+          (token) => [holder, token] as [Address, Address],
+        ),
+      )
+      .map(([holder, token]) => ({
+        holder,
         token,
         required: steps
           .map(
@@ -681,7 +688,7 @@ export class SimulationState implements InputSimulationState {
               //              |                   |=> MAX_UINT_160 - (2 * MAX_UINT_160 - y) < 0
               //              |=> MAX_UINT_160 - (MAX_UINT_160 - y - x) > 0
               MathLib.MAX_UINT_160 -
-              (step.holdings[bundler]?.[token]?.balance ?? 0n),
+              (step.holdings[holder]?.[token]?.balance ?? 0n),
           )
           .sort(
             bigIntComparator(
@@ -690,9 +697,13 @@ export class SimulationState implements InputSimulationState {
               "desc",
             ),
           )[0]!,
-      }),
-    );
+      }));
 
-    return bundlerTokenDiffs.filter(({ required }) => required > 0n);
+    return {
+      requiredTokenAmounts: bundlerTokenDiffs.filter(
+        ({ required }) => required > 0n,
+      ),
+      steps,
+    };
   }
 }

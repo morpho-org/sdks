@@ -403,8 +403,9 @@ export const populateSubBundle = (
   } as Operation;
 
   // Operations with callbacks are populated recursively as a side-effect of the simulation, within the callback itself.
-  let requiredTokenAmounts = data.simulateRequiredTokenAmounts(
+  let { requiredTokenAmounts } = data.simulateWithUnlimitedBalances(
     (operations as Operation[]).concat([simulatedOperation]),
+    [bundler],
   );
 
   const allOperations = (operations as BundlerOperation[]).concat([
@@ -427,12 +428,12 @@ export const populateSubBundle = (
 
   const requirementOperations =
     getRequirementOperations?.(requiredTokenAmounts) ?? [];
-
-  requiredTokenAmounts = data.simulateRequiredTokenAmounts(
+  requiredTokenAmounts = data.simulateWithUnlimitedBalances(
     requirementOperations
       .concat(allOperations)
       .map((operation) => getSimulatedBundlerOperation(operation)),
-  );
+    [bundler],
+  ).requiredTokenAmounts;
 
   // Append required input transfers.
   requiredTokenAmounts.forEach(({ token, required }) => {
