@@ -88,7 +88,7 @@ export const simulateOperation = (
 
 export const simulateOperations = (
   operations: Operation[],
-  startData: SimulationState,
+  startData: MaybeDraft<SimulationState>,
 ) =>
   handleOperations(
     operations,
