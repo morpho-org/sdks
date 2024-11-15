@@ -12,7 +12,13 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
+import {
+  bigIntComparator,
+  entries,
+  getLast,
+  getValue,
+  keys,
+} from "@morpho-org/morpho-ts";
 import {
   type Erc20Operations,
   type MaybeDraft,
@@ -25,6 +31,7 @@ import {
   handleOperations,
   produceImmutable,
   simulateOperation,
+  simulateOperations,
 } from "@morpho-org/simulation-sdk";
 
 import { maxUint256 } from "viem";
@@ -403,9 +410,9 @@ export const populateSubBundle = (
   } as Operation;
 
   // Operations with callbacks are populated recursively as a side-effect of the simulation, within the callback itself.
-  let { requiredTokenAmounts } = data.simulateWithUnlimitedBalances(
+  let requiredTokenAmounts = simulateRequiredTokenAmounts(
     (operations as Operation[]).concat([simulatedOperation]),
-    [bundler],
+    data,
   );
 
   const allOperations = (operations as BundlerOperation[]).concat([
@@ -428,12 +435,12 @@ export const populateSubBundle = (
 
   const requirementOperations =
     getRequirementOperations?.(requiredTokenAmounts) ?? [];
-  ({ requiredTokenAmounts } = data.simulateWithUnlimitedBalances(
+  requiredTokenAmounts = simulateRequiredTokenAmounts(
     requirementOperations
       .concat(allOperations)
       .map((operation) => getSimulatedBundlerOperation(operation)),
-    [bundler],
-  ));
+    data,
+  );
 
   // Append required input transfers.
   requiredTokenAmounts.forEach(({ token, required }) => {
@@ -845,6 +852,48 @@ export const populateBundle = (
   });
 
   return { operations, steps };
+};
+
+export const simulateRequiredTokenAmounts = (
+  operations: Operation[],
+  data: MaybeDraft<SimulationState>,
+) => {
+  const { bundler } = getChainAddresses(data.chainId);
+
+  const virtualBundlerData = produceImmutable(data, (draft) => {
+    Object.values(draft.holdings[bundler] ?? {}).forEach((bundlerTokenData) => {
+      // Virtual balance to calculate the amount required.
+      bundlerTokenData.balance += MathLib.MAX_UINT_160;
+    });
+  });
+
+  const steps = simulateOperations(operations, virtualBundlerData);
+
+  const bundlerTokenDiffs = keys(virtualBundlerData.holdings[bundler]).map(
+    (token) => ({
+      token,
+      required: steps
+        .map(
+          (step) =>
+            // When recursively simulated, this will cause tokens to be required at the highest recursion level.
+            // For example: supplyCollateral(x, supplyCollateral(y, borrow(z)))   [provided x, y, z < MAX_UINT_160]
+            //              |                   |                   |=> MAX_UINT_160 - (3 * MAX_UINT_160 + z) < 0
+            //              |                   |=> MAX_UINT_160 - (2 * MAX_UINT_160 - y) < 0
+            //              |=> MAX_UINT_160 - (MAX_UINT_160 - y - x) > 0
+            MathLib.MAX_UINT_160 -
+            (step.holdings[bundler]?.[token]?.balance ?? 0n),
+        )
+        .sort(
+          bigIntComparator(
+            (required) => required,
+            // Take the highest required amount among all operations.
+            "desc",
+          ),
+        )[0]!,
+    }),
+  );
+
+  return bundlerTokenDiffs.filter(({ required }) => required > 0n);
 };
 
 export const getSimulatedBundlerOperation = (

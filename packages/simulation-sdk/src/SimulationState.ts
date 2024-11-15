@@ -45,14 +45,7 @@ import {
   UnknownVaultUserError,
   UnknownWrappedTokenError,
 } from "./errors.js";
-import {
-  type MaybeDraft,
-  type SimulationResult,
-  produceImmutable,
-  simulateOperation,
-  simulateOperations,
-} from "./handlers/index.js";
-import type { Operation } from "./operations.js";
+import { type MaybeDraft, simulateOperation } from "./handlers/index.js";
 
 export interface PublicAllocatorOptions {
   /* The array of vaults to reallocate. Must all have enabled the PublicAllocator. Defaults to all the vaults that have enabled the PublicAllocator. */
@@ -654,69 +647,5 @@ export class SimulationState implements InputSimulationState {
     };
 
     return _getMarketPublicReallocations();
-  }
-
-  public simulateWithUnlimitedBalances(
-    operations: Operation[],
-    holders: Address[],
-  ) {
-    const virtualHoldersData = produceImmutable(this, (draft) => {
-      holders
-        .flatMap((holder) => Object.values(draft.holdings[holder] ?? {}))
-        .forEach((holderTokenData) => {
-          // Virtual balance to calculate the amount required.
-          holderTokenData.balance += MathLib.MAX_UINT_160;
-        });
-    });
-
-    const steps = simulateOperations(operations, virtualHoldersData);
-
-    const holdersTokenDiffs = holders
-      .flatMap((holder) =>
-        keys(virtualHoldersData.holdings[holder]).map(
-          (token) => [holder, token] as const,
-        ),
-      )
-      .map(([holder, token]) => ({
-        holder,
-        token,
-        required: steps
-          .map(
-            (step) =>
-              // When recursively simulated, this will cause tokens to be required at the highest recursion level.
-              // For example: supplyCollateral(x, supplyCollateral(y, borrow(z)))   [provided x, y, z < MAX_UINT_160]
-              //              |                   |                   |=> MAX_UINT_160 - (3 * MAX_UINT_160 + z) < 0
-              //              |                   |=> MAX_UINT_160 - (2 * MAX_UINT_160 - y) < 0
-              //              |=> MAX_UINT_160 - (MAX_UINT_160 - y - x) > 0
-              MathLib.MAX_UINT_160 -
-              (step.holdings[holder]?.[token]?.balance ?? 0n),
-          )
-          .sort(
-            bigIntComparator(
-              (required) => required,
-              // Take the highest required amount among all operations.
-              "desc",
-            ),
-          )[0]!,
-      }));
-
-    return {
-      requiredTokenAmounts: holdersTokenDiffs.filter(
-        ({ required }) => required > 0n,
-      ),
-      steps: steps.map((step) =>
-        produceImmutable(step, (draft) =>
-          holders
-            .flatMap((holder) => Object.values(draft.holdings[holder] ?? {}))
-            .forEach((holderTokenData) => {
-              // Change virtual balance back to real value
-              holderTokenData.balance = MathLib.max(
-                0n,
-                holderTokenData.balance - MathLib.MAX_UINT_160,
-              );
-            }),
-        ),
-      ) as SimulationResult,
-    };
   }
 }
