@@ -3716,16 +3716,15 @@ __metadata:
   linkType: hard
 
 "@nomicfoundation/hardhat-viem@npm:^2.0.3":
-  version: 2.0.5
-  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.5"
+  version: 2.0.6
+  resolution: "@nomicfoundation/hardhat-viem@npm:2.0.6"
   dependencies:
     abitype: "npm:^0.9.8"
     lodash.memoize: "npm:^4.1.2"
   peerDependencies:
     hardhat: ^2.17.0
-    typescript: ~5.0.0
     viem: ^2.7.6
-  checksum: 10c0/e69711ab5221042f58079ab8af9d6f066ad79eb2177f72083bbf48685f59450a86a0b1336d7e466d21bf4fef3599017bdec9f103dddf2d01fec216ac023b29f7
+  checksum: 10c0/81542d78399a38b504b4ce4ff7a5d57db2708d6ed7eef0c23f482e063e180f605c5b54e309f4aebe292896c09687006c9d2c92f334da80d73dc48afe68ca950e
   languageName: node
   linkType: hard
 
