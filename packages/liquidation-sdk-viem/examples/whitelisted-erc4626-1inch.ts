@@ -181,7 +181,7 @@ export const check = async <
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
-                if (chainId === ChainId.EthMainnet && pendleTokens) {
+                if (pendleTokens) {
                   ({ srcAmount, srcToken } = await encoder.handlePendleTokens(
                     market.params.collateralToken,
                     seizedAssets,
