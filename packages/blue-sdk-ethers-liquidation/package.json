@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@flashbots/ethers-provider-bundle": "^1.0.0",
-    "@paraswap/sdk": "^6.10.0",
+    "@paraswap/sdk": "^7.0.0",
     "executooor": "^1.4.0",
     "graphql": "^16.9.0",
     "graphql-request": "^6.1.0",

@@ -3147,7 +3147,7 @@ __metadata:
     "@nomicfoundation/hardhat-chai-matchers": "npm:^2.0.2"
     "@nomicfoundation/hardhat-ethers": "npm:^3.0.6"
     "@nomicfoundation/hardhat-network-helpers": "npm:^1.0.11"
-    "@paraswap/sdk": "npm:^6.10.0"
+    "@paraswap/sdk": "npm:^7.0.0"
     "@typechain/ethers-v6": "npm:^0.5.1"
     "@typechain/hardhat": "npm:^9.1.0"
     "@types/chai": "npm:^4.3.14"
@@ -4142,32 +4142,34 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@paraswap/core@npm:2.2.0":
-  version: 2.2.0
-  resolution: "@paraswap/core@npm:2.2.0"
-  checksum: 10c0/8a62ef1c6bfa9a6b7f9326315263a7c5b77d27aa6624ec846c6308f6e3fb8fe1661a6f7845182c0b7d2c17f15f8c5d2f40ccf6853980fcd8d69caa6bfd21883c
+"@paraswap/core@npm:2.4.0":
+  version: 2.4.0
+  resolution: "@paraswap/core@npm:2.4.0"
+  checksum: 10c0/12d032e838182ff6736ab6b5baac82608bf8a73b70c8dbe76c99f7b9ed6eaea4e4e65245dc6c979dd4fc8f4420fe50407d10f561ec6d3aba892429eee0b14b5b
   languageName: node
   linkType: hard
 
-"@paraswap/sdk@npm:^6.10.0":
-  version: 6.10.0
-  resolution: "@paraswap/sdk@npm:6.10.0"
+"@paraswap/sdk@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "@paraswap/sdk@npm:7.0.0"
   dependencies:
-    "@paraswap/core": "npm:2.2.0"
-    bignumber.js: "npm:^9.0.2"
-    ts-essentials: "npm:^9.1.2"
+    "@paraswap/core": "npm:2.4.0"
+    ts-essentials: "npm:^10.0.3"
   peerDependencies:
     axios: ">=0.25.0 <2.0.0"
-    ethers: ^5.5.0
-    web3: ^1.7.1
+    ethers: ^5.5.0 || ^6.0.0
+    viem: ^2.21.0
+    web3: ^4.14.0
   peerDependenciesMeta:
     axios:
       optional: true
     ethers:
       optional: true
+    viem:
+      optional: true
     web3:
       optional: true
-  checksum: 10c0/ac097956363648c776ecf4aa3148b75d191e7c96485f339f4e69aab6fe678b5a6d2e40c75b17c7ea9ffc1825aea9af1859ec8c819e3536611621dc055c5e21eb
+  checksum: 10c0/5280fce640839ecad0467fd6afe2ccb4f9b7cb4a541b5fbd0bc7259860b92d28ed9c7bf9945378847345acccca39d29464b924a34361627fdd2b8a5191c1ed2c
   languageName: node
   linkType: hard
 
@@ -5424,13 +5426,6 @@ __metadata:
   version: 3.3.0
   resolution: "bigint-crypto-utils@npm:3.3.0"
   checksum: 10c0/7d06fa01d63e8e9513eee629fe8a426993276b1bdca5aefd0eb3188cee7026334d29e801ef6187a5bc6105ebf26e6e79e6fab544a7da769ccf55b913e66d2a14
-  languageName: node
-  linkType: hard
-
-"bignumber.js@npm:^9.0.2":
-  version: 9.1.2
-  resolution: "bignumber.js@npm:9.1.2"
-  checksum: 10c0/e17786545433f3110b868725c449fa9625366a6e675cd70eb39b60938d6adbd0158cb4b3ad4f306ce817165d37e63f4aa3098ba4110db1d9a3b9f66abfbaf10d
   languageName: node
   linkType: hard
 
@@ -12021,24 +12016,24 @@ __metadata:
   languageName: node
   linkType: hard
 
+"ts-essentials@npm:^10.0.3":
+  version: 10.0.3
+  resolution: "ts-essentials@npm:10.0.3"
+  peerDependencies:
+    typescript: ">=4.5.0"
+  peerDependenciesMeta:
+    typescript:
+      optional: true
+  checksum: 10c0/1bbad8241d8db1ebe4b2eb8f3c984b879de24b14ea42010fcbbc71d9a61a4e3ccd95f7a22c8c0709e2cad578fe1722012e9fbf74420a2ca3fc840565d0b8eb9d
+  languageName: node
+  linkType: hard
+
 "ts-essentials@npm:^7.0.1":
   version: 7.0.3
   resolution: "ts-essentials@npm:7.0.3"
   peerDependencies:
     typescript: ">=3.7.0"
   checksum: 10c0/ea1919534ec6ce4ca4d9cb0ff1ab8e053509237da8d4298762ab3bfba4e78ca5649a599ce78a5c7c2624f3a7a971f62b265b7b0c3c881336e4fa6acaf6f37544
-  languageName: node
-  linkType: hard
-
-"ts-essentials@npm:^9.1.2":
-  version: 9.4.2
-  resolution: "ts-essentials@npm:9.4.2"
-  peerDependencies:
-    typescript: ">=4.1.0"
-  peerDependenciesMeta:
-    typescript:
-      optional: true
-  checksum: 10c0/125d79a0fc4fbfcfbc6f6461e05cde1f9da46035867ae3164812e615d6cc02cd0b2f470c944f619e87f89bebb00b81eb5c9558e83cf6e8e0f47be184474f855e
   languageName: node
   linkType: hard
 
