@@ -135,10 +135,8 @@ export const createAnvilTestClient = <chain extends Chain>(
           args.abi = erc20Abi;
           args.functionName = "approve";
 
-          return client.writeContract(
-            // @ts-ignore
-            args,
-          );
+          // @ts-ignore
+          return this.writeContract(args);
         },
         async balanceOf({
           erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
@@ -209,10 +207,8 @@ export const createAnvilTestClient = <chain extends Chain>(
           args.abi = erc4626Abi;
           args.functionName = "deposit";
 
-          return client.writeContract(
-            // @ts-ignore
-            args,
-          );
+          // @ts-ignore
+          return this.writeContract(args);
         },
 
         async deployContractWait<const abi extends Abi | readonly unknown[]>(

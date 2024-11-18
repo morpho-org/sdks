@@ -26,6 +26,8 @@ jobs:
 
           - simulation-sdk
           - simulation-sdk-wagmi
+
+          - bundler-sdk-ethers
           - bundler-sdk-viem
 
           - liquidation-sdk-viem
@@ -37,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           # Fetch all history so that we can determine the version to release.
-          fetch-depth: 0 
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 

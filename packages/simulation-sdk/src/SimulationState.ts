@@ -45,13 +45,7 @@ import {
   UnknownVaultUserError,
   UnknownWrappedTokenError,
 } from "./errors.js";
-import {
-  type MaybeDraft,
-  produceImmutable,
-  simulateOperation,
-  simulateOperations,
-} from "./handlers/index.js";
-import type { Operation } from "./operations.js";
+import { type MaybeDraft, simulateOperation } from "./handlers/index.js";
 
 export interface PublicAllocatorOptions {
   /* The array of vaults to reallocate. Must all have enabled the PublicAllocator. Defaults to all the vaults that have enabled the PublicAllocator. */
@@ -653,46 +647,5 @@ export class SimulationState implements InputSimulationState {
     };
 
     return _getMarketPublicReallocations();
-  }
-
-  public simulateRequiredTokenAmounts(operations: Operation[]) {
-    const { bundler } = getChainAddresses(this.chainId);
-
-    const virtualBundlerData = produceImmutable(this, (draft) => {
-      Object.values(draft.holdings[bundler] ?? {}).forEach(
-        (bundlerTokenData) => {
-          // Virtual balance to calculate the amount required.
-          bundlerTokenData.balance += MathLib.MAX_UINT_160;
-        },
-      );
-    });
-
-    const steps = simulateOperations(operations, virtualBundlerData);
-
-    const bundlerTokenDiffs = keys(virtualBundlerData.holdings[bundler]).map(
-      (token) => ({
-        token,
-        required: steps
-          .map(
-            (step) =>
-              // When recursively simulated, this will cause tokens to be required at the highest recursion level.
-              // For example: supplyCollateral(x, supplyCollateral(y, borrow(z)))   [provided x, y, z < MAX_UINT_160]
-              //              |                   |                   |=> MAX_UINT_160 - (3 * MAX_UINT_160 + z) < 0
-              //              |                   |=> MAX_UINT_160 - (2 * MAX_UINT_160 - y) < 0
-              //              |=> MAX_UINT_160 - (MAX_UINT_160 - y - x) > 0
-              MathLib.MAX_UINT_160 -
-              (step.holdings[bundler]?.[token]?.balance ?? 0n),
-          )
-          .sort(
-            bigIntComparator(
-              (required) => required,
-              // Take the highest required amount among all operations.
-              "desc",
-            ),
-          )[0]!,
-      }),
-    );
-
-    return bundlerTokenDiffs.filter(({ required }) => required > 0n);
   }
 }
