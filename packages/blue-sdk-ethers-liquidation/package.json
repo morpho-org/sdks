@@ -56,7 +56,7 @@
     "ethers-multicall-provider": "^6.4.1",
     "ethers-types": "^3.17.0",
     "evm-maths": "^7.0.0",
-    "fetch-mock": "^11.1.4",
+    "fetch-mock": "^12.2.0",
     "hardhat": "^2.22.12",
     "hardhat-config": "^0.0.1-security",
     "hardhat-deal": "^3.1.0",

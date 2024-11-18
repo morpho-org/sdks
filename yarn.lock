@@ -3166,7 +3166,7 @@ __metadata:
     ethers-types: "npm:^3.17.0"
     evm-maths: "npm:^7.0.0"
     executooor: "npm:^1.4.0"
-    fetch-mock: "npm:^11.1.4"
+    fetch-mock: "npm:^12.2.0"
     graphql: "npm:^16.9.0"
     graphql-request: "npm:^6.1.0"
     graphql-tag: "npm:^2.12.6"
@@ -7260,19 +7260,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"fetch-mock@npm:^11.1.4":
-  version: 11.1.4
-  resolution: "fetch-mock@npm:11.1.4"
+"fetch-mock@npm:^12.2.0":
+  version: 12.2.0
+  resolution: "fetch-mock@npm:12.2.0"
   dependencies:
     "@types/glob-to-regexp": "npm:^0.4.4"
     dequal: "npm:^2.0.3"
     glob-to-regexp: "npm:^0.4.1"
-    is-subset: "npm:^0.1.1"
+    is-subset-of: "npm:^3.1.10"
     regexparam: "npm:^3.0.0"
-  peerDependenciesMeta:
-    node-fetch:
-      optional: true
-  checksum: 10c0/06909ac2e9bf6b32aca054d44dc09c94f847e2f67b7d3eaac570dc91e7fc00332eb262ba2af3f2fabc17e1798f069c6e07f7cc08e66dfcc86b3d3120795c5f12
+  checksum: 10c0/471f4edabbbff2ba3ed720fa6895d5d3d9c74a499db0b357fb8b4561fc20535018270d902d00da366cc38e953bf7dfc01132957b1c241f72f639265001ad5b4a
   languageName: node
   linkType: hard
 
@@ -8465,10 +8462,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"is-subset@npm:^0.1.1":
-  version: 0.1.1
-  resolution: "is-subset@npm:0.1.1"
-  checksum: 10c0/d8125598ab9077a76684e18726fb915f5cea7a7358ed0c6ff723f4484d71a0a9981ee5aae06c44de99cfdef0fefce37438c6257ab129e53c82045ea0c2acdebf
+"is-subset-of@npm:^3.1.10":
+  version: 3.1.10
+  resolution: "is-subset-of@npm:3.1.10"
+  dependencies:
+    typedescriptor: "npm:3.0.2"
+  checksum: 10c0/79d569c05fe64b7fe8f12b22205064b0fe67ed90e4359b3eb1622d8cfcc48d289b0c49310c7547dec2a4a13561e99e157088e3f67b00a02829a89acb3862225e
   languageName: node
   linkType: hard
 
@@ -12282,6 +12281,13 @@ __metadata:
   bin:
     typechain: dist/cli/cli.js
   checksum: 10c0/1ea660cc7c699c6ac68da67b76454eb4e9395c54666d924ca67f983ae8eb5b5e7dab0a576beb55dbfad75ea784a3f68cb1ca019d332293b7291731c156ead5b5
+  languageName: node
+  linkType: hard
+
+"typedescriptor@npm:3.0.2":
+  version: 3.0.2
+  resolution: "typedescriptor@npm:3.0.2"
+  checksum: 10c0/7e3daf4857ad2f03e8fbbe3683b219c80183637d3f849a52ff8246f0b6e852ca46f9f6d6c2c05c7fa8fe895afc7c07c2a071a25049a4ce26bd2eed1e00935465
   languageName: node
   linkType: hard
 
