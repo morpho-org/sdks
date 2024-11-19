@@ -11,7 +11,7 @@ export namespace Paraswap {
   ): Promise<SwapResponse> {
     const paraSwap = constructSimpleSDK({
       chainId: Number(swapParams.chainId),
-      fetch: fetch,
+      fetch,
     });
 
     const priceRoute = await paraSwap.swap.getRate({

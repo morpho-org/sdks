@@ -81,8 +81,6 @@ export const check = async <
 
   const ethPriceUsd = safeParseNumber(wethPriceUsd, 18);
 
-  const pendleTokens = await Pendle.getTokens(chainId);
-
   return Promise.all(
     (positions ?? []).map(async (position) => {
       if (position.market.collateralAsset == null) return;
@@ -165,6 +163,11 @@ export const check = async <
         const slippage =
           (market.params.liquidationIncentiveFactor - BigInt.WAD) / 2n;
 
+        const pendleTokens =
+          chainId === ChainId.EthMainnet
+            ? await Pendle.getTokens(chainId)
+            : undefined;
+
         await Promise.allSettled(
           triedLiquidity.map(
             async ({ seizedAssets, repaidAssets, withdrawnAssets }) => {
@@ -178,11 +181,13 @@ export const check = async <
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
-                ({ srcAmount, srcToken } = await encoder.handlePendleTokens(
-                  market.params.collateralToken,
-                  seizedAssets,
-                  pendleTokens,
-                ));
+                if (pendleTokens) {
+                  ({ srcAmount, srcToken } = await encoder.handlePendleTokens(
+                    market.params.collateralToken,
+                    seizedAssets,
+                    pendleTokens,
+                  ));
+                }
 
                 // As there is no liquidity for sUSDS, we use the sUSDS withdrawal function to get USDS instead
                 if (
