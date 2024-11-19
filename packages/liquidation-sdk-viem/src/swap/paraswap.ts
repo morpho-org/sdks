@@ -48,12 +48,9 @@ export namespace Paraswap {
         logoURI: "",
       },
       tx: {
-        from: calldata.from as Address,
         to: calldata.to as Address,
         data: calldata.data as Hex,
-        value: calldata.value,
-        gasPrice: calldata.gasPrice,
-        gas: Number(calldata.gas),
+        value: BigInt(calldata.value),
       },
       protocols: [],
     };

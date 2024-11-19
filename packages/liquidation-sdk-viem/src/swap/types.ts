@@ -42,11 +42,8 @@ export interface SwapResponse {
   dstAmount: string;
   protocols: {}[];
   tx: {
-    from: Address;
     to: Address;
     data: Hex;
-    value: string;
-    gasPrice: string;
-    gas: number;
+    value: bigint;
   };
 }
