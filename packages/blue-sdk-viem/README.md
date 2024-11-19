@@ -92,11 +92,12 @@ const market = await Market.fetch(
 
 market.utilization; // e.g. 92% (scaled by WAD).
 market.liquidity; // e.g. 23_000000n (in loan assets).
-market.apyAtTarget; // e.g. 3% (scaled by WAD).
 
 const accruedMarket = market.accrueInterest(Time.timestamp()); // Accrue interest to the latest's timestamp.
 
 accruedMarket.toSupplyAssets(shares); // Convert supply shares to assets.
+accruedMarket.apyAtTarget; // e.g. 3% (scaled by WAD).
+accruedMarket.borrowApy; // e.g. 8% (scaled by WAD).
 ```
 
 ### Fetch data on the position of a specific user on a specific market
