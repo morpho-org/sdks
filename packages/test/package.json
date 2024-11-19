@@ -53,9 +53,9 @@
     "@types/node": "^22.9.0",
     "ethers": "^6.13.4",
     "typescript": "^5.6.3",
-    "viem": "^2.21.44",
-    "vitest": "^2.1.4",
-    "wagmi": "^2.12.25"
+    "viem": "^2.21.48",
+    "vitest": "^2.1.5",
+    "wagmi": "^2.12.33"
   },
   "publishConfig": {
     "main": "lib/index.js",
