@@ -261,7 +261,7 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's APY on its assets averaged over its markets deposits, including the performance fee.
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits, before deducting the performance fee.
    */
   get apy() {
     if (this.totalAssets === 0n) return 0n;
@@ -278,7 +278,7 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's APY on its assets averaged over its markets deposits, excluding the performance fee.
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits, after deducting the performance fee.
    */
   get netApy() {
     return MathLib.wMulDown(this.apy, MathLib.WAD - this.fee);
