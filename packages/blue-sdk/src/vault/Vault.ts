@@ -261,9 +261,9 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's average APY on its assets, including the performance fee.
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits, before deducting the performance fee.
    */
-  get avgApy() {
+  get apy() {
     if (this.totalAssets === 0n) return 0n;
 
     return (
@@ -278,10 +278,10 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's average APY on its assets, excluding the performance fee.
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits, after deducting the performance fee.
    */
   get netApy() {
-    return MathLib.wMulDown(this.avgApy, MathLib.WAD - this.fee);
+    return MathLib.wMulDown(this.apy, MathLib.WAD - this.fee);
   }
 
   public getAllocationProportion(marketId: MarketId) {
