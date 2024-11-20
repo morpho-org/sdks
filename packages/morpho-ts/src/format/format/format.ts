@@ -359,7 +359,8 @@ export class HexFormatter extends BaseFormatter {
 export abstract class CommonFormatter extends BaseFormatter {
   protected abstract _options: Readonly<BaseFormatOptions>;
 
-  digits(_d: number) {
+  digits(_d: number | undefined | null) {
+    if (_d == null) return this;
     const newOptions = { ...this._options, digits: _d };
 
     return this._clone(newOptions);
@@ -377,13 +378,15 @@ export abstract class CommonFormatter extends BaseFormatter {
     return this._clone(newOptions);
   }
 
-  min(_m: number) {
+  min(_m: number | undefined | null) {
+    if (_m == null) return this;
     const newOptions = { ...this._options, min: _m };
 
     return this._clone(newOptions);
   }
 
-  max(_m: number) {
+  max(_m: number | undefined | null) {
+    if (_m == null) return this;
     const newOptions = { ...this._options, max: _m };
 
     return this._clone(newOptions);
@@ -395,13 +398,16 @@ export abstract class CommonFormatter extends BaseFormatter {
     return this._clone(newOptions);
   }
 
-  unit(_u: string) {
+  unit(_u: string | undefined | null) {
+    if (_u == null) return this;
+
     const newOptions = { ...this._options, unit: _u };
 
     return this._clone(newOptions);
   }
 
-  locale(_l: string) {
+  locale(_l: string | undefined | null) {
+    if (_l == null) return this;
     const newOptions = { ...this._options, locale: _l };
 
     return this._clone(newOptions);
