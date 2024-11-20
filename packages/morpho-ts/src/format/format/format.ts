@@ -284,7 +284,10 @@ export abstract class BaseFormatter {
 
   protected abstract _clone(_options: FormatOptions): this;
 
-  default(_d: string) {
+  default(_d: string): FormatterWithDefault<this>;
+  default(_d: string | undefined | null): this;
+  default(_d: string | undefined | null) {
+    if (_d == null) return this;
     const newOptions = { ...this._options, default: _d };
 
     return this._clone(newOptions) as FormatterWithDefault<this>;

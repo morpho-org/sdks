@@ -163,6 +163,49 @@ describe("format", () => {
   });
 
   describe("number", () => {
+    describe("should properly handle options", () => {
+      const formatter = format.number
+        .digits(2)
+        .locale("en-US")
+        .unit("unit")
+        .min(0)
+        .max(100);
+
+      test("it shouldn't update options if parameter is undefined", () => {
+        const newFormatter = formatter
+          .digits(undefined)
+          .locale(undefined)
+          .unit(undefined)
+          .min(undefined)
+          .max(undefined);
+
+        //@ts-ignore
+        const options = newFormatter._options;
+        expect(options.digits).toBe(2);
+        expect(options.locale).toBe("en-US");
+        expect(options.unit).toBe("unit");
+        expect(options.min).toBe(0);
+        expect(options.max).toBe(100);
+      });
+
+      test("it shouldn't update options if parameter is null", () => {
+        const newFormatter = formatter
+          .digits(null)
+          .locale(null)
+          .unit(null)
+          .min(null)
+          .max(null);
+
+        //@ts-ignore
+        const options = newFormatter._options;
+        expect(options.digits).toBe(2);
+        expect(options.locale).toBe("en-US");
+        expect(options.unit).toBe("unit");
+        expect(options.min).toBe(0);
+        expect(options.max).toBe(100);
+      });
+    });
+
     describe("should properly format number in number format", () => {
       test("without option", () => {
         expect(format.number.of(number)).toEqual("12345.6789");
