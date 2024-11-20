@@ -271,8 +271,9 @@ export const populateSubBundle = (
 
   // Reallocate liquidity if necessary.
   if (
-    mainOperation.type === "Blue_Borrow" ||
-    mainOperation.type === "Blue_Withdraw"
+    !!publicAllocatorOptions?.enabled &&
+    (mainOperation.type === "Blue_Borrow" ||
+      mainOperation.type === "Blue_Withdraw")
   ) {
     const market = data
       .getMarket(mainOperation.args.id)
@@ -300,7 +301,7 @@ export const populateSubBundle = (
     } = {};
 
     const supplyTargetUtilization =
-      publicAllocatorOptions?.supplyTargetUtilization?.[market.params.id] ??
+      publicAllocatorOptions.supplyTargetUtilization?.[market.params.id] ??
       DEFAULT_SUPPLY_TARGET_UTILIZATION;
 
     if (

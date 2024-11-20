@@ -93,6 +93,10 @@ export const setupBundle = async <chain extends Chain = Chain>(
       ...withSimplePermit[startData.chainId],
       ...(options?.withSimplePermit ?? []),
     ]),
+    publicAllocatorOptions: {
+      enabled: true,
+      ...options.publicAllocatorOptions,
+    },
   });
   operations = finalizeBundle(
     operations,
