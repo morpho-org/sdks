@@ -48,6 +48,8 @@ import {
 import { type MaybeDraft, simulateOperation } from "./handlers/index.js";
 
 export interface PublicAllocatorOptions {
+  enabled?: boolean;
+
   /* The array of vaults to reallocate. Must all have enabled the PublicAllocator. Defaults to all the vaults that have enabled the PublicAllocator. */
   reallocatableVaults?: Address[];
 
@@ -344,7 +346,7 @@ export class SimulationState implements InputSimulationState {
     user: Address,
     marketId: MarketId,
     slippage?: bigint,
-    reallocationOptions?: PublicAllocatorOptions,
+    publicAllocatorOptions?: PublicAllocatorOptions,
     disabledPeripheralTokens = new Set<PeripheralBalanceType>(),
     maxCapacitiesOptions?: {
       borrow?: MaxBorrowOptions;
@@ -368,7 +370,7 @@ export class SimulationState implements InputSimulationState {
       );
       if (loanBalance == null || collateralBalance == null) return;
 
-      return this.getMarketPublicReallocations(marketId, reallocationOptions)
+      return this.getMarketPublicReallocations(marketId, publicAllocatorOptions)
         .data.getAccrualPosition(user, marketId)
         .getMaxCapacities(loanBalance, collateralBalance, maxCapacitiesOptions);
     }, UnknownDataError);
@@ -526,11 +528,14 @@ export class SimulationState implements InputSimulationState {
   public getMarketPublicReallocations(
     marketId: MarketId,
     {
+      enabled = true,
       reallocatableVaults = keys(this.vaultMarketConfigs),
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
     }: PublicAllocatorOptions = {},
   ) {
+    if (!enabled) return { withdrawals: [], data: this };
+
     // Filter the vaults that have the market enabled and configured on the PublicAllocator.
     reallocatableVaults = reallocatableVaults.filter((vault) => {
       const vaultMarketConfig = this.vaultMarketConfigs[vault]?.[marketId];
