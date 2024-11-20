@@ -169,7 +169,8 @@ describe("format", () => {
         .locale("en-US")
         .unit("unit")
         .min(0)
-        .max(100);
+        .max(100)
+        .default("default");
 
       test("it shouldn't update options if parameter is undefined", () => {
         const newFormatter = formatter
@@ -177,7 +178,8 @@ describe("format", () => {
           .locale(undefined)
           .unit(undefined)
           .min(undefined)
-          .max(undefined);
+          .max(undefined)
+          .default(undefined);
 
         //@ts-ignore
         const options = newFormatter._options;
@@ -186,6 +188,7 @@ describe("format", () => {
         expect(options.unit).toBe("unit");
         expect(options.min).toBe(0);
         expect(options.max).toBe(100);
+        expect(options.default).toBe("default");
       });
 
       test("it shouldn't update options if parameter is null", () => {
@@ -194,7 +197,8 @@ describe("format", () => {
           .locale(null)
           .unit(null)
           .min(null)
-          .max(null);
+          .max(null)
+          .default(undefined);
 
         //@ts-ignore
         const options = newFormatter._options;
@@ -203,6 +207,7 @@ describe("format", () => {
         expect(options.unit).toBe("unit");
         expect(options.min).toBe(0);
         expect(options.max).toBe(100);
+        expect(options.default).toBe("default");
       });
     });
 
