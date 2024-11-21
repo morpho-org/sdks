@@ -878,9 +878,8 @@ describe("erc4626-1inch", () => {
         marketId,
         client,
       );
-      const newAccruedPosition = newAccrualPosition.accrueInterest(timestamp);
 
-      const seizedCollateral = newAccruedPosition.seizableCollateral!;
+      const seizedCollateral = newAccrualPosition.seizableCollateral!;
 
       mockOneInch(encoder, [
         {
@@ -899,10 +898,8 @@ describe("erc4626-1inch", () => {
         marketId,
         client,
       );
-      const finalAccruedPosition =
-        finalAccrualPosition.accrueInterest(timestamp);
 
-      expect(finalAccruedPosition.borrowShares).toEqual(0n);
+      expect(finalAccrualPosition.borrowShares).toEqual(0n);
     },
   );
 
