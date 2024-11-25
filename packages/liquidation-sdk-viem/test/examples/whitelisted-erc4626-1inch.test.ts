@@ -803,8 +803,6 @@ describe("erc4626-1inch", () => {
         ],
       });
 
-      const timestamp = await syncTimestamp(client);
-
       nock(BLUE_API_BASE_URL)
         .post("/graphql")
         .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
@@ -841,18 +839,10 @@ describe("erc4626-1inch", () => {
           },
         });
 
-      const accrualPosition = await fetchAccrualPosition(
-        borrower.address as Address,
-        marketId,
-        client,
-      );
-      const accruedPosition = accrualPosition.accrueInterest(timestamp);
-
-      const loanAmount = accruedPosition.borrowAssets;
       await client.deal({
         erc20: loanToken.address,
         account: liquidator.address,
-        amount: loanAmount,
+        amount: maxUint256,
       });
       await client.approve({
         account: liquidator,
@@ -867,28 +857,20 @@ describe("erc4626-1inch", () => {
         args: [
           market.params,
           borrower.address,
-          accruedPosition.seizableCollateral! - parseEther("0.01"),
+          collateral - parseEther("0.01"),
           0n,
           "0x",
         ],
       });
 
-      const newAccrualPosition = await fetchAccrualPosition(
-        borrower.address as Address,
-        marketId,
-        client,
-      );
-
-      const seizedCollateral = newAccrualPosition.seizableCollateral!;
-
       mockOneInch(encoder, [
         {
-          srcAmount: seizedCollateral,
+          srcAmount: parseEther("0.01"),
           dstAmount: "10000000000000000",
         },
       ]);
       mockParaSwap(encoder, [
-        { srcAmount: seizedCollateral, dstAmount: "10000000000000000" },
+        { srcAmount: parseEther("0.01"), dstAmount: "10000000000000000" },
       ]);
 
       await check(encoder.address, client, client.account, [marketId]);
