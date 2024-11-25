@@ -7067,9 +7067,9 @@ __metadata:
   linkType: hard
 
 "evm-maths@npm:^7.0.0":
-  version: 7.0.0
-  resolution: "evm-maths@npm:7.0.0"
-  checksum: 10c0/e135f85f20d29ce894da6e3e5fbb46134524a24a693e7848a83327cafe7e50ee8a3e6e8d27d7b027d023b791cde497ce133195ae852b51fa5c3e0f2d9b5da746
+  version: 7.0.1
+  resolution: "evm-maths@npm:7.0.1"
+  checksum: 10c0/dd528e2b25503150e693a25ad89d19c594a3614f30625b8f26ef445fed511c0b6d53cc53ec2149af20213ac46776ea2face6b0e7eaf1afe4d8301f6161e21365
   languageName: node
   linkType: hard
 
