@@ -6981,11 +6981,11 @@ __metadata:
   linkType: hard
 
 "ethers-types@npm:^3.15.0, ethers-types@npm:^3.17.0":
-  version: 3.17.2
-  resolution: "ethers-types@npm:3.17.2"
+  version: 3.17.3
+  resolution: "ethers-types@npm:3.17.3"
   peerDependencies:
     ethers: ^6.0.0
-  checksum: 10c0/e99ad59253cd5de0c7f5669b2a13ca06b6e6eaf493541fcecf4587341bd14f60fae46ab60cb5bae6e46acdd7c38d718df9d80b4a92bea75a74a09d525ad4cad7
+  checksum: 10c0/ef4a4dbd0a63db251629e12bba13b11d6492d16f1ecf869c079322d6d903819b06558938d8b4dc2288a59048a4cd439420f1ca5e2ce3d0e70869f98d84863d23
   languageName: node
   linkType: hard
 
