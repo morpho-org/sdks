@@ -88,11 +88,15 @@ describe("erc4626-1inch", () => {
     fetchMock.restore();
   });
 
-  const syncTimestamp = async (client: AnvilTestClient, timestamp?: bigint) => {
+  const syncTimestamp = async (
+    client: AnvilTestClient,
+    timestamp?: bigint,
+    increment?: bigint,
+  ) => {
     timestamp ??= (await client.timestamp()) + 60n;
 
     vi.useFakeTimers({
-      now: Number(timestamp) * 1000,
+      now: Number(timestamp + (increment ?? 0n)) * 1000,
       toFake: ["Date"], // Avoid faking setTimeout, used to delay retries.
     });
 
@@ -803,6 +807,8 @@ describe("erc4626-1inch", () => {
         ],
       });
 
+      await syncTimestamp(client, (await client.timestamp()) + 31536000n, 1n);
+
       nock(BLUE_API_BASE_URL)
         .post("/graphql")
         .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
@@ -829,7 +835,7 @@ describe("erc4626-1inch", () => {
                     loanAsset: {
                       address: market.params.loanToken,
                       decimals: loanToken.decimals,
-                      priceUsd: null,
+                      priceUsd: ethPriceUsd,
                       spotPriceEth: 1 / ethPriceUsd,
                     },
                   },
@@ -863,14 +869,31 @@ describe("erc4626-1inch", () => {
         ],
       });
 
+      const postLiquidationAccrualPosition = await fetchAccrualPosition(
+        borrower.address as Address,
+        marketId,
+        client,
+      );
+
+      const collateralValue =
+        (collateralPriceUsd *
+          Number(postLiquidationAccrualPosition.collateral)) /
+        10 ** collateralToken.decimals;
+      const loanValue =
+        (ethPriceUsd * Number(postLiquidationAccrualPosition.borrowAssets)) /
+        10 ** loanToken.decimals;
+
+      expect(loanValue).toBeGreaterThan(1000);
+      expect(collateralValue).toBeLessThan(1000);
+
       mockOneInch(encoder, [
         {
           srcAmount: parseEther("0.01"),
-          dstAmount: "10000000000000000",
+          dstAmount: "14035289781000635",
         },
       ]);
       mockParaSwap(encoder, [
-        { srcAmount: parseEther("0.01"), dstAmount: "10000000000000000" },
+        { srcAmount: parseEther("0.01"), dstAmount: "14035289781000635" },
       ]);
 
       await check(encoder.address, client, client.account, [marketId]);
@@ -882,6 +905,7 @@ describe("erc4626-1inch", () => {
       );
 
       expect(finalAccrualPosition.borrowShares).toEqual(0n);
+      expect(finalAccrualPosition.collateral).toEqual(0n);
     },
   );
 
