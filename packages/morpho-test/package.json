@@ -27,9 +27,9 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "@types/node": "^22.9.0",
+    "@types/node": "^22.9.3",
     "typescript": "^5.6.3",
-    "viem": "^2.21.48"
+    "viem": "^2.21.50"
   },
   "publishConfig": {
     "main": "lib/index.js",

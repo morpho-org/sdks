@@ -117,15 +117,20 @@ format.number.of(123.45); // "123.45"
 
 **Customization Methods:**
 
-- `.digits(number)`: Sets the number of decimal digits.
+- `.digits(number)`: Sets the number of decimal digits. <span style="color:#C73E59">*</span>
 - `.removeTrailingZero()`: Removes trailing zeros after the decimal.
-- `.min(number)`: Sets the minimum value; values below this will display as `< min`.
-- `.max(number)`: Sets the maximum value; values above this will display as `> max`.
+- `.min(number)`: Sets the minimum value; values below this will display as `< min`. <span style="color:#C73E59">*</span>
+- `.max(number)`: Sets the maximum value; values above this will display as `> max`. <span style="color:#C73E59">*</span>
 - `.sign()`: Adds a sign to the number (`+` or `-`).
-- `.unit(string)`: Adds a unit to the number (e.g., `$`, `%`).
-- `.locale(string)`: Formats the number according to the specified locale.
+- `.unit(string)`: Adds a unit to the number (e.g., `$`, `%`). <span style="color:#C73E59">*</span>
+- `.locale(string)`: Formats the number according to the specified locale. <span style="color:#C73E59">*</span>
 - `.readable()`: Makes the value more readable for small numbers.
-- `.default(string)`: Sets a default value in case `value` (or `decimals`) is `null` or `undefined`.
+- `.default(string)`: Sets a default value in case `value` (or `decimals`) is `null` or `undefined`. <span style="color:#C73E59">*</span>
+
+
+
+_<sub><span style="color:#C73E59">*</span> If the provided value is `null` or `undefined`, the option is ignored.</sub>_
+
 
 ---
 

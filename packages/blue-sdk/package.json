@@ -28,7 +28,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "typescript": "^5.6.3",
-    "viem": "^2.21.48",
+    "viem": "^2.21.50",
     "vitest": "^2.1.5"
   },
   "publishConfig": {
