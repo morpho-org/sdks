@@ -8,7 +8,12 @@ import {
   type MarketId,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { BLUE_API_BASE_URL, ZERO_ADDRESS, format } from "@morpho-org/morpho-ts";
+import {
+  BLUE_API_BASE_URL,
+  Time,
+  ZERO_ADDRESS,
+  format,
+} from "@morpho-org/morpho-ts";
 import type { BuildTxInput } from "@paraswap/sdk";
 
 import {
@@ -88,15 +93,11 @@ describe("erc4626-1inch", () => {
     fetchMock.restore();
   });
 
-  const syncTimestamp = async (
-    client: AnvilTestClient,
-    timestamp?: bigint,
-    increment?: bigint,
-  ) => {
+  const syncTimestamp = async (client: AnvilTestClient, timestamp?: bigint) => {
     timestamp ??= (await client.timestamp()) + 60n;
 
     vi.useFakeTimers({
-      now: Number(timestamp + (increment ?? 0n)) * 1000,
+      now: Number(timestamp) * 1000,
       toFake: ["Date"], // Avoid faking setTimeout, used to delay retries.
     });
 
@@ -807,7 +808,9 @@ describe("erc4626-1inch", () => {
         ],
       });
 
-      await syncTimestamp(client, (await client.timestamp()) + 31536000n, 1n);
+      await client.setNextBlockTimestamp({
+        timestamp: (await client.timestamp()) + Time.s.from.y(1n),
+      });
 
       nock(BLUE_API_BASE_URL)
         .post("/graphql")
@@ -868,6 +871,8 @@ describe("erc4626-1inch", () => {
           "0x",
         ],
       });
+
+      await syncTimestamp(client, await client.timestamp());
 
       const postLiquidationAccrualPosition = await fetchAccrualPosition(
         borrower.address as Address,
