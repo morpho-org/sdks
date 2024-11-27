@@ -2331,3 +2331,95 @@ export const daiUsdsConverterAbi = [
     type: "function",
   },
 ] as const;
+
+export const preLiquidationFactoryAbi = [
+  {
+    type: "constructor",
+    inputs: [{ name: "morpho", type: "address", internalType: "address" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "MORPHO",
+    inputs: [],
+    outputs: [{ name: "", type: "address", internalType: "contract IMorpho" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "createPreLiquidation",
+    inputs: [
+      { name: "id", type: "bytes32", internalType: "Id" },
+      {
+        name: "preLiquidationParams",
+        type: "tuple",
+        internalType: "struct PreLiquidationParams",
+        components: [
+          { name: "preLltv", type: "uint256", internalType: "uint256" },
+          { name: "preLCF1", type: "uint256", internalType: "uint256" },
+          { name: "preLCF2", type: "uint256", internalType: "uint256" },
+          { name: "preLIF1", type: "uint256", internalType: "uint256" },
+          { name: "preLIF2", type: "uint256", internalType: "uint256" },
+          {
+            name: "preLiquidationOracle",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "contract IPreLiquidation",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "isPreLiquidation",
+    inputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "CreatePreLiquidation",
+    inputs: [
+      {
+        name: "preLiquidation",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "id",
+        type: "bytes32",
+        indexed: false,
+        internalType: "Id",
+      },
+      {
+        name: "preLiquidationParams",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct PreLiquidationParams",
+        components: [
+          { name: "preLltv", type: "uint256", internalType: "uint256" },
+          { name: "preLCF1", type: "uint256", internalType: "uint256" },
+          { name: "preLCF2", type: "uint256", internalType: "uint256" },
+          { name: "preLIF1", type: "uint256", internalType: "uint256" },
+          { name: "preLIF2", type: "uint256", internalType: "uint256" },
+          {
+            name: "preLiquidationOracle",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  { type: "error", name: "ZeroAddress", inputs: [] },
+] as const;

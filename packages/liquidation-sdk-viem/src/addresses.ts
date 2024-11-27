@@ -32,6 +32,7 @@ declare module "@morpho-org/blue-sdk" {
     "PT-sUSDE-24OCT2024"?: Address;
     "PT-weETH-26DEC2024"?: Address;
     "PT-weETH-27JUN2024"?: Address;
+    preLiquidationFactory?: Address;
   }
 }
 
@@ -47,6 +48,8 @@ mainnetAddresses.sky = "0x56072C95FAA701256059aa122697B133aDEd9279";
 mainnetAddresses.mkrSkyConverter = "0xBDcFCA946b6CDd965f99a839e4435Bcdc1bc470B";
 mainnetAddresses.daiUsdsConverter =
   "0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A";
+mainnetAddresses.preLiquidationFactory =
+  "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52";
 
 export const curvePools = {
   "usd0usd0++": "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52",
