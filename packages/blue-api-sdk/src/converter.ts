@@ -196,8 +196,9 @@ export class BlueSdkConverter {
     const rateAtTarget =
       // rateAtUTarget is not typed nullable, but it will be as soon as a non-compatible IRM is enabled.
       dto.state.rateAtUTarget != null
-        ? // API rate at targed is annualized, while the Market rateAtTarget is per second.
-          this.options.parseNumber(dto.state.rateAtUTarget, 18) /
+        ? // API rate at target is compounded over the year, while the Market rateAtTarget is per second.
+          //TODO use rateAtTarget directly per second
+          this.options.parseNumber(Math.log1p(dto.state.rateAtUTarget), 18) /
           Time.s.from.y(1n)
         : undefined;
 
