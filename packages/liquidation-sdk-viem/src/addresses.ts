@@ -32,9 +32,13 @@ declare module "@morpho-org/blue-sdk" {
     "PT-sUSDE-24OCT2024"?: Address;
     "PT-weETH-26DEC2024"?: Address;
     "PT-weETH-27JUN2024"?: Address;
-    preLiquidationFactory?: Address;
   }
 }
+
+type PreLiquidationFactoryConfig = {
+  address: Address;
+  deploymentBlock: bigint;
+};
 
 export const mainnetAddresses = addresses[ChainId.EthMainnet] as ChainAddresses;
 export const baseAddresses = addresses[ChainId.BaseMainnet] as ChainAddresses;
@@ -48,10 +52,22 @@ mainnetAddresses.sky = "0x56072C95FAA701256059aa122697B133aDEd9279";
 mainnetAddresses.mkrSkyConverter = "0xBDcFCA946b6CDd965f99a839e4435Bcdc1bc470B";
 mainnetAddresses.daiUsdsConverter =
   "0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A";
-mainnetAddresses.preLiquidationFactory =
-  "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52";
 
 export const curvePools = {
   "usd0usd0++": "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52",
   usd0usdc: "0x14100f81e33C33Ecc7CDac70181Fb45B6E78569F",
 } as const;
+
+export const preLiquidationFactoryConfigs: Record<
+  ChainId,
+  PreLiquidationFactoryConfig
+> = {
+  [ChainId.EthMainnet]: {
+    address: "0x0000000000000000000000000000000000000000",
+    deploymentBlock: 0n,
+  },
+  [ChainId.BaseMainnet]: {
+    address: "0x0000000000000000000000000000000000000000",
+    deploymentBlock: 0n,
+  },
+};

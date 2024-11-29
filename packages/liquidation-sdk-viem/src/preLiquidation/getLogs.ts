@@ -1,6 +1,6 @@
-import { ChainUtils } from "@morpho-org/blue-sdk";
+import { type Address, ChainUtils, type MarketId } from "@morpho-org/blue-sdk";
 import { addresses } from "@morpho-org/blue-sdk";
-import { mainnetAddresses } from "src/addresses";
+import { preLiquidationFactoryConfigs } from "src/addresses";
 import type {
   Account,
   Chain,
@@ -21,17 +21,15 @@ export async function preLiquidationLogs<chain extends Chain = Chain>(
     PublicRpcSchema | WalletRpcSchema,
     PublicActions<Transport, chain, Account> & WalletActions<chain, Account>
   >,
-) {
+): Promise<PreLiquidation[]> {
   const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
-  const factoryDeploymentBlock = 21272611;
 
   try {
     const head = await client.getBlockNumber();
 
     const logs = await client.getLogs({
-      address:
-        chainId === 1 ? mainnetAddresses.preLiquidationFactory : undefined,
-      fromBlock: BigInt(factoryDeploymentBlock),
+      address: preLiquidationFactoryConfigs[chainId].address,
+      fromBlock: preLiquidationFactoryConfigs[chainId].deploymentBlock,
       toBlock: BigInt(head),
       event: {
         type: "event",
@@ -73,9 +71,11 @@ export async function preLiquidationLogs<chain extends Chain = Chain>(
 
     return logs.map((log) => {
       return {
-        marketId: log.args.id!,
-        preLiquidationAddress: log.args.preLiquidation!,
-        preLiquidationParams: log.args.preLiquidationParams!,
+        marketId: log.args.id! as MarketId,
+        address: log.args.preLiquidation! as Address,
+        preLiquidationParams: formatPreLiquidationParams(
+          log.args.preLiquidationParams!,
+        ),
       };
     });
   } catch (e) {
@@ -142,9 +142,27 @@ export async function authorizationLogs<chain extends Chain = Chain>(
 
     return logs
       .filter((log) => log.args.newIsAuthorized! === true)
-      .map((log) => log.args.authorizer!);
+      .map((log) => log.args.authorizer! as Address);
   } catch (e) {
     console.error(e);
     return [];
   }
+}
+
+function formatPreLiquidationParams(preLiquidiationParams: {
+  preLltv: bigint;
+  preLCF1: bigint;
+  preLCF2: bigint;
+  preLIF1: bigint;
+  preLIF2: bigint;
+  preLiquidationOracle: `0x${string}`;
+}) {
+  return {
+    preLltv: preLiquidiationParams.preLltv,
+    preLCF1: preLiquidiationParams.preLCF1,
+    preLCF2: preLiquidiationParams.preLCF2,
+    preLIF1: preLiquidiationParams.preLIF1,
+    preLIF2: preLiquidiationParams.preLIF2,
+    preLiquidationOracle: preLiquidiationParams.preLiquidationOracle as Address,
+  };
 }

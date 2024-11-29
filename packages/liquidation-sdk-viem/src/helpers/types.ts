@@ -1,4 +1,10 @@
-import type { Address } from "@morpho-org/blue-sdk";
+import type { AccrualPosition, Address, MarketId } from "@morpho-org/blue-sdk";
+
+export type preLiquidationPosition = {
+  position: AccrualPosition;
+  preLiquidation: PreLiquidation;
+  preSeizableCollateral?: bigint;
+};
 
 export type PreLiquidationParams = {
   preLltv: bigint;
@@ -10,7 +16,7 @@ export type PreLiquidationParams = {
 };
 
 export type PreLiquidation = {
-  marketId: bigint;
+  marketId: MarketId;
   address: Address;
   preLiquidationParams: PreLiquidationParams;
 };
