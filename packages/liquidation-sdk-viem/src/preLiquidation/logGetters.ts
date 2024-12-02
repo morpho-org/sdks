@@ -1,33 +1,19 @@
 import { type Address, ChainUtils, type MarketId } from "@morpho-org/blue-sdk";
 import { addresses } from "@morpho-org/blue-sdk";
 import { preLiquidationFactoryConfigs } from "src/addresses";
-import type {
-  Account,
-  Chain,
-  Client,
-  PublicActions,
-  PublicRpcSchema,
-  Transport,
-  WalletActions,
-  WalletRpcSchema,
-} from "viem";
-import type { PreLiquidation } from "../helpers/types";
+import type { Account, Chain, Client, Transport } from "viem";
+import { getBlockNumber, getLogs } from "viem/actions";
+import type { PreLiquidation } from "./types";
 
 export async function preLiquidationLogs<chain extends Chain = Chain>(
-  client: Client<
-    Transport,
-    chain,
-    Account,
-    PublicRpcSchema | WalletRpcSchema,
-    PublicActions<Transport, chain, Account> & WalletActions<chain, Account>
-  >,
+  client: Client<Transport, chain, Account>,
 ): Promise<PreLiquidation[]> {
   const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
 
   try {
-    const head = await client.getBlockNumber();
+    const head = await getBlockNumber(client);
 
-    const logs = await client.getLogs({
+    const logs = await getLogs(client, {
       address: preLiquidationFactoryConfigs[chainId].address,
       fromBlock: preLiquidationFactoryConfigs[chainId].deploymentBlock,
       toBlock: BigInt(head),
@@ -85,22 +71,16 @@ export async function preLiquidationLogs<chain extends Chain = Chain>(
 }
 
 export async function authorizationLogs<chain extends Chain = Chain>(
-  client: Client<
-    Transport,
-    chain,
-    Account,
-    PublicRpcSchema | WalletRpcSchema,
-    PublicActions<Transport, chain, Account> & WalletActions<chain, Account>
-  >,
+  client: Client<Transport, chain>,
   preLiquidation: PreLiquidation,
 ) {
   const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
   const factoryDeploymentBlock = 21272611;
 
   try {
-    const head = await client.getBlockNumber();
+    const head = await getBlockNumber(client);
 
-    const logs = await client.getLogs({
+    const logs = await getLogs(client, {
       address: addresses[chainId].morpho,
       fromBlock: BigInt(factoryDeploymentBlock),
       toBlock: BigInt(head),
