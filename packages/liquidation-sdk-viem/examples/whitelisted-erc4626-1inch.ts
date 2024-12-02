@@ -135,8 +135,11 @@ export const check = async <
             .map((_v, i) => seizableCollateral / 2n ** BigInt(i))
             .filter(
               (seizedAssets) =>
-                collateralToken.toUsd(seizedAssets)! > parseEther("1000"), // Do not try seizing less than $1000 collateral.
-            )
+                collateralToken.toUsd(seizedAssets)! > parseEther("1000") ||
+                (accrualPosition.collateral === seizedAssets &&
+                  loanToken.toUsd(accrualPosition.borrowAssets)! >
+                    parseEther("1000")),
+            ) // Do not try seizing less than $1000 collateral, except if we can realize more than $1000 bad debt.
             .map(async (seizedAssets) => {
               const repaidShares =
                 market.getLiquidationRepaidShares(seizedAssets)!;
