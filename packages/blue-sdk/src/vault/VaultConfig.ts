@@ -4,7 +4,6 @@ import type { Address, BigIntish } from "../types.js";
 
 export interface InputVaultConfig {
   address: Address;
-  decimals: BigIntish;
   decimalsOffset: BigIntish;
   symbol: string;
   name: string;
@@ -33,18 +32,11 @@ export class VaultConfig implements InputVaultConfig {
   public readonly asset: Address;
 
   constructor(
-    {
-      address,
-      decimals,
-      decimalsOffset,
-      symbol,
-      name,
-      asset,
-    }: InputVaultConfig,
+    { address, decimalsOffset, symbol, name, asset }: InputVaultConfig,
     public readonly chainId?: number,
   ) {
     this.address = address;
-    this.decimals = Number(decimals);
+    this.decimals = 18;
     this.decimalsOffset = BigInt(decimalsOffset);
     this.symbol = symbol;
     this.name = name;
