@@ -237,7 +237,6 @@ export class BlueSdkConverter {
     return new VaultConfig(
       {
         ...dto,
-        decimals: Math.max(18, dto.asset.decimals),
         decimalsOffset: VaultUtils.decimalsOffset(dto.asset.decimals),
         asset: dto.asset.address,
       },
