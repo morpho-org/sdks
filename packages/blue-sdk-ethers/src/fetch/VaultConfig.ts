@@ -32,11 +32,10 @@ export async function fetchVaultConfig(
     );
 
     // always fetch at latest block because config is immutable
-    const [asset, symbol, name, decimals, decimalsOffset] = await Promise.all([
+    const [asset, symbol, name, decimalsOffset] = await Promise.all([
       mm.asset() as Promise<Address>,
       mm.symbol(),
       mm.name(),
-      mm.decimals(),
       mm.DECIMALS_OFFSET(),
     ]);
 
@@ -46,7 +45,6 @@ export async function fetchVaultConfig(
         asset,
         symbol,
         name,
-        decimals: Number(decimals),
         decimalsOffset,
       },
       chainId,

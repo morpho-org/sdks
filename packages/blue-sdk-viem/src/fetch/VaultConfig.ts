@@ -26,7 +26,7 @@ export async function fetchVaultConfig(
 
   if (!config) {
     // Always fetch at latest block because config is immutable.
-    const [asset, symbol, name, decimals, decimalsOffset] = await Promise.all([
+    const [asset, symbol, name, decimalsOffset] = await Promise.all([
       readContract(client, {
         address,
         abi: metaMorphoAbi,
@@ -48,12 +48,6 @@ export async function fetchVaultConfig(
       readContract(client, {
         address,
         abi: metaMorphoAbi,
-        functionName: "decimals",
-        blockTag: "latest",
-      }),
-      readContract(client, {
-        address,
-        abi: metaMorphoAbi,
         functionName: "DECIMALS_OFFSET",
         blockTag: "latest",
       }),
@@ -65,7 +59,6 @@ export async function fetchVaultConfig(
         asset,
         symbol,
         name,
-        decimals: Number(decimals),
         decimalsOffset: BigInt(decimalsOffset),
       },
       chainId,
