@@ -18,8 +18,8 @@
     "build": "tsc --build tsconfig.build.json"
   },
   "devDependencies": {
-    "typescript": "^5.6.3",
-    "vitest": "^2.1.5"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   },
   "publishConfig": {
     "main": "lib/index.js",

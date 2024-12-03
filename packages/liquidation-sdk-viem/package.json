@@ -34,7 +34,7 @@
   "devDependencies": {
     "@graphql-codegen/cli": "^5.0.3",
     "@graphql-codegen/import-types-preset": "^3.0.0",
-    "@graphql-codegen/typescript": "^4.1.1",
+    "@graphql-codegen/typescript": "^4.1.2",
     "@graphql-codegen/typescript-graphql-request": "^6.2.0",
     "@graphql-codegen/typescript-operations": "^4.3.1",
     "@morpho-org/blue-api-sdk": "workspace:^",
@@ -51,9 +51,9 @@
     "hardhat": "^2.22.16",
     "nock": "beta",
     "ts-node": "^10.9.2",
-    "typescript": "^5.6.3",
-    "viem": "^2.21.50",
-    "vitest": "^2.1.5"
+    "typescript": "^5.7.2",
+    "viem": "^2.21.53",
+    "vitest": "^2.1.8"
   },
   "publishConfig": {
     "main": "lib/index.js",

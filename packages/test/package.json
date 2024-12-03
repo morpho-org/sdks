@@ -52,9 +52,9 @@
     "@types/lodash.kebabcase": "^4.1.9",
     "@types/node": "^22.9.3",
     "ethers": "^6.13.4",
-    "typescript": "^5.6.3",
-    "viem": "^2.21.50",
-    "vitest": "^2.1.5",
+    "typescript": "^5.7.2",
+    "viem": "^2.21.53",
+    "vitest": "^2.1.8",
     "wagmi": "^2.12.33"
   },
   "publishConfig": {

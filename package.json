@@ -38,9 +38,9 @@
     "husky": "^9.1.6",
     "lint-staged": "^15.2.10",
     "semver": "^7.6.3",
-    "typescript": "^5.6.3",
-    "viem": "^2.21.50",
-    "vitest": "^2.1.5"
+    "typescript": "^5.7.2",
+    "viem": "^2.21.53",
+    "vitest": "^2.1.8"
   },
   "lint-staged": {
     "*.json": "biome check --write --no-errors-on-unmatched",
