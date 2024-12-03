@@ -13,7 +13,7 @@ import {
   VaultMarketPublicAllocatorConfig,
   VaultUtils,
 } from "@morpho-org/blue-sdk";
-import { Time, isDefined } from "@morpho-org/morpho-ts";
+import { isDefined } from "@morpho-org/morpho-ts";
 
 import {
   Chain as BlueApiChain,
@@ -59,7 +59,7 @@ export interface PartialBlueApiMarket
       | "supplyShares"
       | "timestamp"
       | "fee"
-      | "rateAtUTarget"
+      | "rateAtTarget"
     >
   >;
 }
@@ -193,15 +193,6 @@ export class BlueSdkConverter {
     const fee = this.options.parseNumber(dto.state.fee, 18);
     const price = dto.collateralPrice ?? 1n;
 
-    const rateAtTarget =
-      // rateAtUTarget is not typed nullable, but it will be as soon as a non-compatible IRM is enabled.
-      dto.state.rateAtUTarget != null
-        ? // API rate at target is compounded over the year, while the Market rateAtTarget is per second.
-          //TODO use rateAtTarget directly per second
-          this.options.parseNumber(Math.log1p(dto.state.rateAtUTarget), 18) /
-          Time.s.from.y(1n)
-        : undefined;
-
     return new Market({
       config,
       totalSupplyAssets: dto.state.supplyAssets,
@@ -211,7 +202,7 @@ export class BlueSdkConverter {
       lastUpdate: dto.state.timestamp,
       fee,
       price,
-      rateAtTarget,
+      rateAtTarget: dto.state.rateAtTarget ?? undefined,
     });
   }
 
