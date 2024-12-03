@@ -103,6 +103,9 @@ export const typePolicies = {
       timestamp: {
         read: readMaybeBigInt,
       },
+      rateAtTarget: {
+        read: readMaybeBigInt,
+      },
       rewards: {
         // Merges two arrays of MarketStateReward objects, where the merge is based on the asset id
         // Asset id must be queried for this to work.
