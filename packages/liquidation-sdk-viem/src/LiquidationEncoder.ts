@@ -9,12 +9,14 @@ import {
   type Account,
   type Chain,
   type Client,
+  type Hex,
   type Transport,
+  encodeAbiParameters,
   encodeFunctionData,
 } from "viem";
 import { readContract } from "viem/actions";
 import { daiUsdsConverterAbi, mkrSkyConverterAbi } from "./abis.js";
-import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
+import { curveStableSwapNGAbi, preLiquidationAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";
 import { Pendle, Sky, Usual } from "./tokens/index.js";
@@ -325,32 +327,6 @@ export class LiquidationEncoder<
     });
   }
 
-  public removeLiquidityFromCurvePool(
-    pool: Address,
-    amount: bigint,
-    withdrawnTokenIndex: bigint,
-    minReceived: bigint,
-    receiver: Address,
-  ) {
-    this.pushCall(
-      pool,
-      0n,
-      encodeFunctionData({
-        abi: curveStableSwapNGAbi,
-        functionName: "remove_liquidity_one_coin",
-        /**
-         * @notice Withdraw a single coin from the pool
-         * @param _burn_amount Amount of LP tokens to burn in the withdrawal
-         * @param i Index value of the coin to withdraw
-         * @param _min_received Minimum amount of coin to receive
-         * @param _receiver Address that receives the withdrawn coins
-         * @return Amount of coin received
-         */
-        args: [amount, withdrawnTokenIndex, minReceived, receiver],
-      }),
-    );
-  }
-
   public curveSwap(
     pool: Address,
     amount: bigint,
@@ -381,6 +357,69 @@ export class LiquidationEncoder<
           amount,
           minDestAmount,
           receiver,
+        ],
+      }),
+    );
+  }
+
+  public removeLiquidityFromCurvePool(
+    pool: Address,
+    amount: bigint,
+    withdrawnTokenIndex: bigint,
+    minReceived: bigint,
+    receiver: Address,
+  ) {
+    this.pushCall(
+      pool,
+      0n,
+      encodeFunctionData({
+        abi: curveStableSwapNGAbi,
+        functionName: "remove_liquidity_one_coin",
+        /**
+         * @notice Withdraw a single coin from the pool
+         * @param _burn_amount Amount of LP tokens to burn in the withdrawal
+         * @param i Index value of the coin to withdraw
+         * @param _min_received Minimum amount of coin to receive
+         * @param _receiver Address that receives the withdrawn coins
+         * @return Amount of coin received
+         */
+        args: [amount, withdrawnTokenIndex, minReceived, receiver],
+      }),
+    );
+  }
+
+  public preLiquidationPreLiquidate(
+    preLiquidation: Address,
+    borrower: Address,
+    seizedAssets: bigint,
+    repaidShares: bigint,
+    callbackCalls?: Hex[],
+  ) {
+    callbackCalls ??= [];
+    this.pushCall(
+      preLiquidation,
+      0n,
+      /**
+       * @notice Perform an preLiquidation
+       * @dev Index values can be found via the `coins` public getter method
+       * @param i Index value for the coin to send
+       * @param j Index value of the coin to receive
+       * @param _dx Amount of `i` being exchanged
+       * @param _min_dy Minimum amount of `j` to receive
+       * @param _receiver Address that receives `j`
+       * @return Actual amount of `j` received
+       */
+      encodeFunctionData({
+        abi: preLiquidationAbi,
+        functionName: "preLiquidate",
+        args: [
+          borrower,
+          seizedAssets,
+          repaidShares,
+          encodeAbiParameters(
+            [{ type: "bytes[]" }, { type: "bytes" }],
+            [callbackCalls, "0x"],
+          ),
         ],
       }),
     );

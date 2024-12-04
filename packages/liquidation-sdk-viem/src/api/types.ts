@@ -58,3 +58,36 @@ export type GetWhitelistedMarketIdsQuery = {
     }> | null;
   };
 };
+
+export type GetMarketAssetsQueryVariables = Types.Exact<{
+  chainId: Types.Scalars["Int"]["input"];
+  marketId: Types.Scalars["String"]["input"];
+}>;
+
+export type GetMarketAssetsQuery = {
+  __typename?: "Query";
+  markets: {
+    __typename?: "PaginatedMarkets";
+    items: Array<{
+      market: {
+        __typename?: "Market";
+        collateralAsset: {
+          __typename?: "Asset";
+          address: Types.Scalars["Address"]["output"];
+          decimals: number;
+          symbol: string;
+          priceUsd: number | null;
+          spotPriceEth: number | null;
+        } | null;
+        loanAsset: {
+          __typename?: "Asset";
+          address: Types.Scalars["Address"]["output"];
+          decimals: number;
+          symbol: string;
+          priceUsd: number | null;
+          spotPriceEth: number | null;
+        };
+      };
+    }> | null;
+  };
+};
