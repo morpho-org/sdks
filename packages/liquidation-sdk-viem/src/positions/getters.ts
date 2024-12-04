@@ -11,7 +11,10 @@ export async function getPositions(
   chainId: ChainId,
   wNative: string,
   marketIds: MarketId[],
-) {
+): Promise<{
+  positions: PreLiquidationPosition[];
+  wethPriceUsd: number | null;
+}> {
   const [{ liquidablePositions, wethPriceUsd }, preliquidablePositions] =
     await Promise.all([
       getLiquidatablePositions(client, chainId, wNative, marketIds),
@@ -60,6 +63,8 @@ async function getLiquidatablePositions(
 
         return new PreLiquidationPosition(
           accrualPosition.accrueInterest(Time.timestamp()),
+          position.market.collateralAsset,
+          position.market.loanAsset,
         );
       }),
     )
