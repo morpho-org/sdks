@@ -15,7 +15,7 @@ export async function getPositions(
   positions: PreLiquidationPosition[];
   wethPriceUsd: number | null;
 }> {
-  const [{ liquidablePositions, wethPriceUsd }, preliquidablePositions] =
+  const [{ liquidablePositions, wethPriceUsd }, preLiquidablePositions] =
     await Promise.all([
       getLiquidatablePositions(client, chainId, wNative, marketIds),
       getPreLiquidablePositions(client, marketIds),
@@ -24,7 +24,7 @@ export async function getPositions(
   if (wethPriceUsd == null) return { positions: [], wethPriceUsd };
 
   return {
-    positions: liquidablePositions.concat(preliquidablePositions),
+    positions: liquidablePositions.concat(preLiquidablePositions),
     wethPriceUsd,
   };
 }
@@ -72,7 +72,7 @@ async function getLiquidatablePositions(
 
   return {
     liquidablePositions: accruedPositions.filter(
-      (position) => position.preSeizableCollateral !== undefined,
+      (position) => position.seizableCollateral !== undefined,
     ),
     wethPriceUsd,
   };

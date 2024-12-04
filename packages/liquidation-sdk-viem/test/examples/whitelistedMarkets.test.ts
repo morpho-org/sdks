@@ -55,7 +55,7 @@ const { morpho } = addresses[ChainId.EthMainnet];
 
 const borrower = testAccount(1);
 
-describe("erc4626-1inch", () => {
+describe("whitelisted markets", () => {
   let swapMockAddress: Address;
 
   beforeEach<LiquidationTestContext<typeof mainnet>>(async ({ client }) => {
