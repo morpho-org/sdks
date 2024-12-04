@@ -18,7 +18,6 @@ import {
   apiSdk,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
-import { getPositions } from "src/positions/getters";
 import {
   type Account,
   type Chain,
@@ -38,6 +37,7 @@ import {
   readContract,
   sendTransaction,
 } from "viem/actions";
+import { getPositions } from "../src/positions/getters";
 
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,

@@ -2,12 +2,12 @@ import type { PartialBlueApiToken } from "@morpho-org/blue-api-sdk";
 import { ChainUtils, type MarketId } from "@morpho-org/blue-sdk";
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import { apiSdk } from "src/api";
 import {
   type PreLiquidation,
   PreLiquidationPosition,
 } from "src/preLiquidation/types";
 import type { Account, Chain, Client, Transport } from "viem";
+import { apiSdk } from "../api";
 import { authorizationLogs, preLiquidationLogs } from "./logGetters";
 
 export async function getPreLiquidablePositions(

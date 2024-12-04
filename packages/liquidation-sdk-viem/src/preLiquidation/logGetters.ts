@@ -1,8 +1,8 @@
 import { type Address, ChainUtils, type MarketId } from "@morpho-org/blue-sdk";
 import { addresses } from "@morpho-org/blue-sdk";
-import { preLiquidationFactoryConfigs } from "src/addresses";
 import type { Account, Chain, Client, Transport } from "viem";
 import { getBlockNumber, getLogs } from "viem/actions";
+import { preLiquidationFactoryConfigs } from "../addresses";
 import type { PreLiquidation } from "./types";
 
 export async function preLiquidationLogs<chain extends Chain = Chain>(

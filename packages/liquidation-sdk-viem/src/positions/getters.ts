@@ -1,10 +1,10 @@
 import type { ChainId, MarketId } from "@morpho-org/blue-sdk";
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import { apiSdk } from "src/api";
-import { getPreLiquidablePositions } from "src/preLiquidation/positionGetters";
-import { PreLiquidationPosition } from "src/preLiquidation/types";
 import type { Account, Chain, Client, Transport } from "viem";
+import { apiSdk } from "../api";
+import { getPreLiquidablePositions } from "../preLiquidation/positionGetters";
+import { PreLiquidationPosition } from "../preLiquidation/types";
 
 export async function getPositions(
   client: Client<Transport, Chain, Account>,
