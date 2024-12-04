@@ -4,9 +4,15 @@ import type {
   MarketPosition,
   MarketStateReward,
   MarketWarning,
+  PublicAllocatorFlowCaps,
+  PublicAllocatorSharedLiquidity,
+  Transaction,
   Vault,
   VaultAllocation,
+  VaultAllocator,
   VaultPendingCap,
+  VaultPosition,
+  VaultStateReward,
   VaultWarning,
 } from "./types";
 
@@ -57,28 +63,28 @@ export const mergeArrayByField = <
       return _get(readField(key!, data), rest);
     };
 
-    const getId = (
+    const getFirstValueAtPath = (
       // biome-ignore lint/suspicious/noExplicitAny: recursion breaks type
       data: any,
       i = splittedPaths.length - 1,
     ): PropertyKey | null | undefined => {
       if (i < 0) return;
 
-      return _get(data, splittedPaths[i]!) ?? getId(data, i - 1);
+      return _get(data, splittedPaths[i]!) ?? getFirstValueAtPath(data, i - 1);
     };
 
     const merged = existing ? existing.slice(0) : [];
 
     const indexes = new Map<PropertyKey, number>();
     existing?.forEach((entity, index) => {
-      const id = getId(entity);
+      const id = getFirstValueAtPath(entity);
       if (id == null) return;
 
       indexes.set(id, index);
     });
 
     incoming.forEach((entity) => {
-      const id = getId(entity);
+      const id = getFirstValueAtPath(entity);
 
       if (id != null) {
         const index = indexes.get(id);
@@ -100,17 +106,20 @@ export const mergeArrayByField = <
 export const typePolicies = {
   Transaction: {
     fields: {
+      blockNumber: {
+        read: readMaybeBigInt,
+      },
+      timestamp: {
+        read: readMaybeBigInt,
+      },
       chain: {
         merge: true,
       },
       user: {
         merge: true,
       },
-      timestamp: {
-        read: readMaybeBigInt,
-      },
-      blockNumber: {
-        read: readMaybeBigInt,
+      data: {
+        merge: true,
       },
     },
   },
@@ -149,18 +158,18 @@ export const typePolicies = {
       chain: {
         merge: true,
       },
+      data: {
+        merge: true,
+      },
+      markets: {
+        merge: mergeArrayByField<Market>("id"),
+      },
     },
   },
   OracleFeed: {
     fields: {
       chain: {
         merge: true,
-      },
-      data: {
-        merge: true,
-      },
-      markets: {
-        merge: mergeArrayByField<Market>("id"),
       },
     },
   },
@@ -175,8 +184,14 @@ export const typePolicies = {
       historicalState: {
         merge: true,
       },
+      transactions: {
+        merge: mergeArrayByField<Transaction>("id", "hash"),
+      },
       marketPositions: {
         merge: mergeArrayByField<MarketPosition>("id", "market.id"),
+      },
+      vaultPositions: {
+        merge: mergeArrayByField<VaultPosition>("id", "vault.id"),
       },
     },
   },
@@ -184,6 +199,15 @@ export const typePolicies = {
     fields: {
       totalSupply: {
         read: readMaybeBigInt,
+      },
+      chain: {
+        merge: true,
+      },
+      vault: {
+        merge: true,
+      },
+      yield: {
+        merge: true,
       },
     },
   },
@@ -193,6 +217,18 @@ export const typePolicies = {
         merge: true,
       },
       loanAsset: {
+        merge: true,
+      },
+      oracle: {
+        merge: true,
+      },
+      oracleFeed: {
+        merge: true,
+      },
+      oracleInfo: {
+        merge: true,
+      },
+      morphoBlue: {
         merge: true,
       },
       lltv: {
@@ -207,10 +243,25 @@ export const typePolicies = {
       creationTimestamp: {
         read: readMaybeBigInt,
       },
+      targetBorrowUtilization: {
+        read: readMaybeBigInt,
+      },
+      targetWithdrawUtilization: {
+        read: readMaybeBigInt,
+      },
       state: {
         merge: true,
       },
       historicalState: {
+        merge: true,
+      },
+      badDebt: {
+        merge: true,
+      },
+      realizedBadDebt: {
+        merge: true,
+      },
+      concentration: {
         merge: true,
       },
       dailyApys: {
@@ -228,8 +279,14 @@ export const typePolicies = {
       yearlyApys: {
         merge: true,
       },
+      allTimeApys: {
+        merge: true,
+      },
       supplyingVaults: {
         merge: mergeArrayByField<Vault>("id"),
+      },
+      publicAllocatorSharedLiquidity: {
+        merge: mergeArrayByField<PublicAllocatorSharedLiquidity>("id"),
       },
       warnings: {
         merge: mergeArrayByField<MarketWarning>("type"),
@@ -283,6 +340,9 @@ export const typePolicies = {
       },
       amountPerBorrowedToken: {
         read: readMaybeBigInt,
+      },
+      asset: {
+        merge: true,
       },
     },
   },
@@ -373,10 +433,16 @@ export const typePolicies = {
       creationTimestamp: {
         read: readMaybeBigInt,
       },
+      asset: {
+        merge: true,
+      },
       chain: {
         merge: true,
       },
       metadata: {
+        merge: true,
+      },
+      liquidity: {
         merge: true,
       },
       state: {
@@ -387,6 +453,18 @@ export const typePolicies = {
       },
       publicAllocatorConfig: {
         merge: true,
+      },
+      dailyApys: {
+        merge: true,
+      },
+      weeklyApys: {
+        merge: true,
+      },
+      monthlyApys: {
+        merge: true,
+      },
+      allocators: {
+        merge: mergeArrayByField<VaultAllocator>("address"),
       },
       pendingCaps: {
         merge: mergeArrayByField<VaultPendingCap>("market.id"),
@@ -424,6 +502,25 @@ export const typePolicies = {
       },
       sharePrice: {
         read: readMaybeBigInt,
+      },
+      allocation: {
+        merge: mergeArrayByField<VaultAllocation>("id", "market.id"),
+      },
+      rewards: {
+        merge: mergeArrayByField<VaultStateReward>("asset.id"),
+      },
+    },
+  },
+  VaultStateReward: {
+    fields: {
+      yearlySupplyTokens: {
+        read: readMaybeBigInt,
+      },
+      amountPerSuppliedToken: {
+        read: readMaybeBigInt,
+      },
+      asset: {
+        merge: true,
       },
     },
   },
@@ -486,6 +583,15 @@ export const typePolicies = {
       supplyCap: {
         read: readMaybeBigInt,
       },
+      pendingSupplyCap: {
+        read: readMaybeBigInt,
+      },
+      pendingSupplyCapValidAt: {
+        read: readMaybeBigInt,
+      },
+      removableAt: {
+        read: readMaybeBigInt,
+      },
       market: {
         merge: true,
       },
@@ -538,6 +644,9 @@ export const typePolicies = {
       validAt: {
         read: readMaybeBigInt,
       },
+      market: {
+        merge: true,
+      },
     },
   },
   PublicAllocatorConfig: {
@@ -548,12 +657,37 @@ export const typePolicies = {
       accruedFee: {
         read: readMaybeBigInt,
       },
+      flowCaps: {
+        merge: mergeArrayByField<PublicAllocatorFlowCaps>("market.id"),
+      },
+    },
+  },
+  PublicAllocatorFlowCaps: {
+    fields: {
+      maxIn: {
+        read: readMaybeBigInt,
+      },
+      maxOut: {
+        read: readMaybeBigInt,
+      },
+      market: {
+        merge: true,
+      },
     },
   },
   PublicAllocatorSharedLiquidity: {
     fields: {
       assets: {
         read: readMaybeBigInt,
+      },
+      allocationMarket: {
+        merge: true,
+      },
+      market: {
+        merge: true,
+      },
+      vault: {
+        merge: true,
       },
     },
   },
