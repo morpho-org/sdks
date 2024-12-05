@@ -88,12 +88,18 @@ export interface ErrorClass<E extends Error> {
 }
 
 export function _try<T, E extends Error>(
+  accessor: () => Promise<T>,
+  ...errorClasses: ErrorClass<E>[]
+): Promise<T | undefined>;
+export function _try<T, E extends Error>(
   accessor: () => T,
   ...errorClasses: ErrorClass<E>[]
-): T | undefined {
-  try {
-    return accessor();
-  } catch (error) {
+): T | undefined;
+export function _try<T, E extends Error>(
+  accessor: () => T | Promise<T>,
+  ...errorClasses: ErrorClass<E>[]
+): T | undefined | Promise<T | undefined> {
+  const maybeCatchError = (error: unknown): undefined => {
     if (
       errorClasses.length === 0 ||
       errorClasses.some((errorClass) => error instanceof errorClass)
@@ -101,5 +107,14 @@ export function _try<T, E extends Error>(
       return;
 
     throw error;
+  };
+
+  try {
+    const res = accessor();
+
+    if (res instanceof Promise) return res.catch(maybeCatchError);
+    return res;
+  } catch (error) {
+    return maybeCatchError(error);
   }
 }
