@@ -72,3 +72,5 @@ local_*
 
 # Local Netlify folder
 .netlify
+
+!.vscode

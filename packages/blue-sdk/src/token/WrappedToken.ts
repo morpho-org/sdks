@@ -1,12 +1,12 @@
-import { MathLib, RoundingDirection } from "../maths";
-import { Address } from "../types";
+import { MathLib, type RoundingDirection } from "../math/index.js";
+import type { Address } from "../types.js";
 
-import { InputToken, Token } from "./Token";
+import { type InputToken, Token } from "./Token.js";
 
 export abstract class WrappedToken extends Token {
   constructor(
     token: InputToken,
-    readonly underlying: Address,
+    public readonly underlying: Address,
   ) {
     super(token);
   }
