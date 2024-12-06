@@ -547,9 +547,7 @@ export class SimulationState implements InputSimulationState {
     });
 
     let data: MaybeDraft<SimulationState> = this;
-
     const withdrawals: PublicReallocation[] = [];
-    const remainingMaxIns: Record<Address, bigint> = {};
 
     const _getMarketPublicReallocations = () => {
       const vaultWithdrawals = reallocatableVaults
@@ -570,9 +568,6 @@ export class SimulationState implements InputSimulationState {
                 dstAssets,
                 MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
               );
-
-            const remainingMaxIn = (remainingMaxIns[vault] ??=
-              publicAllocatorConfig.maxIn);
 
             const marketWithdrawals = data
               .getVault(vault)
@@ -598,7 +593,7 @@ export class SimulationState implements InputSimulationState {
                       srcPosition.supplyAssets, // Cannot reallocate more than what the vault supplied on the source market.
                       targetUtilizationLiquidity, // Cannot reallocate more than the liquidity directly available on the source market under target utilization.
                       suppliable, // Cannot supply over the destination market's configured cap.
-                      remainingMaxIn, // Cannot supply over the destination market's configured maxIn.
+                      publicAllocatorConfig.maxIn, // Cannot supply over the destination market's configured maxIn.
                       maxOut, // Cannot reallocate more than the source market's configured maxOut.
                     ),
                   };
@@ -639,7 +634,6 @@ export class SimulationState implements InputSimulationState {
       const { vault, largestWithdrawal } = largestVaultWithdrawal;
 
       withdrawals.push({ ...largestWithdrawal, vault });
-      remainingMaxIns[vault]! -= largestWithdrawal.assets;
 
       data = simulateOperation(
         {
