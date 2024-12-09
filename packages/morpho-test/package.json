@@ -29,7 +29,7 @@
     "@morpho-org/test": "workspace:^",
     "@types/node": "^22.9.3",
     "typescript": "^5.7.2",
-    "viem": "^2.21.53"
+    "viem": "^2.21.54"
   },
   "publishConfig": {
     "main": "lib/index.js",

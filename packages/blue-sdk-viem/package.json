@@ -31,7 +31,7 @@
     "hardhat": "^2.22.16",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2",
-    "viem": "^2.21.53",
+    "viem": "^2.21.54",
     "vitest": "^2.1.8"
   },
   "publishConfig": {

@@ -1,0 +1,18 @@
+query getMarket($marketId: String!, $chainId: Int!) {
+  marketByUniqueKey(uniqueKey: $marketId, chainId: $chainId) {
+    supplyingVaults {
+      address
+      state {
+        allocation {
+          market {
+            uniqueKey
+            loanAsset {
+              address
+            }
+            targetWithdrawUtilization
+          }
+        }
+      }
+    }
+  }
+}

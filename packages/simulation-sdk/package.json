@@ -32,7 +32,7 @@
     "lodash": "^4.17.21",
     "mutative": "^1.0.11",
     "typescript": "^5.7.2",
-    "viem": "^2.21.53",
+    "viem": "^2.21.54",
     "vitest": "^2.1.8"
   },
   "publishConfig": {

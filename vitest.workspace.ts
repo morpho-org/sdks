@@ -64,4 +64,11 @@ export default defineWorkspace([
       testTimeout: 90_000,
     },
   },
+  {
+    test: {
+      name: "examples",
+      include: ["packages/examples/**/*.test.ts"],
+      testTimeout: 90_000,
+    },
+  },
 ]);
