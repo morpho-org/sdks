@@ -13,6 +13,19 @@ export type GetMarketsQuery = {
     __typename?: "PaginatedMarkets";
     items: Array<{
       __typename?: "Market";
+      uniqueKey: Types.Scalars["MarketId"]["output"];
+      publicAllocatorSharedLiquidity: Array<{
+        __typename?: "PublicAllocatorSharedLiquidity";
+        assets: Types.Scalars["BigInt"]["output"];
+        vault: {
+          __typename?: "Vault";
+          address: Types.Scalars["Address"]["output"];
+        };
+        allocationMarket: {
+          __typename?: "Market";
+          uniqueKey: Types.Scalars["MarketId"]["output"];
+        };
+      }> | null;
       supplyingVaults: Array<{
         __typename?: "Vault";
         address: Types.Scalars["Address"]["output"];

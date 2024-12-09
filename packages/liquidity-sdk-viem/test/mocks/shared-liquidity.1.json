@@ -3,86 +3,91 @@
     "markets": {
       "items": [
         {
-          "supplyingVaults": [
+          "uniqueKey": "0xc54d7acf14de29e0e5527cabd7a576506870346a78a11a6762e2cca66322ec41",
+          "publicAllocatorSharedLiquidity": [
             {
-              "address": "0x38989BBA00BDF8181F4082995b3DEAe96163aC5D",
-              "state": {
-                "allocation": [
-                  {
-                    "market": {
-                      "uniqueKey": "0x58e212060645d18eab6d9b2af3d56fbc906a92ff5667385f616f662c70372284",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xc54d7acf14de29e0e5527cabd7a576506870346a78a11a6762e2cca66322ec41",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "727698911252080000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x3c83f77bde9541f8d3d82533b19bbc1f97eb2f1098bb991728acbfbede09cc5d",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "905523982333582300"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x1929f8139224cb7d5db8c270addc9ce366d37ad279e1135f73c0adce74b0f936",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x138eec0e4a1937eb92ebc70043ed539661dd7ed5a89fb92a720b341650288a40",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "902717919215447400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xd0e50cdac92fe2172043f5e0c36532c6369d24947e40968f34a5e8819ca9ec5d",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "911851884730352300"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x2cbfb38723a8d9a2ad1607015591a78cfe3a5949561b39bde42c242b22874ec0",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "939467593333873300"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xbed21964cf290ab95fa458da6c1f302f2278aec5f897c1b1da3054553ef5e90c",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "903054396540482600"
-                    }
-                  }
-                ]
-              }
+              "vault": {
+                "address": "0x2371e134e3455e0593363cBF89d3b6cf53740618"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e"
+              },
+              "assets": "1275130606448103386958"
             },
+            {
+              "vault": {
+                "address": "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0xd0e50cdac92fe2172043f5e0c36532c6369d24947e40968f34a5e8819ca9ec5d"
+              },
+              "assets": "389065680030846265972"
+            },
+            {
+              "vault": {
+                "address": "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0xba761af4134efb0855adfba638945f454f0a704af11fc93439e20c7c5ebab942"
+              },
+              "assets": "365462549282824742961"
+            },
+            {
+              "vault": {
+                "address": "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0x2287407f0f42ad5ad224f70e4d9da37f02770f79959df703d6cfee8afc548e0d"
+              },
+              "assets": "213832870661212422340"
+            },
+            {
+              "vault": {
+                "address": "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0xcacd4c39af872ddecd48b650557ff5bcc7d3338194c0f5b2038e0d4dec5dc022"
+              },
+              "assets": "124910324631670795145"
+            },
+            {
+              "vault": {
+                "address": "0x2371e134e3455e0593363cBF89d3b6cf53740618"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0x138eec0e4a1937eb92ebc70043ed539661dd7ed5a89fb92a720b341650288a40"
+              },
+              "assets": "34063242931816427292"
+            },
+            {
+              "vault": {
+                "address": "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0x37e7484d642d90f14451f1910ba4b7b8e4c3ccdd0ec28f8b2bdb35479e472ba7"
+              },
+              "assets": "23606063480643419318"
+            },
+            {
+              "vault": {
+                "address": "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0xa0534c78620867b7c8706e3b6df9e69a2bc67c783281b7a77e034ed75cee012e"
+              },
+              "assets": "12850528338832344500"
+            },
+            {
+              "vault": {
+                "address": "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0x87a3e5dbcd822f2a543bea1365b7dd99ad9a1cb460061278319732e63207c792"
+              },
+              "assets": 240388038072619
+            }
+          ],
+          "supplyingVaults": [
             {
               "address": "0x2371e134e3455e0593363cBF89d3b6cf53740618",
               "state": {
@@ -102,7 +107,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "911851884730352300"
+                      "targetWithdrawUtilization": "911812298640694800"
                     }
                   },
                   {
@@ -111,7 +116,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "905952947689466900"
+                      "targetWithdrawUtilization": "905931560823437400"
                     }
                   },
                   {
@@ -120,7 +125,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "902717919215447400"
+                      "targetWithdrawUtilization": "902684749739267100"
                     }
                   },
                   {
@@ -138,7 +143,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "727698911252080000"
+                      "targetWithdrawUtilization": "726761640573396200"
                     }
                   },
                   {
@@ -147,7 +152,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "939467593333873300"
+                      "targetWithdrawUtilization": "939406187278027600"
                     }
                   },
                   {
@@ -156,14 +161,14 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "905523982333582300"
+                      "targetWithdrawUtilization": "905547403520706000"
                     }
                   }
                 ]
               }
             },
             {
-              "address": "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
+              "address": "0x38989BBA00BDF8181F4082995b3DEAe96163aC5D",
               "state": {
                 "allocation": [
                   {
@@ -177,160 +182,25 @@
                   },
                   {
                     "market": {
-                      "uniqueKey": "0xd0e50cdac92fe2172043f5e0c36532c6369d24947e40968f34a5e8819ca9ec5d",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "911851884730352300"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "905952947689466900"
-                    }
-                  },
-                  {
-                    "market": {
                       "uniqueKey": "0xc54d7acf14de29e0e5527cabd7a576506870346a78a11a6762e2cca66322ec41",
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "727698911252080000"
+                      "targetWithdrawUtilization": "726761640573396200"
                     }
                   },
                   {
                     "market": {
-                      "uniqueKey": "0x0eed5a89c7d397d02fd0b9b8e42811ca67e50ed5aeaa4f22e506516c716cfbbf",
+                      "uniqueKey": "0x3c83f77bde9541f8d3d82533b19bbc1f97eb2f1098bb991728acbfbede09cc5d",
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "721175002874315900"
+                      "targetWithdrawUtilization": "905547403520706000"
                     }
                   },
                   {
                     "market": {
-                      "uniqueKey": "0x2287407f0f42ad5ad224f70e4d9da37f02770f79959df703d6cfee8afc548e0d",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "900838791334179500"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x138eec0e4a1937eb92ebc70043ed539661dd7ed5a89fb92a720b341650288a40",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "902717919215447400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x49bb2d114be9041a787432952927f6f144f05ad3e83196a7d062f374ee11d0ee",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "719494515895699200"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x093d5b432aace8bf6c4d67494f4ac2542a499571ff7a1bcc9f8778f3200d457d",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "172192332194565280"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xd5211d0e3f4a30d5c98653d988585792bb7812221f04801be73a44ceecb11e89",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "658236874711706100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xeeabdcb98e9f7ec216d259a2c026bbb701971efae0b44eec79a86053f9b128b6",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "336517222367520260"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xea023e57814fb9a814a5a9ee9f3e7ece5b771dd8cc703e50b911e9cde064a12d",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "648743197564687400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x698fe98247a40c5771537b5786b2f3f9d78eb487b4ce4d75533cd0e94d88a115",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "581535331138096900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xa0534c78620867b7c8706e3b6df9e69a2bc67c783281b7a77e034ed75cee012e",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "901047128410935400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x2cbfb38723a8d9a2ad1607015591a78cfe3a5949561b39bde42c242b22874ec0",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "939467593333873300"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xcacd4c39af872ddecd48b650557ff5bcc7d3338194c0f5b2038e0d4dec5dc022",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "904155114454601900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x37e7484d642d90f14451f1910ba4b7b8e4c3ccdd0ec28f8b2bdb35479e472ba7",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "912640251190749800"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xba761af4134efb0855adfba638945f454f0a704af11fc93439e20c7c5ebab942",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "908165228744558600"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xab4e2a2b60871cbbe808841b1debc1eea1a8a72a9a7bb03f9143a4fee87749fd",
+                      "uniqueKey": "0x1929f8139224cb7d5db8c270addc9ce366d37ad279e1135f73c0adce74b0f936",
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
@@ -339,29 +209,38 @@
                   },
                   {
                     "market": {
-                      "uniqueKey": "0x87a3e5dbcd822f2a543bea1365b7dd99ad9a1cb460061278319732e63207c792",
+                      "uniqueKey": "0x138eec0e4a1937eb92ebc70043ed539661dd7ed5a89fb92a720b341650288a40",
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "975716921776994700"
+                      "targetWithdrawUtilization": "902684749739267100"
                     }
                   },
                   {
                     "market": {
-                      "uniqueKey": "0x5f8a138ba332398a9116910f4d5e5dcd9b207024c5290ce5bc87bc2dbd8e4a86",
+                      "uniqueKey": "0xd0e50cdac92fe2172043f5e0c36532c6369d24947e40968f34a5e8819ca9ec5d",
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "909064679320199300"
+                      "targetWithdrawUtilization": "911812298640694800"
                     }
                   },
                   {
                     "market": {
-                      "uniqueKey": "0xb7ad412532006bf876534ccae59900ddd9d1d1e394959065cb39b12b22f94ff5",
+                      "uniqueKey": "0x2cbfb38723a8d9a2ad1607015591a78cfe3a5949561b39bde42c242b22874ec0",
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "934509444641220100"
+                      "targetWithdrawUtilization": "939406187278027600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xbed21964cf290ab95fa458da6c1f302f2278aec5f897c1b1da3054553ef5e90c",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "903021356100421400"
                     }
                   }
                 ]
@@ -373,65 +252,11 @@
                 "allocation": [
                   {
                     "market": {
-                      "uniqueKey": "0xcacd4c39af872ddecd48b650557ff5bcc7d3338194c0f5b2038e0d4dec5dc022",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "904155114454601900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x698fe98247a40c5771537b5786b2f3f9d78eb487b4ce4d75533cd0e94d88a115",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "581535331138096900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xeeabdcb98e9f7ec216d259a2c026bbb701971efae0b44eec79a86053f9b128b6",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "336517222367520260"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "905952947689466900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x0eed5a89c7d397d02fd0b9b8e42811ca67e50ed5aeaa4f22e506516c716cfbbf",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "721175002874315900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x8bbd1763671eb82a75d5f7ca33a0023ffabdd9d1a3d4316f34753685ae988e80",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "289410794333782200"
-                    }
-                  },
-                  {
-                    "market": {
                       "uniqueKey": "0xd5211d0e3f4a30d5c98653d988585792bb7812221f04801be73a44ceecb11e89",
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "658236874711706100"
+                      "targetWithdrawUtilization": "657306149981874800"
                     }
                   },
                   {
@@ -440,43 +265,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "363576017215137500"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xa0534c78620867b7c8706e3b6df9e69a2bc67c783281b7a77e034ed75cee012e",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "901047128410935400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x2287407f0f42ad5ad224f70e4d9da37f02770f79959df703d6cfee8afc548e0d",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "900838791334179500"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x935faae97f5784dc97fba3c6ec072186ad9dbbf16368431c38f6a8b7fc3ec9a3",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "483987400602402750"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xba761af4134efb0855adfba638945f454f0a704af11fc93439e20c7c5ebab942",
-                      "loanAsset": {
-                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
-                      },
-                      "targetWithdrawUtilization": "908165228744558600"
+                      "targetWithdrawUtilization": "362874414471902400"
                     }
                   },
                   {
@@ -503,7 +292,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "648743197564687400"
+                      "targetWithdrawUtilization": "647944582041094700"
                     }
                   },
                   {
@@ -512,7 +301,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "727698911252080000"
+                      "targetWithdrawUtilization": "726761640573396200"
                     }
                   },
                   {
@@ -521,7 +310,7 @@
                       "loanAsset": {
                         "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
                       },
-                      "targetWithdrawUtilization": "719494515895699200"
+                      "targetWithdrawUtilization": "718826302449026400"
                     }
                   },
                   {
@@ -532,6 +321,301 @@
                       },
                       "targetWithdrawUtilization": 0
                     }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xcacd4c39af872ddecd48b650557ff5bcc7d3338194c0f5b2038e0d4dec5dc022",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "904142144757619600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x698fe98247a40c5771537b5786b2f3f9d78eb487b4ce4d75533cd0e94d88a115",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "581009656484598400"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xeeabdcb98e9f7ec216d259a2c026bbb701971efae0b44eec79a86053f9b128b6",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "337925087629681600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "905931560823437400"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x0eed5a89c7d397d02fd0b9b8e42811ca67e50ed5aeaa4f22e506516c716cfbbf",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "720519642948412800"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x8bbd1763671eb82a75d5f7ca33a0023ffabdd9d1a3d4316f34753685ae988e80",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "289299204352905500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xa0534c78620867b7c8706e3b6df9e69a2bc67c783281b7a77e034ed75cee012e",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "901016836454484700"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x2287407f0f42ad5ad224f70e4d9da37f02770f79959df703d6cfee8afc548e0d",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "900831190299562400"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x935faae97f5784dc97fba3c6ec072186ad9dbbf16368431c38f6a8b7fc3ec9a3",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "482359608318933950"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xba761af4134efb0855adfba638945f454f0a704af11fc93439e20c7c5ebab942",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "908149629661471400"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "address": "0x4881Ef0BF6d2365D3dd6499ccd7532bcdBCE0658",
+              "state": {
+                "allocation": [
+                  {
+                    "market": {
+                      "uniqueKey": "0x58e212060645d18eab6d9b2af3d56fbc906a92ff5667385f616f662c70372284",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x5f8a138ba332398a9116910f4d5e5dcd9b207024c5290ce5bc87bc2dbd8e4a86",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "909027281730098600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb7ad412532006bf876534ccae59900ddd9d1d1e394959065cb39b12b22f94ff5",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "934304270883233000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xab4e2a2b60871cbbe808841b1debc1eea1a8a72a9a7bb03f9143a4fee87749fd",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x87a3e5dbcd822f2a543bea1365b7dd99ad9a1cb460061278319732e63207c792",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "975584776724493400"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xd0e50cdac92fe2172043f5e0c36532c6369d24947e40968f34a5e8819ca9ec5d",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "911812298640694800"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "905931560823437400"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xc54d7acf14de29e0e5527cabd7a576506870346a78a11a6762e2cca66322ec41",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "726761640573396200"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x0eed5a89c7d397d02fd0b9b8e42811ca67e50ed5aeaa4f22e506516c716cfbbf",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "720519642948412800"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x2287407f0f42ad5ad224f70e4d9da37f02770f79959df703d6cfee8afc548e0d",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "900831190299562400"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x138eec0e4a1937eb92ebc70043ed539661dd7ed5a89fb92a720b341650288a40",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "902684749739267100"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x49bb2d114be9041a787432952927f6f144f05ad3e83196a7d062f374ee11d0ee",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "718826302449026400"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x093d5b432aace8bf6c4d67494f4ac2542a499571ff7a1bcc9f8778f3200d457d",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "171196539387282560"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xd5211d0e3f4a30d5c98653d988585792bb7812221f04801be73a44ceecb11e89",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "657306149981874800"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xeeabdcb98e9f7ec216d259a2c026bbb701971efae0b44eec79a86053f9b128b6",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "337925087629681600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xea023e57814fb9a814a5a9ee9f3e7ece5b771dd8cc703e50b911e9cde064a12d",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "647944582041094700"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x698fe98247a40c5771537b5786b2f3f9d78eb487b4ce4d75533cd0e94d88a115",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "581009656484598400"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xa0534c78620867b7c8706e3b6df9e69a2bc67c783281b7a77e034ed75cee012e",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "901016836454484700"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xcacd4c39af872ddecd48b650557ff5bcc7d3338194c0f5b2038e0d4dec5dc022",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "904142144757619600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x2cbfb38723a8d9a2ad1607015591a78cfe3a5949561b39bde42c242b22874ec0",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "939406187278027600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x37e7484d642d90f14451f1910ba4b7b8e4c3ccdd0ec28f8b2bdb35479e472ba7",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "912584509503691900"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xba761af4134efb0855adfba638945f454f0a704af11fc93439e20c7c5ebab942",
+                      "loanAsset": {
+                        "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+                      },
+                      "targetWithdrawUtilization": "908149629661471400"
+                    }
                   }
                 ]
               }
@@ -539,9 +623,30 @@
           ]
         },
         {
+          "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
+          "publicAllocatorSharedLiquidity": [
+            {
+              "vault": {
+                "address": "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc"
+              },
+              "assets": 3772737814490
+            },
+            {
+              "vault": {
+                "address": "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB"
+              },
+              "allocationMarket": {
+                "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64"
+              },
+              "assets": 1511008658317
+            }
+          ],
           "supplyingVaults": [
             {
-              "address": "0xd63070114470f685b75B74D60EEc7c1113d33a3D",
+              "address": "0x4Ff4186188f8406917293A9e01A1ca16d3cf9E59",
               "state": {
                 "allocation": [
                   {
@@ -559,7 +664,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "950828263661827100"
+                      "targetWithdrawUtilization": "954159407681601200"
                     }
                   },
                   {
@@ -568,61 +673,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "951862340749168800"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb48bb53f0f2690c71e8813f2dc7ed6fca9ac4b0ace3faa37b4a8e5ece38fa1a2",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "914409301911536000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x8411eeb07c8e32de0b3784b6b967346a45593bfd8baeb291cc209dc195c7b3ad",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "919839000750577900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x864c9b82eb066ae2c038ba763dfc0221001e62fc40925530056349633eb0a259",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "904420391255819100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x97bb820669a19ba5fa6de964a466292edd67957849f9631eb8b830c382f58b7f",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "622583855787127900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x2daab4eb520e7eab0a6d432d2edfb11775c9544a6b5e441c2e0f74abcd48f975",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": 0
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x12e703583b8a2a46a85d9d383b6156bbcf73db6b47a6f97c38771c56dd1bdd6c",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
+                      "targetWithdrawUtilization": "955205258696331500"
                     }
                   }
                 ]
@@ -647,7 +698,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "950828263661827100"
+                      "targetWithdrawUtilization": "954159407681601200"
                     }
                   },
                   {
@@ -656,7 +707,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "951862340749168800"
+                      "targetWithdrawUtilization": "955205258696331500"
                     }
                   },
                   {
@@ -665,7 +716,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "953026691638644100"
+                      "targetWithdrawUtilization": "956425117975472500"
                     }
                   },
                   {
@@ -674,23 +725,93 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "944910896581608400"
+                      "targetWithdrawUtilization": "947987671306734100"
                     }
                   }
                 ]
               }
             },
             {
-              "address": "0x186514400e52270cef3D80e1c6F8d10A75d47344",
+              "address": "0xF2eFEBE45180C8c04edFdBfF3d88e58C9D61a03E",
               "state": {
                 "allocation": [
+                  {
+                    "market": {
+                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "954159407681601200"
+                    }
+                  },
                   {
                     "market": {
                       "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "951862340749168800"
+                      "targetWithdrawUtilization": "955205258696331500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "address": "0xd63070114470f685b75B74D60EEc7c1113d33a3D",
+              "state": {
+                "allocation": [
+                  {
+                    "market": {
+                      "uniqueKey": "0x8411eeb07c8e32de0b3784b6b967346a45593bfd8baeb291cc209dc195c7b3ad",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "921915948460803300"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x864c9b82eb066ae2c038ba763dfc0221001e62fc40925530056349633eb0a259",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "905956685588439800"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x97bb820669a19ba5fa6de964a466292edd67957849f9631eb8b830c382f58b7f",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "623520982758656600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x2daab4eb520e7eab0a6d432d2edfb11775c9544a6b5e441c2e0f74abcd48f975",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": 0
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x12e703583b8a2a46a85d9d383b6156bbcf73db6b47a6f97c38771c56dd1bdd6c",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
                     }
                   },
                   {
@@ -708,68 +829,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "950828263661827100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x7dde86a1e94561d9690ec678db673c1a6396365f7d1d65e129c5fff0990ff758",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": 0
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xf9acc677910cc17f650416a22e2a14d5da7ccb9626db18f1bf94efe64f92b372",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "959820966827978900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x3bb29b62affbedc60b8446b235aaa349d5e3bad96c09bca1d7a2d693c06669aa",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "944910896581608400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "953026691638644100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xdcfd3558f75a13a3c430ee71df056b5570cbd628da91e33c27eec7c42603247b",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "address": "0x1265a81d42d513Df40d0031f8f2e1346954d665a",
-              "state": {
-                "allocation": [
-                  {
-                    "market": {
-                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950828263661827100"
+                      "targetWithdrawUtilization": "954159407681601200"
                     }
                   },
                   {
@@ -778,16 +838,16 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "951862340749168800"
+                      "targetWithdrawUtilization": "955205258696331500"
                     }
                   },
                   {
                     "market": {
-                      "uniqueKey": "0xbd1ad3b968f5f0552dbd8cf1989a62881407c5cccf9e49fb3657c8731caf0c1f",
+                      "uniqueKey": "0xb48bb53f0f2690c71e8813f2dc7ed6fca9ac4b0ace3faa37b4a8e5ece38fa1a2",
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "941475302322558300"
+                      "targetWithdrawUtilization": "916191129103545100"
                     }
                   }
                 ]
@@ -803,7 +863,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "937837304789649200"
+                      "targetWithdrawUtilization": "940671332944815100"
                     }
                   },
                   {
@@ -821,7 +881,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "948095183146296000"
+                      "targetWithdrawUtilization": "951242063074958300"
                     }
                   },
                   {
@@ -848,16 +908,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "914409301911536000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950828263661827100"
+                      "targetWithdrawUtilization": "916191129103545100"
                     }
                   },
                   {
@@ -866,7 +917,16 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "919804193070953000"
+                      "targetWithdrawUtilization": "921880000299340700"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "954159407681601200"
                     }
                   },
                   {
@@ -884,7 +944,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "950310788746164400"
+                      "targetWithdrawUtilization": "953579519471603200"
                     }
                   },
                   {
@@ -893,7 +953,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "904420391255819100"
+                      "targetWithdrawUtilization": "905956685588439800"
                     }
                   },
                   {
@@ -902,7 +962,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "854478052464344700"
+                      "targetWithdrawUtilization": "892901426329517200"
                     }
                   },
                   {
@@ -911,7 +971,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "965583421293351000"
+                      "targetWithdrawUtilization": "969254957482872300"
                     }
                   },
                   {
@@ -920,7 +980,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "939447755594875400"
+                      "targetWithdrawUtilization": "942318162118721000"
                     }
                   },
                   {
@@ -929,7 +989,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "622583855787127900"
+                      "targetWithdrawUtilization": "623520982758656600"
                     }
                   },
                   {
@@ -938,7 +998,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "953026691638644100"
+                      "targetWithdrawUtilization": "956425117975472500"
                     }
                   },
                   {
@@ -947,7 +1007,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "975692593768007300"
+                      "targetWithdrawUtilization": "980250147540524700"
                     }
                   },
                   {
@@ -965,7 +1025,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "951862340749168800"
+                      "targetWithdrawUtilization": "955205258696331500"
                     }
                   },
                   {
@@ -984,410 +1044,6 @@
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
                       "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "address": "0xF2eFEBE45180C8c04edFdBfF3d88e58C9D61a03E",
-              "state": {
-                "allocation": [
-                  {
-                    "market": {
-                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950828263661827100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "951862340749168800"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "address": "0x4Ff4186188f8406917293A9e01A1ca16d3cf9E59",
-              "state": {
-                "allocation": [
-                  {
-                    "market": {
-                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950828263661827100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "951862340749168800"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "address": "0xBEeFFF209270748ddd194831b3fa287a5386f5bC",
-              "state": {
-                "allocation": [
-                  {
-                    "market": {
-                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x346afa2b6d528222a2f9721ded6e7e2c40ac94877a598f5dae5013c651d2a462",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "919804193070953000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x8411eeb07c8e32de0b3784b6b967346a45593bfd8baeb291cc209dc195c7b3ad",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "919839000750577900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x85c7f4374f3a403b36d54cc284983b2b02bbd8581ee0f3c36494447b87d9fcab",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950310788746164400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb48bb53f0f2690c71e8813f2dc7ed6fca9ac4b0ace3faa37b4a8e5ece38fa1a2",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "914409301911536000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x97bb820669a19ba5fa6de964a466292edd67957849f9631eb8b830c382f58b7f",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "622583855787127900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x864c9b82eb066ae2c038ba763dfc0221001e62fc40925530056349633eb0a259",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "904420391255819100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xd925961ad5df1d12f677ff14cf20bac37ea5ef3b325d64d5a9f4c0cc013a1d47",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "948095183146296000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "951862340749168800"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950828263661827100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "953026691638644100"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "address": "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
-              "state": {
-                "allocation": [
-                  {
-                    "market": {
-                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "951862340749168800"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950828263661827100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x6cd5fd13ae90d2e4ecc70032e64ca48b263d94763168a7e7e11ecbf9dbe56c19",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "953026691638644100"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "address": "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458",
-              "state": {
-                "allocation": [
-                  {
-                    "market": {
-                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "1000000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x85c7f4374f3a403b36d54cc284983b2b02bbd8581ee0f3c36494447b87d9fcab",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950310788746164400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "951862340749168800"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "950828263661827100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x97bb820669a19ba5fa6de964a466292edd67957849f9631eb8b830c382f58b7f",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "622583855787127900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x9c765f69d8a8e40d2174824bc5107d05d7f0d0f81181048c9403262aeb1ab457",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "920000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xe4cfbee9af4ad713b41bf79f009ca02b17c001a0c0e7bd2e6a89b1111b3d3f08",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "920000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x718af3af39b183758849486340b69466e3e89b84b7884188323416621ee91cb7",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "920000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x7e9c708876fa3816c46aeb08937b51aa0461c2af3865ecb306433db8a80b1d1b",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "920000000000000000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xd925961ad5df1d12f677ff14cf20bac37ea5ef3b325d64d5a9f4c0cc013a1d47",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "948095183146296000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x3bb29b62affbedc60b8446b235aaa349d5e3bad96c09bca1d7a2d693c06669aa",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "944910896581608400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x46981f15ab56d2fdff819d9c2b9c33ed9ce8086e0cce70939175ac7e55377c7f",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "975692593768007300"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "953026691638644100"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x61765602144e91e5ac9f9e98b8584eae308f9951596fd7f5e0f59f21cd2bf664",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "939447755594875400"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xe95187ba4e7668ab4434bbb17d1dfd7b87e878242eee3e73dac9fdb79a4d0d99",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "937837304789649200"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x444327b909aa41043cc4f20209eefb2fbb37f1c38ff9ca312374a4ecc3f0a871",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "951786693194398700"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x8411eeb07c8e32de0b3784b6b967346a45593bfd8baeb291cc209dc195c7b3ad",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "919839000750577900"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0xb48bb53f0f2690c71e8813f2dc7ed6fca9ac4b0ace3faa37b4a8e5ece38fa1a2",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "914409301911536000"
-                    }
-                  },
-                  {
-                    "market": {
-                      "uniqueKey": "0x346afa2b6d528222a2f9721ded6e7e2c40ac94877a598f5dae5013c651d2a462",
-                      "loanAsset": {
-                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
-                      },
-                      "targetWithdrawUtilization": "919804193070953000"
                     }
                   }
                 ]
@@ -1412,7 +1068,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "950828263661827100"
+                      "targetWithdrawUtilization": "954159407681601200"
                     }
                   },
                   {
@@ -1421,7 +1077,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "914409301911536000"
+                      "targetWithdrawUtilization": "916191129103545100"
                     }
                   },
                   {
@@ -1430,7 +1086,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "904420391255819100"
+                      "targetWithdrawUtilization": "905956685588439800"
                     }
                   },
                   {
@@ -1439,7 +1095,7 @@
                       "loanAsset": {
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
-                      "targetWithdrawUtilization": "622583855787127900"
+                      "targetWithdrawUtilization": "623520982758656600"
                     }
                   },
                   {
@@ -1449,6 +1105,455 @@
                         "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
                       },
                       "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "address": "0x8eB67A509616cd6A7c1B3c8C21D48FF57df3d458",
+              "state": {
+                "allocation": [
+                  {
+                    "market": {
+                      "uniqueKey": "0x97bb820669a19ba5fa6de964a466292edd67957849f9631eb8b830c382f58b7f",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "623520982758656600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x9c765f69d8a8e40d2174824bc5107d05d7f0d0f81181048c9403262aeb1ab457",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "920000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xe4cfbee9af4ad713b41bf79f009ca02b17c001a0c0e7bd2e6a89b1111b3d3f08",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "920000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x718af3af39b183758849486340b69466e3e89b84b7884188323416621ee91cb7",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "920000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x7e9c708876fa3816c46aeb08937b51aa0461c2af3865ecb306433db8a80b1d1b",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "920000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x8411eeb07c8e32de0b3784b6b967346a45593bfd8baeb291cc209dc195c7b3ad",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "921915948460803300"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb48bb53f0f2690c71e8813f2dc7ed6fca9ac4b0ace3faa37b4a8e5ece38fa1a2",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "916191129103545100"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x346afa2b6d528222a2f9721ded6e7e2c40ac94877a598f5dae5013c651d2a462",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "921880000299340700"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x85c7f4374f3a403b36d54cc284983b2b02bbd8581ee0f3c36494447b87d9fcab",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "953579519471603200"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "955205258696331500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "954159407681601200"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xd925961ad5df1d12f677ff14cf20bac37ea5ef3b325d64d5a9f4c0cc013a1d47",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "951242063074958300"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x3bb29b62affbedc60b8446b235aaa349d5e3bad96c09bca1d7a2d693c06669aa",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "947987671306734100"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x46981f15ab56d2fdff819d9c2b9c33ed9ce8086e0cce70939175ac7e55377c7f",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "980250147540524700"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "956425117975472500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x61765602144e91e5ac9f9e98b8584eae308f9951596fd7f5e0f59f21cd2bf664",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "942318162118721000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xe95187ba4e7668ab4434bbb17d1dfd7b87e878242eee3e73dac9fdb79a4d0d99",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "940671332944815100"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x444327b909aa41043cc4f20209eefb2fbb37f1c38ff9ca312374a4ecc3f0a871",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "955125165280301200"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "address": "0x186514400e52270cef3D80e1c6F8d10A75d47344",
+              "state": {
+                "allocation": [
+                  {
+                    "market": {
+                      "uniqueKey": "0x3bb29b62affbedc60b8446b235aaa349d5e3bad96c09bca1d7a2d693c06669aa",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "947987671306734100"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "956425117975472500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xdcfd3558f75a13a3c430ee71df056b5570cbd628da91e33c27eec7c42603247b",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "955205258696331500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "954159407681601200"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x7dde86a1e94561d9690ec678db673c1a6396365f7d1d65e129c5fff0990ff758",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": 0
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xf9acc677910cc17f650416a22e2a14d5da7ccb9626db18f1bf94efe64f92b372",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "963670838370623100"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "address": "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
+              "state": {
+                "allocation": [
+                  {
+                    "market": {
+                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "955205258696331500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "954159407681601200"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x6cd5fd13ae90d2e4ecc70032e64ca48b263d94763168a7e7e11ecbf9dbe56c19",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "956425117975472500"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "address": "0xBEeFFF209270748ddd194831b3fa287a5386f5bC",
+              "state": {
+                "allocation": [
+                  {
+                    "market": {
+                      "uniqueKey": "0x54efdee08e272e929034a8f26f7ca34b1ebe364b275391169b28c6d7db24dbc8",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "1000000000000000000"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x346afa2b6d528222a2f9721ded6e7e2c40ac94877a598f5dae5013c651d2a462",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "921880000299340700"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x8411eeb07c8e32de0b3784b6b967346a45593bfd8baeb291cc209dc195c7b3ad",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "921915948460803300"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x85c7f4374f3a403b36d54cc284983b2b02bbd8581ee0f3c36494447b87d9fcab",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "953579519471603200"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb48bb53f0f2690c71e8813f2dc7ed6fca9ac4b0ace3faa37b4a8e5ece38fa1a2",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "916191129103545100"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x97bb820669a19ba5fa6de964a466292edd67957849f9631eb8b830c382f58b7f",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "623520982758656600"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x864c9b82eb066ae2c038ba763dfc0221001e62fc40925530056349633eb0a259",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "905956685588439800"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xd925961ad5df1d12f677ff14cf20bac37ea5ef3b325d64d5a9f4c0cc013a1d47",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "951242063074958300"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "955205258696331500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "954159407681601200"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "956425117975472500"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "address": "0x1265a81d42d513Df40d0031f8f2e1346954d665a",
+              "state": {
+                "allocation": [
+                  {
+                    "market": {
+                      "uniqueKey": "0x3a85e619751152991742810df6ec69ce473daef99e28a64ab2340d7b7ccfee49",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "954159407681601200"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "955205258696331500"
+                    }
+                  },
+                  {
+                    "market": {
+                      "uniqueKey": "0xbd1ad3b968f5f0552dbd8cf1989a62881407c5cccf9e49fb3657c8731caf0c1f",
+                      "loanAsset": {
+                        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+                      },
+                      "targetWithdrawUtilization": "944447150229001900"
                     }
                   }
                 ]
