@@ -31,6 +31,7 @@ jobs:
           - bundler-sdk-viem
 
           - liquidation-sdk-viem
+          - liquidity-sdk-viem
 
     name: "@morpho-org/${{ matrix.package }}"
     runs-on: ubuntu-latest

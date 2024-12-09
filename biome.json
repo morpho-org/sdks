@@ -7,8 +7,8 @@
       "cache",
       "coverage",
       "artifacts",
-      "packages/examples/src/api/sdk.ts",
-      "packages/liquidation-sdk-viem/src/api/sdk.ts"
+      "packages/liquidation-sdk-viem/src/api/sdk.ts",
+      "packages/liquidity-sdk-viem/src/api/sdk.ts"
     ]
   },
   "formatter": {

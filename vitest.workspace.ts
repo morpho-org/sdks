@@ -66,9 +66,9 @@ export default defineWorkspace([
   },
   {
     test: {
-      name: "examples",
-      include: ["packages/examples/**/*.test.ts"],
-      testTimeout: 90_000,
+      name: "liquidity-sdk-viem",
+      include: ["packages/liquidity-sdk-viem/**/*.test.ts"],
+      testTimeout: 30_000,
     },
   },
 ]);
