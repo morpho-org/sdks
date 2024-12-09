@@ -1,12 +1,17 @@
-import {
+import type {
   Signature,
   TransactionReceipt,
   TransactionRequest,
   TransactionResponse,
 } from "ethers";
-import { Observable, Observer, ReplaySubject, lastValueFrom } from "rxjs";
+import {
+  type Observable,
+  type Observer,
+  ReplaySubject,
+  lastValueFrom,
+} from "rxjs";
 
-import { SignatureMessage } from "./signatures/types";
+import type { SignatureMessage } from "./signatures/types.js";
 
 export enum NotificationStatus {
   signing = "signing",
@@ -26,17 +31,20 @@ export interface NotificationContext {
       tx: TransactionRequest;
     };
     [NotificationStatus.pending]: {
+      // biome-ignore lint/suspicious/noExplicitAny: old code
       args: Record<PropertyKey, any>;
       tx: TransactionRequest;
       response?: TransactionResponse;
     };
     [NotificationStatus.success]: {
+      // biome-ignore lint/suspicious/noExplicitAny: old code
       args: Record<PropertyKey, any>;
       tx: TransactionRequest;
       response?: TransactionResponse;
       receipt: TransactionReceipt | null;
     };
     [NotificationStatus.error]: {
+      // biome-ignore lint/suspicious/noExplicitAny: old code
       args: Record<PropertyKey, any>;
       tx: TransactionRequest;
       response?: TransactionResponse;
@@ -47,15 +55,18 @@ export interface NotificationContext {
     [NotificationStatus.signing]: never;
     [NotificationStatus.pending]: {
       message: SignatureMessage;
+      // biome-ignore lint/suspicious/noExplicitAny: old code
       args: Record<PropertyKey, any>;
     };
     [NotificationStatus.success]: {
       message: SignatureMessage;
+      // biome-ignore lint/suspicious/noExplicitAny: old code
       args: Record<PropertyKey, any>;
       signature: Signature;
     };
     [NotificationStatus.error]: {
       message: SignatureMessage;
+      // biome-ignore lint/suspicious/noExplicitAny: old code
       args: Record<PropertyKey, any>;
       error: Error;
     };
@@ -115,7 +126,7 @@ export interface NotificationConsumer<Topic extends NotificationTopic> {
 export class NotificationProducer<Topic extends NotificationTopic> {
   protected readonly _notifications$ = new ReplaySubject<
     Notifications[Topic][NotificationStatus]
-  >(Infinity);
+  >(Number.POSITIVE_INFINITY);
   public readonly notifications$ = this._notifications$.asObservable();
 
   protected readonly _result = lastValueFrom(this._notifications$);
