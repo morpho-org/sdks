@@ -5,15 +5,15 @@ import { markets } from "@morpho-org/morpho-test";
 import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
 import { describe, expect } from "vitest";
 import { LiquidityLoader } from "../src";
-import sharedLiquidityMock0 from "./mocks/shared-liquidity.0.json";
-import sharedLiquidityMock1 from "./mocks/shared-liquidity.1.json";
+import apiMock0 from "./mocks/dataloader.0.json";
+import apiMock1 from "./mocks/dataloader.1.json";
 import { test } from "./setup.js";
 
 const { usdc_wstEth, eth_wstEth, usdc_wbtc } = markets[ChainId.EthMainnet];
 
 describe("dataloader", () => {
   test("should fetch shared liquidity from api", async ({ client }) => {
-    nock(BLUE_API_BASE_URL).post("/graphql").reply(200, sharedLiquidityMock0);
+    nock(BLUE_API_BASE_URL).post("/graphql").reply(200, apiMock0);
 
     const reallocations = await new LiquidityLoader(client).fetch(
       usdc_wstEth.id,
@@ -41,7 +41,7 @@ describe("dataloader", () => {
   test("should fetch shared liquidity for 1 market from api and 1 from rpc", async ({
     client,
   }) => {
-    nock(BLUE_API_BASE_URL).post("/graphql").reply(200, sharedLiquidityMock1);
+    nock(BLUE_API_BASE_URL).post("/graphql").reply(200, apiMock1);
 
     const loader = new LiquidityLoader(client);
 
@@ -114,7 +114,7 @@ describe("dataloader", () => {
   test("should fetch shared liquidity for 2 markets from rpc", async ({
     client,
   }) => {
-    nock(BLUE_API_BASE_URL).post("/graphql").reply(200, sharedLiquidityMock1);
+    nock(BLUE_API_BASE_URL).post("/graphql").reply(200, apiMock1);
 
     const loader = new LiquidityLoader(client);
 
