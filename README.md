@@ -23,6 +23,8 @@
 
 - [**`@morpho-org/blue-api-sdk`**](./packages/blue-api-sdk/): GraphQL SDK that exports types from the [API's GraphQL schema](https://blue-api.morpho.org/graphql) and a useful Apollo cache controller
 
+- [**`@morpho-org/liquidity-sdk-ethers`**](./packages/liquidity-sdk-ethers/): Ethers-based package that helps seamlessly calculate the liquidity available through the PublicAllocator
+- [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator
 - [**`@morpho-org/liquidation-sdk-viem`**](./packages/liquidation-sdk-viem/): Viem-based package that provides utilities to build viem-based liquidation bots on Morpho and examples using Flashbots and Morpho's GraphQL API
 
 ### Testing

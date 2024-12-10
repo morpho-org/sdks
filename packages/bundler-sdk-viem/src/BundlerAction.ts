@@ -28,8 +28,8 @@ import type {
   Action,
   Authorization,
   InputMarketParams,
+  InputReallocation,
   Permit2PermitSingle,
-  ReallocationWithdrawal,
 } from "./types/index.js";
 
 export type BundlerCall = Hex;
@@ -794,7 +794,7 @@ export namespace BundlerAction {
     publicAllocator: Address,
     vault: Address,
     value: bigint,
-    withdrawals: ReallocationWithdrawal[],
+    withdrawals: InputReallocation[],
     supplyMarketParams: InputMarketParams,
   ): BundlerCall {
     return encodeFunctionData({

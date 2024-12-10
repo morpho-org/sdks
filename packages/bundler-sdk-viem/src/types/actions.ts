@@ -23,7 +23,7 @@ export interface Authorization {
   deadline: bigint;
 }
 
-export interface ReallocationWithdrawal {
+export interface InputReallocation {
   marketParams: InputMarketParams;
   amount: bigint;
 }
@@ -163,7 +163,7 @@ export interface ActionArgs {
     publicAllocator: Address,
     vault: Address,
     value: bigint,
-    withdrawals: ReallocationWithdrawal[],
+    withdrawals: InputReallocation[],
     supplyMarket: InputMarketParams,
   ];
 

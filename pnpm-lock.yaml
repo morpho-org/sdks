@@ -151,9 +151,6 @@ importers:
       hardhat:
         specifier: ^2.22.17
         version: 2.22.17(bufferutil@4.0.8)(ts-node@10.9.2(@types/node@22.10.1)(typescript@5.7.2))(typescript@5.7.2)(utf-8-validate@5.0.10)
-      ts-node:
-        specifier: ^10.9.2
-        version: 10.9.2(@types/node@22.10.1)(typescript@5.7.2)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -362,9 +359,6 @@ importers:
       nock:
         specifier: beta
         version: 14.0.0-beta.19
-      ts-node:
-        specifier: ^10.9.2
-        version: 10.9.2(@types/node@22.10.1)(typescript@5.7.2)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -435,9 +429,6 @@ importers:
       nock:
         specifier: beta
         version: 14.0.0-beta.19
-      ts-node:
-        specifier: ^10.9.2
-        version: 10.9.2(@types/node@22.10.1)(typescript@5.7.2)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -502,9 +493,6 @@ importers:
       nock:
         specifier: beta
         version: 14.0.0-beta.19
-      ts-node:
-        specifier: ^10.9.2
-        version: 10.9.2(@types/node@22.10.1)(typescript@5.7.2)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -8616,6 +8604,7 @@ snapshots:
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
+    optional: true
 
   '@ecies/ciphers@0.2.1(@noble/ciphers@1.0.0)':
     dependencies:
@@ -9487,6 +9476,7 @@ snapshots:
     dependencies:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.0
+    optional: true
 
   '@kamilkisiela/fast-url-parser@1.1.4': {}
 
@@ -10491,13 +10481,17 @@ snapshots:
       '@types/react': 18.3.11
       '@types/react-dom': 18.3.1
 
-  '@tsconfig/node10@1.0.11': {}
+  '@tsconfig/node10@1.0.11':
+    optional: true
 
-  '@tsconfig/node12@1.0.11': {}
+  '@tsconfig/node12@1.0.11':
+    optional: true
 
-  '@tsconfig/node14@1.0.3': {}
+  '@tsconfig/node14@1.0.3':
+    optional: true
 
-  '@tsconfig/node16@1.0.4': {}
+  '@tsconfig/node16@1.0.4':
+    optional: true
 
   '@typechain/ethers-v6@0.5.1(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typechain@8.3.2(typescript@5.7.2))(typescript@5.7.2)':
     dependencies:
@@ -11056,6 +11050,7 @@ snapshots:
   acorn-walk@8.3.4:
     dependencies:
       acorn: 8.14.0
+    optional: true
 
   acorn@8.14.0: {}
 
@@ -11134,7 +11129,8 @@ snapshots:
 
   appdirsjs@1.2.7: {}
 
-  arg@4.1.3: {}
+  arg@4.1.3:
+    optional: true
 
   argparse@1.0.10:
     dependencies:
@@ -11780,7 +11776,8 @@ snapshots:
       safe-buffer: 5.2.1
       sha.js: 2.4.11
 
-  create-require@1.1.1: {}
+  create-require@1.1.1:
+    optional: true
 
   cross-fetch@3.1.8(encoding@0.1.13):
     dependencies:
@@ -11883,7 +11880,8 @@ snapshots:
 
   detect-libc@1.0.3: {}
 
-  diff@4.0.2: {}
+  diff@4.0.2:
+    optional: true
 
   diff@5.2.0: {}
 
@@ -13298,7 +13296,8 @@ snapshots:
     dependencies:
       semver: 7.6.3
 
-  make-error@1.3.6: {}
+  make-error@1.3.6:
+    optional: true
 
   makeerror@1.0.12:
     dependencies:
@@ -14727,6 +14726,7 @@ snapshots:
       typescript: 5.7.2
       v8-compile-cache-lib: 3.0.1
       yn: 3.1.1
+    optional: true
 
   tslib@1.14.1: {}
 
@@ -14893,7 +14893,8 @@ snapshots:
 
   uuid@9.0.1: {}
 
-  v8-compile-cache-lib@3.0.1: {}
+  v8-compile-cache-lib@3.0.1:
+    optional: true
 
   valtio@1.11.2(@types/react@18.3.11)(react@18.3.1):
     dependencies:
@@ -15215,7 +15216,8 @@ snapshots:
       y18n: 5.0.8
       yargs-parser: 21.1.1
 
-  yn@3.1.1: {}
+  yn@3.1.1:
+    optional: true
 
   yocto-queue@0.1.0: {}
 
