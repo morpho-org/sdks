@@ -546,6 +546,10 @@ importers:
         version: 2.1.8(@types/node@22.10.1)(happy-dom@15.11.7)(terser@5.36.0)
 
   packages/simulation-sdk:
+    dependencies:
+      mutative:
+        specifier: ^1.0.11
+        version: 1.0.11
     devDependencies:
       '@morpho-org/blue-sdk':
         specifier: workspace:^
@@ -565,9 +569,6 @@ importers:
       lodash:
         specifier: ^4.17.21
         version: 4.17.21
-      mutative:
-        specifier: ^1.0.11
-        version: 1.0.11
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
