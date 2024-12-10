@@ -14,6 +14,7 @@ export type GetMarketsQuery = {
     items: Array<{
       __typename?: "Market";
       uniqueKey: Types.Scalars["MarketId"]["output"];
+      targetBorrowUtilization: Types.Scalars["BigInt"]["output"];
       publicAllocatorSharedLiquidity: Array<{
         __typename?: "PublicAllocatorSharedLiquidity";
         assets: Types.Scalars["BigInt"]["output"];

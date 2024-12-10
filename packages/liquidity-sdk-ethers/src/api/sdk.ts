@@ -9,6 +9,7 @@ export const GetMarketsDocument = gql`
   markets(where: {chainId_in: [$chainId], uniqueKey_in: $marketIds}) {
     items {
       uniqueKey
+      targetBorrowUtilization
       publicAllocatorSharedLiquidity {
         vault {
           address
