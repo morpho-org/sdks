@@ -9,40 +9,37 @@ export type GetLiquidatablePositionsQueryVariables = Types.Exact<{
   first?: Types.InputMaybe<Types.Scalars["Int"]["input"]>;
 }>;
 
+type Asset = {
+  __typename?: "Asset";
+  address: Types.Scalars["Address"]["output"];
+  decimals: number;
+  symbol: string;
+  priceUsd: number | null;
+  spotPriceEth: number | null;
+};
+
+export type MarketPosition = {
+  __typename?: "MarketPosition";
+  user: {
+    __typename?: "User";
+    address: Types.Scalars["Address"]["output"];
+  };
+  market: {
+    __typename?: "Market";
+    oracleAddress: Types.Scalars["Address"]["output"];
+    irmAddress: Types.Scalars["Address"]["output"];
+    lltv: Types.Scalars["BigInt"]["output"];
+    collateralAsset: Asset | null;
+    loanAsset: Asset;
+  };
+};
+
 export type GetLiquidatablePositionsQuery = {
   __typename?: "Query";
   assetByAddress: { __typename?: "Asset"; priceUsd: number | null };
   marketPositions: {
     __typename?: "PaginatedMarketPositions";
-    items: Array<{
-      __typename?: "MarketPosition";
-      user: {
-        __typename?: "User";
-        address: Types.Scalars["Address"]["output"];
-      };
-      market: {
-        __typename?: "Market";
-        oracleAddress: Types.Scalars["Address"]["output"];
-        irmAddress: Types.Scalars["Address"]["output"];
-        lltv: Types.Scalars["BigInt"]["output"];
-        collateralAsset: {
-          __typename?: "Asset";
-          address: Types.Scalars["Address"]["output"];
-          decimals: number;
-          symbol: string;
-          priceUsd: number | null;
-          spotPriceEth: number | null;
-        } | null;
-        loanAsset: {
-          __typename?: "Asset";
-          address: Types.Scalars["Address"]["output"];
-          decimals: number;
-          symbol: string;
-          priceUsd: number | null;
-          spotPriceEth: number | null;
-        };
-      };
-    }> | null;
+    items: Array<MarketPosition> | null;
   };
 };
 
