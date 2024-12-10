@@ -6,7 +6,7 @@ import {
   fetchVault,
   fetchVaultMarketConfig,
 } from "@morpho-org/blue-sdk-ethers";
-import { entries, fromEntries } from "@morpho-org/morpho-ts";
+import { entries, fromEntries, isDefined } from "@morpho-org/morpho-ts";
 import {
   type PublicReallocation,
   SimulationState,
@@ -75,9 +75,9 @@ export class LiquidityLoader {
               .map(({ marketId }) => marketId),
           );
 
-          const rpcMarkets = [...rpcMarketIds].map(
-            (marketId) => apiMarkets[marketId.toLowerCase()]!,
-          );
+          const rpcMarkets = [...rpcMarketIds]
+            .map((marketId) => apiMarkets[marketId.toLowerCase()])
+            .filter(isDefined);
 
           const allMarketIds = new Set(
             rpcMarkets.flatMap(
