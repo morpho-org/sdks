@@ -27,7 +27,7 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "@types/node": "^22.9.3",
+    "@types/node": "^22.10.1",
     "typescript": "^5.7.2",
     "viem": "^2.21.54"
   },
