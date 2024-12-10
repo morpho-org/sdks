@@ -41,7 +41,7 @@ yarn add @morpho-org/liquidity-sdk-ethers
 import { LiquidityLoader } from "@morpho-org/liquidity-sdk-ethers";
 
 const loader = new LiquidityLoader(
-  client // ethers client.
+  provider // ethers provider.
 );
 
 const [withdrawals1, withdrawals2] = await Promise.all([
