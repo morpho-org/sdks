@@ -65,7 +65,7 @@ describe("SimulationState", () => {
         {
           vault: vaultC.address,
           id: marketA3.id,
-          assets: 199_940000n,
+          assets: 199_999627n,
         }, // Only vault on market A3.
         {
           vault: vaultA.address,
@@ -75,8 +75,8 @@ describe("SimulationState", () => {
       ]);
 
       expect(data.getMarket(marketA1.id).liquidity).toEqual(710_000000n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10439_940000n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(100_060000n);
+      expect(data.getMarket(marketA2.id).liquidity).toEqual(10439_999627n);
+      expect(data.getMarket(marketA3.id).liquidity).toEqual(100_000373n);
     });
 
     test("should calculate reallocatable liquidity on market A3", () => {
@@ -89,15 +89,18 @@ describe("SimulationState", () => {
         {
           vault: vaultC.address,
           id: marketA2.id,
-          assets: 99_700000n,
-        }, // Only vault on market A3.
+          assets: 99_990072n,
+        },
+        {
+          vault: vaultC.address,
+          id: marketA1.id,
+          assets: 1654n,
+        },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA1.id).liquidity,
-      );
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10100_300000n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(399_700000n);
+      expect(data.getMarket(marketA1.id).liquidity).toEqual(749_998346n);
+      expect(data.getMarket(marketA2.id).liquidity).toEqual(10100_009928n);
+      expect(data.getMarket(marketA3.id).liquidity).toEqual(399_991726n);
     });
 
     test("should calculate reallocatable liquidity on market B1", () => {
@@ -326,12 +329,12 @@ describe("SimulationState", () => {
         {
           vault: vaultC.address,
           id: marketA2.id,
-          assets: 119_678714n,
+          assets: 119_640644n,
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_678714n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_321286n);
+      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_640644n);
+      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_359356n);
       expect(data.getMarket(marketA3.id).liquidity).toEqual(
         dataFixture.getMarket(marketA3.id).liquidity,
       );
@@ -350,12 +353,12 @@ describe("SimulationState", () => {
         {
           vault: vaultC.address,
           id: marketA2.id,
-          assets: 119_678714n,
+          assets: 119_640644n,
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_678714n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_321286n);
+      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_640644n);
+      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_359356n);
       expect(data.getMarket(marketA3.id).liquidity).toEqual(
         dataFixture.getMarket(marketA3.id).liquidity,
       );
@@ -390,15 +393,15 @@ describe("SimulationState", () => {
         {
           vault: vaultC.address,
           id: marketA2.id,
-          assets: 99_700000n,
+          assets: 99_990072n,
         }, // Only vault on market A3.
       ]);
 
       expect(data.getMarket(marketA1.id).liquidity).toEqual(
         dataFixture.getMarket(marketA1.id).liquidity,
       );
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10100_300000n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(399_700000n);
+      expect(data.getMarket(marketA2.id).liquidity).toEqual(10100_009928n);
+      expect(data.getMarket(marketA3.id).liquidity).toEqual(399_990072n);
     });
   });
 

@@ -570,7 +570,15 @@ export class SimulationState implements InputSimulationState {
 
             const marketWithdrawals = data
               .getVault(vault)
-              .withdrawQueue.filter((srcMarketId) => srcMarketId !== marketId)
+              .withdrawQueue.filter(
+                (srcMarketId) =>
+                  srcMarketId !== marketId &&
+                  !withdrawals.some(
+                    (withdrawal) =>
+                      withdrawal.id === srcMarketId &&
+                      withdrawal.vault === vault,
+                  ),
+              )
               .map((srcMarketId) => {
                 try {
                   const srcPosition = data
