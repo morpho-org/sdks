@@ -329,12 +329,12 @@ describe("SimulationState", () => {
         {
           vault: vaultC.address,
           id: marketA2.id,
-          assets: 119_640644n,
+          assets: 119_678714n,
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_640644n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_359356n);
+      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_678714n);
+      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_321286n);
       expect(data.getMarket(marketA3.id).liquidity).toEqual(
         dataFixture.getMarket(marketA3.id).liquidity,
       );
@@ -353,12 +353,12 @@ describe("SimulationState", () => {
         {
           vault: vaultC.address,
           id: marketA2.id,
-          assets: 119_640644n,
+          assets: 119_678714n,
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_640644n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_359356n);
+      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_678714n);
+      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_321286n);
       expect(data.getMarket(marketA3.id).liquidity).toEqual(
         dataFixture.getMarket(marketA3.id).liquidity,
       );

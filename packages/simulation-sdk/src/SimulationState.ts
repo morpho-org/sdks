@@ -557,16 +557,16 @@ export class SimulationState implements InputSimulationState {
       const vaultWithdrawals = reallocatableVaults
         .map((vault) =>
           _try(() => {
-            const dstAssets = data
-              .getAccrualPosition(vault, marketId)
-              .accrueInterest(this.block.timestamp + delay).supplyAssets;
-
             const { cap, publicAllocatorConfig } = data.getVaultMarketConfig(
               vault,
               marketId,
             );
 
-            const suppliable = cap - dstAssets;
+            const suppliable =
+              cap -
+              data
+                .getAccrualPosition(vault, marketId)
+                .accrueInterest(this.block.timestamp + delay).supplyAssets;
 
             const marketWithdrawals = data
               .getVault(vault)
@@ -583,7 +583,7 @@ export class SimulationState implements InputSimulationState {
                 try {
                   const srcPosition = data
                     .getAccrualPosition(vault, srcMarketId)
-                    .accrueInterest(this.block.timestamp + delay);
+                    .accrueInterest(this.block.timestamp);
 
                   const targetUtilizationLiquidity =
                     srcPosition.market.getWithdrawToUtilization(
