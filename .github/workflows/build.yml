@@ -28,6 +28,7 @@ jobs:
           - bundler-sdk-viem
 
           - liquidation-sdk-viem
+          - liquidity-sdk-ethers
           - liquidity-sdk-viem
 
     name: "@morpho-org/${{ matrix.package }}"

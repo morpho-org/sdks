@@ -375,29 +375,72 @@ importers:
         specifier: ^2.1.8
         version: 2.1.8(@types/node@22.10.0)(happy-dom@15.11.7)(terser@5.36.0)
 
-  packages/morpho-test:
+  packages/liquidity-sdk-ethers:
+    dependencies:
+      '@morpho-org/blue-sdk-viem':
+        specifier: workspace:^
+        version: link:../blue-sdk-viem
+      dataloader:
+        specifier: ^2.2.3
+        version: 2.2.3
+      graphql:
+        specifier: ^16.9.0
+        version: 16.9.0
+      graphql-request:
+        specifier: ^6.1.0
+        version: 6.1.0(encoding@0.1.13)(graphql@16.9.0)
+      graphql-tag:
+        specifier: 2.11.0
+        version: 2.11.0(graphql@16.9.0)
     devDependencies:
+      '@graphql-codegen/cli':
+        specifier: ^5.0.3
+        version: 5.0.3(@parcel/watcher@2.4.1)(@types/node@22.10.0)(bufferutil@4.0.8)(encoding@0.1.13)(enquirer@2.4.1)(graphql@16.9.0)(typescript@5.7.2)(utf-8-validate@5.0.10)
+      '@graphql-codegen/import-types-preset':
+        specifier: ^3.0.0
+        version: 3.0.0(encoding@0.1.13)(graphql@16.9.0)
+      '@graphql-codegen/typescript':
+        specifier: ^4.1.2
+        version: 4.1.2(encoding@0.1.13)(graphql@16.9.0)
+      '@graphql-codegen/typescript-graphql-request':
+        specifier: ^6.2.0
+        version: 6.2.0(encoding@0.1.13)(graphql-request@6.1.0(encoding@0.1.13)(graphql@16.9.0))(graphql-tag@2.11.0(graphql@16.9.0))(graphql@16.9.0)
+      '@graphql-codegen/typescript-operations':
+        specifier: ^4.3.1
+        version: 4.3.1(encoding@0.1.13)(graphql@16.9.0)
+      '@morpho-org/blue-api-sdk':
+        specifier: workspace:^
+        version: link:../blue-api-sdk
       '@morpho-org/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
+      '@morpho-org/blue-sdk-ethers':
+        specifier: workspace:^
+        version: link:../blue-sdk-ethers
+      '@morpho-org/morpho-test':
+        specifier: workspace:^
+        version: link:../morpho-test
       '@morpho-org/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
+      '@morpho-org/simulation-sdk':
+        specifier: workspace:^
+        version: link:../simulation-sdk
       '@morpho-org/test':
         specifier: workspace:^
         version: link:../test
       '@types/node':
         specifier: ^22.9.3
         version: 22.10.0
-      typescript:
-        specifier: ^5.7.2
-        version: 5.7.2
-      viem:
-        specifier: ^2.21.54
-        version: 2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
-
-  packages/morpho-ts:
-    devDependencies:
+      ethers:
+        specifier: ^6.0.0
+        version: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      nock:
+        specifier: beta
+        version: 14.0.0-beta.19
+      ts-node:
+        specifier: ^10.9.2
+        version: 10.9.2(@types/node@22.10.0)(typescript@5.7.2)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -471,6 +514,36 @@ importers:
       viem:
         specifier: ^2.21.54
         version: 2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.8(@types/node@22.10.0)(happy-dom@15.11.7)(terser@5.36.0)
+
+  packages/morpho-test:
+    devDependencies:
+      '@morpho-org/blue-sdk':
+        specifier: workspace:^
+        version: link:../blue-sdk
+      '@morpho-org/morpho-ts':
+        specifier: workspace:^
+        version: link:../morpho-ts
+      '@morpho-org/test':
+        specifier: workspace:^
+        version: link:../test
+      '@types/node':
+        specifier: ^22.9.3
+        version: 22.10.0
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
+      viem:
+        specifier: ^2.21.54
+        version: 2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+
+  packages/morpho-ts:
+    devDependencies:
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
       vitest:
         specifier: ^2.1.8
         version: 2.1.8(@types/node@22.10.0)(happy-dom@15.11.7)(terser@5.36.0)
@@ -3976,9 +4049,6 @@ packages:
   dargs@8.1.0:
     resolution: {integrity: sha512-wAV9QHOsNbwnWdNW2FYvE1P56wtgSbM+3SZcdGiWQILwVjACCXDCI3Ai8QlCjMDB8YK5zySiXZYBiwGmNY3lnw==}
     engines: {node: '>=12'}
-
-  dataloader@2.2.2:
-    resolution: {integrity: sha512-8YnDaaf7N3k/q5HnTJVuzSyLETjoZjVmHc4AeKAzOvKHEFQKcn64OKBfzHYtE9zGjctNM7V9I0MfnUVLpi7M5g==}
 
   dataloader@2.2.3:
     resolution: {integrity: sha512-y2krtASINtPFS1rSDjacrFgn1dcUuoREVabwlOGOe4SdxenREqwjwjElAdwvbGM7kgZz9a3KVicWR7vcz8rnzA==}
@@ -9057,7 +9127,7 @@ snapshots:
   '@graphql-tools/batch-execute@9.0.5(graphql@16.9.0)':
     dependencies:
       '@graphql-tools/utils': 10.5.5(graphql@16.9.0)
-      dataloader: 2.2.2
+      dataloader: 2.2.3
       graphql: 16.9.0
       tslib: 2.8.1
       value-or-promise: 1.0.12
@@ -9080,7 +9150,7 @@ snapshots:
       '@graphql-tools/schema': 10.0.7(graphql@16.9.0)
       '@graphql-tools/utils': 10.5.5(graphql@16.9.0)
       '@repeaterjs/repeater': 3.0.6
-      dataloader: 2.2.2
+      dataloader: 2.2.3
       graphql: 16.9.0
       tslib: 2.8.1
 
@@ -11749,8 +11819,6 @@ snapshots:
   csstype@3.1.3: {}
 
   dargs@8.1.0: {}
-
-  dataloader@2.2.2: {}
 
   dataloader@2.2.3: {}
 

@@ -12,10 +12,10 @@ import { test } from "./setup.js";
 const { usdc_wstEth, eth_wstEth, usdc_wbtc } = markets[ChainId.EthMainnet];
 
 describe("dataloader", () => {
-  test("should fetch shared liquidity from api", async ({ client }) => {
+  test("should fetch shared liquidity from api", async ({ wallet }) => {
     nock(BLUE_API_BASE_URL).post("/graphql").reply(200, apiMock0);
 
-    const reallocations = await new LiquidityLoader(client).fetch(
+    const reallocations = await new LiquidityLoader(wallet.provider).fetch(
       usdc_wstEth.id,
     );
 
@@ -39,11 +39,11 @@ describe("dataloader", () => {
   });
 
   test("should fetch shared liquidity for 1 market from api and 1 from rpc", async ({
-    client,
+    wallet,
   }) => {
     nock(BLUE_API_BASE_URL).post("/graphql").reply(200, apiMock1);
 
-    const loader = new LiquidityLoader(client);
+    const loader = new LiquidityLoader(wallet.provider);
 
     const [eth_reallocations, usdc_reallocations] = await Promise.all([
       loader.fetch(eth_wstEth.id, "api"),
@@ -112,11 +112,11 @@ describe("dataloader", () => {
   });
 
   test("should fetch shared liquidity for 2 markets from rpc", async ({
-    client,
+    wallet,
   }) => {
     nock(BLUE_API_BASE_URL).post("/graphql").reply(200, apiMock1);
 
-    const loader = new LiquidityLoader(client);
+    const loader = new LiquidityLoader(wallet.provider);
 
     const [eth_reallocations, usdc_reallocations] = await Promise.all([
       loader.fetch(eth_wstEth.id, "rpc"),
