@@ -12,62 +12,47 @@ import {
   SimulationState,
 } from "@morpho-org/simulation-sdk";
 import DataLoader from "dataloader";
-import type {
-  Account,
-  BlockTag,
-  Chain,
-  Client,
-  GetBlockParameters,
-  Transport,
-  UnionPick,
-} from "viem";
+import type { Chain, Client, Transport } from "viem";
 import { getBlock } from "viem/actions";
 import { apiSdk } from "./api";
 
-export type LiquidityRequest = {
+export interface LiquidityRequest {
   marketId: MarketId;
   from: "api" | "rpc";
-};
+}
 
-export type DefinedBlockParameters = UnionPick<
-  GetBlockParameters<false, Exclude<BlockTag, "pending">>,
-  "blockNumber" | "blockTag"
->;
+export interface LiquidityParameters {
+  chainId?: ChainId;
+  /* The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
+  delay?: bigint;
+}
 
-export class LiquidityLoader<
-  chain extends Chain = Chain,
-  account extends Account | undefined = Account | undefined,
-> {
-  public client?: Client<Transport, chain, account>;
-  public readonly parameters: { chainId?: ChainId } & DefinedBlockParameters;
+export class LiquidityLoader<chain extends Chain = Chain> {
+  public client?: Client<Transport, chain>;
+  public readonly parameters: LiquidityParameters = {};
 
   protected readonly dataLoader: DataLoader<
     LiquidityRequest,
     PublicReallocation[]
   >;
 
+  constructor(client: Client<Transport, chain>);
   constructor(
-    client: Client<Transport, chain, account>,
-    parameters?: DefinedBlockParameters,
+    parameters: { chainId: ChainId } & Omit<LiquidityParameters, "chainId">,
   );
-  constructor(parameters: { chainId: ChainId } & DefinedBlockParameters);
   constructor(
-    clientOrParameters:
-      | Client<Transport, chain, account>
-      | ({ chainId?: ChainId } & DefinedBlockParameters),
-    parameters: DefinedBlockParameters = {},
+    clientOrParameters: Client<Transport, chain> | LiquidityParameters,
   ) {
     if ("chainId" in clientOrParameters) {
       this.parameters = clientOrParameters;
     } else {
-      this.client = clientOrParameters as Client<Transport, chain, account>;
-      this.parameters = parameters;
+      this.client = clientOrParameters as Client<Transport, chain>;
     }
 
     this.dataLoader = new DataLoader(
       async (reqs) => {
-        const { client } = this;
-        const chainId = this.parameters.chainId ?? client!.chain.id;
+        const { client, parameters } = this;
+        const chainId = parameters.chainId ?? client!.chain.id;
 
         const data = await apiSdk.getMarkets({
           chainId,
@@ -128,18 +113,15 @@ export class LiquidityLoader<
 
           const [block, markets, vaults, vaultsTokens, vaultsMarkets] =
             await Promise.all([
-              getBlock<chain, account, false, Exclude<BlockTag, "pending">>(
-                client,
-                this.parameters,
-              ),
+              getBlock(client),
               Promise.all(
                 [...allMarketIds].map((marketId) =>
-                  fetchMarket(marketId, client, this.parameters),
+                  fetchMarket(marketId, client, parameters),
                 ),
               ),
               Promise.all(
                 [...allVaults].map((vault) =>
-                  fetchVault(vault, client, this.parameters),
+                  fetchVault(vault, client, parameters),
                 ),
               ),
               Promise.all(
@@ -157,7 +139,7 @@ export class LiquidityLoader<
                                   vault,
                                   loanAsset.address,
                                   client,
-                                  this.parameters,
+                                  parameters,
                                 ),
                               },
                             ] as const,
@@ -181,13 +163,13 @@ export class LiquidityLoader<
                                   vault,
                                   market.uniqueKey,
                                   client,
-                                  this.parameters,
+                                  parameters,
                                 ),
                                 vaultMarketConfig: await fetchVaultMarketConfig(
                                   vault,
                                   market.uniqueKey,
                                   client,
-                                  this.parameters,
+                                  parameters,
                                 ),
                               },
                             ] as const,
@@ -251,10 +233,13 @@ export class LiquidityLoader<
                 {
                   enabled: true,
                   maxWithdrawalUtilization,
+                  delay: parameters.delay,
                 },
               ).withdrawals;
             } catch (error) {
-              rpcWithdrawals[marketId] = error as Error;
+              rpcWithdrawals[marketId] = Error(
+                `An error occurred while simulating reallocations: ${error}`,
+              );
             }
           }
         }
@@ -278,7 +263,7 @@ export class LiquidityLoader<
         );
       },
       {
-        cache: !this.parameters.blockTag,
+        cache: false,
         cacheKeyFn: ({ marketId, from }) => `${from}:${marketId}`,
       },
     );

@@ -35,15 +35,36 @@ yarn add @morpho-org/liquidity-sdk-viem
 
 ## Getting Started
 
+### Fetch from API or RPC
+
 ```typescript
-import { ChainId } from "@morpho-org/blue-sdk";
 import { LiquidityLoader } from "@morpho-org/liquidity-sdk-viem";
 
 const loader = new LiquidityLoader(
   client // viem client.
 );
 
-await Promise.all([
+const [withdrawals1, withdrawals2] = await Promise.all([
+  loader.fetch(
+    "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
+    "api"
+  ),
+  loader.fetch(
+    "0xe475337d11be1db07f7c5a156e511f05d1844308e66e17d2ba5da0839d3b34d9" as MarketId,
+    "rpc"
+  ),
+]);
+```
+
+### Fetch only from API
+
+```typescript
+import { ChainId } from "@morpho-org/blue-sdk";
+import { LiquidityLoader } from "@morpho-org/liquidity-sdk-viem";
+
+const loader = new LiquidityLoader({ chainId: ChainId.EthMainnet });
+
+const [withdrawals1, withdrawals2] = await Promise.all([
   loader.fetch(
     "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId
   ),

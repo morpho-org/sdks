@@ -4,7 +4,6 @@ import {
   type Address,
   AssetBalances,
   ChainId,
-  DEFAULT_SLIPPAGE_TOLERANCE,
   DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   type Holding,
   type Market,
@@ -29,6 +28,7 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import {
+  Time,
   ZERO_ADDRESS,
   bigIntComparator,
   isDefined,
@@ -58,6 +58,9 @@ export interface PublicAllocatorOptions {
 
   /* Market-specific maximum utilization allowed for each corresponding withdrawn market. */
   maxWithdrawalUtilization?: Record<MarketId, bigint | undefined>;
+
+  /* The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
+  delay?: bigint;
 }
 
 export interface PublicReallocation {
@@ -532,6 +535,7 @@ export class SimulationState implements InputSimulationState {
       reallocatableVaults = keys(this.vaultMarketConfigs),
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
+      delay = Time.s.from.h(1n),
     }: PublicAllocatorOptions = {},
   ) {
     if (!enabled) return { withdrawals: [], data: this };
@@ -555,19 +559,14 @@ export class SimulationState implements InputSimulationState {
           _try(() => {
             const dstAssets = data
               .getAccrualPosition(vault, marketId)
-              .accrueInterest(this.block.timestamp).supplyAssets;
+              .accrueInterest(this.block.timestamp + delay).supplyAssets;
+
             const { cap, publicAllocatorConfig } = data.getVaultMarketConfig(
               vault,
               marketId,
             );
 
-            const suppliable =
-              cap -
-              // There is slippage in the expected vault's supply on the destination market.
-              MathLib.wMulDown(
-                dstAssets,
-                MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
-              );
+            const suppliable = cap - dstAssets;
 
             const marketWithdrawals = data
               .getVault(vault)
@@ -576,7 +575,7 @@ export class SimulationState implements InputSimulationState {
                 try {
                   const srcPosition = data
                     .getAccrualPosition(vault, srcMarketId)
-                    .accrueInterest(this.block.timestamp);
+                    .accrueInterest(this.block.timestamp + delay);
 
                   const targetUtilizationLiquidity =
                     srcPosition.market.getWithdrawToUtilization(
