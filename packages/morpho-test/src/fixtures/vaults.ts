@@ -6,7 +6,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 
-const { wNative, usdc } = addresses[ChainId.EthMainnet];
+const { wNative, usdc, dai } = addresses[ChainId.EthMainnet];
 
 export const vaults = {
   [ChainId.EthMainnet]: {
@@ -69,6 +69,17 @@ export const vaults = {
         symbol: "re7WETH",
         name: "Re7 WETH",
         asset: wNative,
+      },
+      ChainId.EthMainnet,
+    ),
+
+    gDai: new VaultConfig(
+      {
+        address: "0x500331c9fF24D9d11aee6B07734Aa72343EA74a5",
+        decimalsOffset: 0n,
+        symbol: "gDAI",
+        name: "Gauntlet DAI Core",
+        asset: dai,
       },
       ChainId.EthMainnet,
     ),
