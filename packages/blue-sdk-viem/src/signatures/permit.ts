@@ -81,7 +81,7 @@ export const getDaiPermitTypedData = (
   const { dai } = getChainAddresses(chainId);
 
   const domain = {
-    name: "DAI",
+    name: "Dai Stablecoin",
     version: "1",
     chainId,
     verifyingContract: dai,

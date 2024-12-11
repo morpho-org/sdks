@@ -7,7 +7,7 @@ import {
 import { randomAddress } from "@morpho-org/test";
 import { parseEther, parseUnits } from "viem";
 
-const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt } =
+const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt, dai } =
   addresses[ChainId.EthMainnet];
 
 export const markets = {
@@ -145,6 +145,15 @@ export const markets = {
       oracle: "0x6E8F5b2DF218443E87fe8aA9811E6956716dde88",
       irm: adaptiveCurveIrm,
       lltv: parseUnits("96.5", 16),
+    }),
+
+    dai_sUsde: new MarketParams({
+      // DAI(sUSDe, 86%, Exchange rate, AdaptiveCurve)
+      loanToken: dai,
+      collateralToken: "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497",
+      oracle: "0x5D916980D5Ae1737a8330Bf24dF812b2911Aae25",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
     }),
 
     crvUsd_stkcvxcrvUSDTWBTCWETH: new MarketParams({

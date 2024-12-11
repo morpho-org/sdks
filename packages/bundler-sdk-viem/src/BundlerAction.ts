@@ -62,7 +62,7 @@ export namespace BundlerAction {
       /* Permit */
       case "permit": {
         const [asset, amount, deadline, signature, skipRevert = true] = args;
-        if (signature === null) throw new BundlerErrors.MissingSignature();
+        if (signature == null) throw new BundlerErrors.MissingSignature();
 
         return BundlerAction.permit(
           asset,
@@ -74,7 +74,7 @@ export namespace BundlerAction {
       }
       case "permitDai": {
         const [nonce, expiry, allowed, signature, skipRevert = true] = args;
-        if (signature === null) throw new BundlerErrors.MissingSignature();
+        if (signature == null) throw new BundlerErrors.MissingSignature();
 
         return BundlerAction.permitDai(
           nonce,
@@ -88,7 +88,7 @@ export namespace BundlerAction {
       /* Permit2 */
       case "approve2": {
         const [permitSingle, signature, skipRevert = true] = args;
-        if (signature === null) throw new BundlerErrors.MissingSignature();
+        if (signature == null) throw new BundlerErrors.MissingSignature();
 
         return BundlerAction.approve2(permitSingle, signature, skipRevert);
       }
@@ -113,7 +113,7 @@ export namespace BundlerAction {
       /* Morpho */
       case "morphoSetAuthorizationWithSig": {
         const [authorization, signature, skipRevert = true] = args;
-        if (signature === null) throw new BundlerErrors.MissingSignature();
+        if (signature == null) throw new BundlerErrors.MissingSignature();
 
         return BundlerAction.morphoSetAuthorizationWithSig(
           authorization,
@@ -282,7 +282,7 @@ export namespace BundlerAction {
         const [isApproved, nonce, deadline, signature, skipRevert = true] =
           args;
 
-        if (signature === null) throw new BundlerErrors.MissingSignature();
+        if (signature == null) throw new BundlerErrors.MissingSignature();
 
         return BundlerAction.aaveV3OptimizerApproveManagerWithSig(
           isApproved,
@@ -318,7 +318,7 @@ export namespace BundlerAction {
           skipRevert = true,
         ] = args;
 
-        if (signature === null) throw new BundlerErrors.MissingSignature();
+        if (signature == null) throw new BundlerErrors.MissingSignature();
 
         return BundlerAction.compoundV3AllowBySig(
           instance,

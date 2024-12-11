@@ -34,7 +34,7 @@ import {
   getPermit2PermitTypedData,
   getPermitTypedData,
 } from "@morpho-org/blue-sdk-viem";
-import { sendTransaction, signTypedData } from "viem/actions";
+import { signTypedData } from "viem/actions";
 import BundlerAction from "./BundlerAction.js";
 import { baseBundlerAbi } from "./abis.js";
 import type {
@@ -857,8 +857,6 @@ export function encodeBundle(
     requirements.signatures.push(...bundle.requirements.signatures);
     requirements.txs.push(...bundle.requirements.txs);
   }
-
-  sendTransaction;
 
   return {
     steps,
