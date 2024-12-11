@@ -72,3 +72,6 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - run: echo "- [RELEASE] ${{ steps.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        if: steps.release.outputs.version
+
