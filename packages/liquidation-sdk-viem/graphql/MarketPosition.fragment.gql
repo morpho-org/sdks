@@ -1,22 +1,22 @@
 fragment MarketPosition on MarketPosition {
   user {
-        address
-      }
-      market {
-        uniqueKey
-        collateralAsset {
-          address
-          decimals
-          symbol
-          priceUsd
-          spotPriceEth
-        }
-        loanAsset {
-          address
-          decimals
-          symbol
-          priceUsd
-          spotPriceEth
-        }
-      }
+    address
+  }
+  market {
+    uniqueKey
+    collateralAsset {
+      address
+      decimals
+      symbol
+      priceUsd
+      spotPriceEth
+    }
+    loanAsset {
+      address
+      decimals
+      symbol
+      priceUsd
+      spotPriceEth
+    }
+  }
 }

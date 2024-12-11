@@ -43,9 +43,8 @@
     "vitest": "^2.1.8"
   },
   "lint-staged": {
-    "*.json": "biome check --write --no-errors-on-unmatched",
-    "*.ts*": "biome check --write --no-errors-on-unmatched && lint:address",
-    "*.js*": "biome check --write --no-errors-on-unmatched && lint:address"
+    "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
+    "*.[tj]s*": "biome check --write --no-errors-on-unmatched && lint:address"
   },
   "commitlint": {
     "extends": ["@commitlint/config-conventional"]
