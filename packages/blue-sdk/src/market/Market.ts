@@ -156,11 +156,11 @@ export class Market implements InputMarket {
   get apyAtTarget() {
     if (this.rateAtTarget == null) return;
 
-    return MarketUtils.getApy(this.rateAtTarget);
+    return MarketUtils.compoundRate(this.rateAtTarget);
   }
 
   /**
-   * Returns the rate at which interest accrued on average for suppliers of this market,
+   * Returns the rate at which interest accrued for suppliers of this market,
    * since the last time the market was updated (scaled by WAD).
    */
   get supplyRate() {
@@ -168,7 +168,7 @@ export class Market implements InputMarket {
   }
 
   /**
-   * Returns the rate at which interest accrued on average for borrowers of this market,
+   * Returns the rate at which interest accrued for borrowers of this market,
    * since the last time the market was updated (scaled by WAD).
    */
   get borrowRate() {
@@ -182,17 +182,17 @@ export class Market implements InputMarket {
   }
 
   /**
-   * The market's supply Annual Percentage Yield (APY) (scaled by WAD).
+   * The market's supply-side Annual Percentage Yield (APY) (scaled by WAD).
    */
   get supplyApy() {
-    return MarketUtils.getApy(this.supplyRate);
+    return MarketUtils.compoundRate(this.supplyRate);
   }
 
   /**
-   * The market's borrow Annual Percentage Yield (APY) (scaled by WAD).
+   * The market's borrow-side Annual Percentage Yield (APY) (scaled by WAD).
    */
   get borrowApy() {
-    return MarketUtils.getApy(this.borrowRate);
+    return MarketUtils.compoundRate(this.borrowRate);
   }
 
   /**

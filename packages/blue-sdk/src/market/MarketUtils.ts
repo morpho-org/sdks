@@ -76,7 +76,7 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the rate at which interest accrued on average for suppliers on the corresponding market,
+   * Returns the rate at which interest accrued for suppliers on the corresponding market,
    * since the last time the market was updated (scaled by WAD).
    * @param borrowRate The average borrow rate since the last market update (scaled by WAD).
    * @param market The market state.
@@ -91,11 +91,16 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the Annual Percentage Yield (APY) from an average rate, as calculated in Morpho Blue.
-   * @param rate The average rate to convert to APY (scaled by WAD).
+   * Returns the per-second rate continuously compounded over the given period, as calculated in Morpho Blue (scaled by WAD).
+   * If the period is 1 year, the compounded rate correspond to the Annual Percentage Yield (APY)
+   * @param rate The per-second rate to compound (scaled by WAD).
+   * @param period The period to compound the rate over (in seconds). Defaults to 1 year.
    */
-  export function getApy(rate: BigIntish) {
-    return MathLib.wTaylorCompounded(rate, SECONDS_PER_YEAR);
+  export function compoundRate(
+    rate: BigIntish,
+    period: BigIntish = SECONDS_PER_YEAR,
+  ) {
+    return MathLib.wTaylorCompounded(rate, period);
   }
 
   /**

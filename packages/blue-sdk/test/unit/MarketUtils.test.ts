@@ -1,5 +1,7 @@
-import { MarketUtils, MathLib } from "../../src/index.js";
+import { parseUnits } from "viem";
+import { MarketUtils, MathLib, SECONDS_PER_YEAR } from "../../src/index.js";
 
+import { Time } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
 
 const market = {
@@ -106,5 +108,25 @@ describe("MarketUtils", () => {
         90_0000000000000000n,
       ),
     ).toEqual(0n);
+  });
+
+  test("should continuously compound rates", () => {
+    expect(
+      MarketUtils.compoundRate(parseUnits("3", 16) / SECONDS_PER_YEAR),
+    ).toEqual(3_0454499983331440n);
+
+    expect(
+      MarketUtils.compoundRate(
+        parseUnits("40", 16) / SECONDS_PER_YEAR,
+        Time.s.from.mo(1),
+      ),
+    ).toEqual(3_4556206450587179n);
+
+    expect(
+      MarketUtils.compoundRate(
+        parseUnits("500", 16) / SECONDS_PER_YEAR,
+        Time.s.from.mo(8),
+      ),
+    ).toEqual(157_02792765518178794n);
   });
 });
