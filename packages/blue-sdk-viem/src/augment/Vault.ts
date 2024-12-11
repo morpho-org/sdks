@@ -1,6 +1,6 @@
 import { AccrualVault, Vault } from "@morpho-org/blue-sdk";
 
-import { fetchAccrualVault, fetchVault } from "../fetch/index.js";
+import { fetchAccrualVault, fetchVault } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
   namespace Vault {

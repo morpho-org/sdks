@@ -7,8 +7,8 @@ import {
   _try,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { metaMorphoAbi } from "../abis.js";
-import type { FetchParameters } from "../types.js";
+import { metaMorphoAbi } from "../abis";
+import type { FetchParameters } from "../types";
 
 export async function fetchVaultConfig(
   address: Address,

@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup.js";
+import { test } from "./setup";
 
 import {
   ChainId,
@@ -8,8 +8,8 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { markets, vaults } from "@morpho-org/morpho-test";
-import { VaultMarketConfig } from "../../src/augment/VaultMarketConfig.js";
-import { metaMorphoAbi, publicAllocatorAbi } from "./abis.js";
+import { VaultMarketConfig } from "../../src/augment/VaultMarketConfig";
+import { metaMorphoAbi, publicAllocatorAbi } from "./abis";
 
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];

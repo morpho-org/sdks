@@ -11,9 +11,9 @@ import {
   type VaultPublicAllocatorConfig,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchVaultConfig } from "./VaultConfig.js";
-import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
+import type { FetchOptions } from "../types";
+import { fetchVaultConfig } from "./VaultConfig";
+import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
 export async function fetchVault(
   address: Address,

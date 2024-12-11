@@ -8,9 +8,9 @@ import {
 
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi } from "../abis.js";
-import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
-import { fetchMarket } from "./Market.js";
+import { blueAbi } from "../abis";
+import type { DeploylessFetchParameters, FetchParameters } from "../types";
+import { fetchMarket } from "./Market";
 
 export async function fetchPosition(
   user: Address,

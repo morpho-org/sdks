@@ -1,5 +1,5 @@
 import { VaultMarketPublicAllocatorConfig } from "@morpho-org/blue-sdk";
-import { fetchVaultMarketPublicAllocatorConfig } from "../fetch/index.js";
+import { fetchVaultMarketPublicAllocatorConfig } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
   namespace VaultMarketPublicAllocatorConfig {

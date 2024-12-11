@@ -2,8 +2,8 @@ import { zeroAddress } from "viem";
 
 import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
 
-import { MarketParams } from "../../src/augment/MarketParams.js";
-import { test } from "./setup.js";
+import { MarketParams } from "../../src/augment/MarketParams";
+import { test } from "./setup";
 
 import { markets } from "@morpho-org/morpho-test";
 import { describe, expect } from "vitest";

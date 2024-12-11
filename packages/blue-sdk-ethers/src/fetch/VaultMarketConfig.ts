@@ -7,8 +7,8 @@ import {
   type MarketId,
   VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
+import type { FetchOptions } from "../types";
+import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig";
 
 export async function fetchVaultMarketConfig(
   vault: Address,

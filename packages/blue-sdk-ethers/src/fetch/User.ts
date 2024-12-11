@@ -7,7 +7,7 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { MorphoBlue__factory } from "ethers-types";
-import type { FetchOptions } from "../types.js";
+import type { FetchOptions } from "../types";
 
 export async function fetchUser(
   address: Address,

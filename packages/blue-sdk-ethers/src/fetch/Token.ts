@@ -11,7 +11,7 @@ import { ERC20__factory } from "ethers-types";
 import type {
   ERC20,
   ERC20Interface,
-} from "ethers-types/dist/token/ERC20/ERC20.js";
+} from "ethers-types/dist/token/ERC20/ERC20";
 
 import {
   type Address,
@@ -25,7 +25,7 @@ import {
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
+import type { FetchOptions } from "../types";
 
 export const isBytes32ERC20Metadata = (address: string, chainId: ChainId) => {
   switch (chainId) {

@@ -1,12 +1,12 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup.js";
+import { test } from "./setup";
 
 import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
 
 import { vaults } from "@morpho-org/morpho-test";
 import { zeroAddress } from "viem";
-import { Vault } from "../src/augment/Vault.js";
-import { metaMorphoAbi, publicAllocatorAbi } from "../src/index.js";
+import { metaMorphoAbi, publicAllocatorAbi } from "../src";
+import { Vault } from "../src/augment/Vault";
 
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 

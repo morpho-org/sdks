@@ -20,7 +20,7 @@ import {
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
 import { fromEntries } from "@morpho-org/morpho-ts";
-import type { FetchOptions } from "../types.js";
+import type { FetchOptions } from "../types";
 
 export async function fetchHolding(
   user: Address,

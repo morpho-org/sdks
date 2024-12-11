@@ -4,7 +4,6 @@ import {
   MathLib,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-
 import type { TypedDataDefinition } from "viem";
 
 export interface Permit2PermitArgs {

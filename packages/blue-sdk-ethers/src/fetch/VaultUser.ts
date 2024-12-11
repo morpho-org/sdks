@@ -7,8 +7,8 @@ import {
   type VaultConfig,
   VaultUser,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchVaultConfig } from "./VaultConfig.js";
+import type { FetchOptions } from "../types";
+import { fetchVaultConfig } from "./VaultConfig";
 
 export async function fetchVaultUser(
   vault: Address,

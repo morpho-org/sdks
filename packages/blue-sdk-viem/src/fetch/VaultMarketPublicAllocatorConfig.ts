@@ -7,8 +7,8 @@ import {
   addresses,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { publicAllocatorAbi } from "../abis.js";
-import type { FetchParameters } from "../types.js";
+import { publicAllocatorAbi } from "../abis";
+import type { FetchParameters } from "../types";
 
 export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,

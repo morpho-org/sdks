@@ -1,5 +1,5 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
-import { fetchMarketParams } from "../fetch/index.js";
+import { fetchMarketParams } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
   namespace MarketParams {

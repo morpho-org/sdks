@@ -1,5 +1,5 @@
 import { User } from "@morpho-org/blue-sdk";
-import { fetchUser } from "../fetch/index.js";
+import { fetchUser } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
   namespace User {

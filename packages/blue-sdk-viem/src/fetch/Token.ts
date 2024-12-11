@@ -17,9 +17,9 @@ import {
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { wstEthAbi } from "../abis.js";
-import { abi, code } from "../queries/GetToken.js";
-import type { DeploylessFetchParameters } from "../types.js";
+import { wstEthAbi } from "../abis";
+import { abi, code } from "../queries/GetToken";
+import type { DeploylessFetchParameters } from "../types";
 
 export const decodeBytes32String = (hexOrStr: string) => {
   if (isHex(hexOrStr)) return hexToString(hexOrStr, { size: 32 });

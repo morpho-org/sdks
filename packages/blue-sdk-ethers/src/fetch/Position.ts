@@ -10,8 +10,8 @@ import {
   Position,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchMarket, fetchMarketFromConfig } from "./Market.js";
+import type { FetchOptions } from "../types";
+import { fetchMarket, fetchMarketFromConfig } from "./Market";
 
 export async function fetchPosition(
   user: Address,

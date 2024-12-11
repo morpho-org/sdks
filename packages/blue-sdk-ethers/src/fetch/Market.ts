@@ -12,8 +12,8 @@ import {
   type MarketParams,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchMarketParams } from "./MarketParams.js";
+import type { FetchOptions } from "../types";
+import { fetchMarketParams } from "./MarketParams";
 
 export async function fetchMarket(
   id: MarketId,
