@@ -3,7 +3,30 @@ import * as Types from './types.js';
 import { GraphQLClient, RequestOptions } from 'graphql-request';
 import gql from 'graphql-tag';
 type GraphQLClientRequestHeaders = RequestOptions['requestHeaders'];
-
+export const MarketPositionFragmentDoc = gql`
+    fragment MarketPosition on MarketPosition {
+  user {
+    address
+  }
+  market {
+    uniqueKey
+    collateralAsset {
+      address
+      decimals
+      symbol
+      priceUsd
+      spotPriceEth
+    }
+    loanAsset {
+      address
+      decimals
+      symbol
+      priceUsd
+      spotPriceEth
+    }
+  }
+}
+    `;
 export const GetLiquidatablePositionsDocument = gql`
     query getLiquidatablePositions($chainId: Int!, $wNative: String!, $marketIds: [String!], $first: Int = 1000) {
   assetByAddress(chainId: $chainId, address: $wNative) {
@@ -14,30 +37,11 @@ export const GetLiquidatablePositionsDocument = gql`
     where: {chainId_in: [$chainId], marketUniqueKey_in: $marketIds, healthFactor_lte: 1}
   ) {
     items {
-      user {
-        address
-      }
-      market {
-        uniqueKey
-        collateralAsset {
-          address
-          decimals
-          symbol
-          priceUsd
-          spotPriceEth
-        }
-        loanAsset {
-          address
-          decimals
-          symbol
-          priceUsd
-          spotPriceEth
-        }
-      }
+      ...MarketPosition
     }
   }
 }
-    `;
+    ${MarketPositionFragmentDoc}`;
 export const GetWhitelistedMarketIdsDocument = gql`
     query getWhitelistedMarketIds($chainId: Int!) {
   markets(where: {chainId_in: [$chainId], whitelisted: true}) {
