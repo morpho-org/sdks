@@ -1,0 +1,42 @@
+{
+  "name": "@morpho-org/simulation-sdk",
+  "description": "Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`).",
+  "version": "2.0.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "MIT",
+  "main": "src/index.ts",
+  "files": ["lib"],
+  "scripts": {
+    "prepublish": "$npm_execpath build",
+    "build": "tsc --build tsconfig.build.json"
+  },
+  "dependencies": {
+    "mutative": "^1.0.11"
+  },
+  "peerDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^"
+  },
+  "devDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/test": "workspace:^",
+    "@types/lodash": "^4.17.12",
+    "lodash": "^4.17.21",
+    "typescript": "^5.7.2",
+    "viem": "^2.21.54",
+    "vitest": "^2.1.8"
+  },
+  "publishConfig": {
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts"
+  }
+}

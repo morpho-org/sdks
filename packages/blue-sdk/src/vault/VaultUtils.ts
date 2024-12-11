@@ -1,5 +1,5 @@
-import { MathLib, RoundingDirection } from "../maths";
-import { BigIntish } from "../types";
+import { MathLib, type RoundingDirection } from "../math/index.js";
+import type { BigIntish } from "../types.js";
 
 export namespace VaultUtils {
   export const VIRTUAL_ASSETS = 1n;
@@ -13,11 +13,12 @@ export namespace VaultUtils {
     {
       totalAssets,
       totalSupply,
+      decimalsOffset,
     }: {
       totalAssets: BigIntish;
       totalSupply: BigIntish;
+      decimalsOffset: BigIntish;
     },
-    { decimalsOffset }: { decimalsOffset: BigIntish },
     rounding: RoundingDirection = "Down",
   ) {
     return MathLib.mulDiv(
@@ -33,11 +34,12 @@ export namespace VaultUtils {
     {
       totalAssets,
       totalSupply,
+      decimalsOffset,
     }: {
       totalAssets: BigIntish;
       totalSupply: BigIntish;
+      decimalsOffset: BigIntish;
     },
-    { decimalsOffset }: { decimalsOffset: BigIntish },
     rounding: RoundingDirection = "Up",
   ) {
     return MathLib.mulDiv(

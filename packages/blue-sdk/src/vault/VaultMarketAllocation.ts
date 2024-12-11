@@ -1,7 +1,7 @@
-import { MathLib } from "../maths";
-import { AccrualPosition } from "../position";
+import { MathLib } from "../math/index.js";
+import type { AccrualPosition } from "../position/index.js";
 
-import { VaultMarketConfig } from "./VaultMarketConfig";
+import type { VaultMarketConfig } from "./VaultMarketConfig.js";
 
 export interface InputVaultMarketAllocation {
   config: VaultMarketConfig;
@@ -12,7 +12,7 @@ export class VaultMarketAllocation implements InputVaultMarketAllocation {
   /**
    * The vault's configuration on the corresponding market.
    */
-  public config: VaultMarketConfig;
+  public readonly config: VaultMarketConfig;
 
   /**
    * The vault's position on the corresponding market.

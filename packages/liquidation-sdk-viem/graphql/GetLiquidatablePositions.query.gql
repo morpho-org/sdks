@@ -1,0 +1,23 @@
+query getLiquidatablePositions(
+  $chainId: Int!
+  $wNative: String!
+  $marketIds: [String!]
+  $first: Int = 1000
+) {
+  assetByAddress(chainId: $chainId, address: $wNative) {
+    priceUsd
+  }
+
+  marketPositions(
+    first: $first
+    where: {
+      chainId_in: [$chainId]
+      marketUniqueKey_in: $marketIds
+      healthFactor_lte: 1
+    }
+  ) {
+    items {
+      ...MarketPosition
+    }
+  }
+}

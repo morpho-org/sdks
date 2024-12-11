@@ -1,7 +1,7 @@
 import { entries, fromEntries } from "@morpho-org/morpho-ts";
 
-import { AddressLabel, NATIVE_ADDRESS } from "../addresses";
-import { Address } from "../types";
+import type { AddressLabel } from "../addresses.js";
+import type { Address, BigIntish } from "../types.js";
 
 export const ERC20_ALLOWANCE_RECIPIENTS = [
   "morpho",
@@ -26,6 +26,12 @@ export interface Permit2Allowance {
   nonce: bigint;
 }
 
+export interface InputPermit2Allowance {
+  amount: BigIntish;
+  expiration: BigIntish;
+  nonce: BigIntish;
+}
+
 export interface InputHolding {
   user: Address;
   token: Address;
@@ -33,7 +39,7 @@ export interface InputHolding {
     [key in Erc20AllowanceRecipient]: bigint;
   };
   permit2Allowances: {
-    [key in Permit2AllowanceRecipient]: Permit2Allowance;
+    [key in Permit2AllowanceRecipient]: InputPermit2Allowance;
   };
   erc2612Nonce?: bigint;
   canTransfer?: boolean;
@@ -88,19 +94,30 @@ export class Holding implements InputHolding {
     permit2Allowances,
     balance,
     erc2612Nonce,
-    canTransfer = true,
+    canTransfer,
   }: InputHolding) {
     this.user = user;
     this.token = token;
     this.balance = balance;
-    this.canTransfer = token === NATIVE_ADDRESS || canTransfer;
+    this.canTransfer = canTransfer;
     this.erc20Allowances = fromEntries(
       entries(erc20Allowances).map(([address, allowance]) => [
         address,
         allowance,
       ]),
     );
-    this.permit2Allowances = permit2Allowances;
+    this.permit2Allowances = {
+      morpho: {
+        amount: BigInt(permit2Allowances.morpho.amount),
+        expiration: BigInt(permit2Allowances.morpho.expiration),
+        nonce: BigInt(permit2Allowances.morpho.nonce),
+      },
+      bundler: {
+        amount: BigInt(permit2Allowances.bundler.amount),
+        expiration: BigInt(permit2Allowances.bundler.expiration),
+        nonce: BigInt(permit2Allowances.bundler.nonce),
+      },
+    };
 
     if (erc2612Nonce != null) this.erc2612Nonce = erc2612Nonce;
   }

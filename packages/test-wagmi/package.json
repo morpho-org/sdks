@@ -1,0 +1,50 @@
+{
+  "name": "@morpho-org/test-wagmi",
+  "description": "Wagmi-based extension of `@morpho-org/test` that injects a test Wagmi config as a test fixture alongside viem's anvil client.",
+  "version": "2.0.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "type": "module",
+  "main": "src/index.ts",
+  "files": ["lib"],
+  "license": "MIT",
+  "scripts": {
+    "prepublish": "$npm_execpath build",
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "@morpho-org/test": "workspace:^",
+    "@tanstack/react-query": "^5.59.0",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.0.0",
+    "viem": "^2.21.10",
+    "vitest": "^2.1.0",
+    "wagmi": "^2.12.0"
+  },
+  "devDependencies": {
+    "@morpho-org/test": "workspace:^",
+    "@tanstack/react-query": "^5.60.5",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.0.1",
+    "@types/node": "^22.10.1",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "@wagmi/core": "^2.14.6",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "viem": "^2.21.54",
+    "vitest": "^2.1.8",
+    "wagmi": "^2.12.33"
+  },
+  "publishConfig": {
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts"
+  }
+}
