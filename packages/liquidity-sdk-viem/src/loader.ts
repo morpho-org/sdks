@@ -42,10 +42,13 @@ export class LiquidityLoader<chain extends Chain = Chain> {
         const { client, parameters } = this;
         const chainId = client.chain.id;
 
-        const data = await apiSdk.getMarkets({
-          chainId,
-          marketIds: [...marketIds],
-        });
+        const [block, data] = await Promise.all([
+          getBlock(client),
+          apiSdk.getMarkets({
+            chainId,
+            marketIds: [...marketIds],
+          }),
+        ]);
 
         const marketsById = fromEntries(
           data.markets.items?.map((market) => [
@@ -88,16 +91,17 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         );
 
-        const [block, markets, vaults, vaultsTokens, vaultsMarkets] =
+        const [markets, vaults, vaultsTokens, vaultsMarkets] =
           await Promise.all([
-            getBlock(client),
             Promise.all(
               [...allMarketIds].map((marketId) =>
-                fetchMarket(marketId, client),
+                fetchMarket(marketId, client, { blockNumber: block.number }),
               ),
             ),
             Promise.all(
-              [...allVaults].map((vault) => fetchVault(vault, client)),
+              [...allVaults].map((vault) =>
+                fetchVault(vault, client, { blockNumber: block.number }),
+              ),
             ),
             Promise.all(
               allVaultsMarkets.map(
@@ -114,6 +118,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
                                 vault,
                                 loanAsset.address,
                                 client,
+                                { blockNumber: block.number },
                               ),
                             },
                           ] as const,
@@ -137,11 +142,13 @@ export class LiquidityLoader<chain extends Chain = Chain> {
                                 vault,
                                 market.uniqueKey,
                                 client,
+                                { blockNumber: block.number },
                               ),
                               vaultMarketConfig: await fetchVaultMarketConfig(
                                 vault,
                                 market.uniqueKey,
                                 client,
+                                { blockNumber: block.number },
                               ),
                             },
                           ] as const,

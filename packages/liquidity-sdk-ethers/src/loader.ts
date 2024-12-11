@@ -43,10 +43,13 @@ export class LiquidityLoader {
       const chainId =
         parameters.chainId ?? Number((await provider!.getNetwork()).chainId);
 
-      const data = await apiSdk.getMarkets({
-        chainId,
-        marketIds: [...marketIds],
-      });
+      const [block, data] = await Promise.all([
+        provider.getBlock("latest", false),
+        apiSdk.getMarkets({
+          chainId,
+          marketIds: [...marketIds],
+        }),
+      ]);
 
       const marketsById = fromEntries(
         data.markets.items?.map((market) => [
@@ -89,74 +92,72 @@ export class LiquidityLoader {
         ),
       );
 
-      const [block, markets, vaults, vaultsTokens, vaultsMarkets] =
-        await Promise.all([
-          provider.getBlock("latest", false),
-          Promise.all(
-            [...allMarketIds].map((marketId) =>
-              fetchMarket(marketId, provider, parameters),
-            ),
+      const [markets, vaults, vaultsTokens, vaultsMarkets] = await Promise.all([
+        Promise.all(
+          [...allMarketIds].map((marketId) =>
+            fetchMarket(marketId, provider, parameters),
           ),
-          Promise.all(
-            [...allVaults].map((vault) =>
-              fetchVault(vault, provider, parameters),
-            ),
+        ),
+        Promise.all(
+          [...allVaults].map((vault) =>
+            fetchVault(vault, provider, parameters),
           ),
-          Promise.all(
-            allVaultsMarkets.map(
-              async ([vault, markets]) =>
-                [
-                  vault,
-                  await Promise.all(
-                    markets.map(
-                      async ({ loanAsset }) =>
-                        [
-                          loanAsset.address,
-                          {
-                            holding: await fetchHolding(
-                              vault,
-                              loanAsset.address,
-                              provider,
-                              parameters,
-                            ),
-                          },
-                        ] as const,
-                    ),
+        ),
+        Promise.all(
+          allVaultsMarkets.map(
+            async ([vault, markets]) =>
+              [
+                vault,
+                await Promise.all(
+                  markets.map(
+                    async ({ loanAsset }) =>
+                      [
+                        loanAsset.address,
+                        {
+                          holding: await fetchHolding(
+                            vault,
+                            loanAsset.address,
+                            provider,
+                            parameters,
+                          ),
+                        },
+                      ] as const,
                   ),
-                ] as const,
-            ),
+                ),
+              ] as const,
           ),
-          Promise.all(
-            allVaultsMarkets.map(
-              async ([vault, markets]) =>
-                [
-                  vault,
-                  await Promise.all(
-                    markets.map(
-                      async (market) =>
-                        [
-                          market.uniqueKey,
-                          {
-                            position: await fetchPosition(
-                              vault,
-                              market.uniqueKey,
-                              provider,
-                              parameters,
-                            ),
-                            vaultMarketConfig: await fetchVaultMarketConfig(
-                              vault,
-                              market.uniqueKey,
-                              provider,
-                              parameters,
-                            ),
-                          },
-                        ] as const,
-                    ),
+        ),
+        Promise.all(
+          allVaultsMarkets.map(
+            async ([vault, markets]) =>
+              [
+                vault,
+                await Promise.all(
+                  markets.map(
+                    async (market) =>
+                      [
+                        market.uniqueKey,
+                        {
+                          position: await fetchPosition(
+                            vault,
+                            market.uniqueKey,
+                            provider,
+                            parameters,
+                          ),
+                          vaultMarketConfig: await fetchVaultMarketConfig(
+                            vault,
+                            market.uniqueKey,
+                            provider,
+                            parameters,
+                          ),
+                        },
+                      ] as const,
                   ),
-                ] as const,
-            ),
+                ),
+              ] as const,
           ),
-        ]);
+        ),
+      ]);
 
       const startState = new SimulationState({
         chainId,
