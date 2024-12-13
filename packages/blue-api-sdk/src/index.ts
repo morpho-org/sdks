@@ -3,3 +3,4 @@ export * from "./converter";
 export * from "./warnings";
 export * from "./cache";
 export * from "./errors";
+export * from "./tags";
