@@ -39,7 +39,7 @@ export interface MaxPositionCapacities {
   withdrawCollateral: CapacityLimit | undefined;
 }
 
-export interface InputMarket {
+export interface IMarket {
   params: MarketParams;
   totalSupplyAssets: bigint;
   totalBorrowAssets: bigint;
@@ -54,7 +54,7 @@ export interface InputMarket {
 /**
  * Represents a lending market on Morpho Blue.
  */
-export class Market implements InputMarket {
+export class Market implements IMarket {
   /**
    * The market's params.
    */
@@ -108,7 +108,7 @@ export class Market implements InputMarket {
     fee,
     price,
     rateAtTarget,
-  }: InputMarket) {
+  }: IMarket) {
     this.params = params;
     this.totalSupplyAssets = totalSupplyAssets;
     this.totalBorrowAssets = totalBorrowAssets;

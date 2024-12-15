@@ -1,4 +1,4 @@
-import { ChainId } from "@morpho-org/blue-sdk";
+import { ChainId, type InputMarketParams } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { getLast } from "@morpho-org/morpho-ts";
@@ -92,10 +92,7 @@ describe("MetaMorpho_Reallocate", () => {
       args: [
         [
           {
-            marketParams: usdc_wstEth as Pick<
-              typeof usdc_wstEth,
-              "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-            >,
+            marketParams: usdc_wstEth as InputMarketParams,
             assets,
           },
           { marketParams: usdc_idle, assets: maxUint256 },

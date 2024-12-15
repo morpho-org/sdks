@@ -2,7 +2,7 @@ import type { ChainId } from "../chain.js";
 import { UnknownVaultConfigError } from "../errors.js";
 import type { Address, BigIntish } from "../types.js";
 
-export interface InputVaultConfig {
+export interface IVaultConfig {
   address: Address;
   decimalsOffset: BigIntish;
   symbol: string;
@@ -10,7 +10,7 @@ export interface InputVaultConfig {
   asset: Address;
 }
 
-export class VaultConfig implements InputVaultConfig {
+export class VaultConfig implements IVaultConfig {
   protected static readonly _CACHE: Record<
     number,
     Record<Address, VaultConfig>
@@ -32,7 +32,7 @@ export class VaultConfig implements InputVaultConfig {
   public readonly asset: Address;
 
   constructor(
-    { address, decimalsOffset, symbol, name, asset }: InputVaultConfig,
+    { address, decimalsOffset, symbol, name, asset }: IVaultConfig,
     public readonly chainId?: number,
   ) {
     this.address = address;

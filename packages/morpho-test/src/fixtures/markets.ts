@@ -1,6 +1,6 @@
 import {
   ChainId,
-  type InputMarketParams,
+  type IMarketParams,
   MarketParams,
   addresses,
 } from "@morpho-org/blue-sdk";
@@ -209,7 +209,7 @@ export const markets = {
   },
 } as const;
 
-export const randomMarket = (params: Partial<InputMarketParams> = {}) =>
+export const randomMarket = (params: Partial<IMarketParams> = {}) =>
   new MarketParams({
     collateralToken: randomAddress(),
     loanToken: randomAddress(),

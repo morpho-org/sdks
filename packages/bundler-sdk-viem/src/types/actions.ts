@@ -7,13 +7,8 @@ import type {
   Transport,
 } from "viem";
 
-import type { Address, MarketParams } from "@morpho-org/blue-sdk";
+import type { Address, InputMarketParams } from "@morpho-org/blue-sdk";
 import type { SimulationResult } from "@morpho-org/simulation-sdk";
-
-export type InputMarketParams = Pick<
-  MarketParams,
-  "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
->;
 
 export interface Authorization {
   authorizer: Address;

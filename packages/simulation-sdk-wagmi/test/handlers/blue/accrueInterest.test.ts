@@ -1,4 +1,8 @@
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  type InputMarketParams,
+  addresses,
+} from "@morpho-org/blue-sdk";
 
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";
@@ -63,12 +67,7 @@ describe("Blue_AccrueInterest", () => {
       address: morpho,
       abi: blueAbi,
       functionName: "accrueInterest",
-      args: [
-        usdc_wstEth as Pick<
-          typeof usdc_wstEth,
-          "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-        >,
-      ],
+      args: [usdc_wstEth as InputMarketParams],
     });
 
     await rerender(await client.getBlock());

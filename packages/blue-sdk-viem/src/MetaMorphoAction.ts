@@ -1,13 +1,8 @@
-import type { MarketId, MarketParams } from "@morpho-org/blue-sdk";
+import type { InputMarketParams, MarketId } from "@morpho-org/blue-sdk";
 import { type Address, type Hex, encodeFunctionData } from "viem";
 import { metaMorphoAbi } from "./abis";
 
 export type MetaMorphoCall = Hex;
-
-type InputMarketParams = Pick<
-  MarketParams,
-  "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
->;
 
 export interface InputAllocation {
   marketParams: InputMarketParams;

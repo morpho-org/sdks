@@ -8,7 +8,7 @@ import {
 } from "../constants.js";
 import { MathLib, type RoundingDirection, SharesMath } from "../math/index.js";
 import type { BigIntish, MarketId } from "../types.js";
-import type { InputMarketParams } from "./MarketParams.js";
+import type { IMarketParams } from "./MarketParams.js";
 
 /**
  * Namespace of utility functions to ease market-related calculations.
@@ -18,7 +18,7 @@ export namespace MarketUtils {
    * Returns the id of a market based on its params.
    * @param market The market params.
    */
-  export function getMarketId(market: InputMarketParams) {
+  export function getMarketId(market: IMarketParams) {
     return `0x${bytesToHex(
       keccak_256(
         hexToBytes(

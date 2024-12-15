@@ -1,13 +1,13 @@
 import type { Address } from "../types.js";
 
-export interface InputVaultUser {
+export interface IVaultUser {
   vault: Address;
   user: Address;
   isAllocator: boolean;
   allowance: bigint;
 }
 
-export class VaultUser implements InputVaultUser {
+export class VaultUser implements IVaultUser {
   /**
    * The vault's address.
    */
@@ -28,7 +28,7 @@ export class VaultUser implements InputVaultUser {
    */
   public allowance: bigint;
 
-  constructor({ vault, user, isAllocator, allowance }: InputVaultUser) {
+  constructor({ vault, user, isAllocator, allowance }: IVaultUser) {
     this.vault = vault;
     this.user = user;
     this.isAllocator = isAllocator;

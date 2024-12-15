@@ -6,7 +6,7 @@ import {
 } from "../market/index.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 
-export interface InputPosition {
+export interface IPosition {
   user: Address;
   marketId: MarketId;
   supplyShares: bigint;
@@ -14,7 +14,7 @@ export interface InputPosition {
   collateral: bigint;
 }
 
-export class Position implements InputPosition {
+export class Position implements IPosition {
   /**
    * The user holding this position.
    */
@@ -44,7 +44,7 @@ export class Position implements InputPosition {
     supplyShares,
     borrowShares,
     collateral,
-  }: InputPosition) {
+  }: IPosition) {
     this.user = user;
     this.marketId = marketId;
     this.supplyShares = supplyShares;
@@ -53,15 +53,15 @@ export class Position implements InputPosition {
   }
 }
 
-export interface InputAccrualPosition extends Omit<InputPosition, "marketId"> {}
+export interface IAccrualPosition extends Omit<IPosition, "marketId"> {}
 
-export class AccrualPosition extends Position implements InputAccrualPosition {
+export class AccrualPosition extends Position implements IAccrualPosition {
   /**
    * The market on which this position is held.
    */
   public readonly market: Market;
 
-  constructor(position: InputAccrualPosition, market: Market) {
+  constructor(position: IAccrualPosition, market: Market) {
     super({ ...position, marketId: market.id });
 
     this.market = market;

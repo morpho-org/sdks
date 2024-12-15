@@ -1,4 +1,9 @@
-import { ChainId, NATIVE_ADDRESS, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  type InputMarketParams,
+  NATIVE_ADDRESS,
+  addresses,
+} from "@morpho-org/blue-sdk";
 import { metaMorphoAbi, publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { getLast } from "@morpho-org/morpho-ts";
@@ -122,17 +127,11 @@ describe("MetaMorpho_PublicReallocate", () => {
         steakUsdc.address,
         [
           {
-            marketParams: usdc_wstEth as Pick<
-              typeof usdc_wstEth,
-              "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-            >,
+            marketParams: usdc_wstEth as InputMarketParams,
             amount: assets,
           },
         ],
-        usdc_idle as Pick<
-          typeof usdc_idle,
-          "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-        >,
+        usdc_idle as InputMarketParams,
       ],
       value: fee,
     });

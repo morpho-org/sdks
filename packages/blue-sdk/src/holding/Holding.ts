@@ -26,27 +26,27 @@ export interface Permit2Allowance {
   nonce: bigint;
 }
 
-export interface InputPermit2Allowance {
+export interface IPermit2Allowance {
   amount: BigIntish;
   expiration: BigIntish;
   nonce: BigIntish;
 }
 
-export interface InputHolding {
+export interface IHolding {
   user: Address;
   token: Address;
   erc20Allowances: {
     [key in Erc20AllowanceRecipient]: bigint;
   };
   permit2Allowances: {
-    [key in Permit2AllowanceRecipient]: InputPermit2Allowance;
+    [key in Permit2AllowanceRecipient]: IPermit2Allowance;
   };
   erc2612Nonce?: bigint;
   canTransfer?: boolean;
   balance: bigint;
 }
 
-export class Holding implements InputHolding {
+export class Holding implements IHolding {
   /**
    * The user of this holding.
    */
@@ -95,7 +95,7 @@ export class Holding implements InputHolding {
     balance,
     erc2612Nonce,
     canTransfer,
-  }: InputHolding) {
+  }: IHolding) {
     this.user = user;
     this.token = token;
     this.balance = balance;

@@ -5,6 +5,7 @@ import fetchMock from "fetch-mock";
 import {
   type Address,
   ChainId,
+  type InputMarketParams,
   type MarketId,
   addresses,
 } from "@morpho-org/blue-sdk";
@@ -497,10 +498,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           market.getMaxBorrowAssets(collateral)! - 10n,
           0n,
           borrower.address,
@@ -646,10 +644,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           borrowed,
           0n,
           borrower.address,
@@ -797,10 +792,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           borrowed,
           0n,
           borrower.address,
@@ -955,10 +947,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
@@ -1091,10 +1080,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
@@ -1260,10 +1246,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           market.getMaxBorrowAssets(newCollatValue)! - 1n,
           0n,
           borrower.address,
@@ -1400,10 +1383,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           market.getMaxBorrowAssets(collateral)! - 1n,
           0n,
           borrower.address,
@@ -1553,10 +1533,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           borrowed,
           0n,
           borrower.address,
@@ -1709,10 +1686,7 @@ describe("erc4626-1inch", () => {
         abi: blueAbi,
         functionName: "borrow",
         args: [
-          market.params as Pick<
-            typeof market.params,
-            "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
-          >,
+          market.params as InputMarketParams,
           borrowed,
           0n,
           borrower.address,

@@ -4,7 +4,7 @@ import type { Address, BigIntish, MarketId } from "../types.js";
 
 import { MarketUtils } from "./MarketUtils.js";
 
-export interface InputMarketParams {
+export interface IMarketParams {
   loanToken: Address;
   collateralToken: Address;
   oracle: Address;
@@ -12,10 +12,15 @@ export interface InputMarketParams {
   lltv: BigIntish;
 }
 
+export type InputMarketParams = Pick<
+  MarketParams,
+  "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
+>;
+
 /**
  * Represents a market's configuration (also called market params).
  */
-export class MarketParams implements InputMarketParams {
+export class MarketParams implements IMarketParams {
   private static readonly _CACHE: Record<MarketId, MarketParams> = {};
 
   /**
@@ -78,7 +83,7 @@ export class MarketParams implements InputMarketParams {
    */
   public readonly liquidationIncentiveFactor: bigint; // Cached because lltv is readonly.
 
-  constructor(params: InputMarketParams) {
+  constructor(params: IMarketParams) {
     const { collateralToken, loanToken, oracle, irm, lltv } = params;
 
     this.collateralToken = collateralToken;
