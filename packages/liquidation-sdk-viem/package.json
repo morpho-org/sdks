@@ -20,16 +20,16 @@
   },
   "dependencies": {
     "@paraswap/sdk": "^7.0.0",
-    "executooor-viem": "^1.3.3"
+    "executooor-viem": "^1.3.3",
+    "graphql-request": "^6.1.0",
+    "graphql-tag": "^2.12.6"
   },
   "peerDependencies": {
     "@morpho-org/blue-api-sdk": "workspace:^",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "evm-maths": "^7.0.0",
-    "graphql": "^16.9.0",
-    "graphql-request": "^6.1.0",
-    "graphql-tag": "2.11.0",
+    "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {
@@ -49,6 +49,7 @@
     "evm-maths": "^7.0.1",
     "executooor-viem": "^1.3.3",
     "fetch-mock": "^11.1.5",
+    "graphql": "^16.10.0",
     "hardhat": "^2.22.17",
     "nock": "beta",
     "typescript": "^5.7.2",
