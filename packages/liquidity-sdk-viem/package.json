@@ -18,10 +18,7 @@
     "codegen": "graphql-codegen --config codegen.ts"
   },
   "dependencies": {
-    "dataloader": "^2.2.3",
-    "graphql": "^16.9.0",
-    "graphql-request": "^6.1.0",
-    "graphql-tag": "2.11.0"
+    "dataloader": "^2.2.3"
   },
   "peerDependencies": {
     "@morpho-org/blue-api-sdk": "workspace:^",
@@ -29,6 +26,9 @@
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",
+    "graphql": "^16.9.0",
+    "graphql-request": "^6.1.0",
+    "graphql-tag": "2.11.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {
