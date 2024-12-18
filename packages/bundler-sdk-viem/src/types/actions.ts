@@ -3,7 +3,7 @@ import type {
   Chain,
   Client,
   Hex,
-  SendTransactionRequest,
+  TransactionRequest,
   Transport,
 } from "viem";
 
@@ -250,7 +250,7 @@ export type Requirements = {
   [T in TransactionRequirementType]: {
     type: T;
     args: TransactionRequirementArgs[T];
-    tx: SendTransactionRequest;
+    tx: TransactionRequest & { to: Address; data: Hex };
   };
 };
 
@@ -273,5 +273,5 @@ export interface ActionBundle {
     signatures: SignatureRequirement[];
     txs: TransactionRequirement[];
   };
-  tx: () => SendTransactionRequest;
+  tx: () => TransactionRequest & { to: Address; data: Hex };
 }
