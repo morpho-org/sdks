@@ -11,7 +11,7 @@ export function getSeizabeCollateral(
   preLiquidation: PreLiquidation,
 ) {
   const preLiquidationParams = preLiquidation.preLiquidationParams;
-  const lltv = preLiquidationParams.preLltv;
+  const lltv = position.market.params.lltv;
   const preLltv = preLiquidationParams.preLltv;
   if (
     position.borrowAssets > MathLib.wMulDown(position.collateralValue!, lltv) ||
