@@ -1,92 +1,61 @@
-import { expect } from "chai";
-
-import { viem } from "hardhat";
-import {
-  Account,
-  Address,
-  Chain,
-  Client,
-  PublicActions,
-  TestActions,
-  Transport,
-  WalletActions,
-  WalletRpcSchema,
-  publicActions,
-  testActions,
-} from "viem";
+import { describe, expect } from "vitest";
+import { test } from "./setup";
 
 import {
   ChainId,
   VaultMarketPublicAllocatorConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
-import { MAINNET_MARKETS } from "@morpho-org/blue-sdk/src/tests/mocks/markets";
-import { setUp } from "@morpho-org/morpho-test";
 
-import { metaMorphoAbi, publicAllocatorAbi } from "../src/abis";
+import { markets, vaults } from "@morpho-org/morpho-test";
+import { metaMorphoAbi, publicAllocatorAbi } from "../src";
 import { VaultMarketConfig } from "../src/augment/VaultMarketConfig";
-import { steakUsdc } from "./fixtures";
+
+const { usdc_wstEth } = markets[ChainId.EthMainnet];
+const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("augment/VaultMarketConfig", () => {
-  let client: Client<
-    Transport,
-    Chain,
-    Account,
-    WalletRpcSchema,
-    WalletActions<Chain, Account> &
-      PublicActions<Transport, Chain, Account> &
-      TestActions
-  >;
-
-  setUp(async () => {
-    client = (await viem.getWalletClients())[0]!
-      .extend(publicActions)
-      .extend(testActions({ mode: "hardhat" }));
-
+  test("should fetch vault market data", async ({ client }) => {
     const owner = await client.readContract({
-      address: steakUsdc.address as Address,
+      address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "owner",
     });
-    await client.impersonateAccount({ address: owner });
 
+    await client.setBalance({ address: owner, value: BigInt(1e18) });
     await client.writeContract({
       account: owner,
-      address: steakUsdc.address as Address,
+      address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "setIsAllocator",
       args: [addresses[ChainId.EthMainnet].publicAllocator, true],
     });
-
     await client.writeContract({
       account: owner,
-      address: addresses[ChainId.EthMainnet].publicAllocator as Address,
+      address: addresses[ChainId.EthMainnet].publicAllocator,
       abi: publicAllocatorAbi,
       functionName: "setFee",
-      args: [steakUsdc.address as Address, 1n],
+      args: [steakUsdc.address, 1n],
     });
-
     await client.writeContract({
       account: owner,
-      address: addresses[ChainId.EthMainnet].publicAllocator as Address,
+      address: addresses[ChainId.EthMainnet].publicAllocator,
       abi: publicAllocatorAbi,
       functionName: "setFlowCaps",
       args: [
-        steakUsdc.address as Address,
+        steakUsdc.address,
         [
           {
-            id: MAINNET_MARKETS.usdc_wstEth.id,
+            id: usdc_wstEth.id,
             caps: { maxIn: 2n, maxOut: 3n },
           },
         ],
       ],
     });
-  });
 
-  it("should fetch vault market data", async () => {
     const expectedData = new VaultMarketConfig({
       vault: steakUsdc.address,
-      marketId: MAINNET_MARKETS.usdc_wstEth.id,
+      marketId: usdc_wstEth.id,
       cap: 1000000000000000000000000000000n,
       enabled: true,
       pendingCap: {
@@ -95,7 +64,7 @@ describe("augment/VaultMarketConfig", () => {
       },
       publicAllocatorConfig: new VaultMarketPublicAllocatorConfig({
         vault: steakUsdc.address,
-        marketId: MAINNET_MARKETS.usdc_wstEth.id,
+        marketId: usdc_wstEth.id,
         maxIn: 2n,
         maxOut: 3n,
       }),
@@ -103,11 +72,11 @@ describe("augment/VaultMarketConfig", () => {
     });
 
     const value = await VaultMarketConfig.fetch(
-      steakUsdc.address as Address,
-      MAINNET_MARKETS.usdc_wstEth.id,
+      steakUsdc.address,
+      usdc_wstEth.id,
       client,
     );
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

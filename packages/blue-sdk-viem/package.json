@@ -1,46 +1,40 @@
 {
   "name": "@morpho-org/blue-sdk-viem",
-  "version": "1.12.7",
+  "description": "Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods.",
+  "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
   "license": "MIT",
   "main": "src/index.ts",
-  "files": [
-    "lib"
-  ],
+  "files": ["lib"],
   "scripts": {
-    "prepublish": "yarn build",
-    "build": "tsc --build tsconfig.build.json",
-    "test": "hardhat test"
-  },
-  "devDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-test": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
-    "@nomicfoundation/hardhat-viem": "^2.0.3",
-    "@types/chai": "^4.3.14",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^22.1.0",
-    "@types/sinon": "^17.0.3",
-    "@types/sinon-chai": "^3.2.12",
-    "chai": "^4.3.10",
-    "dotenv": "^16.4.5",
-    "ethers": "^6.13.2",
-    "hardhat": "^2.22.6",
-    "hardhat-deal": "^3.1.0",
-    "mocha": "^10.4.0",
-    "sinon": "^19.0.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5",
-    "viem": "^2.18.8"
+    "prepublish": "$npm_execpath build",
+    "compile": "hardhat compile",
+    "build": "tsc --build tsconfig.build.json"
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "viem": "^2.0.0"
   },
+  "devDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/test": "workspace:^",
+    "hardhat": "^2.22.17",
+    "typescript": "^5.7.2",
+    "viem": "^2.21.54",
+    "vitest": "^2.1.8"
+  },
   "publishConfig": {
     "main": "lib/index.js",
-    "access": "public"
+    "types": "lib/index.d.ts"
   }
 }

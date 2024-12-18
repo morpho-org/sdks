@@ -1,4 +1,4 @@
-import { Token } from "../token/Token";
+import type { Token } from "../token/Token.js";
 
 export type PeripheralBalanceType =
   | "base" // The balance of the requested token (ETH for ETH, wstETH for wstETH).
@@ -36,7 +36,7 @@ export interface PeripheralBalance {
   dstAmount: bigint;
 }
 
-export interface InputAssetBalances extends Omit<PeripheralBalance, "type"> {}
+export interface IAssetBalances extends Omit<PeripheralBalance, "type"> {}
 
 export class AssetBalances {
   /**
@@ -51,7 +51,7 @@ export class AssetBalances {
     [T in Exclude<PeripheralBalanceType, "base">]?: PeripheralBalance;
   };
 
-  constructor(balance: InputAssetBalances) {
+  constructor(balance: IAssetBalances) {
     this.total = balance.dstAmount;
     this.allocations = {
       base: { ...balance, type: "base" },

@@ -1,9 +1,10 @@
 {
   "compilerOptions": {
     "baseUrl": ".",
-    "target": "esnext",
+    "target": "ESNext",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
+    "moduleDetection": "force",
     "skipLibCheck": true,
     "strict": true,
     "noImplicitAny": true,
@@ -16,6 +17,8 @@
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "incremental": true
+    "incremental": true,
+    "experimentalDecorators": true,
+    "jsx": "preserve"
   }
 }

@@ -1,4 +1,5 @@
-import { AddressLike, ZeroAddress, getAddress, parseUnits } from "ethers";
+import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { type AddressLike, getAddress, parseUnits } from "ethers";
 
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.
 const toFixed = (x: number, decimals: number) =>
@@ -17,7 +18,7 @@ export const safeParseNumber = (value: number, decimals = 18) =>
 
 export const safeParseUnits = (strValue: string, decimals = 18) => {
   if (!/[-+]?[0-9]*\.?[0-9]+/.test(strValue))
-    throw new Error("invalid number: " + strValue);
+    throw Error(`invalid number: ${strValue}`);
 
   let [whole, dec = ""] = strValue.split(".");
 
@@ -37,8 +38,8 @@ export const safeParseUnits = (strValue: string, decimals = 18) => {
  */
 export const isZeroAddressOrUnset = (
   address: string | null | undefined,
-): address is "0x0000000000000000000000000000000000000000" =>
-  address == null || address === ZeroAddress;
+): address is typeof ZERO_ADDRESS =>
+  address == null || address === ZERO_ADDRESS;
 
 /**
  * Transform an AddressLike into a checksumed address

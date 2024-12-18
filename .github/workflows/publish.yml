@@ -1,0 +1,77 @@
+name: Publish
+
+on:
+  workflow_call:
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+jobs:
+  publish:
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - test
+          - test-wagmi
+
+          - morpho-ts
+          - morpho-test
+
+          - blue-api-sdk
+          - blue-sdk
+          - blue-sdk-ethers
+          - blue-sdk-viem
+          - blue-sdk-wagmi
+
+          - simulation-sdk
+          - simulation-sdk-wagmi
+
+          - bundler-sdk-ethers
+          - bundler-sdk-viem
+
+          - liquidation-sdk-viem
+          - liquidity-sdk-ethers
+          - liquidity-sdk-viem
+
+    name: "@morpho-org/${{ matrix.package }}"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch all history so that we can determine the version to release.
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install
+
+      - id: release
+        run: node ../../scripts/release/release.js
+        working-directory: packages/${{ matrix.package }}
+
+      # Set version of each package to the most recent so they are referenced correctly in dependencies.
+      - run: |
+          pnpm -r -c exec 'node ../../scripts/release/version.js'
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
+          echo "${{ steps.release.outputs.changelog }}" > CHANGELOG.md
+        if: steps.release.outputs.version
+
+      - run: pnpm publish --no-git-checks --access public --tag ${{ steps.release.outputs.channel }}
+        working-directory: packages/${{ matrix.package }}
+        if: steps.release.outputs.version
+
+      - run: gh release create ${{ steps.release.outputs.tag }} --target ${{ steps.release.outputs.branch }} --notes-file CHANGELOG.md --title '${{ steps.release.outputs.tag }}' ${{ steps.release.outputs.channel == 'latest' && '--latest' || '--prerelease' }}
+        if: steps.release.outputs.version
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: echo "- [RELEASE] ${{ steps.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        if: steps.release.outputs.version
+

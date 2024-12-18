@@ -1,49 +1,21 @@
-import { expect } from "chai";
-
-import { viem } from "hardhat";
-import {
-  Account,
-  Chain,
-  Client,
-  PublicActions,
-  TestActions,
-  Transport,
-  WalletActions,
-  WalletRpcSchema,
-  publicActions,
-  testActions,
-} from "viem";
+import { describe, expect } from "vitest";
+import { test } from "./setup";
 
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
-import { setUp } from "@morpho-org/morpho-test";
-import { blueAbi } from "../src/abis";
+import { blueAbi } from "../src";
 import { User } from "../src/augment/User";
 
+const { morpho, bundler } = addresses[ChainId.EthMainnet];
+
 describe("augment/User", () => {
-  let client: Client<
-    Transport,
-    Chain,
-    Account,
-    WalletRpcSchema,
-    WalletActions<Chain, Account> &
-      PublicActions<Transport, Chain, Account> &
-      TestActions
-  >;
-
-  setUp(async () => {
-    client = (await viem.getWalletClients())[0]!
-      .extend(publicActions)
-      .extend(testActions({ mode: "hardhat" }));
-
+  test("should fetch user data", async ({ client }) => {
     await client.writeContract({
-      address: addresses[ChainId.EthMainnet].morpho,
+      address: morpho,
       abi: blueAbi,
       functionName: "setAuthorization",
-      args: [addresses[ChainId.EthMainnet].bundler, true],
+      args: [bundler, true],
     });
-  });
 
-  it("should fetch user data", async () => {
     const expectedData = new User({
       address: client.account.address,
       isBundlerAuthorized: true,
@@ -52,6 +24,6 @@ describe("augment/User", () => {
 
     const value = await User.fetch(client.account.address, client);
 
-    expect(value).to.eql(expectedData);
+    expect(value).toStrictEqual(expectedData);
   });
 });

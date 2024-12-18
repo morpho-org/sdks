@@ -1,45 +1,38 @@
-import { Provider, ZeroAddress } from "ethers";
+import { type Provider, ZeroAddress } from "ethers";
 import {
   AdaptiveCurveIrm__factory,
   BlueOracle__factory,
   MorphoBlue__factory,
 } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
-  ChainId,
   ChainUtils,
   Market,
-  MarketConfig,
-  MarketId,
+  type MarketId,
+  type MarketParams,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import { fetchMarketConfig } from "./MarketConfig";
+import type { FetchOptions } from "../types";
+import { fetchMarketParams } from "./MarketParams";
 
 export async function fetchMarket(
   id: MarketId,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const config = await fetchMarketConfig(id, runner, { chainId });
+  const config = await fetchMarketParams(id, runner, { chainId });
 
   return fetchMarketFromConfig(config, runner, { chainId, overrides });
 }
 
 export async function fetchMarketFromConfig(
-  config: MarketConfig,
+  params: MarketParams,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -59,20 +52,31 @@ export async function fetchMarketFromConfig(
     price,
     rateAtTarget,
   ] = await Promise.all([
-    MorphoBlue__factory.connect(morpho, runner).market(config.id, overrides),
-    config.oracle !== ZeroAddress
-      ? BlueOracle__factory.connect(config.oracle, runner).price(overrides)
-      : 0n,
-    config.irm === adaptiveCurveIrm
-      ? await AdaptiveCurveIrm__factory.connect(
-          config.irm,
+    MorphoBlue__factory.connect(
+      morpho,
+      // @ts-ignore incompatible commonjs type
+      runner,
+    ).market(params.id, overrides),
+    params.oracle !== ZeroAddress
+      ? BlueOracle__factory.connect(
+          params.oracle,
+          // @ts-ignore incompatible commonjs type
           runner,
-        ).rateAtTarget(config.id, overrides)
+        )
+          .price(overrides)
+          .catch(() => undefined)
+      : undefined,
+    params.irm === adaptiveCurveIrm
+      ? await AdaptiveCurveIrm__factory.connect(
+          params.irm,
+          // @ts-ignore incompatible commonjs type
+          runner,
+        ).rateAtTarget(params.id, overrides)
       : undefined,
   ]);
 
   return new Market({
-    config,
+    params,
     totalSupplyAssets,
     totalBorrowAssets,
     totalSupplyShares,

@@ -1,14 +1,13 @@
-import { CapacityLimit, CapacityLimitReason } from "../market";
-import { MathLib, RoundingDirection } from "../maths";
-import { VaultToken } from "../token";
-import { Address, BigIntish, MarketId } from "../types";
+import { type CapacityLimit, CapacityLimitReason } from "../market/index.js";
+import { MathLib, type RoundingDirection } from "../math/index.js";
+import { VaultToken } from "../token/index.js";
+import type { Address, BigIntish, MarketId } from "../types.js";
 
-import { VaultConfig } from "./VaultConfig";
+import type { IVaultConfig } from "./VaultConfig.js";
 import {
-  InputVaultMarketAllocation,
+  type IVaultMarketAllocation,
   VaultMarketAllocation,
-} from "./VaultMarketAllocation";
-import { VaultUtils } from "./VaultUtils";
+} from "./VaultMarketAllocation.js";
 
 export interface Pending<T> {
   value: T;
@@ -30,8 +29,7 @@ export interface VaultPublicAllocatorConfig {
   accruedFee: bigint;
 }
 
-export interface InputVault {
-  config: VaultConfig;
+export interface IVault extends IVaultConfig {
   curator: Address;
   owner: Address;
   guardian: Address;
@@ -50,84 +48,80 @@ export interface InputVault {
   publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
-export class Vault extends VaultToken implements InputVault {
+export class Vault extends VaultToken implements IVault {
   /**
-   * The MetaMorpho vault's config.
+   * The vault's share token's name.
    */
-  public readonly config: VaultConfig;
+  public declare readonly name: string;
+
+  /**
+   * The vault's share token's symbol.
+   */
+  public declare readonly symbol: string;
 
   /**
    * The MetaMorpho vault's owner address.
    */
-  owner: Address;
+  public owner: Address;
   /**
    * The MetaMorpho vault's curator address.
    */
-  curator: Address;
+  public curator: Address;
   /**
    * The MetaMorpho vault's guardian address.
    */
-  guardian: Address;
+  public guardian: Address;
   /**
    * The MetaMorpho vault's skim recipient address (mostly used to skim reward tokens claimed to the vault).
    */
-  skimRecipient: Address;
+  public skimRecipient: Address;
   /**
    * The MetaMorpho vault's fee recipient address.
    */
-  feeRecipient: Address;
+  public feeRecipient: Address;
 
   /**
    * The MetaMorpho vault's timelock (in seconds).
    */
-  timelock: bigint;
+  public timelock: bigint;
   /**
    * The MetaMorpho vault's fee.
    */
-  fee: bigint;
+  public fee: bigint;
 
   /**
    * The MetaMorpho vault's pending owner address and activation timestamp.
    */
-  pendingOwner: Address;
+  public pendingOwner: Address;
   /**
    * The MetaMorpho vault's pending guardian address and activation timestamp.
    */
-  pendingGuardian: Pending<Address>;
+  public pendingGuardian: Pending<Address>;
   /**
    * The MetaMorpho vault's pending timelock (in seconds) and activation timestamp.
    */
-  pendingTimelock: Pending<bigint>;
+  public pendingTimelock: Pending<bigint>;
 
   /**
    * The MetaMorpho vault's ordered supply queue.
    */
-  supplyQueue: MarketId[];
+  public supplyQueue: MarketId[];
   /**
    * The MetaMorpho vault's ordered withdraw queue.
    */
-  withdrawQueue: MarketId[];
+  public withdrawQueue: MarketId[];
 
-  /**
-   * The ERC4626 vault's total supply of shares.
-   */
-  totalSupply: bigint;
-  /**
-   * The ERC4626 vault's total assets.
-   */
-  totalAssets: bigint;
   /**
    * The MetaMorpho vault's last total assets used to calculate performance fees.
    */
-  lastTotalAssets: bigint;
+  public lastTotalAssets: bigint;
 
   /**
    * The MetaMorpho vault's public allocator configuration.
    */
-  publicAllocatorConfig?: VaultPublicAllocatorConfig;
+  public publicAllocatorConfig?: VaultPublicAllocatorConfig;
 
   constructor({
-    config,
     curator,
     owner,
     guardian,
@@ -144,10 +138,10 @@ export class Vault extends VaultToken implements InputVault {
     totalSupply,
     totalAssets,
     lastTotalAssets,
-  }: InputVault) {
+    ...config
+  }: IVault) {
     super(config, { totalAssets, totalSupply });
 
-    this.config = config;
     this.curator = curator;
     this.owner = owner;
     this.guardian = guardian;
@@ -163,14 +157,8 @@ export class Vault extends VaultToken implements InputVault {
     this.timelock = timelock;
     this.supplyQueue = supplyQueue;
     this.withdrawQueue = withdrawQueue;
-    this.totalSupply = totalSupply;
-    this.totalAssets = totalAssets;
     this.lastTotalAssets = lastTotalAssets;
     this.publicAllocatorConfig = publicAllocatorConfig;
-  }
-
-  get asset() {
-    return this.config.asset;
   }
 
   /**
@@ -181,11 +169,11 @@ export class Vault extends VaultToken implements InputVault {
   }
 
   public toAssets(shares: bigint, rounding?: RoundingDirection) {
-    return VaultUtils.toAssets(shares, this, this.config, rounding);
+    return this._unwrap(shares, rounding);
   }
 
   public toShares(assets: bigint, rounding?: RoundingDirection) {
-    return VaultUtils.toShares(assets, this, this.config, rounding);
+    return this._wrap(assets, rounding);
   }
 }
 
@@ -197,10 +185,10 @@ export interface CollateralAllocation {
   proportion: bigint;
 }
 
-export interface InputAccrualVault
-  extends Omit<InputVault, "withdrawQueue" | "totalAssets"> {}
+export interface IAccrualVault
+  extends Omit<IVault, "withdrawQueue" | "totalAssets"> {}
 
-export class AccrualVault extends Vault implements InputAccrualVault {
+export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * The allocation of the vault on each market enabled.
    */
@@ -212,12 +200,12 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   public readonly collateralAllocations: Map<Address, CollateralAllocation>;
 
   constructor(
-    vault: InputAccrualVault,
+    vault: IAccrualVault,
     /**
      * The allocation of the vault on each market of the withdraw queue,
      * in the same order as the withdraw queue.
      */
-    allocations: Omit<InputVaultMarketAllocation, "proportion">[],
+    allocations: Omit<IVaultMarketAllocation, "proportion">[],
   ) {
     super({
       ...vault,
@@ -238,7 +226,7 @@ export class AccrualVault extends Vault implements InputAccrualVault {
     this.collateralAllocations = new Map<Address, CollateralAllocation>();
 
     for (const { marketId, position } of this.allocations.values()) {
-      const address = position.market.config.collateralToken;
+      const address = position.market.params.collateralToken;
 
       let exposure = this.collateralAllocations.get(address);
       if (!exposure)
@@ -253,8 +241,8 @@ export class AccrualVault extends Vault implements InputAccrualVault {
           }),
         );
 
-      exposure.lltvs.add(position.market.config.lltv);
-      exposure.oracles.add(position.market.config.oracle);
+      exposure.lltvs.add(position.market.params.lltv);
+      exposure.oracles.add(position.market.params.oracle);
       exposure.markets.add(marketId);
       exposure.proportion += this.getAllocationProportion(marketId);
     }
@@ -264,32 +252,36 @@ export class AccrualVault extends Vault implements InputAccrualVault {
    * The vault's liquidity directly available from allocated markets.
    */
   get liquidity() {
-    return Array.from(this.allocations.values()).reduce(
-      (total, { position }) => total + position.withdrawCapacityLimit.value,
-      0n,
-    );
+    return this.allocations
+      .values()
+      .reduce(
+        (total, { position }) => total + position.withdrawCapacityLimit.value,
+        0n,
+      );
   }
 
   /**
-   * The MetaMorpho vault's average APY on its assets, including the performance fee.
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits, before deducting the performance fee.
    */
-  get avgApy() {
+  get apy() {
     if (this.totalAssets === 0n) return 0n;
 
     return (
-      Array.from(this.allocations.values()).reduce(
-        (total, { position }) =>
-          total + position.market.supplyApy * position.supplyAssets,
-        0n,
-      ) / this.totalAssets
+      this.allocations
+        .values()
+        .reduce(
+          (total, { position }) =>
+            total + position.market.supplyApy * position.supplyAssets,
+          0n,
+        ) / this.totalAssets
     );
   }
 
   /**
-   * The MetaMorpho vault's average APY on its assets, excluding the performance fee.
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits, after deducting the performance fee.
    */
   get netApy() {
-    return MathLib.wMulDown(this.avgApy, MathLib.WAD - this.fee);
+    return MathLib.wMulDown(this.apy, MathLib.WAD - this.fee);
   }
 
   public getAllocationProportion(marketId: MarketId) {
@@ -302,17 +294,19 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   }
 
   public getDepositCapacityLimit(assets: bigint): CapacityLimit {
-    const suppliable = Array.from(this.allocations.values()).reduce(
-      (total, { config: { cap }, position: { marketId, supplyAssets } }) =>
-        MathLib.min(
-          total +
-            (this.supplyQueue.includes(marketId)
-              ? MathLib.zeroFloorSub(cap, supplyAssets)
-              : 0n),
-          MathLib.MAX_UINT_256,
-        ),
-      0n,
-    );
+    const suppliable = this.allocations
+      .values()
+      .reduce(
+        (total, { config: { cap }, position: { marketId, supplyAssets } }) =>
+          MathLib.min(
+            total +
+              (this.supplyQueue.includes(marketId)
+                ? MathLib.zeroFloorSub(cap, supplyAssets)
+                : 0n),
+            MathLib.MAX_UINT_256,
+          ),
+        0n,
+      );
 
     if (assets > suppliable)
       return {
@@ -349,10 +343,15 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   public accrueInterest(timestamp: BigIntish) {
     const vault = new AccrualVault(
       this,
-      Array.from(this.allocations.values(), ({ config, position }) => ({
-        config,
-        position: position.accrueInterest(timestamp),
-      })),
+      // Keep withdraw queue order.
+      this.withdrawQueue.map((marketId) => {
+        const { config, position } = this.allocations.get(marketId)!;
+
+        return {
+          config,
+          position: position.accrueInterest(timestamp),
+        };
+      }),
     );
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);
