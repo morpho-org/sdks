@@ -17,18 +17,16 @@
     "build": "tsc --build tsconfig.build.json",
     "codegen": "graphql-codegen --config codegen.ts"
   },
-  "dependencies": {
-    "dataloader": "^2.2.3",
-    "graphql-request": "^6.1.0",
-    "graphql-tag": "^2.12.6"
-  },
   "peerDependencies": {
     "@morpho-org/blue-api-sdk": "workspace:^",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",
+    "dataloader": "^2.2.3",
     "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0",
+    "graphql-request": "^6.1.0",
+    "graphql-tag": "^2.12.6",
     "viem": "^2.0.0"
   },
   "devDependencies": {

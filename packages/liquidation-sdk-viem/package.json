@@ -20,9 +20,7 @@
   },
   "dependencies": {
     "@paraswap/sdk": "^7.0.0",
-    "executooor-viem": "^1.3.3",
-    "graphql-request": "^6.1.0",
-    "graphql-tag": "^2.12.6"
+    "executooor-viem": "^1.3.3"
   },
   "peerDependencies": {
     "@morpho-org/blue-api-sdk": "workspace:^",
@@ -30,6 +28,8 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "evm-maths": "^7.0.0",
     "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0",
+    "graphql-request": "^6.1.0",
+    "graphql-tag": "^2.12.6",
     "viem": "^2.0.0"
   },
   "devDependencies": {
