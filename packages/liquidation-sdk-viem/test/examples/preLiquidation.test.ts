@@ -336,7 +336,7 @@ describe("pre liquidation", () => {
             typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral)! - 10n,
+          market.getMaxBorrowAssets(collateral)! - 10000000n,
           0n,
           borrower.address,
           borrower.address,
@@ -380,10 +380,39 @@ describe("pre liquidation", () => {
               ],
             },
           },
+        })
+        .post("/graphql")
+        .reply(200, {
+          data: {
+            markets: {
+              items: [
+                {
+                  market: {
+                    collateralAsset: {
+                      address: market.params.collateralToken,
+                      decimals: collateralToken.decimals,
+                      priceUsd: collateralPriceUsd,
+                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
+                    },
+                    loanAsset: {
+                      address: market.params.loanToken,
+                      decimals: loanToken.decimals,
+                      priceUsd: null,
+                      spotPriceEth: 1 / ethPriceUsd,
+                    },
+                  },
+                },
+              ],
+            },
+          },
         });
 
-      mockOneInch(encoder, [{ srcAmount: 0n, dstAmount: "60475733900" }]);
-      mockParaSwap(encoder, [{ srcAmount: 0n, dstAmount: "60475733901" }]);
+      mockOneInch(encoder, [
+        { srcAmount: 68600069n, dstAmount: "67941555868" },
+      ]);
+      mockParaSwap(encoder, [
+        { srcAmount: 68600069n, dstAmount: "67941555868" },
+      ]);
 
       await check(encoder.address, client, client.account, [marketId]);
 

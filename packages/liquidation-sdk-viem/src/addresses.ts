@@ -37,7 +37,7 @@ declare module "@morpho-org/blue-sdk" {
 
 type PreLiquidationFactoryConfig = {
   address: Address;
-  deploymentBlock: bigint;
+  startBlock: bigint;
 };
 
 export const mainnetAddresses = addresses[ChainId.EthMainnet] as ChainAddresses;
@@ -64,10 +64,10 @@ export const preLiquidationFactoryConfigs: Record<
 > = {
   [ChainId.EthMainnet]: {
     address: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
-    deploymentBlock: 21414664n,
+    startBlock: 21429900n,
   },
   [ChainId.BaseMainnet]: {
     address: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
-    deploymentBlock: 23779056n,
+    startBlock: 23779056n,
   },
 };

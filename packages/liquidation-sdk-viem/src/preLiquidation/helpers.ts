@@ -4,9 +4,10 @@ import {
   ORACLE_PRICE_SCALE,
   SharesMath,
 } from "@morpho-org/blue-sdk";
+import { parseEther } from "viem";
 import type { PreLiquidation } from "./types";
 
-export function getSeizabeCollateral(
+export function getPreSeizableCollateral(
   position: AccrualPosition,
   preLiquidation: PreLiquidation,
 ) {
@@ -20,7 +21,7 @@ export function getSeizabeCollateral(
     return undefined;
 
   const ltv = MathLib.wDivUp(position.borrowAssets, position.collateralValue!);
-  const quotient = MathLib.wDivDown(ltv - preLltv, ltv - lltv);
+  const quotient = MathLib.wDivDown(ltv - preLltv, lltv - preLltv);
   const preLIF =
     preLiquidationParams.preLIF1 +
     MathLib.wMulDown(
@@ -34,7 +35,12 @@ export function getSeizabeCollateral(
       preLiquidationParams.preLCF2 - preLiquidationParams.preLCF1,
     );
 
-  const repayableShares = MathLib.wMulDown(position.borrowShares, preLCF);
+  const repayableShares = MathLib.mulDivDown(
+    position.borrowShares,
+    preLCF,
+    parseEther("1.01"), // adding a 1% security to not repay too much
+  );
+
   const repayableAssets = MathLib.wMulDown(
     SharesMath.toAssets(
       repayableShares,
