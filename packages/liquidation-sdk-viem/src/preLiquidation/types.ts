@@ -4,7 +4,7 @@ import {
   type Address,
   type MarketId,
 } from "@morpho-org/blue-sdk";
-import { getSeizabeCollateral } from "./helpers";
+import { getPreSeizableCollateral } from "./helpers";
 
 export class PreLiquidationPosition extends AccrualPosition {
   public collateralAsset: PartialBlueApiToken;
@@ -26,7 +26,7 @@ export class PreLiquidationPosition extends AccrualPosition {
     this.loanAsset = loanAsset;
     this.preLiquidation = preLiquidation;
     this.preSeizableCollateral = preLiquidation
-      ? getSeizabeCollateral(position, preLiquidation)
+      ? getPreSeizableCollateral(position, preLiquidation)
       : undefined;
   }
 }
