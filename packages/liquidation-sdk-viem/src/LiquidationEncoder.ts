@@ -422,6 +422,10 @@ export class LiquidationEncoder<
           ),
         ],
       }),
+      {
+        sender: preLiquidation,
+        dataIndex: 1n, // onPreLiquidate(uint256,bytes)
+      },
     );
   }
 

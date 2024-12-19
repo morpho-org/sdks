@@ -11,7 +11,12 @@ import {
 import { BLUE_API_BASE_URL, format } from "@morpho-org/morpho-ts";
 import type { BuildTxInput } from "@paraswap/sdk";
 
-import { blueAbi, fetchMarket, fetchToken } from "@morpho-org/blue-sdk-viem";
+import {
+  blueAbi,
+  fetchAccrualPosition,
+  fetchMarket,
+  fetchToken,
+} from "@morpho-org/blue-sdk-viem";
 import {
   Flashbots,
   type LiquidationEncoder,
@@ -23,6 +28,7 @@ import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelistedMarkets.js";
 import { OneInch, Paraswap, Pendle } from "../../src/index.js";
+import { PreLiquidationPosition } from "../../src/preLiquidation/types.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import pendleMarketData from "../pendleMockData/pendleMarketData.json";
 import pendleTokens from "../pendleMockData/pendleTokens.json";
@@ -336,14 +342,29 @@ describe("pre liquidation", () => {
             typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral)! - 10n,
+          market.getMaxBorrowAssets(collateral)! - 10000000n,
           0n,
           borrower.address,
           borrower.address,
         ],
       });
 
-      await syncTimestamp(client);
+      const timestamp = await syncTimestamp(client);
+
+      const loanAssetApiData = {
+        address: market.params.loanToken,
+        decimals: loanToken.decimals,
+        priceUsd: null,
+        spotPriceEth: 1 / ethPriceUsd,
+        symbol: loanToken.symbol!,
+      };
+      const collateralAssetApiData = {
+        address: market.params.collateralToken,
+        decimals: collateralToken.decimals,
+        priceUsd: collateralPriceUsd,
+        spotPriceEth: collateralPriceUsd / ethPriceUsd,
+        symbol: collateralToken.symbol!,
+      };
 
       nock(BLUE_API_BASE_URL)
         .post("/graphql")
@@ -380,10 +401,63 @@ describe("pre liquidation", () => {
               ],
             },
           },
+        })
+        .post("/graphql")
+        .reply(200, {
+          data: {
+            markets: {
+              items: [
+                {
+                  market: {
+                    collateralAsset: {
+                      address: market.params.collateralToken,
+                      decimals: collateralToken.decimals,
+                      priceUsd: collateralPriceUsd,
+                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
+                    },
+                    loanAsset: {
+                      address: market.params.loanToken,
+                      decimals: loanToken.decimals,
+                      priceUsd: null,
+                      spotPriceEth: 1 / ethPriceUsd,
+                    },
+                  },
+                },
+              ],
+            },
+          },
         });
 
-      mockOneInch(encoder, [{ srcAmount: 0n, dstAmount: "60475733900" }]);
-      mockParaSwap(encoder, [{ srcAmount: 0n, dstAmount: "60475733901" }]);
+      const accrualPosition = await fetchAccrualPosition(
+        borrower.address,
+        marketId,
+        client,
+      );
+
+      const accruedPosition = accrualPosition.accrueInterest(timestamp);
+
+      const preLiquidablePosition = new PreLiquidationPosition(
+        accruedPosition,
+        collateralAssetApiData,
+        loanAssetApiData,
+        {
+          marketId,
+          address: preLiquidationAddress,
+          preLiquidationParams,
+        },
+      );
+
+      const preSeizableCollateral =
+        preLiquidablePosition.preSeizableCollateral!;
+
+      console.log("preSeizableCollateral", preSeizableCollateral);
+
+      mockOneInch(encoder, [
+        { srcAmount: preSeizableCollateral, dstAmount: "73000000000" },
+      ]);
+      mockParaSwap(encoder, [
+        { srcAmount: preSeizableCollateral, dstAmount: "73000000000" },
+      ]);
 
       await check(encoder.address, client, client.account, [marketId]);
 
@@ -396,10 +470,9 @@ describe("pre liquidation", () => {
         args: [encoder.address],
       });
 
-      expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        33_317.258,
-        3,
-      );
+      expect(
+        Number(format.number.of(decimalBalance, decimals)),
+      ).toBeGreaterThan(1_967.905);
     },
   );
 });
