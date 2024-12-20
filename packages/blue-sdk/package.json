@@ -1,70 +1,38 @@
 {
   "name": "@morpho-org/blue-sdk",
-  "version": "1.12.7",
+  "description": "Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`).",
+  "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
   "license": "MIT",
   "main": "src/index.ts",
-  "files": [
-    "lib"
-  ],
+  "files": ["lib"],
   "scripts": {
-    "prepublish": "yarn build",
+    "prepublish": "$npm_execpath build",
     "build": "tsc --build tsconfig.build.json",
-    "test-jest": "jest",
-    "test-hardhat": "hardhat test"
+    "test": "vitest"
   },
   "dependencies": {
-    "keccak256": "^1.0.6"
-  },
-  "devDependencies": {
-    "@morpho-org/morpho-test": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@nomicfoundation/hardhat-ethers": "^3.0.6",
-    "@nomicfoundation/hardhat-network-helpers": "^1.0.11",
-    "@types/chai": "^4.3.14",
-    "@types/chai-as-promised": "^7.1.2",
-    "@types/jest": "^29.5.12",
-    "@types/mocha": "^10.0.6",
-    "@types/node": "^22.1.0",
-    "chai": "^4.3.10",
-    "chai-as-promised": "^7.1.2",
-    "chai-ts": "^0.0.3",
-    "dotenv": "^16.4.5",
-    "ethers": "^6.13.2",
-    "ethers-types": "^3.17.0",
-    "hardhat": "^2.22.6",
-    "hardhat-deal": "^3.1.0",
-    "hardhat-tracer": "^3.1.0",
-    "jest": "^29.7.0",
-    "mocha": "^10.4.0",
-    "ts-jest": "^29.2.4",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "@noble/hashes": "^1.5.0"
   },
   "peerDependencies": {
     "@morpho-org/morpho-ts": "workspace:^"
   },
+  "devDependencies": {
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/test": "workspace:^",
+    "typescript": "^5.7.2",
+    "viem": "^2.21.54",
+    "vitest": "^2.1.8"
+  },
   "publishConfig": {
     "main": "lib/index.js",
-    "access": "public"
-  },
-  "jest": {
-    "verbose": true,
-    "testTimeout": 15000,
-    "maxWorkers": 1,
-    "transform": {
-      "^.+\\.tsx?$": [
-        "ts-jest",
-        {
-          "tsconfig": "tsconfig.json"
-        }
-      ]
-    },
-    "testRegex": "(/src/.*|(\\.|/)(test|spec)+)\\.test\\.(jsx?|tsx?)$",
-    "moduleFileExtensions": [
-      "js",
-      "ts"
-    ],
-    "preset": "ts-jest"
+    "types": "lib/index.d.ts"
   }
 }

@@ -1,7 +1,17 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.8.3/schema.json",
+  "$schema": "https://biomejs.dev/schemas/1.9.3/schema.json",
   "files": {
-    "ignore": ["out", "lib", "dist", ".pnp.*", ".vscode", "package.json"]
+    "ignore": [
+      "lib",
+      ".vscode",
+      "cache",
+      "coverage",
+      "artifacts",
+      "packages/bundler-sdk-ethers/src/types",
+      "packages/liquidation-sdk-viem/src/api/sdk.ts",
+      "packages/liquidity-sdk-ethers/src/api/sdk.ts",
+      "packages/liquidity-sdk-viem/src/api/sdk.ts"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -15,13 +25,26 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": false,
+      "recommended": true,
+      "complexity": {
+        "noForEach": "off",
+        "noBannedTypes": "off"
+      },
       "correctness": {
         "noUnusedImports": "error",
-        "noUnusedVariables": "error"
+        "noUnusedVariables": "error",
+        "useExhaustiveDependencies": "error"
       },
       "style": {
-        "useBlockStatements": "off"
+        "noParameterAssign": "off",
+        "useBlockStatements": "off",
+        "noUnusedTemplateLiteral": "off",
+        "noNonNullAssertion": "off"
+      },
+      "suspicious": {
+        "useGetterReturn": "off",
+        "noAssignInExpressions": "off",
+        "noFallthroughSwitchClause": "off"
       }
     }
   }

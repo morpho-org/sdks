@@ -1,46 +1,28 @@
 {
   "name": "@morpho-org/morpho-ts",
-  "version": "1.12.7",
+  "description": "TypeScript package to handle all things time & format-related.",
+  "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
   "license": "MIT",
   "main": "src/index.ts",
-  "files": [
-    "lib"
-  ],
+  "files": ["lib"],
   "scripts": {
-    "prepublish": "yarn build",
-    "build": "tsc --build tsconfig.build.json",
-    "test": "jest"
+    "prepublish": "$npm_execpath build",
+    "build": "tsc --build tsconfig.build.json"
   },
   "devDependencies": {
-    "@types/chai": "^4.3.14",
-    "@types/jest": "^29.5.12",
-    "chai": "^4.3.10",
-    "jest": "^29.7.0",
-    "ts-jest": "^29.2.4",
-    "typescript": "^5.4.5"
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   },
   "publishConfig": {
     "main": "lib/index.js",
-    "access": "public"
-  },
-  "jest": {
-    "verbose": true,
-    "testTimeout": 15000,
-    "maxWorkers": 1,
-    "transform": {
-      "^.+\\.tsx?$": [
-        "ts-jest",
-        {
-          "tsconfig": "tsconfig.json"
-        }
-      ]
-    },
-    "testRegex": "(/src/.*|(\\.|/)(test|spec)+)\\.test\\.(jsx?|tsx?)$",
-    "moduleFileExtensions": [
-      "js",
-      "ts"
-    ],
-    "preset": "ts-jest"
+    "types": "lib/index.d.ts"
   }
 }

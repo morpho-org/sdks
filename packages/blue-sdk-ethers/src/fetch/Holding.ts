@@ -1,4 +1,4 @@
-import { MaxUint256, Provider } from "ethers";
+import { MaxUint256, type Provider } from "ethers";
 import {
   BackedWhitelistControllerAggregatorV2__factory,
   ERC20__factory,
@@ -7,11 +7,9 @@ import {
   Permit2__factory,
   WrappedBackedToken__factory,
 } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
-  Address,
-  ChainId,
+  type Address,
   ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
@@ -22,15 +20,13 @@ import {
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
 import { fromEntries } from "@morpho-org/morpho-ts";
+import type { FetchOptions } from "../types";
 
 export async function fetchHolding(
   user: Address,
   token: Address,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -58,9 +54,21 @@ export async function fetchHolding(
       balance: await runner.provider.getBalance(user, overrides.blockTag),
     });
 
-  const erc20 = ERC20__factory.connect(token, runner);
-  const permit2 = Permit2__factory.connect(chainAddresses.permit2, runner);
-  const erc2612 = ERC2612__factory.connect(token, runner);
+  const erc20 = ERC20__factory.connect(
+    token,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
+  const permit2 = Permit2__factory.connect(
+    chainAddresses.permit2,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
+  const erc2612 = ERC2612__factory.connect(
+    token,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
 
   const [
     balance,
@@ -99,14 +107,17 @@ export async function fetchHolding(
     permissionedBackedTokens[chainId].has(token)
       ? WrappedBackedToken__factory.connect(
           token,
+          // @ts-ignore incompatible commonjs type
           runner,
         ).whitelistControllerAggregator(overrides)
       : undefined,
-    PermissionedERC20Wrapper__factory.connect(token, runner)
+    PermissionedERC20Wrapper__factory.connect(
+      token,
+      // @ts-ignore incompatible commonjs type
+      runner,
+    )
       .hasPermission(user, overrides)
-      .catch(() =>
-        permissionedWrapperTokens[chainId].has(token) ? false : undefined,
-      ),
+      .catch(() => !permissionedWrapperTokens[chainId].has(token)),
   ]);
 
   const holding = new Holding({
@@ -116,13 +127,14 @@ export async function fetchHolding(
     permit2Allowances: fromEntries(permit2Allowances),
     erc2612Nonce,
     balance,
-    canTransfer: hasErc20WrapperPermission ?? true,
+    canTransfer: hasErc20WrapperPermission,
   });
 
   if (whitelistControllerAggregator)
     holding.canTransfer =
       await BackedWhitelistControllerAggregatorV2__factory.connect(
         whitelistControllerAggregator,
+        // @ts-ignore incompatible commonjs type
         runner,
       )
         .isWhitelisted(user, overrides)

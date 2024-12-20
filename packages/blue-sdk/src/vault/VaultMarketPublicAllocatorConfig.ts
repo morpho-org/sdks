@@ -1,9 +1,9 @@
-import { Address, MarketId } from "../types";
+import type { Address, MarketId } from "../types.js";
 
 /**
  * The vault's configuration of a market on the PublicAllocator.
  */
-export interface InputVaultMarketPublicAllocatorConfig {
+export interface IVaultMarketPublicAllocatorConfig {
   vault: Address;
   marketId: MarketId;
   maxIn: bigint;
@@ -11,17 +11,17 @@ export interface InputVaultMarketPublicAllocatorConfig {
 }
 
 export class VaultMarketPublicAllocatorConfig
-  implements InputVaultMarketPublicAllocatorConfig
+  implements IVaultMarketPublicAllocatorConfig
 {
   /**
    * The vault's address.
    */
-  public vault: Address;
+  public readonly vault: Address;
 
   /**
    * The market's id.
    */
-  public marketId: MarketId;
+  public readonly marketId: MarketId;
 
   /**
    * The maximum amount of tokens that can be allocated to this market by the vault via the PublicAllocator.
@@ -38,7 +38,7 @@ export class VaultMarketPublicAllocatorConfig
     marketId,
     maxIn,
     maxOut,
-  }: InputVaultMarketPublicAllocatorConfig) {
+  }: IVaultMarketPublicAllocatorConfig) {
     this.vault = vault;
     this.marketId = marketId;
     this.maxIn = maxIn;

@@ -1,38 +1,30 @@
-import { Address, Client } from "viem";
-
 import {
   AccrualPosition,
-  ChainId,
   ChainUtils,
-  MarketConfig,
-  MarketId,
+  type MarketId,
   Position,
-  getChainAddresses,
+  addresses,
 } from "@morpho-org/blue-sdk";
 
+import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
-import { ViewOverrides } from "../types";
-import { fetchMarket, fetchMarketFromConfig } from "./Market";
+import type { DeploylessFetchParameters, FetchParameters } from "../types";
+import { fetchMarket } from "./Market";
 
 export async function fetchPosition(
   user: Address,
   marketId: MarketId,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  parameters: FetchParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
-
-  const { morpho } = getChainAddresses(chainId);
-
+  const { morpho } = addresses[parameters.chainId];
   const [supplyShares, borrowShares, collateral] = await readContract(client, {
-    ...overrides,
-    address: morpho as Address,
+    ...parameters,
+    address: morpho,
     abi: blueAbi,
     functionName: "position",
     args: [marketId, user],
@@ -51,33 +43,14 @@ export async function fetchAccrualPosition(
   user: Address,
   marketId: MarketId,
   client: Client,
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
-
   const [position, market] = await Promise.all([
-    await fetchPosition(user, marketId, client, options),
-    await fetchMarket(marketId, client, options),
-  ]);
-
-  return new AccrualPosition(position, market);
-}
-
-export async function fetchAccrualPositionFromConfig(
-  user: Address,
-  config: MarketConfig,
-  client: Client,
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
-) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await getChainId(client)),
-  );
-
-  const [position, market] = await Promise.all([
-    await fetchPosition(user, config.id, client, options),
-    await fetchMarketFromConfig(config, client, options),
+    await fetchPosition(user, marketId, client, parameters),
+    await fetchMarket(marketId, client, parameters),
   ]);
 
   return new AccrualPosition(position, market);

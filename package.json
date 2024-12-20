@@ -1,29 +1,52 @@
 {
   "name": "@morpho-org/sdks",
   "version": "0.0.0",
-  "description": "Collection of SDKs to interact with Morpho",
-  "repository": "git@github.com:morpho-org/sdks.git",
+  "description": "Collection of SDKs to ease interactions with the Morpho protocol and Morpho Vaults",
   "author": "Morpho Association <contact@morpho.org>",
-  "license": "MIT",
-  "private": true,
-  "engines": {
-    "node": ">=18"
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
   },
-  "packageManager": "yarn@4.4.1",
-  "workspaces": [
-    "packages/*"
-  ],
+  "license": "MIT",
+  "type": "module",
+  "private": true,
+  "packageManager": "pnpm@9.12.2",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
-    "postinstall": "husky install",
-    "lint": "biome check",
-    "publish": "lerna publish from-git"
+    "prepare": "husky",
+    "lint": "biome check && $npm_execpath lint:address",
+    "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
+    "test": "dotenv -- vitest",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.8.3",
-    "@lerna-lite/cli": "3.9.1",
-    "@lerna-lite/publish": "3.9.2",
-    "@lerna-lite/version": "^3.7.1",
-    "husky": "^9.0.11",
-    "typescript": "^5.4.5"
+    "@actions/core": "^1.11.1",
+    "@biomejs/biome": "^1.9.4",
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "conventional-changelog-conventionalcommits": "^8.0.0",
+    "conventional-changelog-writer": "^8.0.0",
+    "conventional-recommended-bump": "^10.0.0",
+    "dotenv-cli": "^7.4.4",
+    "happy-dom": "^15.11.7",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.10",
+    "semver": "^7.6.3",
+    "typescript": "^5.7.2",
+    "viem": "^2.21.54",
+    "vitest": "^2.1.8"
+  },
+  "lint-staged": {
+    "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
+    "*.[tj]s*": "biome check --write --no-errors-on-unmatched && lint:address"
+  },
+  "commitlint": {
+    "extends": ["@commitlint/config-conventional"]
   }
 }

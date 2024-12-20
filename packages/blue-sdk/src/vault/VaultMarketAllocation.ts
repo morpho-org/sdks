@@ -1,25 +1,25 @@
-import { MathLib } from "../maths";
-import { AccrualPosition } from "../position";
+import { MathLib } from "../math/index.js";
+import type { AccrualPosition } from "../position/index.js";
 
-import { VaultMarketConfig } from "./VaultMarketConfig";
+import type { VaultMarketConfig } from "./VaultMarketConfig.js";
 
-export interface InputVaultMarketAllocation {
+export interface IVaultMarketAllocation {
   config: VaultMarketConfig;
   position: AccrualPosition;
 }
 
-export class VaultMarketAllocation implements InputVaultMarketAllocation {
+export class VaultMarketAllocation implements IVaultMarketAllocation {
   /**
    * The vault's configuration on the corresponding market.
    */
-  public config: VaultMarketConfig;
+  public readonly config: VaultMarketConfig;
 
   /**
    * The vault's position on the corresponding market.
    */
   public readonly position: AccrualPosition;
 
-  constructor({ config, position }: InputVaultMarketAllocation) {
+  constructor({ config, position }: IVaultMarketAllocation) {
     this.config = config;
     this.position = position;
   }

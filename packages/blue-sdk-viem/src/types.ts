@@ -1,15 +1,13 @@
-import { Account, Address, BlockTag, StateOverride } from "viem";
+import type { ChainId } from "@morpho-org/blue-sdk";
+import type { CallParameters, UnionPick } from "viem";
 
-export type ViewOverrides = {
-  account?: Account | Address;
-  stateOverride?: StateOverride;
-} & (
-  | {
-      blockNumber?: bigint;
-      blockTag?: undefined;
-    }
-  | {
-      blockNumber?: undefined;
-      blockTag?: BlockTag;
-    }
-);
+export type FetchParameters = UnionPick<
+  CallParameters,
+  "account" | "blockNumber" | "blockTag" | "stateOverride"
+> & {
+  chainId?: ChainId;
+};
+
+export type DeploylessFetchParameters = FetchParameters & {
+  deployless?: boolean;
+};

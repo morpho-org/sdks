@@ -1,28 +1,31 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { MetaMorpho__factory } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
-  Address,
-  ChainId,
+  type Address,
   ChainUtils,
-  MarketId,
+  type MarketId,
   VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
+import type { FetchOptions } from "../types";
 import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig";
 
 export async function fetchVaultMarketConfig(
   vault: Address,
   marketId: MarketId,
   runner: { provider: Provider },
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  options: FetchOptions = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
   );
   options.overrides ??= {};
 
-  const mm = MetaMorpho__factory.connect(vault, runner);
+  const mm = MetaMorpho__factory.connect(
+    vault,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
 
   const [{ cap, removableAt, enabled }, pendingCap, publicAllocatorConfig] =
     await Promise.all([

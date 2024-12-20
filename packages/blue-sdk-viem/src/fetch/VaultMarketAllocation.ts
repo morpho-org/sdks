@@ -1,15 +1,13 @@
-import { Address, Client } from "viem";
+import type { Address, Client } from "viem";
 
 import {
-  ChainId,
   ChainUtils,
-  MarketId,
+  type MarketId,
   VaultMarketAllocation,
-  VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
 
 import { getChainId } from "viem/actions";
-import { ViewOverrides } from "../types";
+import type { DeploylessFetchParameters } from "../types";
 import { fetchAccrualPosition } from "./Position";
 import { fetchVaultMarketConfig } from "./VaultMarketConfig";
 
@@ -17,39 +15,16 @@ export async function fetchVaultMarketAllocation(
   vault: Address,
   marketId: MarketId,
   client: Client,
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
 
-  const config = await fetchVaultMarketConfig(vault, marketId, client, options);
+  const [config, position] = await Promise.all([
+    fetchVaultMarketConfig(vault, marketId, client, parameters),
+    fetchAccrualPosition(vault, marketId, client, parameters),
+  ]);
 
-  return fetchVaultMarketAllocationFromConfig(
-    config,
-    marketId,
-    client,
-    options,
-  );
-}
-
-export async function fetchVaultMarketAllocationFromConfig(
-  config: VaultMarketConfig,
-  marketId: MarketId,
-  client: Client,
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
-) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await getChainId(client)),
-  );
-
-  return new VaultMarketAllocation({
-    config,
-    position: await fetchAccrualPosition(
-      config.vault as Address,
-      marketId,
-      client,
-      options,
-    ),
-  });
+  return new VaultMarketAllocation({ config, position });
 }
