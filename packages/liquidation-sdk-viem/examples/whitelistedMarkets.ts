@@ -176,6 +176,8 @@ export const check = async <
 
                 const encoder = new LiquidationEncoder(executorAddress, client);
 
+                console.log("seizedAssets", seizedAssets);
+
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
@@ -252,7 +254,6 @@ export const check = async <
                     );
 
                     if (result) {
-                      console.log("result", result);
                       dstAmount = result.dstAmount;
                     } else {
                       return;
@@ -287,18 +288,14 @@ export const check = async <
 
                 if (loanMorphoAllowance === 0n)
                   // Allows to handle changes in repaidAssets due to price changes and saves gas.
+                  encoder.erc20Approve(
+                    market.params.loanToken,
+                    seizableCollateral.preLiquidation
+                      ? position.preLiquidation!.address
+                      : morpho,
+                    maxUint256,
+                  );
 
-                  console.log("approving");
-
-                encoder.erc20Approve(
-                  market.params.loanToken,
-                  seizableCollateral.preLiquidation
-                    ? position.preLiquidation!.address
-                    : morpho,
-                  maxUint256,
-                );
-
-                console.log("preLiquidating");
                 seizableCollateral.preLiquidation
                   ? encoder.preLiquidationPreLiquidate(
                       position.preLiquidation!.address,
@@ -364,7 +361,6 @@ export const check = async <
 
                 return await sendTransaction(client, transaction);
               } catch (error) {
-                console.log("error on transaction");
                 console.warn(
                   `Tried liquidating "${seizedAssets}" collateral ("${withdrawnAssets}" underlying) from "${user}" on market "${market.id}":\n`,
                   error instanceof Error ? error.stack : error,
