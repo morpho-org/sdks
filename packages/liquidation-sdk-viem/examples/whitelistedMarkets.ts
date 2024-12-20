@@ -80,7 +80,8 @@ export const check = async <
       const user = position.user;
       const market = position.market;
       const seizableCollateral =
-        position.seizableCollateral != null
+        position.seizableCollateral !== undefined &&
+        position.seizableCollateral !== 0n
           ? { value: position.seizableCollateral, preLiquidation: false }
           : { value: position.preSeizableCollateral, preLiquidation: true };
 
@@ -174,6 +175,8 @@ export const check = async <
                 let srcAmount = withdrawnAssets ?? seizedAssets;
 
                 const encoder = new LiquidationEncoder(executorAddress, client);
+
+                console.log("seizedAssets", seizedAssets);
 
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
