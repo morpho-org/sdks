@@ -408,12 +408,6 @@ describe("pre liquidation", () => {
         });
 
       mockOneInch(encoder, [
-        { srcAmount: 68600069n, dstAmount: "67941555868" },
-      ]);
-      mockParaSwap(encoder, [
-        { srcAmount: 68600069n, dstAmount: "67941555868" },
-      ]);
-      mockOneInch(encoder, [
         { srcAmount: 68612722n, dstAmount: "67941555868" },
       ]);
       mockParaSwap(encoder, [
