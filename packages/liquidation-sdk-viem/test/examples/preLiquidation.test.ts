@@ -413,6 +413,12 @@ describe("pre liquidation", () => {
       mockParaSwap(encoder, [
         { srcAmount: 68600069n, dstAmount: "67941555868" },
       ]);
+      mockOneInch(encoder, [
+        { srcAmount: 68612722n, dstAmount: "67941555868" },
+      ]);
+      mockParaSwap(encoder, [
+        { srcAmount: 68612722n, dstAmount: "67941555868" },
+      ]);
 
       await check(encoder.address, client, client.account, [marketId]);
 
