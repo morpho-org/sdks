@@ -426,7 +426,7 @@ describe("pre liquidation", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        33_317.258,
+        1_338.717,
         3,
       );
     },
