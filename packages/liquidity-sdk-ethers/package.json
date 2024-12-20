@@ -17,26 +17,24 @@
     "build": "tsc --build tsconfig.build.json",
     "codegen": "graphql-codegen --config codegen.ts"
   },
-  "dependencies": {
-    "dataloader": "^2.2.3",
-    "graphql": "^16.9.0",
-    "graphql-request": "^6.1.0",
-    "graphql-tag": "2.11.0"
-  },
   "peerDependencies": {
     "@morpho-org/blue-api-sdk": "workspace:^",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-ethers": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",
-    "ethers": "^6.0.0"
+    "dataloader": "^2.2.3",
+    "ethers": "^6.0.0",
+    "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0",
+    "graphql-request": "^6.1.0",
+    "graphql-tag": "^2.12.6"
   },
   "devDependencies": {
     "@graphql-codegen/cli": "^5.0.3",
     "@graphql-codegen/import-types-preset": "^3.0.0",
     "@graphql-codegen/typescript": "^4.1.2",
     "@graphql-codegen/typescript-graphql-request": "^6.2.0",
-    "@graphql-codegen/typescript-operations": "^4.3.1",
+    "@graphql-codegen/typescript-operations": "^4.4.0",
     "@morpho-org/blue-api-sdk": "workspace:^",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-ethers": "workspace:^",
@@ -45,6 +43,7 @@
     "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@types/node": "^22.10.1",
+    "graphql": "^16.10.0",
     "nock": "beta",
     "typescript": "^5.7.2",
     "ethers": "^6.0.0",

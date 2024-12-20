@@ -3,12 +3,12 @@ import type { AccrualPosition } from "../position/index.js";
 
 import type { VaultMarketConfig } from "./VaultMarketConfig.js";
 
-export interface InputVaultMarketAllocation {
+export interface IVaultMarketAllocation {
   config: VaultMarketConfig;
   position: AccrualPosition;
 }
 
-export class VaultMarketAllocation implements InputVaultMarketAllocation {
+export class VaultMarketAllocation implements IVaultMarketAllocation {
   /**
    * The vault's configuration on the corresponding market.
    */
@@ -19,7 +19,7 @@ export class VaultMarketAllocation implements InputVaultMarketAllocation {
    */
   public readonly position: AccrualPosition;
 
-  constructor({ config, position }: InputVaultMarketAllocation) {
+  constructor({ config, position }: IVaultMarketAllocation) {
     this.config = config;
     this.position = position;
   }

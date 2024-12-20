@@ -1,6 +1,6 @@
 import {
   ChainId,
-  type InputVaultConfig,
+  type IVaultConfig,
   VaultConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
@@ -86,7 +86,7 @@ export const vaults = {
   },
 } as const;
 
-export const randomVault = (config: Partial<InputVaultConfig> = {}) =>
+export const randomVault = (config: Partial<IVaultConfig> = {}) =>
   new VaultConfig({
     asset: randomAddress(),
     decimalsOffset: 0n,

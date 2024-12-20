@@ -55,7 +55,7 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
       timestamp(): Promise<bigint>;
 
       approve(args: ApproveParameters<chain>): Promise<WriteContractReturnType>;
-      balanceOf(args: { erc20?: Address; owner?: Address }): Promise<bigint>;
+      balanceOf(args?: { erc20?: Address; owner?: Address }): Promise<bigint>;
       allowance(args: {
         erc20?: Address;
         owner?: Address;
@@ -149,7 +149,7 @@ export const createAnvilTestClient = <chain extends Chain>(
         async balanceOf({
           erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
           owner = client.account.address,
-        }: { erc20?: Address; owner?: Address }) {
+        }: { erc20?: Address; owner?: Address } = {}) {
           if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
             return client.getBalance({ address: owner });
 

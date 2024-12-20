@@ -16,6 +16,7 @@ import {
   wNativeBundlerAbi,
 } from "./abis.js";
 
+import type { InputMarketParams } from "@morpho-org/blue-sdk";
 import {
   type Address,
   type Hex,
@@ -27,7 +28,6 @@ import { BundlerErrors } from "./errors.js";
 import type {
   Action,
   Authorization,
-  InputMarketParams,
   InputReallocation,
   Permit2PermitSingle,
 } from "./types/index.js";

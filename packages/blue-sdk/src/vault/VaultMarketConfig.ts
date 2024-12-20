@@ -3,7 +3,7 @@ import type { Address, MarketId } from "../types.js";
 import type { Pending } from "./Vault.js";
 import type { VaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
 
-export interface InputVaultMarketConfig {
+export interface IVaultMarketConfig {
   vault: Address;
   marketId: MarketId;
   cap: bigint;
@@ -13,7 +13,7 @@ export interface InputVaultMarketConfig {
   publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
 }
 
-export class VaultMarketConfig implements InputVaultMarketConfig {
+export class VaultMarketConfig implements IVaultMarketConfig {
   /**
    * The vault's address.
    */
@@ -57,7 +57,7 @@ export class VaultMarketConfig implements InputVaultMarketConfig {
     removableAt,
     enabled,
     publicAllocatorConfig,
-  }: InputVaultMarketConfig) {
+  }: IVaultMarketConfig) {
     this.vault = vault;
     this.marketId = marketId;
     this.cap = cap;

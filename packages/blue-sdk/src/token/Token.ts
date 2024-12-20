@@ -3,7 +3,7 @@ import { type ChainId, ChainUtils } from "../chain.js";
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import type { Address, BigIntish } from "../types.js";
 
-export interface InputToken {
+export interface IToken {
   address: Address;
   name?: string;
   symbol?: string;
@@ -11,7 +11,7 @@ export interface InputToken {
   price?: BigIntish;
 }
 
-export class Token implements InputToken {
+export class Token implements IToken {
   static native(chainId: ChainId) {
     const currency = ChainUtils.CHAIN_METADATA[chainId].nativeCurrency;
 
@@ -43,7 +43,7 @@ export class Token implements InputToken {
    */
   public price?: bigint;
 
-  constructor({ address, name, symbol, decimals = 0, price }: InputToken) {
+  constructor({ address, name, symbol, decimals = 0, price }: IToken) {
     this.address = address;
     this.name = name;
     this.symbol = symbol;

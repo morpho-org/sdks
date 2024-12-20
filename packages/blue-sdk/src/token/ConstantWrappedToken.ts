@@ -1,14 +1,14 @@
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import type { Address, BigIntish } from "../types.js";
 
-import type { InputToken } from "./Token.js";
+import type { IToken } from "./Token.js";
 import { WrappedToken } from "./WrappedToken.js";
 
 export class ConstantWrappedToken extends WrappedToken {
   public readonly underlyingDecimals;
 
   constructor(
-    token: InputToken,
+    token: IToken,
     underlying: Address,
     underlyingDecimals: BigIntish = 0,
   ) {

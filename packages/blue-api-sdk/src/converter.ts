@@ -7,6 +7,7 @@ import {
   MathLib,
   Position,
   Token,
+  Vault,
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
@@ -95,15 +96,7 @@ export interface PartialApiPublicAllocatorConfig
 }
 
 export interface PartialApiVaultAllocation
-  extends Pick<
-    ApiVaultAllocation,
-    | "supplyQueueIndex"
-    | "supplyShares"
-    | "supplyCap"
-    | "pendingSupplyCap"
-    | "pendingSupplyCapValidAt"
-    | "removableAt"
-  > {
+  extends Pick<ApiVaultAllocation, "supplyQueueIndex"> {
   market: PartialApiMarket & Pick<ApiMarket, "uniqueKey">;
 }
 
@@ -133,6 +126,25 @@ export interface PartialApiVault
     Pick<ApiVault, "address" | "symbol" | "name"> {
   state: Maybe<PartialApiVaultState>;
   publicAllocatorConfig: Maybe<PartialApiPublicAllocatorConfig>;
+}
+
+export interface PartialApiAccrualVaultAllocation
+  extends PartialApiVaultAllocation,
+    Pick<
+      ApiVaultAllocation,
+      | "supplyShares"
+      | "supplyCap"
+      | "pendingSupplyCap"
+      | "pendingSupplyCapValidAt"
+      | "removableAt"
+    > {}
+
+export interface PartialApiAccrualVaultState extends PartialApiVaultState {
+  allocation: Maybe<PartialApiAccrualVaultAllocation[]>;
+}
+
+export interface PartialApiAccrualVault extends PartialApiVault {
+  state: Maybe<PartialApiAccrualVaultState>;
 }
 
 export interface ConverterOptions {
@@ -180,6 +192,8 @@ export class BlueSdkConverter {
     });
   }
 
+  public getMarket(dto: PartialApiMarket & { state: null }): null;
+  public getMarket(dto: PartialApiMarket): Market;
   public getMarket(dto: PartialApiMarket) {
     if (dto.state == null) return null;
 
@@ -208,6 +222,12 @@ export class BlueSdkConverter {
     });
   }
 
+  public getAccrualPosition(
+    dto: PartialApiMarketAccrualPosition & { market: { state: null } },
+  ): null;
+  public getAccrualPosition(
+    dto: PartialApiMarketAccrualPosition,
+  ): AccrualPosition;
   public getAccrualPosition(dto: PartialApiMarketAccrualPosition) {
     const market = this.getMarket(dto.market);
     if (market == null) return null;
@@ -232,20 +252,44 @@ export class BlueSdkConverter {
     );
   }
 
+  public getVault(dto: PartialApiVault & { state: null }): null;
+  public getVault(dto: PartialApiVault): Vault;
+  public getVault({ state, publicAllocatorConfig, ...dto }: PartialApiVault) {
+    if (state == null) return null;
+
+    return new Vault({
+      ...state,
+      ...this.getVaultConfig(dto),
+      fee: this.options.parseNumber(state.fee ?? 0, 18),
+      pendingOwner: state.pendingOwner ?? ZERO_ADDRESS,
+      pendingTimelock: {
+        value: state.pendingTimelock ?? 0n,
+        validAt: state.pendingTimelockValidAt ?? 0n,
+      },
+      pendingGuardian: {
+        value: state.pendingGuardian ?? ZERO_ADDRESS,
+        validAt: state.pendingGuardianValidAt ?? 0n,
+      },
+      lastTotalAssets: state.totalAssets,
+      supplyQueue:
+        state.allocation
+          ?.filter((allocation) => isDefined(allocation.supplyQueueIndex))
+          .sort(
+            (allocationA, allocationB) =>
+              allocationA.supplyQueueIndex! - allocationB.supplyQueueIndex!,
+          )
+          .map((allocation) => allocation.market.uniqueKey) ?? [],
+      withdrawQueue:
+        state.allocation?.map(({ market }) => market.uniqueKey) ?? [],
+      publicAllocatorConfig: publicAllocatorConfig ?? undefined,
+    });
+  }
+
   public getVaultMarketAllocation(
     vault: Address,
-    dto: PartialApiVaultAllocation,
+    dto: PartialApiAccrualVaultAllocation,
     publicAllocatorConfig?: Maybe<PartialApiPublicAllocatorConfig>,
   ) {
-    const position = this.getAccrualPosition({
-      user: { address: vault },
-      market: dto.market,
-      supplyShares: dto.supplyShares,
-      borrowShares: 0n,
-      collateral: 0n,
-    });
-    if (!position) return;
-
     return new VaultMarketAllocation({
       config: this.getVaultMarketConfig(
         vault,
@@ -254,13 +298,19 @@ export class BlueSdkConverter {
           ({ market: { uniqueKey } }) => uniqueKey === dto.market.uniqueKey,
         ),
       ),
-      position,
+      position: this.getAccrualPosition({
+        user: { address: vault },
+        market: dto.market,
+        supplyShares: dto.supplyShares,
+        borrowShares: 0n,
+        collateral: 0n,
+      }),
     });
   }
 
   public getVaultMarketConfig(
     vault: Address,
-    dto: PartialApiVaultAllocation,
+    dto: PartialApiAccrualVaultAllocation,
     flowCaps?: Maybe<PartialApiPublicAllocatorFlowCaps>,
   ) {
     return new VaultMarketConfig({
@@ -291,38 +341,14 @@ export class BlueSdkConverter {
     });
   }
 
-  public getAccrualVault({
-    state,
-    publicAllocatorConfig,
-    ...dto
-  }: PartialApiVault) {
+  public getAccrualVault(dto: PartialApiAccrualVault & { state: null }): null;
+  public getAccrualVault(dto: PartialApiAccrualVault): AccrualVault;
+  public getAccrualVault(dto: PartialApiAccrualVault) {
+    const { state, publicAllocatorConfig } = dto;
     if (state == null) return null;
 
     return new AccrualVault(
-      {
-        ...state,
-        ...this.getVaultConfig(dto),
-        fee: this.options.parseNumber(state.fee, 18),
-        pendingOwner: state.pendingOwner ?? ZERO_ADDRESS,
-        pendingTimelock: {
-          value: state.pendingTimelock ?? 0n,
-          validAt: state.pendingTimelockValidAt ?? 0n,
-        },
-        pendingGuardian: {
-          value: state.pendingGuardian ?? ZERO_ADDRESS,
-          validAt: state.pendingGuardianValidAt ?? 0n,
-        },
-        lastTotalAssets: state.totalAssets,
-        supplyQueue:
-          state.allocation
-            ?.filter((allocation) => isDefined(allocation.supplyQueueIndex))
-            .sort(
-              (allocationA, allocationB) =>
-                allocationA.supplyQueueIndex! - allocationB.supplyQueueIndex!,
-            )
-            .map((allocation) => allocation.market.uniqueKey) ?? [],
-        publicAllocatorConfig: publicAllocatorConfig || undefined,
-      },
+      this.getVault(dto),
       state.allocation
         ?.map((allocation) =>
           this.getVaultMarketAllocation(
