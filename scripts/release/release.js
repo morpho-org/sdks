@@ -5,14 +5,14 @@ import {
   channel,
   commits,
   lastTag,
-  prefix,
   releaseType,
+  tagParams,
   version,
   writer,
 } from "./bumper.js";
 
 if (releaseType) {
-  const tag = `${prefix}v${version}`;
+  const tag = `${tagParams.prefix}v${version}`;
 
   setOutput("tag", tag);
   setOutput("version", version);

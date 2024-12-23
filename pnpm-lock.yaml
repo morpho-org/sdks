@@ -20,6 +20,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: ^19.6.0
         version: 19.6.0
+      '@conventional-changelog/git-client':
+        specifier: ^1.0.1
+        version: 1.0.1(conventional-commits-filter@5.0.0)(conventional-commits-parser@6.0.0)
       '@vitest/coverage-v8':
         specifier: ^2.1.8
         version: 2.1.8(vitest@2.1.8(@types/node@22.10.1)(happy-dom@15.11.7)(terser@5.36.0))
