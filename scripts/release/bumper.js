@@ -38,12 +38,8 @@ export const tagParams = {
 
 export const lastVersion = await git.getVersionFromTags(tagParams);
 
-if (!lastVersion) {
-  console.error("Cannot find version from tags");
-  process.exit(1);
-}
-
-export const lastTag = `${tagParams.prefix}v${lastVersion}`;
+export const lastTag =
+  lastVersion != null ? `${tagParams.prefix}v${lastVersion}` : null;
 export const channel = branch !== "main" ? branch : "latest";
 
 export const bumper = new Bumper(git)
@@ -53,7 +49,8 @@ export const bumper = new Bumper(git)
 let { releaseType } = await bumper.bump(whatBump);
 
 let version = lastVersion;
-if (releaseType) {
+if (lastVersion == null) version = "v1.0.0";
+else if (releaseType) {
   if (branch !== "main") releaseType = "prerelease";
 
   const npmReq = await fetch(
@@ -72,6 +69,9 @@ if (releaseType) {
   );
 }
 
-console.log(version, lastVersion, releaseType);
+if (!version) {
+  console.error(`Cannot determine version for ${packageName}`);
+  process.exit(1);
+}
 
 export { releaseType, version };
