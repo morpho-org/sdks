@@ -49,7 +49,7 @@ export const bumper = new Bumper(git)
 let { releaseType } = await bumper.bump(whatBump);
 
 let version = lastVersion;
-if (lastVersion == null) version = "v1.0.0";
+if (lastVersion == null) version = "1.0.0";
 else if (releaseType) {
   if (branch !== "main") releaseType = "prerelease";
 
