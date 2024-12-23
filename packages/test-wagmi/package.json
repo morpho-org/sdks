@@ -35,7 +35,7 @@
     "@types/node": "^22.10.1",
     "@types/react": "^18.3.11",
     "@types/react-dom": "^18.3.1",
-    "@wagmi/core": "^2.14.6",
+    "@wagmi/core": "^2.16.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.7.2",
