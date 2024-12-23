@@ -37,7 +37,7 @@
     "dotenv-cli": "^7.4.4",
     "happy-dom": "^15.11.7",
     "husky": "^9.1.7",
-    "lint-staged": "^15.2.10",
+    "lint-staged": "^15.2.11",
     "semver": "^7.6.3",
     "typescript": "^5.7.2",
     "viem": "^2.21.54",
