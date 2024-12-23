@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "lodash.kebabcase": "^4.1.1",
-    "viem-deal": "^2.0.3",
+    "viem-deal": "^2.0.4",
     "viem-tracer": "^1.4.0"
   },
   "peerDependencies": {
