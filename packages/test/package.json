@@ -31,7 +31,7 @@
     "viem-tracer": "^1.4.0"
   },
   "peerDependencies": {
-    "@playwright/test": "^1.48.1",
+    "@playwright/test": "^1.49.1",
     "ethers": "^6.13.0",
     "viem": "^2.21.10",
     "vitest": "^2.1.0"
@@ -48,7 +48,7 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.1",
+    "@playwright/test": "^1.49.1",
     "@types/lodash.kebabcase": "^4.1.9",
     "@types/node": "^22.10.1",
     "ethers": "^6.13.4",
