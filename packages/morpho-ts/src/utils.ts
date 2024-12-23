@@ -1,5 +1,8 @@
 import { Time } from "./time";
-import { FieldType, PartialDottedKeys } from "./types";
+import type { FieldType, PartialDottedKeys } from "./types";
+
+export const ZERO_ADDRESS =
+  "0x0000000000000000000000000000000000000000" as const;
 
 export const isNotNull = <T>(v: T | null): v is T => v !== null;
 export const isNotUndefined = <T>(v: T | undefined): v is T => v !== undefined;
@@ -15,16 +18,17 @@ export const bigIntComparator =
     const xA = getter(a);
     const xB = getter(b);
 
-    if (xA == undefined && xB == undefined) return 0;
-    if (xA == undefined) return 1;
-    if (xB == undefined) return -1;
+    if (xA == null && xB == null) return 0;
+    if (xA == null) return 1;
+    if (xB == null) return -1;
 
     if (order === "asc") return xA > xB ? 1 : -1;
 
     return xA > xB ? -1 : 1;
   };
 
-const _get = (data: any, path: string[]): any => {
+// biome-ignore lint/suspicious/noExplicitAny: recursion breaks type
+const _get = (data: any, path: string[]): unknown => {
   if (data === null) return null;
   if (data === undefined) return undefined;
 
@@ -107,7 +111,7 @@ export const retryPromiseLinearBackoff = async <R>(
   }: {
     timeout?: number;
     retries?: number;
-    onError?: (error: unknown, index: number) => any | Promise<any>;
+    onError?: (error: unknown, index: number) => unknown | Promise<unknown>;
   },
 ) => {
   let i = 0;
@@ -124,3 +128,25 @@ export const retryPromiseLinearBackoff = async <R>(
 
   throw Error("too many retries");
 };
+
+export function getLast<T>(array: [T, ...(T | null | undefined)[]]): T;
+export function getLast<T>(array: T[]): T | undefined;
+export function getLast<T>(array: T[]) {
+  return array[array.length - 1];
+}
+
+export function filterDefined<T>(
+  array: [T, ...(T | null | undefined)[]],
+): [T, ...T[]];
+export function filterDefined<T>(array: (T | null | undefined)[]): T[];
+export function filterDefined<T>(array: T[]) {
+  return array.filter(isDefined);
+}
+
+export function getLastDefined<T>(array: [T, ...(T | null | undefined)[]]): T;
+export function getLastDefined<T>(
+  array: (T | null | undefined)[],
+): T | undefined;
+export function getLastDefined<T>(array: T[]) {
+  return getLast(filterDefined(array));
+}

@@ -1,25 +1,24 @@
-import { Provider, resolveProperties } from "ethers";
+import { type Provider, resolveProperties } from "ethers";
 import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
   AccrualVault,
-  Address,
-  ChainId,
+  type Address,
   ChainUtils,
-  MarketId,
+  type MarketId,
   Vault,
-  VaultConfig,
-  VaultPublicAllocatorConfig,
+  type VaultConfig,
+  type VaultPublicAllocatorConfig,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import type { FetchOptions } from "../types";
 import { fetchVaultConfig } from "./VaultConfig";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
 export async function fetchVault(
   address: Address,
   runner: { provider: Provider },
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  options: FetchOptions = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -34,17 +33,18 @@ export async function fetchVaultFromConfig(
   address: Address,
   config: VaultConfig,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
   const chainAddresses = getChainAddresses(chainId);
-  const mm = MetaMorpho__factory.connect(address, runner);
+  const mm = MetaMorpho__factory.connect(
+    address,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
 
   const [
     curator,
@@ -64,20 +64,20 @@ export async function fetchVaultFromConfig(
     withdrawQueueSize,
     hasPublicAllocator,
   ] = await Promise.all([
-    mm.curator(overrides),
-    mm.owner(overrides),
-    mm.guardian(overrides),
+    mm.curator(overrides) as Promise<Address>,
+    mm.owner(overrides) as Promise<Address>,
+    mm.guardian(overrides) as Promise<Address>,
     mm.timelock(overrides),
     mm
       .pendingTimelock(overrides)
       .then(({ value, validAt }) => ({ value, validAt })),
     mm
       .pendingGuardian(overrides)
-      .then(({ value, validAt }) => ({ value, validAt })),
-    mm.pendingOwner(overrides),
+      .then(({ value, validAt }) => ({ value: value as Address, validAt })),
+    mm.pendingOwner(overrides) as Promise<Address>,
     mm.fee(overrides),
-    mm.feeRecipient(overrides),
-    mm.skimRecipient(overrides),
+    mm.feeRecipient(overrides) as Promise<Address>,
+    mm.skimRecipient(overrides) as Promise<Address>,
     mm.totalSupply(overrides),
     mm.totalAssets(overrides),
     mm.lastTotalAssets(overrides),
@@ -94,11 +94,12 @@ export async function fetchVaultFromConfig(
   if (hasPublicAllocator) {
     const publicAllocator = PublicAllocator__factory.connect(
       chainAddresses.publicAllocator!,
+      // @ts-ignore incompatible commonjs type
       runner,
     );
 
     publicAllocatorConfigPromise = resolveProperties({
-      admin: publicAllocator.admin(address, overrides),
+      admin: publicAllocator.admin(address, overrides) as Promise<Address>,
       fee: publicAllocator.fee(address, overrides),
       accruedFee: publicAllocator.accruedFee(address, overrides),
     });
@@ -121,7 +122,7 @@ export async function fetchVaultFromConfig(
   );
 
   return new Vault({
-    config,
+    ...config,
     owner,
     curator,
     guardian,
@@ -144,7 +145,7 @@ export async function fetchVaultFromConfig(
 export async function fetchAccrualVault(
   address: Address,
   runner: { provider: Provider },
-  options: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  options: FetchOptions = {},
 ) {
   options.chainId = ChainUtils.parseSupportedChainId(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -153,9 +154,8 @@ export async function fetchAccrualVault(
   const vault = await fetchVault(address, runner, options);
 
   const allocations = await Promise.all(
-    [...new Set(vault.supplyQueue.concat(vault.withdrawQueue))].map(
-      (marketId) =>
-        fetchVaultMarketAllocation(vault.address, marketId, runner, options),
+    Array.from(vault.withdrawQueue, (marketId) =>
+      fetchVaultMarketAllocation(vault.address, marketId, runner, options),
     ),
   );
 

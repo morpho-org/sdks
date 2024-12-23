@@ -1,0 +1,63 @@
+{
+  "name": "@morpho-org/simulation-sdk-wagmi",
+  "description": "Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states.",
+  "version": "2.0.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "files": ["lib"],
+  "scripts": {
+    "prepublish": "$npm_execpath build",
+    "build": "tsc --build tsconfig.build.json"
+  },
+  "peerDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/blue-sdk-wagmi": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/simulation-sdk": "workspace:^",
+    "@tanstack/react-query": "^5.0.0",
+    "mutative": "^1.0.8",
+    "react": "^18.0.0",
+    "typescript": "^5.0.4",
+    "viem": "^2.0.0",
+    "wagmi": "^2.12.10"
+  },
+  "devDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/blue-sdk-wagmi": "workspace:^",
+    "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/simulation-sdk": "workspace:^",
+    "@morpho-org/test": "workspace:^",
+    "@morpho-org/test-wagmi": "workspace:^",
+    "@tanstack/query-core": "^5.60.5",
+    "@tanstack/react-query": "^5.60.5",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.0.1",
+    "@types/lodash": "^4.17.12",
+    "@types/react": "^18.3.11",
+    "@types/react-dom": "^18.3.1",
+    "lodash": "^4.17.21",
+    "mutative": "^1.0.11",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "viem": "^2.21.54",
+    "vitest": "^2.1.8",
+    "wagmi": "^2.12.33"
+  },
+  "publishConfig": {
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts"
+  }
+}

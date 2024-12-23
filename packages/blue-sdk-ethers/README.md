@@ -1,11 +1,29 @@
 # @morpho-org/blue-sdk-ethers
 
-[![npm package][npm-img]][npm-url]
-[![Downloads][downloads-img]][downloads-url]
+<a href="https://www.npmjs.com/package/@morpho-org/blue-sdk-ethers">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/v/@morpho-org/blue-sdk-ethers?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/v/@morpho-org/blue-sdk-ethers?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
+    </picture>
+</a>
+<a href="https://github.com/morpho-org/blue-sdk-ethers/blob/main/LICENSE">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/blue-sdk-ethers?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/l/@morpho-org/blue-sdk-ethers?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
+    </picture>
+</a>
+<a href="https://www.npmjs.com/package/@morpho-org/blue-sdk-ethers">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/dm/@morpho-org/blue-sdk-ethers?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/dm/@morpho-org/blue-sdk-ethers?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Downloads per month">
+    </picture>
+</a>
+<br />
+<br />
 
-Ethers-based SDK to augment [`@morpho-org/blue-sdk`](../blue-sdk/) with fetchers using a Ethers Provider.
+Ethers-based augmentation of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports (and optionally injects) ethers-based fetch methods.
 
-## Install
+## Installation
 
 ```bash
 npm install @morpho-org/blue-sdk-ethers
@@ -14,8 +32,6 @@ npm install @morpho-org/blue-sdk-ethers
 ```bash
 yarn add @morpho-org/blue-sdk-ethers
 ```
-
----
 
 ## Getting Started
 
@@ -28,11 +44,12 @@ Opt in classes augmentation to easily fetch an entire entity of the Morpho Blue 
 import "@morpho-org/blue-sdk-ethers/lib/augment/AccrualPosition";
 import "@morpho-org/blue-sdk-ethers/lib/augment/Holding";
 import "@morpho-org/blue-sdk-ethers/lib/augment/Market";
-import "@morpho-org/blue-sdk-ethers/lib/augment/MarketConfig";
+import "@morpho-org/blue-sdk-ethers/lib/augment/MarketParams";
 import "@morpho-org/blue-sdk-ethers/lib/augment/Position";
 import "@morpho-org/blue-sdk-ethers/lib/augment/Token";
-import "@morpho-org/blue-sdk-ethers/lib/augment/Vault";
 import "@morpho-org/blue-sdk-ethers/lib/augment/VaultConfig";
+import "@morpho-org/blue-sdk-ethers/lib/augment/Vault";
+import "@morpho-org/blue-sdk-ethers/lib/augment/VaultUser";
 import "@morpho-org/blue-sdk-ethers/lib/augment/VaultMarketAllocation";
 import "@morpho-org/blue-sdk-ethers/lib/augment/VaultMarketConfig";
 import "@morpho-org/blue-sdk-ethers/lib/augment/VaultMarketPublicAllocatorConfig";
@@ -43,14 +60,14 @@ import "@morpho-org/blue-sdk-ethers/lib/augment";
 
 ### Fetch the config of a specific market
 
-Leverage the [`MarketConfig`](./src/market/MarketConfig.ts) class to fetch information on a given market's immutable configuration:
+Leverage the [`MarketParams`](./src/market/MarketParams.ts) class to fetch information on a given market's immutable configuration:
 
 ```typescript
 import { MarketId } from "@morpho-org/blue-sdk";
-// /!\ Import MarketConfig from the augmentation file (or simply import the file)
-import { MarketConfig } from "@morpho-org/blue-sdk-ethers/lib/augment/MarketConfig";
+// /!\ Import MarketParams from the augmentation file (or simply import the file)
+import { MarketParams } from "@morpho-org/blue-sdk-ethers/lib/augment/MarketParams";
 
-const config = await MarketConfig.fetch(
+const config = await MarketParams.fetch(
   "0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc" as MarketId,
   provider // Ethers provider.
 );
@@ -81,11 +98,12 @@ const market = await Market.fetch(
 
 market.utilization; // e.g. 92% (scaled by WAD).
 market.liquidity; // e.g. 23_000000n (in loan assets).
-market.apyAtTarget; // e.g. 3% (scaled by WAD).
 
 const accruedMarket = market.accrueInterest(Time.timestamp()); // Accrue interest to the latest's timestamp.
 
 accruedMarket.toSupplyAssets(shares); // Convert supply shares to assets.
+accruedMarket.apyAtTarget; // e.g. 3% (scaled by WAD).
+accruedMarket.borrowApy; // e.g. 8% (scaled by WAD).
 ```
 
 ### Fetch data on the position of a specific user on a specific market

@@ -1,49 +1,88 @@
-import { Address, Client, zeroAddress } from "viem";
+import { type Client, zeroAddress } from "viem";
 
 import {
-  ChainId,
   ChainUtils,
   Market,
-  MarketConfig,
-  MarketId,
-  getChainAddresses,
+  type MarketId,
+  MarketParams,
+  addresses,
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
+import type { DeploylessFetchParameters } from "../types";
+
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
-import { ViewOverrides } from "../types";
-import { fetchMarketConfig } from "./MarketConfig";
+import { abi, code } from "../queries/GetMarket";
 
 export async function fetchMarket(
   id: MarketId,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
 
-  const config = await fetchMarketConfig(id, client, { chainId });
+  const { morpho, adaptiveCurveIrm } = addresses[parameters.chainId];
 
-  return fetchMarketFromConfig(config, client, { chainId, overrides });
-}
+  if (deployless) {
+    try {
+      const {
+        marketParams,
+        market: {
+          totalSupplyAssets,
+          totalSupplyShares,
+          totalBorrowAssets,
+          totalBorrowShares,
+          lastUpdate,
+          fee,
+        },
+        hasPrice,
+        price,
+        rateAtTarget,
+      } = await readContract(client, {
+        ...parameters,
+        abi,
+        code,
+        functionName: "query",
+        args: [morpho, id, adaptiveCurveIrm],
+      });
 
-export async function fetchMarketFromConfig(
-  config: MarketConfig,
-  client: Client,
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
-) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+      return new Market({
+        params: new MarketParams(marketParams),
+        totalSupplyAssets,
+        totalBorrowAssets,
+        totalSupplyShares,
+        totalBorrowShares,
+        lastUpdate,
+        fee,
+        price: hasPrice ? price : undefined,
+        rateAtTarget:
+          marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
+      });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
+  }
+
+  const [loanToken, collateralToken, oracle, irm, lltv] = await readContract(
+    client,
+    {
+      ...parameters,
+      address: morpho,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      args: [id],
+    },
   );
 
-  const { morpho, adaptiveCurveIrm } = getChainAddresses(chainId);
+  const params = new MarketParams({
+    loanToken,
+    collateralToken,
+    oracle,
+    irm,
+    lltv,
+  });
 
   const [
     [
@@ -58,33 +97,33 @@ export async function fetchMarketFromConfig(
     rateAtTarget,
   ] = await Promise.all([
     readContract(client, {
-      ...overrides,
-      address: morpho as Address,
+      ...parameters,
+      address: morpho,
       abi: blueAbi,
       functionName: "market",
-      args: [config.id],
+      args: [params.id],
     }),
-    config.oracle !== zeroAddress
+    params.oracle !== zeroAddress
       ? readContract(client, {
-          ...overrides,
-          address: config.oracle as Address,
+          ...parameters,
+          address: params.oracle,
           abi: blueOracleAbi,
           functionName: "price",
-        })
-      : 0n,
-    config.irm === adaptiveCurveIrm
+        }).catch(() => undefined)
+      : undefined,
+    params.irm === adaptiveCurveIrm
       ? await readContract(client, {
-          ...overrides,
-          address: adaptiveCurveIrm as Address,
+          ...parameters,
+          address: adaptiveCurveIrm,
           abi: adaptiveCurveIrmAbi,
           functionName: "rateAtTarget",
-          args: [config.id],
+          args: [params.id],
         })
       : undefined,
   ]);
 
   return new Market({
-    config,
+    params,
     totalSupplyAssets,
     totalBorrowAssets,
     totalSupplyShares,

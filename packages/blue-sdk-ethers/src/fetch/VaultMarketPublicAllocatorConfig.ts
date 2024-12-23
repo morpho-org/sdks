@@ -1,35 +1,30 @@
-import { Provider } from "ethers";
+import type { Provider } from "ethers";
 import { PublicAllocator__factory } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
 
 import {
-  Address,
-  ChainId,
+  type Address,
   ChainUtils,
-  MarketId,
+  type MarketId,
   VaultMarketPublicAllocatorConfig,
-  getChainAddresses,
+  addresses,
 } from "@morpho-org/blue-sdk";
+import type { FetchOptions } from "../types";
 
 export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,
   marketId: MarketId,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const { publicAllocator } = getChainAddresses(chainId);
-
-  if (!publicAllocator) return;
+  const { publicAllocator } = addresses[chainId];
 
   const [maxIn, maxOut] = await PublicAllocator__factory.connect(
     publicAllocator,
+    // @ts-ignore incompatible commonjs type
     runner,
   ).flowCaps(vault, marketId, overrides);
 

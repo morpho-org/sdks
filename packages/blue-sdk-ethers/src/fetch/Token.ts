@@ -1,18 +1,20 @@
 import {
   Contract,
-  ContractRunner,
+  type ContractRunner,
   Interface,
-  Provider,
+  type Provider,
   decodeBytes32String,
   isHexString,
 } from "ethers";
 import { WStEth__factory } from "ethers-types";
 import { ERC20__factory } from "ethers-types";
-import { ViewOverrides } from "ethers-types/dist/common";
-import { ERC20, ERC20Interface } from "ethers-types/dist/token/ERC20/ERC20";
+import type {
+  ERC20,
+  ERC20Interface,
+} from "ethers-types/dist/token/ERC20/ERC20";
 
 import {
-  Address,
+  type Address,
   ChainId,
   ChainUtils,
   ConstantWrappedToken,
@@ -23,6 +25,7 @@ import {
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
+import type { FetchOptions } from "../types";
 
 export const isBytes32ERC20Metadata = (address: string, chainId: ChainId) => {
   switch (chainId) {
@@ -72,13 +75,15 @@ const _bytes32ERC20Abi = [
   },
 ] as const;
 
-export class Bytes32ERC20__factory {
-  static readonly abi = _bytes32ERC20Abi;
+export namespace Bytes32ERC20__factory {
+  export const abi = _bytes32ERC20Abi;
 
-  static createInterface() {
+  export function createInterface() {
+    // @ts-ignore incompatible commonjs type
     return new Interface(_bytes32ERC20Abi) as ERC20Interface;
   }
-  static connect(address: string, runner?: ContractRunner | null) {
+
+  export function connect(address: string, runner?: ContractRunner | null) {
     const erc20 = new Contract(
       address,
       _bytes32ERC20Abi,
@@ -102,8 +107,8 @@ export class Bytes32ERC20__factory {
   }
 }
 
-export class ERC20Metadata__factory {
-  static connect(
+export namespace ERC20Metadata__factory {
+  export function connect(
     address: string,
     chainId: ChainId,
     runner?: ContractRunner | null,
@@ -111,7 +116,11 @@ export class ERC20Metadata__factory {
     if (isBytes32ERC20Metadata(address, chainId))
       return Bytes32ERC20__factory.connect(address, runner);
 
-    const erc20 = ERC20__factory.connect(address, runner);
+    const erc20 = ERC20__factory.connect(
+      address,
+      // @ts-ignore incompatible commonjs type
+      runner,
+    );
 
     const name = erc20.name.bind(erc20);
     erc20.name = Object.assign(
@@ -138,10 +147,7 @@ export class ERC20Metadata__factory {
 export async function fetchToken(
   address: Address,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
@@ -152,16 +158,16 @@ export async function fetchToken(
   const erc20 = ERC20Metadata__factory.connect(address, chainId, runner);
 
   const [decimals, symbol, name] = await Promise.all([
-    erc20.decimals(overrides),
-    erc20.symbol(overrides),
-    erc20.name(overrides),
+    erc20.decimals(overrides).catch(() => undefined),
+    erc20.symbol(overrides).catch(() => undefined),
+    erc20.name(overrides).catch(() => undefined),
   ]);
 
   const token = {
     address,
-    decimals: parseInt(decimals.toString()),
-    symbol,
     name,
+    symbol,
+    decimals,
   };
 
   const { wstEth, stEth } = getChainAddresses(chainId);
@@ -169,7 +175,11 @@ export async function fetchToken(
   switch (address) {
     case wstEth: {
       if (stEth) {
-        const wstEthToken = WStEth__factory.connect(wstEth!, runner);
+        const wstEthToken = WStEth__factory.connect(
+          wstEth!,
+          // @ts-ignore incompatible commonjs type
+          runner,
+        );
         const stEthPerWstEth = await wstEthToken.stEthPerToken(overrides);
         return new ExchangeRateWrappedToken(token, stEth, stEthPerWstEth);
       }

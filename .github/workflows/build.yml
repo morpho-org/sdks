@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  workflow_call:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - test
+          - test-wagmi
+
+          - morpho-ts
+          - morpho-test
+
+          - blue-api-sdk
+          - blue-sdk
+          - blue-sdk-ethers
+          - blue-sdk-viem
+          - blue-sdk-wagmi
+
+          - simulation-sdk
+          - simulation-sdk-wagmi
+
+          - bundler-sdk-ethers
+          - bundler-sdk-viem
+
+          - liquidation-sdk-viem
+          - liquidity-sdk-ethers
+          - liquidity-sdk-viem
+
+    name: "@morpho-org/${{ matrix.package }}"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install
+
+      - run: pnpm --filter @morpho-org/${{ matrix.package }} build

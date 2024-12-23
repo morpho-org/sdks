@@ -1,11 +1,11 @@
 import {
-  Address,
-  ChainId,
+  type Address,
+  type ChainId,
   MathLib,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import { SignatureMessage } from "./types";
+import type { SignatureMessage } from "./types";
 import { getMessage } from "./utils";
 
 export interface Permit2Args {

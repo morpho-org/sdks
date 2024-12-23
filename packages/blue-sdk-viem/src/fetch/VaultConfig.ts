@@ -1,7 +1,6 @@
-import { Address, Client } from "viem";
+import type { Address, Client } from "viem";
 
 import {
-  ChainId,
   ChainUtils,
   UnknownVaultConfigError,
   VaultConfig,
@@ -9,48 +8,48 @@ import {
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis";
+import type { FetchParameters } from "../types";
 
 export async function fetchVaultConfig(
   address: Address,
   client: Client,
-  { chainId }: { chainId?: ChainId } = {},
+  { chainId }: Pick<FetchParameters, "chainId"> = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await getChainId(client)),
   );
 
   let config = _try(
-    () => VaultConfig.get(address, chainId),
+    () => VaultConfig.get(address, chainId!),
     UnknownVaultConfigError,
   );
 
   if (!config) {
-    // always fetch at latest block because config is immutable
-    const [asset, symbol, name, decimals, decimalsOffset] = await Promise.all([
+    // Always fetch at latest block because config is immutable.
+    const [asset, symbol, name, decimalsOffset] = await Promise.all([
       readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "asset",
+        blockTag: "latest",
       }),
       readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "symbol",
+        blockTag: "latest",
       }),
       readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "name",
-      }),
-      readContract(client, {
-        address,
-        abi: metaMorphoAbi,
-        functionName: "decimals",
+        blockTag: "latest",
       }),
       readContract(client, {
         address,
         abi: metaMorphoAbi,
         functionName: "DECIMALS_OFFSET",
+        blockTag: "latest",
       }),
     ]);
 
@@ -60,7 +59,6 @@ export async function fetchVaultConfig(
         asset,
         symbol,
         name,
-        decimals: Number(decimals),
         decimalsOffset: BigInt(decimalsOffset),
       },
       chainId,

@@ -1,29 +1,29 @@
-import { Provider } from "ethers";
-import { ViewOverrides } from "ethers-types/dist/common";
+import type { Provider } from "ethers";
 
 import {
-  Address,
-  ChainId,
+  type Address,
   ChainUtils,
   User,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { MorphoBlue__factory } from "ethers-types";
+import type { FetchOptions } from "../types";
 
 export async function fetchUser(
   address: Address,
   runner: { provider: Provider },
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { chainId, overrides = {} }: FetchOptions = {},
 ) {
   chainId = ChainUtils.parseSupportedChainId(
     chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
   const { morpho, bundler } = getChainAddresses(chainId);
-  const blue = MorphoBlue__factory.connect(morpho, runner);
+  const blue = MorphoBlue__factory.connect(
+    morpho,
+    // @ts-ignore incompatible commonjs type
+    runner,
+  );
 
   const [isBundlerAuthorized, morphoNonce] = await Promise.all([
     blue.isAuthorized(address, bundler, overrides),

@@ -1,17 +1,18 @@
 import {
-  ChainId,
   ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
   NATIVE_ADDRESS,
   PERMIT2_ALLOWANCE_RECIPIENTS,
+  addresses,
   getChainAddresses,
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { fromEntries } from "@morpho-org/morpho-ts";
-import { Address, Client, erc20Abi, maxUint256 } from "viem";
+import { type Address, type Client, erc20Abi, maxUint256 } from "viem";
 import { getBalance, getChainId, readContract } from "viem/actions";
+
+import { fromEntries } from "@morpho-org/morpho-ts";
 import {
   erc2612Abi,
   permissionedErc20WrapperAbi,
@@ -19,22 +20,20 @@ import {
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
 } from "../abis";
-import { ViewOverrides } from "../types";
+import { abi, code } from "../queries/GetHolding";
+import type { DeploylessFetchParameters } from "../types";
+
+export const optionalBoolean = [undefined, false, true] as const;
 
 export async function fetchHolding(
   user: Address,
   token: Address,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
-
-  const chainAddresses = getChainAddresses(chainId);
 
   if (token === NATIVE_ADDRESS)
     return new Holding({
@@ -53,8 +52,54 @@ export async function fetchHolding(
           },
         ]),
       ),
-      balance: await getBalance(client, { ...overrides, address: user }),
+      balance: await getBalance(client, {
+        // biome-ignore lint/suspicious/noExplicitAny: flattened union type
+        ...(parameters as any),
+        address: user,
+      }),
     });
+
+  if (deployless) {
+    const { morpho, permit2, bundler } = addresses[parameters.chainId];
+    try {
+      const {
+        balance,
+        erc20Allowances,
+        permit2Allowances,
+        isErc2612,
+        erc2612Nonce,
+        canTransfer,
+      } = await readContract(client, {
+        ...parameters,
+        abi,
+        code,
+        functionName: "query",
+        args: [
+          token,
+          user,
+          morpho,
+          permit2,
+          bundler,
+          permissionedBackedTokens[parameters.chainId].has(token),
+          permissionedWrapperTokens[parameters.chainId].has(token),
+        ],
+      });
+
+      return new Holding({
+        user,
+        token,
+        erc20Allowances,
+        permit2Allowances,
+        erc2612Nonce: isErc2612 ? erc2612Nonce : undefined,
+        balance,
+        canTransfer: optionalBoolean[canTransfer],
+      });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
+  }
+
+  const chainAddresses = getChainAddresses(parameters.chainId);
 
   const [
     balance,
@@ -65,7 +110,7 @@ export async function fetchHolding(
     hasErc20WrapperPermission,
   ] = await Promise.all([
     readContract(client, {
-      ...overrides,
+      ...parameters,
       abi: erc20Abi,
       address: token,
       functionName: "balanceOf",
@@ -77,11 +122,11 @@ export async function fetchHolding(
           [
             label,
             await readContract(client, {
-              ...overrides,
+              ...parameters,
               abi: erc20Abi,
               address: token,
               functionName: "allowance",
-              args: [user, chainAddresses[label] as Address],
+              args: [user, chainAddresses[label]],
             }),
           ] as const,
       ),
@@ -92,11 +137,11 @@ export async function fetchHolding(
           [
             label,
             await readContract(client, {
-              ...overrides,
+              ...parameters,
               abi: permit2Abi,
-              address: chainAddresses.permit2 as Address,
+              address: chainAddresses.permit2,
               functionName: "allowance",
-              args: [user, token, chainAddresses[label] as Address],
+              args: [user, token, chainAddresses[label]],
             }).then(([amount, expiration, nonce]) => ({
               amount,
               expiration: BigInt(expiration),
@@ -106,29 +151,27 @@ export async function fetchHolding(
       ),
     ),
     readContract(client, {
-      ...overrides,
+      ...parameters,
       abi: erc2612Abi,
       address: token,
       functionName: "nonces",
       args: [user],
     }).catch(() => undefined),
-    permissionedBackedTokens[chainId].has(token)
+    permissionedBackedTokens[parameters.chainId].has(token)
       ? readContract(client, {
-          ...overrides,
+          ...parameters,
           abi: wrappedBackedTokenAbi,
           address: token,
           functionName: "whitelistControllerAggregator",
         })
       : undefined,
     readContract(client, {
-      ...overrides,
+      ...parameters,
       abi: permissionedErc20WrapperAbi,
       address: token,
       functionName: "hasPermission",
       args: [user],
-    }).catch(() =>
-      permissionedWrapperTokens[chainId].has(token) ? false : undefined,
-    ),
+    }).catch(() => !permissionedWrapperTokens[parameters.chainId!].has(token)),
   ]);
 
   const holding = new Holding({
@@ -138,12 +181,12 @@ export async function fetchHolding(
     permit2Allowances: fromEntries(permit2Allowances),
     erc2612Nonce,
     balance,
-    canTransfer: hasErc20WrapperPermission ?? true,
+    canTransfer: hasErc20WrapperPermission,
   });
 
   if (whitelistControllerAggregator)
     holding.canTransfer = await readContract(client, {
-      ...overrides,
+      ...parameters,
       abi: whitelistControllerAggregatorV2Abi,
       address: whitelistControllerAggregator,
       functionName: "isWhitelisted",

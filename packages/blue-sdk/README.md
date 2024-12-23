@@ -1,11 +1,38 @@
 # @morpho-org/blue-sdk
 
-[![npm package][npm-img]][npm-url]
-[![Downloads][downloads-img]][downloads-url]
+<a href="https://www.npmjs.com/package/@morpho-org/blue-sdk">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/v/@morpho-org/blue-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/v/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Version">
+    </picture>
+</a>
+<a href="https://github.com/morpho-org/blue-sdk/blob/main/LICENSE">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/l/@morpho-org/blue-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/l/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="MIT License">
+    </picture>
+</a>
+<a href="https://www.npmjs.com/package/@morpho-org/blue-sdk">
+    <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/npm/dm/@morpho-org/blue-sdk?colorA=21262d&colorB=21262d&style=flat">
+        <img src="https://img.shields.io/npm/dm/@morpho-org/blue-sdk?colorA=f6f8fa&colorB=f6f8fa&style=flat" alt="Downloads per month">
+    </picture>
+</a>
+<br />
+<br />
 
-Framework-agnostic SDK foundational to Morpho Blue's offchain ecosystem, useful to fetch and interact with Morpho Blue and MetaMorpho.
+Framework-agnostic package that defines Morpho-related entity classes:
 
-## Install
+- [**`MarketParams`**](./src/market/MarketParams.ts): represents the immutable configuration of a market on Morpho
+- [**`Market`**](./src/market/Market.ts): represents the state of a market on Morpho
+- [**`Token`**](./src/token/Token.ts): represents a ERC20 token
+- [**`User`**](./src/user/User.ts): represents a user of Morpho
+- [**`VaultConfig`**](./src/vault/VaultConfig.ts): represents the configuration of a Morpho Vault
+- [**`Vault`**](./src/vault/Vault.ts): represents the state of a Morpho Vault
+- [**`VaultUser`**](./src/vault/VaultUser.ts): represents the state of a user on a Morpho Vault
+- [**`VaultMarketAllocation`**](./src/vault/VaultMarketAllocation.ts): represents the allocation (and configuration) of a Morpho Vault on a Morpho market
+
+## Installation
 
 ```bash
 npm install @morpho-org/blue-sdk
@@ -15,23 +42,21 @@ npm install @morpho-org/blue-sdk
 yarn add @morpho-org/blue-sdk
 ```
 
----
-
 ## Getting Started
 
 ### Instance of the immutable configuration of a specific market
 
-Leverage the [`MarketConfig`](./src/market/MarketConfig.ts) class to manipulate a given market's immutable configuration:
+Leverage the [`MarketParams`](./src/market/MarketParams.ts) class to manipulate a given market's immutable configuration:
 
 ```typescript
-import { MarketConfig } from "@morpho-org/blue-sdk";
+import { MarketParams } from "@morpho-org/blue-sdk";
 
-const config = new MarketConfig({
-  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",       // WETH
+const config = new MarketParams({
+  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
   collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", // wstETH
   oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
-  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",             // AdaptiveCurveIrm
-  lltv: 94_5000000000000000n,                                    // 94.5%
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC", // AdaptiveCurveIrm
+  lltv: 94_5000000000000000n, // 94.5%
 });
 
 config.liquidationIncentiveFactor; // e.g. 1_090000000000000000n (109%).
@@ -42,16 +67,16 @@ config.liquidationIncentiveFactor; // e.g. 1_090000000000000000n (109%).
 Leverage the [`Market`](./src/market/Market.ts) class to manipulate a specific market:
 
 ```typescript
-import { Market } from "@morpho-org/blue-sdk";
+import { Market, MarketParams } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 
 const market = new Market({
-  config: new MarketConfig({
-    loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",       // WETH
+  config: new MarketParams({
+    loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH
     collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", // wstETH
     oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
-    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",             // AdaptiveCurveIrm
-    lltv: 94_5000000000000000n,                                    // 94.5%
+    irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC", // AdaptiveCurveIrm
+    lltv: 94_5000000000000000n, // 94.5%
   }),
   totalSupplyAssets: 1000_000000000000000000n,
   totalBorrowAssets: 920_000000000000000000n,
@@ -60,7 +85,7 @@ const market = new Market({
   lastUpdate: 1721000000n,
   fee: 0n,
   price: 1_100000000000000000000000000000000000n,
-  rateAtTarget: 94850992095n
+  rateAtTarget: 94850992095n,
 });
 
 market.utilization; // e.g. 92_0000000000000000n (92%).
@@ -86,7 +111,7 @@ const position = new AccrualPosition(
     marketId: market.id,
     supplyShares: 0n,
     borrowShares: 20_000000000000000000000000n,
-    collateral: 27_000000000000000000n
+    collateral: 27_000000000000000000n,
   }),
   market
 );
@@ -99,8 +124,3 @@ const accruedPosition = position.accrueInterest(Time.timestamp()); // Accrue int
 
 position.borrowAssets; // e.g. 20_400000000000000000n (in loan assets).
 ```
-
-[downloads-img]: https://img.shields.io/npm/dt/@morpho-org/blue-sdk
-[downloads-url]: https://www.npmtrends.com/@morpho-org/blue-sdk
-[npm-img]: https://img.shields.io/npm/v/@morpho-org/blue-sdk
-[npm-url]: https://www.npmjs.com/package/@morpho-org/blue-sdk

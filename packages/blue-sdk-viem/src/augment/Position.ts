@@ -1,10 +1,6 @@
 import { AccrualPosition, Position } from "@morpho-org/blue-sdk";
 
-import {
-  fetchAccrualPosition,
-  fetchAccrualPositionFromConfig,
-  fetchPosition,
-} from "../fetch";
+import { fetchAccrualPosition, fetchPosition } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
   namespace Position {
@@ -13,12 +9,10 @@ declare module "@morpho-org/blue-sdk" {
 
   namespace AccrualPosition {
     let fetch: typeof fetchAccrualPosition;
-    let fetchFromConfig: typeof fetchAccrualPositionFromConfig;
   }
 }
 
 Position.fetch = fetchPosition;
 AccrualPosition.fetch = fetchAccrualPosition;
-AccrualPosition.fetchFromConfig = fetchAccrualPositionFromConfig;
 
 export { Position, AccrualPosition };

@@ -1,12 +1,12 @@
-import { BlueErrors } from "../errors";
+import { BlueErrors } from "../errors.js";
 import {
   Market,
-  MaxBorrowOptions,
-  MaxWithdrawCollateralOptions,
-} from "../market";
-import { Address, BigIntish, MarketId } from "../types";
+  type MaxBorrowOptions,
+  type MaxWithdrawCollateralOptions,
+} from "../market/index.js";
+import type { Address, BigIntish, MarketId } from "../types.js";
 
-export interface InputPosition {
+export interface IPosition {
   user: Address;
   marketId: MarketId;
   supplyShares: bigint;
@@ -14,7 +14,7 @@ export interface InputPosition {
   collateral: bigint;
 }
 
-export class Position implements InputPosition {
+export class Position implements IPosition {
   /**
    * The user holding this position.
    */
@@ -44,7 +44,7 @@ export class Position implements InputPosition {
     supplyShares,
     borrowShares,
     collateral,
-  }: InputPosition) {
+  }: IPosition) {
     this.user = user;
     this.marketId = marketId;
     this.supplyShares = supplyShares;
@@ -53,15 +53,15 @@ export class Position implements InputPosition {
   }
 }
 
-export interface InputAccrualPosition extends Omit<InputPosition, "marketId"> {}
+export interface IAccrualPosition extends Omit<IPosition, "marketId"> {}
 
-export class AccrualPosition extends Position implements InputAccrualPosition {
+export class AccrualPosition extends Position implements IAccrualPosition {
   /**
    * The market on which this position is held.
    */
   public readonly market: Market;
 
-  constructor(position: InputAccrualPosition, market: Market) {
+  constructor(position: IAccrualPosition, market: Market) {
     super({ ...position, marketId: market.id });
 
     this.market = market;
@@ -77,6 +77,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
 
   /**
    * The value of this position's collateral quoted in loan assets.
+   * `undefined` iff the market's oracle is undefined or reverts.
    */
   get collateralValue() {
     return this.market.getCollateralValue(this.collateral);
@@ -84,6 +85,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
 
   /**
    * The maximum amount of loan assets that can be borrowed against this position's collateral.
+   * `undefined` iff the market's oracle is undefined or reverts.
    */
   get maxBorrowAssets() {
     return this.market.getMaxBorrowAssets(this.collateral);
@@ -91,6 +93,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
 
   /**
    * The maximum additional amount of assets that can be borrowed against this position's collateral.
+   * `undefined` iff the market's oracle is undefined or reverts.
    */
   get maxBorrowableAssets() {
     return this.market.getMaxBorrowableAssets(this);
@@ -98,6 +101,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
 
   /**
    * The maximum amount of collateral that can be seized in exchange for the outstanding debt.
+   * `undefined` iff the market's oracle is undefined or reverts.
    */
   get seizableCollateral() {
     return this.market.getSeizableCollateral(this);
@@ -105,6 +109,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
 
   /**
    * The maximum amount of collateral that can be withdrawn.
+   * `undefined` iff the market's oracle is undefined or reverts.
    */
   get withdrawableCollateral() {
     return this.market.getWithdrawableCollateral(this);
@@ -112,6 +117,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
 
   /**
    * Whether this position is healthy.
+   * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isHealthy() {
     return this.market.isHealthy(this);
@@ -127,7 +133,8 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
   /**
    * The price variation required for the position to reach its liquidation threshold (scaled by WAD).
    * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
-   * Returns null if the position is not a borrow.
+   * `undefined` iff the market's oracle is undefined or reverts.
+   * Null if the position is not a borrow.
    */
   get priceVariationToLiquidationPrice() {
     return this.market.getPriceVariationToLiquidationPrice(this);
@@ -136,6 +143,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
   /**
    * This position's Loan-To-Value (debt over collateral power, scaled by WAD).
    * If the collateral price is 0, LTV is `MaxUint256`.
+   * `undefined` iff the market's oracle is undefined or reverts.
    */
   get ltv() {
     return this.market.getLtv(this);
@@ -144,6 +152,7 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
   /**
    * This position's health factor (collateral power over debt, scaled by WAD).
    * If the debt is 0, health factor is `MaxUint256`.
+   * `undefined` iff the market's oracle is undefined or reverts.
    */
   get healthFactor() {
     return this.market.getHealthFactor(this);
@@ -181,29 +190,28 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
     let { market } = this;
     ({ market, assets, shares } = market.supply(assets, shares, timestamp));
 
-    this.supplyShares += shares;
+    const position = new AccrualPosition(this, market);
 
-    return {
-      position: new AccrualPosition(this, market),
-      assets,
-      shares,
-    };
+    position.supplyShares += shares;
+
+    return { position, assets, shares };
   }
 
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
     ({ market, assets, shares } = market.withdraw(assets, shares, timestamp));
 
-    this.supplyShares -= shares;
+    const position = new AccrualPosition(this, market);
 
-    if (this.supplyShares < 0n)
-      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+    position.supplyShares -= shares;
 
-    return {
-      position: new AccrualPosition(this, market),
-      assets,
-      shares,
-    };
+    if (position.supplyShares < 0n)
+      throw new BlueErrors.InsufficientPosition(
+        position.user,
+        position.marketId,
+      );
+
+    return { position, assets, shares };
   }
 
   public supplyCollateral(assets: bigint) {
@@ -213,49 +221,60 @@ export class AccrualPosition extends Position implements InputAccrualPosition {
   }
 
   public withdrawCollateral(assets: bigint, timestamp?: BigIntish) {
-    const market = this.market.accrueInterest(timestamp);
+    if (this.market.price == null)
+      throw new BlueErrors.UnknownOraclePrice(this.marketId);
 
-    this.collateral -= assets;
+    const position = this.accrueInterest(timestamp);
 
-    if (this.collateral < 0n)
-      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+    position.collateral -= assets;
 
-    if (!market.isHealthy(this))
-      throw new BlueErrors.InsufficientCollateral(this.user, this.marketId);
+    if (position.collateral < 0n)
+      throw new BlueErrors.InsufficientPosition(
+        position.user,
+        position.marketId,
+      );
 
-    return new AccrualPosition(this, market);
+    if (!position.isHealthy!)
+      throw new BlueErrors.InsufficientCollateral(
+        position.user,
+        position.marketId,
+      );
+
+    return position;
   }
 
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
+    if (market.price == null)
+      throw new BlueErrors.UnknownOraclePrice(market.id);
+
     ({ market, assets, shares } = market.borrow(assets, shares, timestamp));
 
-    this.borrowShares += shares;
+    const position = new AccrualPosition(this, market);
 
-    if (!market.isHealthy(this))
+    position.borrowShares += shares;
+
+    if (!position.isHealthy!)
       throw new BlueErrors.InsufficientCollateral(this.user, this.marketId);
 
-    return {
-      position: new AccrualPosition(this, market),
-      assets,
-      shares,
-    };
+    return { position, assets, shares };
   }
 
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { market } = this;
     ({ market, assets, shares } = market.repay(assets, shares, timestamp));
 
-    this.borrowShares -= shares;
+    const position = new AccrualPosition(this, market);
 
-    if (this.borrowShares < 0n)
-      throw new BlueErrors.InsufficientPosition(this.user, this.marketId);
+    position.borrowShares -= shares;
 
-    return {
-      position: new AccrualPosition(this, market),
-      assets,
-      shares,
-    };
+    if (position.borrowShares < 0n)
+      throw new BlueErrors.InsufficientPosition(
+        position.user,
+        position.marketId,
+      );
+
+    return { position, assets, shares };
   }
 
   public getRepayCapacityLimit(loanTokenBalance: bigint) {

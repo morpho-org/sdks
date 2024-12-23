@@ -1,40 +1,32 @@
-import { Address, Client } from "viem";
+import type { Address, Client } from "viem";
 
-import {
-  ChainId,
-  ChainUtils,
-  User,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
+import { ChainUtils, User, addresses } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
-import { ViewOverrides } from "../types";
+import type { FetchParameters } from "../types";
 
 export async function fetchUser(
   address: Address,
   client: Client,
-  {
-    chainId,
-    overrides = {},
-  }: { chainId?: ChainId; overrides?: ViewOverrides } = {},
+  parameters: FetchParameters = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await getChainId(client)),
+  parameters.chainId = ChainUtils.parseSupportedChainId(
+    parameters.chainId ?? (await getChainId(client)),
   );
 
-  const { morpho, bundler } = getChainAddresses(chainId);
+  const { morpho, bundler } = addresses[parameters.chainId];
 
   const [isBundlerAuthorized, morphoNonce] = await Promise.all([
     readContract(client, {
-      ...overrides,
-      address: morpho as Address,
+      ...parameters,
+      address: morpho,
       abi: blueAbi,
       functionName: "isAuthorized",
-      args: [address, bundler as Address],
+      args: [address, bundler],
     }),
     readContract(client, {
-      ...overrides,
-      address: morpho as Address,
+      ...parameters,
+      address: morpho,
       abi: blueAbi,
       functionName: "nonce",
       args: [address],
