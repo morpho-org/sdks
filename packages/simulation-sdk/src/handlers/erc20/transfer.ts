@@ -10,6 +10,11 @@ export const handleErc20TransferOperation: OperationHandler<
 > = ({ args: { amount, from, to }, sender, address }, data) => {
   const { morpho, bundler, permit2 } = getChainAddresses(data.chainId);
 
+  const toHolding = data.tryGetHolding(to, address);
+
+  if (toHolding?.canTransfer === false)
+    throw new Erc20Errors.UnauthorizedTransfer(address, to);
+
   if (from !== ZERO_ADDRESS && from !== morpho) {
     const fromHolding = data.getHolding(from, address);
 
@@ -60,7 +65,7 @@ export const handleErc20TransferOperation: OperationHandler<
     fromHolding.balance -= amount;
   }
 
-  const toHolding = data.tryGetHolding(to, address);
-
-  if (toHolding != null) toHolding.balance += amount;
+  if (toHolding != null) {
+    toHolding.balance += amount;
+  }
 };
