@@ -648,8 +648,8 @@ importers:
         specifier: ^4.1.1
         version: 4.1.1
       viem-deal:
-        specifier: ^2.0.3
-        version: 2.0.3(viem@2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+        specifier: ^2.0.4
+        version: 2.0.4(viem@2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
       viem-tracer:
         specifier: ^1.4.0
         version: 1.4.0(viem@2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
@@ -6908,8 +6908,8 @@ packages:
     resolution: {integrity: sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==}
     engines: {node: '>= 0.8'}
 
-  viem-deal@2.0.3:
-    resolution: {integrity: sha512-u913WiX6AaPbxYuJu9qkPuN6zTnTmbY0WZUEHXZFQzs3ZUc+6OeenXzc8xLmOYX4+wHBhMv/u09DItXrm6Cvcw==}
+  viem-deal@2.0.4:
+    resolution: {integrity: sha512-gd1+pnLissjxYbaJ8u2UtdOOpv0o4W8RsVlSwy5w+SEasi/f5VJvrCVmE8cBrcHpvWYqoaxwj4VfJG45oLPnyQ==}
     peerDependencies:
       viem: ^2.21.18
 
@@ -14900,7 +14900,7 @@ snapshots:
 
   vary@1.1.2: {}
 
-  viem-deal@2.0.3(viem@2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)):
+  viem-deal@2.0.4(viem@2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)):
     dependencies:
       viem: 2.21.54(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
 
