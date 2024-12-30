@@ -46,7 +46,7 @@
     "graphql": "^16.10.0",
     "nock": "beta",
     "typescript": "^5.7.2",
-    "viem": "^2.21.54",
+    "viem": "^2.21.59",
     "vitest": "^2.1.8"
   },
   "publishConfig": {
