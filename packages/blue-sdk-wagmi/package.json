@@ -33,7 +33,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
-    "@tanstack/query-core": "^5.60.5",
+    "@tanstack/query-core": "^5.62.9",
     "@tanstack/react-query": "^5.60.5",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.0.1",
