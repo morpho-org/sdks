@@ -21,8 +21,10 @@ import {
   type WriteContractParameters,
   type WriteContractReturnType,
   createTestClient,
+  encodePacked,
   erc20Abi,
   erc4626Abi,
+  keccak256,
   maxUint256,
   publicActions,
   walletActions,
@@ -35,6 +37,7 @@ import {
   traced,
 } from "viem-tracer";
 import {
+  setStorageAt,
   sendRawTransaction as viem_sendRawTransaction,
   sendTransaction as viem_sendTransaction,
   writeContract as viem_writeContract,
@@ -80,6 +83,12 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
           contractAddress: Address;
         }
       >;
+
+      setPublicAllocatorFee(args: {
+        vault: Address;
+        fee: bigint;
+        publicAllocator: Address;
+      }): Promise<void>;
     }
 >;
 
@@ -284,6 +293,23 @@ export const createAnvilTestClient = <chain extends Chain>(
             await client.waitForTransactionReceipt({ hash });
 
           return hash;
+        },
+
+        async setPublicAllocatorFee({
+          publicAllocator,
+          vault,
+          fee,
+        }: { vault: Address; fee: bigint; publicAllocator: Address }) {
+          const feeStorageSlot =
+            "0x0000000000000000000000000000000000000000000000000000000000000001";
+          const vaultStorageSlot = keccak256(
+            encodePacked(["address", "bytes32"], [vault, feeStorageSlot]),
+          );
+          await setStorageAt(client, {
+            address: publicAllocator,
+            index: vaultStorageSlot,
+            value: `0x${fee.toString(16).padStart(64, "0")}`,
+          });
         },
       };
     });
