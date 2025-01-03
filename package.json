@@ -35,12 +35,12 @@
     "conventional-changelog-writer": "^8.0.0",
     "conventional-recommended-bump": "^10.0.0",
     "dotenv-cli": "^7.4.4",
-    "happy-dom": "^15.11.7",
+    "happy-dom": "^16.2.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.11",
     "semver": "^7.6.3",
     "typescript": "^5.7.2",
-    "viem": "^2.21.54",
+    "viem": "^2.22.2",
     "vitest": "^2.1.8"
   },
   "lint-staged": {
