@@ -629,6 +629,8 @@ export class LiquidationEncoder<
       }
     }
 
+    console.log("returning dstAmount", dstAmount);
+
     return { dstAmount };
   }
 }
