@@ -254,6 +254,9 @@ export const check = async <
                       repaidAssets,
                     );
 
+                    if (seizableCollateral.preLiquidation)
+                      console.log("result", result);
+
                     if (result) {
                       dstAmount = result.dstAmount;
                     } else {
@@ -297,6 +300,9 @@ export const check = async <
                     maxUint256,
                   );
 
+                if (seizableCollateral.preLiquidation)
+                  console.log("pre liquidation encoding");
+
                 seizableCollateral.preLiquidation
                   ? encoder.preLiquidationPreLiquidate(
                       position.preLiquidation!.address,
@@ -313,6 +319,9 @@ export const check = async <
                       0n,
                       encoder.flush(),
                     );
+
+                if (seizableCollateral.preLiquidation)
+                  console.log("pre liquidation encoded");
 
                 const populatedTx = await encoder.encodeExec();
                 const [gasLimit, blockNumber, txCount, { maxFeePerGas }] =
@@ -351,6 +360,9 @@ export const check = async <
                   gas: gasLimit, // Avoid estimating gas again.
                   maxFeePerGas,
                 };
+
+                if (seizableCollateral.preLiquidation)
+                  console.log("transaction", transaction);
 
                 if (chainId === ChainId.EthMainnet) {
                   const signedBundle = await Flashbots.signBundle([
