@@ -18,6 +18,7 @@ import {
   ChainId,
   ChainUtils,
   ConstantWrappedToken,
+  Eip5267Domain,
   ExchangeRateWrappedToken,
   NATIVE_ADDRESS,
   Token,
@@ -158,11 +159,33 @@ export async function fetchToken(
   const erc20 = ERC20Metadata__factory.connect(address, chainId, runner);
   const erc20Permit = ERC20Permit__factory.connect(address, runner);
 
-  const [decimals, symbol, name, eip712Domain] = await Promise.all([
+  const [decimals, symbol, name, eip5267Domain] = await Promise.all([
     erc20.decimals(overrides).catch(() => undefined),
     erc20.symbol(overrides).catch(() => undefined),
     erc20.name(overrides).catch(() => undefined),
-    erc20Permit.eip712Domain(overrides).catch(() => undefined),
+    erc20Permit
+      .eip712Domain(overrides)
+      .then(
+        ({
+          fields,
+          name,
+          version,
+          chainId,
+          verifyingContract,
+          salt,
+          extensions,
+        }) =>
+          new Eip5267Domain({
+            fields: fields as `0x${string}`,
+            name,
+            version,
+            chainId,
+            verifyingContract: verifyingContract as Address,
+            salt: salt as `0x${string}`,
+            extensions,
+          }),
+      )
+      .catch(() => undefined),
   ]);
 
   const token = {
@@ -170,12 +193,7 @@ export async function fetchToken(
     name,
     symbol,
     decimals,
-    eip712Domain: eip712Domain && {
-      chainId: eip712Domain.chainId,
-      name: eip712Domain.name,
-      verifyingContract: eip712Domain.verifyingContract as Address,
-      version: eip712Domain.version,
-    },
+    eip5267Domain,
   };
 
   const { wstEth, stEth } = getChainAddresses(chainId);

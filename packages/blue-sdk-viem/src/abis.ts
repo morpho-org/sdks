@@ -7865,7 +7865,7 @@ export const permissionedErc20WrapperAbi = [
   },
 ] as const;
 
-export const eip712DomainAbi = [
+export const erc5267Abi = [
   {
     inputs: [],
     name: "eip712Domain",

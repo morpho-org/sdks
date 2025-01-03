@@ -1,47 +1,22 @@
-import type { ChainId } from "../chain.js";
-import { UnknownVaultConfigError } from "../errors.js";
+import { type IToken, Token } from "../token/Token.js";
 import type { Address, BigIntish } from "../types.js";
 
-export interface IVaultConfig {
-  address: Address;
+export interface IVaultConfig extends Omit<IToken, "decimals"> {
   decimalsOffset: BigIntish;
-  symbol: string;
-  name: string;
   asset: Address;
 }
 
-export class VaultConfig implements IVaultConfig {
-  protected static readonly _CACHE: Record<
-    number,
-    Record<Address, VaultConfig>
-  > = {};
-
-  static get(address: Address, chainId: ChainId) {
-    const config = VaultConfig._CACHE[chainId]?.[address];
-
-    if (!config) throw new UnknownVaultConfigError(address);
-
-    return config;
-  }
-
-  public readonly address: Address;
-  public readonly decimals: number;
-  public readonly decimalsOffset: bigint;
-  public readonly symbol: string;
-  public readonly name: string;
-  public readonly asset: Address;
+export class VaultConfig extends Token implements IVaultConfig {
+  public readonly decimalsOffset;
+  public readonly asset;
 
   constructor(
-    { address, decimalsOffset, symbol, name, asset }: IVaultConfig,
+    { decimalsOffset, asset, ...config }: IVaultConfig,
     public readonly chainId?: number,
   ) {
-    this.address = address;
-    this.decimals = 18;
-    this.decimalsOffset = BigInt(decimalsOffset);
-    this.symbol = symbol;
-    this.name = name;
-    this.asset = asset;
+    super({ ...config, decimals: 18 });
 
-    if (chainId != null) (VaultConfig._CACHE[chainId] ??= {})[address] = this;
+    this.decimalsOffset = BigInt(decimalsOffset);
+    this.asset = asset;
   }
 }
