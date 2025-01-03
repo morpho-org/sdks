@@ -86,10 +86,18 @@ export class Eip5267Domain implements IEip5267Domain {
     const fields = BigInt(this.fields);
 
     return EIP_712_FIELDS.reduce<{
-      [field in Eip712Field]?: Eip5267Domain[field];
+      [field in Eip712Field]?: field extends "chainId"
+        ? number
+        : Eip5267Domain[field];
     }>((acc, field, i) => {
-      // @ts-expect-error Typescript doesn't infer value type based on field.
-      if (fields & BigInt(i)) acc[field] = this[field];
+      if (fields & (2n ** BigInt(i))) {
+        // @ts-expect-error Typescript doesn't infer value type based on field.
+        acc[field] =
+          field === "chainId"
+            ? // Signature does not correspond if chainId is a bigint.
+              Number(this.chainId)
+            : this[field];
+      }
 
       return acc;
     }, {});
