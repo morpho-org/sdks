@@ -176,6 +176,9 @@ export const check = async <
 
                 const encoder = new LiquidationEncoder(executorAddress, client);
 
+                if (seizableCollateral.preLiquidation)
+                  console.log("seizedAssets", seizedAssets);
+
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
