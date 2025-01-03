@@ -80,7 +80,6 @@ export namespace Bytes32ERC20__factory {
   export const abi = _bytes32ERC20Abi;
 
   export function createInterface() {
-    // @ts-ignore incompatible commonjs type
     return new Interface(_bytes32ERC20Abi) as ERC20Interface;
   }
 
@@ -117,11 +116,7 @@ export namespace ERC20Metadata__factory {
     if (isBytes32ERC20Metadata(address, chainId))
       return Bytes32ERC20__factory.connect(address, runner);
 
-    const erc20 = ERC20__factory.connect(
-      address,
-      // @ts-ignore incompatible commonjs type
-      runner,
-    );
+    const erc20 = ERC20__factory.connect(address, runner);
 
     const name = erc20.name.bind(erc20);
     erc20.name = Object.assign(
@@ -201,11 +196,7 @@ export async function fetchToken(
   switch (address) {
     case wstEth: {
       if (stEth) {
-        const wstEthToken = WStEth__factory.connect(
-          wstEth!,
-          // @ts-ignore incompatible commonjs type
-          runner,
-        );
+        const wstEthToken = WStEth__factory.connect(wstEth!, runner);
         const stEthPerWstEth = await wstEthToken.stEthPerToken(overrides);
         return new ExchangeRateWrappedToken(token, stEth, stEthPerWstEth);
       }

@@ -40,11 +40,7 @@ export async function fetchVaultFromConfig(
   );
 
   const chainAddresses = getChainAddresses(chainId);
-  const mm = MetaMorpho__factory.connect(
-    address,
-    // @ts-ignore incompatible commonjs type
-    runner,
-  );
+  const mm = MetaMorpho__factory.connect(address, runner);
 
   const [
     curator,
@@ -94,7 +90,6 @@ export async function fetchVaultFromConfig(
   if (hasPublicAllocator) {
     const publicAllocator = PublicAllocator__factory.connect(
       chainAddresses.publicAllocator!,
-      // @ts-ignore incompatible commonjs type
       runner,
     );
 

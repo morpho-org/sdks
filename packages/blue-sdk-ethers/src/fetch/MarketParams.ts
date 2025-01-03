@@ -28,7 +28,6 @@ export async function fetchMarketParams(
 
     const marketParams = await MorphoBlue__factory.connect(
       morpho,
-      // @ts-ignore incompatible commonjs type
       runner,
     ).idToMarketParams(id, {
       // Always fetch at latest block because config is immutable.
