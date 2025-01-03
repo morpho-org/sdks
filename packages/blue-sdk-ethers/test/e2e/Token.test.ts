@@ -62,4 +62,24 @@ describe("augment/Token", () => {
 
     expect(value).toStrictEqual(expectedData);
   });
+
+  test("should fetch token data with eip712Domain", async ({ wallet }) => {
+    const steakUSDC = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
+    const expectedData = new Token({
+      address: steakUSDC,
+      decimals: 18,
+      symbol: "steakUSDC",
+      name: "Steakhouse USDC",
+      eip712Domain: {
+        name: "Steakhouse USDC",
+        verifyingContract: steakUSDC,
+        version: "1",
+        chainId: 1n,
+      },
+    });
+
+    const value = await Token.fetch(expectedData.address, wallet);
+
+    expect(value).toStrictEqual(expectedData);
+  });
 });
