@@ -16,7 +16,7 @@ export async function fetchVaultConfig(
   );
 
   const [token, asset, decimalsOffset] = await Promise.all([
-    fetchToken(address, client, parameters),
+    fetchToken(address, client, parameters), // TODO: avoid fetching decimals
     readContract(client, {
       ...parameters,
       address,
