@@ -300,7 +300,7 @@ export const check = async <
                     maxUint256,
                   );
 
-                console.log("pre liquidating");
+                console.log("pre liquidation encoding");
 
                 seizableCollateral.preLiquidation
                   ? encoder.preLiquidationPreLiquidate(
@@ -319,6 +319,8 @@ export const check = async <
                       encoder.flush(),
                     );
 
+                console.log("pre liquidation encoded");
+
                 const populatedTx = await encoder.encodeExec();
                 const [gasLimit, blockNumber, txCount, { maxFeePerGas }] =
                   await Promise.all([
@@ -335,12 +337,14 @@ export const check = async <
                 );
                 const profitUsd = loanToken.toUsd(dstAmount - repaidAssets)!;
 
-                if (gasLimitUsd > profitUsd)
+                if (gasLimitUsd > profitUsd) {
+                  console.log("no profit");
                   throw Error(
                     `gas cost ($${gasLimitUsd.formatWad(
                       2,
                     )}) > profit ($${profitUsd.formatWad(2)})`,
                   );
+                }
 
                 const transaction = {
                   ...populatedTx,
@@ -349,6 +353,8 @@ export const check = async <
                   gas: gasLimit, // Avoid estimating gas again.
                   maxFeePerGas,
                 };
+
+                console.log("transaction", transaction);
 
                 if (chainId === ChainId.EthMainnet) {
                   const signedBundle = await Flashbots.signBundle([
@@ -367,6 +373,7 @@ export const check = async <
 
                 return await sendTransaction(client, transaction);
               } catch (error) {
+                console.log("error", error);
                 console.warn(
                   `Tried liquidating "${seizedAssets}" collateral ("${withdrawnAssets}" underlying) from "${user}" on market "${market.id}":\n`,
                   error instanceof Error ? error.stack : error,
