@@ -422,6 +422,10 @@ export class LiquidationEncoder<
           ),
         ],
       }),
+      {
+        sender: preLiquidation,
+        dataIndex: 1n, // onPreLiquidate(uint256,bytes)
+      },
     );
   }
 
@@ -523,12 +527,16 @@ export class LiquidationEncoder<
         usePermit2: false,
       });
 
+      console.log("bestSwap", bestSwap);
+
       tries.push({ srcAmount, srcToken });
 
       if (!bestSwap)
         throw Error("could not fetch swap from both 1inch and paraswap");
 
       dstAmount = BigInt(bestSwap.dstAmount);
+
+      console.log(`repaidAssets: ${repaidAssets}, dstAmount: ${dstAmount}`);
 
       if (dstAmount < repaidAssets.wadMulDown(BigInt.WAD + slippage)) {
         // If we don't have enough liquidity, we try to swap to the alternative token and retry
@@ -620,6 +628,8 @@ export class LiquidationEncoder<
         break;
       }
     }
+
+    console.log("returning dstAmount", dstAmount);
 
     return { dstAmount };
   }

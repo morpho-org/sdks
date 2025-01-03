@@ -80,7 +80,8 @@ export const check = async <
       const user = position.user;
       const market = position.market;
       const seizableCollateral =
-        position.seizableCollateral != null
+        position.seizableCollateral !== undefined &&
+        position.seizableCollateral !== 0n
           ? { value: position.seizableCollateral, preLiquidation: false }
           : { value: position.preSeizableCollateral, preLiquidation: true };
 
@@ -175,6 +176,9 @@ export const check = async <
 
                 const encoder = new LiquidationEncoder(executorAddress, client);
 
+                if (seizableCollateral.preLiquidation)
+                  console.log("seizedAssets", seizedAssets);
+
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
@@ -250,8 +254,14 @@ export const check = async <
                       repaidAssets,
                     );
 
+                    if (seizableCollateral.preLiquidation)
+                      console.log("result", result);
+
                     if (result) {
                       dstAmount = result.dstAmount;
+
+                      if (seizableCollateral.preLiquidation)
+                        console.log("dstAmount", result.dstAmount);
                     } else {
                       return;
                     }
@@ -293,6 +303,9 @@ export const check = async <
                     maxUint256,
                   );
 
+                if (seizableCollateral.preLiquidation)
+                  console.log("pre liquidation encoding");
+
                 seizableCollateral.preLiquidation
                   ? encoder.preLiquidationPreLiquidate(
                       position.preLiquidation!.address,
@@ -310,6 +323,9 @@ export const check = async <
                       encoder.flush(),
                     );
 
+                if (seizableCollateral.preLiquidation)
+                  console.log("pre liquidation encoded");
+
                 const populatedTx = await encoder.encodeExec();
                 const [gasLimit, blockNumber, txCount, { maxFeePerGas }] =
                   await Promise.all([
@@ -326,12 +342,19 @@ export const check = async <
                 );
                 const profitUsd = loanToken.toUsd(dstAmount - repaidAssets)!;
 
-                if (gasLimitUsd > profitUsd)
+                if (seizableCollateral.preLiquidation) {
+                  console.log("profitUsd", profitUsd);
+                  console.log("gasLimitUsd", gasLimitUsd);
+                }
+
+                if (gasLimitUsd > profitUsd) {
+                  console.log("no profit");
                   throw Error(
                     `gas cost ($${gasLimitUsd.formatWad(
                       2,
                     )}) > profit ($${profitUsd.formatWad(2)})`,
                   );
+                }
 
                 const transaction = {
                   ...populatedTx,
@@ -340,6 +363,9 @@ export const check = async <
                   gas: gasLimit, // Avoid estimating gas again.
                   maxFeePerGas,
                 };
+
+                if (seizableCollateral.preLiquidation)
+                  console.log("transaction", transaction);
 
                 if (chainId === ChainId.EthMainnet) {
                   const signedBundle = await Flashbots.signBundle([
