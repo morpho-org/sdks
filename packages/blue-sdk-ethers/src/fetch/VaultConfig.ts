@@ -1,55 +1,39 @@
 import type { Provider } from "ethers";
 import { MetaMorpho__factory } from "ethers-types";
 
-import {
-  type Address,
-  type ChainId,
-  ChainUtils,
-  UnknownVaultConfigError,
-  VaultConfig,
-  _try,
-} from "@morpho-org/blue-sdk";
+import { type Address, ChainUtils, VaultConfig } from "@morpho-org/blue-sdk";
+import type { FetchOptions } from "../types";
+import { fetchToken } from "./Token";
 
 export async function fetchVaultConfig(
   address: Address,
   runner: { provider: Provider },
-  { chainId }: { chainId?: ChainId } = {},
+  options: FetchOptions = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
+  options.chainId = ChainUtils.parseSupportedChainId(
+    options.chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  let config = _try(
-    () => VaultConfig.get(address, chainId),
-    UnknownVaultConfigError,
+  const mm = MetaMorpho__factory.connect(
+    address,
+    // @ts-ignore incompatible commonjs type
+    runner,
   );
 
-  if (!config) {
-    const mm = MetaMorpho__factory.connect(
-      address,
-      // @ts-ignore incompatible commonjs type
-      runner,
-    );
+  const { overrides = {} } = options;
 
-    // always fetch at latest block because config is immutable
-    const [asset, symbol, name, decimalsOffset] = await Promise.all([
-      mm.asset() as Promise<Address>,
-      mm.symbol(),
-      mm.name(),
-      mm.DECIMALS_OFFSET(),
-    ]);
+  const [token, asset, decimalsOffset] = await Promise.all([
+    fetchToken(address, runner, options),
+    mm.asset() as Promise<Address>,
+    mm.DECIMALS_OFFSET(overrides),
+  ]);
 
-    config = new VaultConfig(
-      {
-        address,
-        asset,
-        symbol,
-        name,
-        decimalsOffset,
-      },
-      chainId,
-    );
-  }
-
-  return config;
+  return new VaultConfig(
+    {
+      ...token,
+      asset,
+      decimalsOffset,
+    },
+    options.chainId,
+  );
 }

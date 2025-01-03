@@ -3,6 +3,7 @@ import type { Address, Client } from "viem";
 import {
   AccrualVault,
   ChainUtils,
+  Eip5267Domain,
   type MarketId,
   Vault,
   VaultConfig,
@@ -58,7 +59,14 @@ export async function fetchVault(
       });
 
       return new Vault({
-        ...new VaultConfig({ ...config, address }, parameters.chainId),
+        ...new VaultConfig(
+          {
+            ...config,
+            eip5267Domain: new Eip5267Domain(config.eip5267Domain),
+            address,
+          },
+          parameters.chainId,
+        ),
         owner,
         curator,
         guardian,
