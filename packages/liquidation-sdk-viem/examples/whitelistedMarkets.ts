@@ -253,8 +253,12 @@ export const check = async <
                       repaidAssets,
                     );
 
+                    console.log("result", result);
+
                     if (result) {
                       dstAmount = result.dstAmount;
+
+                      console.log("dstAmount", dstAmount);
                     } else {
                       return;
                     }
@@ -295,6 +299,8 @@ export const check = async <
                       : morpho,
                     maxUint256,
                   );
+
+                console.log("pre liquidating");
 
                 seizableCollateral.preLiquidation
                   ? encoder.preLiquidationPreLiquidate(
