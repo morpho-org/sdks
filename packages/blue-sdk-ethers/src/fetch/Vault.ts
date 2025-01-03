@@ -7,7 +7,6 @@ import {
   ChainUtils,
   type MarketId,
   Vault,
-  type VaultConfig,
   type VaultPublicAllocatorConfig,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -24,25 +23,13 @@ export async function fetchVault(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const config = await fetchVaultConfig(address, runner, options);
-
-  return fetchVaultFromConfig(address, config, runner, options);
-}
-
-export async function fetchVaultFromConfig(
-  address: Address,
-  config: VaultConfig,
-  runner: { provider: Provider },
-  { chainId, overrides = {} }: FetchOptions = {},
-) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
-
-  const chainAddresses = getChainAddresses(chainId);
+  const chainAddresses = getChainAddresses(options.chainId);
   const mm = MetaMorpho__factory.connect(address, runner);
 
+  const { overrides = {} } = options;
+
   const [
+    config,
     curator,
     owner,
     guardian,
@@ -60,6 +47,7 @@ export async function fetchVaultFromConfig(
     withdrawQueueSize,
     hasPublicAllocator,
   ] = await Promise.all([
+    fetchVaultConfig(address, runner, options),
     mm.curator(overrides) as Promise<Address>,
     mm.owner(overrides) as Promise<Address>,
     mm.guardian(overrides) as Promise<Address>,
