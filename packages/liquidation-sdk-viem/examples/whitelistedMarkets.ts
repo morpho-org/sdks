@@ -258,10 +258,10 @@ export const check = async <
                       console.log("result", result);
 
                     if (result) {
+                      dstAmount = result.dstAmount;
+
                       if (seizableCollateral.preLiquidation)
                         console.log("dstAmount", result.dstAmount);
-
-                      dstAmount = result.dstAmount;
                     } else {
                       return;
                     }
