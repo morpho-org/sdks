@@ -176,9 +176,6 @@ export const check = async <
 
                 const encoder = new LiquidationEncoder(executorAddress, client);
 
-                if (seizableCollateral.preLiquidation)
-                  console.log("seizedAssets", seizedAssets);
-
                 let dstAmount = 0n;
                 // Handle Pendle Tokens
                 // To retrieve the tokens, we need to call the Pendle API to get the swap calldata
@@ -254,15 +251,8 @@ export const check = async <
                       repaidAssets,
                     );
 
-                    if (seizableCollateral.preLiquidation)
-                      console.log("result", result);
-
                     if (result) {
-                      if (seizableCollateral.preLiquidation)
-                        dstAmount = result.dstAmount;
-
-                      if (seizableCollateral.preLiquidation)
-                        console.log("dstAmount", dstAmount);
+                      dstAmount = result.dstAmount;
                     } else {
                       return;
                     }
@@ -304,9 +294,6 @@ export const check = async <
                     maxUint256,
                   );
 
-                if (seizableCollateral.preLiquidation)
-                  console.log("pre liquidation encoding");
-
                 seizableCollateral.preLiquidation
                   ? encoder.preLiquidationPreLiquidate(
                       position.preLiquidation!.address,
@@ -324,9 +311,6 @@ export const check = async <
                       encoder.flush(),
                     );
 
-                if (seizableCollateral.preLiquidation)
-                  console.log("pre liquidation encoded");
-
                 const populatedTx = await encoder.encodeExec();
                 const [gasLimit, blockNumber, txCount, { maxFeePerGas }] =
                   await Promise.all([
@@ -342,6 +326,11 @@ export const check = async <
                   gasLimit * maxFeePerGas,
                 );
                 const profitUsd = loanToken.toUsd(dstAmount - repaidAssets)!;
+
+                if (seizableCollateral.preLiquidation) {
+                  console.log("profitUsd", profitUsd);
+                  console.log("gasLimitUsd", gasLimitUsd);
+                }
 
                 if (gasLimitUsd > profitUsd) {
                   console.log("no profit");
@@ -360,9 +349,6 @@ export const check = async <
                   maxFeePerGas,
                 };
 
-                if (seizableCollateral.preLiquidation)
-                  console.log("transaction", transaction);
-
                 if (chainId === ChainId.EthMainnet) {
                   const signedBundle = await Flashbots.signBundle([
                     {
@@ -380,8 +366,6 @@ export const check = async <
 
                 return await sendTransaction(client, transaction);
               } catch (error) {
-                if (seizableCollateral.preLiquidation)
-                  console.log("error", error);
                 console.warn(
                   `Tried liquidating "${seizedAssets}" collateral ("${withdrawnAssets}" underlying) from "${user}" on market "${market.id}":\n`,
                   error instanceof Error ? error.stack : error,
