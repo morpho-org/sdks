@@ -17,7 +17,7 @@ import {
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { wstEthAbi } from "../abis";
+import { eip712DomainAbi, wstEthAbi } from "../abis";
 import { abi, code } from "../queries/GetToken";
 import type { DeploylessFetchParameters } from "../types";
 
@@ -52,9 +52,13 @@ export async function fetchToken(
         args: [address, isWstEth],
       });
 
+      const eip712Domain = token.hasEip712Domain
+        ? token.eip712Domain
+        : undefined;
+
       if (isWstEth && stEth != null)
         return new ExchangeRateWrappedToken(
-          { ...token, address },
+          { ...token, address, eip712Domain },
           stEth,
           token.stEthPerWstEth,
         );
@@ -62,18 +66,18 @@ export async function fetchToken(
       const unwrapToken = getUnwrappedToken(address, parameters.chainId);
       if (unwrapToken)
         return new ConstantWrappedToken(
-          { ...token, address },
+          { ...token, address, eip712Domain },
           unwrapToken,
           token.decimals,
         );
 
-      return new Token({ ...token, address });
+      return new Token({ ...token, address, eip712Domain });
     } catch {
       // Fallback to multicall if deployless call fails.
     }
   }
 
-  const [decimals, symbol, name] = await Promise.all([
+  const [decimals, symbol, name, eip712Domain] = await Promise.all([
     readContract(client, {
       ...parameters,
       address,
@@ -110,6 +114,12 @@ export async function fetchToken(
         .then(decodeBytes32String)
         .catch(() => undefined),
     ),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: eip712DomainAbi,
+      functionName: "eip712Domain",
+    }).catch(() => undefined),
   ]);
 
   const token = {
@@ -117,6 +127,12 @@ export async function fetchToken(
     name,
     symbol,
     decimals,
+    eip712Domain: eip712Domain && {
+      chainId: eip712Domain[3],
+      name: eip712Domain[1],
+      verifyingContract: eip712Domain[4],
+      version: eip712Domain[2],
+    },
   };
 
   switch (address) {

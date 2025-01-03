@@ -6,7 +6,7 @@ import {
   decodeBytes32String,
   isHexString,
 } from "ethers";
-import { WStEth__factory } from "ethers-types";
+import { ERC20Permit__factory, WStEth__factory } from "ethers-types";
 import { ERC20__factory } from "ethers-types";
 import type {
   ERC20,
@@ -156,11 +156,13 @@ export async function fetchToken(
   if (address === NATIVE_ADDRESS) return Token.native(chainId);
 
   const erc20 = ERC20Metadata__factory.connect(address, chainId, runner);
+  const erc20Permit = ERC20Permit__factory.connect(address, runner);
 
-  const [decimals, symbol, name] = await Promise.all([
+  const [decimals, symbol, name, eip712Domain] = await Promise.all([
     erc20.decimals(overrides).catch(() => undefined),
     erc20.symbol(overrides).catch(() => undefined),
     erc20.name(overrides).catch(() => undefined),
+    erc20Permit.eip712Domain(overrides).catch(() => undefined),
   ]);
 
   const token = {
@@ -168,6 +170,12 @@ export async function fetchToken(
     name,
     symbol,
     decimals,
+    eip712Domain: eip712Domain && {
+      chainId: eip712Domain.chainId,
+      name: eip712Domain.name,
+      verifyingContract: eip712Domain.verifyingContract as Address,
+      version: eip712Domain.version,
+    },
   };
 
   const { wstEth, stEth } = getChainAddresses(chainId);

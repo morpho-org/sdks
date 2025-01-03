@@ -9,6 +9,14 @@ export interface IToken {
   symbol?: string;
   decimals?: BigIntish;
   price?: BigIntish;
+  eip712Domain?: EIP712Domain;
+}
+
+interface EIP712Domain {
+  name: string;
+  version: string;
+  chainId: bigint;
+  verifyingContract: Address;
 }
 
 export class Token implements IToken {
@@ -39,15 +47,28 @@ export class Token implements IToken {
   public readonly decimals: number;
 
   /**
+   * The eip712 domain of the token if it can be directly queried onchain
+   */
+  public readonly eip712Domain?: EIP712Domain;
+
+  /**
    * Price of the token in USD (scaled by WAD).
    */
   public price?: bigint;
 
-  constructor({ address, name, symbol, decimals = 0, price }: IToken) {
+  constructor({
+    address,
+    name,
+    symbol,
+    decimals = 0,
+    price,
+    eip712Domain,
+  }: IToken) {
     this.address = address;
     this.name = name;
     this.symbol = symbol;
     this.decimals = Number(decimals);
+    this.eip712Domain = eip712Domain;
 
     if (price != null) this.price = BigInt(price);
   }

@@ -27,10 +27,10 @@ export const getPermitMessage = (
 ): SignatureMessage => {
   const { usdc, dai } = getChainAddresses(chainId);
 
-  const domain = {
+  const domain = erc20.eip712Domain ?? {
     name: erc20.name,
     version: erc20.address === usdc ? "2" : "1",
-    chainId: chainId.toString(),
+    chainId,
     verifyingContract: erc20.address,
   };
 

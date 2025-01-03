@@ -310,8 +310,7 @@ export const encodeOperation = (
             } else {
               const typedData = getPermitTypedData(
                 {
-                  name: tokenData.name,
-                  address: tokenData.address,
+                  erc20: tokenData,
                   owner: sender,
                   spender,
                   allowance: amount,
