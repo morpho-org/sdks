@@ -5,14 +5,14 @@ import {
   channel,
   commits,
   lastTag,
-  prefix,
   releaseType,
+  tagParams,
   version,
   writer,
 } from "./bumper.js";
 
 if (releaseType) {
-  const tag = `${prefix}v${version}`;
+  const tag = `${tagParams.prefix}v${version}`;
 
   setOutput("tag", tag);
   setOutput("version", version);
@@ -23,7 +23,10 @@ if (releaseType) {
     await writeChangelogString(
       commits,
       {
-        version: `[${tag}](https://github.com/morpho-org/sdks/compare/${lastTag}...${tag})`,
+        version:
+          lastTag == null
+            ? tag
+            : `[${tag}](https://github.com/morpho-org/sdks/compare/${lastTag}...${tag})`,
         host: "https://github.com",
         owner: "morpho-org",
         repository: "sdks",

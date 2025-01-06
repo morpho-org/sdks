@@ -4,7 +4,6 @@ import {
   type Address,
   AssetBalances,
   ChainId,
-  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   type Holding,
   type Market,
   type MarketId,
@@ -47,17 +46,27 @@ import {
 } from "./errors.js";
 import { type MaybeDraft, simulateOperation } from "./handlers/index.js";
 
+/**
+ * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
+ */
+export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 92_0000000000000000n;
+
 export interface PublicAllocatorOptions {
   enabled?: boolean;
 
   /* The array of vaults to reallocate. Must all have enabled the PublicAllocator. Defaults to all the vaults that have enabled the PublicAllocator. */
   reallocatableVaults?: Address[];
 
-  /* Fallback maximum utilization allowed from withdrawn markets. */
-  defaultMaxWithdrawalUtilization?: bigint;
-
-  /* Market-specific maximum utilization allowed for each corresponding withdrawn market. */
+  /**
+   * The maximum utilization of each market allowed to reach to find shared liquidity (scaled by WAD).
+   */
   maxWithdrawalUtilization?: Record<MarketId, bigint | undefined>;
+
+  /**
+   * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
+   * @default 92%
+   */
+  defaultMaxWithdrawalUtilization?: bigint;
 
   /* The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
   delay?: bigint;

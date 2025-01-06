@@ -1,7 +1,6 @@
 import {
   type Address,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  DEFAULT_SUPPLY_TARGET_UTILIZATION,
   type MarketId,
   MarketUtils,
   MathLib,
@@ -42,10 +41,24 @@ import type {
   InputBundlerOperation,
 } from "./types/index.js";
 
+/**
+ * The default target utilization above which the shared liquidity algorithm is triggered (scaled by WAD).
+ */
+export const DEFAULT_SUPPLY_TARGET_UTILIZATION = 90_5000000000000000n;
+
 export interface BundlingOptions {
   withSimplePermit?: Set<Address>;
   publicAllocatorOptions?: PublicAllocatorOptions & {
+    /**
+     * The target utilization of each market above which the shared liquidity algorithm is triggered (scaled by WAD).
+     */
     supplyTargetUtilization?: Record<MarketId, bigint | undefined>;
+
+    /**
+     * The default target utilization above which the shared liquidity algorithm is triggered (scaled by WAD).
+     * @default 90.5%
+     */
+    defaultSupplyTargetUtilization?: bigint;
   };
   getRequirementOperations?: (
     requiredTokenAmounts: {
@@ -302,6 +315,7 @@ export const populateSubBundle = (
 
     const supplyTargetUtilization =
       publicAllocatorOptions.supplyTargetUtilization?.[market.params.id] ??
+      publicAllocatorOptions.defaultSupplyTargetUtilization ??
       DEFAULT_SUPPLY_TARGET_UTILIZATION;
 
     if (

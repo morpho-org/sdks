@@ -28,7 +28,7 @@
   "dependencies": {
     "lodash.kebabcase": "^4.1.1",
     "viem-deal": "^2.0.3",
-    "viem-tracer": "^1.4.0"
+    "viem-tracer": "^1.4.1"
   },
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
@@ -53,9 +53,9 @@
     "@types/node": "^22.10.1",
     "ethers": "^6.13.4",
     "typescript": "^5.7.2",
-    "viem": "^2.21.54",
+    "viem": "^2.22.2",
     "vitest": "^2.1.8",
-    "wagmi": "^2.12.33"
+    "wagmi": "^2.14.6"
   },
   "publishConfig": {
     "main": "lib/index.js",

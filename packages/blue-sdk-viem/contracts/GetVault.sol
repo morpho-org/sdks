@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IMorpho, Id, MarketParams} from "./interfaces/IMorpho.sol";
+import {Eip5267Domain} from "./interfaces/IERC20Permit.sol";
 import {IMetaMorpho, PendingUint192, PendingAddress} from "./interfaces/IMetaMorpho.sol";
 import {IPublicAllocator} from "./interfaces/IPublicAllocator.sol";
 
@@ -11,6 +12,7 @@ struct VaultConfig {
     string name;
     uint256 decimals;
     uint256 decimalsOffset;
+    Eip5267Domain eip5267Domain;
 }
 
 struct PublicAllocatorConfig {
@@ -50,7 +52,8 @@ contract GetVault {
             symbol: vault.symbol(),
             name: vault.name(),
             decimals: vault.decimals(),
-            decimalsOffset: vault.DECIMALS_OFFSET()
+            decimalsOffset: vault.DECIMALS_OFFSET(),
+            eip5267Domain: vault.eip712Domain()
         });
 
         res.owner = vault.owner();

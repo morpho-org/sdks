@@ -24,7 +24,6 @@ export async function fetchVaultMarketPublicAllocatorConfig(
 
   const [maxIn, maxOut] = await PublicAllocator__factory.connect(
     publicAllocator,
-    // @ts-ignore incompatible commonjs type
     runner,
   ).flowCaps(vault, marketId, overrides);
 
