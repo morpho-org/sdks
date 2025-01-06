@@ -10,6 +10,7 @@ import {
 import {
   ChainUtils,
   ConstantWrappedToken,
+  Eip5267Domain,
   ExchangeRateWrappedToken,
   NATIVE_ADDRESS,
   Token,
@@ -17,7 +18,7 @@ import {
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { eip712DomainAbi, wstEthAbi } from "../abis";
+import { erc5267Abi, wstEthAbi } from "../abis";
 import { abi, code } from "../queries/GetToken";
 import type { DeploylessFetchParameters } from "../types";
 
@@ -52,13 +53,13 @@ export async function fetchToken(
         args: [address, isWstEth],
       });
 
-      const eip712Domain = token.hasEip712Domain
-        ? token.eip712Domain
+      const eip5267Domain = token.hasEip5267Domain
+        ? new Eip5267Domain(token.eip5267Domain)
         : undefined;
 
       if (isWstEth && stEth != null)
         return new ExchangeRateWrappedToken(
-          { ...token, address, eip712Domain },
+          { ...token, address, eip5267Domain },
           stEth,
           token.stEthPerWstEth,
         );
@@ -66,18 +67,18 @@ export async function fetchToken(
       const unwrapToken = getUnwrappedToken(address, parameters.chainId);
       if (unwrapToken)
         return new ConstantWrappedToken(
-          { ...token, address, eip712Domain },
+          { ...token, address, eip5267Domain },
           unwrapToken,
           token.decimals,
         );
 
-      return new Token({ ...token, address, eip712Domain });
+      return new Token({ ...token, address, eip5267Domain });
     } catch {
       // Fallback to multicall if deployless call fails.
     }
   }
 
-  const [decimals, symbol, name, eip712Domain] = await Promise.all([
+  const [decimals, symbol, name, eip5267Domain] = await Promise.all([
     readContract(client, {
       ...parameters,
       address,
@@ -117,9 +118,30 @@ export async function fetchToken(
     readContract(client, {
       ...parameters,
       address,
-      abi: eip712DomainAbi,
+      abi: erc5267Abi,
       functionName: "eip712Domain",
-    }).catch(() => undefined),
+    })
+      .then(
+        ([
+          fields,
+          name,
+          version,
+          chainId,
+          verifyingContract,
+          salt,
+          extensions,
+        ]) =>
+          new Eip5267Domain({
+            fields,
+            name,
+            version,
+            chainId,
+            verifyingContract,
+            salt,
+            extensions,
+          }),
+      )
+      .catch(() => undefined),
   ]);
 
   const token = {
@@ -127,12 +149,7 @@ export async function fetchToken(
     name,
     symbol,
     decimals,
-    eip712Domain: eip712Domain && {
-      chainId: eip712Domain[3],
-      name: eip712Domain[1],
-      verifyingContract: eip712Domain[4],
-      version: eip712Domain[2],
-    },
+    eip5267Domain,
   };
 
   switch (address) {

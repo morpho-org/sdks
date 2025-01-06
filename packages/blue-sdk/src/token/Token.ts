@@ -2,6 +2,7 @@ import { NATIVE_ADDRESS } from "../addresses.js";
 import { type ChainId, ChainUtils } from "../chain.js";
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import type { Address, BigIntish } from "../types.js";
+import type { Eip5267Domain } from "./Eip5267Domain.js";
 
 export interface IToken {
   address: Address;
@@ -9,14 +10,7 @@ export interface IToken {
   symbol?: string;
   decimals?: BigIntish;
   price?: BigIntish;
-  eip712Domain?: EIP712Domain;
-}
-
-interface EIP712Domain {
-  name: string;
-  version: string;
-  chainId: bigint;
-  verifyingContract: Address;
+  eip5267Domain?: Eip5267Domain;
 }
 
 export class Token implements IToken {
@@ -49,7 +43,7 @@ export class Token implements IToken {
   /**
    * The eip712 domain of the token if it can be directly queried onchain
    */
-  public readonly eip712Domain?: EIP712Domain;
+  public readonly eip5267Domain?: Eip5267Domain;
 
   /**
    * Price of the token in USD (scaled by WAD).
@@ -62,13 +56,13 @@ export class Token implements IToken {
     symbol,
     decimals = 0,
     price,
-    eip712Domain,
+    eip5267Domain,
   }: IToken) {
     this.address = address;
     this.name = name;
     this.symbol = symbol;
     this.decimals = Number(decimals);
-    this.eip712Domain = eip712Domain;
+    this.eip5267Domain = eip5267Domain;
 
     if (price != null) this.price = BigInt(price);
   }
