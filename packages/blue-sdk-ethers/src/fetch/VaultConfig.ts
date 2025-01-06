@@ -14,11 +14,7 @@ export async function fetchVaultConfig(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const mm = MetaMorpho__factory.connect(
-    address,
-    // @ts-ignore incompatible commonjs type
-    runner,
-  );
+  const mm = MetaMorpho__factory.connect(address, runner);
 
   const { overrides = {} } = options;
 
