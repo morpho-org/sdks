@@ -19,7 +19,7 @@ export async function fetchVaultConfig(
   const { overrides = {} } = options;
 
   const [token, asset, decimalsOffset] = await Promise.all([
-    fetchToken(address, runner, options),
+    fetchToken(address, runner, options), // TODO: avoid fetching decimals
     mm.asset() as Promise<Address>,
     mm.DECIMALS_OFFSET(overrides),
   ]);
