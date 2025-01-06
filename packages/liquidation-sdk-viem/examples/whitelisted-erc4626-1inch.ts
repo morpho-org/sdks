@@ -136,10 +136,8 @@ export const check = async <
             .filter(
               (seizedAssets) =>
                 collateralToken.toUsd(seizedAssets)! > parseEther("1000") ||
-                (accrualPosition.collateral === seizedAssets &&
-                  loanToken.toUsd(accrualPosition.borrowAssets)! >
-                    parseEther("1000")),
-            ) // Do not try seizing less than $1000 collateral, except if we can realize more than $1000 bad debt.
+                accrualPosition.collateral === seizedAssets,
+            ) // Do not try seizing less than $1000 collateral, except if we can realize debt.
             .map(async (seizedAssets) => {
               const repaidShares =
                 market.getLiquidationRepaidShares(seizedAssets)!;
@@ -175,6 +173,9 @@ export const check = async <
           triedLiquidity.map(
             async ({ seizedAssets, repaidAssets, withdrawnAssets }) => {
               try {
+                const badDebtRealization =
+                  seizedAssets === accrualPosition.collateral;
+
                 let srcToken =
                   collateralUnderlyingAsset ?? market.params.collateralToken;
                 let srcAmount = withdrawnAssets ?? seizedAssets;
@@ -322,7 +323,7 @@ export const check = async <
                 );
                 const profitUsd = loanToken.toUsd(dstAmount - repaidAssets)!;
 
-                if (gasLimitUsd > profitUsd)
+                if (!badDebtRealization && gasLimitUsd > profitUsd)
                   throw Error(
                     `gas cost ($${gasLimitUsd.formatWad(
                       2,
