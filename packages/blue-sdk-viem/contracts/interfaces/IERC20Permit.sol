@@ -5,6 +5,16 @@ pragma solidity >=0.5.0;
 
 import {IERC20} from "./IERC20.sol";
 
+struct Eip5267Domain {
+    bytes1 fields;
+    string name;
+    string version;
+    uint256 chainId;
+    address verifyingContract;
+    bytes32 salt;
+    uint256[] extensions;
+}
+
 /**
  * @dev Interface of the ERC-20 Permit extension allowing approvals to be made via signatures, as defined in
  * https://eips.ethereum.org/EIPS/eip-2612[ERC-2612].
@@ -82,4 +92,10 @@ interface IERC20Permit is IERC20 {
      */
     // solhint-disable-next-line func-name-mixedcase
     function DOMAIN_SEPARATOR() external view returns (bytes32);
+
+    /**
+     * @dev returns the fields and values that describe the domain separator used by this contract for EIP-712
+     * signature.
+     */
+    function eip712Domain() external view returns (Eip5267Domain memory);
 }
