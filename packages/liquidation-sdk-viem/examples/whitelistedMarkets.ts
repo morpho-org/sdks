@@ -38,6 +38,7 @@ import {
   sendTransaction,
 } from "viem/actions";
 import { getPositions } from "../src/positions/getters";
+import { getRepayDataPreLiquidation } from "../src/preLiquidation/helpers";
 
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
@@ -80,7 +81,8 @@ export const check = async <
       const user = position.user;
       const market = position.market;
       const seizableCollateral =
-        position.seizableCollateral != null
+        position.seizableCollateral !== undefined &&
+        position.seizableCollateral !== 0n
           ? { value: position.seizableCollateral, preLiquidation: false }
           : { value: position.preSeizableCollateral, preLiquidation: true };
 
@@ -135,13 +137,24 @@ export const check = async <
                 collateralToken.toUsd(seizedAssets)! > parseEther("1000"), // Do not try seizing less than $1000 collateral.
             )
             .map(async (seizedAssets) => {
-              const repaidShares =
-                market.getLiquidationRepaidShares(seizedAssets)!;
+              const repayData = seizableCollateral.preLiquidation
+                ? getRepayDataPreLiquidation(
+                    position,
+                    position.preLiquidation!,
+                    seizedAssets,
+                  )
+                : {
+                    repaidShares:
+                      market.getLiquidationRepaidShares(seizedAssets)!,
+                    repaidAssets: market.toBorrowAssets(
+                      market.getLiquidationRepaidShares(seizedAssets)!,
+                    ),
+                  };
 
               return {
                 seizedAssets,
-                repaidShares,
-                repaidAssets: market.toBorrowAssets(repaidShares),
+                repaidShares: repayData.repaidShares,
+                repaidAssets: repayData.repaidAssets,
                 withdrawnAssets: await readContract(client, {
                   address: market.params.collateralToken,
                   abi: erc4626Abi,
@@ -326,12 +339,13 @@ export const check = async <
                 );
                 const profitUsd = loanToken.toUsd(dstAmount - repaidAssets)!;
 
-                if (gasLimitUsd > profitUsd)
+                if (gasLimitUsd > profitUsd) {
                   throw Error(
                     `gas cost ($${gasLimitUsd.formatWad(
                       2,
                     )}) > profit ($${profitUsd.formatWad(2)})`,
                   );
+                }
 
                 const transaction = {
                   ...populatedTx,

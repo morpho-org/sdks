@@ -4,14 +4,15 @@ import {
   ORACLE_PRICE_SCALE,
   SharesMath,
 } from "@morpho-org/blue-sdk";
+import { parseEther } from "viem";
 import type { PreLiquidation } from "./types";
 
-export function getSeizabeCollateral(
+export function getPreSeizableCollateral(
   position: AccrualPosition,
   preLiquidation: PreLiquidation,
 ) {
   const preLiquidationParams = preLiquidation.preLiquidationParams;
-  const lltv = preLiquidationParams.preLltv;
+  const lltv = position.market.params.lltv;
   const preLltv = preLiquidationParams.preLltv;
   if (
     position.borrowAssets > MathLib.wMulDown(position.collateralValue!, lltv) ||
@@ -20,7 +21,7 @@ export function getSeizabeCollateral(
     return undefined;
 
   const ltv = MathLib.wDivUp(position.borrowAssets, position.collateralValue!);
-  const quotient = MathLib.wDivDown(ltv - preLltv, ltv - lltv);
+  const quotient = MathLib.wDivDown(ltv - preLltv, lltv - preLltv);
   const preLIF =
     preLiquidationParams.preLIF1 +
     MathLib.wMulDown(
@@ -34,7 +35,12 @@ export function getSeizabeCollateral(
       preLiquidationParams.preLCF2 - preLiquidationParams.preLCF1,
     );
 
-  const repayableShares = MathLib.wMulDown(position.borrowShares, preLCF);
+  const repayableShares = MathLib.mulDivDown(
+    position.borrowShares,
+    preLCF,
+    parseEther("1.01"), // adding a 1% security to not repay too much
+  );
+
   const repayableAssets = MathLib.wMulDown(
     SharesMath.toAssets(
       repayableShares,
@@ -50,4 +56,39 @@ export function getSeizabeCollateral(
     ORACLE_PRICE_SCALE,
     position.market.price!,
   );
+}
+
+export function getRepayDataPreLiquidation(
+  position: AccrualPosition,
+  preLiquidation: PreLiquidation,
+  preSeizableCollateral: bigint,
+) {
+  const lltv = position.market.params.lltv;
+  const preLltv = preLiquidation.preLiquidationParams.preLltv;
+  const ltv = MathLib.wDivUp(position.borrowAssets, position.collateralValue!);
+  const quotient = MathLib.wDivDown(ltv - preLltv, lltv - preLltv);
+
+  const preLIF =
+    preLiquidation.preLiquidationParams.preLIF1 +
+    MathLib.wMulDown(
+      quotient,
+      preLiquidation.preLiquidationParams.preLIF2 -
+        preLiquidation.preLiquidationParams.preLIF1,
+    );
+
+  const preSeizedAssetsQuoted = MathLib.mulDivUp(
+    preSeizableCollateral,
+    position.market.price!,
+    ORACLE_PRICE_SCALE,
+  );
+
+  const repaidAssets = MathLib.wDivUp(preSeizedAssetsQuoted, preLIF);
+  const repaidShares = SharesMath.toShares(
+    repaidAssets,
+    position.market.totalBorrowAssets,
+    position.market.totalBorrowShares,
+    "Up",
+  );
+
+  return { repaidAssets, repaidShares };
 }
