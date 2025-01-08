@@ -1,9 +1,9 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup.js";
+import { test } from "./setup";
 
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
-import { User } from "../../src/augment/User.js";
-import { blueAbi } from "./abis.js";
+import { User } from "../../src/augment/User";
+import { blueAbi } from "./abis";
 
 const { morpho, bundler } = addresses[ChainId.EthMainnet];
 

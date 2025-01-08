@@ -36,7 +36,7 @@ export interface PeripheralBalance {
   dstAmount: bigint;
 }
 
-export interface InputAssetBalances extends Omit<PeripheralBalance, "type"> {}
+export interface IAssetBalances extends Omit<PeripheralBalance, "type"> {}
 
 export class AssetBalances {
   /**
@@ -51,7 +51,7 @@ export class AssetBalances {
     [T in Exclude<PeripheralBalanceType, "base">]?: PeripheralBalance;
   };
 
-  constructor(balance: InputAssetBalances) {
+  constructor(balance: IAssetBalances) {
     this.total = balance.dstAmount;
     this.allocations = {
       base: { ...balance, type: "base" },

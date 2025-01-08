@@ -1,4 +1,3 @@
-import { Time, format } from "@morpho-org/morpho-ts";
 import type { BigIntish } from "../types.js";
 
 export type RoundingDirection = "Up" | "Down";
@@ -170,7 +169,7 @@ export namespace MathLib {
 
   /**
    * The sum of the first three non-zero terms of a Taylor expansion of e^(nx) - 1,
-   * to approximate a continuous compound interest rate.
+   * to approximate a continuously compounded interest rate.
    *
    * @param x The base of the exponent
    * @param n The exponent
@@ -189,34 +188,5 @@ export namespace MathLib {
     );
 
     return firstTerm + secondTerm + thirdTerm;
-  }
-
-  /**
-   * Converts an rate to compounded apy
-   *
-   * @param rate The rate to convert (in WAD)
-   * @param period The compounding basis
-   */
-  export function rateToApy(rate: BigIntish, period: Time.PeriodLike) {
-    const { unit, duration } = Time.toPeriod(period);
-    const factor = Time[unit].from.y(1) / duration;
-
-    return (
-      (1 + Number(format.number.locale("en").of(BigInt(rate), 18))) ** factor -
-      1
-    );
-  }
-
-  /**
-   * Converts an apr to compounded apy
-   *
-   * @param apr The apr to convert (in WAD)
-   * @param compounding The compounding basis
-   */
-  export function aprToApy(apr: BigIntish, compounding: Time.PeriodLike) {
-    const { unit, duration } = Time.toPeriod(compounding);
-    const rate = (BigInt(apr) * BigInt(duration)) / Time[unit].from.y(1n);
-
-    return rateToApy(rate, compounding);
   }
 }

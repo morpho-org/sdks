@@ -7,8 +7,8 @@ import {
   type MarketId,
   VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
+import type { FetchOptions } from "../types";
+import { fetchVaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig";
 
 export async function fetchVaultMarketConfig(
   vault: Address,
@@ -21,11 +21,7 @@ export async function fetchVaultMarketConfig(
   );
   options.overrides ??= {};
 
-  const mm = MetaMorpho__factory.connect(
-    vault,
-    // @ts-ignore incompatible commonjs type
-    runner,
-  );
+  const mm = MetaMorpho__factory.connect(vault, runner);
 
   const [{ cap, removableAt, enabled }, pendingCap, publicAllocatorConfig] =
     await Promise.all([

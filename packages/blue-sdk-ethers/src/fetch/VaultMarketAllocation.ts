@@ -7,9 +7,9 @@ import {
   VaultMarketAllocation,
   type VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchAccrualPosition } from "./Position.js";
-import { fetchVaultMarketConfig } from "./VaultMarketConfig.js";
+import type { FetchOptions } from "../types";
+import { fetchAccrualPosition } from "./Position";
+import { fetchVaultMarketConfig } from "./VaultMarketConfig";
 
 export async function fetchVaultMarketAllocation(
   vault: Address,

@@ -1,4 +1,4 @@
-import type { PartialBlueApiToken } from "@morpho-org/blue-api-sdk";
+import type { PartialApiToken } from "@morpho-org/blue-api-sdk";
 import {
   AccrualPosition,
   type Address,
@@ -7,8 +7,8 @@ import {
 import { getPreSeizableCollateral } from "./helpers";
 
 export class PreLiquidationPosition extends AccrualPosition {
-  public collateralAsset: PartialBlueApiToken;
-  public loanAsset: PartialBlueApiToken;
+  public collateralAsset: PartialApiToken;
+  public loanAsset: PartialApiToken;
 
   public preLiquidation?: PreLiquidation;
 
@@ -16,8 +16,8 @@ export class PreLiquidationPosition extends AccrualPosition {
 
   constructor(
     position: AccrualPosition,
-    collateralAsset: PartialBlueApiToken,
-    loanAsset: PartialBlueApiToken,
+    collateralAsset: PartialApiToken,
+    loanAsset: PartialApiToken,
     preLiquidation?: PreLiquidation,
   ) {
     super(position, position.market);

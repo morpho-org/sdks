@@ -1,12 +1,17 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup.js";
+import { test } from "./setup";
 
-import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  Eip5267Domain,
+  type MarketId,
+  addresses,
+} from "@morpho-org/blue-sdk";
 
 import { vaults } from "@morpho-org/morpho-test";
-import { zeroAddress } from "viem";
-import { Vault } from "../../src/augment/Vault.js";
-import { metaMorphoAbi, publicAllocatorAbi } from "./abis.js";
+import { zeroAddress, zeroHash } from "viem";
+import { Vault } from "../../src/augment/Vault";
+import { metaMorphoAbi, publicAllocatorAbi } from "./abis";
 
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 
@@ -71,10 +76,19 @@ describe("augment/Vault", () => {
       lastTotalAssets: 26129569140552n,
       totalAssets: 26138940196162n,
       totalSupply: 25752992371062043744406063n,
+      eip5267Domain: new Eip5267Domain({
+        fields: "0x0f",
+        name: "Steakhouse USDC",
+        version: "1",
+        chainId: 1n,
+        verifyingContract: steakUsdc.address,
+        salt: zeroHash,
+        extensions: [],
+      }),
     });
 
     const value = await Vault.fetch(steakUsdc.address, wallet);
 
-    expect(value).toStrictEqual(expectedData);
+    expect(value).toEqual(expectedData);
   });
 });

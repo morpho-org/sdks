@@ -1,5 +1,5 @@
 import { Market } from "@morpho-org/blue-sdk";
-import { fetchMarket, fetchMarketFromConfig } from "../fetch/index.js";
+import { fetchMarket, fetchMarketFromConfig } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
   namespace Market {

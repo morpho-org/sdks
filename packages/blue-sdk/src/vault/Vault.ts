@@ -3,9 +3,9 @@ import { MathLib, type RoundingDirection } from "../math/index.js";
 import { VaultToken } from "../token/index.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 
-import type { InputVaultConfig } from "./VaultConfig.js";
+import type { IVaultConfig } from "./VaultConfig.js";
 import {
-  type InputVaultMarketAllocation,
+  type IVaultMarketAllocation,
   VaultMarketAllocation,
 } from "./VaultMarketAllocation.js";
 
@@ -29,7 +29,7 @@ export interface VaultPublicAllocatorConfig {
   accruedFee: bigint;
 }
 
-export interface InputVault extends InputVaultConfig {
+export interface IVault extends IVaultConfig {
   curator: Address;
   owner: Address;
   guardian: Address;
@@ -48,7 +48,7 @@ export interface InputVault extends InputVaultConfig {
   publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
-export class Vault extends VaultToken implements InputVault {
+export class Vault extends VaultToken implements IVault {
   /**
    * The vault's share token's name.
    */
@@ -139,7 +139,7 @@ export class Vault extends VaultToken implements InputVault {
     totalAssets,
     lastTotalAssets,
     ...config
-  }: InputVault) {
+  }: IVault) {
     super(config, { totalAssets, totalSupply });
 
     this.curator = curator;
@@ -185,10 +185,10 @@ export interface CollateralAllocation {
   proportion: bigint;
 }
 
-export interface InputAccrualVault
-  extends Omit<InputVault, "withdrawQueue" | "totalAssets"> {}
+export interface IAccrualVault
+  extends Omit<IVault, "withdrawQueue" | "totalAssets"> {}
 
-export class AccrualVault extends Vault implements InputAccrualVault {
+export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * The allocation of the vault on each market enabled.
    */
@@ -200,12 +200,12 @@ export class AccrualVault extends Vault implements InputAccrualVault {
   public readonly collateralAllocations: Map<Address, CollateralAllocation>;
 
   constructor(
-    vault: InputAccrualVault,
+    vault: IAccrualVault,
     /**
      * The allocation of the vault on each market of the withdraw queue,
      * in the same order as the withdraw queue.
      */
-    allocations: Omit<InputVaultMarketAllocation, "proportion">[],
+    allocations: Omit<IVaultMarketAllocation, "proportion">[],
   ) {
     super({
       ...vault,

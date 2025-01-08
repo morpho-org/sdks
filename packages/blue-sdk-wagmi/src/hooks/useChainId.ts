@@ -1,5 +1,4 @@
 import { ChainUtils } from "@morpho-org/blue-sdk";
-import type { ChainIdParameter } from "@wagmi/core/internal";
 import { useMemo } from "react";
 import {
   type Config,
@@ -9,7 +8,9 @@ import {
 import type { ConfigParameter } from "../types/index.js";
 
 export type UseChainIdParameters<config extends Config = Config> =
-  ChainIdParameter<config> & ConfigParameter<config>;
+  ConfigParameter<config> & {
+    chainId?: config["chains"][number]["id"];
+  };
 
 export function useChainId<config extends Config = ResolvedRegister["config"]>(
   parameters?: UseChainIdParameters<config>,

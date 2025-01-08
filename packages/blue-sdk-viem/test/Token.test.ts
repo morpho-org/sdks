@@ -1,13 +1,15 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup.js";
+import { test } from "./setup";
 
 import {
   ChainId,
+  Eip5267Domain,
   ExchangeRateWrappedToken,
   addresses,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
-import { Token } from "../src/augment/Token.js";
+import { zeroHash } from "viem";
+import { Token } from "../src/augment/Token";
 
 const { mkr, usdc, stEth, wstEth } = addresses[ChainId.EthMainnet];
 
@@ -57,6 +59,29 @@ describe("augment/Token", () => {
 
   test("should fetch invalid ERC20", async ({ client }) => {
     const expectedData = new Token({ address: randomAddress() });
+
+    const value = await Token.fetch(expectedData.address, client);
+
+    expect(value).toStrictEqual(expectedData);
+  });
+
+  test("should fetch token data with eip5267Domain", async ({ client }) => {
+    const steakUSDC = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
+    const expectedData = new Token({
+      address: steakUSDC,
+      decimals: 18,
+      symbol: "steakUSDC",
+      name: "Steakhouse USDC",
+      eip5267Domain: new Eip5267Domain({
+        fields: "0x0f",
+        name: "Steakhouse USDC",
+        version: "1",
+        chainId: 1n,
+        verifyingContract: steakUSDC,
+        salt: zeroHash,
+        extensions: [],
+      }),
+    });
 
     const value = await Token.fetch(expectedData.address, client);
 

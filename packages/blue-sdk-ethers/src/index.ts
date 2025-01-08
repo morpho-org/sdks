@@ -1,8 +1,8 @@
-export * from "./evm.js";
-export * from "./notifications.js";
-export * from "./signatures/index.js";
-export * from "./fetch/index.js";
-export * from "./ethers/index.js";
-export * from "./types.js";
+export * from "./evm";
+export * from "./notifications";
+export * from "./signatures";
+export * from "./fetch";
+export * from "./ethers";
+export * from "./types";
 
-import "./augment/ethers.js";
+import "./augment/ethers";

@@ -1,19 +1,18 @@
 import {
   ChainId,
-  type InputVaultConfig,
+  type IVaultConfig,
   VaultConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 
-const { wNative, usdc } = addresses[ChainId.EthMainnet];
+const { wNative, usdc, dai } = addresses[ChainId.EthMainnet];
 
 export const vaults = {
   [ChainId.EthMainnet]: {
     steakUsdc: new VaultConfig(
       {
         address: "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB",
-        decimals: 18,
         decimalsOffset: 12n,
         symbol: "steakUSDC",
         name: "Steakhouse USDC",
@@ -22,10 +21,17 @@ export const vaults = {
       ChainId.EthMainnet,
     ),
 
+    steakEth: new VaultConfig({
+      address: "0xBEEf050ecd6a16c4e7bfFbB52Ebba7846C4b8cD4",
+      asset: wNative,
+      name: "Steakhouse ETH",
+      decimalsOffset: 0,
+      symbol: "steakETH",
+    }),
+
     bbUsdc: new VaultConfig(
       {
         address: "0x186514400e52270cef3D80e1c6F8d10A75d47344",
-        decimals: 18,
         decimalsOffset: 12n,
         symbol: "bbUSDC",
         name: "BlockAnalytica USDC",
@@ -37,7 +43,6 @@ export const vaults = {
     bbEth: new VaultConfig(
       {
         address: "0x38989BBA00BDF8181F4082995b3DEAe96163aC5D",
-        decimals: 18,
         decimalsOffset: 0n,
         symbol: "bbETH",
         name: "BlockAnalytica ETH",
@@ -49,7 +54,6 @@ export const vaults = {
     bbUsdt: new VaultConfig(
       {
         address: "0x2C25f6C25770fFEC5959D34B94Bf898865e5D6b1",
-        decimals: 18,
         decimalsOffset: 12n,
         symbol: "bbUSDT",
         name: "BlockAnalytica USDT",
@@ -61,7 +65,6 @@ export const vaults = {
     re7Weth: new VaultConfig(
       {
         address: "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0",
-        decimals: 18,
         decimalsOffset: 0n,
         symbol: "re7WETH",
         name: "Re7 WETH",
@@ -69,13 +72,23 @@ export const vaults = {
       },
       ChainId.EthMainnet,
     ),
+
+    gDai: new VaultConfig(
+      {
+        address: "0x500331c9fF24D9d11aee6B07734Aa72343EA74a5",
+        decimalsOffset: 0n,
+        symbol: "gDAI",
+        name: "Gauntlet DAI Core",
+        asset: dai,
+      },
+      ChainId.EthMainnet,
+    ),
   },
 } as const;
 
-export const randomVault = (config: Partial<InputVaultConfig> = {}) =>
+export const randomVault = (config: Partial<IVaultConfig> = {}) =>
   new VaultConfig({
     asset: randomAddress(),
-    decimals: 18,
     decimalsOffset: 0n,
     symbol: "TEST",
     name: "Test vault",

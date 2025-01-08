@@ -1,13 +1,13 @@
 import {
   type Address,
   type ChainId,
+  type Token,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { TypedDataDefinition } from "viem";
 
 export interface PermitArgs {
-  name?: string;
-  address: Address;
+  erc20: Token;
   owner: Address;
   spender: Address;
   allowance: bigint;
@@ -30,16 +30,16 @@ const permitTypes = {
  * Docs: https://eips.ethereum.org/EIPS/eip-2612
  */
 export const getPermitTypedData = (
-  { deadline, owner, nonce, spender, name, address, allowance }: PermitArgs,
+  { deadline, owner, nonce, spender, erc20, allowance }: PermitArgs,
   chainId: ChainId,
 ): TypedDataDefinition<typeof permitTypes, "Permit"> => {
   const { usdc } = getChainAddresses(chainId);
 
-  const domain = {
-    name,
-    version: address === usdc ? "2" : "1",
+  const domain = erc20.eip5267Domain?.eip712Domain ?? {
+    name: erc20.name,
+    version: erc20.address === usdc ? "2" : "1",
     chainId,
-    verifyingContract: address,
+    verifyingContract: erc20.address,
   };
 
   return {
@@ -81,7 +81,7 @@ export const getDaiPermitTypedData = (
   const { dai } = getChainAddresses(chainId);
 
   const domain = {
-    name: "DAI",
+    name: "Dai Stablecoin",
     version: "1",
     chainId,
     verifyingContract: dai,

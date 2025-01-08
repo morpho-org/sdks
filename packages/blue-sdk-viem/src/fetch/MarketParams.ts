@@ -8,8 +8,8 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi } from "../abis.js";
-import type { FetchParameters } from "../types.js";
+import { blueAbi } from "../abis";
+import type { FetchParameters } from "../types";
 
 export async function fetchMarketParams(
   id: MarketId,

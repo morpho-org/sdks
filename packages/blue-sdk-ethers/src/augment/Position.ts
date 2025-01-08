@@ -4,7 +4,7 @@ import {
   fetchAccrualPosition,
   fetchAccrualPositionFromConfig,
   fetchPosition,
-} from "../fetch/index.js";
+} from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
   namespace Position {

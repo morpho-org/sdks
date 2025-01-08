@@ -8,7 +8,7 @@ import {
   VaultMarketPublicAllocatorConfig,
   addresses,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
+import type { FetchOptions } from "../types";
 
 export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,
@@ -24,7 +24,6 @@ export async function fetchVaultMarketPublicAllocatorConfig(
 
   const [maxIn, maxOut] = await PublicAllocator__factory.connect(
     publicAllocator,
-    // @ts-ignore incompatible commonjs type
     runner,
   ).flowCaps(vault, marketId, overrides);
 

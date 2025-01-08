@@ -17,26 +17,7 @@ query getLiquidatablePositions(
     }
   ) {
     items {
-      user {
-        address
-      }
-      market {
-        uniqueKey
-        collateralAsset {
-          address
-          decimals
-          symbol
-          priceUsd
-          spotPriceEth
-        }
-        loanAsset {
-          address
-          decimals
-          symbol
-          priceUsd
-          spotPriceEth
-        }
-      }
+      ...MarketPosition
     }
   }
 }

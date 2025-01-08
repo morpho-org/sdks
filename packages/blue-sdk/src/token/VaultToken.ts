@@ -1,15 +1,15 @@
 import type { RoundingDirection } from "../math/index.js";
 import type { Address } from "../types.js";
-import type { InputVaultConfig } from "../vault/VaultConfig.js";
+import type { IVaultConfig } from "../vault/VaultConfig.js";
 import { VaultUtils } from "../vault/VaultUtils.js";
 import { WrappedToken } from "./WrappedToken.js";
 
-export interface InputVaultToken {
+export interface IVaultToken {
   totalAssets: bigint;
   totalSupply: bigint;
 }
 
-export class VaultToken extends WrappedToken implements InputVaultToken {
+export class VaultToken extends WrappedToken implements IVaultToken {
   public readonly asset: Address;
   public readonly decimalsOffset: bigint;
 
@@ -23,10 +23,7 @@ export class VaultToken extends WrappedToken implements InputVaultToken {
    */
   public totalAssets: bigint;
 
-  constructor(
-    config: InputVaultConfig,
-    { totalAssets, totalSupply }: InputVaultToken,
-  ) {
+  constructor(config: IVaultConfig, { totalAssets, totalSupply }: IVaultToken) {
     super(config, config.asset);
 
     this.asset = config.asset;

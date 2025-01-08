@@ -7,9 +7,9 @@ import {
 
 import { maxUint256 } from "viem";
 import { describe, expect } from "vitest";
-import { Holding } from "../src/augment/Holding.js";
-import { permit2Abi } from "../src/index.js";
-import { test } from "./setup.js";
+import { permit2Abi } from "../src";
+import { Holding } from "../src/augment/Holding";
+import { test } from "./setup";
 
 const { morpho, bundler, permit2, wNative, wbC3M } =
   addresses[ChainId.EthMainnet];

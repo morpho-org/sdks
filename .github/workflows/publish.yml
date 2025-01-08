@@ -31,6 +31,8 @@ jobs:
           - bundler-sdk-viem
 
           - liquidation-sdk-viem
+          - liquidity-sdk-ethers
+          - liquidity-sdk-viem
 
     name: "@morpho-org/${{ matrix.package }}"
     runs-on: ubuntu-latest
@@ -69,4 +71,7 @@ jobs:
         if: steps.release.outputs.version
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - run: echo "- [RELEASE] ${{ steps.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        if: steps.release.outputs.version
 

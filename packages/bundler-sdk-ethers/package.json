@@ -4,7 +4,11 @@
   "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
-  "repository": "github:morpho-org/sdks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morpho-org/sdks.git",
+    "directory": "packages/bundler-sdk-ethers"
+  },
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
     "url": "https://github.com/morpho-org/sdks/issues",
@@ -25,9 +29,9 @@
   "devDependencies": {
     "@typechain/ethers-v6": "^0.5.1",
     "ethers": "^6.13.4",
-    "hardhat": "^2.22.16",
+    "hardhat": "^2.22.17",
     "typechain": "^8.3.2",
-    "typescript": "^5.6.3"
+    "typescript": "^5.7.2"
   },
   "publishConfig": {
     "main": "lib/index.js",

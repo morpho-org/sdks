@@ -2,7 +2,6 @@ import {
   type Address,
   MarketParams,
   UnknownMarketParamsError,
-  VaultConfig,
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
@@ -133,8 +132,8 @@ export const setupBundle = async <chain extends Chain = Chain>(
     if (isMetaMorphoOperation(operation)) {
       tokens.add(address);
 
-      const vaultConfig = VaultConfig.get(address, startData.chainId);
-      if (vaultConfig) tokens.add(vaultConfig.asset);
+      const vault = startData.tryGetVault(address);
+      if (vault) tokens.add(vault.asset);
     }
 
     if (isErc20Operation(operation)) {

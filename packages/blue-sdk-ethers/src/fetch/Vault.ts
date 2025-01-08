@@ -7,13 +7,12 @@ import {
   ChainUtils,
   type MarketId,
   Vault,
-  type VaultConfig,
   type VaultPublicAllocatorConfig,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchVaultConfig } from "./VaultConfig.js";
-import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
+import type { FetchOptions } from "../types";
+import { fetchVaultConfig } from "./VaultConfig";
+import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
 export async function fetchVault(
   address: Address,
@@ -24,29 +23,13 @@ export async function fetchVault(
     options.chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const config = await fetchVaultConfig(address, runner, options);
+  const chainAddresses = getChainAddresses(options.chainId);
+  const mm = MetaMorpho__factory.connect(address, runner);
 
-  return fetchVaultFromConfig(address, config, runner, options);
-}
-
-export async function fetchVaultFromConfig(
-  address: Address,
-  config: VaultConfig,
-  runner: { provider: Provider },
-  { chainId, overrides = {} }: FetchOptions = {},
-) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
-
-  const chainAddresses = getChainAddresses(chainId);
-  const mm = MetaMorpho__factory.connect(
-    address,
-    // @ts-ignore incompatible commonjs type
-    runner,
-  );
+  const { overrides = {} } = options;
 
   const [
+    config,
     curator,
     owner,
     guardian,
@@ -64,6 +47,7 @@ export async function fetchVaultFromConfig(
     withdrawQueueSize,
     hasPublicAllocator,
   ] = await Promise.all([
+    fetchVaultConfig(address, runner, options),
     mm.curator(overrides) as Promise<Address>,
     mm.owner(overrides) as Promise<Address>,
     mm.guardian(overrides) as Promise<Address>,
@@ -94,7 +78,6 @@ export async function fetchVaultFromConfig(
   if (hasPublicAllocator) {
     const publicAllocator = PublicAllocator__factory.connect(
       chainAddresses.publicAllocator!,
-      // @ts-ignore incompatible commonjs type
       runner,
     );
 

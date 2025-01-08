@@ -5,11 +5,11 @@ import {
   addresses,
 } from "@morpho-org/blue-sdk";
 import { describe, expect } from "vitest";
-import { test } from "./setup.js";
+import { test } from "./setup";
 
 import { maxUint256 } from "viem";
-import { Holding } from "../../src/augment/Holding.js";
-import { permit2Abi } from "./abis.js";
+import { Holding } from "../../src/augment/Holding";
+import { permit2Abi } from "./abis";
 
 const { morpho, bundler, permit2, wNative, wbC3M } =
   addresses[ChainId.EthMainnet];

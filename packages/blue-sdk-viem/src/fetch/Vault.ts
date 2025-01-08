@@ -3,6 +3,7 @@ import type { Address, Client } from "viem";
 import {
   AccrualVault,
   ChainUtils,
+  Eip5267Domain,
   type MarketId,
   Vault,
   VaultConfig,
@@ -11,12 +12,12 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
-import { metaMorphoAbi, publicAllocatorAbi } from "../abis.js";
-import type { DeploylessFetchParameters } from "../types.js";
-import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
+import { metaMorphoAbi, publicAllocatorAbi } from "../abis";
+import type { DeploylessFetchParameters } from "../types";
+import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
-import { abi, code } from "../queries/GetVault.js";
-import { fetchVaultConfig } from "./VaultConfig.js";
+import { abi, code } from "../queries/GetVault";
+import { fetchVaultConfig } from "./VaultConfig";
 
 export async function fetchVault(
   address: Address,
@@ -58,7 +59,14 @@ export async function fetchVault(
       });
 
       return new Vault({
-        ...new VaultConfig({ ...config, address }, parameters.chainId),
+        ...new VaultConfig(
+          {
+            ...config,
+            eip5267Domain: new Eip5267Domain(config.eip5267Domain),
+            address,
+          },
+          parameters.chainId,
+        ),
         owner,
         curator,
         guardian,

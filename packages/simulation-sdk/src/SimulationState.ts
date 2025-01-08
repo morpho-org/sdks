@@ -4,8 +4,6 @@ import {
   type Address,
   AssetBalances,
   ChainId,
-  DEFAULT_SLIPPAGE_TOLERANCE,
-  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
   type Holding,
   type Market,
   type MarketId,
@@ -29,6 +27,7 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import {
+  Time,
   ZERO_ADDRESS,
   bigIntComparator,
   isDefined,
@@ -47,17 +46,30 @@ import {
 } from "./errors.js";
 import { type MaybeDraft, simulateOperation } from "./handlers/index.js";
 
+/**
+ * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
+ */
+export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 92_0000000000000000n;
+
 export interface PublicAllocatorOptions {
   enabled?: boolean;
 
   /* The array of vaults to reallocate. Must all have enabled the PublicAllocator. Defaults to all the vaults that have enabled the PublicAllocator. */
   reallocatableVaults?: Address[];
 
-  /* Fallback maximum utilization allowed from withdrawn markets. */
+  /**
+   * The maximum utilization of each market allowed to reach to find shared liquidity (scaled by WAD).
+   */
+  maxWithdrawalUtilization?: Record<MarketId, bigint | undefined>;
+
+  /**
+   * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
+   * @default 92%
+   */
   defaultMaxWithdrawalUtilization?: bigint;
 
-  /* Market-specific maximum utilization allowed for each corresponding withdrawn market. */
-  maxWithdrawalUtilization?: Record<MarketId, bigint | undefined>;
+  /* The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
+  delay?: bigint;
 }
 
 export interface PublicReallocation {
@@ -408,8 +420,7 @@ export class SimulationState implements InputSimulationState {
           wrappedToken.underlying,
         );
 
-        // We don't want to add 0 balances
-        if (unwrappedBalance) {
+        if (unwrappedBalance != null) {
           const wrappedBalance = wrappedToken.toWrappedExactAmountIn(
             unwrappedBalance,
             slippage,
@@ -431,8 +442,7 @@ export class SimulationState implements InputSimulationState {
         _try(() => {
           const wEthBalance = this.getBundleBalance(user, wNative);
 
-          // We don't want to add 0 balances
-          if (wEthBalance) {
+          if (wEthBalance != null) {
             const stEthToken = this.getWrappedToken(stEth);
             const stEthBalance = stEthToken.toWrappedExactAmountIn(
               wEthBalance,
@@ -455,8 +465,7 @@ export class SimulationState implements InputSimulationState {
         _try(() => {
           const ethBalance = this.getBundleBalance(user, NATIVE_ADDRESS);
 
-          // We don't want to add 0 balances
-          if (ethBalance) {
+          if (ethBalance != null) {
             const stEthToken = this.getWrappedToken(stEth);
             const stEthBalance = stEthToken.toWrappedExactAmountIn(
               ethBalance,
@@ -532,6 +541,7 @@ export class SimulationState implements InputSimulationState {
       reallocatableVaults = keys(this.vaultMarketConfigs),
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
+      delay = Time.s.from.h(1n),
     }: PublicAllocatorOptions = {},
   ) {
     if (!enabled) return { withdrawals: [], data: this };
@@ -553,9 +563,6 @@ export class SimulationState implements InputSimulationState {
       const vaultWithdrawals = reallocatableVaults
         .map((vault) =>
           _try(() => {
-            const dstAssets = data
-              .getAccrualPosition(vault, marketId)
-              .accrueInterest(this.block.timestamp).supplyAssets;
             const { cap, publicAllocatorConfig } = data.getVaultMarketConfig(
               vault,
               marketId,
@@ -563,15 +570,21 @@ export class SimulationState implements InputSimulationState {
 
             const suppliable =
               cap -
-              // There is slippage in the expected vault's supply on the destination market.
-              MathLib.wMulDown(
-                dstAssets,
-                MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
-              );
+              data
+                .getAccrualPosition(vault, marketId)
+                .accrueInterest(this.block.timestamp + delay).supplyAssets;
 
             const marketWithdrawals = data
               .getVault(vault)
-              .withdrawQueue.filter((srcMarketId) => srcMarketId !== marketId)
+              .withdrawQueue.filter(
+                (srcMarketId) =>
+                  srcMarketId !== marketId &&
+                  !withdrawals.some(
+                    (withdrawal) =>
+                      withdrawal.id === srcMarketId &&
+                      withdrawal.vault === vault,
+                  ),
+              )
               .map((srcMarketId) => {
                 try {
                   const srcPosition = data

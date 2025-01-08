@@ -3,18 +3,33 @@ export type WithIndex<T> = T & { index: number };
 
 export type ArrayElementType<T> = T extends (infer U)[] ? U : never;
 
-export type DottedKeys<T> = T extends object | null | undefined
+type Digit = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type NextDigit = [1, 2, 3, 4, 5, 6, 7, "MAX"];
+type Inc<T> = T extends Digit ? NextDigit[T] : "MAX";
+
+export type DottedKeys<T, Depth = 0> = T extends object | null | undefined
   ? {
       [K in keyof T & string]: T[K] extends object | null | undefined
-        ? `${K}.${DottedKeys<T[K]>}`
+        ? `${K}.${
+            // biome-ignore lint/suspicious/noExplicitAny: allow any keys from max depth on
+            Depth extends "MAX" ? any : DottedKeys<T[K], Inc<Depth>>
+          }`
         : K;
     }[keyof T & string]
   : "";
 
-export type PartialDottedKeys<T> = T extends object | null | undefined
+export type PartialDottedKeys<T, Depth = 0> = T extends
+  | object
+  | null
+  | undefined
   ? {
       [K in keyof T & string]: T[K] extends object | null | undefined
-        ? `${K}.${PartialDottedKeys<T[K]>}` | K
+        ?
+            | `${K}.${
+                // biome-ignore lint/suspicious/noExplicitAny: allow any keys from max depth on
+                Depth extends "MAX" ? any : PartialDottedKeys<T[K], Inc<Depth>>
+              }`
+            | K
         : K;
     }[keyof T & string]
   : "";

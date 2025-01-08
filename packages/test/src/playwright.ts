@@ -1,5 +1,5 @@
 import { test } from "@playwright/test";
-import { http, type Chain } from "viem";
+import { http, type Chain, formatUnits } from "viem";
 import { type AnvilArgs, spawnAnvil } from "./anvil";
 import { type AnvilTestClient, createAnvilTestClient } from "./client";
 
@@ -39,3 +39,48 @@ export const createViemTest = <chain extends Chain>(
     },
   });
 };
+
+export const expect = test.expect.extend({
+  toApproxEqual(
+    received: bigint,
+    expected: bigint,
+    numDigits = 2,
+    decimals = 18,
+  ) {
+    const assertionName = "toApproxEqual";
+
+    const receivedNumber = Number(formatUnits(received, decimals));
+    const expectedNumber = Number(formatUnits(expected, decimals));
+
+    let pass: boolean;
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    let matcherResult: any;
+    try {
+      test.expect(receivedNumber).toBeCloseTo(expectedNumber, numDigits);
+      pass = true;
+    } catch (error) {
+      // @ts-expect-error
+      matcherResult = error.matcherResult;
+      pass = false;
+    }
+
+    return {
+      message: () => {
+        return `${this.utils.matcherHint(assertionName, undefined, undefined, {
+          isNot: this.isNot,
+        })}
+
+Expected: ${this.utils.printExpected(expectedNumber)}
+Received: ${this.utils.printReceived(receivedNumber)}
+
+Expected precision:  ${numDigits}
+Expected difference: ${this.isNot ? ">=" : "<"} ${this.utils.printExpected(10 ** -numDigits / 2)}
+Received difference: ${this.utils.printReceived(Math.abs(receivedNumber - expectedNumber))}`;
+      },
+      pass,
+      name: assertionName,
+      expected,
+      actual: matcherResult?.actual,
+    };
+  },
+});

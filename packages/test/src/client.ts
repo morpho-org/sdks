@@ -8,6 +8,7 @@ import {
   type HDAccount,
   type HttpTransport,
   type PublicActions,
+  type PublicRpcSchema,
   type SendRawTransactionParameters,
   type SendTransactionParameters,
   type SendTransactionRequest,
@@ -16,6 +17,7 @@ import {
   type UnionPartialBy,
   type WaitForTransactionReceiptReturnType,
   type WalletActions,
+  type WalletRpcSchema,
   type WriteContractParameters,
   type WriteContractReturnType,
   createTestClient,
@@ -26,7 +28,12 @@ import {
   walletActions,
 } from "viem";
 import { type DealActions, dealActions } from "viem-deal";
-import { type TracedTransport, traceActions, traced } from "viem-tracer";
+import {
+  type TraceActions,
+  type TracedTransport,
+  traceActions,
+  traced,
+} from "viem-tracer";
 import {
   sendRawTransaction as viem_sendRawTransaction,
   sendTransaction as viem_sendTransaction,
@@ -39,15 +46,16 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
   TracedTransport<HttpTransport>,
   chain,
   HDAccount,
-  TestRpcSchema<"anvil">,
+  TestRpcSchema<"anvil"> | PublicRpcSchema | WalletRpcSchema,
   TestActions &
     DealActions &
+    TraceActions &
     PublicActions<TracedTransport<HttpTransport>, chain, HDAccount> &
     WalletActions<chain, HDAccount> & {
       timestamp(): Promise<bigint>;
 
       approve(args: ApproveParameters<chain>): Promise<WriteContractReturnType>;
-      balanceOf(args: { erc20?: Address; owner?: Address }): Promise<bigint>;
+      balanceOf(args?: { erc20?: Address; owner?: Address }): Promise<bigint>;
       allowance(args: {
         erc20?: Address;
         owner?: Address;
@@ -141,7 +149,7 @@ export const createAnvilTestClient = <chain extends Chain>(
         async balanceOf({
           erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
           owner = client.account.address,
-        }: { erc20?: Address; owner?: Address }) {
+        }: { erc20?: Address; owner?: Address } = {}) {
           if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
             return client.getBalance({ address: owner });
 

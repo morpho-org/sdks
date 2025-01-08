@@ -7,7 +7,10 @@
       "cache",
       "coverage",
       "artifacts",
-      "packages/liquidation-sdk-viem/src/api/sdk.ts"
+      "packages/bundler-sdk-ethers/src/types",
+      "packages/liquidation-sdk-viem/src/api/sdk.ts",
+      "packages/liquidity-sdk-ethers/src/api/sdk.ts",
+      "packages/liquidity-sdk-viem/src/api/sdk.ts"
     ]
   },
   "formatter": {

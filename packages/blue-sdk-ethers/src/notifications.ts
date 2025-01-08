@@ -11,7 +11,7 @@ import {
   lastValueFrom,
 } from "rxjs";
 
-import type { SignatureMessage } from "./signatures/types.js";
+import type { SignatureMessage } from "./signatures/types";
 
 export enum NotificationStatus {
   signing = "signing",

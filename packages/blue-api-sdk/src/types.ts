@@ -183,7 +183,7 @@ export type Market = {
   /** Market concentrations */
   concentration: Maybe<MarketConcentration>;
   creationBlockNumber: Scalars["Int"]["output"];
-  creationTimestamp: Maybe<Scalars["BigInt"]["output"]>;
+  creationTimestamp: Scalars["BigInt"]["output"];
   creatorAddress: Maybe<Scalars["Address"]["output"]>;
   /** Current IRM curve at different utilization thresholds for display purpose */
   currentIrmCurve: Maybe<Array<IrmCurveDataPoint>>;
@@ -282,6 +282,10 @@ export type MarketConcentration = {
 
 /** Filtering options for markets. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
 export type MarketFilters = {
+  /** Filter by greater than or equal to given apy at target utilization */
+  apyAtTarget_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by lower than or equal to given apy at target utilization */
+  apyAtTarget_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by greater than or equal to given borrow APY */
   borrowApy_gte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by lower than or equal to given borrow APY */
@@ -336,10 +340,6 @@ export type MarketFilters = {
   netSupplyApy_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by market oracle address. Case insensitive. */
   oracleAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  /** Filter by greater than or equal to given rate at target utilization */
-  rateAtUTarget_gte?: InputMaybe<Scalars["Float"]["input"]>;
-  /** Filter by lower than or equal to given rate at target utilization */
-  rateAtUTarget_lte?: InputMaybe<Scalars["Float"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by greater than or equal to given supply APY */
   supplyApy_gte?: InputMaybe<Scalars["Float"]["input"]>;
@@ -377,6 +377,8 @@ export type MarketHistory = {
   allTimeNetSupplyApy: Maybe<Array<FloatDataPoint>>;
   /** All Time Supply APY excluding rewards */
   allTimeSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** AdaptiveCurveIRM APY if utilization was at target */
+  apyAtTarget: Maybe<Array<FloatDataPoint>>;
   /** Borrow APY excluding rewards */
   borrowApy: Maybe<Array<FloatDataPoint>>;
   /** Amount borrowed on the market, in underlying units. Amount increases as interests accrue. */
@@ -415,6 +417,8 @@ export type MarketHistory = {
   netBorrowApy: Maybe<Array<FloatDataPoint>>;
   /** Supply APY including rewards */
   netSupplyApy: Maybe<Array<FloatDataPoint>>;
+  /** Collateral price */
+  price: Maybe<Array<FloatDataPoint>>;
   /** Quarterly Borrow APY excluding rewards */
   quarterlyBorrowApy: Maybe<Array<FloatDataPoint>>;
   /** Quarterly Borrow APY including rewards */
@@ -423,7 +427,12 @@ export type MarketHistory = {
   quarterlyNetSupplyApy: Maybe<Array<FloatDataPoint>>;
   /** Quarterly Supply APY excluding rewards */
   quarterlySupplyApy: Maybe<Array<FloatDataPoint>>;
-  /** Rate at utilization target */
+  /** AdaptiveCurveIRM rate per second if utilization was at target */
+  rateAtTarget: Maybe<Array<BigIntDataPoint>>;
+  /**
+   * AdaptiveCurveIRM APY if utilization was at target
+   * @deprecated Use `apyAtTarget` instead
+   */
   rateAtUTarget: Maybe<Array<FloatDataPoint>>;
   /** Supply APY excluding rewards */
   supplyApy: Maybe<Array<FloatDataPoint>>;
@@ -470,6 +479,11 @@ export type MarketHistoryAllTimeNetSupplyApyArgs = {
 
 /** Market state history */
 export type MarketHistoryAllTimeSupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryApyAtTargetArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -569,6 +583,11 @@ export type MarketHistoryNetSupplyApyArgs = {
 };
 
 /** Market state history */
+export type MarketHistoryPriceArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
 export type MarketHistoryQuarterlyBorrowApyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
@@ -585,6 +604,11 @@ export type MarketHistoryQuarterlyNetSupplyApyArgs = {
 
 /** Market state history */
 export type MarketHistoryQuarterlySupplyApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market state history */
+export type MarketHistoryRateAtTargetArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -716,6 +740,7 @@ export type MarketOracleInfo = {
 };
 
 export enum MarketOrderBy {
+  ApyAtTarget = "ApyAtTarget",
   BorrowApy = "BorrowApy",
   BorrowAssets = "BorrowAssets",
   BorrowAssetsUsd = "BorrowAssetsUsd",
@@ -753,10 +778,20 @@ export type MarketPosition = {
   collateralUsd: Maybe<Scalars["Float"]["output"]>;
   /** Health factor of the position, computed as collateral value divided by borrow value. */
   healthFactor: Maybe<Scalars["Float"]["output"]>;
+  /**
+   * State history
+   * @deprecated Not indexed yet.
+   */
+  historicalState: Maybe<MarketPositionHistory>;
   id: Scalars["ID"]["output"];
   market: Market;
   /** Price variation required for the given position to reach its liquidation threshold (scaled by WAD) */
   priceVariationToLiquidationPrice: Maybe<Scalars["Float"]["output"]>;
+  /**
+   * Current state
+   * @deprecated Not indexed yet.
+   */
+  state: Maybe<MarketPositionState>;
   /** Amount of loan asset supplied, in underlying token units. */
   supplyAssets: Scalars["BigInt"]["output"];
   /** Amount of loan asset supplied, in USD for display purpose. */
@@ -797,12 +832,95 @@ export type MarketPositionFilters = {
   userId_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 
+/** Market position state history */
+export type MarketPositionHistory = {
+  __typename?: "MarketPositionHistory";
+  /** Borrow assets history. */
+  borrowAssets: Maybe<Array<BigIntDataPoint>>;
+  /** Borrow shares history. */
+  borrowShares: Maybe<Array<BigIntDataPoint>>;
+  /** Collateral history. */
+  collateral: Maybe<Array<BigIntDataPoint>>;
+  /** Profit (from the collateral's price variation) & Loss (from the loan interest) history, in loan assets. */
+  pnl: Maybe<Array<BigIntDataPoint>>;
+  /** Profit (from the collateral's price variation) & Loss (from the loan interest) history, in USD for display purposes. */
+  pnlUsd: Maybe<Array<FloatDataPoint>>;
+  /** Supply assets history. */
+  supplyAssets: Maybe<Array<BigIntDataPoint>>;
+  /** Supply shares history. */
+  supplyShares: Maybe<Array<BigIntDataPoint>>;
+};
+
+/** Market position state history */
+export type MarketPositionHistoryBorrowAssetsArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
+export type MarketPositionHistoryBorrowSharesArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
+export type MarketPositionHistoryCollateralArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
+export type MarketPositionHistoryPnlArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
+export type MarketPositionHistoryPnlUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
+export type MarketPositionHistorySupplyAssetsArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
+export type MarketPositionHistorySupplySharesArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
 export enum MarketPositionOrderBy {
   BorrowShares = "BorrowShares",
   Collateral = "Collateral",
   HealthFactor = "HealthFactor",
   SupplyShares = "SupplyShares",
 }
+
+/** Market position state */
+export type MarketPositionState = {
+  __typename?: "MarketPositionState";
+  /** The last borrow assets used to update the position's P&L. */
+  borrowAssets: Scalars["BigInt"]["output"];
+  /** The last borrow shares used to update the position's P&L. */
+  borrowShares: Scalars["BigInt"]["output"];
+  /** The last collateral assets used to update the position's P&L. */
+  collateral: Scalars["BigInt"]["output"];
+  /** The last collateral asset USD price used to update the position's P&L in USD. */
+  collateralAssetUsdPrice: Maybe<Scalars["Float"]["output"]>;
+  /** The last collateral price used to update the position's P&L. */
+  collateralPrice: Scalars["BigInt"]["output"];
+  id: Scalars["ID"]["output"];
+  /** The last loan asset USD price used to update the position's P&L in USD. */
+  loanAssetUsdPrice: Maybe<Scalars["Float"]["output"]>;
+  /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in loan assets. */
+  pnl: Scalars["BigInt"]["output"];
+  /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in USD for display purpose */
+  pnlUsd: Maybe<Scalars["Float"]["output"]>;
+  position: MarketPosition;
+  /** The last supply assets used to update the position's P&L. */
+  supplyAssets: Scalars["BigInt"]["output"];
+  /** The last supply shares used to update the position's P&L. */
+  supplyShares: Scalars["BigInt"]["output"];
+  /** Last update timestamp. */
+  timestamp: Scalars["BigInt"]["output"];
+};
 
 /** Morpho Blue market state */
 export type MarketState = {
@@ -815,6 +933,8 @@ export type MarketState = {
   allTimeNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** All Time Supply APY excluding rewards */
   allTimeSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Apy at target utilization */
+  apyAtTarget: Scalars["Float"]["output"];
   /** Borrow APY */
   borrowApy: Scalars["Float"]["output"];
   /** Amount borrowed on the market, in underlying units. Amount increases as interests accrue. */
@@ -833,6 +953,8 @@ export type MarketState = {
   dailyNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
   /** Daily Supply APY including rewards */
   dailyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Variation of the collateral price over the last 24 hours */
+  dailyPriceVariation: Maybe<Scalars["Float"]["output"]>;
   /** Daily Supply APY excluding rewards */
   dailySupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Fee rate */
@@ -854,6 +976,8 @@ export type MarketState = {
   netBorrowApy: Maybe<Scalars["Float"]["output"]>;
   /** Supply APY including rewards */
   netSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Collateral price */
+  price: Maybe<Scalars["BigInt"]["output"]>;
   /** Quarterly Borrow APY excluding rewards */
   quarterlyBorrowApy: Maybe<Scalars["Float"]["output"]>;
   /** Quarterly Borrow APY including rewards */
@@ -862,7 +986,12 @@ export type MarketState = {
   quarterlyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Quarterly Supply APY excluding rewards */
   quarterlySupplyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Borrow rate at target utilization */
+  /** Rate at target utilization */
+  rateAtTarget: Maybe<Scalars["BigInt"]["output"]>;
+  /**
+   * Apy at target utilization
+   * @deprecated Use `apyAtTarget` instead
+   */
   rateAtUTarget: Scalars["Float"]["output"];
   /** Market state rewards */
   rewards: Maybe<Array<MarketStateReward>>;
@@ -1741,11 +1870,31 @@ export type User = {
   __typename?: "User";
   address: Scalars["Address"]["output"];
   chain: Chain;
+  historicalState: Array<UserHistory>;
   id: Scalars["ID"]["output"];
   marketPositions: Array<MarketPosition>;
+  state: UserState;
   tag: Maybe<Scalars["String"]["output"]>;
   transactions: Array<Transaction>;
   vaultPositions: Array<VaultPosition>;
+};
+
+/** User state history */
+export type UserHistory = {
+  __typename?: "UserHistory";
+  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's market positions, in USD. */
+  marketsPnlUsd: Maybe<Array<FloatDataPoint>>;
+  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's vault positions, in USD. */
+  vaultsPnlUsd: Maybe<Array<FloatDataPoint>>;
+};
+
+/** User state */
+export type UserState = {
+  __typename?: "UserState";
+  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's market positions, in USD. */
+  marketsPnlUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's vault positions, in USD. */
+  vaultsPnlUsd: Maybe<Scalars["Float"]["output"]>;
 };
 
 /** Filtering options for users. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
@@ -1786,7 +1935,7 @@ export type Vault = {
   asset: Asset;
   chain: Chain;
   creationBlockNumber: Scalars["Int"]["output"];
-  creationTimestamp: Maybe<Scalars["BigInt"]["output"]>;
+  creationTimestamp: Scalars["BigInt"]["output"];
   creatorAddress: Maybe<Scalars["Address"]["output"]>;
   /**
    * Daily vault APY
@@ -1903,9 +2052,9 @@ export type VaultAllocator = {
 /** Vault APY aggregates */
 export type VaultApyAggregates = {
   __typename?: "VaultApyAggregates";
-  /** Average vault apy excluding rewards */
+  /** Average vault apy excluding rewards, before deducting the performance fee. */
   apy: Maybe<Scalars["Float"]["output"]>;
-  /** Average vault APY including rewards */
+  /** Average vault APY including rewards, after deducting the performance fee. */
   netApy: Maybe<Scalars["Float"]["output"]>;
 };
 
@@ -1972,19 +2121,19 @@ export type VaultFilters = {
 /** Meta-Morpho vault history */
 export type VaultHistory = {
   __typename?: "VaultHistory";
-  /** All Time Vault APY excluding rewards */
+  /** All Time Vault APY excluding rewards, before deducting the performance fee. */
   allTimeApy: Maybe<Array<FloatDataPoint>>;
-  /** All Time Vault APY including rewards */
+  /** All Time Vault APY including rewards, after deducting the performance fee. */
   allTimeNetApy: Maybe<Array<FloatDataPoint>>;
   /** Vault allocation on Morpho Blue markets. */
   allocation: Maybe<Array<VaultAllocationHistory>>;
-  /** Vault APY excluding rewards. */
+  /** Vault APY excluding rewards, before deducting the performance fee. */
   apy: Maybe<Array<FloatDataPoint>>;
   /** Vault curator. */
   curator: Maybe<Array<AddressDataPoint>>;
-  /** Daily Vault APY excluding rewards */
+  /** Daily Vault APY excluding rewards, before deducting the performance fee. */
   dailyApy: Maybe<Array<FloatDataPoint>>;
-  /** Daily Vault APY including rewards */
+  /** Daily Vault APY including rewards, after deducting the performance fee. */
   dailyNetApy: Maybe<Array<FloatDataPoint>>;
   /** Vault performance fee. */
   fee: Maybe<Array<FloatDataPoint>>;
@@ -1992,18 +2141,24 @@ export type VaultHistory = {
   feeRecipient: Maybe<Array<AddressDataPoint>>;
   /** Guardian. */
   guardian: Maybe<Array<AddressDataPoint>>;
-  /** Monthly Vault APY excluding rewards */
+  /** Monthly Vault APY excluding rewards, before deducting the performance fee. */
   monthlyApy: Maybe<Array<FloatDataPoint>>;
-  /** Monthly Vault APY including rewards */
+  /** Monthly Vault APY including rewards, after deducting the performance fee. */
   monthlyNetApy: Maybe<Array<FloatDataPoint>>;
-  /** Vault APY including rewards. */
+  /** Vault APY including rewards, after deducting the performance fee. */
   netApy: Maybe<Array<FloatDataPoint>>;
+  /** Vault APY excluding rewards, after deducting the performance fee. */
+  netApyWithoutRewards: Maybe<Array<FloatDataPoint>>;
   /** Owner. */
   owner: Maybe<Array<AddressDataPoint>>;
-  /** Quarterly Vault APY excluding rewards */
+  /** Quarterly Vault APY excluding rewards, before deducting the performance fee. */
   quarterlyApy: Maybe<Array<FloatDataPoint>>;
-  /** Quarterly Vault APY including rewards */
+  /** Quarterly Vault APY including rewards, after deducting the performance fee. */
   quarterlyNetApy: Maybe<Array<FloatDataPoint>>;
+  /** Value of WAD shares in assets */
+  sharePrice: Maybe<Array<BigIntDataPoint>>;
+  /** Value of WAD shares in USD */
+  sharePriceUsd: Maybe<Array<FloatDataPoint>>;
   /** Skim recipient. */
   skimRecipient: Maybe<Array<AddressDataPoint>>;
   /** Total value of vault holdings, in underlying token units. */
@@ -2012,13 +2167,13 @@ export type VaultHistory = {
   totalAssetsUsd: Maybe<Array<FloatDataPoint>>;
   /** Vault shares total supply. */
   totalSupply: Maybe<Array<BigIntDataPoint>>;
-  /** Weekly Vault APY excluding rewards */
+  /** Weekly Vault APY excluding rewards, before deducting the performance fee. */
   weeklyApy: Maybe<Array<FloatDataPoint>>;
-  /** Weekly Vault APY including rewards */
+  /** Weekly Vault APY including rewards, after deducting the performance fee. */
   weeklyNetApy: Maybe<Array<FloatDataPoint>>;
-  /** Yearly Vault APY excluding rewards */
+  /** Yearly Vault APY excluding rewards, before deducting the performance fee. */
   yearlyApy: Maybe<Array<FloatDataPoint>>;
-  /** Yearly Vault APY including rewards */
+  /** Yearly Vault APY including rewards, after deducting the performance fee. */
   yearlyNetApy: Maybe<Array<FloatDataPoint>>;
 };
 
@@ -2083,6 +2238,11 @@ export type VaultHistoryNetApyArgs = {
 };
 
 /** Meta-Morpho vault history */
+export type VaultHistoryNetApyWithoutRewardsArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
 export type VaultHistoryOwnerArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
@@ -2094,6 +2254,16 @@ export type VaultHistoryQuarterlyApyArgs = {
 
 /** Meta-Morpho vault history */
 export type VaultHistoryQuarterlyNetApyArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistorySharePriceArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Meta-Morpho vault history */
+export type VaultHistorySharePriceUsdArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2195,9 +2365,19 @@ export type VaultPosition = {
   assets: Scalars["BigInt"]["output"];
   /** Value of vault shares held, in USD for display purpose. */
   assetsUsd: Maybe<Scalars["Float"]["output"]>;
+  /**
+   * State history
+   * @deprecated Not indexed yet.
+   */
+  historicalState: Maybe<VaultPositionHistory>;
   id: Scalars["ID"]["output"];
   /** Amount of vault shares */
   shares: Scalars["BigInt"]["output"];
+  /**
+   * Current state
+   * @deprecated Not indexed yet.
+   */
+  state: Maybe<VaultPositionState>;
   user: User;
   vault: Vault;
 };
@@ -2221,9 +2401,61 @@ export type VaultPositionFilters = {
   vaultId_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 
+/** Vault position state history */
+export type VaultPositionHistory = {
+  __typename?: "VaultPositionHistory";
+  /** Value of the position since its inception, in underlying assets. */
+  assets: Maybe<Array<BigIntDataPoint>>;
+  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of the position since its inception, in underlying assets. */
+  pnl: Maybe<Array<BigIntDataPoint>>;
+  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of the position since its inception, in USD for display purposes. */
+  pnlUsd: Maybe<Array<FloatDataPoint>>;
+  /** Value of the position since its inception, in vault shares. */
+  shares: Maybe<Array<BigIntDataPoint>>;
+};
+
+/** Vault position state history */
+export type VaultPositionHistoryAssetsArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault position state history */
+export type VaultPositionHistoryPnlArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault position state history */
+export type VaultPositionHistoryPnlUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault position state history */
+export type VaultPositionHistorySharesArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
 export enum VaultPositionOrderBy {
   Shares = "Shares",
 }
+
+/** Vault position state */
+export type VaultPositionState = {
+  __typename?: "VaultPositionState";
+  /** The last asset USD price used to update the position's P&L in USD. */
+  assetUsdPrice: Maybe<Scalars["Float"]["output"]>;
+  id: Scalars["ID"]["output"];
+  /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in loan assets. */
+  pnl: Scalars["BigInt"]["output"];
+  /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in USD for display purpose */
+  pnlUsd: Maybe<Scalars["Float"]["output"]>;
+  position: VaultPosition;
+  /** The last supply assets used to update the position's P&L. */
+  supplyAssets: Scalars["BigInt"]["output"];
+  /** The last supply shares used to update the position's P&L. */
+  supplyShares: Scalars["BigInt"]["output"];
+  /** Last update timestamp. */
+  timestamp: Scalars["BigInt"]["output"];
+};
 
 /** Vault reallocate */
 export type VaultReallocate = {
@@ -2283,19 +2515,19 @@ export enum VaultReallocateType {
 /** MetaMorpho vault state */
 export type VaultState = {
   __typename?: "VaultState";
-  /** All Time Vault APY excluding rewards */
+  /** All Time Vault APY excluding rewards, before deducting the performance fee. */
   allTimeApy: Maybe<Scalars["Float"]["output"]>;
-  /** All Time Vault APY including rewards */
+  /** All Time Vault APY including rewards, after deducting the performance fee. */
   allTimeNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Vault allocation on Morpho Blue markets. */
   allocation: Maybe<Array<VaultAllocation>>;
-  /** Vault APY excluding rewards. */
+  /** Vault APY excluding rewards, before deducting the performance fee. */
   apy: Scalars["Float"]["output"];
   /** Vault curator address. */
   curator: Scalars["Address"]["output"];
-  /** Daily Vault APY excluding rewards */
+  /** Daily Vault APY excluding rewards, before deducting the performance fee. */
   dailyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Daily Vault APY including rewards */
+  /** Daily Vault APY including rewards, after deducting the performance fee. */
   dailyNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Vault performance fee. */
   fee: Scalars["Float"]["output"];
@@ -2306,12 +2538,14 @@ export type VaultState = {
   id: Scalars["ID"]["output"];
   /** Stores the total assets managed by this vault when the fee was last accrued, in underlying token units. */
   lastTotalAssets: Scalars["BigInt"]["output"];
-  /** Monthly Vault APY excluding rewards */
+  /** Monthly Vault APY excluding rewards, before deducting the performance fee. */
   monthlyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Monthly Vault APY including rewards */
+  /** Monthly Vault APY including rewards, after deducting the performance fee. */
   monthlyNetApy: Maybe<Scalars["Float"]["output"]>;
-  /** Vault APY including rewards. */
+  /** Vault APY including rewards, after deducting the performance fee. */
   netApy: Maybe<Scalars["Float"]["output"]>;
+  /** Vault APY excluding rewards, after deducting the performance fee. */
+  netApyWithoutRewards: Scalars["Float"]["output"];
   /** Owner address. */
   owner: Scalars["Address"]["output"];
   /** Pending guardian address. */
@@ -2324,12 +2558,16 @@ export type VaultState = {
   pendingTimelock: Maybe<Scalars["BigInt"]["output"]>;
   /** Pending timelock apply timestamp. */
   pendingTimelockValidAt: Maybe<Scalars["BigInt"]["output"]>;
-  /** Quarterly Vault APY excluding rewards */
+  /** Quarterly Vault APY excluding rewards, before deducting the performance fee. */
   quarterlyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Quarterly Vault APY including rewards */
+  /** Quarterly Vault APY including rewards, after deducting the performance fee. */
   quarterlyNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Vault state rewards */
   rewards: Maybe<Array<VaultStateReward>>;
+  /** Value of WAD shares in assets */
+  sharePrice: Maybe<Scalars["BigInt"]["output"]>;
+  /** Value of WAD shares in USD */
+  sharePriceUsd: Maybe<Scalars["Float"]["output"]>;
   /** Skim recipient address. */
   skimRecipient: Scalars["Address"]["output"];
   /** Timelock in seconds. */
@@ -2342,13 +2580,13 @@ export type VaultState = {
   totalAssetsUsd: Maybe<Scalars["Float"]["output"]>;
   /** Vault shares total supply. */
   totalSupply: Scalars["BigInt"]["output"];
-  /** Weekly Vault APY excluding rewards */
+  /** Weekly Vault APY excluding rewards, before deducting the performance fee. */
   weeklyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Weekly Vault APY including rewards */
+  /** Weekly Vault APY including rewards, after deducting the performance fee. */
   weeklyNetApy: Maybe<Scalars["Float"]["output"]>;
-  /** Yearly Vault APY excluding rewards */
+  /** Yearly Vault APY excluding rewards, before deducting the performance fee. */
   yearlyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Yearly Vault APY including rewards */
+  /** Yearly Vault APY including rewards, after deducting the performance fee. */
   yearlyNetApy: Maybe<Scalars["Float"]["output"]>;
 };
 

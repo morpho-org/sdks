@@ -4,9 +4,9 @@ import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { markets } from "@morpho-org/morpho-test";
 import { testAccount } from "@morpho-org/test";
 import { describe, expect } from "vitest";
-import { Position } from "../src/augment/Position.js";
-import { blueAbi } from "../src/index.js";
-import { test } from "./setup.js";
+import { blueAbi } from "../src";
+import { Position } from "../src/augment/Position";
+import { test } from "./setup";
 
 const { morpho } = addresses[ChainId.EthMainnet];
 const { usdc_wstEth } = markets[ChainId.EthMainnet];

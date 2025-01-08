@@ -27,25 +27,25 @@
   "devDependencies": {
     "@actions/core": "^1.11.1",
     "@biomejs/biome": "^1.9.4",
-    "@commitlint/cli": "^19.5.0",
-    "@commitlint/config-conventional": "^19.5.0",
-    "@vitest/coverage-v8": "^2.1.4",
+    "@commitlint/cli": "^19.6.0",
+    "@commitlint/config-conventional": "^19.6.0",
+    "@conventional-changelog/git-client": "^1.0.1",
+    "@vitest/coverage-v8": "^2.1.8",
     "conventional-changelog-conventionalcommits": "^8.0.0",
     "conventional-changelog-writer": "^8.0.0",
     "conventional-recommended-bump": "^10.0.0",
-    "dotenv-cli": "^7.4.2",
-    "happy-dom": "^15.9.0",
-    "husky": "^9.1.6",
-    "lint-staged": "^15.2.10",
+    "dotenv-cli": "^7.4.4",
+    "happy-dom": "^16.2.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
     "semver": "^7.6.3",
-    "typescript": "^5.6.3",
-    "viem": "^2.21.50",
-    "vitest": "^2.1.5"
+    "typescript": "^5.7.2",
+    "viem": "^2.22.2",
+    "vitest": "^2.1.8"
   },
   "lint-staged": {
-    "*.json": "biome check --write --no-errors-on-unmatched",
-    "*.ts*": "biome check --write --no-errors-on-unmatched && lint:address",
-    "*.js*": "biome check --write --no-errors-on-unmatched && lint:address"
+    "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
+    "*.[tj]s*": "biome check --write --no-errors-on-unmatched && lint:address"
   },
   "commitlint": {
     "extends": ["@commitlint/config-conventional"]

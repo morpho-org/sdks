@@ -10,8 +10,8 @@ import {
 
 import type { Address } from "@morpho-org/blue-sdk";
 
-import { InvalidSignatureError } from "../errors.js";
-import type { SignatureMessage } from "./types.js";
+import { InvalidSignatureError } from "../errors";
+import type { SignatureMessage } from "./types";
 
 export async function safeSignTypedData(
   signer: Signer,

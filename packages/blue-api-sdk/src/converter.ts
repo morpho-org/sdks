@@ -7,109 +7,102 @@ import {
   MathLib,
   Position,
   Token,
+  Vault,
   VaultConfig,
   VaultMarketAllocation,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
   VaultUtils,
 } from "@morpho-org/blue-sdk";
-import { Time, ZERO_ADDRESS, isDefined } from "@morpho-org/morpho-ts";
+import { ZERO_ADDRESS, isDefined } from "@morpho-org/morpho-ts";
 
 import type {
-  Chain as BlueApiChain,
-  Market as BlueApiMarket,
-  MarketPosition as BlueApiMarketPosition,
-  MarketState as BlueApiMarketState,
-  PublicAllocatorConfig as BlueApiPublicAllocatorConfig,
-  PublicAllocatorFlowCaps as BlueApiPublicAllocatorFlowCaps,
-  Asset as BlueApiToken,
-  User as BlueApiUser,
-  Vault as BlueApiVault,
-  VaultAllocation as BlueApiVaultAllocation,
-  VaultState as BlueApiVaultState,
+  Chain as ApiChain,
+  Market as ApiMarket,
+  MarketPosition as ApiMarketPosition,
+  MarketState as ApiMarketState,
+  PublicAllocatorConfig as ApiPublicAllocatorConfig,
+  PublicAllocatorFlowCaps as ApiPublicAllocatorFlowCaps,
+  Asset as ApiToken,
+  User as ApiUser,
+  Vault as ApiVault,
+  VaultAllocation as ApiVaultAllocation,
+  VaultState as ApiVaultState,
   Maybe,
 } from "./types.js";
 
-export interface PartialBlueApiTokenPrice {
-  priceUsd?: BlueApiToken["priceUsd"];
-  spotPriceEth?: BlueApiToken["spotPriceEth"];
+export interface PartialApiTokenPrice {
+  priceUsd?: ApiToken["priceUsd"];
+  spotPriceEth?: ApiToken["spotPriceEth"];
 }
 
-export interface PartialBlueApiToken
-  extends Pick<BlueApiToken, "address" | "decimals" | "symbol">,
-    PartialBlueApiTokenPrice {
-  name?: BlueApiToken["name"];
+export interface PartialApiToken
+  extends Pick<ApiToken, "address" | "decimals" | "symbol">,
+    PartialApiTokenPrice {
+  name?: ApiToken["name"];
 }
 
-export interface PartialBlueApiMarketParams
-  extends Pick<BlueApiMarket, "oracleAddress" | "irmAddress" | "lltv"> {
-  collateralAsset: Maybe<Pick<BlueApiToken, "address">>;
-  loanAsset: Pick<BlueApiToken, "address">;
+export interface PartialApiMarketParams
+  extends Pick<ApiMarket, "oracleAddress" | "irmAddress" | "lltv"> {
+  collateralAsset: Maybe<Pick<ApiToken, "address">>;
+  loanAsset: Pick<ApiToken, "address">;
 }
 
-export interface PartialBlueApiMarket
-  extends PartialBlueApiMarketParams,
-    Pick<BlueApiMarket, "collateralPrice"> {
+export interface PartialApiMarket
+  extends PartialApiMarketParams,
+    Pick<ApiMarket, "collateralPrice"> {
   state: Maybe<
     Pick<
-      BlueApiMarketState,
+      ApiMarketState,
       | "borrowAssets"
       | "supplyAssets"
       | "borrowShares"
       | "supplyShares"
       | "timestamp"
       | "fee"
-      | "rateAtUTarget"
+      | "rateAtTarget"
     >
   >;
 }
 
-export interface PartialBlueApiMarketPosition
+export interface PartialApiMarketPosition
   extends Pick<
-    BlueApiMarketPosition,
+    ApiMarketPosition,
     "supplyShares" | "borrowShares" | "collateral"
   > {
-  user: Pick<BlueApiUser, "address">;
-  market: Pick<BlueApiMarket, "uniqueKey">;
+  user: Pick<ApiUser, "address">;
+  market: Pick<ApiMarket, "uniqueKey">;
 }
 
-export interface PartialBlueApiMarketAccrualPosition
-  extends Omit<PartialBlueApiMarketPosition, "market"> {
-  market: PartialBlueApiMarket;
+export interface PartialApiMarketAccrualPosition
+  extends Omit<PartialApiMarketPosition, "market"> {
+  market: PartialApiMarket;
 }
 
-export interface PartialBlueApiVaultConfig
-  extends Pick<BlueApiVault, "address" | "symbol" | "name"> {
-  asset: Pick<BlueApiToken, "address" | "decimals">;
-  chain: Pick<BlueApiChain, "id">;
+export interface PartialApiVaultConfig
+  extends Pick<ApiVault, "address" | "symbol" | "name"> {
+  asset: Pick<ApiToken, "address" | "decimals">;
+  chain: Pick<ApiChain, "id">;
 }
 
-export interface PartialBlueApiPublicAllocatorFlowCaps
-  extends Pick<BlueApiPublicAllocatorFlowCaps, "maxIn" | "maxOut"> {
-  market: Pick<BlueApiMarket, "uniqueKey">;
+export interface PartialApiPublicAllocatorFlowCaps
+  extends Pick<ApiPublicAllocatorFlowCaps, "maxIn" | "maxOut"> {
+  market: Pick<ApiMarket, "uniqueKey">;
 }
 
-export interface PartialBlueApiPublicAllocatorConfig
-  extends Pick<BlueApiPublicAllocatorConfig, "fee" | "accruedFee" | "admin"> {
-  flowCaps: PartialBlueApiPublicAllocatorFlowCaps[];
+export interface PartialApiPublicAllocatorConfig
+  extends Pick<ApiPublicAllocatorConfig, "fee" | "accruedFee" | "admin"> {
+  flowCaps: PartialApiPublicAllocatorFlowCaps[];
 }
 
-export interface PartialBlueApiVaultAllocation
+export interface PartialApiVaultAllocation
+  extends Pick<ApiVaultAllocation, "supplyQueueIndex"> {
+  market: PartialApiMarket & Pick<ApiMarket, "uniqueKey">;
+}
+
+export interface PartialApiVaultState
   extends Pick<
-    BlueApiVaultAllocation,
-    | "supplyQueueIndex"
-    | "supplyShares"
-    | "supplyCap"
-    | "pendingSupplyCap"
-    | "pendingSupplyCapValidAt"
-    | "removableAt"
-  > {
-  market: PartialBlueApiMarket & Pick<BlueApiMarket, "uniqueKey">;
-}
-
-export interface PartialBlueApiVaultState
-  extends Pick<
-    BlueApiVaultState,
+    ApiVaultState,
     | "totalAssets"
     | "totalSupply"
     | "owner"
@@ -125,14 +118,33 @@ export interface PartialBlueApiVaultState
     | "pendingTimelock"
     | "pendingTimelockValidAt"
   > {
-  allocation: Maybe<PartialBlueApiVaultAllocation[]>;
+  allocation: Maybe<PartialApiVaultAllocation[]>;
 }
 
-export interface PartialBlueApiVault
-  extends PartialBlueApiVaultConfig,
-    Pick<BlueApiVault, "address" | "symbol" | "name"> {
-  state: Maybe<PartialBlueApiVaultState>;
-  publicAllocatorConfig: Maybe<PartialBlueApiPublicAllocatorConfig>;
+export interface PartialApiVault
+  extends PartialApiVaultConfig,
+    Pick<ApiVault, "address" | "symbol" | "name"> {
+  state: Maybe<PartialApiVaultState>;
+  publicAllocatorConfig: Maybe<PartialApiPublicAllocatorConfig>;
+}
+
+export interface PartialApiAccrualVaultAllocation
+  extends PartialApiVaultAllocation,
+    Pick<
+      ApiVaultAllocation,
+      | "supplyShares"
+      | "supplyCap"
+      | "pendingSupplyCap"
+      | "pendingSupplyCapValidAt"
+      | "removableAt"
+    > {}
+
+export interface PartialApiAccrualVaultState extends PartialApiVaultState {
+  allocation: Maybe<PartialApiAccrualVaultAllocation[]>;
+}
+
+export interface PartialApiAccrualVault extends PartialApiVault {
+  state: Maybe<PartialApiAccrualVaultState>;
 }
 
 export interface ConverterOptions {
@@ -144,8 +156,8 @@ export class BlueSdkConverter {
   constructor(protected readonly options: ConverterOptions) {}
 
   public getPriceUsd(
-    dto: PartialBlueApiTokenPrice,
-    ethPriceUsd?: BlueApiToken["priceUsd"],
+    dto: PartialApiTokenPrice,
+    ethPriceUsd?: ApiToken["priceUsd"],
   ) {
     let price: bigint | undefined;
 
@@ -160,10 +172,7 @@ export class BlueSdkConverter {
     return price;
   }
 
-  public getToken(
-    dto: PartialBlueApiToken,
-    ethPriceUsd?: BlueApiToken["priceUsd"],
-  ) {
+  public getToken(dto: PartialApiToken, ethPriceUsd?: ApiToken["priceUsd"]) {
     return new Token({
       ...dto,
       address: this.options.parseAddress(dto.address),
@@ -171,7 +180,7 @@ export class BlueSdkConverter {
     });
   }
 
-  public getMarketParams(dto: PartialBlueApiMarketParams) {
+  public getMarketParams(dto: PartialApiMarketParams) {
     return new MarketParams({
       collateralToken: this.options.parseAddress(
         dto.collateralAsset?.address ?? ZERO_ADDRESS,
@@ -183,20 +192,14 @@ export class BlueSdkConverter {
     });
   }
 
-  public getMarket(dto: PartialBlueApiMarket) {
+  public getMarket(dto: PartialApiMarket & { state: null }): null;
+  public getMarket(dto: PartialApiMarket): Market;
+  public getMarket(dto: PartialApiMarket) {
     if (dto.state == null) return null;
 
     const params = this.getMarketParams(dto);
     const fee = this.options.parseNumber(dto.state.fee, 18);
     const price = dto.collateralPrice ?? 1n;
-
-    const rateAtTarget =
-      // rateAtUTarget is not typed nullable, but it will be as soon as a non-compatible IRM is enabled.
-      dto.state.rateAtUTarget != null
-        ? // API rate at targed is annualized, while the Market rateAtTarget is per second.
-          this.options.parseNumber(dto.state.rateAtUTarget, 18) /
-          Time.s.from.y(1n)
-        : undefined;
 
     return new Market({
       params,
@@ -207,11 +210,11 @@ export class BlueSdkConverter {
       lastUpdate: dto.state.timestamp,
       fee,
       price,
-      rateAtTarget,
+      rateAtTarget: dto.state.rateAtTarget ?? undefined,
     });
   }
 
-  public getPosition(dto: PartialBlueApiMarketPosition) {
+  public getPosition(dto: PartialApiMarketPosition) {
     return new Position({
       ...dto,
       marketId: dto.market.uniqueKey,
@@ -219,7 +222,13 @@ export class BlueSdkConverter {
     });
   }
 
-  public getAccrualPosition(dto: PartialBlueApiMarketAccrualPosition) {
+  public getAccrualPosition(
+    dto: PartialApiMarketAccrualPosition & { market: { state: null } },
+  ): null;
+  public getAccrualPosition(
+    dto: PartialApiMarketAccrualPosition,
+  ): AccrualPosition;
+  public getAccrualPosition(dto: PartialApiMarketAccrualPosition) {
     const market = this.getMarket(dto.market);
     if (market == null) return null;
 
@@ -232,11 +241,10 @@ export class BlueSdkConverter {
     );
   }
 
-  public getVaultConfig(dto: PartialBlueApiVaultConfig) {
+  public getVaultConfig(dto: PartialApiVaultConfig) {
     return new VaultConfig(
       {
         ...dto,
-        decimals: Math.max(18, dto.asset.decimals),
         decimalsOffset: VaultUtils.decimalsOffset(dto.asset.decimals),
         asset: dto.asset.address,
       },
@@ -244,20 +252,44 @@ export class BlueSdkConverter {
     );
   }
 
+  public getVault(dto: PartialApiVault & { state: null }): null;
+  public getVault(dto: PartialApiVault): Vault;
+  public getVault({ state, publicAllocatorConfig, ...dto }: PartialApiVault) {
+    if (state == null) return null;
+
+    return new Vault({
+      ...state,
+      ...this.getVaultConfig(dto),
+      fee: this.options.parseNumber(state.fee ?? 0, 18),
+      pendingOwner: state.pendingOwner ?? ZERO_ADDRESS,
+      pendingTimelock: {
+        value: state.pendingTimelock ?? 0n,
+        validAt: state.pendingTimelockValidAt ?? 0n,
+      },
+      pendingGuardian: {
+        value: state.pendingGuardian ?? ZERO_ADDRESS,
+        validAt: state.pendingGuardianValidAt ?? 0n,
+      },
+      lastTotalAssets: state.totalAssets,
+      supplyQueue:
+        state.allocation
+          ?.filter((allocation) => isDefined(allocation.supplyQueueIndex))
+          .sort(
+            (allocationA, allocationB) =>
+              allocationA.supplyQueueIndex! - allocationB.supplyQueueIndex!,
+          )
+          .map((allocation) => allocation.market.uniqueKey) ?? [],
+      withdrawQueue:
+        state.allocation?.map(({ market }) => market.uniqueKey) ?? [],
+      publicAllocatorConfig: publicAllocatorConfig ?? undefined,
+    });
+  }
+
   public getVaultMarketAllocation(
     vault: Address,
-    dto: PartialBlueApiVaultAllocation,
-    publicAllocatorConfig?: Maybe<PartialBlueApiPublicAllocatorConfig>,
+    dto: PartialApiAccrualVaultAllocation,
+    publicAllocatorConfig?: Maybe<PartialApiPublicAllocatorConfig>,
   ) {
-    const position = this.getAccrualPosition({
-      user: { address: vault },
-      market: dto.market,
-      supplyShares: dto.supplyShares,
-      borrowShares: 0n,
-      collateral: 0n,
-    });
-    if (!position) return;
-
     return new VaultMarketAllocation({
       config: this.getVaultMarketConfig(
         vault,
@@ -266,14 +298,20 @@ export class BlueSdkConverter {
           ({ market: { uniqueKey } }) => uniqueKey === dto.market.uniqueKey,
         ),
       ),
-      position,
+      position: this.getAccrualPosition({
+        user: { address: vault },
+        market: dto.market,
+        supplyShares: dto.supplyShares,
+        borrowShares: 0n,
+        collateral: 0n,
+      }),
     });
   }
 
   public getVaultMarketConfig(
     vault: Address,
-    dto: PartialBlueApiVaultAllocation,
-    flowCaps?: Maybe<PartialBlueApiPublicAllocatorFlowCaps>,
+    dto: PartialApiAccrualVaultAllocation,
+    flowCaps?: Maybe<PartialApiPublicAllocatorFlowCaps>,
   ) {
     return new VaultMarketConfig({
       vault,
@@ -294,7 +332,7 @@ export class BlueSdkConverter {
 
   public getVaultMarketPublicAllocatorConfig(
     vault: Address,
-    dto: PartialBlueApiPublicAllocatorFlowCaps,
+    dto: PartialApiPublicAllocatorFlowCaps,
   ) {
     return new VaultMarketPublicAllocatorConfig({
       ...dto,
@@ -303,38 +341,14 @@ export class BlueSdkConverter {
     });
   }
 
-  public getAccrualVault({
-    state,
-    publicAllocatorConfig,
-    ...dto
-  }: PartialBlueApiVault) {
+  public getAccrualVault(dto: PartialApiAccrualVault & { state: null }): null;
+  public getAccrualVault(dto: PartialApiAccrualVault): AccrualVault;
+  public getAccrualVault(dto: PartialApiAccrualVault) {
+    const { state, publicAllocatorConfig } = dto;
     if (state == null) return null;
 
     return new AccrualVault(
-      {
-        ...state,
-        ...this.getVaultConfig(dto),
-        fee: this.options.parseNumber(state.fee, 18),
-        pendingOwner: state.pendingOwner ?? ZERO_ADDRESS,
-        pendingTimelock: {
-          value: state.pendingTimelock ?? 0n,
-          validAt: state.pendingTimelockValidAt ?? 0n,
-        },
-        pendingGuardian: {
-          value: state.pendingGuardian ?? ZERO_ADDRESS,
-          validAt: state.pendingGuardianValidAt ?? 0n,
-        },
-        lastTotalAssets: state.totalAssets,
-        supplyQueue:
-          state.allocation
-            ?.filter((allocation) => isDefined(allocation.supplyQueueIndex))
-            .sort(
-              (allocationA, allocationB) =>
-                allocationA.supplyQueueIndex! - allocationB.supplyQueueIndex!,
-            )
-            .map((allocation) => allocation.market.uniqueKey) ?? [],
-        publicAllocatorConfig: publicAllocatorConfig || undefined,
-      },
+      this.getVault(dto),
       state.allocation
         ?.map((allocation) =>
           this.getVaultMarketAllocation(

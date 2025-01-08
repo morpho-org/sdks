@@ -1,7 +1,7 @@
 import { type ChainId, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import type { SignatureMessage } from "./types.js";
-import { getMessage } from "./utils.js";
+import type { SignatureMessage } from "./types";
+import { getMessage } from "./utils";
 
 export interface ManagerApprovalSignatureArgs {
   authorizer: string;

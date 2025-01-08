@@ -19,7 +19,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@noble/hashes": "^1.5.0"
+    "@noble/hashes": "^1.6.1"
   },
   "peerDependencies": {
     "@morpho-org/morpho-ts": "workspace:^"
@@ -27,9 +27,9 @@
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "typescript": "^5.6.3",
-    "viem": "^2.21.50",
-    "vitest": "^2.1.5"
+    "typescript": "^5.7.2",
+    "viem": "^2.22.2",
+    "vitest": "^2.1.8"
   },
   "publishConfig": {
     "main": "lib/index.js",

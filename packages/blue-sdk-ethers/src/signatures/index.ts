@@ -1,13 +1,13 @@
-import * as _Manager from "./manager.js";
-import * as _Permit from "./permit.js";
-import * as _Permit2 from "./permit2.js";
+import * as _Manager from "./manager";
+import * as _Permit from "./permit";
+import * as _Permit2 from "./permit2";
 import {
   getMessage as _getMessage,
   safeSignTypedData as _safeSignTypedData,
   verifySignature as _verifySignature,
-} from "./utils.js";
+} from "./utils";
 
-export * from "./types.js";
+export * from "./types";
 
 export namespace SignatureUtils {
   export const Permit = _Permit;

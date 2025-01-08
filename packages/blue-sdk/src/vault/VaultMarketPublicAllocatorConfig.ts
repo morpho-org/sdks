@@ -3,7 +3,7 @@ import type { Address, MarketId } from "../types.js";
 /**
  * The vault's configuration of a market on the PublicAllocator.
  */
-export interface InputVaultMarketPublicAllocatorConfig {
+export interface IVaultMarketPublicAllocatorConfig {
   vault: Address;
   marketId: MarketId;
   maxIn: bigint;
@@ -11,7 +11,7 @@ export interface InputVaultMarketPublicAllocatorConfig {
 }
 
 export class VaultMarketPublicAllocatorConfig
-  implements InputVaultMarketPublicAllocatorConfig
+  implements IVaultMarketPublicAllocatorConfig
 {
   /**
    * The vault's address.
@@ -38,7 +38,7 @@ export class VaultMarketPublicAllocatorConfig
     marketId,
     maxIn,
     maxOut,
-  }: InputVaultMarketPublicAllocatorConfig) {
+  }: IVaultMarketPublicAllocatorConfig) {
     this.vault = vault;
     this.marketId = marketId;
     this.maxIn = maxIn;

@@ -64,4 +64,18 @@ export default defineWorkspace([
       testTimeout: 90_000,
     },
   },
+  {
+    test: {
+      name: "liquidity-sdk-ethers",
+      include: ["packages/liquidity-sdk-ethers/**/*.test.ts"],
+      testTimeout: 30_000,
+    },
+  },
+  {
+    test: {
+      name: "liquidity-sdk-viem",
+      include: ["packages/liquidity-sdk-viem/**/*.test.ts"],
+      testTimeout: 30_000,
+    },
+  },
 ]);

@@ -1,13 +1,13 @@
 import {
   ChainId,
-  type InputMarketParams,
+  type IMarketParams,
   MarketParams,
   addresses,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { parseEther, parseUnits } from "viem";
 
-const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt } =
+const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt, dai } =
   addresses[ChainId.EthMainnet];
 
 export const markets = {
@@ -147,6 +147,15 @@ export const markets = {
       lltv: parseUnits("96.5", 16),
     }),
 
+    dai_sUsde: new MarketParams({
+      // DAI(sUSDe, 86%, Exchange rate, AdaptiveCurve)
+      loanToken: dai,
+      collateralToken: "0x9D39A5DE30e57443BfF2A8307A4256c8797A3497",
+      oracle: "0x5D916980D5Ae1737a8330Bf24dF812b2911Aae25",
+      irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+
     crvUsd_stkcvxcrvUSDTWBTCWETH: new MarketParams({
       loanToken: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
       collateralToken: "0xb0Ce26C88e4e7DCa51968b6047f44646f5064278",
@@ -200,7 +209,7 @@ export const markets = {
   },
 } as const;
 
-export const randomMarket = (params: Partial<InputMarketParams> = {}) =>
+export const randomMarket = (params: Partial<IMarketParams> = {}) =>
   new MarketParams({
     collateralToken: randomAddress(),
     loanToken: randomAddress(),

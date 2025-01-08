@@ -10,8 +10,8 @@ import {
   Position,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import type { FetchOptions } from "../types.js";
-import { fetchMarket, fetchMarketFromConfig } from "./Market.js";
+import type { FetchOptions } from "../types";
+import { fetchMarket, fetchMarketFromConfig } from "./Market";
 
 export async function fetchPosition(
   user: Address,
@@ -26,11 +26,11 @@ export async function fetchPosition(
   const { morpho } = getChainAddresses(chainId);
 
   const { supplyShares, borrowShares, collateral } =
-    await MorphoBlue__factory.connect(
-      morpho,
-      // @ts-ignore incompatible commonjs type
-      runner,
-    ).position(marketId, user, overrides);
+    await MorphoBlue__factory.connect(morpho, runner).position(
+      marketId,
+      user,
+      overrides,
+    );
 
   return new Position({
     user,

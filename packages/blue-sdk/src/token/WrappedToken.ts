@@ -1,11 +1,11 @@
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import type { Address } from "../types.js";
 
-import { type InputToken, Token } from "./Token.js";
+import { type IToken, Token } from "./Token.js";
 
 export abstract class WrappedToken extends Token {
   constructor(
-    token: InputToken,
+    token: IToken,
     public readonly underlying: Address,
   ) {
     super(token);

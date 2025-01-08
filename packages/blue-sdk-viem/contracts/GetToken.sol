@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import {IERC20Permit, Eip5267Domain} from "./interfaces/IERC20Permit.sol";
 import {IERC20} from "./interfaces/IERC20.sol";
 import {IWstEth} from "./interfaces/IWstEth.sol";
 
@@ -11,6 +12,8 @@ struct TokenResponse {
     bool hasName;
     string name;
     uint256 stEthPerWstEth;
+    Eip5267Domain eip5267Domain;
+    bool hasEip5267Domain;
 }
 
 contract GetToken {
@@ -30,5 +33,10 @@ contract GetToken {
         } catch {}
 
         if (isWstEth) res.stEthPerWstEth = IWstEth(address(token)).stEthPerToken();
+
+        try IERC20Permit(address(token)).eip712Domain() returns (Eip5267Domain memory eip5267Domain) {
+            res.hasEip5267Domain = true;
+            res.eip5267Domain = eip5267Domain;
+        } catch {}
     }
 }

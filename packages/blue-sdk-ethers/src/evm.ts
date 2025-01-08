@@ -11,9 +11,9 @@ import {
   NotificationProducer,
   NotificationStatus,
   NotificationTopic,
-} from "./notifications.js";
-import { SignatureUtils } from "./signatures/index.js";
-import type { SignatureMessage } from "./signatures/types.js";
+} from "./notifications";
+import { SignatureUtils } from "./signatures";
+import type { SignatureMessage } from "./signatures/types";
 
 export interface NotificationOptions<Topic extends NotificationTopic> {
   producer: NotificationProducer<Topic>;

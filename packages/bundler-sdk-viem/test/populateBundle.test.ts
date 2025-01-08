@@ -15,12 +15,17 @@ import {
   publicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
-import { format } from "@morpho-org/morpho-ts";
 import { Erc20Errors } from "@morpho-org/simulation-sdk";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
-import { maxUint256, parseEther, parseUnits, zeroAddress } from "viem";
+import {
+  formatUnits,
+  maxUint256,
+  parseEther,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 import { describe, expect } from "vitest";
 import { donate, donator, setupBundle } from "./helpers.js";
 import { test } from "./setup.js";
@@ -40,6 +45,7 @@ describe("populateBundle", () => {
         stEth,
         usdc,
         usdt,
+        dai,
       } = addresses[ChainId.EthMainnet];
       const {
         eth_idle,
@@ -62,6 +68,7 @@ describe("populateBundle", () => {
         usdt_wbtc,
         usdt_wstEth,
         usdt_sDai,
+        dai_sUsde,
       } = markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbUsdc, bbEth, re7Weth } =
         vaults[ChainId.EthMainnet];
@@ -112,6 +119,110 @@ describe("populateBundle", () => {
               wNative,
               client.account.address,
             ),
+          );
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should supply DAI via permit",
+        async ({ client, config }) => {
+          const id = dai_sUsde.id;
+
+          const assets = parseEther("55873.253");
+          await client.deal({
+            erc20: dai,
+            amount: assets,
+          });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [id],
+              users: [client.account.address, bundler],
+              tokens: [NATIVE_ADDRESS, dai, dai_sUsde.collateralToken],
+              vaults: [],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupBundle(client, data, [
+            {
+              type: "Blue_Supply",
+              sender: client.account.address,
+              address: morpho,
+              args: {
+                id,
+                assets,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          expect(bundle.requirements.signatures.length).toBe(1);
+
+          expect(bundle.requirements.txs).toStrictEqual([]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: assets,
+                spender: bundler,
+                nonce: 3n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: bundler,
+              address: dai,
+              args: {
+                amount: assets,
+                from: client.account.address,
+                to: bundler,
+              },
+            },
+            {
+              type: "Blue_Supply",
+              sender: bundler,
+              address: morpho,
+              args: {
+                id,
+                assets,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          const position = await fetchPosition(
+            client.account.address,
+            id,
+            client,
+          );
+
+          expect(
+            formatUnits(await client.balanceOf({ erc20: dai }), 18),
+          ).toBeCloseTo(0, 8);
+          expect(position.collateral).toBe(0n);
+          expect(position.supplyShares).toBe(54506265375843865703066553021n);
+          expect(position.borrowShares).toBe(0n);
+
+          expect(await client.allowance({ erc20: dai, spender: permit2 })).toBe(
+            0n,
+          );
+          expect(await client.allowance({ erc20: dai, spender: bundler })).toBe(
+            MathLib.MAX_UINT_256,
+          );
+          expect(await client.allowance({ erc20: dai, spender: morpho })).toBe(
+            0n,
           );
         },
       );
@@ -281,7 +392,7 @@ describe("populateBundle", () => {
           );
 
           expect(
-            format.number.of(await client.balanceOf({ erc20: stEth }), 18),
+            formatUnits(await client.balanceOf({ erc20: stEth }), 18),
           ).toBeCloseTo(0, 8);
           expect(position.collateral).toBe(assets);
           expect(position.supplyShares).toBe(0n);
@@ -759,8 +870,8 @@ describe("populateBundle", () => {
             marketParams.id,
             client,
           );
-          expect(format.number.of(collateral, 18)).toBeCloseTo(
-            Number(format.number.of(expectedShares, 18)),
+          expect(formatUnits(collateral, 18)).toBeCloseTo(
+            Number(formatUnits(expectedShares, 18)),
             1,
           );
 
@@ -923,14 +1034,8 @@ describe("populateBundle", () => {
 
           expect(await client.balanceOf({ erc20: usdt })).toBe(0n);
           expect(
-            format.number.of(
-              await client.balanceOf({ erc20: bbUsdt.address }),
-              18,
-            ),
-          ).toBeCloseTo(
-            Number(format.number.of(expectedShares - shares, 18)),
-            1,
-          );
+            formatUnits(await client.balanceOf({ erc20: bbUsdt.address }), 18),
+          ).toBeCloseTo(Number(formatUnits(expectedShares - shares, 18)), 1);
 
           const { collateral } = await fetchPosition(
             client.account.address,
@@ -1081,7 +1186,7 @@ describe("populateBundle", () => {
           ).toBe(0n);
           expect(await client.maxWithdraw({ erc4626: bbEth.address })).toBe(0n);
           expect(
-            format.number.of(await client.balanceOf({ erc20: wNative }), 18),
+            formatUnits(await client.balanceOf({ erc20: wNative }), 18),
           ).toBeCloseTo(10, 1);
 
           expect(
@@ -1323,8 +1428,8 @@ describe("populateBundle", () => {
 
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(
-            format.number.of(await client.balanceOf({ erc20: usdc }), 6),
-          ).toBeCloseTo(Number(format.number.of(loanAssets / 2n, 6)), -1);
+            formatUnits(await client.balanceOf({ erc20: usdc }), 6),
+          ).toBeCloseTo(Number(formatUnits(loanAssets / 2n, 6)), -1);
           expect(await client.maxWithdraw({ erc4626: bbEth.address })).toBe(0n);
 
           expect(
@@ -2696,7 +2801,7 @@ describe("populateBundle", () => {
           );
 
           expect(
-            format.number.of(await client.balanceOf({ erc20: stEth }), 18),
+            formatUnits(await client.balanceOf({ erc20: stEth }), 18),
           ).toBeCloseTo(0, 8);
           expect(position.collateral).toBe(assets);
           expect(position.supplyShares).toBe(0n);
@@ -3212,8 +3317,8 @@ describe("populateBundle", () => {
             marketParams.id,
             client,
           );
-          expect(format.number.of(collateral, 18)).toBeCloseTo(
-            Number(format.number.of(expectedShares, 18)),
+          expect(formatUnits(collateral, 18)).toBeCloseTo(
+            Number(formatUnits(expectedShares, 18)),
             1,
           );
 
@@ -3381,14 +3486,8 @@ describe("populateBundle", () => {
 
           expect(await client.balanceOf({ erc20: usdt })).toBe(0n);
           expect(
-            format.number.of(
-              await client.balanceOf({ erc20: bbUsdt.address }),
-              18,
-            ),
-          ).toBeCloseTo(
-            Number(format.number.of(expectedShares - shares, 18)),
-            1,
-          );
+            formatUnits(await client.balanceOf({ erc20: bbUsdt.address }), 18),
+          ).toBeCloseTo(Number(formatUnits(expectedShares - shares, 18)), 1);
 
           const { collateral } = await fetchPosition(
             client.account.address,
@@ -3540,7 +3639,7 @@ describe("populateBundle", () => {
           ).toBe(0n);
           expect(await client.maxWithdraw({ erc4626: bbEth.address })).toBe(0n);
           expect(
-            format.number.of(await client.balanceOf({ erc20: wNative }), 18),
+            formatUnits(await client.balanceOf({ erc20: wNative }), 18),
           ).toBeCloseTo(10, 1);
 
           expect(
@@ -3795,8 +3894,8 @@ describe("populateBundle", () => {
 
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(
-            format.number.of(await client.balanceOf({ erc20: usdc }), 6),
-          ).toBeCloseTo(Number(format.number.of(loanAssets / 2n, 6)), -1);
+            formatUnits(await client.balanceOf({ erc20: usdc }), 6),
+          ).toBeCloseTo(Number(formatUnits(loanAssets / 2n, 6)), -1);
           expect(await client.maxWithdraw({ erc4626: bbEth.address })).toBe(0n);
 
           expect(

@@ -1,4 +1,20 @@
-import type { MarketStateReward, VaultAllocation } from "./types";
+import type { DottedKeys } from "@morpho-org/morpho-ts";
+import type {
+  Market,
+  MarketPosition,
+  MarketStateReward,
+  MarketWarning,
+  PublicAllocatorFlowCaps,
+  PublicAllocatorSharedLiquidity,
+  Transaction,
+  Vault,
+  VaultAllocation,
+  VaultAllocator,
+  VaultPendingCap,
+  VaultPosition,
+  VaultStateReward,
+  VaultWarning,
+} from "./types";
 
 type ReadFieldFunction = <T, K extends keyof T = keyof T>(
   fieldName: K,
@@ -16,14 +32,107 @@ export const readMaybeBigInt = (value: string | number | undefined | null) => {
   return BigInt(value);
 };
 
+export const mergeArrayByField = <
+  T extends { __typename?: string },
+  Path extends DottedKeys<T> = DottedKeys<T>,
+>(
+  ...paths: Path[]
+) => {
+  const splittedPaths = paths.map((path) => path.split("."));
+
+  return (
+    existing: T[] | null | undefined,
+    incoming: T[],
+    {
+      readField,
+      mergeObjects,
+    }: {
+      readField: ReadFieldFunction;
+      mergeObjects: MergeObjectsFunction;
+    },
+  ) => {
+    const _get = (
+      // biome-ignore lint/suspicious/noExplicitAny: recursion breaks type
+      data: any,
+      path: string[],
+    ): PropertyKey | null | undefined => {
+      if (path.length === 0) return data;
+
+      const [key, ...rest] = path;
+
+      return _get(readField(key!, data), rest);
+    };
+
+    const getFirstValueAtPath = (
+      // biome-ignore lint/suspicious/noExplicitAny: recursion breaks type
+      data: any,
+      i = splittedPaths.length - 1,
+    ): PropertyKey | null | undefined => {
+      if (i < 0) return;
+
+      return _get(data, splittedPaths[i]!) ?? getFirstValueAtPath(data, i - 1);
+    };
+
+    const merged = existing ? existing.slice(0) : [];
+
+    const indexes = new Map<PropertyKey, number>();
+    existing?.forEach((entity, index) => {
+      const id = getFirstValueAtPath(entity);
+      if (id == null) return;
+
+      indexes.set(id, index);
+    });
+
+    incoming.forEach((entity) => {
+      const id = getFirstValueAtPath(entity);
+
+      if (id != null) {
+        const index = indexes.get(id);
+
+        if (index != null) {
+          merged[index] = mergeObjects(merged[index]!, entity);
+
+          return;
+        }
+      }
+
+      merged.push(entity);
+    });
+
+    return merged;
+  };
+};
+
 export const typePolicies = {
   Transaction: {
     fields: {
+      blockNumber: {
+        read: readMaybeBigInt,
+      },
       timestamp: {
         read: readMaybeBigInt,
       },
-      blockNumber: {
-        read: readMaybeBigInt,
+      chain: {
+        merge: true,
+      },
+      user: {
+        merge: true,
+      },
+      data: {
+        merge: true,
+      },
+    },
+  },
+  MorphoBlue: {
+    fields: {
+      chain: {
+        merge: true,
+      },
+      state: {
+        merge: true,
+      },
+      historicalState: {
+        merge: true,
       },
     },
   },
@@ -39,6 +148,51 @@ export const typePolicies = {
       blockNumber: {
         read: readMaybeBigInt,
       },
+      chain: {
+        merge: true,
+      },
+    },
+  },
+  Oracle: {
+    fields: {
+      chain: {
+        merge: true,
+      },
+      data: {
+        merge: true,
+      },
+      markets: {
+        merge: mergeArrayByField<Market>("id"),
+      },
+    },
+  },
+  OracleFeed: {
+    fields: {
+      chain: {
+        merge: true,
+      },
+    },
+  },
+  User: {
+    fields: {
+      chain: {
+        merge: true,
+      },
+      state: {
+        merge: true,
+      },
+      historicalState: {
+        merge: true,
+      },
+      transactions: {
+        merge: mergeArrayByField<Transaction>("id", "hash"),
+      },
+      marketPositions: {
+        merge: mergeArrayByField<MarketPosition>("id", "market.id"),
+      },
+      vaultPositions: {
+        merge: mergeArrayByField<VaultPosition>("id", "vault.id"),
+      },
     },
   },
   Asset: {
@@ -46,10 +200,37 @@ export const typePolicies = {
       totalSupply: {
         read: readMaybeBigInt,
       },
+      chain: {
+        merge: true,
+      },
+      vault: {
+        merge: true,
+      },
+      yield: {
+        merge: true,
+      },
     },
   },
   Market: {
     fields: {
+      collateralAsset: {
+        merge: true,
+      },
+      loanAsset: {
+        merge: true,
+      },
+      oracle: {
+        merge: true,
+      },
+      oracleFeed: {
+        merge: true,
+      },
+      oracleInfo: {
+        merge: true,
+      },
+      morphoBlue: {
+        merge: true,
+      },
       lltv: {
         read: readMaybeBigInt,
       },
@@ -62,11 +243,25 @@ export const typePolicies = {
       creationTimestamp: {
         read: readMaybeBigInt,
       },
+      targetBorrowUtilization: {
+        read: readMaybeBigInt,
+      },
+      targetWithdrawUtilization: {
+        read: readMaybeBigInt,
+      },
       state: {
         merge: true,
       },
       historicalState: {
-        // Fixes issue with cache causing infinite query loop when querying market history through multiple queries
+        merge: true,
+      },
+      badDebt: {
+        merge: true,
+      },
+      realizedBadDebt: {
+        merge: true,
+      },
+      concentration: {
         merge: true,
       },
       dailyApys: {
@@ -78,10 +273,31 @@ export const typePolicies = {
       monthlyApys: {
         merge: true,
       },
+      quarterlyApys: {
+        merge: true,
+      },
+      yearlyApys: {
+        merge: true,
+      },
+      allTimeApys: {
+        merge: true,
+      },
+      supplyingVaults: {
+        merge: mergeArrayByField<Vault>("id"),
+      },
+      publicAllocatorSharedLiquidity: {
+        merge: mergeArrayByField<PublicAllocatorSharedLiquidity>("id"),
+      },
+      warnings: {
+        merge: mergeArrayByField<MarketWarning>("type"),
+      },
     },
   },
   MarketState: {
     fields: {
+      price: {
+        read: readMaybeBigInt,
+      },
       borrowAssets: {
         read: readMaybeBigInt,
       },
@@ -103,56 +319,20 @@ export const typePolicies = {
       timestamp: {
         read: readMaybeBigInt,
       },
+      rateAtTarget: {
+        read: readMaybeBigInt,
+      },
       rewards: {
-        // Merges two arrays of MarketStateReward objects, where the merge is based on the asset id
-        // Asset id must be queried for this to work.
-        // https://www.apollographql.com/docs/react/caching/cache-field-behavior/#merging-arrays-of-non-normalized-objects
-        merge: (
-          existing: MarketStateReward[] | null | undefined,
-          incoming: MarketStateReward[],
-          {
-            readField,
-            mergeObjects,
-          }: {
-            readField: ReadFieldFunction;
-            mergeObjects: MergeObjectsFunction;
-          },
-        ) => {
-          const merged = existing ? existing.slice(0) : [];
-
-          const assetIdToIndex = new Map<string, number>();
-          existing?.forEach((marketStateReward, index) => {
-            const asset = readField("asset", marketStateReward);
-            const assetId = readField("id", asset);
-            if (!assetId)
-              throw Error(
-                'Expected "asset.id" field to be defined. Check that the "asset" field is present in the query',
-              );
-
-            assetIdToIndex.set(assetId, index);
-          });
-
-          incoming.forEach((marketStateReward) => {
-            const asset = readField("asset", marketStateReward);
-            const assetId = readField("id", asset);
-            const index = assetIdToIndex.get(assetId);
-
-            if (assetId && index != null)
-              merged[index] = mergeObjects(merged[index]!, marketStateReward);
-            else merged.push(marketStateReward);
-          });
-
-          return merged;
-        },
+        merge: mergeArrayByField<MarketStateReward>("asset.id"),
       },
     },
   },
   MarketStateReward: {
     fields: {
-      yearlyBorrowTokens: {
+      yearlySupplyTokens: {
         read: readMaybeBigInt,
       },
-      yearlySupplyTokens: {
+      yearlyBorrowTokens: {
         read: readMaybeBigInt,
       },
       amountPerSuppliedToken: {
@@ -160,6 +340,9 @@ export const typePolicies = {
       },
       amountPerBorrowedToken: {
         read: readMaybeBigInt,
+      },
+      asset: {
+        merge: true,
       },
     },
   },
@@ -200,6 +383,49 @@ export const typePolicies = {
       collateral: {
         read: readMaybeBigInt,
       },
+      user: {
+        merge: true,
+      },
+      market: {
+        merge: true,
+      },
+      state: {
+        merge: true,
+      },
+      historicalState: {
+        merge: true,
+      },
+    },
+  },
+  MarketPositionState: {
+    fields: {
+      timestamp: {
+        read: readMaybeBigInt,
+      },
+      pnl: {
+        read: readMaybeBigInt,
+      },
+      supplyAssets: {
+        read: readMaybeBigInt,
+      },
+      supplyShares: {
+        read: readMaybeBigInt,
+      },
+      borrowAssets: {
+        read: readMaybeBigInt,
+      },
+      borrowShares: {
+        read: readMaybeBigInt,
+      },
+      collateral: {
+        read: readMaybeBigInt,
+      },
+      collateralPrice: {
+        read: readMaybeBigInt,
+      },
+      position: {
+        merge: true,
+      },
     },
   },
   Vault: {
@@ -207,12 +433,44 @@ export const typePolicies = {
       creationTimestamp: {
         read: readMaybeBigInt,
       },
+      asset: {
+        merge: true,
+      },
+      chain: {
+        merge: true,
+      },
       metadata: {
         merge: true,
       },
-      historicalState: {
-        // Fixes issue with cache causing infinite query loop when querying vault history through multiple queries
+      liquidity: {
         merge: true,
+      },
+      state: {
+        merge: true,
+      },
+      historicalState: {
+        merge: true,
+      },
+      publicAllocatorConfig: {
+        merge: true,
+      },
+      dailyApys: {
+        merge: true,
+      },
+      weeklyApys: {
+        merge: true,
+      },
+      monthlyApys: {
+        merge: true,
+      },
+      allocators: {
+        merge: mergeArrayByField<VaultAllocator>("address"),
+      },
+      pendingCaps: {
+        merge: mergeArrayByField<VaultPendingCap>("market.id"),
+      },
+      warnings: {
+        merge: mergeArrayByField<VaultWarning>("type"),
       },
     },
   },
@@ -242,6 +500,28 @@ export const typePolicies = {
       pendingGuardianValidAt: {
         read: readMaybeBigInt,
       },
+      sharePrice: {
+        read: readMaybeBigInt,
+      },
+      allocation: {
+        merge: mergeArrayByField<VaultAllocation>("id", "market.id"),
+      },
+      rewards: {
+        merge: mergeArrayByField<VaultStateReward>("asset.id"),
+      },
+    },
+  },
+  VaultStateReward: {
+    fields: {
+      yearlySupplyTokens: {
+        read: readMaybeBigInt,
+      },
+      amountPerSuppliedToken: {
+        read: readMaybeBigInt,
+      },
+      asset: {
+        merge: true,
+      },
     },
   },
   VaultPosition: {
@@ -251,6 +531,37 @@ export const typePolicies = {
       },
       shares: {
         read: readMaybeBigInt,
+      },
+      user: {
+        merge: true,
+      },
+      vault: {
+        merge: true,
+      },
+      state: {
+        merge: true,
+      },
+      historicalState: {
+        merge: true,
+      },
+    },
+  },
+  VaultPositionState: {
+    fields: {
+      timestamp: {
+        read: readMaybeBigInt,
+      },
+      pnl: {
+        read: readMaybeBigInt,
+      },
+      supplyAssets: {
+        read: readMaybeBigInt,
+      },
+      supplyShares: {
+        read: readMaybeBigInt,
+      },
+      position: {
+        merge: true,
       },
     },
   },
@@ -272,6 +583,18 @@ export const typePolicies = {
       supplyCap: {
         read: readMaybeBigInt,
       },
+      pendingSupplyCap: {
+        read: readMaybeBigInt,
+      },
+      pendingSupplyCapValidAt: {
+        read: readMaybeBigInt,
+      },
+      removableAt: {
+        read: readMaybeBigInt,
+      },
+      market: {
+        merge: true,
+      },
     },
   },
   VaultReallocate: {
@@ -288,51 +611,18 @@ export const typePolicies = {
       blockNumber: {
         read: readMaybeBigInt,
       },
+      market: {
+        merge: true,
+      },
+      vault: {
+        merge: true,
+      },
     },
   },
   VaultHistory: {
     fields: {
       allocation: {
-        // Merges two arrays of VaultAllocation objects, where the merge is based on the market id
-        // Vault id must be queried for this to work.
-        // https://www.apollographql.com/docs/react/caching/cache-field-behavior/#merging-arrays-of-non-normalized-objects
-        merge: (
-          existing: VaultAllocation[] | null | undefined,
-          incoming: VaultAllocation[],
-          {
-            readField,
-            mergeObjects,
-          }: {
-            readField: ReadFieldFunction;
-            mergeObjects: MergeObjectsFunction;
-          },
-        ) => {
-          const merged = existing ? existing.slice(0) : [];
-
-          const vaultIdToIndex = new Map<string, number>();
-          existing?.forEach((allocation, index) => {
-            const market = readField("market", allocation);
-            const marketId = readField("id", market);
-            if (!marketId)
-              throw Error(
-                'Expected "market.id" field to be defined. Check that the "market" field is present in the query',
-              );
-
-            vaultIdToIndex.set(marketId, index);
-          });
-
-          incoming.forEach((allocation) => {
-            const market = readField("market", allocation);
-            const marketId = readField("id", market);
-            const index = vaultIdToIndex.get(marketId);
-
-            if (marketId && index != null)
-              merged[index] = mergeObjects(merged[index]!, allocation);
-            else merged.push(allocation);
-          });
-
-          return merged;
-        },
+        merge: mergeArrayByField<VaultAllocation>("market.id"),
       },
     },
   },
@@ -354,6 +644,9 @@ export const typePolicies = {
       validAt: {
         read: readMaybeBigInt,
       },
+      market: {
+        merge: true,
+      },
     },
   },
   PublicAllocatorConfig: {
@@ -364,12 +657,37 @@ export const typePolicies = {
       accruedFee: {
         read: readMaybeBigInt,
       },
+      flowCaps: {
+        merge: mergeArrayByField<PublicAllocatorFlowCaps>("market.id"),
+      },
+    },
+  },
+  PublicAllocatorFlowCaps: {
+    fields: {
+      maxIn: {
+        read: readMaybeBigInt,
+      },
+      maxOut: {
+        read: readMaybeBigInt,
+      },
+      market: {
+        merge: true,
+      },
     },
   },
   PublicAllocatorSharedLiquidity: {
     fields: {
       assets: {
         read: readMaybeBigInt,
+      },
+      allocationMarket: {
+        merge: true,
+      },
+      market: {
+        merge: true,
+      },
+      vault: {
+        merge: true,
       },
     },
   },
@@ -381,12 +699,18 @@ export const typePolicies = {
       shares: {
         read: readMaybeBigInt,
       },
+      market: {
+        merge: true,
+      },
     },
   },
   MarketCollateralTransferTransactionData: {
     fields: {
       assets: {
         read: readMaybeBigInt,
+      },
+      market: {
+        merge: true,
       },
     },
   },
@@ -407,6 +731,9 @@ export const typePolicies = {
       seizedAssets: {
         read: readMaybeBigInt,
       },
+      market: {
+        merge: true,
+      },
     },
   },
   VaultTransactionData: {
@@ -416,6 +743,9 @@ export const typePolicies = {
       },
       shares: {
         read: readMaybeBigInt,
+      },
+      vault: {
+        merge: true,
       },
     },
   },
