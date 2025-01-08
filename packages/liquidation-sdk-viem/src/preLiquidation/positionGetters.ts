@@ -1,4 +1,4 @@
-import type { PartialBlueApiToken } from "@morpho-org/blue-api-sdk";
+import type { PartialApiToken } from "@morpho-org/blue-api-sdk";
 import { ChainUtils, type MarketId } from "@morpho-org/blue-sdk";
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
@@ -74,8 +74,8 @@ async function getPreLiquidablePosition(
   client: Client<Transport, Chain>,
   preLiquidation: PreLiquidation,
   borrower: string,
-  collateralAsset: PartialBlueApiToken,
-  loanAsset: PartialBlueApiToken,
+  collateralAsset: PartialApiToken,
+  loanAsset: PartialApiToken,
 ) {
   const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
   const accrualPosition = await fetchAccrualPosition(
