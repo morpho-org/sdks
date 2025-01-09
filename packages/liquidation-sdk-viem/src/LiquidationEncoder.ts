@@ -462,6 +462,7 @@ export class LiquidationEncoder<
     marketParams: MarketParams,
     slippage: bigint,
     repaidAssets: bigint,
+    origin: Address,
   ) {
     let srcToken = initialSrcToken;
     const srcAmount = initialSrcAmount;
@@ -476,6 +477,7 @@ export class LiquidationEncoder<
         amount: srcAmount,
         from: this.address,
         slippage,
+        origin,
         includeTokensInfo: false,
         includeProtocols: false,
         includeGas: false,
@@ -513,6 +515,7 @@ export class LiquidationEncoder<
             dst: marketParams.loanToken,
             amount: halfAmount,
             from: this.address,
+            origin,
             slippage,
             includeTokensInfo: false,
             includeProtocols: false,
@@ -529,6 +532,7 @@ export class LiquidationEncoder<
             dst: marketParams.loanToken,
             amount: halfAmount,
             from: this.address,
+            origin,
             slippage,
             includeTokensInfo: false,
             includeProtocols: false,

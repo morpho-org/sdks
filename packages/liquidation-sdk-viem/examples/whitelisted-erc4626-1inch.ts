@@ -253,8 +253,9 @@ export const check = async <
                       srcToken,
                       srcAmount,
                       market.params,
-                      slippage,
+                      slippage / 10n ** 16n,
                       repaidAssets,
+                      client.account.address,
                     );
 
                     if (result) {
