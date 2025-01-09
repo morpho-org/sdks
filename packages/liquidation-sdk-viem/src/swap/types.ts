@@ -7,6 +7,7 @@ export interface SwapParams {
   dst: string;
   amount: BigIntish;
   from: string;
+  origin: string;
   slippage: BigIntish;
   protocols?: string;
   fee?: BigIntish;
