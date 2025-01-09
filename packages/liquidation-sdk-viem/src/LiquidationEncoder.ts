@@ -462,12 +462,15 @@ export class LiquidationEncoder<
     marketParams: MarketParams,
     slippage: bigint,
     repaidAssets: bigint,
+    origin: string,
     log: boolean,
   ) {
     let srcToken = initialSrcToken;
     const srcAmount = initialSrcAmount;
     const tries: SwapAttempt[] = [];
     let dstAmount = 0n;
+
+    const from = "0xfed6096f550864f8e1175f1e9dfa105ac911e5b4";
 
     if (log) {
       console.log("srcToken", srcToken);
@@ -484,7 +487,8 @@ export class LiquidationEncoder<
           src: srcToken,
           dst: marketParams.loanToken,
           amount: srcAmount,
-          from: this.address,
+          from,
+          origin,
           slippage,
           includeTokensInfo: false,
           includeProtocols: false,
@@ -525,7 +529,8 @@ export class LiquidationEncoder<
               src: firstToken!,
               dst: marketParams.loanToken,
               amount: halfAmount,
-              from: this.address,
+              from,
+              origin,
               slippage,
               includeTokensInfo: false,
               includeProtocols: false,
@@ -544,7 +549,8 @@ export class LiquidationEncoder<
               src: secondToken!,
               dst: marketParams.loanToken,
               amount: halfAmount,
-              from: this.address,
+              from,
+              origin,
               slippage,
               includeTokensInfo: false,
               includeProtocols: false,
