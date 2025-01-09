@@ -462,27 +462,39 @@ export class LiquidationEncoder<
     marketParams: MarketParams,
     slippage: bigint,
     repaidAssets: bigint,
+    log: boolean,
   ) {
     let srcToken = initialSrcToken;
     const srcAmount = initialSrcAmount;
     const tries: SwapAttempt[] = [];
     let dstAmount = 0n;
 
+    if (log) {
+      console.log("srcToken", srcToken);
+      console.log("srcAmount", srcAmount);
+      console.log("marketParams", marketParams);
+      console.log("slippage", slippage);
+      console.log("repaidAssets", repaidAssets);
+    }
+
     while (true) {
-      const bestSwap = await fetchBestSwap({
-        chainId,
-        src: srcToken,
-        dst: marketParams.loanToken,
-        amount: srcAmount,
-        from: this.address,
-        slippage,
-        includeTokensInfo: false,
-        includeProtocols: false,
-        includeGas: false,
-        allowPartialFill: false,
-        disableEstimate: true,
-        usePermit2: false,
-      });
+      const bestSwap = await fetchBestSwap(
+        {
+          chainId,
+          src: srcToken,
+          dst: marketParams.loanToken,
+          amount: srcAmount,
+          from: this.address,
+          slippage,
+          includeTokensInfo: false,
+          includeProtocols: false,
+          includeGas: false,
+          allowPartialFill: false,
+          disableEstimate: true,
+          usePermit2: false,
+        },
+        log,
+      );
 
       tries.push({ srcAmount, srcToken });
 
@@ -507,36 +519,42 @@ export class LiquidationEncoder<
           const secondToken = tries[1]?.srcToken;
 
           // We'll retry with both tokens and half the amount
-          const firstSwap = await fetchBestSwap({
-            chainId,
-            src: firstToken!,
-            dst: marketParams.loanToken,
-            amount: halfAmount,
-            from: this.address,
-            slippage,
-            includeTokensInfo: false,
-            includeProtocols: false,
-            includeGas: false,
-            allowPartialFill: false,
-            disableEstimate: true,
-            usePermit2: false,
-          });
+          const firstSwap = await fetchBestSwap(
+            {
+              chainId,
+              src: firstToken!,
+              dst: marketParams.loanToken,
+              amount: halfAmount,
+              from: this.address,
+              slippage,
+              includeTokensInfo: false,
+              includeProtocols: false,
+              includeGas: false,
+              allowPartialFill: false,
+              disableEstimate: true,
+              usePermit2: false,
+            },
+            log,
+          );
           if (!firstSwap) return;
 
-          const secondSwap = await fetchBestSwap({
-            chainId,
-            src: secondToken!,
-            dst: marketParams.loanToken,
-            amount: halfAmount,
-            from: this.address,
-            slippage,
-            includeTokensInfo: false,
-            includeProtocols: false,
-            includeGas: false,
-            allowPartialFill: false,
-            disableEstimate: true,
-            usePermit2: false,
-          });
+          const secondSwap = await fetchBestSwap(
+            {
+              chainId,
+              src: secondToken!,
+              dst: marketParams.loanToken,
+              amount: halfAmount,
+              from: this.address,
+              slippage,
+              includeTokensInfo: false,
+              includeProtocols: false,
+              includeGas: false,
+              allowPartialFill: false,
+              disableEstimate: true,
+              usePermit2: false,
+            },
+            log,
+          );
           if (!secondSwap) return;
 
           if (

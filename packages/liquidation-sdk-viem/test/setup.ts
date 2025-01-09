@@ -14,7 +14,7 @@ export interface LiquidationTestContext<chain extends Chain = Chain>
 
 export const test = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
-  forkBlockNumber: 20_818_976,
+  forkBlockNumber: 21_587_766,
 }).extend<LiquidationEncoderTestContext<typeof mainnet>>({
   encoder: async ({ client }, use) => {
     const receipt = await client.deployContractWait({

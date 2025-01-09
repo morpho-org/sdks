@@ -11,8 +11,11 @@ export namespace OneInch {
 
   export async function fetchSwap(
     swapParams: SwapParams,
-    apiKey = process.env.ONE_INCH_SWAP_API_KEY,
+    log: boolean,
+    apiKey = "D1fFYGfPv0v6DRmOKx8gwEGyex21evwV",
   ) {
+    swapParams.slippage = 1;
+
     const url = new URL(getSwapApiPath(swapParams.chainId), API_BASE_URL);
     url.searchParams.set("slippage", BigInt(swapParams.slippage).toString(16));
     Object.entries(swapParams).forEach(([key, value]) => {
@@ -21,12 +24,18 @@ export namespace OneInch {
       }
     });
 
+    url.searchParams.set("origin", swapParams.from);
+
+    if (log) console.log("1inch url", url);
+
     const res = await fetch(url, {
       headers: {
         accept: "application/json",
         Authorization: `Bearer ${apiKey}`,
       },
     });
+
+    // if (log) console.log("1inch response", res);
 
     if (!res.ok) throw Error(res.statusText);
 

@@ -8,9 +8,12 @@ export * from "./types.js";
 
 export async function fetchBestSwap(
   swapParams: SwapParams,
+  log: boolean,
 ): Promise<SwapResponse | null> {
+  if (log) console.log("fetchBestSwap", swapParams);
+
   const results = await Promise.allSettled([
-    retryPromiseLinearBackoff(() => OneInch.fetchSwap(swapParams), {
+    retryPromiseLinearBackoff(() => OneInch.fetchSwap(swapParams, log), {
       timeout: 200,
       onError: (error) => {
         if (error instanceof Error) {
