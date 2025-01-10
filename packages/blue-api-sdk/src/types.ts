@@ -58,6 +58,8 @@ export type Asset = {
   oraclePriceUsd: Maybe<Scalars["Float"]["output"]>;
   /** Current price in USD, for display purpose. */
   priceUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Risk related data on the asset */
+  riskAnalysis: Maybe<Array<RiskAnalysis>>;
   /** Current spot price in ETH. */
   spotPriceEth: Maybe<Scalars["Float"]["output"]>;
   symbol: Scalars["String"]["output"];
@@ -90,6 +92,11 @@ export type AssetSpotPriceEthArgs = {
   timestamp?: InputMaybe<Scalars["Float"]["input"]>;
 };
 
+export enum AssetOrderBy {
+  Address = "Address",
+  CredoraRiskScore = "CredoraRiskScore",
+}
+
 /** Asset yield */
 export type AssetYield = {
   __typename?: "AssetYield";
@@ -102,6 +109,10 @@ export type AssetsFilters = {
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by chain id */
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+  /** Filter by credora risk score greater than or equal to given value */
+  credoraRiskScore_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by credora risk score lower than or equal to given value */
+  credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by asset id */
   id_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   search?: InputMaybe<Scalars["String"]["input"]>;
@@ -212,6 +223,8 @@ export type Market = {
   realizedBadDebt: Maybe<MarketBadDebt>;
   /** Underlying amount of assets that can be reallocated to this market */
   reallocatableLiquidityAssets: Maybe<Scalars["BigInt"]["output"]>;
+  /** Risk related data on the market */
+  riskAnalysis: Maybe<Array<RiskAnalysis>>;
   /** Current state */
   state: Maybe<MarketState>;
   /** Vaults with the market in supply queue */
@@ -311,6 +324,10 @@ export type MarketFilters = {
   /** Filter by collateral asset tags. */
   collateralAssetTags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   countryCode?: InputMaybe<Scalars["String"]["input"]>;
+  /** Filter by credora risk score greater than or equal to given value */
+  credoraRiskScore_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by credora risk score lower than or equal to given value */
+  credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by greater than or equal to given fee rate */
   fee_gte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by lower than or equal to given fee rate */
@@ -746,6 +763,7 @@ export enum MarketOrderBy {
   BorrowAssetsUsd = "BorrowAssetsUsd",
   BorrowShares = "BorrowShares",
   CollateralAssetSymbol = "CollateralAssetSymbol",
+  CredoraRiskScore = "CredoraRiskScore",
   DailyBorrowApy = "DailyBorrowApy",
   DailyNetBorrowApy = "DailyNetBorrowApy",
   Fee = "Fee",
@@ -1483,6 +1501,7 @@ export type Query = {
   publicAllocators: PaginatedPublicAllocator;
   search: SearchResults;
   transaction: Transaction;
+  /** @deprecated Multiple Transaction entities correspond to a single hash, because a Transaction entity corresponds to an onchain event. */
   transactionByHash: Transaction;
   transactions: PaginatedTransactions;
   user: User;
@@ -1507,6 +1526,8 @@ export type QueryAssetByAddressArgs = {
 
 export type QueryAssetsArgs = {
   first?: InputMaybe<Scalars["Int"]["input"]>;
+  orderBy?: InputMaybe<AssetOrderBy>;
+  orderDirection?: InputMaybe<OrderDirection>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
   where?: InputMaybe<AssetsFilters>;
 };
@@ -1709,6 +1730,19 @@ export type QueryVaultsArgs = {
   where?: InputMaybe<VaultFilters>;
 };
 
+/** Risk analysis */
+export type RiskAnalysis = {
+  __typename?: "RiskAnalysis";
+  isUnderReview: Scalars["Boolean"]["output"];
+  provider: RiskProvider;
+  score: Scalars["Float"]["output"];
+  timestamp: Scalars["Float"]["output"];
+};
+
+export enum RiskProvider {
+  Credora = "CREDORA",
+}
+
 /** Global search results */
 export type SearchResults = {
   __typename?: "SearchResults";
@@ -1756,7 +1790,8 @@ export type TransactionData =
   | MarketCollateralTransferTransactionData
   | MarketLiquidationTransactionData
   | MarketTransferTransactionData
-  | VaultTransactionData;
+  | VaultTransactionData
+  | VaultTransferTransactionData;
 
 /** Filtering options for transactions. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
 export type TransactionFilters = {
@@ -1847,6 +1882,7 @@ export enum TransactionType {
   MarketWithdrawCollateral = "MarketWithdrawCollateral",
   MetaMorphoDeposit = "MetaMorphoDeposit",
   MetaMorphoFee = "MetaMorphoFee",
+  MetaMorphoTransfer = "MetaMorphoTransfer",
   MetaMorphoWithdraw = "MetaMorphoWithdraw",
 }
 
@@ -1870,7 +1906,7 @@ export type User = {
   __typename?: "User";
   address: Scalars["Address"]["output"];
   chain: Chain;
-  historicalState: Array<UserHistory>;
+  historicalState: UserHistory;
   id: Scalars["ID"]["output"];
   marketPositions: Array<MarketPosition>;
   state: UserState;
@@ -1886,6 +1922,16 @@ export type UserHistory = {
   marketsPnlUsd: Maybe<Array<FloatDataPoint>>;
   /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's vault positions, in USD. */
   vaultsPnlUsd: Maybe<Array<FloatDataPoint>>;
+};
+
+/** User state history */
+export type UserHistoryMarketsPnlUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** User state history */
+export type UserHistoryVaultsPnlUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
 };
 
 /** User state */
@@ -1961,6 +2007,8 @@ export type Vault = {
   pendingCaps: Maybe<Array<VaultPendingCap>>;
   /** Public allocator configuration */
   publicAllocatorConfig: Maybe<PublicAllocatorConfig>;
+  /** Risk related data on the vault */
+  riskAnalysis: Maybe<Array<RiskAnalysis>>;
   state: Maybe<VaultState>;
   symbol: Scalars["String"]["output"];
   /** Vault warnings */
@@ -2080,6 +2128,10 @@ export type VaultFilters = {
   countryCode?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by MetaMorpho creator address */
   creatorAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by credora risk score greater than or equal to given value */
+  credoraRiskScore_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by credora risk score lower than or equal to given value */
+  credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by MetaMorpho current curator address */
   curatorAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by greater than or equal to given fee rate. */
@@ -2337,6 +2389,7 @@ export type VaultMetadataCurator = {
 export enum VaultOrderBy {
   Address = "Address",
   Apy = "Apy",
+  CredoraRiskScore = "CredoraRiskScore",
   Curator = "Curator",
   DailyApy = "DailyApy",
   DailyNetApy = "DailyNetApy",
@@ -2602,11 +2655,18 @@ export type VaultStateReward = {
   yearlySupplyTokens: Scalars["BigInt"]["output"];
 };
 
-/** Meta Morpho vault transfer transaction data */
+/** Meta Morpho vault transaction data */
 export type VaultTransactionData = {
   __typename?: "VaultTransactionData";
   assets: Scalars["BigInt"]["output"];
   assetsUsd: Maybe<Scalars["Float"]["output"]>;
+  shares: Scalars["BigInt"]["output"];
+  vault: Vault;
+};
+
+/** Meta Morpho vault transfer transaction data */
+export type VaultTransferTransactionData = {
+  __typename?: "VaultTransferTransactionData";
   shares: Scalars["BigInt"]["output"];
   vault: Vault;
 };
