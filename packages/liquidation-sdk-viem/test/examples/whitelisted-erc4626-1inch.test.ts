@@ -908,6 +908,163 @@ describe("erc4626-1inch", () => {
 
   // Cannot run concurrently because `fetch` is mocked globally.
   test.sequential(
+    `should liquidate on standard market an unprofitable position with bad debt`,
+    async ({ client, encoder }) => {
+      const collateralPriceUsd = 3_129;
+      const ethPriceUsd = 2_653;
+
+      const marketId =
+        "0xb8fc70e82bc5bb53e773626fcc6a23f7eefa036918d7ef216ecfb1950a94a85e" as MarketId; // wstETH/WETH (96.5%)
+
+      const market = await fetchMarket(marketId, client);
+      const [collateralToken, loanToken] = await Promise.all([
+        fetchToken(market.params.collateralToken, client),
+        fetchToken(market.params.loanToken, client),
+      ]);
+
+      const collateral = parseUnits("10000", collateralToken.decimals);
+      await client.deal({
+        erc20: collateralToken.address,
+        account: borrower.address,
+        amount: collateral,
+      });
+      await client.approve({
+        account: borrower,
+        address: collateralToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supplyCollateral",
+        args: [market.params, collateral, borrower.address, "0x"],
+      });
+
+      const borrowed = market.getMaxBorrowAssets(collateral)! - 1n;
+      await client.deal({
+        erc20: loanToken.address,
+        account: borrower.address,
+        amount: borrowed - market.liquidity,
+      });
+      await client.approve({
+        account: borrower,
+        address: loanToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supply",
+        args: [
+          market.params,
+          borrowed - market.liquidity, // 100% utilization after borrow.
+          0n,
+          borrower.address,
+          "0x",
+        ],
+      });
+
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "borrow",
+        args: [
+          market.params as InputMarketParams,
+          borrowed,
+          0n,
+          borrower.address,
+          borrower.address,
+        ],
+      });
+
+      await client.setNextBlockTimestamp({
+        timestamp: (await client.timestamp()) + Time.s.from.y(1n),
+      });
+
+      nock(BLUE_API_BASE_URL)
+        .post("/graphql")
+        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
+        .post("/graphql")
+        .reply(200, {
+          data: {
+            assetByAddress: {
+              priceUsd: ethPriceUsd,
+              spotPriceEth: 1,
+            },
+            marketPositions: {
+              items: [
+                {
+                  user: {
+                    address: borrower.address,
+                  },
+                  market: {
+                    uniqueKey: marketId,
+                    collateralAsset: {
+                      address: market.params.collateralToken,
+                      decimals: collateralToken.decimals,
+                      priceUsd: collateralPriceUsd,
+                    },
+                    loanAsset: {
+                      address: market.params.loanToken,
+                      decimals: loanToken.decimals,
+                      priceUsd: ethPriceUsd,
+                      spotPriceEth: 1 / ethPriceUsd,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        });
+
+      await client.deal({
+        erc20: loanToken.address,
+        account: liquidator.address,
+        amount: maxUint256,
+      });
+      await client.approve({
+        account: liquidator,
+        address: loanToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.writeContract({
+        account: liquidator,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "liquidate",
+        args: [market.params, borrower.address, collateral - 1n, 0n, "0x"],
+      });
+
+      await syncTimestamp(client, await client.timestamp());
+
+      await fetchAccrualPosition(borrower.address as Address, marketId, client);
+
+      mockOneInch(encoder, [
+        {
+          srcAmount: 1n,
+          dstAmount: "100000000000000",
+        },
+      ]);
+      mockParaSwap(encoder, [{ srcAmount: 1n, dstAmount: "100000000000000" }]);
+
+      await check(encoder.address, client, client.account, [marketId]);
+
+      const finalAccrualPosition = await fetchAccrualPosition(
+        borrower.address as Address,
+        marketId,
+        client,
+      );
+
+      expect(finalAccrualPosition.borrowShares).toEqual(0n);
+      expect(finalAccrualPosition.collateral).toEqual(0n);
+    },
+  );
+
+  // Cannot run concurrently because `fetch` is mocked globally.
+  test.sequential(
     `should liquidate on a PT standard market before maturity`,
     async ({ client, encoder }) => {
       const collateralPriceUsd = 1;
