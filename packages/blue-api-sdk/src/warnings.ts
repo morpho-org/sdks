@@ -13,6 +13,8 @@ export enum MarketWarningType {
   IncorrectCollateralExchangeRate = "incorrect_collateral_exchange_rate",
   IncorrectLoanExchangeRate = "incorrect_loan_exchange_rate",
   NonWhitelisted = "not_whitelisted",
+  OracleNotFromFactory = "oracle_not_from_factory",
+  MisconfiguredOracleDecimals = "misconfigured_oracle_decimals",
 }
 
 export enum VaultWarningType {
