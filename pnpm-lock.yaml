@@ -536,8 +536,8 @@ importers:
   packages/simulation-sdk:
     dependencies:
       mutative:
-        specifier: ^1.0.11
-        version: 1.0.11
+        specifier: ^1.1.0
+        version: 1.1.0
     devDependencies:
       '@morpho-org/blue-sdk':
         specifier: workspace:^
@@ -618,8 +618,8 @@ importers:
         specifier: ^4.17.21
         version: 4.17.21
       mutative:
-        specifier: ^1.0.11
-        version: 1.0.11
+        specifier: ^1.1.0
+        version: 1.1.0
       react:
         specifier: ^19.0.0
         version: 19.0.0
@@ -4329,8 +4329,8 @@ packages:
   multiformats@9.9.0:
     resolution: {integrity: sha512-HoMUjhH9T8DDBNT+6xzkrd9ga/XiBI4xLr58LJACwK6G3HTOPeMz4nB4KJs33L2BelrIJa7P0VuNaVF3hMYfjg==}
 
-  mutative@1.0.11:
-    resolution: {integrity: sha512-DfxsNvHfJlxp5yul7jhcNSI0EEWlP1vatiOr6Q7cvr8RNFBbIU5nENilUULbNJiOtbXznOxgbxHf4cYbqPDPlg==}
+  mutative@1.1.0:
+    resolution: {integrity: sha512-2PJADREjOusk3iJkD3rXV2YjAxTuaLxdfqtqTEt6vcY07LtEBR1seHuBHXWEIuscqRDGvbauYPs+A4Rj/KTczQ==}
     engines: {node: '>=14.0'}
 
   mute-stream@0.0.8:
@@ -10283,7 +10283,7 @@ snapshots:
 
   multiformats@9.9.0: {}
 
-  mutative@1.0.11: {}
+  mutative@1.1.0: {}
 
   mute-stream@0.0.8: {}
 
