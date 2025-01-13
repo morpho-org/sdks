@@ -216,7 +216,7 @@ async function fetchCompoundV2InstancePosition(
 export async function fetchCompoundV2Positions(
   user: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
@@ -231,7 +231,7 @@ export async function fetchCompoundV2Positions(
 
   const { comptroller: comptrollerAddress, ...markets } = migrationContracts;
 
-  if (deployless) {
+  if (parameters.deployless !== false) {
     //TODO
   }
 

@@ -134,7 +134,7 @@ async function fetchCompoundV3InstancePosition(
 export async function fetchCompoundV3Positions(
   user: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
@@ -147,7 +147,7 @@ export async function fetchCompoundV3Positions(
 
   if (!migrationContracts) return [];
 
-  if (deployless) {
+  if (parameters.deployless !== false) {
     //TODO
   }
 
