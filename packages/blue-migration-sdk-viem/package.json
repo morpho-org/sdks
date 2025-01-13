@@ -1,5 +1,5 @@
 {
-  "name": "@morpho-org/migration-sdk-viem",
+  "name": "@morpho-org/blue-migration-sdk-viem",
   "description": "Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to build migration bundles to migrate lending positions (on aave, compound, morpho-aaveV3-optimizer, ...) to the morpho protocol.",
   "version": "1.0.0",
   "author": "Morpho Association <contact@morpho.org>",
@@ -35,10 +35,6 @@
     "@morpho-org/simulation-sdk-wagmi": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
-    "@tanstack/query-core": "^5.62.9",
-    "@tanstack/react-query": "^5.62.11",
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/react": "^16.1.0",
     "@types/lodash": "^4.17.12",
     "lodash": "^4.17.21",
     "typescript": "^5.7.2",

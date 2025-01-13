@@ -1,13 +1,13 @@
-import { MathLib, ChainId, ChainUtils } from "@morpho-org/blue-sdk";
+import { ChainId, ChainUtils, MathLib } from "@morpho-org/blue-sdk";
+import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
 import type { Address, Client } from "viem";
-import { cErc20Abi, mErc20Abi } from "../../abis/compoundV2.abis.js";
 import {
   getBlock,
   getBlockNumber,
   getChainId,
   readContract,
 } from "viem/actions";
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import { cErc20Abi, mErc20Abi } from "../../abis/compoundV2.abis.js";
 
 export interface CompoundV2MarketState {
   lastExchangeRate: bigint;

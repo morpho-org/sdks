@@ -4,9 +4,9 @@ import {
   UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 
+import type { TypedDataDefinition } from "viem";
 import MIGRATION_ADDRESSES from "../../config.js";
 import { MigratableProtocol } from "../../types/index.js";
-import type { TypedDataDefinition } from "viem";
 
 interface MorphoAaveV3ManagerApprovalArgs {
   delegator: Address;

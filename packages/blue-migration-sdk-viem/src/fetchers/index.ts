@@ -3,13 +3,13 @@ import type { Address } from "@morpho-org/blue-sdk";
 import type { MigratablePosition } from "../positions/index.js";
 import { MigratableProtocol } from "../types/index.js";
 
+import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { Client } from "viem";
 import { fetchAaveV2Positions } from "./aaveV2/aaveV2.fetchers.js";
 import { fetchAaveV3Positions } from "./aaveV3/aaveV3.fetchers.js";
 import { fetchAaveV3OptimizerPositions } from "./aaveV3Optimizer/aaveV3Optimizer.fetchers.js";
 import { fetchCompoundV2Positions } from "./compoundV2/compoundV2.fetchers.js";
 import { fetchCompoundV3Positions } from "./compoundV3/compoundV3.fetchers.js";
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
-import type { Client } from "viem";
 
 export async function fetchMigratablePositions(
   user: Address,

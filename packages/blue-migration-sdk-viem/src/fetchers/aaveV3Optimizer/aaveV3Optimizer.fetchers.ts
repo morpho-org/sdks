@@ -13,21 +13,21 @@ import { MigratableSupplyPosition_AaveV3Optimizer } from "../../positions/supply
 import { MigratableProtocol } from "../../types/index.js";
 import { SupplyMigrationLimiter } from "../../types/positions.js";
 
+import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import {
+  type Client,
+  erc20Abi,
+  formatEther,
+  maxUint256,
+  parseUnits,
+} from "viem";
+import { getBlock, getChainId, readContract } from "viem/actions";
+import { variableDebtTokenV3Abi } from "../../abis/aaveV3.abis.js";
 import { MorphoAaveMath } from "./AaveV3.maths.js";
 import {
   P2PInterestRates,
   PoolInterestRates,
 } from "./aaveV3Optimizer.helpers.js";
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
-import {
-  type Client,
-  parseUnits,
-  formatEther,
-  erc20Abi,
-  maxUint256,
-} from "viem";
-import { getBlock, getChainId, readContract } from "viem/actions";
-import { variableDebtTokenV3Abi } from "../../abis/aaveV3.abis.js";
 
 export async function fetchAaveV3OptimizerPositions(
   user: Address,

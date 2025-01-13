@@ -1,12 +1,26 @@
 import {
+  type Address,
   type ChainId,
   MathLib,
-  type Token,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-
 import { Time } from "@morpho-org/morpho-ts";
 
+import type {
+  Action,
+  SignatureRequirement,
+} from "@morpho-org/bundler-sdk-viem";
+import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
+import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
+import {
+  type Account,
+  type Client,
+  encodeFunctionData,
+  maxUint256,
+  verifyTypedData,
+} from "viem";
+import { signTypedData } from "viem/actions";
+import { cometExtAbi } from "../../abis/compoundV3.abis.js";
 import type {
   MigrationBundle,
   MigrationTransactionRequirement,
@@ -15,45 +29,32 @@ import {
   MigratableProtocol,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
-
+import { getCompoundV3ManagerApprovalMessage } from "../helpers/signatures.js";
 import {
   MigratableSupplyPosition,
   type MigratableSupplyPositionConfig,
 } from "./index.js";
-import type {
-  Action,
-  SignatureRequirement,
-} from "@morpho-org/bundler-sdk-viem";
-import {
-  type Account,
-  type Client,
-  encodeFunctionData,
-  maxUint256,
-  verifyTypedData,
-} from "viem";
-import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
-import { signTypedData } from "viem/actions";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { aTokenV2Abi } from "../../abis/aaveV2.abis.js";
 
-interface MigratableSupplyPositionConfig_AaveV2
+interface MigratableSupplyPositionConfig_CompoundV3
   extends Omit<MigratableSupplyPositionConfig, "protocol"> {
   nonce: bigint;
-  aToken: Token;
+  cometAddress: Address;
+  cometName: string;
 }
 
-export class MigratableSupplyPosition_AaveV2
+export class MigratableSupplyPosition_CompoundV3
   extends MigratableSupplyPosition
-  implements MigratableSupplyPositionConfig_AaveV2
+  implements MigratableSupplyPositionConfig_CompoundV3
 {
   private _nonce: bigint;
-  public readonly aToken: Token;
+  public readonly cometAddress: Address;
+  public readonly cometName: string;
 
-  constructor(config: MigratableSupplyPositionConfig_AaveV2) {
-    super({ ...config, protocol: MigratableProtocol.aaveV2 });
-    this.aToken = config.aToken;
+  constructor(config: MigratableSupplyPositionConfig_CompoundV3) {
+    super({ ...config, protocol: MigratableProtocol.compoundV3 });
     this._nonce = config.nonce;
+    this.cometAddress = config.cometAddress;
+    this.cometName = config.cometName;
   }
 
   get nonce() {
@@ -70,45 +71,48 @@ export class MigratableSupplyPosition_AaveV2
     const actions: Action[] = [];
 
     const user = this.user;
-    const aToken = this.aToken;
 
-    const bundler = getChainAddresses(chainId).aaveV2Bundler;
-    if (!bundler) throw new Error("missing aaveV2Bundler address");
-
-    let migratedAmount = amount;
+    const bundler = getChainAddresses(chainId).compoundV3Bundler;
+    if (!bundler) throw new Error("missing compoundV3Bundler address");
 
     const migrateMax =
       this.max.limiter === SupplyMigrationLimiter.position &&
       this.max.value === amount;
 
+    let migratedAmount = amount;
+
     if (migrateMax) {
       migratedAmount = maxUint256;
     }
 
-    if (supportsSignature) {
-      const deadline = Time.timestamp() + Time.s.from.d(1n);
-      const nonce = this._nonce;
+    const instance = this.cometAddress;
+    const nonce = this._nonce;
+    const name = this.cometName;
 
-      const permitAction: Action = {
-        type: "permit",
-        args: [aToken.address, migratedAmount, deadline, null],
+    if (supportsSignature) {
+      const expiry = Time.timestamp() + Time.s.from.d(1n);
+
+      const allowAction: Action = {
+        type: "compoundV3AllowBySig",
+        args: [instance, true, nonce, expiry, null],
       };
 
-      actions.push(permitAction);
+      actions.push(allowAction);
 
       signRequirements.push({
-        action: permitAction,
+        action: allowAction,
         async sign(client: Client, account: Account = client.account!) {
-          if (permitAction.args[3] != null) return permitAction.args[3]; // action is already signed
+          if (allowAction.args[4] != null) return allowAction.args[4]; // action is already signed
 
-          const typedData = getPermitTypedData(
+          const typedData = getCompoundV3ManagerApprovalMessage(
             {
-              erc20: aToken,
+              name,
+              instance,
               owner: user,
-              spender: bundler,
-              allowance: migratedAmount,
+              manager: bundler,
+              isAllowed: true,
               nonce,
-              deadline,
+              expiry,
             },
             chainId,
           );
@@ -123,33 +127,28 @@ export class MigratableSupplyPosition_AaveV2
             signature,
           });
 
-          return (permitAction.args[3] = signature);
+          return (allowAction.args[4] = signature);
         },
       });
     } else {
       txRequirements.push({
-        type: "erc20Approve",
-        args: [aToken.address, bundler, amount],
+        type: "compoundV3ApproveManager",
+        args: [bundler, true],
         tx: {
-          to: aToken.address,
+          to: instance,
           data: encodeFunctionData({
-            abi: aTokenV2Abi,
-            functionName: "approve",
-            args: [bundler, amount],
+            abi: cometExtAbi,
+            functionName: "allow",
+            args: [bundler, true],
           }),
         },
       });
     }
 
-    actions.push({
-      type: "erc20TransferFrom",
-      args: [aToken.address, migratedAmount],
-    });
-
     actions.push(
       {
-        type: "aaveV2Withdraw",
-        args: [this.loanToken, maxUint256],
+        type: "compoundV3WithdrawFrom",
+        args: [instance, this.loanToken, migratedAmount],
       },
       {
         type: "erc4626Deposit",

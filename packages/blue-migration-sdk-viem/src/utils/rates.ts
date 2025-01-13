@@ -1,5 +1,5 @@
 import type { BigIntish } from "@morpho-org/blue-sdk";
-import { format, Time } from "@morpho-org/morpho-ts";
+import { Time, format } from "@morpho-org/morpho-ts";
 
 export function rateToApy(rate: BigIntish, period: Time.PeriodLike) {
   const { unit, duration } = Time.toPeriod(period);

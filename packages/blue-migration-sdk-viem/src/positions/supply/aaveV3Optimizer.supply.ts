@@ -13,15 +13,12 @@ import {
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
-import {
-  MigratableSupplyPosition,
-  type MigratableSupplyPositionConfig,
-} from "./index.js";
 import type {
-  SignatureRequirement,
   Action,
+  SignatureRequirement,
 } from "@morpho-org/bundler-sdk-viem";
-import { getMorphoAaveV3ManagerApprovalTypedData } from "../helpers/signatures.js";
+import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
+import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import {
   type Account,
   type Client,
@@ -30,8 +27,11 @@ import {
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { morphoAaveV3Abi } from "../../abis/aaveV3Optimizer.abis.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
+import { getMorphoAaveV3ManagerApprovalTypedData } from "../helpers/signatures.js";
+import {
+  MigratableSupplyPosition,
+  type MigratableSupplyPositionConfig,
+} from "./index.js";
 
 interface MigratableSupplyPositionConfig_AaveV3Optimizer
   extends Omit<MigratableSupplyPositionConfig, "protocol"> {
