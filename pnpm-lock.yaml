@@ -503,6 +503,64 @@ importers:
         specifier: ^2.1.8
         version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
 
+  packages/migration-sdk-viem:
+    dependencies:
+      '@morpho-org/bundler-sdk-viem':
+        specifier: workspace:^
+        version: link:../bundler-sdk-viem
+    devDependencies:
+      '@morpho-org/blue-sdk':
+        specifier: workspace:^
+        version: link:../blue-sdk
+      '@morpho-org/blue-sdk-viem':
+        specifier: workspace:^
+        version: link:../blue-sdk-viem
+      '@morpho-org/morpho-test':
+        specifier: workspace:^
+        version: link:../morpho-test
+      '@morpho-org/morpho-ts':
+        specifier: workspace:^
+        version: link:../morpho-ts
+      '@morpho-org/simulation-sdk':
+        specifier: workspace:^
+        version: link:../simulation-sdk
+      '@morpho-org/simulation-sdk-wagmi':
+        specifier: workspace:^
+        version: link:../simulation-sdk-wagmi
+      '@morpho-org/test':
+        specifier: workspace:^
+        version: link:../test
+      '@morpho-org/test-wagmi':
+        specifier: workspace:^
+        version: link:../test-wagmi
+      '@tanstack/query-core':
+        specifier: ^5.62.9
+        version: 5.62.9
+      '@tanstack/react-query':
+        specifier: ^5.62.11
+        version: 5.62.11(react@19.0.0)
+      '@testing-library/dom':
+        specifier: ^10.4.0
+        version: 10.4.0
+      '@testing-library/react':
+        specifier: ^16.1.0
+        version: 16.1.0(@testing-library/dom@10.4.0)(@types/react-dom@19.0.2(@types/react@19.0.2))(@types/react@19.0.2)(react-dom@19.0.0(react@19.0.0))(react@19.0.0)
+      '@types/lodash':
+        specifier: ^4.17.12
+        version: 4.17.12
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
+      viem:
+        specifier: ^2.22.2
+        version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+
   packages/morpho-test:
     devDependencies:
       '@morpho-org/blue-sdk':

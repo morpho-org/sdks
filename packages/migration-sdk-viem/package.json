@@ -1,0 +1,52 @@
+{
+  "name": "@morpho-org/migration-sdk-viem",
+  "description": "Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to build migration bundles to migrate lending positions (on aave, compound, morpho-aaveV3-optimizer, ...) to the morpho protocol.",
+  "version": "1.0.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["oumar-fall"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "files": ["lib"],
+  "scripts": {
+    "prepublish": "$npm_execpath build",
+    "build": "tsc --build tsconfig.build.json"
+  },
+  "peerDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/bundler-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/simulation-sdk": "workspace:^",
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-test": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/simulation-sdk": "workspace:^",
+    "@morpho-org/simulation-sdk-wagmi": "workspace:^",
+    "@morpho-org/test": "workspace:^",
+    "@morpho-org/test-wagmi": "workspace:^",
+    "@tanstack/query-core": "^5.62.9",
+    "@tanstack/react-query": "^5.62.11",
+    "@testing-library/dom": "^10.4.0",
+    "@testing-library/react": "^16.1.0",
+    "@types/lodash": "^4.17.12",
+    "lodash": "^4.17.21",
+    "typescript": "^5.7.2",
+    "viem": "^2.22.2",
+    "vitest": "^2.1.8"
+  },
+  "publishConfig": {
+    "main": "lib/index.js",
+    "types": "lib/index.d.ts"
+  }
+}
