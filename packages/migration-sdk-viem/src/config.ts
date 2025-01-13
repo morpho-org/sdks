@@ -14,6 +14,7 @@ import {
   cErc20Abi,
   cEtherAbi,
   comptrollerAbi,
+  mErc20Abi,
 } from "./abis/compoundV2.abis.js";
 import { cometAbi } from "./abis/compoundV3.abis.js";
 import { MigratableProtocol } from "./types/index.js";
@@ -23,23 +24,25 @@ interface Contract {
   address: Address;
 }
 
-interface ProtocolMigrationContracts {
-  [MigratableProtocol.aaveV3Optimizer]?: {
+export interface ProtocolMigrationContracts {
+  [MigratableProtocol.aaveV3Optimizer]: {
     morpho: Contract;
     poolDataProvider: Contract;
-  };
-  [MigratableProtocol.aaveV2]?: {
+  } | null;
+  [MigratableProtocol.aaveV2]: {
     protocolDataProvider: Contract;
     lendingPool: Contract;
-  };
-  [MigratableProtocol.aaveV3]?: {
+  } | null;
+  [MigratableProtocol.aaveV3]: {
     pool: Contract;
     protocolDataProvider: Contract;
-  };
-  [MigratableProtocol.compoundV3]?: Record<string, Contract>;
-  [MigratableProtocol.compoundV2]?: Record<string, Contract> & {
-    comptroller: Contract;
-  };
+  } | null;
+  [MigratableProtocol.compoundV3]: Record<string, Contract> | null;
+  [MigratableProtocol.compoundV2]:
+    | (Record<string, Contract> & {
+        comptroller: Contract;
+      })
+    | null;
 }
 
 export const MIGRATION_ADDRESSES = {
@@ -123,17 +126,19 @@ export const MIGRATION_ADDRESSES = {
     [MigratableProtocol.compoundV2]: {
       mWeth: {
         address: "0x628ff693426583D9a7FB391E54366292F509D457",
-        abi: cErc20Abi,
+        abi: mErc20Abi,
       },
       mUsdc: {
         address: "0xEdc817A28E8B93B03976FBd4a3dDBc9f7D176c22",
-        abi: cErc20Abi,
+        abi: mErc20Abi,
       },
       comptroller: {
         address: "0xfBb21d0380beE3312B33c4353c8936a0F13EF26C",
         abi: comptrollerAbi,
       },
     },
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
   },
 } as const satisfies {
   [id in ChainId]: ProtocolMigrationContracts;
