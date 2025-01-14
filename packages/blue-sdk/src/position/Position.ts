@@ -1,9 +1,12 @@
 import { BlueErrors } from "../errors.js";
 import {
+  CapacityLimitReason,
   Market,
   type MaxBorrowOptions,
+  type MaxPositionCapacities,
   type MaxWithdrawCollateralOptions,
 } from "../market/index.js";
+import { MathLib } from "../math/MathLib.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 
 export interface IPosition {
@@ -96,7 +99,10 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get maxBorrowableAssets() {
-    return this.market.getMaxBorrowableAssets(this);
+    const { maxBorrowAssets } = this;
+    if (maxBorrowAssets == null) return;
+
+    return MathLib.zeroFloorSub(maxBorrowAssets, this.borrowAssets);
   }
 
   /**
@@ -166,14 +172,30 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return this.market.getBorrowCapacityUsage(this);
   }
 
+  /**
+   * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position
+   * and the reason for the limit.
+   * Returns `undefined` iff the market's price is undefined.
+   * @deprecated Use `getBorrowCapacityLimit` instead.
+   */
   get borrowCapacityLimit() {
     return this.market.getBorrowCapacityLimit(this);
   }
 
+  /**
+   * Returns the maximum amount of loan assets that can be withdrawn given a certain supply position
+   * and a balance of loan assets, and the reason for the limit.
+   */
   get withdrawCapacityLimit() {
     return this.market.getWithdrawCapacityLimit(this);
   }
 
+  /**
+   * Returns the maximum amount of collateral assets that can be withdrawn given a certain borrow position
+   * and the reason for the limit.
+   * Returns `undefined` iff the market's price is undefined.
+   * @deprecated Use `getWithdrawCollateralCapacityLimit` instead.
+   */
   get withdrawCollateralCapacityLimit() {
     return this.market.getWithdrawCollateralCapacityLimit(this);
   }
@@ -277,6 +299,16 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  public getBorrowCapacityLimit(options?: MaxBorrowOptions) {
+    return this.market.getBorrowCapacityLimit(this, options);
+  }
+
+  public getWithdrawCollateralCapacityLimit(
+    options?: MaxWithdrawCollateralOptions,
+  ) {
+    return this.market.getWithdrawCollateralCapacityLimit(this, options);
+  }
+
   public getRepayCapacityLimit(loanTokenBalance: bigint) {
     return this.market.getRepayCapacityLimit(
       this.borrowShares,
@@ -291,12 +323,22 @@ export class AccrualPosition extends Position implements IAccrualPosition {
       borrow?: MaxBorrowOptions;
       withdrawCollateral?: MaxWithdrawCollateralOptions;
     },
-  ) {
-    return this.market.getMaxCapacities(
-      this,
-      loanTokenBalance,
-      collateralTokenBalance,
-      options,
-    );
+  ): MaxPositionCapacities {
+    return {
+      supply: {
+        value: loanTokenBalance,
+        limiter: CapacityLimitReason.balance,
+      },
+      withdraw: this.withdrawCapacityLimit,
+      borrow: this.getBorrowCapacityLimit(options?.borrow),
+      repay: this.getRepayCapacityLimit(loanTokenBalance),
+      supplyCollateral: {
+        value: collateralTokenBalance,
+        limiter: CapacityLimitReason.balance,
+      },
+      withdrawCollateral: this.getWithdrawCollateralCapacityLimit(
+        options?.withdrawCollateral,
+      ),
+    };
   }
 }

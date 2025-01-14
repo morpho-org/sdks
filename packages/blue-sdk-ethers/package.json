@@ -17,7 +17,7 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "ethers": "^6.0.0",
-    "ethers-types": "^3.17.0"
+    "ethers-types": "^3.18.1"
   },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
@@ -25,7 +25,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "ethers": "^6.13.4",
-    "ethers-types": "^3.17.3",
+    "ethers-types": "^3.18.1",
     "typescript": "^5.7.2",
     "viem": "^2.22.2",
     "vitest": "^2.1.8"

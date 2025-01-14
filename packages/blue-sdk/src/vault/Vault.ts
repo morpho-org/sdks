@@ -45,6 +45,7 @@ export interface IVault extends IVaultConfig {
   totalSupply: bigint;
   totalAssets: bigint;
   lastTotalAssets: bigint;
+  lostAssets?: bigint;
   publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
@@ -117,6 +118,12 @@ export class Vault extends VaultToken implements IVault {
   public lastTotalAssets: bigint;
 
   /**
+   * The MetaMorpho vault's lost assets due to realized bad debt.
+   * Only defined for MetaMorpho V1.1 vaults.
+   */
+  public lostAssets?: bigint;
+
+  /**
    * The MetaMorpho vault's public allocator configuration.
    */
   public publicAllocatorConfig?: VaultPublicAllocatorConfig;
@@ -138,6 +145,7 @@ export class Vault extends VaultToken implements IVault {
     totalSupply,
     totalAssets,
     lastTotalAssets,
+    lostAssets,
     ...config
   }: IVault) {
     super(config, { totalAssets, totalSupply });
@@ -158,6 +166,7 @@ export class Vault extends VaultToken implements IVault {
     this.supplyQueue = supplyQueue;
     this.withdrawQueue = withdrawQueue;
     this.lastTotalAssets = lastTotalAssets;
+    this.lostAssets = lostAssets;
     this.publicAllocatorConfig = publicAllocatorConfig;
   }
 
@@ -353,6 +362,15 @@ export class AccrualVault extends Vault implements IAccrualVault {
         };
       }),
     );
+
+    if (vault.lostAssets != null) {
+      vault.lostAssets += MathLib.max(
+        vault.lastTotalAssets - vault.lostAssets - vault.totalAssets,
+        0n,
+      );
+
+      vault.totalAssets += vault.lostAssets;
+    }
 
     const feeAssets = MathLib.wMulDown(vault.totalInterest, vault.fee);
 
