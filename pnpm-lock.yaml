@@ -25,7 +25,7 @@ importers:
         version: 1.0.1(conventional-commits-filter@5.0.0)(conventional-commits-parser@6.0.0)
       '@vitest/coverage-v8':
         specifier: ^2.1.8
-        version: 2.1.8(vitest@2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0))
+        version: 2.1.8(vitest@2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0))
       conventional-changelog-conventionalcommits:
         specifier: ^8.0.0
         version: 8.0.0
@@ -39,8 +39,8 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
       happy-dom:
-        specifier: ^16.2.0
-        version: 16.3.0
+        specifier: ^16.5.3
+        version: 16.5.3
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -58,7 +58,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/blue-api-sdk:
     devDependencies:
@@ -101,7 +101,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/blue-sdk-ethers:
     dependencies:
@@ -122,11 +122,11 @@ importers:
         specifier: workspace:^
         version: link:../test
       ethers:
-        specifier: ^6.13.4
-        version: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+        specifier: ^6.13.5
+        version: 6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       ethers-types:
         specifier: ^3.18.1
-        version: 3.18.1(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))
+        version: 3.18.1(ethers@6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10))
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -135,7 +135,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/blue-sdk-viem:
     devDependencies:
@@ -162,7 +162,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/blue-sdk-wagmi:
     devDependencies:
@@ -213,7 +213,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
       wagmi:
         specifier: ^2.14.6
         version: 2.14.6(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
@@ -222,10 +222,10 @@ importers:
     devDependencies:
       '@typechain/ethers-v6':
         specifier: ^0.5.1
-        version: 0.5.1(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typechain@8.3.2(typescript@5.7.2))(typescript@5.7.2)
+        version: 0.5.1(ethers@6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typechain@8.3.2(typescript@5.7.2))(typescript@5.7.2)
       ethers:
-        specifier: ^6.13.4
-        version: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+        specifier: ^6.13.5
+        version: 6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       hardhat:
         specifier: ^2.22.18
         version: 2.22.18(bufferutil@4.0.8)(ts-node@10.9.2(@types/node@22.10.1)(typescript@5.7.2))(typescript@5.7.2)(utf-8-validate@5.0.10)
@@ -288,13 +288,13 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/liquidation-sdk-viem:
     dependencies:
       '@paraswap/sdk':
         specifier: ^7.2.3
-        version: 7.2.3(axios@1.7.7)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.7.2)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+        version: 7.2.3(axios@1.7.7)(ethers@6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.7.2)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
       executooor-viem:
         specifier: ^1.3.3
         version: 1.3.3(evm-maths@7.0.1)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
@@ -367,7 +367,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/liquidity-sdk-ethers:
     dependencies:
@@ -421,8 +421,8 @@ importers:
         specifier: ^22.10.1
         version: 22.10.1
       ethers:
-        specifier: ^6.0.0
-        version: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+        specifier: ^6.13.5
+        version: 6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       graphql:
         specifier: ^16.10.0
         version: 16.10.0
@@ -434,7 +434,7 @@ importers:
         version: 5.7.2
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/liquidity-sdk-viem:
     dependencies:
@@ -501,7 +501,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/morpho-test:
     devDependencies:
@@ -531,7 +531,7 @@ importers:
         version: 5.7.2
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/simulation-sdk:
     dependencies:
@@ -565,7 +565,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
 
   packages/simulation-sdk-wagmi:
     devDependencies:
@@ -634,7 +634,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
       wagmi:
         specifier: ^2.14.6
         version: 2.14.6(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
@@ -661,8 +661,8 @@ importers:
         specifier: ^22.10.1
         version: 22.10.1
       ethers:
-        specifier: ^6.13.4
-        version: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+        specifier: ^6.13.5
+        version: 6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -671,10 +671,10 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
       wagmi:
         specifier: ^2.14.6
-        version: 2.14.6(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+        version: 2.14.6(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
 
   packages/test-wagmi:
     devDependencies:
@@ -716,7 +716,7 @@ importers:
         version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
       vitest:
         specifier: ^2.1.8
-        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
       wagmi:
         specifier: ^2.14.6
         version: 2.14.6(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
@@ -3394,8 +3394,8 @@ packages:
     peerDependencies:
       ethers: ^6.0.0
 
-  ethers@6.13.4:
-    resolution: {integrity: sha512-21YtnZVg4/zKkCQPjrDj38B1r4nQvTZLopUGMLQ1ePU2zV/joCfDC3t3iKQjWRzjjjbzR+mdAIoikeBRNkdllA==}
+  ethers@6.13.5:
+    resolution: {integrity: sha512-+knKNieu5EKRThQJWwqaJ10a6HE9sSehGeqWN65//wE7j47ZpFhKAnHB/JJFibwwg61I/koxaPsXbXpD/skNOQ==}
     engines: {node: '>=14.0.0'}
 
   ethjs-util@0.1.6:
@@ -3686,8 +3686,8 @@ packages:
     engines: {node: '>=0.4.7'}
     hasBin: true
 
-  happy-dom@16.3.0:
-    resolution: {integrity: sha512-Q71RaIhyS21vhW17Tpa5W36yqQXIlE1TZ0A0Gguts8PShUSQE/7fBgxYGxgm3+5y0gF6afdlAVHLQqgrIcfRzg==}
+  happy-dom@16.5.3:
+    resolution: {integrity: sha512-7zGnyROZuntn+5X84MQ535qiQ3ccm45uHl+Q7EFAcPP0NhkbrfPitqprz0GgszX91/QqsZKQ7nTYkyObCTDUjg==}
     engines: {node: '>=18.0.0'}
 
   hardhat@2.22.18:
@@ -6743,7 +6743,7 @@ snapshots:
       '@graphql-tools/utils': 10.5.5(graphql@16.10.0)
       '@whatwg-node/fetch': 0.9.22
       graphql: 16.10.0
-      tslib: 2.8.0
+      tslib: 2.8.1
     transitivePeerDependencies:
       - encoding
 
@@ -6761,7 +6761,7 @@ snapshots:
       '@graphql-tools/utils': 10.5.5(graphql@16.10.0)
       globby: 11.1.0
       graphql: 16.10.0
-      tslib: 2.8.0
+      tslib: 2.8.1
       unixify: 1.0.0
     transitivePeerDependencies:
       - supports-color
@@ -6837,7 +6837,7 @@ snapshots:
       graphql: 16.10.0
       is-glob: 4.0.3
       micromatch: 4.0.8
-      tslib: 2.8.0
+      tslib: 2.8.1
       unixify: 1.0.0
     transitivePeerDependencies:
       - supports-color
@@ -6850,7 +6850,7 @@ snapshots:
       '@graphql-tools/utils': 10.5.5(graphql@16.10.0)
       '@whatwg-node/fetch': 0.9.22
       graphql: 16.10.0
-      tslib: 2.8.0
+      tslib: 2.8.1
       value-or-promise: 1.0.12
     transitivePeerDependencies:
       - '@types/node'
@@ -6863,7 +6863,7 @@ snapshots:
       '@graphql-tools/utils': 10.5.5(graphql@16.10.0)
       globby: 11.1.0
       graphql: 16.10.0
-      tslib: 2.8.0
+      tslib: 2.8.1
       unixify: 1.0.0
 
   '@graphql-tools/graphql-tag-pluck@8.3.3(graphql@16.10.0)':
@@ -6891,7 +6891,7 @@ snapshots:
       '@graphql-tools/utils': 10.5.5(graphql@16.10.0)
       globby: 11.1.0
       graphql: 16.10.0
-      tslib: 2.8.0
+      tslib: 2.8.1
       unixify: 1.0.0
 
   '@graphql-tools/load@8.0.3(graphql@16.10.0)':
@@ -6900,7 +6900,7 @@ snapshots:
       '@graphql-tools/utils': 10.5.5(graphql@16.10.0)
       graphql: 16.10.0
       p-limit: 3.1.0
-      tslib: 2.8.0
+      tslib: 2.8.1
 
   '@graphql-tools/merge@9.0.8(graphql@16.10.0)':
     dependencies:
@@ -6935,7 +6935,7 @@ snapshots:
       js-yaml: 4.1.0
       lodash: 4.17.21
       scuid: 1.1.0
-      tslib: 2.8.0
+      tslib: 2.8.1
       yaml-ast-parser: 0.0.43
     transitivePeerDependencies:
       - '@types/node'
@@ -6985,7 +6985,7 @@ snapshots:
       '@whatwg-node/fetch': 0.9.22
       graphql: 16.10.0
       isomorphic-ws: 5.0.0(ws@8.18.0(bufferutil@4.0.8)(utf-8-validate@5.0.10))
-      tslib: 2.8.0
+      tslib: 2.8.1
       value-or-promise: 1.0.12
       ws: 8.18.0(bufferutil@4.0.8)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
@@ -7000,7 +7000,7 @@ snapshots:
       cross-inspect: 1.0.1
       dset: 3.1.4
       graphql: 16.10.0
-      tslib: 2.8.0
+      tslib: 2.8.1
 
   '@graphql-tools/utils@8.13.1(graphql@16.10.0)':
     dependencies:
@@ -7423,13 +7423,13 @@ snapshots:
 
   '@paraswap/core@2.4.0': {}
 
-  '@paraswap/sdk@7.2.3(axios@1.7.7)(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.7.2)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
+  '@paraswap/sdk@7.2.3(axios@1.7.7)(ethers@6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typescript@5.7.2)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
     dependencies:
       '@paraswap/core': 2.4.0
       ts-essentials: 10.0.3(typescript@5.7.2)
     optionalDependencies:
       axios: 1.7.7
-      ethers: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      ethers: 6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       viem: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
     transitivePeerDependencies:
       - typescript
@@ -7792,9 +7792,9 @@ snapshots:
   '@tsconfig/node16@1.0.4':
     optional: true
 
-  '@typechain/ethers-v6@0.5.1(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typechain@8.3.2(typescript@5.7.2))(typescript@5.7.2)':
+  '@typechain/ethers-v6@0.5.1(ethers@6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10))(typechain@8.3.2(typescript@5.7.2))(typescript@5.7.2)':
     dependencies:
-      ethers: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      ethers: 6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10)
       lodash: 4.17.21
       ts-essentials: 7.0.3(typescript@5.7.2)
       typechain: 8.3.2(typescript@5.7.2)
@@ -7868,7 +7868,7 @@ snapshots:
     dependencies:
       '@types/node': 22.10.1
 
-  '@vitest/coverage-v8@2.1.8(vitest@2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0))':
+  '@vitest/coverage-v8@2.1.8(vitest@2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0))':
     dependencies:
       '@ampproject/remapping': 2.3.0
       '@bcoe/v8-coverage': 0.2.3
@@ -7882,7 +7882,7 @@ snapshots:
       std-env: 3.8.0
       test-exclude: 7.0.1
       tinyrainbow: 1.2.0
-      vitest: 2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0)
+      vitest: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -7926,7 +7926,7 @@ snapshots:
       loupe: 3.1.2
       tinyrainbow: 1.2.0
 
-  '@wagmi/connectors@5.7.3(@types/react@19.0.7)(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
+  '@wagmi/connectors@5.7.3(@types/react@19.0.7)(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
     dependencies:
       '@coinbase/wallet-sdk': 4.2.3
       '@metamask/sdk': 0.31.4(bufferutil@4.0.8)(encoding@0.1.13)(utf-8-validate@5.0.10)
@@ -7960,7 +7960,56 @@ snapshots:
       - utf-8-validate
       - zod
 
+  '@wagmi/connectors@5.7.3(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
+    dependencies:
+      '@coinbase/wallet-sdk': 4.2.3
+      '@metamask/sdk': 0.31.4(bufferutil@4.0.8)(encoding@0.1.13)(utf-8-validate@5.0.10)
+      '@safe-global/safe-apps-provider': 0.18.5(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+      '@safe-global/safe-apps-sdk': 9.1.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+      '@wagmi/core': 2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+      '@walletconnect/ethereum-provider': 2.17.0(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(utf-8-validate@5.0.10)
+      cbw-sdk: '@coinbase/wallet-sdk@3.9.3'
+      viem: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+    optionalDependencies:
+      typescript: 5.7.2
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@capacitor/preferences'
+      - '@netlify/blobs'
+      - '@planetscale/database'
+      - '@react-native-async-storage/async-storage'
+      - '@types/react'
+      - '@upstash/redis'
+      - '@vercel/kv'
+      - bufferutil
+      - encoding
+      - ioredis
+      - react
+      - supports-color
+      - utf-8-validate
+      - zod
+
   '@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
+    dependencies:
+      eventemitter3: 5.0.1
+      mipd: 0.0.7(typescript@5.7.2)
+      viem: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+      zustand: 5.0.0(@types/react@19.0.7)(react@19.0.0)(use-sync-external-store@1.2.0(react@19.0.0))
+    optionalDependencies:
+      '@tanstack/query-core': 5.62.16
+      typescript: 5.7.2
+    transitivePeerDependencies:
+      - '@types/react'
+      - immer
+      - react
+      - use-sync-external-store
+
+  '@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
     dependencies:
       eventemitter3: 5.0.1
       mipd: 0.0.7(typescript@5.7.2)
@@ -9225,11 +9274,11 @@ snapshots:
       ethjs-util: 0.1.6
       rlp: 2.2.7
 
-  ethers-types@3.18.1(ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)):
+  ethers-types@3.18.1(ethers@6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10)):
     dependencies:
-      ethers: 6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10)
+      ethers: 6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10)
 
-  ethers@6.13.4(bufferutil@4.0.8)(utf-8-validate@5.0.10):
+  ethers@6.13.5(bufferutil@4.0.8)(utf-8-validate@5.0.10):
     dependencies:
       '@adraffy/ens-normalize': 1.10.1
       '@noble/curves': 1.2.0
@@ -9517,7 +9566,7 @@ snapshots:
       jiti: 2.3.3
       minimatch: 9.0.5
       string-env-interpolation: 1.0.1
-      tslib: 2.8.0
+      tslib: 2.8.1
     transitivePeerDependencies:
       - '@types/node'
       - bufferutil
@@ -9570,7 +9619,7 @@ snapshots:
     optionalDependencies:
       uglify-js: 3.19.3
 
-  happy-dom@16.3.0:
+  happy-dom@16.5.3:
     dependencies:
       webidl-conversions: 7.0.0
       whatwg-mimetype: 3.0.0
@@ -11284,7 +11333,7 @@ snapshots:
       fsevents: 2.3.3
       terser: 5.36.0
 
-  vitest@2.1.8(@types/node@22.10.1)(happy-dom@16.3.0)(terser@5.36.0):
+  vitest@2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0):
     dependencies:
       '@vitest/expect': 2.1.8
       '@vitest/mocker': 2.1.8(vite@5.4.10(@types/node@22.10.1)(terser@5.36.0))
@@ -11308,7 +11357,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 22.10.1
-      happy-dom: 16.3.0
+      happy-dom: 16.5.3
     transitivePeerDependencies:
       - less
       - lightningcss
@@ -11323,8 +11372,41 @@ snapshots:
   wagmi@2.14.6(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)):
     dependencies:
       '@tanstack/react-query': 5.62.11(react@19.0.0)
-      '@wagmi/connectors': 5.7.3(@types/react@19.0.7)(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+      '@wagmi/connectors': 5.7.3(@types/react@19.0.7)(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
       '@wagmi/core': 2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+      react: 19.0.0
+      use-sync-external-store: 1.2.0(react@19.0.0)
+      viem: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+    optionalDependencies:
+      typescript: 5.7.2
+    transitivePeerDependencies:
+      - '@azure/app-configuration'
+      - '@azure/cosmos'
+      - '@azure/data-tables'
+      - '@azure/identity'
+      - '@azure/keyvault-secrets'
+      - '@azure/storage-blob'
+      - '@capacitor/preferences'
+      - '@netlify/blobs'
+      - '@planetscale/database'
+      - '@react-native-async-storage/async-storage'
+      - '@tanstack/query-core'
+      - '@types/react'
+      - '@upstash/redis'
+      - '@vercel/kv'
+      - bufferutil
+      - encoding
+      - immer
+      - ioredis
+      - supports-color
+      - utf-8-validate
+      - zod
+
+  wagmi@2.14.6(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)):
+    dependencies:
+      '@tanstack/react-query': 5.62.11(react@19.0.0)
+      '@wagmi/connectors': 5.7.3(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+      '@wagmi/core': 2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.2.0(react@19.0.0))(viem@2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
       react: 19.0.0
       use-sync-external-store: 1.2.0(react@19.0.0)
       viem: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
