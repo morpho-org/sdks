@@ -129,13 +129,13 @@ export class MigratableSupplyPosition_AaveV2
     } else {
       txRequirements.push({
         type: "erc20Approve",
-        args: [aToken.address, bundler, amount],
+        args: [aToken.address, bundler, migratedAmount],
         tx: {
           to: aToken.address,
           data: encodeFunctionData({
             abi: aTokenV2Abi,
             functionName: "approve",
-            args: [bundler, amount],
+            args: [bundler, migratedAmount],
           }),
         },
       });
