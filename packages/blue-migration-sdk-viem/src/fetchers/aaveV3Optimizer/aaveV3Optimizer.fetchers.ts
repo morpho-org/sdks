@@ -56,7 +56,7 @@ export async function fetchAaveV3OptimizerPositions(
       abi: migrationContracts.morpho.abi,
       address: migrationContracts.morpho.address,
       functionName: "isManagedBy",
-      args: [user, addresses[ChainId.EthMainnet].bundler],
+      args: [user, addresses[ChainId.EthMainnet].aaveV3OptimizerBundler],
     }),
     readContract(client, {
       ...parameters,
@@ -167,14 +167,14 @@ export async function fetchAaveV3OptimizerPositions(
         readContract(client, {
           ...parameters,
           abi: erc20Abi,
-          address: variableDebtTokenAddress,
+          address: underlyingAddress,
           functionName: "balanceOf",
           args: [aTokenAddress],
         }),
         readContract(client, {
           ...parameters,
           abi: erc20Abi,
-          address: variableDebtTokenAddress,
+          address: underlyingAddress,
           functionName: "decimals",
           args: [],
         }),
