@@ -10,5 +10,9 @@ declare global {
       lte(expected: number | bigint | Date): Assertion;
       lt(expected: number | bigint | Date): Assertion;
     }
+    interface CloseTo {
+      // biome-ignore lint/style/useShorthandFunctionType: Chai does it that way
+      (expected: bigint, delta: bigint, message?: string): Assertion;
+    }
   }
 }

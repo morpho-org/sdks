@@ -372,16 +372,11 @@ describe("Borrow position on blue", () => {
         );
         expect(finalPositionTo.collateral).equal(collateralToMigrate);
         expect(finalPositionFrom.borrowShares).approximately(
-          //TODO fix typescript
           initialPositionFrom.borrowShares -
             finalPositionFrom.market.toBorrowShares(borrowToMigrate),
           2n,
         );
-        expect(finalPositionTo.borrowAssets).approximately(
-          //TODO fix typescript
-          borrowToMigrate,
-          2n,
-        );
+        expect(finalPositionTo.borrowAssets).approximately(borrowToMigrate, 2n);
       });
 
       testFn("should fully migrate borrow position", async ({ client }) => {
@@ -562,7 +557,6 @@ describe("Borrow position on blue", () => {
           MathLib.WAD + slippageFrom,
         );
         expect(finalPositionTo.borrowAssets).approximately(
-          //TODO fix typescript
           expectedBorrowAssets,
           2n,
         );

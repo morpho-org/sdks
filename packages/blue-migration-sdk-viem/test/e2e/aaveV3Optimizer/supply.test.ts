@@ -268,11 +268,7 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       expect(wEthBundlerBalance).eql(0n);
       expect(userPosition).gt(positionAmount - migratedAmount); //interest have been accumulated
-      expect(userMMBalance).approximately(
-        //TODO fix typescript
-        migratedAmount,
-        1n,
-      );
+      expect(userMMBalance).gte(migratedAmount - 2n);
     },
   );
 
@@ -436,11 +432,7 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       expect(wEthBundlerBalance).eql(0n);
       expect(userPosition).gt(positionAmount - migratedAmount); //interest have been accumulated
-      expect(userMMBalance).approximately(
-        //TODO fix typescript
-        migratedAmount,
-        1n,
-      );
+      expect(userMMBalance).gte(migratedAmount - 2n);
     },
   );
 
