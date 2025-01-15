@@ -1,12 +1,7 @@
 import { ChainId, ChainUtils, MathLib } from "@morpho-org/blue-sdk";
 import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
 import type { Address, Client } from "viem";
-import {
-  getBlock,
-  getBlockNumber,
-  getChainId,
-  readContract,
-} from "viem/actions";
+import { getBlock, getChainId, readContract } from "viem/actions";
 import { cErc20Abi, mErc20Abi } from "../../abis/compoundV2.abis.js";
 
 export interface CompoundV2MarketState {
@@ -89,7 +84,10 @@ export const fetchAccruedExchangeRate = async (
             functionName: "borrowRatePerBlock",
             args: [],
           }),
-          getBlockNumber(client),
+          getBlock(client, {
+            blockTag: "latest",
+            includeTransactions: false,
+          }).then((block) => block.number),
         ],
         abi: cErc20Abi,
       } as const;
@@ -186,8 +184,9 @@ export const fetchAccruedExchangeRate = async (
       reserveFactorMantissa,
       borrowRatePerUnit,
     },
+    // return the rate you would experience if you interract at next block
     chainId === ChainId.BaseMainnet
-      ? BigInt(blockUnit)
-      : BigInt(blockUnit) + 1n, // on mainnet, return the rate you would experience if you interract at next block
+      ? BigInt(blockUnit) + 2n
+      : BigInt(blockUnit) + 1n,
   );
 };

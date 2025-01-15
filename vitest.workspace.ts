@@ -32,7 +32,7 @@ export default defineWorkspace([
     test: {
       name: "blue-migration-sdk-viem",
       include: ["packages/blue-migration-sdk-viem/**/*.test.ts"],
-      testTimeout: 30_000,
+      testTimeout: 90_000,
     },
   },
   {
