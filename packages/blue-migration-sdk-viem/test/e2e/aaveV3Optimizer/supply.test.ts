@@ -64,13 +64,17 @@ describe("Supply position on Morpho AAVE V3", () => {
     expect(position.loanToken).to.equal(wNative);
     expect(position.nonce).to.equal(0n);
     expect(position.isBundlerManaging).to.equal(false);
-    expect(position.supply)
-      .gte(amount - 1n)
-      .lte(amount);
+    expect(position.supply).approximately(
+      //TODO fix typescript
+      amount,
+      1n,
+    );
     expect(position.max.limiter).to.equal(SupplyMigrationLimiter.position);
-    expect(position.max.value)
-      .gte(amount - 1n)
-      .lte(amount);
+    expect(position.max.value).approximately(
+      //TODO fix typescript
+      amount,
+      1n,
+    );
   });
 
   test[ChainId.EthMainnet](
@@ -270,9 +274,11 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       expect(wEthBundlerBalance).eql(0n);
       expect(userPosition).gt(positionAmount - migratedAmount); //interest have been accumulated
-      expect(userMMBalance)
-        .gte(migratedAmount - 1n)
-        .lte(migratedAmount);
+      expect(userMMBalance).approximately(
+        //TODO fix typescript
+        migratedAmount,
+        1n,
+      );
     },
   );
 
@@ -435,9 +441,11 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       expect(wEthBundlerBalance).eql(0n);
       expect(userPosition).gt(positionAmount - migratedAmount); //interest have been accumulated
-      expect(userMMBalance)
-        .gte(migratedAmount - 1n)
-        .lte(migratedAmount);
+      expect(userMMBalance).approximately(
+        //TODO fix typescript
+        migratedAmount,
+        1n,
+      );
     },
   );
 

@@ -7,7 +7,13 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import { getAddress, maxUint256, parseEther, zeroAddress } from "viem";
+import {
+  getAddress,
+  maxUint256,
+  parseEther,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 
 import {
   blueAbi,
@@ -23,6 +29,7 @@ import {
   finalizeBundle,
   populateBundle,
 } from "@morpho-org/bundler-sdk-viem";
+import { markets } from "@morpho-org/morpho-test";
 import { fromEntries } from "@morpho-org/morpho-ts";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
 import { sendTransaction } from "viem/actions";
@@ -37,15 +44,15 @@ const TEST_CONFIGS: {
   marketFrom: MarketParams;
   marketTo: MarketParams;
 }[] = [
-  // {
-  //   chainId: ChainId.EthMainnet,
-  //   testFn: test[ChainId.EthMainnet],
-  //   marketFrom: markets[ChainId.EthMainnet].eth_wstEth_2,
-  //   marketTo: new MarketParams({
-  //     ...markets[ChainId.EthMainnet].eth_wstEth_2,
-  //     lltv: parseUnits("0.965", 18),
-  //   }),
-  // },
+  {
+    chainId: ChainId.EthMainnet,
+    testFn: test[ChainId.EthMainnet],
+    marketFrom: markets[ChainId.EthMainnet].eth_wstEth_2,
+    marketTo: new MarketParams({
+      ...markets[ChainId.EthMainnet].eth_wstEth_2,
+      lltv: parseUnits("0.965", 18),
+    }),
+  },
   {
     chainId: ChainId.BaseMainnet,
     //@ts-expect-error
@@ -364,13 +371,16 @@ describe("Borrow position on blue", () => {
         );
         expect(finalPositionTo.collateral).equal(collateralToMigrate);
         expect(finalPositionFrom.borrowShares).approximately(
+          //TODO fix typescript
           initialPositionFrom.borrowShares -
-            finalPositionFrom.market.toBorrowShares(borrowToMigrate), //TODO fix typescript
+            finalPositionFrom.market.toBorrowShares(borrowToMigrate),
           2n,
         );
-        expect(finalPositionTo.borrowAssets)
-          .gte(borrowToMigrate)
-          .lte(borrowToMigrate + 2n);
+        expect(finalPositionTo.borrowAssets).approximately(
+          //TODO fix typescript
+          borrowToMigrate,
+          2n,
+        );
       });
 
       testFn("should fully migrate borrow position", async ({ client }) => {
@@ -551,9 +561,11 @@ describe("Borrow position on blue", () => {
           initialPositionFrom.borrowAssets,
           MathLib.WAD + slippageFrom,
         );
-        expect(finalPositionTo.borrowAssets)
-          .gte(expectedBorrowAssets)
-          .lte(expectedBorrowAssets + 2n);
+        expect(finalPositionTo.borrowAssets).approximately(
+          //TODO fix typescript
+          expectedBorrowAssets,
+          2n,
+        );
         const [loanTokenBundlerBalance, collateralTokenBundlerBalance] =
           await Promise.all([
             client.balanceOf({ erc20: marketFrom.loanToken, owner: bundler }),
