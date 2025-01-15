@@ -13,7 +13,7 @@ import { MigratableSupplyPosition_AaveV3Optimizer } from "../../positions/supply
 import { MigratableProtocol } from "../../types/index.js";
 import { SupplyMigrationLimiter } from "../../types/positions.js";
 
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import {
   type Client,
   erc20Abi,
@@ -32,7 +32,7 @@ import {
 export async function fetchAaveV3OptimizerPositions(
   user: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
@@ -44,10 +44,6 @@ export async function fetchAaveV3OptimizerPositions(
     MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3Optimizer];
 
   if (!migrationContracts) return [];
-
-  if (deployless) {
-    //TODO
-  }
 
   const [allMarkets, isBundlerManaging, nonce] = await Promise.all([
     [addresses[ChainId.EthMainnet].wNative], // TODO we only focus on pure suppliers now

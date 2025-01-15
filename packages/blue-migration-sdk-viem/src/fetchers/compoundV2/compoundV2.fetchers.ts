@@ -18,7 +18,7 @@ import {
 } from "../../types/index.js";
 import { rateToApy } from "../../utils/rates.js";
 
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.abis.js";
@@ -33,17 +33,13 @@ async function fetchCompoundV2InstancePosition(
   user: Address,
   cTokenAddress: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: FetchParameters = {},
 ) {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
   );
 
   const chainId = parameters.chainId;
-
-  if (deployless) {
-    //TODO
-  }
 
   const { abi, calls } = (() => {
     if (chainId === ChainId.EthMainnet) {
@@ -211,7 +207,7 @@ async function fetchCompoundV2InstancePosition(
 export async function fetchCompoundV2Positions(
   user: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
@@ -225,10 +221,6 @@ export async function fetchCompoundV2Positions(
   if (!migrationContracts) return [];
 
   const { comptroller: comptrollerAddress, ...markets } = migrationContracts;
-
-  if (parameters.deployless !== false) {
-    //TODO
-  }
 
   const enterredMarkets = new Set(
     await readContract(client, {

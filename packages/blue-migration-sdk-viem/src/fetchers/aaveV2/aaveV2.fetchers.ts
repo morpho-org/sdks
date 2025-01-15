@@ -9,7 +9,7 @@ import {
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 
 import { type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -19,7 +19,7 @@ import { rateToAPY } from "./aaveV2.helpers.js";
 export async function fetchAaveV2Positions(
   user: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
@@ -31,10 +31,6 @@ export async function fetchAaveV2Positions(
     MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV2];
 
   if (!migrationContracts) return [];
-
-  if (deployless) {
-    //TODO
-  }
 
   const [allATokens, userConfig, reservesList] = await Promise.all([
     readContract(client, {

@@ -1,7 +1,7 @@
 import { type Address, ChainUtils, MathLib, Token } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 
 import { type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -17,7 +17,7 @@ import { rateToAPY } from "../aaveV2/aaveV2.helpers.js";
 export async function fetchAaveV3Positions(
   user: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
@@ -29,10 +29,6 @@ export async function fetchAaveV3Positions(
     MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3];
 
   if (!migrationContracts) return [];
-
-  if (deployless) {
-    //TODO
-  }
 
   const [allATokens, userConfig, reservesList] = await Promise.all([
     readContract(client, {

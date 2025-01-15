@@ -3,7 +3,7 @@ import type { Address } from "@morpho-org/blue-sdk";
 import type { MigratablePosition } from "../positions/index.js";
 import { MigratableProtocol } from "../types/index.js";
 
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import { fromEntries } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { fetchAaveV2Positions } from "./aaveV2/aaveV2.fetchers.js";
@@ -33,7 +33,7 @@ export async function fetchMigratablePositions(
       MigratableProtocol.compoundV2,
     ],
   }: {
-    parameters?: DeploylessFetchParameters;
+    parameters?: FetchParameters;
     protocols?: MigratableProtocol[];
   } = {},
 ): Promise<{

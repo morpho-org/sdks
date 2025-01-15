@@ -1,7 +1,7 @@
 import { type Address, ChainUtils } from "@morpho-org/blue-sdk";
 import { isDefined, values } from "@morpho-org/morpho-ts";
 
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { cometAbi, cometExtAbi } from "../../abis/compoundV3.abis.js";
@@ -18,12 +18,8 @@ async function fetchCompoundV3InstancePosition(
   user: Address,
   cometAddress: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: FetchParameters = {},
 ) {
-  if (deployless) {
-    //TODO
-  }
-
   const [
     supplyBalance,
     nonce,
@@ -123,7 +119,7 @@ async function fetchCompoundV3InstancePosition(
 export async function fetchCompoundV3Positions(
   user: Address,
   client: Client,
-  parameters: DeploylessFetchParameters = {},
+  parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
@@ -135,10 +131,6 @@ export async function fetchCompoundV3Positions(
     MIGRATION_ADDRESSES[chainId][MigratableProtocol.compoundV3];
 
   if (!migrationContracts) return [];
-
-  if (parameters.deployless !== false) {
-    //TODO
-  }
 
   const positions = (
     await Promise.all(

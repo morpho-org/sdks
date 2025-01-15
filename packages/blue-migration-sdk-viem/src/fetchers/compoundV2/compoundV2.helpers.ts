@@ -1,5 +1,5 @@
 import { ChainId, ChainUtils, MathLib } from "@morpho-org/blue-sdk";
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import type { Address, Client } from "viem";
 import { getBlock, getChainId, readContract } from "viem/actions";
 import { cErc20Abi, mErc20Abi } from "../../abis/compoundV2.abis.js";
@@ -58,7 +58,7 @@ export const getAccruedExchangeRate = (
 export const fetchAccruedExchangeRate = async (
   cTokenAddress: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: FetchParameters = {},
 ) => {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
