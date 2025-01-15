@@ -11,7 +11,7 @@ import { type Address, maxUint256, parseEther, parseUnits } from "viem";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
-import { readContract, sendTransaction } from "viem/actions";
+import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
 import { MIGRATION_ADDRESSES } from "../../../src/config.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../../src/positions/supply/aaveV3.supply.js";
@@ -67,6 +67,8 @@ describe("Supply position on AAVE V3", () => {
         functionName: "setUserUseReserveAsCollateral",
         args: [market, asCollateral],
       });
+
+      await client.mine({ blocks: 500 }); //accrue some interests
     };
 
     describe(`on chain ${chainId}`, () => {
@@ -100,7 +102,7 @@ describe("Supply position on AAVE V3", () => {
           expect(position.max.limiter).to.equal(
             SupplyMigrationLimiter.position,
           );
-          expect(position.max.value).gte(amount); //interest accrued
+          expect(position.max.value).equal(position.supply);
         },
       );
 
@@ -264,7 +266,7 @@ describe("Supply position on AAVE V3", () => {
           client.balanceOf({ erc20: mmWeth }),
         ]);
 
-        const userMMBalance = await readContract(client, {
+        const userMMBalance = await client.readContract({
           address: mmWeth,
           abi: metaMorphoAbi,
           functionName: "convertToAssets",
@@ -346,7 +348,7 @@ describe("Supply position on AAVE V3", () => {
           client.balanceOf({ erc20: mmWeth }),
         ]);
 
-        const userMMBalance = await readContract(client, {
+        const userMMBalance = await client.readContract({
           address: mmWeth,
           abi: metaMorphoAbi,
           functionName: "convertToAssets",
@@ -423,7 +425,7 @@ describe("Supply position on AAVE V3", () => {
             client.balanceOf({ erc20: mmWeth }),
           ]);
 
-          const userMMBalance = await readContract(client, {
+          const userMMBalance = await client.readContract({
             address: mmWeth,
             abi: metaMorphoAbi,
             functionName: "convertToAssets",
@@ -505,7 +507,7 @@ describe("Supply position on AAVE V3", () => {
             client.balanceOf({ erc20: mmWeth }),
           ]);
 
-          const userMMBalance = await readContract(client, {
+          const userMMBalance = await client.readContract({
             address: mmWeth,
             abi: metaMorphoAbi,
             functionName: "convertToAssets",

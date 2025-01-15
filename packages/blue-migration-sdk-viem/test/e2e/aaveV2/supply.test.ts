@@ -10,7 +10,7 @@ import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
-import { readContract, sendTransaction } from "viem/actions";
+import { sendTransaction } from "viem/actions";
 import { describe, expect } from "vitest";
 import { MIGRATION_ADDRESSES } from "../../../src/config.js";
 import { test } from "../setup.js";
@@ -43,6 +43,8 @@ const writeSupply = async (
     functionName: "setUserUseReserveAsCollateral",
     args: [market, asCollateral],
   });
+
+  await client.mine({ blocks: 500 }); //accrue some interests
 };
 
 describe("Supply position on AAVE V2", () => {
@@ -71,7 +73,7 @@ describe("Supply position on AAVE V2", () => {
     expect(position.aToken.address).to.equal(aWeth);
     expect(position.supply).gte(amount); //interests accrued
     expect(position.max.limiter).to.equal(SupplyMigrationLimiter.position);
-    expect(position.max.value).gte(amount); //interests accrued
+    expect(position.max.value).equal(position.supply);
   });
 
   test[ChainId.EthMainnet](
@@ -231,7 +233,7 @@ describe("Supply position on AAVE V2", () => {
           client.balanceOf({ erc20: mmWeth }),
         ]);
 
-      const userMMBalance = await readContract(client, {
+      const userMMBalance = await client.readContract({
         address: mmWeth,
         abi: metaMorphoAbi,
         functionName: "convertToAssets",
@@ -314,7 +316,7 @@ describe("Supply position on AAVE V2", () => {
           client.balanceOf({ erc20: mmWeth }),
         ]);
 
-      const userMMBalance = await readContract(client, {
+      const userMMBalance = await client.readContract({
         address: mmWeth,
         abi: metaMorphoAbi,
         functionName: "convertToAssets",
@@ -386,7 +388,7 @@ describe("Supply position on AAVE V2", () => {
           client.balanceOf({ erc20: mmWeth }),
         ]);
 
-      const userMMBalance = await readContract(client, {
+      const userMMBalance = await client.readContract({
         address: mmWeth,
         abi: metaMorphoAbi,
         functionName: "convertToAssets",
@@ -463,7 +465,7 @@ describe("Supply position on AAVE V2", () => {
           client.balanceOf({ erc20: mmWeth }),
         ]);
 
-      const userMMBalance = await readContract(client, {
+      const userMMBalance = await client.readContract({
         address: mmWeth,
         abi: metaMorphoAbi,
         functionName: "convertToAssets",

@@ -9,7 +9,7 @@ import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
-import { readContract, sendTransaction, writeContract } from "viem/actions";
+import { sendTransaction, writeContract } from "viem/actions";
 import { describe, expect } from "vitest";
 import { MIGRATION_ADDRESSES } from "../../../src/config.js";
 import { MigratableSupplyPosition_AaveV3Optimizer } from "../../../src/positions/supply/aaveV3Optimizer.supply.js";
@@ -36,6 +36,8 @@ const writeSupply = async (
     functionName: "supply",
     args: [market, amount, client.account.address, 4n],
   });
+
+  await client.mine({ blocks: 500 }); //accrue some interests
 };
 
 describe("Supply position on Morpho AAVE V3", () => {
@@ -64,17 +66,9 @@ describe("Supply position on Morpho AAVE V3", () => {
     expect(position.loanToken).to.equal(wNative);
     expect(position.nonce).to.equal(0n);
     expect(position.isBundlerManaging).to.equal(false);
-    expect(position.supply).approximately(
-      //TODO fix typescript
-      amount,
-      1n,
-    );
+    expect(position.supply).gt(amount); //interest accrued
     expect(position.max.limiter).to.equal(SupplyMigrationLimiter.position);
-    expect(position.max.value).approximately(
-      //TODO fix typescript
-      amount,
-      1n,
-    );
+    expect(position.max.value).equal(position.supply);
   });
 
   test[ChainId.EthMainnet](
@@ -115,7 +109,7 @@ describe("Supply position on Morpho AAVE V3", () => {
       const amount = parseEther("1");
       await writeSupply(client, wNative, amount);
 
-      const owner = await readContract(client, {
+      const owner = await client.readContract({
         ...morpho,
         functionName: "owner",
         args: [],
@@ -155,7 +149,7 @@ describe("Supply position on Morpho AAVE V3", () => {
   test[ChainId.EthMainnet](
     "should fetch user position with limited liquidity",
     async ({ client }) => {
-      const { aToken } = await readContract(client, {
+      const { aToken } = await client.readContract({
         ...morpho,
         functionName: "market",
         args: [wNative],
@@ -246,18 +240,18 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       const [wEthBundlerBalance, userPosition, userMMShares] =
         await Promise.all([
-          readContract(client, {
+          client.readContract({
             abi: erc20Abi,
             address: wNative,
             functionName: "balanceOf",
             args: [aaveV3OptimizerBundler],
           }),
-          readContract(client, {
+          client.readContract({
             ...morpho,
             functionName: "supplyBalance",
             args: [wNative, client.account.address],
           }),
-          readContract(client, {
+          client.readContract({
             abi: metaMorphoAbi,
             address: mmWeth,
             functionName: "balanceOf",
@@ -265,7 +259,7 @@ describe("Supply position on Morpho AAVE V3", () => {
           }),
         ]);
 
-      const userMMBalance = await readContract(client, {
+      const userMMBalance = await client.readContract({
         abi: metaMorphoAbi,
         address: mmWeth,
         functionName: "convertToAssets",
@@ -300,10 +294,11 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).not.undefined;
       expect(aaveV3Positions).to.have.length(1);
 
-      const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+      const position = aaveV3Positions[0]!;
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
-          amount: positionAmount,
+          amount: position.supply,
           minShares: 0n,
         },
         ChainId.EthMainnet,
@@ -334,18 +329,18 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       const [wEthBundlerBalance, userPosition, userMMShares] =
         await Promise.all([
-          readContract(client, {
+          client.readContract({
             abi: erc20Abi,
             address: wNative,
             functionName: "balanceOf",
             args: [aaveV3OptimizerBundler],
           }),
-          readContract(client, {
+          client.readContract({
             ...morpho,
             functionName: "supplyBalance",
             args: [wNative, client.account.address],
           }),
-          readContract(client, {
+          client.readContract({
             abi: metaMorphoAbi,
             address: mmWeth,
             functionName: "balanceOf",
@@ -353,7 +348,7 @@ describe("Supply position on Morpho AAVE V3", () => {
           }),
         ]);
 
-      const userMMBalance = await readContract(client, {
+      const userMMBalance = await client.readContract({
         abi: metaMorphoAbi,
         address: mmWeth,
         functionName: "convertToAssets",
@@ -413,18 +408,18 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       const [wEthBundlerBalance, userPosition, userMMShares] =
         await Promise.all([
-          readContract(client, {
+          client.readContract({
             abi: erc20Abi,
             address: wNative,
             functionName: "balanceOf",
             args: [aaveV3OptimizerBundler],
           }),
-          readContract(client, {
+          client.readContract({
             ...morpho,
             functionName: "supplyBalance",
             args: [wNative, client.account.address],
           }),
-          readContract(client, {
+          client.readContract({
             abi: metaMorphoAbi,
             address: mmWeth,
             functionName: "balanceOf",
@@ -432,7 +427,7 @@ describe("Supply position on Morpho AAVE V3", () => {
           }),
         ]);
 
-      const userMMBalance = await readContract(client, {
+      const userMMBalance = await client.readContract({
         abi: metaMorphoAbi,
         address: mmWeth,
         functionName: "convertToAssets",
@@ -467,10 +462,12 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).not.undefined;
       expect(aaveV3Positions).to.have.length(1);
 
-      const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+      const position = aaveV3Positions[0]!;
+
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
-          amount: positionAmount,
+          amount: position.supply,
           minShares: 0n,
         },
         ChainId.EthMainnet,
@@ -495,18 +492,18 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       const [wEthBundlerBalance, userPosition, userMMShares] =
         await Promise.all([
-          readContract(client, {
+          client.readContract({
             abi: erc20Abi,
             address: wNative,
             functionName: "balanceOf",
             args: [aaveV3OptimizerBundler],
           }),
-          readContract(client, {
+          client.readContract({
             ...morpho,
             functionName: "supplyBalance",
             args: [wNative, client.account.address],
           }),
-          readContract(client, {
+          client.readContract({
             abi: metaMorphoAbi,
             address: mmWeth,
             functionName: "balanceOf",
@@ -514,7 +511,7 @@ describe("Supply position on Morpho AAVE V3", () => {
           }),
         ]);
 
-      const userMMBalance = await readContract(client, {
+      const userMMBalance = await client.readContract({
         abi: metaMorphoAbi,
         address: mmWeth,
         functionName: "convertToAssets",

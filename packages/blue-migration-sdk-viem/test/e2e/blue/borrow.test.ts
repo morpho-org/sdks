@@ -204,6 +204,8 @@ describe("Borrow position on blue", () => {
           client.account.address,
         ],
       });
+
+      await client.mine({ blocks: 500 }); //accrue some interests
     };
 
     describe(`on chain ${chainId}`, () => {
@@ -223,10 +225,9 @@ describe("Borrow position on blue", () => {
           marketTo,
         ]);
 
-        const initialPositionFrom = dataBefore.getAccrualPosition(
-          client.account.address,
-          marketFrom.id,
-        );
+        const initialPositionFrom = dataBefore
+          .getAccrualPosition(client.account.address, marketFrom.id)
+          .accrueInterest(dataBefore.block.timestamp);
 
         const migratablePosition = new MigratableBorrowPosition_Blue({
           market: initialPositionFrom.market,
@@ -399,10 +400,9 @@ describe("Borrow position on blue", () => {
           marketTo,
         ]);
 
-        const initialPositionFrom = dataBefore.getAccrualPosition(
-          client.account.address,
-          marketFrom.id,
-        );
+        const initialPositionFrom = dataBefore
+          .getAccrualPosition(client.account.address, marketFrom.id)
+          .accrueInterest(dataBefore.block.timestamp);
 
         const migratablePosition = new MigratableBorrowPosition_Blue({
           market: initialPositionFrom.market,
