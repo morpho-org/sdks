@@ -20,17 +20,6 @@ async function fetchCompoundV3InstancePosition(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
-
-  const chainId = parameters.chainId;
-
-  const migrationContracts =
-    MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV2];
-
-  if (!migrationContracts) return null;
-
   if (deployless) {
     //TODO
   }
@@ -143,7 +132,7 @@ export async function fetchCompoundV3Positions(
   const chainId = parameters.chainId;
 
   const migrationContracts =
-    MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV2];
+    MIGRATION_ADDRESSES[chainId][MigratableProtocol.compoundV3];
 
   if (!migrationContracts) return [];
 

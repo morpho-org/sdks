@@ -198,7 +198,7 @@ describe("Supply position on COMPOUND V2", () => {
 
           testFn("should fetch user position", async ({ client }) => {
             const amount = parseUnits("10", underlyingDecimals);
-            await writeSupply(client, cToken, underlying, amount, false);
+            await writeSupply(client, cToken, underlying, amount);
 
             const allPositions = await fetchMigratablePositions(
               client.account.address,

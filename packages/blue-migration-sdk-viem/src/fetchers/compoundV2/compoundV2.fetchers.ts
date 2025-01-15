@@ -41,11 +41,6 @@ async function fetchCompoundV2InstancePosition(
 
   const chainId = parameters.chainId;
 
-  const migrationContracts =
-    MIGRATION_ADDRESSES[chainId][MigratableProtocol.compoundV2];
-
-  if (!migrationContracts) return null;
-
   if (deployless) {
     //TODO
   }

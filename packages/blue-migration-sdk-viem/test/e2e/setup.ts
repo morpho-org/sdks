@@ -9,6 +9,6 @@ export const test = {
   }),
   [ChainId.BaseMainnet]: createViemTest(base, {
     forkUrl: process.env.BASE_RPC_URL,
-    forkBlockNumber: 16_260_000,
+    forkBlockNumber: 25_000_000,
   }),
 } as const;
