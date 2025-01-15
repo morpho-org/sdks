@@ -24,7 +24,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",
     "dataloader": "^2.2.3",
-    "ethers": "^6.0.0",
+    "ethers": "^6.13.5",
     "graphql": "^14.0.0 || ^15.0.0 || ^16.0.0",
     "graphql-request": "^6.1.0",
     "graphql-tag": "^2.12.6"
@@ -46,7 +46,7 @@
     "graphql": "^16.10.0",
     "nock": "beta",
     "typescript": "^5.7.2",
-    "ethers": "^6.0.0",
+    "ethers": "^6.13.5",
     "vitest": "^2.1.8"
   },
   "publishConfig": {

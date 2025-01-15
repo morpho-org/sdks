@@ -1,5 +1,9 @@
 import { type Provider, resolveProperties } from "ethers";
-import { MetaMorpho__factory, PublicAllocator__factory } from "ethers-types";
+import {
+  MetaMorphoV1_1__factory,
+  MetaMorpho__factory,
+  PublicAllocator__factory,
+} from "ethers-types";
 
 import {
   AccrualVault,
@@ -43,6 +47,7 @@ export async function fetchVault(
     totalSupply,
     totalAssets,
     lastTotalAssets,
+    lostAssets,
     supplyQueueSize,
     withdrawQueueSize,
     hasPublicAllocator,
@@ -65,6 +70,9 @@ export async function fetchVault(
     mm.totalSupply(overrides),
     mm.totalAssets(overrides),
     mm.lastTotalAssets(overrides),
+    MetaMorphoV1_1__factory.connect(address, runner)
+      .lostAssets(overrides)
+      .catch(() => undefined),
     mm.supplyQueueLength(overrides).then((r) => Number(r)),
     mm.withdrawQueueLength(overrides).then((r) => Number(r)),
     chainAddresses.publicAllocator &&
@@ -122,6 +130,7 @@ export async function fetchVault(
     totalSupply,
     totalAssets,
     lastTotalAssets,
+    lostAssets,
   });
 }
 

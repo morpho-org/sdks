@@ -12,6 +12,9 @@ export class VaultConfig extends Token implements IVaultConfig {
 
   constructor(
     { decimalsOffset, asset, ...config }: IVaultConfig,
+    /**
+     * @deprecated Kept for backward compatibility.
+     */
     public readonly chainId?: number,
   ) {
     super({ ...config, decimals: 18 });

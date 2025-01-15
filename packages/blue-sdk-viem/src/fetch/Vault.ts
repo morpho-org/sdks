@@ -104,6 +104,7 @@ export async function fetchVault(
     totalSupply,
     totalAssets,
     lastTotalAssets,
+    lostAssets,
     supplyQueueSize,
     withdrawQueueSize,
     hasPublicAllocator,
@@ -187,6 +188,12 @@ export async function fetchVault(
       abi: metaMorphoAbi,
       functionName: "lastTotalAssets",
     }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: metaMorphoAbi,
+      functionName: "lostAssets",
+    }).catch(() => undefined),
     readContract(client, {
       ...parameters,
       address,
@@ -285,6 +292,7 @@ export async function fetchVault(
     totalSupply,
     totalAssets,
     lastTotalAssets,
+    lostAssets,
   });
 }
 export async function fetchAccrualVault(
