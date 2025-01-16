@@ -29,7 +29,7 @@ import {
   MigratableProtocol,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
-import { getCompoundV3ManagerApprovalMessage } from "../helpers/signatures.js";
+import { getCompoundV3ManagerApprovalMessage } from "../signature/compoundV3.js";
 import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
