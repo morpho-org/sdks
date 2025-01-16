@@ -122,6 +122,7 @@ export const createAnvilTestClient = <chain extends Chain>(
     mode: "anvil",
     account: testAccount(),
     transport: traced(transport),
+    cacheTime: Number.POSITIVE_INFINITY,
   })
     .extend(dealActions)
     .extend(traceActions)
