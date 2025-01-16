@@ -32,25 +32,22 @@ import {
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { aTokenV3Abi } from "../../abis/aaveV3.js";
-import {
-  MigratableSupplyPosition,
-  type MigratableSupplyPositionConfig,
-} from "./index.js";
+import { MigratableSupplyPosition } from "./index.js";
 
-interface MigratableSupplyPositionConfig_AaveV3
-  extends Omit<MigratableSupplyPositionConfig, "protocol"> {
+interface IMigratableSupplyPosition_AaveV3
+  extends Omit<IMigratableSupplyPosition, "protocol"> {
   nonce: bigint;
   aToken: Token;
 }
 
 export class MigratableSupplyPosition_AaveV3
   extends MigratableSupplyPosition
-  implements MigratableSupplyPositionConfig_AaveV3
+  implements IMigratableSupplyPosition_AaveV3
 {
   private _nonce: bigint;
   public readonly aToken: Token;
 
-  constructor(config: MigratableSupplyPositionConfig_AaveV3) {
+  constructor(config: IMigratableSupplyPosition_AaveV3) {
     super({ ...config, protocol: MigratableProtocol.aaveV3 });
     this.aToken = config.aToken;
     this._nonce = config.nonce;

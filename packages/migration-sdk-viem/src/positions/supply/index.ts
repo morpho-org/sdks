@@ -14,7 +14,7 @@ export namespace MigratableSupplyPosition {
   }
 }
 
-export interface MigratableSupplyPositionConfig {
+export interface IMigratableSupplyPosition {
   chainId: ChainId;
   protocol: MigratableProtocol;
   user: Address;
@@ -25,7 +25,7 @@ export interface MigratableSupplyPositionConfig {
 }
 
 export abstract class MigratableSupplyPosition
-  implements MigratableSupplyPositionConfig
+  implements IMigratableSupplyPosition
 {
   public readonly protocol: MigratableProtocol;
   public readonly user: Address;
@@ -35,7 +35,7 @@ export abstract class MigratableSupplyPosition
   public readonly max: { value: bigint; limiter: SupplyMigrationLimiter };
   public readonly chainId: ChainId;
 
-  constructor(config: MigratableSupplyPositionConfig) {
+  constructor(config: IMigratableSupplyPosition) {
     this.protocol = config.protocol;
     this.user = config.user;
     this.loanToken = config.loanToken;

@@ -30,13 +30,10 @@ import {
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 import { getCompoundV3ManagerApprovalMessage } from "../helpers/signatures.js";
-import {
-  MigratableSupplyPosition,
-  type MigratableSupplyPositionConfig,
-} from "./index.js";
+import { MigratableSupplyPosition } from "./index.js";
 
-interface MigratableSupplyPositionConfig_CompoundV3
-  extends Omit<MigratableSupplyPositionConfig, "protocol"> {
+interface IMigratableSupplyPosition_CompoundV3
+  extends Omit<IMigratableSupplyPosition, "protocol"> {
   nonce: bigint;
   cometAddress: Address;
   cometName: string;
@@ -44,13 +41,13 @@ interface MigratableSupplyPositionConfig_CompoundV3
 
 export class MigratableSupplyPosition_CompoundV3
   extends MigratableSupplyPosition
-  implements MigratableSupplyPositionConfig_CompoundV3
+  implements IMigratableSupplyPosition_CompoundV3
 {
   private _nonce: bigint;
   public readonly cometAddress: Address;
   public readonly cometName: string;
 
-  constructor(config: MigratableSupplyPositionConfig_CompoundV3) {
+  constructor(config: IMigratableSupplyPosition_CompoundV3) {
     super({ ...config, protocol: MigratableProtocol.compoundV3 });
     this._nonce = config.nonce;
     this.cometAddress = config.cometAddress;

@@ -28,25 +28,22 @@ import {
 import { signTypedData } from "viem/actions";
 import { morphoAaveV3Abi } from "../../abis/aaveV3Optimizer.js";
 import { getMorphoAaveV3ManagerApprovalTypedData } from "../helpers/signatures.js";
-import {
-  MigratableSupplyPosition,
-  type MigratableSupplyPositionConfig,
-} from "./index.js";
+import { MigratableSupplyPosition } from "./index.js";
 
-interface MigratableSupplyPositionConfig_AaveV3Optimizer
-  extends Omit<MigratableSupplyPositionConfig, "protocol"> {
+interface IMigratableSupplyPosition_AaveV3Optimizer
+  extends Omit<IMigratableSupplyPosition, "protocol"> {
   nonce: bigint;
   isBundlerManaging: boolean;
 }
 
 export class MigratableSupplyPosition_AaveV3Optimizer
   extends MigratableSupplyPosition
-  implements MigratableSupplyPositionConfig_AaveV3Optimizer
+  implements IMigratableSupplyPosition_AaveV3Optimizer
 {
   public readonly isBundlerManaging: boolean;
   private _nonce: bigint;
 
-  constructor(config: MigratableSupplyPositionConfig_AaveV3Optimizer) {
+  constructor(config: IMigratableSupplyPosition_AaveV3Optimizer) {
     super({ ...config, protocol: MigratableProtocol.aaveV3Optimizer });
     this.isBundlerManaging = config.isBundlerManaging;
     this._nonce = config.nonce;

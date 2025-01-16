@@ -21,13 +21,10 @@ import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
 import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import { encodeFunctionData, maxUint256 } from "viem";
 import { cErc20Abi } from "../../abis/compoundV2.js";
-import {
-  MigratableSupplyPosition,
-  type MigratableSupplyPositionConfig,
-} from "./index.js";
+import { MigratableSupplyPosition } from "./index.js";
 
-interface MigratableSupplyPositionConfig_CompoundV2
-  extends Omit<MigratableSupplyPositionConfig, "protocol"> {
+interface IMigratableSupplyPosition_CompoundV2
+  extends Omit<IMigratableSupplyPosition, "protocol"> {
   bundlerAllowance: bigint;
   cToken: ExchangeRateWrappedToken;
   cTokenBalance: bigint;
@@ -35,13 +32,13 @@ interface MigratableSupplyPositionConfig_CompoundV2
 
 export class MigratableSupplyPosition_CompoundV2
   extends MigratableSupplyPosition
-  implements MigratableSupplyPositionConfig_CompoundV2
+  implements IMigratableSupplyPosition_CompoundV2
 {
   readonly bundlerAllowance: bigint;
   readonly cToken: ExchangeRateWrappedToken;
   readonly cTokenBalance: bigint;
 
-  constructor(config: MigratableSupplyPositionConfig_CompoundV2) {
+  constructor(config: IMigratableSupplyPosition_CompoundV2) {
     super({ ...config, protocol: MigratableProtocol.compoundV2 });
 
     this.bundlerAllowance = config.bundlerAllowance;
