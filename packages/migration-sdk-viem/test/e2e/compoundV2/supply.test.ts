@@ -14,7 +14,7 @@ import { entries } from "lodash";
 import { maxUint256, parseUnits } from "viem";
 import { sendTransaction, writeContract } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
-import { cErc20Abi } from "../../../src/abis/compoundV2.abis.js";
+import { cErc20Abi } from "../../../src/abis/compoundV2.js";
 import { MIGRATION_ADDRESSES } from "../../../src/config.js";
 import { fetchAccruedExchangeRate } from "../../../src/fetchers/compoundV2/compoundV2.helpers.js";
 import {

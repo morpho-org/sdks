@@ -5,7 +5,7 @@ import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 
 import { type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { aTokenV3Abi } from "../../abis/aaveV3.abis.js";
+import { aTokenV3Abi } from "../../abis/aaveV3.js";
 import { MIGRATION_ADDRESSES } from "../../config.js";
 import type { MigratablePosition } from "../../positions/index.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../positions/supply/aaveV3.supply.js";

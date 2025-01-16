@@ -4,7 +4,7 @@ import { isDefined, values } from "@morpho-org/morpho-ts";
 import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { cometAbi, cometExtAbi } from "../../abis/compoundV3.abis.js";
+import { cometAbi, cometExtAbi } from "../../abis/compoundV3.js";
 import MIGRATION_ADDRESSES from "../../config.js";
 import type { MigratablePosition } from "../../positions/index.js";
 import { MigratableSupplyPosition_CompoundV3 } from "../../positions/supply/compoundV3.supply.js";

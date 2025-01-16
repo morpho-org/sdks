@@ -7,7 +7,7 @@ import {} from "lodash";
 import { type Address, maxUint256, parseUnits } from "viem";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
-import { cometAbi } from "../../../src/abis/compoundV3.abis.js";
+import { cometAbi } from "../../../src/abis/compoundV3.js";
 import { MIGRATION_ADDRESSES } from "../../../src/config.js";
 import {
   MigratableProtocol,

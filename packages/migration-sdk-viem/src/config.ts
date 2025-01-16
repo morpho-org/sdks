@@ -4,19 +4,19 @@ import type { Abi } from "viem";
 import {
   lendingPoolAbi,
   protocolDataProviderAbi as protocolDataProviderAbi_v2,
-} from "./abis/aaveV2.abis.js";
+} from "./abis/aaveV2.js";
 import {
   poolAbi,
   protocolDataProviderAbi as protocolDataProviderAbi_v3,
-} from "./abis/aaveV3.abis.js";
-import { morphoAaveV3Abi } from "./abis/aaveV3Optimizer.abis.js";
+} from "./abis/aaveV3.js";
+import { morphoAaveV3Abi } from "./abis/aaveV3Optimizer.js";
 import {
   cErc20Abi,
   cEtherAbi,
   comptrollerAbi,
   mErc20Abi,
-} from "./abis/compoundV2.abis.js";
-import { cometAbi } from "./abis/compoundV3.abis.js";
+} from "./abis/compoundV2.js";
+import { cometAbi } from "./abis/compoundV3.js";
 import { MigratableProtocol } from "./types/index.js";
 
 interface Contract {

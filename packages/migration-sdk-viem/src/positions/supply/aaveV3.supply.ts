@@ -31,7 +31,7 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
-import { aTokenV3Abi } from "../../abis/aaveV3.abis.js";
+import { aTokenV3Abi } from "../../abis/aaveV3.js";
 import {
   MigratableSupplyPosition,
   type MigratableSupplyPositionConfig,

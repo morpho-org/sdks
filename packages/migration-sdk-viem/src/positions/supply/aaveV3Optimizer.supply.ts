@@ -26,7 +26,7 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
-import { morphoAaveV3Abi } from "../../abis/aaveV3Optimizer.abis.js";
+import { morphoAaveV3Abi } from "../../abis/aaveV3Optimizer.js";
 import { getMorphoAaveV3ManagerApprovalTypedData } from "../helpers/signatures.js";
 import {
   MigratableSupplyPosition,

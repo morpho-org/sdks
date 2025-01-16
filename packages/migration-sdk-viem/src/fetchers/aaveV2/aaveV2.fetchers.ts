@@ -13,7 +13,7 @@ import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 
 import { type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { aTokenV2Abi } from "../../abis/aaveV2.abis.js";
+import { aTokenV2Abi } from "../../abis/aaveV2.js";
 import { rateToAPY } from "./aaveV2.helpers.js";
 
 export async function fetchAaveV2Positions(

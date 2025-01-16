@@ -22,7 +22,7 @@ import {
   parseUnits,
 } from "viem";
 import { getBlock, getChainId, readContract } from "viem/actions";
-import { variableDebtTokenV3Abi } from "../../abis/aaveV3.abis.js";
+import { variableDebtTokenV3Abi } from "../../abis/aaveV3.js";
 import { MorphoAaveMath } from "./AaveV3.maths.js";
 import {
   P2PInterestRates,

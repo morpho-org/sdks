@@ -21,7 +21,7 @@
 <br />
 <br />
 
-Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to build migration bundles to migrate lending positions (on aave, compound, morpho-aaveV3-optimizer, ...) to the morpho protocol.
+Viem-based extension of `@morpho-org/bundler-sdk-viem` that exports utilities to build migration bundles to migrate lending positions (on aave, compound, morpho-aaveV3-optimizer, ...) to the morpho protocol.
 
 ## Installation
 

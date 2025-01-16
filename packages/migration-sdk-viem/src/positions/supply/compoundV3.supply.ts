@@ -20,7 +20,7 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
-import { cometExtAbi } from "../../abis/compoundV3.abis.js";
+import { cometExtAbi } from "../../abis/compoundV3.js";
 import type {
   MigrationBundle,
   MigrationTransactionRequirement,

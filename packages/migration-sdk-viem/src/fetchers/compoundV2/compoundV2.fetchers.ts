@@ -21,7 +21,7 @@ import { rateToApy } from "../../utils/rates.js";
 import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.abis.js";
+import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.js";
 import { fetchAccruedExchangeRate } from "./compoundV2.helpers.js";
 
 const COMPOUNDING_PERIOD: { [chainID in ChainId]: Time.PeriodLike } = {
