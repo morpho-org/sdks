@@ -4980,6 +4980,32 @@ export const metaMorphoAbi = [
   },
   {
     type: "event",
+    name: "SetName",
+    inputs: [
+      {
+        name: "name",
+        type: "string",
+        indexed: false,
+        internalType: "string",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetSymbol",
+    inputs: [
+      {
+        name: "symbol",
+        type: "string",
+        indexed: false,
+        internalType: "string",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
     name: "SetSkimRecipient",
     inputs: [
       {
