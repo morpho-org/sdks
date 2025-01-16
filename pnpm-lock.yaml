@@ -81,7 +81,7 @@ importers:
         specifier: ^5.7.2
         version: 5.7.2
 
-  packages/blue-migration-sdk-viem:
+  packages/migration-sdk-viem:
     dependencies:
       '@morpho-org/bundler-sdk-viem':
         specifier: workspace:^
