@@ -27,3 +27,4 @@ jobs:
       - run: pnpm run test --coverage
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          IS_LOGGING_DISABLED: true
