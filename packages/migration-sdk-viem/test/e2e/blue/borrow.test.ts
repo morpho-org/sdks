@@ -247,7 +247,7 @@ describe("Borrow position on blue", () => {
           slippageTo,
         });
 
-        expect(operation).eql({
+        expect(operation).toEqual({
           type: "Blue_SupplyCollateral",
           address: "0x",
           sender: client.account.address,
@@ -299,7 +299,7 @@ describe("Borrow position on blue", () => {
           dataBefore,
           client.account.address,
         );
-        expect(finalizedBundle).eql([
+        expect(finalizedBundle).toEqual([
           {
             type: "Blue_SupplyCollateral",
             address: "0x",
@@ -367,10 +367,10 @@ describe("Borrow position on blue", () => {
           fetchAccrualPosition(client.account.address, marketTo.id, client),
         ]);
 
-        expect(finalPositionFrom.collateral).equal(
+        expect(finalPositionFrom.collateral).toEqual(
           collateralAmount - collateralToMigrate,
         );
-        expect(finalPositionTo.collateral).equal(collateralToMigrate);
+        expect(finalPositionTo.collateral).toEqual(collateralToMigrate);
         expect(finalPositionFrom.borrowShares).approximately(
           initialPositionFrom.borrowShares -
             finalPositionFrom.market.toBorrowShares(borrowToMigrate),
@@ -413,7 +413,7 @@ describe("Borrow position on blue", () => {
           slippageFrom,
           slippageTo,
         });
-        expect(operation).eql({
+        expect(operation).toEqual({
           type: "Blue_SupplyCollateral",
           address: "0x",
           sender: client.account.address,
@@ -468,7 +468,7 @@ describe("Borrow position on blue", () => {
           dataBefore,
           client.account.address,
         );
-        expect(finalizedBundle).eql([
+        expect(finalizedBundle).toEqual([
           {
             type: "Blue_SupplyCollateral",
             address: "0x",
@@ -549,9 +549,9 @@ describe("Borrow position on blue", () => {
           fetchAccrualPosition(client.account.address, marketTo.id, client),
         ]);
 
-        expect(finalPositionFrom.collateral).equal(0n);
-        expect(finalPositionTo.collateral).equal(collateralAmount);
-        expect(finalPositionFrom.borrowShares).equal(0n);
+        expect(finalPositionFrom.collateral).toEqual(0n);
+        expect(finalPositionTo.collateral).toEqual(collateralAmount);
+        expect(finalPositionFrom.borrowShares).toEqual(0n);
         const expectedBorrowAssets = MathLib.wMulUp(
           initialPositionFrom.borrowAssets,
           MathLib.WAD + slippageFrom,
@@ -568,8 +568,8 @@ describe("Borrow position on blue", () => {
               owner: bundler,
             }),
           ]);
-        expect(loanTokenBundlerBalance).equal(0n);
-        expect(collateralTokenBundlerBalance).equal(0n);
+        expect(loanTokenBundlerBalance).toEqual(0n);
+        expect(collateralTokenBundlerBalance).toEqual(0n);
       });
     });
   }

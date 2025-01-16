@@ -155,8 +155,8 @@ describe("Supply position on COMPOUND V2", () => {
               );
               const compoundV2Positions =
                 allPositions[MigratableProtocol.compoundV2]!;
-              expect(compoundV2Positions).not.undefined;
-              expect(compoundV2Positions).to.have.length(0);
+              expect(compoundV2Positions).toBeDefined();
+              expect(compoundV2Positions).toHaveLength(0);
             },
           );
 
@@ -192,8 +192,8 @@ describe("Supply position on COMPOUND V2", () => {
               args: [],
             });
 
-            expect(initialExchangeRate).to.not.equal(actualExchangeRate);
-            expect(projectedExchangeRate).equal(actualExchangeRate);
+            expect(actualExchangeRate).toBeGreaterThan(initialExchangeRate);
+            expect(projectedExchangeRate).toEqual(actualExchangeRate);
           });
 
           testFn("should fetch user position", async ({ client }) => {
@@ -208,28 +208,28 @@ describe("Supply position on COMPOUND V2", () => {
 
             const compoundV2Positions =
               allPositions[MigratableProtocol.compoundV2]!;
-            expect(compoundV2Positions).not.undefined;
+            expect(compoundV2Positions).toBeDefined();
 
-            expect(compoundV2Positions).to.have.length(1);
+            expect(compoundV2Positions).toHaveLength(1);
 
             const position =
               compoundV2Positions[0]! as MigratableSupplyPosition_CompoundV2;
-            expect(position).to.be.instanceOf(
+            expect(position).toBeInstanceOf(
               MigratableSupplyPosition_CompoundV2,
             );
 
-            expect(position.protocol).to.equal(MigratableProtocol.compoundV2);
-            expect(position.user).to.equal(client.account.address);
-            expect(position.loanToken).to.equal(
+            expect(position.protocol).toEqual(MigratableProtocol.compoundV2);
+            expect(position.user).toEqual(client.account.address);
+            expect(position.loanToken).toEqual(
               underlying === NATIVE_ADDRESS ? wNative : underlying,
             );
-            expect(position.bundlerAllowance).to.equal(0n);
-            expect(position.cToken.address).to.eql(cToken);
-            expect(position.supply).gt(amount); // interests accrued
-            expect(position.max.limiter).to.equal(
+            expect(position.bundlerAllowance).toEqual(0n);
+            expect(position.cToken.address).toEqual(cToken);
+            expect(position.supply).toBeGreaterThan(amount); // interests accrued
+            expect(position.max.limiter).toEqual(
               SupplyMigrationLimiter.position,
             );
-            expect(position.max.value).to.equal(position.supply);
+            expect(position.max.value).toEqual(position.supply);
           });
 
           testFn(
@@ -248,8 +248,8 @@ describe("Supply position on COMPOUND V2", () => {
 
               const compoundV2Positions =
                 allPositions[MigratableProtocol.compoundV2]!;
-              expect(compoundV2Positions).not.undefined;
-              expect(compoundV2Positions).to.have.length(1);
+              expect(compoundV2Positions).toBeDefined();
+              expect(compoundV2Positions).toHaveLength(1);
               const position =
                 compoundV2Positions[0]! as MigratableSupplyPosition_CompoundV2;
               const migrationBundle = position.getMigrationTx(
@@ -261,13 +261,13 @@ describe("Supply position on COMPOUND V2", () => {
                 chainId,
               );
 
-              expect(migrationBundle.requirements.txs).to.have.length(1);
-              expect(migrationBundle.requirements.signatures).to.have.length(0);
+              expect(migrationBundle.requirements.txs).toHaveLength(1);
+              expect(migrationBundle.requirements.signatures).toHaveLength(0);
 
               const transferredAmount =
                 position.cToken.toUnwrappedExactAmountOut(migratedAmount);
 
-              expect(migrationBundle.actions).eql(
+              expect(migrationBundle.actions).toEqual(
                 [
                   {
                     args: [cToken, transferredAmount],
@@ -337,12 +337,12 @@ describe("Supply position on COMPOUND V2", () => {
                 args: [userMMShares],
               });
 
-              expect(bundlerBalance).eql(0n);
-              expect(bundlerCTokenBalance).eql(0n);
-              expect(cErc20Token.toUnwrappedExactAmountIn(userPosition)).gt(
-                positionAmount - migratedAmount,
-              ); //interest have been accumulated
-              expect(userMMBalance).gte(migratedAmount - 2n);
+              expect(bundlerBalance).toEqual(0n);
+              expect(bundlerCTokenBalance).toEqual(0n);
+              expect(
+                cErc20Token.toUnwrappedExactAmountIn(userPosition),
+              ).toBeGreaterThan(positionAmount - migratedAmount); //interest have been accumulated
+              expect(userMMBalance).toBeGreaterThanOrEqual(migratedAmount - 2n);
             },
           );
 
@@ -363,8 +363,8 @@ describe("Supply position on COMPOUND V2", () => {
 
               const compoundV2Positions =
                 allPositions[MigratableProtocol.compoundV2]!;
-              expect(compoundV2Positions).not.undefined;
-              expect(compoundV2Positions).to.have.length(1);
+              expect(compoundV2Positions).toBeDefined();
+              expect(compoundV2Positions).toHaveLength(1);
 
               const position = compoundV2Positions[0]!;
               const migrationBundle = position.getMigrationTx(
@@ -377,10 +377,10 @@ describe("Supply position on COMPOUND V2", () => {
                 false,
               );
 
-              expect(migrationBundle.requirements.txs).to.have.length(1);
-              expect(migrationBundle.requirements.signatures).to.have.length(0);
+              expect(migrationBundle.requirements.txs).toHaveLength(1);
+              expect(migrationBundle.requirements.signatures).toHaveLength(0);
 
-              expect(migrationBundle.actions).eql(
+              expect(migrationBundle.actions).toEqual(
                 [
                   {
                     args: [cToken, cTokenBalance],
@@ -436,10 +436,10 @@ describe("Supply position on COMPOUND V2", () => {
                 args: [userMMShares],
               });
 
-              expect(bundlerBalance).eql(0n);
-              expect(bundlerCTokenBalance).eql(0n);
-              expect(userPosition).eql(0n);
-              expect(userMMBalance).gte(positionAmount);
+              expect(bundlerBalance).toEqual(0n);
+              expect(bundlerCTokenBalance).toEqual(0n);
+              expect(userPosition).toEqual(0n);
+              expect(userMMBalance).toBeGreaterThanOrEqual(positionAmount);
             },
           );
         });

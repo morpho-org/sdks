@@ -54,21 +54,21 @@ describe("Supply position on Morpho AAVE V3", () => {
 
     const aaveV3OptimizerPositions =
       allPositions[MigratableProtocol.aaveV3Optimizer]!;
-    expect(aaveV3OptimizerPositions).not.undefined;
-    expect(aaveV3OptimizerPositions).to.have.length(1);
+    expect(aaveV3OptimizerPositions).toBeDefined();
+    expect(aaveV3OptimizerPositions).toHaveLength(1);
 
     const position =
       aaveV3OptimizerPositions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
-    expect(position).to.be.instanceOf(MigratableSupplyPosition_AaveV3Optimizer);
+    expect(position).toBeInstanceOf(MigratableSupplyPosition_AaveV3Optimizer);
 
-    expect(position.protocol).to.equal(MigratableProtocol.aaveV3Optimizer);
-    expect(position.user).to.equal(client.account.address);
-    expect(position.loanToken).to.equal(wNative);
-    expect(position.nonce).to.equal(0n);
-    expect(position.isBundlerManaging).to.equal(false);
-    expect(position.supply).gt(amount); //interest accrued
-    expect(position.max.limiter).to.equal(SupplyMigrationLimiter.position);
-    expect(position.max.value).equal(position.supply);
+    expect(position.protocol).toEqual(MigratableProtocol.aaveV3Optimizer);
+    expect(position.user).toEqual(client.account.address);
+    expect(position.loanToken).toEqual(wNative);
+    expect(position.nonce).toEqual(0n);
+    expect(position.isBundlerManaging).toEqual(false);
+    expect(position.supply).toBeGreaterThan(amount); //interest accrued
+    expect(position.max.limiter).toEqual(SupplyMigrationLimiter.position);
+    expect(position.max.value).toEqual(position.supply);
   });
 
   test[ChainId.EthMainnet](
@@ -90,16 +90,14 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       const aaveV3OptimizerPositions =
         allPositions[MigratableProtocol.aaveV3Optimizer]!;
-      expect(aaveV3OptimizerPositions).not.undefined;
-      expect(aaveV3OptimizerPositions).to.have.length(1);
+      expect(aaveV3OptimizerPositions).toBeDefined();
+      expect(aaveV3OptimizerPositions).toHaveLength(1);
 
       const position =
         aaveV3OptimizerPositions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
-      expect(position).to.be.instanceOf(
-        MigratableSupplyPosition_AaveV3Optimizer,
-      );
+      expect(position).toBeInstanceOf(MigratableSupplyPosition_AaveV3Optimizer);
 
-      expect(position.isBundlerManaging).to.be.true;
+      expect(position.isBundlerManaging).toBeTruthy();
     },
   );
 
@@ -130,16 +128,14 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       const aaveV3OptimizerPositions =
         allPositions[MigratableProtocol.aaveV3Optimizer]!;
-      expect(aaveV3OptimizerPositions).not.undefined;
-      expect(aaveV3OptimizerPositions).to.have.length(1);
+      expect(aaveV3OptimizerPositions).toBeDefined();
+      expect(aaveV3OptimizerPositions).toHaveLength(1);
 
       const position =
         aaveV3OptimizerPositions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
-      expect(position).to.be.instanceOf(
-        MigratableSupplyPosition_AaveV3Optimizer,
-      );
+      expect(position).toBeInstanceOf(MigratableSupplyPosition_AaveV3Optimizer);
 
-      expect(position.max).to.eql({
+      expect(position.max).toEqual({
         limiter: SupplyMigrationLimiter.withdrawPaused,
         value: 0n,
       });
@@ -171,16 +167,14 @@ describe("Supply position on Morpho AAVE V3", () => {
       );
 
       const aaveV3Positions = allPositions[MigratableProtocol.aaveV3Optimizer]!;
-      expect(aaveV3Positions).not.undefined;
-      expect(aaveV3Positions).to.have.length(1);
+      expect(aaveV3Positions).toBeDefined();
+      expect(aaveV3Positions).toHaveLength(1);
 
       const position =
         aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
-      expect(position).to.be.instanceOf(
-        MigratableSupplyPosition_AaveV3Optimizer,
-      );
+      expect(position).toBeInstanceOf(MigratableSupplyPosition_AaveV3Optimizer);
 
-      expect(position.max).to.eql({
+      expect(position.max).toEqual({
         limiter: SupplyMigrationLimiter.liquidity,
         value: liquidity,
       });
@@ -203,8 +197,8 @@ describe("Supply position on Morpho AAVE V3", () => {
       );
 
       const aaveV3Positions = allPositions[MigratableProtocol.aaveV3Optimizer]!;
-      expect(aaveV3Positions).not.undefined;
-      expect(aaveV3Positions).to.have.length(1);
+      expect(aaveV3Positions).toBeDefined();
+      expect(aaveV3Positions).toHaveLength(1);
 
       const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
         {
@@ -216,10 +210,10 @@ describe("Supply position on Morpho AAVE V3", () => {
         true,
       );
 
-      expect(migrationBundle.requirements.txs).to.have.length(0);
-      expect(migrationBundle.requirements.signatures).to.have.length(1);
+      expect(migrationBundle.requirements.txs).toHaveLength(0);
+      expect(migrationBundle.requirements.signatures).toHaveLength(1);
       const deadline = migrationBundle.actions[0]?.args[2];
-      expect(migrationBundle.actions).eql([
+      expect(migrationBundle.actions).toEqual([
         {
           args: [true, 0n, deadline, null],
           type: "aaveV3OptimizerApproveManagerWithSig",
@@ -266,9 +260,9 @@ describe("Supply position on Morpho AAVE V3", () => {
         args: [userMMShares],
       });
 
-      expect(wEthBundlerBalance).eql(0n);
-      expect(userPosition).gt(positionAmount - migratedAmount); //interest have been accumulated
-      expect(userMMBalance).gte(migratedAmount - 2n);
+      expect(wEthBundlerBalance).toEqual(0n);
+      expect(userPosition).toBeGreaterThan(positionAmount - migratedAmount); //interest have been accumulated
+      expect(userMMBalance).toBeGreaterThanOrEqual(migratedAmount - 2n);
     },
   );
 
@@ -287,8 +281,8 @@ describe("Supply position on Morpho AAVE V3", () => {
       );
 
       const aaveV3Positions = allPositions[MigratableProtocol.aaveV3Optimizer]!;
-      expect(aaveV3Positions).not.undefined;
-      expect(aaveV3Positions).to.have.length(1);
+      expect(aaveV3Positions).toBeDefined();
+      expect(aaveV3Positions).toHaveLength(1);
 
       const position = aaveV3Positions[0]!;
       const migrationBundle = position.getMigrationTx(
@@ -301,10 +295,10 @@ describe("Supply position on Morpho AAVE V3", () => {
         true,
       );
 
-      expect(migrationBundle.requirements.txs).to.have.length(0);
-      expect(migrationBundle.requirements.signatures).to.have.length(1);
+      expect(migrationBundle.requirements.txs).toHaveLength(0);
+      expect(migrationBundle.requirements.signatures).toHaveLength(1);
       const deadline = migrationBundle.actions[0]?.args[2];
-      expect(migrationBundle.actions).eql([
+      expect(migrationBundle.actions).toEqual([
         {
           args: [true, 0n, deadline, null],
           type: "aaveV3OptimizerApproveManagerWithSig",
@@ -351,9 +345,9 @@ describe("Supply position on Morpho AAVE V3", () => {
         args: [userMMShares],
       });
 
-      expect(wEthBundlerBalance).eql(0n);
-      expect(userPosition).eql(0n);
-      expect(userMMBalance).gt(positionAmount); //interest have been accumulated
+      expect(wEthBundlerBalance).toEqual(0n);
+      expect(userPosition).toEqual(0n);
+      expect(userMMBalance).toBeGreaterThan(positionAmount); //interest have been accumulated
     },
   );
 
@@ -373,8 +367,8 @@ describe("Supply position on Morpho AAVE V3", () => {
       );
 
       const aaveV3Positions = allPositions[MigratableProtocol.aaveV3Optimizer]!;
-      expect(aaveV3Positions).not.undefined;
-      expect(aaveV3Positions).to.have.length(1);
+      expect(aaveV3Positions).toBeDefined();
+      expect(aaveV3Positions).toHaveLength(1);
 
       const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
         {
@@ -386,9 +380,9 @@ describe("Supply position on Morpho AAVE V3", () => {
         false,
       );
 
-      expect(migrationBundle.requirements.txs).to.have.length(1);
-      expect(migrationBundle.requirements.signatures).to.have.length(0);
-      expect(migrationBundle.actions).eql([
+      expect(migrationBundle.requirements.txs).toHaveLength(1);
+      expect(migrationBundle.requirements.signatures).toHaveLength(0);
+      expect(migrationBundle.actions).toEqual([
         {
           args: [wNative, migratedAmount, 4n],
           type: "aaveV3OptimizerWithdraw",
@@ -430,9 +424,9 @@ describe("Supply position on Morpho AAVE V3", () => {
         args: [userMMShares],
       });
 
-      expect(wEthBundlerBalance).eql(0n);
-      expect(userPosition).gt(positionAmount - migratedAmount); //interest have been accumulated
-      expect(userMMBalance).gte(migratedAmount - 2n);
+      expect(wEthBundlerBalance).toEqual(0n);
+      expect(userPosition).toBeGreaterThan(positionAmount - migratedAmount); //interest have been accumulated
+      expect(userMMBalance).toBeGreaterThanOrEqual(migratedAmount - 2n);
     },
   );
 
@@ -451,8 +445,8 @@ describe("Supply position on Morpho AAVE V3", () => {
       );
 
       const aaveV3Positions = allPositions[MigratableProtocol.aaveV3Optimizer]!;
-      expect(aaveV3Positions).not.undefined;
-      expect(aaveV3Positions).to.have.length(1);
+      expect(aaveV3Positions).toBeDefined();
+      expect(aaveV3Positions).toHaveLength(1);
 
       const position = aaveV3Positions[0]!;
 
@@ -466,9 +460,9 @@ describe("Supply position on Morpho AAVE V3", () => {
         false,
       );
 
-      expect(migrationBundle.requirements.txs).to.have.length(1);
-      expect(migrationBundle.requirements.signatures).to.have.length(0);
-      expect(migrationBundle.actions).eql([
+      expect(migrationBundle.requirements.txs).toHaveLength(1);
+      expect(migrationBundle.requirements.signatures).toHaveLength(0);
+      expect(migrationBundle.actions).toEqual([
         {
           args: [wNative, MathLib.MAX_UINT_160, 4n],
           type: "aaveV3OptimizerWithdraw",
@@ -510,9 +504,9 @@ describe("Supply position on Morpho AAVE V3", () => {
         args: [userMMShares],
       });
 
-      expect(wEthBundlerBalance).eql(0n);
-      expect(userPosition).eql(0n);
-      expect(userMMBalance).gt(positionAmount); //interest have been accumulated
+      expect(wEthBundlerBalance).toEqual(0n);
+      expect(userPosition).toEqual(0n);
+      expect(userMMBalance).toBeGreaterThan(positionAmount); //interest have been accumulated
     },
   );
 });

@@ -131,26 +131,26 @@ describe("Supply position on COMPOUND V3", () => {
 
             const compoundV3Positions =
               allPositions[MigratableProtocol.compoundV3]!;
-            expect(compoundV3Positions).not.undefined;
+            expect(compoundV3Positions).toBeDefined();
 
-            expect(compoundV3Positions).to.have.length(1);
+            expect(compoundV3Positions).toHaveLength(1);
 
             const position =
               compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
-            expect(position).to.be.instanceOf(
+            expect(position).toBeInstanceOf(
               MigratableSupplyPosition_CompoundV3,
             );
 
-            expect(position.protocol).to.equal(MigratableProtocol.compoundV3);
-            expect(position.user).to.equal(client.account.address);
-            expect(position.loanToken).to.equal(underlying);
-            expect(position.nonce).to.equal(0n);
-            expect(position.cometAddress).to.equal(comet);
-            expect(position.supply).gt(amount); //interests accrued
-            expect(position.max.limiter).to.equal(
+            expect(position.protocol).toEqual(MigratableProtocol.compoundV3);
+            expect(position.user).toEqual(client.account.address);
+            expect(position.loanToken).toEqual(underlying);
+            expect(position.nonce).toEqual(0n);
+            expect(position.cometAddress).toEqual(comet);
+            expect(position.supply).toBeGreaterThan(amount); //interests accrued
+            expect(position.max.limiter).toEqual(
               SupplyMigrationLimiter.position,
             );
-            expect(position.max.value).to.equal(position.supply);
+            expect(position.max.value).toEqual(position.supply);
           });
 
           testFn(
@@ -169,8 +169,8 @@ describe("Supply position on COMPOUND V3", () => {
 
               const compoundV3Positions =
                 allPositions[MigratableProtocol.compoundV3]!;
-              expect(compoundV3Positions).not.undefined;
-              expect(compoundV3Positions).to.have.length(1);
+              expect(compoundV3Positions).toBeDefined();
+              expect(compoundV3Positions).toHaveLength(1);
 
               const migrationBundle = compoundV3Positions[0]!.getMigrationTx(
                 {
@@ -182,10 +182,10 @@ describe("Supply position on COMPOUND V3", () => {
                 true,
               );
 
-              expect(migrationBundle.requirements.txs).to.have.length(0);
-              expect(migrationBundle.requirements.signatures).to.have.length(1);
+              expect(migrationBundle.requirements.txs).toHaveLength(0);
+              expect(migrationBundle.requirements.signatures).toHaveLength(1);
               const deadline = migrationBundle.actions[0]?.args[3];
-              expect(migrationBundle.actions).eql([
+              expect(migrationBundle.actions).toEqual([
                 {
                   args: [comet, true, 0n, deadline, null],
                   type: "compoundV3AllowBySig",
@@ -226,9 +226,11 @@ describe("Supply position on COMPOUND V3", () => {
                 args: [userMMShares],
               });
 
-              expect(bundlerBalance).eql(0n);
-              expect(userPosition).gt(positionAmount - migratedAmount); //interest have been accumulated
-              expect(userMMBalance).gte(migratedAmount - 2n);
+              expect(bundlerBalance).toEqual(0n);
+              expect(userPosition).toBeGreaterThan(
+                positionAmount - migratedAmount,
+              ); //interest have been accumulated
+              expect(userMMBalance).toBeGreaterThanOrEqual(migratedAmount - 2n);
             },
           );
 
@@ -245,8 +247,8 @@ describe("Supply position on COMPOUND V3", () => {
 
             const compoundV3Positions =
               allPositions[MigratableProtocol.compoundV3]!;
-            expect(compoundV3Positions).not.undefined;
-            expect(compoundV3Positions).to.have.length(1);
+            expect(compoundV3Positions).toBeDefined();
+            expect(compoundV3Positions).toHaveLength(1);
 
             const position = compoundV3Positions[0]!;
             const migrationBundle = position.getMigrationTx(
@@ -259,10 +261,10 @@ describe("Supply position on COMPOUND V3", () => {
               true,
             );
 
-            expect(migrationBundle.requirements.txs).to.have.length(0);
-            expect(migrationBundle.requirements.signatures).to.have.length(1);
+            expect(migrationBundle.requirements.txs).toHaveLength(0);
+            expect(migrationBundle.requirements.signatures).toHaveLength(1);
             const deadline = migrationBundle.actions[0]?.args[3];
-            expect(migrationBundle.actions).eql([
+            expect(migrationBundle.actions).toEqual([
               {
                 args: [comet, true, 0n, deadline, null],
                 type: "compoundV3AllowBySig",
@@ -298,9 +300,9 @@ describe("Supply position on COMPOUND V3", () => {
               args: [userMMShares],
             });
 
-            expect(bundlerBalance).eql(0n);
-            expect(userPosition).eql(0n);
-            expect(userMMBalance).gt(positionAmount);
+            expect(bundlerBalance).toEqual(0n);
+            expect(userPosition).toEqual(0n);
+            expect(userMMBalance).toBeGreaterThan(positionAmount);
           });
 
           testFn(
@@ -319,8 +321,8 @@ describe("Supply position on COMPOUND V3", () => {
 
               const compoundV3Positions =
                 allPositions[MigratableProtocol.compoundV3]!;
-              expect(compoundV3Positions).not.undefined;
-              expect(compoundV3Positions).to.have.length(1);
+              expect(compoundV3Positions).toBeDefined();
+              expect(compoundV3Positions).toHaveLength(1);
 
               const migrationBundle = compoundV3Positions[0]!.getMigrationTx(
                 {
@@ -332,9 +334,9 @@ describe("Supply position on COMPOUND V3", () => {
                 false,
               );
 
-              expect(migrationBundle.requirements.txs).to.have.length(1);
-              expect(migrationBundle.requirements.signatures).to.have.length(0);
-              expect(migrationBundle.actions).eql([
+              expect(migrationBundle.requirements.txs).toHaveLength(1);
+              expect(migrationBundle.requirements.signatures).toHaveLength(0);
+              expect(migrationBundle.actions).toEqual([
                 {
                   args: [comet, underlying, migratedAmount],
                   type: "compoundV3WithdrawFrom",
@@ -374,9 +376,11 @@ describe("Supply position on COMPOUND V3", () => {
                 args: [userMMShares],
               });
 
-              expect(bundlerBalance).eql(0n);
-              expect(userPosition).gt(positionAmount - migratedAmount); //interest have been accumulated
-              expect(userMMBalance).gte(migratedAmount - 2n);
+              expect(bundlerBalance).toEqual(0n);
+              expect(userPosition).toBeGreaterThan(
+                positionAmount - migratedAmount,
+              ); //interest have been accumulated
+              expect(userMMBalance).toBeGreaterThanOrEqual(migratedAmount - 2n);
             },
           );
 
@@ -395,8 +399,8 @@ describe("Supply position on COMPOUND V3", () => {
 
               const compoundV3Positions =
                 allPositions[MigratableProtocol.compoundV3]!;
-              expect(compoundV3Positions).not.undefined;
-              expect(compoundV3Positions).to.have.length(1);
+              expect(compoundV3Positions).toBeDefined();
+              expect(compoundV3Positions).toHaveLength(1);
 
               const position = compoundV3Positions[0]!;
               const migrationBundle = position.getMigrationTx(
@@ -409,9 +413,9 @@ describe("Supply position on COMPOUND V3", () => {
                 false,
               );
 
-              expect(migrationBundle.requirements.txs).to.have.length(1);
-              expect(migrationBundle.requirements.signatures).to.have.length(0);
-              expect(migrationBundle.actions).eql([
+              expect(migrationBundle.requirements.txs).toHaveLength(1);
+              expect(migrationBundle.requirements.signatures).toHaveLength(0);
+              expect(migrationBundle.actions).toEqual([
                 {
                   args: [comet, underlying, maxUint256],
                   type: "compoundV3WithdrawFrom",
@@ -450,9 +454,9 @@ describe("Supply position on COMPOUND V3", () => {
                 args: [userMMShares],
               });
 
-              expect(bundlerBalance).eql(0n);
-              expect(userPosition).eql(0n);
-              expect(userMMBalance).gt(positionAmount);
+              expect(bundlerBalance).toEqual(0n);
+              expect(userPosition).toEqual(0n);
+              expect(userMMBalance).toBeGreaterThan(positionAmount);
             },
           );
         });
