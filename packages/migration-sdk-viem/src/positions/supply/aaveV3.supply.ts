@@ -32,7 +32,10 @@ import {
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { aTokenV3Abi } from "../../abis/aaveV3.js";
-import { MigratableSupplyPosition } from "./index.js";
+import {
+  type IMigratableSupplyPosition,
+  MigratableSupplyPosition,
+} from "./index.js";
 
 interface IMigratableSupplyPosition_AaveV3
   extends Omit<IMigratableSupplyPosition, "protocol"> {

@@ -21,7 +21,10 @@ import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
 import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import { encodeFunctionData, maxUint256 } from "viem";
 import { cErc20Abi } from "../../abis/compoundV2.js";
-import { MigratableSupplyPosition } from "./index.js";
+import {
+  type IMigratableSupplyPosition,
+  MigratableSupplyPosition,
+} from "./index.js";
 
 interface IMigratableSupplyPosition_CompoundV2
   extends Omit<IMigratableSupplyPosition, "protocol"> {

@@ -30,7 +30,10 @@ import {
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 import { getCompoundV3ManagerApprovalMessage } from "../helpers/signatures.js";
-import { MigratableSupplyPosition } from "./index.js";
+import {
+  type IMigratableSupplyPosition,
+  MigratableSupplyPosition,
+} from "./index.js";
 
 interface IMigratableSupplyPosition_CompoundV3
   extends Omit<IMigratableSupplyPosition, "protocol"> {
