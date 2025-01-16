@@ -232,20 +232,22 @@ describe("Borrow position on blue", () => {
         const migratablePosition = new MigratableBorrowPosition_Blue({
           market: initialPositionFrom.market,
           position: initialPositionFrom,
-          chainId,
         });
         const collateralToMigrate = collateralAmount / 2n;
         const borrowToMigrate = borrowAmount / 2n;
         const slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE;
         const slippageTo = DEFAULT_SLIPPAGE_TOLERANCE - 10n;
 
-        const operation = migratablePosition.getMigrationOperations({
-          marketTo: marketTo.id,
-          collateralAmount: collateralToMigrate,
-          borrowAmount: borrowToMigrate,
-          slippageFrom,
-          slippageTo,
-        });
+        const operation = migratablePosition.getMigrationOperations(
+          {
+            marketTo: marketTo.id,
+            collateralAmount: collateralToMigrate,
+            borrowAmount: borrowToMigrate,
+            slippageFrom,
+            slippageTo,
+          },
+          chainId,
+        );
 
         expect(operation).toEqual({
           type: "Blue_SupplyCollateral",
@@ -402,17 +404,19 @@ describe("Borrow position on blue", () => {
         const migratablePosition = new MigratableBorrowPosition_Blue({
           market: initialPositionFrom.market,
           position: initialPositionFrom,
-          chainId,
         });
         const slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE;
         const slippageTo = DEFAULT_SLIPPAGE_TOLERANCE - 10n;
-        const operation = migratablePosition.getMigrationOperations({
-          marketTo: marketTo.id,
-          collateralAmount: maxUint256,
-          borrowAmount: maxUint256,
-          slippageFrom,
-          slippageTo,
-        });
+        const operation = migratablePosition.getMigrationOperations(
+          {
+            marketTo: marketTo.id,
+            collateralAmount: maxUint256,
+            borrowAmount: maxUint256,
+            slippageFrom,
+            slippageTo,
+          },
+          chainId,
+        );
         expect(operation).toEqual({
           type: "Blue_SupplyCollateral",
           address: "0x",

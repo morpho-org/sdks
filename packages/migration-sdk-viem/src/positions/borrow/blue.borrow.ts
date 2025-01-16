@@ -20,36 +20,33 @@ export namespace MigratableBorrowPosition_Blue {
   }
 }
 
-export interface MigratableBorrowPositionConfig_Blue {
-  chainId: ChainId;
+export interface IMigratableBorrowPosition_Blue {
   market: Market;
   position: Pick<Position, "borrowShares" | "user" | "collateral">;
 }
 
 export class MigratableBorrowPosition_Blue
-  implements MigratableBorrowPositionConfig_Blue
+  implements IMigratableBorrowPosition_Blue
 {
-  public readonly market: Market;
-  public readonly position: Pick<
-    Position,
-    "borrowShares" | "user" | "collateral"
-  >;
-  public readonly chainId: ChainId;
+  public readonly market;
+  public readonly position;
 
-  constructor(config: MigratableBorrowPositionConfig_Blue) {
+  constructor(config: IMigratableBorrowPosition_Blue) {
     this.market = config.market;
     this.position = config.position;
-    this.chainId = config.chainId;
   }
 
-  public getMigrationOperations({
-    marketTo,
-    collateralAmount,
-    borrowAmount,
-    slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE,
-    slippageTo = DEFAULT_SLIPPAGE_TOLERANCE,
-  }: MigratableBorrowPosition_Blue.Args): BlueInputBundlerOperations["Blue_SupplyCollateral"] {
-    const { bundler } = getChainAddresses(this.chainId);
+  public getMigrationOperations(
+    {
+      marketTo,
+      collateralAmount,
+      borrowAmount,
+      slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE,
+      slippageTo = DEFAULT_SLIPPAGE_TOLERANCE,
+    }: MigratableBorrowPosition_Blue.Args,
+    chainId: ChainId,
+  ): BlueInputBundlerOperations["Blue_SupplyCollateral"] {
+    const { bundler } = getChainAddresses(chainId);
 
     return {
       type: "Blue_SupplyCollateral",
