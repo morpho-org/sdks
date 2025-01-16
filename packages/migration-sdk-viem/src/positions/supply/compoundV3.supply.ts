@@ -46,9 +46,9 @@ export class MigratableSupplyPosition_CompoundV3
   extends MigratableSupplyPosition
   implements IMigratableSupplyPosition_CompoundV3
 {
-  private _nonce: bigint;
-  public readonly cometAddress: Address;
-  public readonly cometName: string;
+  private _nonce;
+  public readonly cometAddress;
+  public readonly cometName;
 
   constructor(config: IMigratableSupplyPosition_CompoundV3) {
     super({ ...config, protocol: MigratableProtocol.compoundV3 });

@@ -27,13 +27,13 @@ export interface IMigratableSupplyPosition {
 export abstract class MigratableSupplyPosition
   implements IMigratableSupplyPosition
 {
-  public readonly protocol: MigratableProtocol;
-  public readonly user: Address;
-  public readonly loanToken: Address;
-  public readonly supply: bigint;
-  public readonly supplyApy: number;
-  public readonly max: { value: bigint; limiter: SupplyMigrationLimiter };
-  public readonly chainId: ChainId;
+  public readonly protocol;
+  public readonly user;
+  public readonly loanToken;
+  public readonly supply;
+  public readonly supplyApy;
+  public readonly max;
+  public readonly chainId;
 
   constructor(config: IMigratableSupplyPosition) {
     this.protocol = config.protocol;

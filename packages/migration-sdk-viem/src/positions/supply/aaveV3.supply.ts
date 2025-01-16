@@ -47,8 +47,8 @@ export class MigratableSupplyPosition_AaveV3
   extends MigratableSupplyPosition
   implements IMigratableSupplyPosition_AaveV3
 {
-  private _nonce: bigint;
-  public readonly aToken: Token;
+  private _nonce;
+  public readonly aToken;
 
   constructor(config: IMigratableSupplyPosition_AaveV3) {
     super({ ...config, protocol: MigratableProtocol.aaveV3 });

@@ -43,8 +43,8 @@ export class MigratableSupplyPosition_AaveV3Optimizer
   extends MigratableSupplyPosition
   implements IMigratableSupplyPosition_AaveV3Optimizer
 {
-  public readonly isBundlerManaging: boolean;
-  private _nonce: bigint;
+  public readonly isBundlerManaging;
+  private _nonce;
 
   constructor(config: IMigratableSupplyPosition_AaveV3Optimizer) {
     super({ ...config, protocol: MigratableProtocol.aaveV3Optimizer });

@@ -37,9 +37,9 @@ export class MigratableSupplyPosition_CompoundV2
   extends MigratableSupplyPosition
   implements IMigratableSupplyPosition_CompoundV2
 {
-  readonly bundlerAllowance: bigint;
-  readonly cToken: ExchangeRateWrappedToken;
-  readonly cTokenBalance: bigint;
+  readonly bundlerAllowance;
+  readonly cToken;
+  readonly cTokenBalance;
 
   constructor(config: IMigratableSupplyPosition_CompoundV2) {
     super({ ...config, protocol: MigratableProtocol.compoundV2 });
