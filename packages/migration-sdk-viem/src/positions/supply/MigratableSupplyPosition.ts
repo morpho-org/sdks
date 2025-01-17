@@ -6,24 +6,46 @@ import type {
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
+/**
+ * Namespace containing argument definitions for Migratable Supply Position.
+ */
 export namespace MigratableSupplyPosition {
+  /**
+   * Arguments required for building a migration operation.
+   */
   export interface Args {
+    /** The amount to migrate. */
     amount: bigint;
+    /** The minimum vault shares expected after migration. */
     minShares: bigint;
+    /** The address of the vault to migrate to. */
     vault: Address;
   }
 }
 
+/**
+ * Interface representing the structure of a migratable supply position.
+ */
 export interface IMigratableSupplyPosition {
+  /** The chain ID where the position resides. */
   chainId: ChainId;
+  /** The protocol associated with the supply position. */
   protocol: MigratableProtocol;
+  /** The user's address. */
   user: Address;
+  /** The address of the loan token being supplied. */
   loanToken: Address;
+  /** The total supply balance of the position. */
   supply: bigint;
+  /** The annual percentage yield (APY) of the supply position. */
   supplyApy: number;
+  /** The maximum supply migration limit and its corresponding limiter. */
   max: { value: bigint; limiter: SupplyMigrationLimiter };
 }
 
+/**
+ * Abstract class representing a migratable supply position.
+ */
 export abstract class MigratableSupplyPosition
   implements IMigratableSupplyPosition
 {
@@ -35,6 +57,11 @@ export abstract class MigratableSupplyPosition
   public readonly max;
   public readonly chainId;
 
+  /**
+   * Creates an instance of MigratableSupplyPosition.
+   *
+   * @param config - Configuration object containing the position details.
+   */
   constructor(config: IMigratableSupplyPosition) {
     this.protocol = config.protocol;
     this.user = config.user;
@@ -45,6 +72,15 @@ export abstract class MigratableSupplyPosition
     this.chainId = config.chainId;
   }
 
+  /**
+   * Method to retrieve a migration operation for the supply position.
+   *
+   * @param args - The arguments required to execute the migration.
+   * @param chainId - The chain ID of the migration.
+   * @param supportsSignature - Whether the migration supports signature-based execution.
+   *
+   * @returns A migration bundle containing the migration details.
+   */
   abstract getMigrationTx(
     args: MigratableSupplyPosition.Args,
     chainId: ChainId,
