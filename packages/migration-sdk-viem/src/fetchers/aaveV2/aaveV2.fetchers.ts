@@ -14,7 +14,7 @@ import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import { type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { aTokenV2Abi } from "../../abis/aaveV2.js";
-import { rateToAPY } from "./aaveV2.helpers.js";
+import { rateToApy } from "../../utils/rates.js";
 
 export async function fetchAaveV2Positions(
   user: Address,
@@ -213,7 +213,7 @@ export async function fetchAaveV2Positions(
       return {
         underlyingAddress,
         supply: totalSupply,
-        supplyApy: rateToAPY(currentLiquidityRate),
+        supplyApy: rateToApy(currentLiquidityRate, "s", 27),
         max,
         nonce,
         aToken: aTokenData,

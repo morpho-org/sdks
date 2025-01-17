@@ -12,7 +12,7 @@ import { MigratableSupplyPosition_AaveV3 } from "../../positions/supply/aaveV3.s
 
 import { MigratableProtocol } from "../../types/index.js";
 import { SupplyMigrationLimiter } from "../../types/positions.js";
-import { rateToAPY } from "../aaveV2/aaveV2.helpers.js";
+import { rateToApy } from "../../utils/rates.js";
 
 export async function fetchAaveV3Positions(
   user: Address,
@@ -210,7 +210,7 @@ export async function fetchAaveV3Positions(
       return {
         underlyingAddress,
         supply: totalSupply,
-        supplyApy: rateToAPY(currentLiquidityRate),
+        supplyApy: rateToApy(currentLiquidityRate, "s", 27),
         max,
         nonce,
         aToken: aTokenData,

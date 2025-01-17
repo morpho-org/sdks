@@ -1,6 +1,7 @@
 import { type BigIntish, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
-import { formatUnits, parseUnits } from "viem";
+import { parseUnits } from "viem";
+import { rateToApy } from "../../utils/rates.js";
 
 export namespace MorphoAaveMath {
   /** Indexes are expressed in RAY */
@@ -94,17 +95,8 @@ export namespace MorphoAaveMath {
    */
   function _rateToAPY(yearlyRate: bigint) {
     const ratePerSeconds = yearlyRate / Time.s.from.y(1n);
-    return compoundInterests(ratePerSeconds, Time.s.from.y(1));
-  }
-
-  /**
-   * Compound interests over a specific duration
-   * @param rate rate over one period in RAY _(27 decimals)_
-   * @param duration number of periods
-   */
-  export function compoundInterests(rate: bigint, duration: number) {
     return parseUnits(
-      ((1 + +formatUnits(rate, _indexesDecimals)) ** duration - 1).toFixed(4),
+      rateToApy(ratePerSeconds, "s", _indexesDecimals).toFixed(4),
       4,
     );
   }
