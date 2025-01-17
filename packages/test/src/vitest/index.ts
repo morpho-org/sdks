@@ -2,6 +2,7 @@ import { http, type Chain } from "viem";
 import { test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "../anvil";
 import { type AnvilTestClient, createAnvilTestClient } from "../client";
+import "./types.d.ts";
 
 // Vitest needs to serialize BigInts to JSON, so we need to add a toJSON method to BigInt.prototype.
 // https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/BigInt#use_within_json
@@ -23,6 +24,7 @@ export const createViemTest = <chain extends Chain>(
   parameters.autoImpersonate ??= true;
   parameters.order ??= "fifo";
   parameters.stepsTracing ??= true;
+  parameters.pruneHistory = true;
 
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
@@ -32,7 +34,15 @@ export const createViemTest = <chain extends Chain>(
     client: async ({}, use) => {
       const { rpcUrl, stop } = await spawnAnvil(parameters);
 
-      const client = createAnvilTestClient(http(rpcUrl), chain);
+      const client = createAnvilTestClient(
+        http(rpcUrl, {
+          fetchOptions: {
+            cache: "force-cache",
+          },
+          timeout: 30_000,
+        }),
+        chain,
+      );
 
       // Make block timestamp 100% predictable.
       await client.setBlockTimestampInterval({ interval: 1 });

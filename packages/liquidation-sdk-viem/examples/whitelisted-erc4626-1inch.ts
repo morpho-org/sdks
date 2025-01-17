@@ -43,6 +43,8 @@ import {
   sendTransaction,
 } from "viem/actions";
 
+const warn = process.env.IS_LOGGING_DISABLED ? () => {} : console.warn;
+
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
   parseNumber: safeParseNumber,
@@ -96,7 +98,7 @@ export const check = async <
         accrualPosition.accrueInterest(Time.timestamp());
 
       if (seizableCollateral == null)
-        return console.warn(`Unknown oracle price for market "${market.id}"`);
+        return warn(`Unknown oracle price for market "${market.id}"`);
 
       try {
         const collateralToken = converter.getToken(
@@ -356,7 +358,7 @@ export const check = async <
 
                 return await sendTransaction(client, transaction);
               } catch (error) {
-                console.warn(
+                warn(
                   `Tried liquidating "${seizedAssets}" collateral ("${withdrawnAssets}" underlying) from "${user}" on market "${market.id}":\n`,
                   error instanceof Error ? error.stack : error,
                 );
@@ -369,7 +371,7 @@ export const check = async <
       } catch (error) {
         if (error instanceof Error)
           // eslint-disable-next-line no-console
-          console.warn(
+          warn(
             `Could not liquidate user "${user}" on market "${market.id}":`,
             error.message,
           );

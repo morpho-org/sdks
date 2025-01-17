@@ -30,6 +30,13 @@ export default defineWorkspace([
   },
   {
     test: {
+      name: "migration-sdk-viem",
+      include: ["packages/migration-sdk-viem/**/*.test.ts"],
+      testTimeout: 90_000,
+    },
+  },
+  {
+    test: {
       name: "blue-sdk-wagmi",
       include: ["packages/blue-sdk-wagmi/**/*.test.ts"],
       environmentMatchGlobs: [["**/e2e/**/*.test.ts", "happy-dom"]],

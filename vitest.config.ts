@@ -20,5 +20,6 @@ export default defineConfig({
     },
     globalSetup: "vitest.setup.ts",
     testTimeout: 90_000,
+    retry: process.env.CI ? 2 : 0,
   },
 });

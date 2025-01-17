@@ -20,10 +20,27 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Restore Foundry cache
+        uses: actions/cache/restore@v3
+        with:
+          path: ~/.foundry/cache/rpc
+          key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-
+
       - uses: foundry-rs/foundry-toolchain@v1.2.0
+        with:
+          cache: false
 
       - run: pnpm install
 
       - run: pnpm run test --coverage
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+          IS_LOGGING_DISABLED: true
+
+      - name: Save Foundry cache
+        if: always()
+        uses: actions/cache/save@v3
+        with:
+          path: ~/.foundry/cache/rpc
+          key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
