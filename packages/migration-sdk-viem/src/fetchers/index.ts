@@ -20,6 +20,32 @@ const FETCHERS = {
   [MigratableProtocol.compoundV3]: fetchCompoundV3Positions,
 };
 
+/**
+ * Fetches migratable positions for a user across specified protocols.
+ *
+ * @param user - The address of the user whose positions need to be fetched.
+ * @param client - The client instance to interact with the blockchain.
+ * @param options - Additional parameters for the fetch operation.
+ * @param options.parameters - Optional parameters for fetching positions.
+ * @param options.protocols - List of protocols to fetch positions from.
+ *                             Defaults to all supported protocols.
+ *
+ * @returns A promise resolving to a map of protocols to their respective migratable positions.
+ *
+ * @example
+ * ```typescript
+ * import { fetchMigratablePositions, MigratableProtocol } from "@morpho-org/migration-sdk-viem";
+ * import { Client } from "viem";
+ *
+ * const user = "0x123...abc"; // Replace with the user's address
+ * const client = new Client({}); // Replace with a properly configured client
+ *
+ * const positions = await fetchMigratablePositions(user, client, {
+ *   protocols: [MigratableProtocol.aaveV2, MigratableProtocol.compoundV3],
+ * });
+ * console.log(positions);
+ * ```
+ */
 export async function fetchMigratablePositions(
   user: Address,
   client: Client,

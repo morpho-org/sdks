@@ -6,5 +6,9 @@ export enum MigratableProtocol {
   aaveV2 = "aaveV2",
   aaveV3 = "aaveV3",
   compoundV3 = "compoundV3",
+  /**
+   * - `Compound V2` on _Ethereum Mainnet_
+   * - `Moonwell` on _Base Mainnet_
+   */
   compoundV2 = "compoundV2", // moonwell on base
 }

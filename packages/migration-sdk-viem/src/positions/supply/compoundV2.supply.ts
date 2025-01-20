@@ -70,6 +70,7 @@ export class MigratableSupplyPosition_CompoundV2
       ? this.cTokenBalance
       : this.cToken.toUnwrappedExactAmountOut(amount);
 
+    // TODO use allowance + test
     txRequirements.push({
       type: "erc20Approve",
       args: [cToken.address, bundler, transferredAmount],
