@@ -34,6 +34,8 @@ jobs:
           - liquidity-sdk-ethers
           - liquidity-sdk-viem
 
+          - migration-sdk-viem
+
     name: "@morpho-org/${{ matrix.package }}"
     runs-on: ubuntu-latest
 
