@@ -52,7 +52,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
 
       - id: release
         run: node ../../scripts/release/release.js
