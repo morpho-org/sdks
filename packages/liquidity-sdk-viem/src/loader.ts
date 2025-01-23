@@ -20,6 +20,15 @@ import { apiSdk } from "./api";
 export interface LiquidityParameters {
   /* The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
   delay?: bigint;
+
+  /** The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD). */
+  defaultMaxWithdrawalUtilization?: bigint;
+
+  /**
+   * - If `false`, `defaultMaxWithdrawalUtilization` is used for each market
+   * - If `true`, the value for maxWithdrawUtilization is taken per-market from morpho API
+   */
+  fetchMaxWithdrawUtilizations?: boolean;
 }
 
 export class LiquidityLoader<chain extends Chain = Chain> {
@@ -196,14 +205,17 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         });
 
-        const maxWithdrawalUtilization = fromEntries(
-          allVaultsMarkets.flatMap(([, markets]) =>
-            markets.map((market) => [
-              market.uniqueKey,
-              market.targetWithdrawUtilization,
-            ]),
-          ),
-        );
+        const maxWithdrawalUtilization = this.parameters
+          .fetchMaxWithdrawUtilizations
+          ? fromEntries(
+              allVaultsMarkets.flatMap(([, markets]) =>
+                markets.map((market) => [
+                  market.uniqueKey,
+                  market.targetWithdrawUtilization,
+                ]),
+              ),
+            )
+          : undefined;
 
         return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
           try {
@@ -212,6 +224,8 @@ export class LiquidityLoader<chain extends Chain = Chain> {
                 enabled: true,
                 maxWithdrawalUtilization,
                 delay: parameters.delay,
+                defaultMaxWithdrawalUtilization:
+                  this.parameters.defaultMaxWithdrawalUtilization,
               });
 
             return {
