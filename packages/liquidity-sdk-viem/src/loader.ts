@@ -26,7 +26,7 @@ export interface LiquidityParameters {
 
   /**
    * - If `false`, `defaultMaxWithdrawalUtilization` is used for each market
-   * - If `true`, the value for maxWithdrawUtilization is taken per-market from morpho API
+   * - If `true` (default), the value for maxWithdrawUtilization is taken per-market from morpho API
    */
   fetchMaxWithdrawUtilizations?: boolean;
 }
@@ -46,6 +46,8 @@ export class LiquidityLoader<chain extends Chain = Chain> {
     public client: Client<Transport, chain>,
     public readonly parameters: LiquidityParameters = {},
   ) {
+    this.parameters.fetchMaxWithdrawUtilizations ??= true;
+
     this.dataLoader = new DataLoader(
       async (marketIds) => {
         const { client, parameters } = this;
