@@ -18,8 +18,17 @@ import { getBlock } from "viem/actions";
 import { apiSdk } from "./api";
 
 export interface LiquidityParameters {
-  /* The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
+  /** The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
   delay?: bigint;
+
+  /** The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD). */
+  defaultMaxWithdrawalUtilization?: bigint;
+
+  /**
+   * If provided, defines the maximum utilization allowed to reach for each market, defaulting to `defaultMaxWithdrawalUtilization`.
+   * If not, these values are fetched from Morpho API.
+   */
+  maxWithdrawalUtilization?: Record<MarketId, bigint>;
 }
 
 export class LiquidityLoader<chain extends Chain = Chain> {
@@ -196,14 +205,16 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         });
 
-        const maxWithdrawalUtilization = fromEntries(
-          allVaultsMarkets.flatMap(([, markets]) =>
-            markets.map((market) => [
-              market.uniqueKey,
-              market.targetWithdrawUtilization,
-            ]),
-          ),
-        );
+        const maxWithdrawalUtilization =
+          this.parameters.maxWithdrawalUtilization ??
+          fromEntries(
+            allVaultsMarkets.flatMap(([, markets]) =>
+              markets.map((market) => [
+                market.uniqueKey,
+                market.targetWithdrawUtilization,
+              ]),
+            ),
+          );
 
         return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
           try {
@@ -212,6 +223,8 @@ export class LiquidityLoader<chain extends Chain = Chain> {
                 enabled: true,
                 maxWithdrawalUtilization,
                 delay: parameters.delay,
+                defaultMaxWithdrawalUtilization:
+                  this.parameters.defaultMaxWithdrawalUtilization,
               });
 
             return {
