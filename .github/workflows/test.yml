@@ -27,10 +27,9 @@ jobs:
           key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
           restore-keys: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-
 
-      - uses: foundry-rs/foundry-toolchain@v1.2.0
+      - uses: foundry-rs/foundry-toolchain@v1
         with:
           cache: false
-          version: stable
 
       - run: pnpm install --frozen-lockfile
 
