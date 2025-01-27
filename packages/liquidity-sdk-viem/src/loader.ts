@@ -25,8 +25,8 @@ export interface LiquidityParameters {
   defaultMaxWithdrawalUtilization?: bigint;
 
   /**
-   * If set, used to retrieve the max withdraw utilization for each market, defaulting to `defaultMaxWithdrawalUtilization`.
-   * If not, these values are fetched from morpho API
+   * If provided, defines the maximum utilization allowed to reach for each market, defaulting to `defaultMaxWithdrawalUtilization`.
+   * If not, these values are fetched from Morpho API.
    */
   maxWithdrawalUtilization?: Record<MarketId, bigint>;
 }
