@@ -23,7 +23,6 @@ import {
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import { Spectra } from "src/tokens/spectra";
 import {
   type Account,
   type Chain,
@@ -43,6 +42,7 @@ import {
   readContract,
   sendTransaction,
 } from "viem/actions";
+import { Spectra } from "../src/tokens/spectra";
 
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
