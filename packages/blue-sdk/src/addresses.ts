@@ -42,11 +42,13 @@ export const addresses = {
 
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     morphoToken: "0x9994E35Db50125E0DF82e4c2dde62496CE330999",
+    aaveV3Optimizer: "0x33333aea097c193e66081E930c33020272b33333",
     dai: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
     sDai: "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
     mkr: "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
     stEth: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
     wstEth: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+    cEth: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
     osEth: "0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38",
     bIB01: "0xCA30c93B02514f86d5C86a6e375E3A330B435Fb5",
     // If we want to change the wbIB01 address, we have to check if the new one has simple permit or not.
@@ -131,11 +133,13 @@ export interface ChainAddresses {
 
   wNative: Address;
   morphoToken?: Address;
+  aaveV3Optimizer?: Address;
   dai?: Address;
   mkr?: Address;
   usdc?: Address;
   stEth?: Address;
   wstEth?: Address;
+  cEth?: Address;
 }
 
 export type AddressLabel = keyof (typeof addresses)[ChainId];

@@ -8,6 +8,7 @@ export type RoundingDirection = "Up" | "Down";
  */
 export namespace MathLib {
   export const WAD = 1_000000000000000000n;
+  export const RAY = 1_000000000000000000000000000n;
 
   export const MAX_UINT_256 = maxUint(256);
   export const MAX_UINT_160 = maxUint(160);
@@ -188,5 +189,13 @@ export namespace MathLib {
     );
 
     return firstTerm + secondTerm + thirdTerm;
+  }
+
+  /**
+   * Converts a WAD-based quantity to a RAY-based quantity.
+   * @param x The WAD-based quantity.
+   */
+  export function wToRay(x: BigIntish) {
+    return BigInt(x) * 1_000000000n;
   }
 }
