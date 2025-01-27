@@ -2331,3 +2331,30 @@ export const daiUsdsConverterAbi = [
     type: "function",
   },
 ] as const;
+
+export const SpectraPrincipalToken = [
+  {
+    type: "function",
+    name: "redeem",
+    inputs: [
+      { name: "shares", type: "uint256", internalType: "uint256" },
+      { name: "receiver", type: "address", internalType: "address" },
+      { name: "owner", type: "address", internalType: "address" },
+    ],
+    outputs: [{ name: "assets", type: "uint256", internalType: "uint256" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "convertToUnderlying",
+    inputs: [
+      {
+        name: "principalAmount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+] as const;

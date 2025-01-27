@@ -11,13 +11,19 @@ import {
   type Client,
   type Transport,
   encodeFunctionData,
+  erc4626Abi,
 } from "viem";
 import { readContract } from "viem/actions";
-import { daiUsdsConverterAbi, mkrSkyConverterAbi } from "./abis.js";
+import {
+  SpectraPrincipalToken,
+  daiUsdsConverterAbi,
+  mkrSkyConverterAbi,
+} from "./abis.js";
 import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";
 import { Pendle, Sky, Usual } from "./tokens/index.js";
+import { Spectra } from "./tokens/spectra.js";
 
 interface SwapAttempt {
   srcAmount: bigint;
@@ -108,6 +114,64 @@ export class LiquidationEncoder<
           swapCallData.tx.data,
         );
       srcAmount = BigInt(swapCallData.data.amountOut);
+    }
+
+    return { srcAmount, srcToken };
+  }
+
+  async handleSpectraTokens(
+    collateralToken: Address,
+    seizedAssets: bigint,
+    spectraTokens: Spectra.PrincipalToken[],
+  ) {
+    if (!Spectra.isPTToken(collateralToken, spectraTokens)) {
+      return {
+        srcAmount: seizedAssets,
+        srcToken: collateralToken,
+      };
+    }
+
+    const pt = Spectra.getPTInfo(collateralToken, spectraTokens);
+    const maturity = pt.maturity;
+
+    let srcAmount = seizedAssets;
+    let srcToken = collateralToken;
+
+    if (maturity > Date.now()) {
+      this.spectraPTRedeem(collateralToken, seizedAssets);
+
+      srcAmount = await this.spectraRedeemAmount(collateralToken, seizedAssets);
+      srcToken = pt.underlying.address as Address;
+    } else {
+      if (pt.pools.length === 0 || pt.pools[0] === undefined)
+        return { srcAmount: seizedAssets, srcToken: collateralToken };
+      const ibt = pt.ibt.address as `0x${string}`;
+      const poolAddress = pt.pools[0].address as `0x${string}`;
+
+      const index0Token = await this.getCurveSwapIndex0Token(poolAddress);
+      const ptIndex = index0Token === pt.underlying.address ? 0n : 1n;
+      const ibtIndex = ptIndex === 0n ? 1n : 0n;
+
+      const swapAmount = await this.getCurveSwapOutputAmountFromInput(
+        poolAddress,
+        seizedAssets,
+        ptIndex,
+        ibtIndex,
+      );
+
+      srcAmount = await this.spectraRedeemAmount(ibt, swapAmount);
+      srcToken = pt.underlying.address as Address;
+
+      this.erc20Approve(collateralToken, poolAddress, MathLib.MAX_UINT_256);
+      this.curveSwap(
+        poolAddress,
+        seizedAssets,
+        ptIndex,
+        ibtIndex,
+        swapAmount,
+        this.address,
+      );
+      this.spectraIBTRedeem(ibt, swapAmount);
     }
 
     return { srcAmount, srcToken };
@@ -325,6 +389,15 @@ export class LiquidationEncoder<
     });
   }
 
+  public getCurveSwapIndex0Token(pool: Address) {
+    return readContract(this.client, {
+      address: pool,
+      abi: curveStableSwapNGAbi,
+      functionName: "coins",
+      args: [0n],
+    });
+  }
+
   public removeLiquidityFromCurvePool(
     pool: Address,
     amount: bigint,
@@ -451,6 +524,48 @@ export class LiquidationEncoder<
         abi: daiUsdsConverterAbi,
         functionName: "usdsToDai",
         args: [user, amount],
+      }),
+    );
+  }
+
+  public previewIBTRedeem(ibt: Address, shares: bigint) {
+    return readContract(this.client, {
+      address: ibt,
+      abi: erc4626Abi,
+      functionName: "previewRedeem",
+      args: [shares],
+    });
+  }
+
+  public spectraRedeemAmount(pt: Address, amount: bigint) {
+    return readContract(this.client, {
+      address: pt,
+      abi: SpectraPrincipalToken,
+      functionName: "convertToUnderlying",
+      args: [amount],
+    });
+  }
+
+  public spectraPTRedeem(pt: Address, amount: bigint) {
+    this.pushCall(
+      pt,
+      0n,
+      encodeFunctionData({
+        abi: SpectraPrincipalToken,
+        functionName: "redeem",
+        args: [amount, this.address, this.address],
+      }),
+    );
+  }
+
+  public spectraIBTRedeem(ibt: Address, amount: bigint) {
+    this.pushCall(
+      ibt,
+      0n,
+      encodeFunctionData({
+        abi: erc4626Abi,
+        functionName: "redeem",
+        args: [amount, this.address, this.address],
       }),
     );
   }

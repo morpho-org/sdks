@@ -23,6 +23,7 @@ import {
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
+import { Spectra } from "src/tokens/spectra";
 import {
   type Account,
   type Chain,
@@ -164,10 +165,12 @@ export const check = async <
         const slippage =
           (market.params.liquidationIncentiveFactor - BigInt.WAD) / 2n;
 
-        const pendleTokens =
+        const [pendleTokens, spectraTokens] = await Promise.all([
           chainId === ChainId.EthMainnet
-            ? await Pendle.getTokens(chainId)
-            : undefined;
+            ? Pendle.getTokens(chainId)
+            : undefined,
+          Spectra.getTokens(chainId),
+        ]);
 
         await Promise.allSettled(
           triedLiquidity.map(
@@ -192,6 +195,12 @@ export const check = async <
                     pendleTokens,
                   ));
                 }
+
+                ({ srcAmount, srcToken } = await encoder.handleSpectraTokens(
+                  market.params.collateralToken,
+                  seizedAssets,
+                  spectraTokens,
+                ));
 
                 // As there is no liquidity for sUSDS, we use the sUSDS withdrawal function to get USDS instead
                 if (
