@@ -18,17 +18,17 @@ import { getBlock } from "viem/actions";
 import { apiSdk } from "./api";
 
 export interface LiquidityParameters {
-  /* The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
+  /** The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
   delay?: bigint;
 
   /** The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD). */
   defaultMaxWithdrawalUtilization?: bigint;
 
   /**
-   * - If `false`, `defaultMaxWithdrawalUtilization` is used for each market
-   * - If `true` (default), the value for maxWithdrawUtilization is taken per-market from morpho API
+   * If set, used to retrieve the max withdraw utilization for each market, defaulting to `defaultMaxWithdrawalUtilization`.
+   * If not, these values are fetched from morpho API
    */
-  fetchMaxWithdrawUtilizations?: boolean;
+  maxWithdrawalUtilization?: Record<MarketId, bigint>;
 }
 
 export class LiquidityLoader<chain extends Chain = Chain> {
@@ -46,8 +46,6 @@ export class LiquidityLoader<chain extends Chain = Chain> {
     public client: Client<Transport, chain>,
     public readonly parameters: LiquidityParameters = {},
   ) {
-    this.parameters.fetchMaxWithdrawUtilizations ??= true;
-
     this.dataLoader = new DataLoader(
       async (marketIds) => {
         const { client, parameters } = this;
@@ -207,17 +205,16 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         });
 
-        const maxWithdrawalUtilization = this.parameters
-          .fetchMaxWithdrawUtilizations
-          ? fromEntries(
-              allVaultsMarkets.flatMap(([, markets]) =>
-                markets.map((market) => [
-                  market.uniqueKey,
-                  market.targetWithdrawUtilization,
-                ]),
-              ),
-            )
-          : undefined;
+        const maxWithdrawalUtilization =
+          this.parameters.maxWithdrawalUtilization ??
+          fromEntries(
+            allVaultsMarkets.flatMap(([, markets]) =>
+              markets.map((market) => [
+                market.uniqueKey,
+                market.targetWithdrawUtilization,
+              ]),
+            ),
+          );
 
         return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
           try {
