@@ -161,11 +161,16 @@ export const setupBundle = async <chain extends Chain = Chain>(
     );
   }
 
-  const { bundler } = getChainAddresses(startData.chainId);
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(startData.chainId);
 
   await Promise.all(
     [...tokens].map(async (token) => {
-      const balance = await client.balanceOf({ erc20: token, owner: bundler });
+      const balance = await client.balanceOf({
+        erc20: token,
+        owner: generalAdapter1,
+      });
 
       expect(
         format.number.of(balance, startData.getToken(token).decimals),

@@ -60,7 +60,11 @@ export async function fetchHolding(
     });
 
   if (deployless) {
-    const { morpho, permit2, bundler } = addresses[parameters.chainId];
+    const {
+      morpho,
+      permit2,
+      bundler3: { generalAdapter1 },
+    } = addresses[parameters.chainId];
     try {
       const {
         balance,
@@ -79,7 +83,7 @@ export async function fetchHolding(
           user,
           morpho,
           permit2,
-          bundler,
+          generalAdapter1,
           permissionedBackedTokens[parameters.chainId].has(token),
           permissionedWrapperTokens[parameters.chainId].has(token),
         ],

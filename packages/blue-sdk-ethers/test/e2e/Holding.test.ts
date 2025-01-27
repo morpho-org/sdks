@@ -11,8 +11,13 @@ import { maxUint256 } from "viem";
 import { Holding } from "../../src/augment/Holding";
 import { permit2Abi } from "./abis";
 
-const { morpho, bundler, permit2, wNative, wbC3M } =
-  addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+  permit2,
+  wNative,
+  wbC3M,
+} = addresses[ChainId.EthMainnet];
 
 describe("augment/Holding", async () => {
   test("should fetch user WETH data ", async ({ client, wallet }) => {
@@ -50,7 +55,7 @@ describe("augment/Holding", async () => {
     });
     await client.approve({
       address: wNative,
-      args: [bundler, expectedData.erc20Allowances.bundler],
+      args: [generalAdapter1, expectedData.erc20Allowances.bundler],
     });
     await client.approve({
       address: wNative,
@@ -73,7 +78,7 @@ describe("augment/Holding", async () => {
       functionName: "approve",
       args: [
         wNative,
-        bundler,
+        generalAdapter1,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
@@ -152,7 +157,7 @@ describe("augment/Holding", async () => {
     });
     await client.approve({
       address: wbC3M,
-      args: [bundler, expectedData.erc20Allowances.bundler],
+      args: [generalAdapter1, expectedData.erc20Allowances.bundler],
     });
     await client.approve({
       address: wbC3M,
@@ -175,7 +180,7 @@ describe("augment/Holding", async () => {
       functionName: "approve",
       args: [
         wbC3M,
-        bundler,
+        generalAdapter1,
         expectedData.permit2Allowances.bundler.amount,
         Number(expectedData.permit2Allowances.bundler.expiration),
       ],
