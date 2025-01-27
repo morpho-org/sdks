@@ -158,10 +158,23 @@ export type CollateralAtRiskDataPoint = {
   collateralUsd: Scalars["Float"]["output"];
 };
 
+/** Custom Warning Metadata */
+export type CustomMetadata = {
+  __typename?: "CustomMetadata";
+  content: Maybe<Scalars["String"]["output"]>;
+};
+
 export type FloatDataPoint = {
   __typename?: "FloatDataPoint";
   x: Scalars["Float"]["output"];
   y: Maybe<Scalars["Float"]["output"]>;
+};
+
+/** Hardcoded Price Metadata */
+export type HardcodedPriceMetadata = {
+  __typename?: "HardcodedPriceMetadata";
+  symbolFrom: Maybe<Scalars["String"]["output"]>;
+  symbolTo: Maybe<Scalars["String"]["output"]>;
 };
 
 /** IRM curve data point */
@@ -796,19 +809,13 @@ export type MarketPosition = {
   collateralUsd: Maybe<Scalars["Float"]["output"]>;
   /** Health factor of the position, computed as collateral value divided by borrow value. */
   healthFactor: Maybe<Scalars["Float"]["output"]>;
-  /**
-   * State history
-   * @deprecated Not indexed yet.
-   */
+  /** State history */
   historicalState: Maybe<MarketPositionHistory>;
   id: Scalars["ID"]["output"];
   market: Market;
   /** Price variation required for the given position to reach its liquidation threshold (scaled by WAD) */
   priceVariationToLiquidationPrice: Maybe<Scalars["Float"]["output"]>;
-  /**
-   * Current state
-   * @deprecated Not indexed yet.
-   */
+  /** Current state */
   state: Maybe<MarketPositionState>;
   /** Amount of loan asset supplied, in underlying token units. */
   supplyAssets: Scalars["BigInt"]["output"];
@@ -855,16 +862,24 @@ export type MarketPositionHistory = {
   __typename?: "MarketPositionHistory";
   /** Borrow assets history. */
   borrowAssets: Maybe<Array<BigIntDataPoint>>;
+  /** Borrow assets history, in USD. */
+  borrowAssetsUsd: Maybe<Array<FloatDataPoint>>;
   /** Borrow shares history. */
   borrowShares: Maybe<Array<BigIntDataPoint>>;
   /** Collateral history. */
   collateral: Maybe<Array<BigIntDataPoint>>;
+  /** Collateral value history, in USD. */
+  collateralUsd: Maybe<Array<FloatDataPoint>>;
+  /** Collateral value history, in loan assets. */
+  collateralValue: Maybe<Array<BigIntDataPoint>>;
   /** Profit (from the collateral's price variation) & Loss (from the loan interest) history, in loan assets. */
   pnl: Maybe<Array<BigIntDataPoint>>;
   /** Profit (from the collateral's price variation) & Loss (from the loan interest) history, in USD for display purposes. */
   pnlUsd: Maybe<Array<FloatDataPoint>>;
   /** Supply assets history. */
   supplyAssets: Maybe<Array<BigIntDataPoint>>;
+  /** Supply assets history, in USD. */
+  supplyAssetsUsd: Maybe<Array<FloatDataPoint>>;
   /** Supply shares history. */
   supplyShares: Maybe<Array<BigIntDataPoint>>;
 };
@@ -875,12 +890,27 @@ export type MarketPositionHistoryBorrowAssetsArgs = {
 };
 
 /** Market position state history */
+export type MarketPositionHistoryBorrowAssetsUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
 export type MarketPositionHistoryBorrowSharesArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
 /** Market position state history */
 export type MarketPositionHistoryCollateralArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
+export type MarketPositionHistoryCollateralUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
+export type MarketPositionHistoryCollateralValueArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -900,6 +930,11 @@ export type MarketPositionHistorySupplyAssetsArgs = {
 };
 
 /** Market position state history */
+export type MarketPositionHistorySupplyAssetsUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Market position state history */
 export type MarketPositionHistorySupplySharesArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
@@ -914,29 +949,31 @@ export enum MarketPositionOrderBy {
 /** Market position state */
 export type MarketPositionState = {
   __typename?: "MarketPositionState";
-  /** The last borrow assets used to update the position's P&L. */
-  borrowAssets: Scalars["BigInt"]["output"];
-  /** The last borrow shares used to update the position's P&L. */
+  /** The latest borrow assets indexed for this position. */
+  borrowAssets: Maybe<Scalars["BigInt"]["output"]>;
+  /** The latest borrow assets indexed for this position, in USD. */
+  borrowAssetsUsd: Maybe<Scalars["Float"]["output"]>;
+  /** The latest borrow shares indexed for this position. */
   borrowShares: Scalars["BigInt"]["output"];
-  /** The last collateral assets used to update the position's P&L. */
+  /** The latest collateral assets indexed for this position. */
   collateral: Scalars["BigInt"]["output"];
-  /** The last collateral asset USD price used to update the position's P&L in USD. */
-  collateralAssetUsdPrice: Maybe<Scalars["Float"]["output"]>;
-  /** The last collateral price used to update the position's P&L. */
-  collateralPrice: Scalars["BigInt"]["output"];
+  /** The latest collateral assets indexed for this position, in USD. */
+  collateralUsd: Maybe<Scalars["Float"]["output"]>;
+  /** The latest collateral assets indexed for this position, in loan assets. */
+  collateralValue: Maybe<Scalars["BigInt"]["output"]>;
   id: Scalars["ID"]["output"];
-  /** The last loan asset USD price used to update the position's P&L in USD. */
-  loanAssetUsdPrice: Maybe<Scalars["Float"]["output"]>;
   /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in loan assets. */
-  pnl: Scalars["BigInt"]["output"];
-  /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in USD for display purpose */
+  pnl: Maybe<Scalars["BigInt"]["output"]>;
+  /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in USD for display purpose. */
   pnlUsd: Maybe<Scalars["Float"]["output"]>;
   position: MarketPosition;
-  /** The last supply assets used to update the position's P&L. */
-  supplyAssets: Scalars["BigInt"]["output"];
-  /** The last supply shares used to update the position's P&L. */
+  /** The latest supply assets indexed for this position. */
+  supplyAssets: Maybe<Scalars["BigInt"]["output"]>;
+  /** The latest supply assets indexed for this position, in USD. */
+  supplyAssetsUsd: Maybe<Scalars["Float"]["output"]>;
+  /** The latest supply shares indexed for this position. */
   supplyShares: Scalars["BigInt"]["output"];
-  /** Last update timestamp. */
+  /** The latest update timestamp. */
   timestamp: Scalars["BigInt"]["output"];
 };
 
@@ -1084,8 +1121,11 @@ export type MarketTransferTransactionData = {
 export type MarketWarning = {
   __typename?: "MarketWarning";
   level: WarningLevel;
+  metadata: Maybe<MarketWarningMetadata>;
   type: Scalars["String"]["output"];
 };
+
+export type MarketWarningMetadata = CustomMetadata | HardcodedPriceMetadata;
 
 /** Morpho Blue deployment */
 export type MorphoBlue = {
@@ -1310,6 +1350,12 @@ export type PaginatedMarkets = {
   pageInfo: Maybe<PageInfo>;
 };
 
+export type PaginatedMetaMorphoFactories = {
+  __typename?: "PaginatedMetaMorphoFactories";
+  items: Maybe<Array<VaultFactory>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
 export type PaginatedMetaMorphoPositions = {
   __typename?: "PaginatedMetaMorphoPositions";
   items: Maybe<Array<VaultPosition>>;
@@ -1509,6 +1555,9 @@ export type Query = {
   users: PaginatedUsers;
   vault: Vault;
   vaultByAddress: Vault;
+  vaultFactories: PaginatedMetaMorphoFactories;
+  vaultFactory: VaultFactory;
+  vaultFactoryByAddress: VaultFactory;
   vaultPosition: VaultPosition;
   vaultPositions: PaginatedMetaMorphoPositions;
   vaultReallocates: PaginatedVaultReallocates;
@@ -1700,6 +1749,15 @@ export type QueryVaultByAddressArgs = {
   chainId?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
+export type QueryVaultFactoryArgs = {
+  id: Scalars["String"]["input"];
+};
+
+export type QueryVaultFactoryByAddressArgs = {
+  address: Scalars["String"]["input"];
+  chainId?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
 export type QueryVaultPositionArgs = {
   chainId?: InputMaybe<Scalars["Int"]["input"]>;
   userAddress: Scalars["String"]["input"];
@@ -1790,8 +1848,7 @@ export type TransactionData =
   | MarketCollateralTransferTransactionData
   | MarketLiquidationTransactionData
   | MarketTransferTransactionData
-  | VaultTransactionData
-  | VaultTransferTransactionData;
+  | VaultTransactionData;
 
 /** Filtering options for transactions. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
 export type TransactionFilters = {
@@ -1990,6 +2047,7 @@ export type Vault = {
   dailyApy: Maybe<Scalars["Float"]["output"]>;
   /** Daily vault APYs */
   dailyApys: Maybe<VaultApyAggregates>;
+  factory: VaultFactory;
   historicalState: VaultHistory;
   id: Scalars["ID"]["output"];
   /** Vault liquidity */
@@ -2106,6 +2164,15 @@ export type VaultApyAggregates = {
   netApy: Maybe<Scalars["Float"]["output"]>;
 };
 
+/** MetaMorpho Vault Factories */
+export type VaultFactory = {
+  __typename?: "VaultFactory";
+  address: Scalars["Address"]["output"];
+  chain: Chain;
+  creationBlockNumber: Scalars["Int"]["output"];
+  id: Scalars["ID"]["output"];
+};
+
 export type VaultFilters = {
   /** Filter by MetaMorpho vault address */
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -2134,6 +2201,8 @@ export type VaultFilters = {
   credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by MetaMorpho current curator address */
   curatorAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by MetaMorphoFactory address */
+  factoryAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by greater than or equal to given fee rate. */
   fee_gte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by lower than or equal to given fee rate. */
@@ -2418,18 +2487,12 @@ export type VaultPosition = {
   assets: Scalars["BigInt"]["output"];
   /** Value of vault shares held, in USD for display purpose. */
   assetsUsd: Maybe<Scalars["Float"]["output"]>;
-  /**
-   * State history
-   * @deprecated Not indexed yet.
-   */
+  /** State history */
   historicalState: Maybe<VaultPositionHistory>;
   id: Scalars["ID"]["output"];
   /** Amount of vault shares */
   shares: Scalars["BigInt"]["output"];
-  /**
-   * Current state
-   * @deprecated Not indexed yet.
-   */
+  /** Current state */
   state: Maybe<VaultPositionState>;
   user: User;
   vault: Vault;
@@ -2459,6 +2522,8 @@ export type VaultPositionHistory = {
   __typename?: "VaultPositionHistory";
   /** Value of the position since its inception, in underlying assets. */
   assets: Maybe<Array<BigIntDataPoint>>;
+  /** Value of the position since its inception, in USD. */
+  assetsUsd: Maybe<Array<FloatDataPoint>>;
   /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of the position since its inception, in underlying assets. */
   pnl: Maybe<Array<BigIntDataPoint>>;
   /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of the position since its inception, in USD for display purposes. */
@@ -2469,6 +2534,11 @@ export type VaultPositionHistory = {
 
 /** Vault position state history */
 export type VaultPositionHistoryAssetsArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault position state history */
+export type VaultPositionHistoryAssetsUsdArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2494,19 +2564,19 @@ export enum VaultPositionOrderBy {
 /** Vault position state */
 export type VaultPositionState = {
   __typename?: "VaultPositionState";
-  /** The last asset USD price used to update the position's P&L in USD. */
-  assetUsdPrice: Maybe<Scalars["Float"]["output"]>;
+  /** The latest supply assets indexed for this position. */
+  assets: Maybe<Scalars["BigInt"]["output"]>;
+  /** The latest supply assets indexed for this position, in USD. */
+  assetsUsd: Maybe<Scalars["Float"]["output"]>;
   id: Scalars["ID"]["output"];
   /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in loan assets. */
-  pnl: Scalars["BigInt"]["output"];
+  pnl: Maybe<Scalars["BigInt"]["output"]>;
   /** Profit (from the collateral's price variation) & Loss (from the loan interest) of the position since its inception, in USD for display purpose */
   pnlUsd: Maybe<Scalars["Float"]["output"]>;
   position: VaultPosition;
-  /** The last supply assets used to update the position's P&L. */
-  supplyAssets: Scalars["BigInt"]["output"];
-  /** The last supply shares used to update the position's P&L. */
-  supplyShares: Scalars["BigInt"]["output"];
-  /** Last update timestamp. */
+  /** The latest supply shares indexed for this position. */
+  shares: Scalars["BigInt"]["output"];
+  /** The latest update timestamp. */
   timestamp: Scalars["BigInt"]["output"];
 };
 
@@ -2660,13 +2730,6 @@ export type VaultTransactionData = {
   __typename?: "VaultTransactionData";
   assets: Scalars["BigInt"]["output"];
   assetsUsd: Maybe<Scalars["Float"]["output"]>;
-  shares: Scalars["BigInt"]["output"];
-  vault: Vault;
-};
-
-/** Meta Morpho vault transfer transaction data */
-export type VaultTransferTransactionData = {
-  __typename?: "VaultTransferTransactionData";
   shares: Scalars["BigInt"]["output"];
   vault: Vault;
 };
