@@ -14,7 +14,10 @@ export async function fetchUser(
     parameters.chainId ?? (await getChainId(client)),
   );
 
-  const { morpho, bundler } = addresses[parameters.chainId];
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+  } = addresses[parameters.chainId];
 
   const [isBundlerAuthorized, morphoNonce] = await Promise.all([
     readContract(client, {
@@ -22,7 +25,7 @@ export async function fetchUser(
       address: morpho,
       abi: blueAbi,
       functionName: "isAuthorized",
-      args: [address, bundler],
+      args: [address, generalAdapter1],
     }),
     readContract(client, {
       ...parameters,
