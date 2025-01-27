@@ -25,17 +25,16 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
     data,
   );
 
-  const { bundler } = getChainAddresses(data.chainId);
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(data.chainId);
   const vault = data.getVault(address);
 
   if (shares === 0n) {
-    if (sender === bundler) {
+    if (sender === generalAdapter1) {
       // Simulate the bundler's behavior on deposits only with MaxUint256.
       if (assets === MathLib.MAX_UINT_256)
-        assets = MathLib.min(
-          assets,
-          data.getHolding(bundler, vault.asset).balance,
-        );
+        assets = data.getHolding(sender, vault.asset).balance;
 
       if (assets === 0n) throw new MetaMorphoErrors.ZeroAssets();
     }
@@ -46,7 +45,7 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
     );
   } else {
     // Simulate the bundler's behavior on withdrawals.
-    if (sender === bundler && shares === 0n)
+    if (sender === generalAdapter1 && shares === 0n)
       throw new MetaMorphoErrors.ZeroShares();
 
     assets = MathLib.wMulUp(

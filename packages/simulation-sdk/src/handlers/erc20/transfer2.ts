@@ -13,9 +13,17 @@ export const handleErc20Transfer2Operation: OperationHandler<
   if (fromHolding == null)
     throw new Erc20Errors.InsufficientBalance(address, from);
 
-  const { morpho, bundler, permit2 } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { bundler3 },
+    permit2,
+  } = getChainAddresses(data.chainId);
   const contract =
-    sender === morpho ? "morpho" : sender === bundler ? "bundler" : undefined;
+    sender === morpho
+      ? "morpho"
+      : sender === bundler3
+        ? "bundler3.bundler3"
+        : undefined;
 
   if (contract == null) throw new UnknownContractError(sender);
 

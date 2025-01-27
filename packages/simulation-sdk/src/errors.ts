@@ -2,6 +2,7 @@ import {
   type Address,
   type ErrorClass,
   type MarketId,
+  type Permit2AllowanceRecipient,
   UnknownDataError,
 } from "@morpho-org/blue-sdk";
 
@@ -139,7 +140,7 @@ export namespace Erc20Errors {
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
-      public readonly spender: "morpho" | "bundler",
+      public readonly spender: Permit2AllowanceRecipient,
       public readonly nonce: bigint,
     ) {
       super(
@@ -152,7 +153,7 @@ export namespace Erc20Errors {
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
-      public readonly spender: "morpho" | "bundler",
+      public readonly spender: Permit2AllowanceRecipient,
     ) {
       super(
         `insufficient permit2 allowance for token "${token}" from owner "${owner}" to spender "${spender}"`,

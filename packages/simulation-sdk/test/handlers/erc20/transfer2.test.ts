@@ -10,7 +10,11 @@ import { dataFixture, tokenA, tokenB, userA, userB } from "../../fixtures.js";
 const type = "Erc20_Transfer2";
 
 const amount = parseUnits("1", 6);
-const { morpho, bundler, permit2 } = addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+  permit2,
+} = addresses[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should transfer with sender morpho", () => {
@@ -42,7 +46,7 @@ describe(type, () => {
     const result = simulateOperation(
       {
         type,
-        sender: bundler,
+        sender: generalAdapter1,
         address: tokenA,
         args: {
           amount,
@@ -88,7 +92,7 @@ describe(type, () => {
       simulateOperation(
         {
           type,
-          sender: bundler,
+          sender: generalAdapter1,
           address: tokenB,
           args: {
             amount,

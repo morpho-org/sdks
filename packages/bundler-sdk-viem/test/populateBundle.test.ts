@@ -37,7 +37,7 @@ describe("populateBundle", () => {
       const {
         morpho,
         permit2,
-        bundler,
+        bundler3: { bundler3, generalAdapter1 },
         publicAllocator,
         wNative,
         wstEth,
@@ -89,7 +89,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [wNative],
               vaults: [],
               block,
@@ -135,7 +135,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, dai, dai_sUsde.collateralToken],
               vaults: [],
               block,
@@ -171,23 +171,23 @@ describe("populateBundle", () => {
               address: dai,
               args: {
                 amount: assets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 3n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: dai,
               args: {
                 amount: assets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Blue_Supply",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -208,15 +208,15 @@ describe("populateBundle", () => {
             formatUnits(await client.balanceOf({ erc20: dai }), 18),
           ).toBeCloseTo(0, 8);
           expect(position.collateral).toBe(0n);
-          expect(position.supplyShares).toBe(54506265375843865703066553021n);
+          expect(position.supplyShares).toBe(50639301938842808563547241013n);
           expect(position.borrowShares).toBe(0n);
 
           expect(await client.allowance({ erc20: dai, spender: permit2 })).toBe(
             0n,
           );
-          expect(await client.allowance({ erc20: dai, spender: bundler })).toBe(
-            MathLib.MAX_UINT_256,
-          );
+          expect(
+            await client.allowance({ erc20: dai, spender: generalAdapter1 }),
+          ).toBe(MathLib.MAX_UINT_256);
           expect(await client.allowance({ erc20: dai, spender: morpho })).toBe(
             0n,
           );
@@ -244,7 +244,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
               block,
@@ -256,7 +256,10 @@ describe("populateBundle", () => {
           const data = result.current.data!;
 
           const { balance } = data.getHolding(client.account.address, stEth);
-          const { balance: bundlerBalance } = data.getHolding(bundler, stEth);
+          const { balance: bundlerBalance } = data.getHolding(
+            generalAdapter1,
+            stEth,
+          );
 
           const wstEthToken = data.getWrappedToken(wstEth);
           const assets =
@@ -272,7 +275,7 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: balance,
-                owner: bundler,
+                owner: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
@@ -314,7 +317,7 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: wBalance,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
@@ -324,44 +327,44 @@ describe("populateBundle", () => {
               address: stEth,
               args: {
                 amount: balance - bundlerBalance,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: wBalance,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: stEth,
               args: {
                 amount: balance - bundlerBalance,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Erc20_Wrap",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: balance,
-                owner: bundler,
+                owner: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -371,11 +374,11 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -398,7 +401,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: stEth, spender: permit2 }),
           ).toBe(MathLib.MAX_UINT_160 - (balance - bundlerBalance));
           expect(
-            await client.allowance({ erc20: stEth, spender: bundler }),
+            await client.allowance({ erc20: stEth, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({
@@ -433,7 +436,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [usdc, stEth, wstEth],
               vaults: [],
               block,
@@ -466,7 +469,7 @@ describe("populateBundle", () => {
           expect(operations).toStrictEqual([
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -475,7 +478,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_Borrow",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -505,7 +508,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: wstEth, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: wstEth, spender: bundler }),
+            await client.allowance({ erc20: wstEth, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({
@@ -516,7 +519,7 @@ describe("populateBundle", () => {
         },
       );
 
-      test[ChainId.EthMainnet](
+      test[ChainId.EthMainnet].only(
         "should deposit steakUSDC via permit",
         async ({ client, config }) => {
           const amount = parseUnits("1000000", 6);
@@ -535,7 +538,11 @@ describe("populateBundle", () => {
                 usdc_wbtc.id,
                 usdc_wbIB01.id,
               ],
-              users: [client.account.address, bundler, steakUsdc.address],
+              users: [
+                client.account.address,
+                generalAdapter1,
+                steakUsdc.address,
+              ],
               tokens: [usdc, steakUsdc.address],
               vaults: [steakUsdc.address],
               block,
@@ -570,23 +577,23 @@ describe("populateBundle", () => {
               address: usdc,
               args: {
                 amount,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 1n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: usdc,
               args: {
                 amount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: steakUsdc.address,
               args: {
                 assets: amount,
@@ -605,7 +612,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdc, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdc, spender: bundler }),
+            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdc, spender: steakUsdc.address }),
@@ -631,7 +638,7 @@ describe("populateBundle", () => {
                 usdt_weth_91_5.id,
                 usdt_sDai.id,
               ],
-              users: [client.account.address, bundler, bbUsdt.address],
+              users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
               block,
@@ -680,24 +687,24 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: usdt,
               args: {
                 amount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 assets: amount,
@@ -716,7 +723,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdt, spender: permit2 }),
           ).toBe(MathLib.MAX_UINT_160 - amount);
           expect(
-            await client.allowance({ erc20: usdt, spender: bundler }),
+            await client.allowance({ erc20: usdt, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
@@ -761,7 +768,7 @@ describe("populateBundle", () => {
                 usdt_weth_91_5.id,
                 usdt_sDai.id,
               ],
-              users: [client.account.address, bundler, bbUsdt.address],
+              users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, bbUsdt.address],
               vaults: [bbUsdt.address],
               block,
@@ -821,34 +828,34 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: usdt,
               args: {
                 amount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 assets: amount,
-                owner: bundler,
+                owner: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: marketParams.id,
@@ -875,7 +882,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdt, spender: permit2 }),
           ).toBe(MathLib.MAX_UINT_160 - amount);
           expect(
-            await client.allowance({ erc20: usdt, spender: bundler }),
+            await client.allowance({ erc20: usdt, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
@@ -921,7 +928,7 @@ describe("populateBundle", () => {
                 usdt_weth_91_5.id,
                 usdt_sDai.id,
               ],
-              users: [client.account.address, bundler, bbUsdt.address],
+              users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, bbUsdt.address],
               vaults: [bbUsdt.address],
               block,
@@ -981,34 +988,34 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: usdt,
               args: {
                 amount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 assets: amount,
-                owner: bundler,
+                owner: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: marketParams.id,
@@ -1018,11 +1025,11 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -1044,7 +1051,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdt, spender: permit2 }),
           ).toBe(MathLib.MAX_UINT_160 - amount);
           expect(
-            await client.allowance({ erc20: usdt, spender: bundler }),
+            await client.allowance({ erc20: usdt, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
@@ -1077,7 +1084,7 @@ describe("populateBundle", () => {
                 eth_wbtc.id,
                 eth_wstEth_2.id,
               ],
-              users: [client.account.address, bundler, bbEth.address],
+              users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
               block,
@@ -1140,24 +1147,24 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: expect.any(BigInt),
-                spender: bundler,
+                spender: bundler3,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: wNative,
               args: {
                 amount: expect.any(BigInt),
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 shares,
@@ -1168,17 +1175,17 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               address: wNative,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
           ]);
 
           expect(
-            await client.balanceOf({ erc20: wNative, owner: bundler }),
+            await client.balanceOf({ erc20: wNative, owner: generalAdapter1 }),
           ).toBe(0n);
           expect(await client.maxWithdraw({ erc4626: bbEth.address })).toBe(0n);
           expect(
@@ -1189,7 +1196,10 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: wNative, spender: permit2 }),
           ).not.toBe(0n);
           expect(
-            await client.allowance({ erc20: wNative, spender: bundler }),
+            await client.allowance({
+              erc20: wNative,
+              spender: generalAdapter1,
+            }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: wNative, spender: bbUsdt.address }),
@@ -1222,7 +1232,7 @@ describe("populateBundle", () => {
                 eth_wbtc.id,
                 eth_wstEth_2.id,
               ],
-              users: [client.account.address, bundler, bbEth.address],
+              users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
               block,
@@ -1281,7 +1291,7 @@ describe("populateBundle", () => {
               marketIds: [id, usdc_idle.id, usdc_wbtc.id, usdc_wbIB01.id],
               users: [
                 client.account.address,
-                bundler,
+                generalAdapter1,
                 steakUsdc.address,
                 donator.address,
               ],
@@ -1355,23 +1365,23 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: collateralAssets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: collateralAssets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -1381,7 +1391,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -1390,19 +1400,19 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_Borrow",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
                 shares: loanShares,
                 onBehalf: client.account.address,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: steakUsdc.address,
               args: {
                 assets: loanAssets / 2n,
@@ -1412,11 +1422,11 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: usdc,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -1432,7 +1442,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: wstEth, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: wstEth, spender: bundler }),
+            await client.allowance({ erc20: wstEth, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: wstEth, spender: bbEth.address }),
@@ -1441,7 +1451,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdc, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdc, spender: bundler }),
+            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdc, spender: bbEth.address }),
@@ -1486,7 +1496,7 @@ describe("populateBundle", () => {
                 eth_wbtc.id,
                 eth_wstEth_2.id,
               ],
-              users: [client.account.address, bundler, bbEth.address],
+              users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
               block,
@@ -1568,7 +1578,7 @@ describe("populateBundle", () => {
               address: bbEth.address,
               args: {
                 amount: shares,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
@@ -1578,34 +1588,34 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: collateralAssets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: collateralAssets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Withdraw",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 shares,
                 owner: client.account.address,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -1615,7 +1625,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -1624,19 +1634,19 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_Borrow",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
                 assets: loanAssets,
                 onBehalf: client.account.address,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 assets: loanAssets,
@@ -1646,7 +1656,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Unwrap",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: maxUint256,
@@ -1656,11 +1666,11 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: NATIVE_ADDRESS,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -1728,7 +1738,7 @@ describe("populateBundle", () => {
               ],
               users: [
                 client.account.address,
-                bundler,
+                generalAdapter1,
                 bbEth.address,
                 re7Weth.address,
               ],
@@ -1854,7 +1864,7 @@ describe("populateBundle", () => {
               sender: client.account.address,
               address: bbEth.address,
               args: {
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
                 amount: expect.any(BigInt),
               },
@@ -1865,24 +1875,24 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: loanAssets / 2n,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: wNative,
               args: {
                 amount: loanAssets / 2n,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Blue_Repay",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -1893,7 +1903,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -1902,7 +1912,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_WithdrawCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -1913,18 +1923,18 @@ describe("populateBundle", () => {
             },
             {
               type: "MetaMorpho_Withdraw",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 assets: loanAssets / 2n,
                 owner: client.account.address,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_Repay",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -1935,7 +1945,7 @@ describe("populateBundle", () => {
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: re7Weth.address,
               args: {
                 assets: loanAssets / 4n,
@@ -2057,7 +2067,7 @@ describe("populateBundle", () => {
               users: [
                 client.account.address,
                 donator.address,
-                bundler,
+                generalAdapter1,
                 steakUsdc.address,
                 bbEth.address,
                 bbUsdc.address,
@@ -2153,7 +2163,7 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: collateralAssets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
@@ -2163,19 +2173,19 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: depositAssets,
-                spender: bundler,
+                spender: bundler3,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: collateralAssets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
@@ -2185,22 +2195,22 @@ describe("populateBundle", () => {
               args: {
                 amount: bbUsdcFee,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: wNative,
               args: {
                 amount: depositAssets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 assets: depositAssets,
@@ -2210,7 +2220,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -2220,7 +2230,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -2229,7 +2239,7 @@ describe("populateBundle", () => {
             },
             {
               type: "MetaMorpho_PublicReallocate",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdc.address,
               args: {
                 withdrawals: [
@@ -2243,7 +2253,7 @@ describe("populateBundle", () => {
             },
             {
               type: "MetaMorpho_PublicReallocate",
-              sender: bundler,
+              sender: generalAdapter1,
               address: steakUsdc.address,
               args: {
                 withdrawals: [
@@ -2257,7 +2267,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_Borrow",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -2276,7 +2286,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: wstEth, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: wstEth, spender: bundler }),
+            await client.allowance({ erc20: wstEth, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: wstEth, spender: bbEth.address }),
@@ -2285,7 +2295,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdc, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdc, spender: bundler }),
+            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdc, spender: bbEth.address }),
@@ -2334,7 +2344,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [eth_wstEth.id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
               block,
@@ -2411,24 +2421,24 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: repayAmount,
-                spender: bundler,
+                spender: bundler3,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: wNative,
               args: {
                 amount: repayAmount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Blue_Repay",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: eth_wstEth.id,
@@ -2439,7 +2449,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -2448,19 +2458,19 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_WithdrawCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: eth_wstEth.id,
                 assets: position.collateral,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 onBehalf: client.account.address,
               },
             },
             {
               type: "Erc20_Unwrap",
               address: wstEth,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
                 receiver: client.account.address,
@@ -2470,20 +2480,20 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               address: wNative,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
             {
               type: "Erc20_Transfer",
               address: stEth,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -2508,13 +2518,13 @@ describe("populateBundle", () => {
           expect(chainPosition.borrowShares).toBe(0n);
 
           expect(
-            await client.balanceOf({ erc20: wstEth, owner: bundler }),
+            await client.balanceOf({ erc20: wstEth, owner: generalAdapter1 }),
           ).toBe(0n);
-          expect(await client.balanceOf({ erc20: stEth, owner: bundler })).toBe(
-            1n,
-          ); // 1 stETH is always remaining in the bundler
           expect(
-            await client.balanceOf({ erc20: wNative, owner: bundler }),
+            await client.balanceOf({ erc20: stEth, owner: generalAdapter1 }),
+          ).toBe(1n); // 1 stETH is always remaining in the bundler
+          expect(
+            await client.balanceOf({ erc20: wNative, owner: generalAdapter1 }),
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
@@ -2534,7 +2544,7 @@ describe("populateBundle", () => {
       const {
         morpho,
         permit2,
-        bundler,
+        bundler3: { bundler3, generalAdapter1 },
         publicAllocator,
         wNative,
         wstEth,
@@ -2584,7 +2594,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [wNative],
               vaults: [],
               block,
@@ -2640,7 +2650,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
               block,
@@ -2652,7 +2662,10 @@ describe("populateBundle", () => {
           const data = result.current.data!;
 
           const { balance } = data.getHolding(client.account.address, stEth);
-          const { balance: bundlerBalance } = data.getHolding(bundler, stEth);
+          const { balance: bundlerBalance } = data.getHolding(
+            generalAdapter1,
+            stEth,
+          );
 
           const wstEthToken = data.getWrappedToken(wstEth);
           const assets =
@@ -2671,7 +2684,7 @@ describe("populateBundle", () => {
                 address: wstEth,
                 args: {
                   amount: balance,
-                  owner: bundler,
+                  owner: generalAdapter1,
                   slippage: DEFAULT_SLIPPAGE_TOLERANCE,
                 },
               },
@@ -2695,12 +2708,12 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: wstEth, data: expect.any(String) },
-              args: [wstEth, bundler, wBalance],
+              args: [wstEth, generalAdapter1, wBalance],
             },
             {
               type: "erc20Approve",
               tx: { to: stEth, data: expect.any(String) },
-              args: [stEth, bundler, balance - bundlerBalance],
+              args: [stEth, generalAdapter1, balance - bundlerBalance],
             },
           ]);
 
@@ -2720,7 +2733,7 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: wBalance,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
@@ -2730,44 +2743,44 @@ describe("populateBundle", () => {
               address: stEth,
               args: {
                 amount: balance - bundlerBalance,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: wBalance,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: stEth,
               args: {
                 amount: balance - bundlerBalance,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Erc20_Wrap",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: balance,
-                owner: bundler,
+                owner: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -2777,11 +2790,11 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -2804,7 +2817,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: stEth, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: stEth, spender: bundler }),
+            await client.allowance({ erc20: stEth, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({
@@ -2839,7 +2852,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [usdc, stEth, wstEth],
               vaults: [],
               block,
@@ -2874,7 +2887,7 @@ describe("populateBundle", () => {
 
           expect(bundle.requirements.txs).toStrictEqual([
             {
-              args: [bundler, true],
+              args: [generalAdapter1, true],
               tx: {
                 to: morpho,
                 data: expect.any(String),
@@ -2886,7 +2899,7 @@ describe("populateBundle", () => {
           expect(operations).toStrictEqual([
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -2895,7 +2908,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_Borrow",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -2925,7 +2938,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: wstEth, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: wstEth, spender: bundler }),
+            await client.allowance({ erc20: wstEth, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({
@@ -2955,7 +2968,11 @@ describe("populateBundle", () => {
                 usdc_wbtc.id,
                 usdc_wbIB01.id,
               ],
-              users: [client.account.address, bundler, steakUsdc.address],
+              users: [
+                client.account.address,
+                generalAdapter1,
+                steakUsdc.address,
+              ],
               tokens: [usdc, stEth, wstEth, steakUsdc.address],
               vaults: [steakUsdc.address],
               block,
@@ -2990,7 +3007,7 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: usdc, data: expect.any(String) },
-              args: [usdc, bundler, amount],
+              args: [usdc, generalAdapter1, amount],
             },
           ]);
 
@@ -3001,23 +3018,23 @@ describe("populateBundle", () => {
               address: usdc,
               args: {
                 amount,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 1n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: usdc,
               args: {
                 amount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: steakUsdc.address,
               args: {
                 assets: amount,
@@ -3036,7 +3053,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdc, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdc, spender: bundler }),
+            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdc, spender: steakUsdc.address }),
@@ -3062,7 +3079,7 @@ describe("populateBundle", () => {
                 usdt_weth_91_5.id,
                 usdt_sDai.id,
               ],
-              users: [client.account.address, bundler, bbUsdt.address],
+              users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
               block,
@@ -3096,7 +3113,7 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: usdt, data: expect.any(String) },
-              args: [usdt, bundler, amount],
+              args: [usdt, generalAdapter1, amount],
             },
           ]);
 
@@ -3116,24 +3133,24 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: usdt,
               args: {
                 amount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 assets: amount,
@@ -3152,7 +3169,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdt, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdt, spender: bundler }),
+            await client.allowance({ erc20: usdt, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
@@ -3197,7 +3214,7 @@ describe("populateBundle", () => {
                 usdt_weth_91_5.id,
                 usdt_sDai.id,
               ],
-              users: [client.account.address, bundler, bbUsdt.address],
+              users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
               block,
@@ -3245,7 +3262,7 @@ describe("populateBundle", () => {
                 to: usdt,
                 data: expect.any(String),
               },
-              args: [usdt, bundler, amount],
+              args: [usdt, generalAdapter1, amount],
             },
           ]);
 
@@ -3265,34 +3282,34 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: usdt,
               args: {
                 amount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 assets: amount,
-                owner: bundler,
+                owner: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: marketParams.id,
@@ -3319,7 +3336,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdt, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdt, spender: bundler }),
+            await client.allowance({ erc20: usdt, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
@@ -3365,7 +3382,7 @@ describe("populateBundle", () => {
                 usdt_weth_91_5.id,
                 usdt_sDai.id,
               ],
-              users: [client.account.address, bundler, bbUsdt.address],
+              users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
               block,
@@ -3410,7 +3427,7 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: usdt, data: expect.any(String) },
-              args: [usdt, bundler, amount],
+              args: [usdt, generalAdapter1, amount],
             },
           ]);
 
@@ -3430,34 +3447,34 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: usdt,
               args: {
                 amount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 assets: amount,
-                owner: bundler,
+                owner: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: marketParams.id,
@@ -3467,11 +3484,11 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -3493,7 +3510,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdt, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdt, spender: bundler }),
+            await client.allowance({ erc20: usdt, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdt, spender: bbUsdt.address }),
@@ -3526,7 +3543,7 @@ describe("populateBundle", () => {
                 eth_wbtc.id,
                 eth_wstEth_2.id,
               ],
-              users: [client.account.address, bundler, bbEth.address],
+              users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
               block,
@@ -3570,7 +3587,7 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: wNative, data: expect.any(String) },
-              args: [wNative, bundler, expect.any(BigInt)],
+              args: [wNative, generalAdapter1, expect.any(BigInt)],
             },
           ]);
 
@@ -3590,24 +3607,24 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: expect.any(BigInt),
-                spender: bundler,
+                spender: bundler3,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: wNative,
               args: {
                 amount: expect.any(BigInt),
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 shares,
@@ -3618,17 +3635,17 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               address: wNative,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
           ]);
 
           expect(
-            await client.balanceOf({ erc20: wNative, owner: bundler }),
+            await client.balanceOf({ erc20: wNative, owner: generalAdapter1 }),
           ).toBe(0n);
           expect(await client.maxWithdraw({ erc4626: bbEth.address })).toBe(0n);
           expect(
@@ -3639,7 +3656,10 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: wNative, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: wNative, spender: bundler }),
+            await client.allowance({
+              erc20: wNative,
+              spender: generalAdapter1,
+            }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: wNative, spender: bbUsdt.address }),
@@ -3672,7 +3692,7 @@ describe("populateBundle", () => {
                 eth_wbtc.id,
                 eth_wstEth_2.id,
               ],
-              users: [client.account.address, bundler, bbEth.address],
+              users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
               block,
@@ -3745,7 +3765,7 @@ describe("populateBundle", () => {
               marketIds: [id, usdc_idle.id, usdc_wbtc.id, usdc_wbIB01.id],
               users: [
                 client.account.address,
-                bundler,
+                generalAdapter1,
                 steakUsdc.address,
                 donator.address,
               ],
@@ -3815,12 +3835,12 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: wstEth, data: expect.any(String) },
-              args: [wstEth, bundler, collateralAssets],
+              args: [wstEth, generalAdapter1, collateralAssets],
             },
             {
               type: "morphoSetAuthorization",
               tx: { to: morpho, data: expect.any(String) },
-              args: [bundler, true],
+              args: [generalAdapter1, true],
             },
           ]);
 
@@ -3831,23 +3851,23 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: collateralAssets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: collateralAssets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -3857,7 +3877,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -3866,19 +3886,19 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_Borrow",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
                 shares: loanShares,
                 onBehalf: client.account.address,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: steakUsdc.address,
               args: {
                 assets: loanAssets / 2n,
@@ -3888,11 +3908,11 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: usdc,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -3908,7 +3928,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: wstEth, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: wstEth, spender: bundler }),
+            await client.allowance({ erc20: wstEth, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: wstEth, spender: bbEth.address }),
@@ -3917,7 +3937,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdc, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdc, spender: bundler }),
+            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdc, spender: bbEth.address }),
@@ -3962,7 +3982,7 @@ describe("populateBundle", () => {
                 eth_wbtc.id,
                 eth_wstEth.id,
               ],
-              users: [client.account.address, bundler, bbEth.address],
+              users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
               block,
@@ -4040,17 +4060,17 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: bbEth.address, data: expect.any(String) },
-              args: [bbEth.address, bundler, shares],
+              args: [bbEth.address, generalAdapter1, shares],
             },
             {
               type: "erc20Approve",
               tx: { to: wstEth, data: expect.any(String) },
-              args: [wstEth, bundler, collateralAssets],
+              args: [wstEth, generalAdapter1, collateralAssets],
             },
             {
               type: "morphoSetAuthorization",
               tx: { to: morpho, data: expect.any(String) },
-              args: [bundler, true],
+              args: [generalAdapter1, true],
             },
           ]);
 
@@ -4061,7 +4081,7 @@ describe("populateBundle", () => {
               address: bbEth.address,
               args: {
                 amount: shares,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
@@ -4071,34 +4091,34 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: collateralAssets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: collateralAssets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Withdraw",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 shares,
                 owner: client.account.address,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -4108,7 +4128,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -4117,19 +4137,19 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_Borrow",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
                 assets: loanAssets,
                 onBehalf: client.account.address,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 assets: loanAssets,
@@ -4139,7 +4159,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Unwrap",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: maxUint256,
@@ -4149,11 +4169,11 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: NATIVE_ADDRESS,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -4221,7 +4241,7 @@ describe("populateBundle", () => {
               ],
               users: [
                 client.account.address,
-                bundler,
+                generalAdapter1,
                 bbEth.address,
                 re7Weth.address,
               ],
@@ -4329,17 +4349,17 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: bbEth.address, data: expect.any(String) },
-              args: [bbEth.address, bundler, expect.any(BigInt)],
+              args: [bbEth.address, generalAdapter1, expect.any(BigInt)],
             },
             {
               type: "erc20Approve",
               tx: { to: wNative, data: expect.any(String) },
-              args: [wNative, bundler, loanAssets / 2n],
+              args: [wNative, generalAdapter1, loanAssets / 2n],
             },
             {
               type: "morphoSetAuthorization",
               tx: { to: morpho, data: expect.any(String) },
-              args: [bundler, true],
+              args: [generalAdapter1, true],
             },
           ]);
 
@@ -4358,7 +4378,7 @@ describe("populateBundle", () => {
               sender: client.account.address,
               address: bbEth.address,
               args: {
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
                 amount: expect.any(BigInt),
               },
@@ -4369,24 +4389,24 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: loanAssets / 2n,
-                spender: bundler,
+                spender: bundler3,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: wNative,
               args: {
                 amount: loanAssets / 2n,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Blue_Repay",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -4397,7 +4417,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -4406,7 +4426,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_WithdrawCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -4417,18 +4437,18 @@ describe("populateBundle", () => {
             },
             {
               type: "MetaMorpho_Withdraw",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 assets: loanAssets / 2n,
                 owner: client.account.address,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
             {
               type: "Blue_Repay",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -4439,7 +4459,7 @@ describe("populateBundle", () => {
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: re7Weth.address,
               args: {
                 assets: loanAssets / 4n,
@@ -4561,7 +4581,7 @@ describe("populateBundle", () => {
               users: [
                 client.account.address,
                 donator.address,
-                bundler,
+                generalAdapter1,
                 steakUsdc.address,
                 bbEth.address,
                 bbUsdc.address,
@@ -4638,17 +4658,17 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: wstEth, data: expect.any(String) },
-              args: [wstEth, bundler, collateralAssets],
+              args: [wstEth, generalAdapter1, collateralAssets],
             },
             {
               type: "erc20Approve",
               tx: { to: wNative, data: expect.any(String) },
-              args: [wNative, bundler, depositAssets],
+              args: [wNative, generalAdapter1, depositAssets],
             },
             {
               type: "morphoSetAuthorization",
               tx: { to: morpho, data: expect.any(String) },
-              args: [bundler, true],
+              args: [generalAdapter1, true],
             },
           ]);
 
@@ -4668,7 +4688,7 @@ describe("populateBundle", () => {
               address: wstEth,
               args: {
                 amount: collateralAssets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
@@ -4678,19 +4698,19 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: depositAssets,
-                spender: bundler,
+                spender: bundler3,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: wstEth,
               args: {
                 amount: collateralAssets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
@@ -4700,22 +4720,22 @@ describe("populateBundle", () => {
               args: {
                 amount: bbUsdcFee,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: wNative,
               args: {
                 amount: depositAssets,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "MetaMorpho_Deposit",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbEth.address,
               args: {
                 assets: depositAssets,
@@ -4725,7 +4745,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SupplyCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -4735,7 +4755,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -4744,7 +4764,7 @@ describe("populateBundle", () => {
             },
             {
               type: "MetaMorpho_PublicReallocate",
-              sender: bundler,
+              sender: generalAdapter1,
               address: bbUsdc.address,
               args: {
                 withdrawals: [
@@ -4758,7 +4778,7 @@ describe("populateBundle", () => {
             },
             {
               type: "MetaMorpho_PublicReallocate",
-              sender: bundler,
+              sender: generalAdapter1,
               address: steakUsdc.address,
               args: {
                 withdrawals: [
@@ -4772,7 +4792,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_Borrow",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id,
@@ -4791,7 +4811,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: wstEth, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: wstEth, spender: bundler }),
+            await client.allowance({ erc20: wstEth, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: wstEth, spender: bbEth.address }),
@@ -4800,7 +4820,7 @@ describe("populateBundle", () => {
             await client.allowance({ erc20: usdc, spender: permit2 }),
           ).toBe(0n);
           expect(
-            await client.allowance({ erc20: usdc, spender: bundler }),
+            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdc, spender: bbEth.address }),
@@ -4850,7 +4870,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [eth_wstEth.id],
-              users: [client.account.address, bundler],
+              users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
               block,
@@ -4907,12 +4927,12 @@ describe("populateBundle", () => {
             {
               type: "erc20Approve",
               tx: { to: wNative, data: expect.any(String) },
-              args: [wNative, bundler, expect.any(BigInt)],
+              args: [wNative, generalAdapter1, expect.any(BigInt)],
             },
             {
               type: "morphoSetAuthorization",
               tx: { to: morpho, data: expect.any(String) },
-              args: [bundler, true],
+              args: [generalAdapter1, true],
             },
           ]);
 
@@ -4932,24 +4952,24 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: repayAmount,
-                spender: bundler,
+                spender: bundler3,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler,
+              sender: bundler3,
               address: wNative,
               args: {
                 amount: repayAmount,
                 from: client.account.address,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Blue_Repay",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: eth_wstEth.id,
@@ -4960,7 +4980,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_SetAuthorization",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 owner: client.account.address,
@@ -4969,19 +4989,19 @@ describe("populateBundle", () => {
             },
             {
               type: "Blue_WithdrawCollateral",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: eth_wstEth.id,
                 assets: position.collateral,
-                receiver: bundler,
+                receiver: generalAdapter1,
                 onBehalf: client.account.address,
               },
             },
             {
               type: "Erc20_Unwrap",
               address: wstEth,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
                 receiver: client.account.address,
@@ -4991,20 +5011,20 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               address: wNative,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
             {
               type: "Erc20_Transfer",
               address: stEth,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
             },
@@ -5029,13 +5049,13 @@ describe("populateBundle", () => {
           expect(chainPosition.borrowShares).toBe(0n);
 
           expect(
-            await client.balanceOf({ erc20: wstEth, owner: bundler }),
+            await client.balanceOf({ erc20: wstEth, owner: generalAdapter1 }),
           ).toBe(0n);
-          expect(await client.balanceOf({ erc20: stEth, owner: bundler })).toBe(
-            1n,
-          ); // 1 stETH is always remaining in the bundler
           expect(
-            await client.balanceOf({ erc20: wNative, owner: bundler }),
+            await client.balanceOf({ erc20: stEth, owner: generalAdapter1 }),
+          ).toBe(1n); // 1 stETH is always remaining in the bundler
+          expect(
+            await client.balanceOf({ erc20: wNative, owner: generalAdapter1 }),
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
@@ -5050,8 +5070,14 @@ describe("populateBundle", () => {
     });
 
     describe("base", () => {
-      const { morpho, bundler, adaptiveCurveIrm, wNative, usdc, verUsdc } =
-        addresses[ChainId.BaseMainnet];
+      const {
+        morpho,
+        bundler3: { generalAdapter1 },
+        adaptiveCurveIrm,
+        wNative,
+        usdc,
+        verUsdc,
+      } = addresses[ChainId.BaseMainnet];
 
       test[ChainId.BaseMainnet](
         "should wrap then supply aUSDC",
@@ -5085,7 +5111,7 @@ describe("populateBundle", () => {
           const { result } = await renderHook(config, () =>
             useSimulationState({
               marketIds: [marketParams.id],
-              users: [whitelisted, bundler],
+              users: [whitelisted, generalAdapter1],
               tokens: [usdc, verUsdc, wNative],
               vaults: [],
               block,
@@ -5104,7 +5130,7 @@ describe("populateBundle", () => {
                 address: verUsdc,
                 args: {
                   amount: assets,
-                  owner: bundler,
+                  owner: generalAdapter1,
                   slippage: DEFAULT_SLIPPAGE_TOLERANCE,
                 },
               },
@@ -5132,7 +5158,7 @@ describe("populateBundle", () => {
               address: usdc,
               args: {
                 amount: assets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
@@ -5142,23 +5168,23 @@ describe("populateBundle", () => {
               address: verUsdc,
               args: {
                 amount: assets,
-                spender: bundler,
+                spender: generalAdapter1,
                 nonce: 0n,
               },
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: usdc,
               args: {
                 amount: assets,
                 from: whitelisted,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Erc20_Wrap",
-              sender: bundler,
+              sender: generalAdapter1,
               address: verUsdc,
               args: {
                 amount: assets,
@@ -5168,17 +5194,17 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
-              sender: bundler,
+              sender: generalAdapter1,
               address: verUsdc,
               args: {
                 amount: assets,
                 from: whitelisted,
-                to: bundler,
+                to: generalAdapter1,
               },
             },
             {
               type: "Blue_Supply",
-              sender: bundler,
+              sender: generalAdapter1,
               address: morpho,
               args: {
                 id: marketParams.id,

@@ -12,14 +12,14 @@ export const handleBlueSupplyCollateralOperation: OperationHandler<
   const {
     params: { collateralToken },
   } = data.getMarket(id);
-  const { morpho, bundler } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(data.chainId);
 
   // Simulate the bundler's behavior on supply.
-  if (sender === bundler && assets === MathLib.MAX_UINT_256)
-    assets = MathLib.min(
-      assets,
-      data.getHolding(bundler, collateralToken).balance,
-    );
+  if (sender === generalAdapter1 && assets === MathLib.MAX_UINT_256)
+    assets = data.getHolding(sender, collateralToken).balance;
 
   if (assets === 0n) throw new BlueSimulationErrors.ZeroAssets();
 

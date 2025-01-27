@@ -15,7 +15,11 @@ import {
 
 const type = "Erc20_Approve";
 
-const { morpho, bundler, permit2 } = addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+  permit2,
+} = addresses[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should approve morpho", () => {
@@ -65,7 +69,7 @@ describe(type, () => {
         sender: userA,
         address: tokenB,
         args: {
-          spender: bundler,
+          spender: generalAdapter1,
           amount: 1n,
         },
       },

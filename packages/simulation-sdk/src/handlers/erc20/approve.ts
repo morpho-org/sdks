@@ -9,13 +9,17 @@ export const handleErc20ApproveOperation: OperationHandler<
 > = ({ args: { spender, amount }, sender, address }, data) => {
   const senderTokenData = data.getHolding(sender, address);
 
-  const { morpho, bundler, permit2 } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+    permit2,
+  } = getChainAddresses(data.chainId);
 
   const contract =
     spender === morpho
       ? "morpho"
-      : spender === bundler
-        ? "bundler"
+      : spender === generalAdapter1
+        ? "bundler3.generalAdapter1"
         : spender === permit2
           ? "permit2"
           : undefined;

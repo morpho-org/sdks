@@ -18,7 +18,6 @@ import type {
   SignatureRequirement,
 } from "@morpho-org/bundler-sdk-viem";
 import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import {
   type Account,
   type Client,
@@ -66,8 +65,11 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     const actions: Action[] = [];
 
     const user = this.user;
-    const bundler = getChainAddresses(chainId).aaveV3OptimizerBundler;
-    if (!bundler) throw new Error("missing aaveV3OptimizerBundler address");
+    const {
+      bundler3: { aaveV3OptimizerMigrationAdapter },
+    } = getChainAddresses(chainId);
+    if (aaveV3OptimizerMigrationAdapter == null)
+      throw new Error("missing aaveV3OptimizerBundler address");
 
     const migrationAddresses =
       MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3Optimizer];
@@ -81,27 +83,27 @@ export class MigratableSupplyPosition_AaveV3Optimizer
 
         const managerApprovalAction: Action = {
           type: "aaveV3OptimizerApproveManagerWithSig",
-          args: [true, nonce, deadline, null],
+          args: [user, true, nonce, deadline, null],
         };
 
         actions.push(managerApprovalAction);
         signRequirements.push({
           action: managerApprovalAction,
           async sign(client: Client, account: Account = client.account!) {
-            if (managerApprovalAction.args[3] != null)
-              return managerApprovalAction.args[3]; // action is already signed
+            let signature = managerApprovalAction.args[4];
+            if (signature != null) return signature; // action is already signed
 
             const typedData = getMorphoAaveV3ManagerApprovalTypedData(
               {
                 delegator: user,
-                manager: bundler,
+                manager: aaveV3OptimizerMigrationAdapter,
                 nonce,
                 deadline,
                 isAllowed: true,
               },
               chainId,
             );
-            const signature = await signTypedData(client, {
+            signature = await signTypedData(client, {
               ...typedData,
               account,
             });
@@ -112,19 +114,19 @@ export class MigratableSupplyPosition_AaveV3Optimizer
               signature,
             });
 
-            return (managerApprovalAction.args[3] = signature);
+            return (managerApprovalAction.args[4] = signature);
           },
         });
       } else {
         txRequirements.push({
           type: "aaveV3OptimizerApproveManager",
-          args: [bundler, true],
+          args: [aaveV3OptimizerMigrationAdapter, true],
           tx: {
             to: migrationAddresses.morpho.address,
             data: encodeFunctionData({
               abi: morphoAaveV3Abi,
               functionName: "approveManager",
-              args: [bundler, true],
+              args: [aaveV3OptimizerMigrationAdapter, true],
             }),
           },
         });
@@ -162,15 +164,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
         signatures: signRequirements,
         txs: txRequirements,
       },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
+      tx: () => BundlerAction.encodeBundle(chainId, actions),
     };
   }
 }

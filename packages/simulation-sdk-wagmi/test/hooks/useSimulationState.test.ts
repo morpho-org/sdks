@@ -12,7 +12,12 @@ import { describe, expect } from "vitest";
 import { useSimulationState } from "../../src/index.js";
 import { test } from "../setup.js";
 
-const { morpho, bundler, permit2, usdc } = addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+  permit2,
+  usdc,
+} = addresses[ChainId.EthMainnet];
 const { usdc_wbIB01, usdc_wstEth, usdc_wbtc, usdc_idle } =
   markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];
@@ -463,7 +468,7 @@ describe("useSimulationState", () => {
     const { result } = await renderHook(config, () =>
       useSimulationState({
         marketIds: [usdc_wstEth.id, usdc_idle.id, usdc_wbtc.id, usdc_wbIB01.id],
-        users: [client.account.address, steakUsdc.address, bundler],
+        users: [client.account.address, steakUsdc.address, generalAdapter1],
         tokens: [steakUsdc.asset, steakUsdc.address],
         vaults: [steakUsdc.address],
         block,
@@ -491,24 +496,24 @@ describe("useSimulationState", () => {
           address: steakUsdc.asset,
           args: {
             amount,
-            spender: bundler,
+            spender: generalAdapter1,
             expiration: MathLib.MAX_UINT_48,
             nonce: 0n,
           },
         },
         {
           type: "Erc20_Transfer2",
-          sender: bundler,
+          sender: generalAdapter1,
           address: steakUsdc.asset,
           args: {
             amount,
             from: client.account.address,
-            to: bundler,
+            to: generalAdapter1,
           },
         },
         {
           type: "MetaMorpho_Deposit",
-          sender: bundler,
+          sender: generalAdapter1,
           address: steakUsdc.address,
           args: {
             assets: amount,

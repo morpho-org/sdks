@@ -6,12 +6,12 @@ import type { Address, BigIntish } from "../types.js";
 export const ERC20_ALLOWANCE_RECIPIENTS = [
   "morpho",
   "permit2",
-  "bundler",
+  "bundler3.generalAdapter1",
 ] as const satisfies readonly AddressLabel[];
 
 export const PERMIT2_ALLOWANCE_RECIPIENTS = [
   "morpho",
-  "bundler",
+  "bundler3.bundler3",
 ] as const satisfies readonly Exclude<AddressLabel, "permit2">[];
 
 export type Erc20AllowanceRecipient =
@@ -112,10 +112,10 @@ export class Holding implements IHolding {
         expiration: BigInt(permit2Allowances.morpho.expiration),
         nonce: BigInt(permit2Allowances.morpho.nonce),
       },
-      bundler: {
-        amount: BigInt(permit2Allowances.bundler.amount),
-        expiration: BigInt(permit2Allowances.bundler.expiration),
-        nonce: BigInt(permit2Allowances.bundler.nonce),
+      "bundler3.bundler3": {
+        amount: BigInt(permit2Allowances["bundler3.bundler3"].amount),
+        expiration: BigInt(permit2Allowances["bundler3.bundler3"].expiration),
+        nonce: BigInt(permit2Allowances["bundler3.bundler3"].nonce),
       },
     };
 

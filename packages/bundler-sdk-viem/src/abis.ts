@@ -1,3 +1,6 @@
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const baseBundlerAbi = [
   {
     type: "function",
@@ -15,6 +18,9 @@ export const baseBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const transferBundlerAbi = [
   ...baseBundlerAbi,
   {
@@ -50,6 +56,9 @@ export const transferBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const permitBundlerAbi = [
   ...baseBundlerAbi,
   {
@@ -69,6 +78,9 @@ export const permitBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const ethereumPermitBundlerAbi = [
   ...permitBundlerAbi,
   {
@@ -88,6 +100,9 @@ export const ethereumPermitBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const permit2BundlerAbi = [
   ...baseBundlerAbi,
   {
@@ -133,6 +148,9 @@ export const permit2BundlerAbi = [
   { type: "error", name: "UnsafeCast", inputs: [] },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const erc20WrapperBundlerAbi = [
   ...baseBundlerAbi,
   {
@@ -158,6 +176,9 @@ export const erc20WrapperBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const erc4626BundlerAbi = [
   ...baseBundlerAbi,
   {
@@ -212,6 +233,9 @@ export const erc4626BundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const morphoBundlerAbi = [
   ...baseBundlerAbi,
   {
@@ -495,6 +519,9 @@ export const morphoBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const urdBundlerAbi = [
   ...baseBundlerAbi,
   {
@@ -513,6 +540,9 @@ export const urdBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const wNativeBundlerAbi = [
   ...baseBundlerAbi,
   { type: "receive", stateMutability: "payable" },
@@ -539,6 +569,9 @@ export const wNativeBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const stEthBundlerAbi = [
   ...baseBundlerAbi,
   {
@@ -582,6 +615,9 @@ export const stEthBundlerAbi = [
   },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const aaveV2MigrationBundlerAbi = [
   ...transferBundlerAbi,
   ...permitBundlerAbi,
@@ -629,6 +665,9 @@ export const aaveV2MigrationBundlerAbi = [
   { type: "error", name: "UnsafeCast", inputs: [] },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const aaveV3MigrationBundlerAbi = [
   ...transferBundlerAbi,
   ...permitBundlerAbi,
@@ -675,6 +714,9 @@ export const aaveV3MigrationBundlerAbi = [
   { type: "error", name: "UnsafeCast", inputs: [] },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const aaveV3OptimizerMigrationBundlerAbi = [
   ...transferBundlerAbi,
   ...permitBundlerAbi,
@@ -755,6 +797,9 @@ export const aaveV3OptimizerMigrationBundlerAbi = [
   { type: "error", name: "UnsafeCast", inputs: [] },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const compoundV2MigrationBundlerAbi = [
   ...transferBundlerAbi,
   ...permitBundlerAbi,
@@ -802,6 +847,9 @@ export const compoundV2MigrationBundlerAbi = [
   { type: "error", name: "UnsafeCast", inputs: [] },
 ] as const;
 
+/**
+ * @deprecated All bundles should be encoded using Bundler3 instead.
+ */
 export const compoundV3MigrationBundlerAbi = [
   ...transferBundlerAbi,
   ...permitBundlerAbi,
@@ -852,6 +900,145 @@ export const compoundV3MigrationBundlerAbi = [
     stateMutability: "payable",
   },
   { type: "error", name: "UnsafeCast", inputs: [] },
+] as const;
+
+export const universalRewardsDistributorAbi = [
+  {
+    inputs: [
+      { internalType: "address", name: "initialOwner", type: "address" },
+      { internalType: "uint256", name: "initialTimelock", type: "uint256" },
+      { internalType: "bytes32", name: "initialRoot", type: "bytes32" },
+      { internalType: "bytes32", name: "initialIpfsHash", type: "bytes32" },
+    ],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  {
+    inputs: [],
+    name: "acceptRoot",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "account", type: "address" },
+      { internalType: "address", name: "reward", type: "address" },
+      { internalType: "uint256", name: "claimable", type: "uint256" },
+      { internalType: "bytes32[]", name: "proof", type: "bytes32[]" },
+    ],
+    name: "claim",
+    outputs: [{ internalType: "uint256", name: "amount", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "account", type: "address" },
+      { internalType: "address", name: "reward", type: "address" },
+    ],
+    name: "claimed",
+    outputs: [{ internalType: "uint256", name: "amount", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "ipfsHash",
+    outputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "isUpdater",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "owner",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "pendingRoot",
+    outputs: [
+      { internalType: "bytes32", name: "root", type: "bytes32" },
+      { internalType: "bytes32", name: "ipfsHash", type: "bytes32" },
+      { internalType: "uint256", name: "validAt", type: "uint256" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "revokePendingRoot",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "root",
+    outputs: [{ internalType: "bytes32", name: "", type: "bytes32" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "newOwner", type: "address" }],
+    name: "setOwner",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "bytes32", name: "newRoot", type: "bytes32" },
+      { internalType: "bytes32", name: "newIpfsHash", type: "bytes32" },
+    ],
+    name: "setRoot",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "updater", type: "address" },
+      { internalType: "bool", name: "active", type: "bool" },
+    ],
+    name: "setRootUpdater",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "uint256", name: "newTimelock", type: "uint256" }],
+    name: "setTimelock",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "bytes32", name: "newRoot", type: "bytes32" },
+      { internalType: "bytes32", name: "newIpfsHash", type: "bytes32" },
+    ],
+    name: "submitRoot",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "timelock",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
 ] as const;
 
 export const bundler3Abi = [
@@ -1174,11 +1361,6 @@ export const generalAdapter1Abi = [
     inputs: [
       {
         name: "wrapper",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "receiver",
         type: "address",
         internalType: "address",
       },
@@ -2372,5 +2554,422 @@ export const paraswapAdapterAbi = [
     type: "error",
     name: "SellAmountTooHigh",
     inputs: [],
+  },
+] as const;
+
+export const aaveV2MigrationAdapterAbi = [
+  ...coreAdapterAbi,
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "bundler3",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "aaveV2Pool",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "aaveV2Repay",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "interestRateMode",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "aaveV2Withdraw",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+export const aaveV3MigrationAdapterAbi = [
+  ...coreAdapterAbi,
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "bundler3",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "aaveV3Pool",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "aaveV3Repay",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "interestRateMode",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "aaveV3Withdraw",
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+export const aaveV3OptimizerMigrationAdapterAbi = [
+  ...coreAdapterAbi,
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "bundler3",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "aaveV3Optimizer",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "aaveV3OptimizerRepay",
+    inputs: [
+      {
+        name: "underlying",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "aaveV3OptimizerWithdraw",
+    inputs: [
+      {
+        name: "underlying",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "maxIterations",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "aaveV3OptimizerWithdrawCollateral",
+    inputs: [
+      {
+        name: "underlying",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+export const compoundV2MigrationAdapterAbi = [
+  ...coreAdapterAbi,
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "bundler3",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "cEth",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "C_ETH",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "compoundV2RedeemErc20",
+    inputs: [
+      {
+        name: "cToken",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "compoundV2RedeemEth",
+    inputs: [
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "compoundV2RepayErc20",
+    inputs: [
+      {
+        name: "cToken",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "compoundV2RepayEth",
+    inputs: [
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+] as const;
+
+export const compoundV3MigrationAdapterAbi = [
+  ...coreAdapterAbi,
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "bundler3",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "compoundV3Repay",
+    inputs: [
+      {
+        name: "instance",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "compoundV3WithdrawFrom",
+    inputs: [
+      {
+        name: "instance",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "asset",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
 ] as const;

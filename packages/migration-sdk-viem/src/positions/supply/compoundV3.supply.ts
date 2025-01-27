@@ -11,7 +11,6 @@ import type {
   SignatureRequirement,
 } from "@morpho-org/bundler-sdk-viem";
 import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import {
   type Account,
   type Client,
@@ -72,8 +71,9 @@ export class MigratableSupplyPosition_CompoundV3
 
     const user = this.user;
 
-    const bundler = getChainAddresses(chainId).compoundV3Bundler;
-    if (!bundler) throw new Error("missing compoundV3Bundler address");
+    const {
+      bundler3: { compoundV3MigrationAdapter },
+    } = getChainAddresses(chainId);
 
     const migrateMax =
       this.max.limiter === SupplyMigrationLimiter.position &&
@@ -94,7 +94,7 @@ export class MigratableSupplyPosition_CompoundV3
 
       const allowAction: Action = {
         type: "compoundV3AllowBySig",
-        args: [instance, true, nonce, expiry, null],
+        args: [instance, user, true, nonce, expiry, null],
       };
 
       actions.push(allowAction);
@@ -102,21 +102,22 @@ export class MigratableSupplyPosition_CompoundV3
       signRequirements.push({
         action: allowAction,
         async sign(client: Client, account: Account = client.account!) {
-          if (allowAction.args[4] != null) return allowAction.args[4]; // action is already signed
+          let signature = allowAction.args[5];
+          if (signature != null) return signature; // action is already signed
 
           const typedData = getCompoundV3ManagerApprovalMessage(
             {
               name,
               instance,
               owner: user,
-              manager: bundler,
+              manager: compoundV3MigrationAdapter,
               isAllowed: true,
               nonce,
               expiry,
             },
             chainId,
           );
-          const signature = await signTypedData(client, {
+          signature = await signTypedData(client, {
             ...typedData,
             account,
           });
@@ -127,19 +128,19 @@ export class MigratableSupplyPosition_CompoundV3
             signature,
           });
 
-          return (allowAction.args[4] = signature);
+          return (allowAction.args[5] = signature);
         },
       });
     } else {
       txRequirements.push({
         type: "compoundV3ApproveManager",
-        args: [bundler, true],
+        args: [compoundV3MigrationAdapter, true],
         tx: {
           to: instance,
           data: encodeFunctionData({
             abi: cometExtAbi,
             functionName: "allow",
-            args: [bundler, true],
+            args: [compoundV3MigrationAdapter, true],
           }),
         },
       });
@@ -162,15 +163,7 @@ export class MigratableSupplyPosition_CompoundV3
         signatures: signRequirements,
         txs: txRequirements,
       },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
+      tx: () => BundlerAction.encodeBundle(chainId, actions),
     };
   }
 }

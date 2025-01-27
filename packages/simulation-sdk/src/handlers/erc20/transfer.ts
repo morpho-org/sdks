@@ -8,7 +8,11 @@ import type { OperationHandler } from "../types.js";
 export const handleErc20TransferOperation: OperationHandler<
   Erc20Operations["Erc20_Transfer"]
 > = ({ args: { amount, from, to }, sender, address }, data) => {
-  const { morpho, bundler, permit2 } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+    permit2,
+  } = getChainAddresses(data.chainId);
 
   if (from !== ZERO_ADDRESS && from !== morpho) {
     const fromHolding = data.getHolding(from, address);
@@ -18,8 +22,8 @@ export const handleErc20TransferOperation: OperationHandler<
 
     // Simulate the bundler's behavior on output transfers.
     if (
-      sender === bundler &&
-      from === bundler &&
+      sender === from &&
+      from === generalAdapter1 &&
       amount === MathLib.MAX_UINT_256
     )
       amount = MathLib.min(amount, fromHolding.balance);
@@ -27,13 +31,13 @@ export const handleErc20TransferOperation: OperationHandler<
     if (fromHolding.balance < amount)
       throw new Erc20Errors.InsufficientBalance(address, from);
 
-    if (sender !== from && from !== bundler) {
+    if (sender !== from && from !== generalAdapter1) {
       // Check allowance for approval recipients (except for the bundler which doesn't need it).
       const contract =
         sender === morpho
           ? "morpho"
-          : sender === bundler
-            ? "bundler"
+          : sender === generalAdapter1
+            ? "bundler3.generalAdapter1"
             : sender === permit2
               ? "permit2"
               : undefined;

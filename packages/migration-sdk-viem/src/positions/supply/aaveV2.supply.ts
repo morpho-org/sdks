@@ -22,7 +22,6 @@ import type {
   SignatureRequirement,
 } from "@morpho-org/bundler-sdk-viem";
 import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import {
   type Account,
   type Client,
@@ -72,8 +71,11 @@ export class MigratableSupplyPosition_AaveV2
     const user = this.user;
     const aToken = this.aToken;
 
-    const bundler = getChainAddresses(chainId).aaveV2Bundler;
-    if (!bundler) throw new Error("missing aaveV2Bundler address");
+    const {
+      bundler3: { aaveV2MigrationAdapter },
+    } = getChainAddresses(chainId);
+    if (aaveV2MigrationAdapter == null)
+      throw new Error("missing aaveV2Bundler address");
 
     let migratedAmount = amount;
 
@@ -91,7 +93,7 @@ export class MigratableSupplyPosition_AaveV2
 
       const permitAction: Action = {
         type: "permit",
-        args: [aToken.address, migratedAmount, deadline, null],
+        args: [user, aToken.address, migratedAmount, deadline, null],
       };
 
       actions.push(permitAction);
@@ -99,20 +101,21 @@ export class MigratableSupplyPosition_AaveV2
       signRequirements.push({
         action: permitAction,
         async sign(client: Client, account: Account = client.account!) {
-          if (permitAction.args[3] != null) return permitAction.args[3]; // action is already signed
+          let signature = permitAction.args[4];
+          if (signature != null) return signature; // action is already signed
 
           const typedData = getPermitTypedData(
             {
               erc20: aToken,
               owner: user,
-              spender: bundler,
+              spender: aaveV2MigrationAdapter,
               allowance: migratedAmount,
               nonce,
               deadline,
             },
             chainId,
           );
-          const signature = await signTypedData(client, {
+          signature = await signTypedData(client, {
             ...typedData,
             account,
           });
@@ -123,19 +126,19 @@ export class MigratableSupplyPosition_AaveV2
             signature,
           });
 
-          return (permitAction.args[3] = signature);
+          return (permitAction.args[4] = signature);
         },
       });
     } else {
       txRequirements.push({
         type: "erc20Approve",
-        args: [aToken.address, bundler, migratedAmount],
+        args: [aToken.address, aaveV2MigrationAdapter, migratedAmount],
         tx: {
           to: aToken.address,
           data: encodeFunctionData({
             abi: aTokenV2Abi,
             functionName: "approve",
-            args: [bundler, migratedAmount],
+            args: [aaveV2MigrationAdapter, migratedAmount],
           }),
         },
       });
@@ -163,15 +166,7 @@ export class MigratableSupplyPosition_AaveV2
         signatures: signRequirements,
         txs: txRequirements,
       },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
+      tx: () => BundlerAction.encodeBundle(chainId, actions),
     };
   }
 }

@@ -10,9 +10,16 @@ export const handleErc20Permit2Operation: OperationHandler<
   { args: { spender, amount, expiration, nonce }, sender, address },
   data,
 ) => {
-  const { morpho, bundler } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { bundler3 },
+  } = getChainAddresses(data.chainId);
   const contract =
-    spender === morpho ? "morpho" : spender === bundler ? "bundler" : undefined;
+    spender === morpho
+      ? "morpho"
+      : spender === bundler3
+        ? "bundler3.bundler3"
+        : undefined;
 
   if (contract == null) throw new UnknownContractError(spender);
 
