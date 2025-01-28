@@ -49,4 +49,23 @@ export namespace VaultUtils {
       rounding,
     );
   }
+
+  export function accruedInterest({
+    totalAssets,
+    totalSupply,
+    decimalsOffset,
+  }: {
+    totalAssets: BigIntish;
+    totalSupply: BigIntish;
+    decimalsOffset: BigIntish;
+  }) {
+    return (
+      BigInt(totalAssets) -
+      toAssets(
+        totalSupply,
+        { totalAssets: 0n, totalSupply: 0n, decimalsOffset },
+        "Down",
+      )
+    );
+  }
 }

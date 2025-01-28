@@ -8,6 +8,7 @@ import {
   type IVaultMarketAllocation,
   VaultMarketAllocation,
 } from "./VaultMarketAllocation.js";
+import { VaultUtils } from "./VaultUtils";
 
 export interface Pending<T> {
   value: T;
@@ -291,6 +292,13 @@ export class AccrualVault extends Vault implements IAccrualVault {
    */
   get netApy() {
     return MathLib.wMulDown(this.apy, MathLib.WAD - this.fee);
+  }
+
+  /**
+   * Total interest paid by borrowers, increased with unrealized bad debt.
+   */
+  get accruedInterest() {
+    return VaultUtils.accruedInterest(this);
   }
 
   public getAllocationProportion(marketId: MarketId) {
