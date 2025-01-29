@@ -11,13 +11,20 @@ import {
   type Client,
   type Transport,
   encodeFunctionData,
+  erc20Abi,
 } from "viem";
 import { readContract } from "viem/actions";
-import { daiUsdsConverterAbi, mkrSkyConverterAbi } from "./abis.js";
+import {
+  RedemptionVaultAbi,
+  daiUsdsConverterAbi,
+  midasDataFeedAbi,
+  mkrSkyConverterAbi,
+} from "./abis.js";
 import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";
 import { Pendle, Sky, Usual } from "./tokens/index.js";
+import { Midas } from "./tokens/midas.js";
 
 interface SwapAttempt {
   srcAmount: bigint;
@@ -587,5 +594,216 @@ export class LiquidationEncoder<
     }
 
     return { dstAmount };
+  }
+
+  // MIDAS
+
+  async handleMidasTokens(collateralToken: Address, seizedAssets: bigint) {
+    if (!Midas.isMidasToken(collateralToken, this.client.chain.id)) {
+      return {
+        srcAmount: seizedAssets,
+        srcToken: collateralToken,
+      };
+    }
+
+    const tokenOut = Midas.postRedeemToken(
+      collateralToken,
+      this.client.chain.id,
+    );
+
+    const redemptionVault = Midas.redemptionVault(
+      collateralToken,
+      this.client.chain.id,
+    );
+
+    const redemptionParams = await this.getRedemptionParams(
+      redemptionVault,
+      tokenOut,
+      seizedAssets,
+    );
+
+    if (!redemptionParams) {
+      return {
+        srcAmount: seizedAssets,
+        srcToken: collateralToken,
+      };
+    }
+
+    const previewRedeemInstant = Midas.previewRedeemInstant(redemptionParams);
+
+    if (!previewRedeemInstant) {
+      return {
+        srcAmount: seizedAssets,
+        srcToken: collateralToken,
+      };
+    }
+
+    this.pushCall(
+      redemptionVault,
+      0n,
+      encodeFunctionData({
+        abi: RedemptionVaultAbi,
+        functionName: "redeemInstant",
+        args: [tokenOut, seizedAssets, previewRedeemInstant],
+      }),
+    );
+
+    return { srcAmount: previewRedeemInstant, srcToken: tokenOut };
+  }
+
+  async getRedemptionParams(
+    vault: Address,
+    tokenOut: Address,
+    seizedCollateral: bigint,
+  ): Promise<Midas.PreviewRedeemInstantParams | undefined> {
+    try {
+      const [
+        minAmount,
+        instantFee,
+        instantDailyLimit,
+        STABLECOIN_RATE,
+        waivedFeeRestriction,
+        dailyLimits,
+        mTokenDataFeed,
+        tokenOutConfig,
+        tokenOutDecimals,
+      ] = await Promise.all([
+        this.getRedemptionVaultMinAmount(vault),
+        this.getRedemptionVaultInstantFee(vault),
+        this.getRedemptionVaultInstantDailyLimit(vault),
+        this.getRedemptionVaultStableCoinRate(vault),
+        this.getRedemptionVaultWaivedFeeRestriction(vault),
+        this.getRedemptionVaultDailyLimits(vault),
+        this.getRedemptionVaultmTokenDataFeed(vault),
+        this.getRedemptionVaultMTokenOutConfig(vault, tokenOut),
+        readContract(this.client, {
+          address: tokenOut,
+          abi: erc20Abi,
+          functionName: "decimals",
+          args: [],
+        }),
+      ]);
+
+      const [mTokenRate, tokenOutRate] = await Promise.all([
+        this.getMidasRate(mTokenDataFeed),
+        this.getMidasRate(tokenOutConfig[0]),
+      ]);
+
+      return {
+        amountMTokenIn: seizedCollateral,
+        tokenOutConfig: {
+          dataFeed: tokenOutConfig[0],
+          fee: tokenOutConfig[1],
+          allowance: tokenOutConfig[2],
+          stable: tokenOutConfig[3],
+        },
+        tokenOutDecimals: BigInt(tokenOutDecimals),
+        minAmount,
+        instantFee,
+        instantDailyLimit,
+        STABLECOIN_RATE,
+        waivedFeeRestriction,
+        dailyLimits,
+        mTokenRate,
+        tokenOutRate,
+      };
+    } catch (e) {
+      console.error(e);
+      return undefined;
+    }
+  }
+
+  async getRedemptionVaultMinAmount(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "minAmount",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultInstantFee(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "instantFee",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultInstantDailyLimit(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "instantDailyLimit",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultStableCoinRate(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "STABLECOIN_RATE",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultWaivedFeeRestriction(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "waivedFeeRestriction",
+      args: [this.address],
+    });
+  }
+
+  async getRedemptionVaultDailyLimits(vault: Address) {
+    const currentDayNumber = Math.round(Date.now()) / 1000 / (60 * 60 * 24);
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "dailyLimits",
+      args: [BigInt(currentDayNumber)],
+    });
+  }
+
+  async getRedemptionVaultmTokenDataFeed(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "mTokenDataFeed",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultMTokenOutConfig(
+    vault: Address,
+    tokenOutAddress: Address,
+  ) {
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "tokensConfig",
+      args: [tokenOutAddress],
+    });
+  }
+
+  async getMidasRate(dataFeed: Address) {
+    return readContract(this.client, {
+      address: dataFeed,
+      abi: midasDataFeedAbi,
+      functionName: "getDataInBase18",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultPaymentTokens(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: RedemptionVaultAbi,
+      functionName: "getPaymentTokens",
+      args: [],
+    });
   }
 }
