@@ -4,6 +4,7 @@ import {
   ChainId,
   addresses,
 } from "@morpho-org/blue-sdk";
+import type { MidasConfig } from "./tokens/midas";
 
 declare module "@morpho-org/blue-sdk" {
   interface ChainAddresses {
@@ -52,3 +53,35 @@ export const curvePools = {
   "usd0usd0++": "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52",
   usd0usdc: "0x14100f81e33C33Ecc7CDac70181Fb45B6E78569F",
 } as const;
+
+export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
+  [ChainId.EthMainnet]: {
+    "0xDD629E5241CbC5919847783e6C96B2De4754e438": {
+      // mTBILL
+      instantRedemptionVault: "0x569D7dccBF6923350521ecBC28A555A500c4f0Ec",
+      redemptionAsset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+    },
+    "0x2a8c22E3b10036f3AEF5875d04f8441d4188b656": {
+      // mBASIS
+      instantRedemptionVault: "0x19AB19e61A930bc5C7B75Bf06cDd954218Ca9F0b",
+      redemptionAsset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+    },
+    "0x007115416AB6c266329a03B09a8aa39aC2eF7d9d": {
+      // mBTC
+      instantRedemptionVault: "0x30d9D1e76869516AEa980390494AaEd45C3EfC1a",
+      redemptionAsset: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", // cbBTC
+    },
+  },
+  [ChainId.BaseMainnet]: {
+    "0xDD629E5241CbC5919847783e6C96B2De4754e438": {
+      // mTBILL
+      instantRedemptionVault: "0x2a8c22E3b10036f3AEF5875d04f8441d4188b656",
+      redemptionAsset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
+    },
+    "0x1C2757c1FeF1038428b5bEF062495ce94BBe92b2": {
+      // mBASIS
+      instantRedemptionVault: "0xF804a646C034749b5484bF7dfE875F6A4F969840",
+      redemptionAsset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
+    },
+  },
+};
