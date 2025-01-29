@@ -132,10 +132,14 @@ export namespace Spectra {
   }
 
   export function isPTToken(token: string, spectraTokens: PrincipalToken[]) {
-    return spectraTokens.some((tokenInfo) => tokenInfo.address === token);
+    return spectraTokens.some(
+      (tokenInfo) => tokenInfo.address === token.toLocaleLowerCase(),
+    );
   }
 
   export function getPTInfo(token: string, spectraTokens: PrincipalToken[]) {
-    return spectraTokens.find((tokenInfo) => tokenInfo.address === token)!;
+    return spectraTokens.find(
+      (tokenInfo) => tokenInfo.address === token.toLocaleLowerCase(),
+    )!;
   }
 }

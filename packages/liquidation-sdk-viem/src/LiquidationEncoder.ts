@@ -12,9 +12,11 @@ import {
   type Transport,
   encodeFunctionData,
   erc4626Abi,
+  getAddress,
 } from "viem";
 import { readContract } from "viem/actions";
 import {
+  SpectraCurveAbi,
   SpectraPrincipalToken,
   daiUsdsConverterAbi,
   mkrSkyConverterAbi,
@@ -146,7 +148,7 @@ export class LiquidationEncoder<
       if (pt.pools.length === 0 || pt.pools[0] === undefined)
         return { srcAmount: seizedAssets, srcToken: collateralToken };
       const ibt = pt.ibt.address as `0x${string}`;
-      const poolAddress = pt.pools[0].address as `0x${string}`;
+      const poolAddress = getAddress(pt.pools[0].address) as `0x${string}`;
 
       const index0Token = await this.getCurveSwapIndex0Token(poolAddress);
       const ptIndex = index0Token === pt.underlying.address ? 0n : 1n;
@@ -159,11 +161,11 @@ export class LiquidationEncoder<
         ibtIndex,
       );
 
-      srcAmount = await this.spectraRedeemAmount(ibt, swapAmount);
+      srcAmount = await this.previewIBTRedeem(ibt, swapAmount);
       srcToken = pt.underlying.address as Address;
 
       this.erc20Approve(collateralToken, poolAddress, MathLib.MAX_UINT_256);
-      this.curveSwap(
+      this.spectraCurveSwap(
         poolAddress,
         seizedAssets,
         ptIndex,
@@ -453,6 +455,42 @@ export class LiquidationEncoder<
           outputTokenIndex,
           amount,
           minDestAmount,
+          receiver,
+        ],
+      }),
+    );
+  }
+
+  public spectraCurveSwap(
+    pool: Address,
+    amount: bigint,
+    inputTokenIndex: bigint,
+    outputTokenIndex: bigint,
+    minDestAmount: bigint,
+    receiver: Address,
+  ) {
+    this.pushCall(
+      pool,
+      0n,
+      /**
+       * @notice Perform an exchange between two coins
+       * @dev Index values can be found via the `coins` public getter method
+       * @param i Index value for the coin to send
+       * @param j Index value of the coin to receive
+       * @param _dx Amount of `i` being exchanged
+       * @param _min_dy Minimum amount of `j` to receive
+       * @param _receiver Address that receives `j`
+       * @return Actual amount of `j` received
+       */
+      encodeFunctionData({
+        abi: SpectraCurveAbi,
+        functionName: "exchange",
+        args: [
+          inputTokenIndex,
+          outputTokenIndex,
+          amount,
+          minDestAmount,
+          false,
           receiver,
         ],
       }),

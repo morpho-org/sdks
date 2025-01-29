@@ -943,11 +943,11 @@ export const curveStableSwapNGAbi = [
     inputs: [
       {
         name: "i",
-        type: "int128",
+        type: "uint256",
       },
       {
         name: "j",
-        type: "int128",
+        type: "uint256",
       },
       {
         name: "dx",
@@ -2355,6 +2355,87 @@ export const SpectraPrincipalToken = [
       },
     ],
     outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    stateMutability: "view",
+  },
+] as const;
+
+export const SpectraCurveAbi = [
+  {
+    stateMutability: "view",
+    type: "function",
+    name: "get_dy",
+    inputs: [
+      {
+        name: "i",
+        type: "uint256",
+      },
+      {
+        name: "j",
+        type: "uint256",
+      },
+      {
+        name: "dx",
+        type: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+      },
+    ],
+  },
+  {
+    stateMutability: "payable",
+    type: "function",
+    name: "exchange",
+    inputs: [
+      {
+        name: "i",
+        type: "uint256",
+      },
+      {
+        name: "j",
+        type: "uint256",
+      },
+      {
+        name: "dx",
+        type: "uint256",
+      },
+      {
+        name: "min_dy",
+        type: "uint256",
+      },
+      {
+        name: "use_eth",
+        type: "bool",
+      },
+      {
+        name: "receiver",
+        type: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+      },
+    ],
+  },
+];
+
+export const testAbi = [
+  {
+    type: "function",
+    name: "maxRedeem",
+    inputs: [{ name: "owner", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "maxWstUSRAmount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
 ] as const;
