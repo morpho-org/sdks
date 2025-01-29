@@ -2147,7 +2147,7 @@ export type VaultAllocationHistorySupplyCapUsdArgs = {
 /** Vault allocator */
 export type VaultAllocator = {
   __typename?: "VaultAllocator";
-  /** Allocator adress. */
+  /** Allocator address. */
   address: Scalars["Address"]["output"];
   /** Allocator since block number */
   blockNumber: Scalars["BigInt"]["output"];
