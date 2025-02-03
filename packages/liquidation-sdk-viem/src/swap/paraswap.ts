@@ -22,14 +22,20 @@ export namespace Paraswap {
       side: SwapSide.SELL,
     });
 
-    const calldata = await paraSwap.swap.buildTx({
-      srcToken: swapParams.src,
-      destToken: swapParams.dst,
-      srcAmount: swapParams.amount.toString(),
-      userAddress: swapParams.from,
-      priceRoute: priceRoute,
-      slippage: Number(swapParams.slippage.toString(16)),
-    });
+    const calldata = await paraSwap.swap.buildTx(
+      {
+        srcToken: swapParams.src,
+        destToken: swapParams.dst,
+        srcAmount: swapParams.amount.toString(),
+        userAddress: swapParams.from,
+        priceRoute: priceRoute,
+        slippage: Number(swapParams.slippage.toString(16)),
+      },
+      {
+        // Necessary so that Paraswap skips balance checks (we won't have tokens until contract callback)
+        ignoreChecks: true,
+      },
+    );
 
     return {
       dstAmount: priceRoute.destAmount,
