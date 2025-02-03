@@ -18,10 +18,15 @@ import { getBlock } from "viem/actions";
 import { apiSdk } from "./api";
 
 export interface LiquidityParameters {
-  /** The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
+  /**
+   * The delay to consider between the moment reallocations are calculated and the moment they are committed onchain.
+   * Defaults to 1h.
+   */
   delay?: bigint;
 
-  /** The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD). */
+  /**
+   * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
+   */
   defaultMaxWithdrawalUtilization?: bigint;
 
   /**
@@ -205,26 +210,21 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         });
 
-        const maxWithdrawalUtilization =
-          this.parameters.maxWithdrawalUtilization ??
-          fromEntries(
-            allVaultsMarkets.flatMap(([, markets]) =>
-              markets.map((market) => [
-                market.uniqueKey,
-                market.targetWithdrawUtilization,
-              ]),
-            ),
-          );
+        parameters.maxWithdrawalUtilization ??= fromEntries(
+          allVaultsMarkets.flatMap(([, markets]) =>
+            markets.map((market) => [
+              market.uniqueKey,
+              market.targetWithdrawUtilization,
+            ]),
+          ),
+        );
 
         return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
           try {
             const { data: endState, withdrawals } =
               startState.getMarketPublicReallocations(uniqueKey, {
+                ...parameters,
                 enabled: true,
-                maxWithdrawalUtilization,
-                delay: parameters.delay,
-                defaultMaxWithdrawalUtilization:
-                  this.parameters.defaultMaxWithdrawalUtilization,
               });
 
             return {
