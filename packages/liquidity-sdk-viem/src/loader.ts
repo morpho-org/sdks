@@ -210,20 +210,23 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         });
 
-        parameters.maxWithdrawalUtilization ??= fromEntries(
-          allVaultsMarkets.flatMap(([, markets]) =>
-            markets.map((market) => [
-              market.uniqueKey,
-              market.targetWithdrawUtilization,
-            ]),
-          ),
-        );
+        const maxWithdrawalUtilization =
+          parameters.maxWithdrawalUtilization ??
+          fromEntries(
+            allVaultsMarkets.flatMap(([, markets]) =>
+              markets.map((market) => [
+                market.uniqueKey,
+                market.targetWithdrawUtilization,
+              ]),
+            ),
+          );
 
         return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
           try {
             const { data: endState, withdrawals } =
               startState.getMarketPublicReallocations(uniqueKey, {
                 ...parameters,
+                maxWithdrawalUtilization,
                 enabled: true,
               });
 
