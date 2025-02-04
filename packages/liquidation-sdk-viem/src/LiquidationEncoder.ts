@@ -15,10 +15,10 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import {
-  RedemptionVaultAbi,
   daiUsdsConverterAbi,
   midasDataFeedAbi,
   mkrSkyConverterAbi,
+  redemptionVaultAbi,
 } from "./abis.js";
 import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
@@ -603,13 +603,6 @@ export class LiquidationEncoder<
   // MIDAS
 
   async handleMidasTokens(collateralToken: Address, seizedAssets: bigint) {
-    if (!Midas.isMidasToken(collateralToken, this.client.chain.id)) {
-      return {
-        srcAmount: seizedAssets,
-        srcToken: collateralToken,
-      };
-    }
-
     const tokenOut = Midas.postRedeemToken(
       collateralToken,
       this.client.chain.id,
@@ -653,7 +646,7 @@ export class LiquidationEncoder<
       redemptionVault,
       0n,
       encodeFunctionData({
-        abi: RedemptionVaultAbi,
+        abi: redemptionVaultAbi,
         functionName: "redeemInstant",
         args: [tokenOut, seizedAssets, amountTokenOutWithoutFee],
       }),
@@ -733,7 +726,7 @@ export class LiquidationEncoder<
   async getRedemptionVaultMinAmount(vault: Address) {
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "minAmount",
       args: [],
     });
@@ -742,7 +735,7 @@ export class LiquidationEncoder<
   async getRedemptionVaultInstantFee(vault: Address) {
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "instantFee",
       args: [],
     });
@@ -751,7 +744,7 @@ export class LiquidationEncoder<
   async getRedemptionVaultInstantDailyLimit(vault: Address) {
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "instantDailyLimit",
       args: [],
     });
@@ -760,7 +753,7 @@ export class LiquidationEncoder<
   async getRedemptionVaultStableCoinRate(vault: Address) {
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "STABLECOIN_RATE",
       args: [],
     });
@@ -769,7 +762,7 @@ export class LiquidationEncoder<
   async getRedemptionVaultWaivedFeeRestriction(vault: Address) {
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "waivedFeeRestriction",
       args: [this.address],
     });
@@ -779,7 +772,7 @@ export class LiquidationEncoder<
     const currentDayNumber = Math.round(Date.now() / 1000 / (60 * 60 * 24));
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "dailyLimits",
       args: [BigInt(currentDayNumber)],
     });
@@ -788,7 +781,7 @@ export class LiquidationEncoder<
   async getRedemptionVaultmTokenDataFeed(vault: Address) {
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "mTokenDataFeed",
       args: [],
     });
@@ -800,7 +793,7 @@ export class LiquidationEncoder<
   ) {
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "tokensConfig",
       args: [tokenOutAddress],
     });
@@ -818,7 +811,7 @@ export class LiquidationEncoder<
   async getRedemptionVaultPaymentTokens(vault: Address) {
     return readContract(this.client, {
       address: vault,
-      abi: RedemptionVaultAbi,
+      abi: redemptionVaultAbi,
       functionName: "getPaymentTokens",
       args: [],
     });

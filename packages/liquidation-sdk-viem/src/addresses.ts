@@ -69,7 +69,7 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
     "0x007115416AB6c266329a03B09a8aa39aC2eF7d9d": {
       // mBTC
       instantRedemptionVault: "0x30d9D1e76869516AEa980390494AaEd45C3EfC1a",
-      redemptionAsset: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf", // cbBTC
+      redemptionAsset: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // wBTC
     },
   },
   [ChainId.BaseMainnet]: {

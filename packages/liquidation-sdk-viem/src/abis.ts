@@ -2332,7 +2332,7 @@ export const daiUsdsConverterAbi = [
   },
 ] as const;
 
-export const RedemptionVaultAbi = [
+export const redemptionVaultAbi = [
   {
     anonymous: false,
     inputs: [
