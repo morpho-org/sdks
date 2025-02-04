@@ -13,14 +13,11 @@ import { BLUE_API_BASE_URL, Time, format } from "@morpho-org/morpho-ts";
 import { blueAbi, fetchMarket, fetchToken } from "@morpho-org/blue-sdk-viem";
 import { Flashbots } from "@morpho-org/liquidation-sdk-viem";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test";
-import dotenv from "dotenv";
 import { erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelisted-erc4626-1inch.js";
 import { type LiquidationTestContext, test } from "../midasSetup.js";
-
-dotenv.config();
 
 fetchMock.config.fallbackToNetwork = true;
 fetchMock.config.overwriteRoutes = false;
