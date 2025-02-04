@@ -18,6 +18,7 @@ import {
 import {
   Flashbots,
   LiquidationEncoder,
+  Midas,
   Pendle,
   apiSdk,
   mainnetAddresses,
@@ -42,7 +43,6 @@ import {
   readContract,
   sendTransaction,
 } from "viem/actions";
-import { Midas } from "../src/tokens/midas";
 
 const warn = process.env.IS_LOGGING_DISABLED ? () => {} : console.warn;
 
