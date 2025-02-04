@@ -42,6 +42,7 @@ import {
   readContract,
   sendTransaction,
 } from "viem/actions";
+import { Midas } from "../src/tokens/midas";
 
 const warn = process.env.IS_LOGGING_DISABLED ? () => {} : console.warn;
 
@@ -219,10 +220,11 @@ export const check = async <
 
                 // Handle Midas Tokens
 
-                ({ srcAmount, srcToken } = await encoder.handleMidasTokens(
-                  market.params.collateralToken,
-                  seizedAssets,
-                ));
+                if (Midas.isMidasToken(srcToken, chainId))
+                  ({ srcAmount, srcToken } = await encoder.handleMidasTokens(
+                    srcToken,
+                    seizedAssets,
+                  ));
 
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
