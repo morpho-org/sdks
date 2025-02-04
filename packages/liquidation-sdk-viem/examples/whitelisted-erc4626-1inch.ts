@@ -217,6 +217,13 @@ export const check = async <
                   srcToken = mainnetAddresses.usds!;
                 }
 
+                // Handle Midas Tokens
+
+                ({ srcAmount, srcToken } = await encoder.handleMidasTokens(
+                  market.params.collateralToken,
+                  seizedAssets,
+                ));
+
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
                   // Process USD0/USD0++ collateral liquidation with specific process (using curve)

@@ -63,15 +63,18 @@ export namespace Midas {
 
     if (!tokenData) return undefined;
 
-    return _truncate(
-      (feeData.amountMTokenWithoutFee * usdData.mTokenRate) /
-        tokenData.tokenRate,
-      params.tokenOutDecimals,
-    );
+    return {
+      amountTokenOutWithoutFee: _truncate(
+        (feeData.amountMTokenWithoutFee * usdData.mTokenRate) /
+          tokenData.tokenRate,
+        params.tokenOutDecimals,
+      ),
+      feeAmount: feeData.feeAmount,
+    };
   }
 
   function _calcAndValidateRedeem(params: PreviewRedeemInstantParams) {
-    if (params.minAmount < params.amountMTokenIn) return undefined;
+    if (params.minAmount > params.amountMTokenIn) return undefined;
 
     const feeAmount = _getFeeAmount(params);
 
@@ -132,7 +135,10 @@ export namespace Midas {
     return convertToBase18(convertFromBase18(value, decimals), decimals);
   }
 
-  function convertFromBase18(originalAmount: bigint, decidedDecimals: bigint) {
+  export function convertFromBase18(
+    originalAmount: bigint,
+    decidedDecimals: bigint,
+  ) {
     return convert(originalAmount, 18n, decidedDecimals);
   }
 

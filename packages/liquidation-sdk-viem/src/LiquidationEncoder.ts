@@ -476,6 +476,10 @@ export class LiquidationEncoder<
     const tries: SwapAttempt[] = [];
     let dstAmount = 0n;
 
+    if (initialSrcToken === marketParams.loanToken) {
+      return { dstAmount: srcAmount };
+    }
+
     while (true) {
       const bestSwap = await fetchBestSwap({
         chainId,
@@ -629,13 +633,20 @@ export class LiquidationEncoder<
       };
     }
 
-    const previewRedeemInstant = Midas.previewRedeemInstant(redemptionParams);
+    const previewRedeemInstantData =
+      Midas.previewRedeemInstant(redemptionParams);
 
-    if (!previewRedeemInstant) {
+    if (!previewRedeemInstantData) {
       return {
         srcAmount: seizedAssets,
         srcToken: collateralToken,
       };
+    }
+
+    const { amountTokenOutWithoutFee, feeAmount } = previewRedeemInstantData;
+
+    if (feeAmount > 0n) {
+      this.erc20Approve(collateralToken, redemptionVault, feeAmount);
     }
 
     this.pushCall(
@@ -644,11 +655,17 @@ export class LiquidationEncoder<
       encodeFunctionData({
         abi: RedemptionVaultAbi,
         functionName: "redeemInstant",
-        args: [tokenOut, seizedAssets, previewRedeemInstant],
+        args: [tokenOut, seizedAssets, amountTokenOutWithoutFee],
       }),
     );
 
-    return { srcAmount: previewRedeemInstant, srcToken: tokenOut };
+    return {
+      srcAmount: Midas.convertFromBase18(
+        amountTokenOutWithoutFee,
+        redemptionParams.tokenOutDecimals,
+      ),
+      srcToken: tokenOut,
+    };
   }
 
   async getRedemptionParams(
@@ -759,7 +776,7 @@ export class LiquidationEncoder<
   }
 
   async getRedemptionVaultDailyLimits(vault: Address) {
-    const currentDayNumber = Math.round(Date.now()) / 1000 / (60 * 60 * 24);
+    const currentDayNumber = Math.round(Date.now() / 1000 / (60 * 60 * 24));
     return readContract(this.client, {
       address: vault,
       abi: RedemptionVaultAbi,
