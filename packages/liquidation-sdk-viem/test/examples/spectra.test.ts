@@ -45,7 +45,7 @@ const { morpho } = addresses[ChainId.EthMainnet];
 
 const borrower = testAccount(1);
 
-describe("spectra liquidation", () => {
+describe("should liquidate Spectra Tokens", () => {
   let swapMockAddress: Address;
 
   beforeEach<LiquidationTestContext<typeof mainnet>>(async ({ client }) => {
