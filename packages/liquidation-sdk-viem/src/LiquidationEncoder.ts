@@ -15,16 +15,16 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import {
+  curveStableSwapNGAbi,
   daiUsdsConverterAbi,
   midasDataFeedAbi,
   mkrSkyConverterAbi,
   redemptionVaultAbi,
+  sUsdsAbi,
 } from "./abis.js";
-import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";
-import { Pendle, Sky, Usual } from "./tokens/index.js";
-import { Midas } from "./tokens/midas.js";
+import { Midas, Pendle, Sky, Usual } from "./tokens/index.js";
 
 interface SwapAttempt {
   srcAmount: bigint;
