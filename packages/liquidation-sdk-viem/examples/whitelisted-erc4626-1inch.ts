@@ -18,6 +18,7 @@ import {
 import {
   Flashbots,
   LiquidationEncoder,
+  Midas,
   Pendle,
   apiSdk,
   mainnetAddresses,
@@ -217,6 +218,14 @@ export const check = async <
                   srcToken = mainnetAddresses.usds!;
                 }
 
+                // Handle Midas Tokens
+
+                if (Midas.isMidasToken(srcToken, chainId))
+                  ({ srcAmount, srcToken } = await encoder.handleMidasTokens(
+                    srcToken,
+                    seizedAssets,
+                  ));
+
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
                   // Process USD0/USD0++ collateral liquidation with specific process (using curve)
@@ -255,7 +264,7 @@ export const check = async <
                       srcToken,
                       srcAmount,
                       market.params,
-                      slippage / 10n ** 16n,
+                      slippage / 10n ** 14n,
                       repaidAssets,
                       client.account.address,
                     );
