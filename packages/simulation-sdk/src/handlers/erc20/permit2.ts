@@ -1,35 +1,16 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
-
-import { Erc20Errors, UnknownContractError } from "../../errors.js";
+import { Erc20Errors } from "../../errors.js";
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
 export const handleErc20Permit2Operation: OperationHandler<
   Erc20Operations["Erc20_Permit2"]
-> = (
-  { args: { spender, amount, expiration, nonce }, sender, address },
-  data,
-) => {
-  const {
-    morpho,
-    bundler3: { bundler3 },
-  } = getChainAddresses(data.chainId);
-  const contract =
-    spender === morpho
-      ? "morpho"
-      : spender === bundler3
-        ? "bundler3.bundler3"
-        : undefined;
+> = ({ args: { amount, expiration, nonce }, sender, address }, data) => {
+  const { permit2BundlerAllowance } = data.getHolding(sender, address);
 
-  if (contract == null) throw new UnknownContractError(spender);
+  if (permit2BundlerAllowance.nonce !== nonce)
+    throw new Erc20Errors.InvalidPermit2Nonce(address, sender, nonce);
 
-  const senderTokenData = data.getHolding(sender, address);
-  const permit2Allowance = senderTokenData.permit2Allowances[contract];
-
-  if (permit2Allowance.nonce !== nonce)
-    throw new Erc20Errors.InvalidPermit2Nonce(address, sender, contract, nonce);
-
-  permit2Allowance.amount = amount;
-  permit2Allowance.expiration = expiration;
-  permit2Allowance.nonce += 1n;
+  permit2BundlerAllowance.amount = amount;
+  permit2BundlerAllowance.expiration = expiration;
+  permit2BundlerAllowance.nonce += 1n;
 };

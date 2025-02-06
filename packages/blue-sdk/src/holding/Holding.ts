@@ -9,16 +9,8 @@ export const ERC20_ALLOWANCE_RECIPIENTS = [
   "bundler3.generalAdapter1",
 ] as const satisfies readonly AddressLabel[];
 
-export const PERMIT2_ALLOWANCE_RECIPIENTS = [
-  "morpho",
-  "bundler3.bundler3",
-] as const satisfies readonly Exclude<AddressLabel, "permit2">[];
-
 export type Erc20AllowanceRecipient =
   (typeof ERC20_ALLOWANCE_RECIPIENTS)[number];
-
-export type Permit2AllowanceRecipient =
-  (typeof PERMIT2_ALLOWANCE_RECIPIENTS)[number];
 
 export interface Permit2Allowance {
   amount: bigint;
@@ -38,9 +30,7 @@ export interface IHolding {
   erc20Allowances: {
     [key in Erc20AllowanceRecipient]: bigint;
   };
-  permit2Allowances: {
-    [key in Permit2AllowanceRecipient]: IPermit2Allowance;
-  };
+  permit2BundlerAllowance: IPermit2Allowance;
   erc2612Nonce?: bigint;
   canTransfer?: boolean;
   balance: bigint;
@@ -77,9 +67,7 @@ export class Holding implements IHolding {
   /**
    * Permit2 allowance for this token from the user to the allowance recipient.
    */
-  public readonly permit2Allowances: {
-    [key in Permit2AllowanceRecipient]: Permit2Allowance;
-  };
+  public readonly permit2BundlerAllowance: Permit2Allowance;
 
   /**
    * ERC-2612 Permit nonce of the user for this token.
@@ -91,7 +79,7 @@ export class Holding implements IHolding {
     user,
     token,
     erc20Allowances,
-    permit2Allowances,
+    permit2BundlerAllowance,
     balance,
     erc2612Nonce,
     canTransfer,
@@ -106,17 +94,10 @@ export class Holding implements IHolding {
         allowance,
       ]),
     );
-    this.permit2Allowances = {
-      morpho: {
-        amount: BigInt(permit2Allowances.morpho.amount),
-        expiration: BigInt(permit2Allowances.morpho.expiration),
-        nonce: BigInt(permit2Allowances.morpho.nonce),
-      },
-      "bundler3.bundler3": {
-        amount: BigInt(permit2Allowances["bundler3.bundler3"].amount),
-        expiration: BigInt(permit2Allowances["bundler3.bundler3"].expiration),
-        nonce: BigInt(permit2Allowances["bundler3.bundler3"].nonce),
-      },
+    this.permit2BundlerAllowance = {
+      amount: BigInt(permit2BundlerAllowance.amount),
+      expiration: BigInt(permit2BundlerAllowance.expiration),
+      nonce: BigInt(permit2BundlerAllowance.nonce),
     };
 
     if (erc2612Nonce != null) this.erc2612Nonce = erc2612Nonce;

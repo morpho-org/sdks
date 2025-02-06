@@ -103,7 +103,9 @@ describe(type, () => {
     const expected = _.cloneDeep(dataFixture);
     expected.holdings[userA]![tokenA]!.balance += amount;
     expected.holdings[userB]![tokenA]!.balance -= amount;
-    expected.holdings[userB]![tokenA]!.erc20Allowances.bundler -= amount;
+    expected.holdings[userB]![tokenA]!.erc20Allowances[
+      "bundler3.generalAdapter1"
+    ] -= amount;
 
     expect(result).toEqual(expected);
   });

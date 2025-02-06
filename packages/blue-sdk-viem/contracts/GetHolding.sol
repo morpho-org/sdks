@@ -13,11 +13,6 @@ struct ERC20Allowances {
     uint256 generalAdapter1;
 }
 
-struct Permit2Allowances {
-    Permit2Allowance morpho;
-    Permit2Allowance bundler3;
-}
-
 enum OptionalBoolean {
     Undefined,
     False,
@@ -27,7 +22,7 @@ enum OptionalBoolean {
 struct HoldingResponse {
     uint256 balance;
     ERC20Allowances erc20Allowances;
-    Permit2Allowances permit2Allowances;
+    Permit2Allowance permit2BundlerAllowance;
     bool isErc2612;
     uint256 erc2612Nonce;
     OptionalBoolean canTransfer;
@@ -50,10 +45,7 @@ contract GetHolding {
             permit2: token.allowance(account, address(permit2)),
             generalAdapter1: token.allowance(account, generalAdapter1)
         });
-        res.permit2Allowances = Permit2Allowances({
-            morpho: permit2.allowance(account, address(token), morpho),
-            bundler3: permit2.allowance(account, address(token), bundler3)
-        });
+        res.permit2BundlerAllowance = permit2.allowance(account, address(token), bundler3);
 
         try token.nonces(account) returns (uint256 nonce) {
             res.isErc2612 = true;

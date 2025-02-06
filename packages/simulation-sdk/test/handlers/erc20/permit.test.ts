@@ -52,7 +52,9 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    expected.holdings[userA]![tokenA]!.erc20Allowances.bundler = 2n;
+    expected.holdings[userA]![tokenA]!.erc20Allowances[
+      "bundler3.generalAdapter1"
+    ] = 2n;
     expected.holdings[userA]![tokenA]!.erc2612Nonce = 1n;
 
     expect(result).toEqual(expected);

@@ -134,7 +134,7 @@ export const encodeOperation = (
   const deadline = Time.timestamp() + Time.s.from.h(24n);
   const {
     morpho,
-    bundler3: { generalAdapter1 },
+    bundler3: { bundler3, generalAdapter1 },
     permit2,
     wNative,
     dai,
@@ -352,7 +352,7 @@ export const encodeOperation = (
       // Native token cannot be permitted.
       if (address === NATIVE_ADDRESS) break;
 
-      const { amount, spender, expiration, nonce } = operation.args;
+      const { amount, expiration, nonce } = operation.args;
 
       if (supportsSignature) {
         const action: Action = {
@@ -366,7 +366,7 @@ export const encodeOperation = (
                 nonce: Number(nonce),
                 expiration: Number(expiration),
               },
-              spender,
+              spender: bundler3,
               sigDeadline: deadline,
             },
             null,
@@ -415,7 +415,13 @@ export const encodeOperation = (
       // Signatures are not supported, fallback to standard approval.
 
       requirements.txs.push(
-        ...encodeErc20Approval(address, sender, spender, amount, dataBefore),
+        ...encodeErc20Approval(
+          address,
+          sender,
+          generalAdapter1,
+          amount,
+          dataBefore,
+        ),
       );
 
       break;
