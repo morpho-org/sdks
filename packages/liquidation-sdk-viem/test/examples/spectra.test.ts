@@ -262,8 +262,6 @@ describe("should liquidate Spectra Tokens", () => {
   test.sequential(
     `should liquidate on a PT standard market before maturity`,
     async ({ client, encoder }) => {
-      /* client.transport.tracer.all = true; */
-
       const collateralPriceUsd = 1;
       const ethPriceUsd = 2_644;
 
@@ -412,12 +410,12 @@ describe("should liquidate Spectra Tokens", () => {
       // const seizedCollateral = accruedPosition.seizableCollateral!;
       mockOneInch(encoder, [
         {
-          srcAmount: 8619150349511109684637n,
+          srcAmount: 8795050497547015034211n,
           dstAmount: "9000000000",
         },
       ]);
       mockParaSwap(encoder, [
-        { srcAmount: 8619150349511109684637n, dstAmount: "9000000000" },
+        { srcAmount: 8795050497547015034211n, dstAmount: "9000000000" },
       ]);
 
       await check(encoder.address, client, client.account, [marketId]);

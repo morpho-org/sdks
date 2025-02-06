@@ -131,7 +131,7 @@ export const check = async <
             functionName: "allowance",
             args: [executorAddress, morpho],
           }),
-          ...new Array(1)
+          ...new Array(10)
             .fill(undefined)
             .map((_v, i) => seizableCollateral / 2n ** BigInt(i))
             .filter(

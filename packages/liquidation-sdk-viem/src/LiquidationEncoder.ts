@@ -13,6 +13,7 @@ import {
   encodeFunctionData,
   erc4626Abi,
   getAddress,
+  parseEther,
 } from "viem";
 import { readContract } from "viem/actions";
 import {
@@ -161,7 +162,7 @@ export class LiquidationEncoder<
           ptIndex,
           ibtIndex,
         ),
-        BigInt(0.98 * 10 ** 18),
+        parseEther("0.9999999"), // 0.00001
       );
 
       srcAmount = await this.previewIBTRedeem(ibt, swapAmount);
