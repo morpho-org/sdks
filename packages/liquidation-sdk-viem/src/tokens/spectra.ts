@@ -127,7 +127,7 @@ export namespace Spectra {
 
     const res = await fetch(url);
 
-    if (!res.ok) throw new Error(res.statusText);
+    if (!res.ok) return [];
 
     return (await res.json()) as PrincipalToken[];
   }
