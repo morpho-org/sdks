@@ -25,8 +25,7 @@ import {
 import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";
-import { Pendle, Sky, Usual } from "./tokens/index.js";
-import { Spectra } from "./tokens/spectra.js";
+import { Pendle, Sky, Spectra, Usual } from "./tokens/index.js";
 
 interface SwapAttempt {
   srcAmount: bigint;
@@ -162,7 +161,7 @@ export class LiquidationEncoder<
           ptIndex,
           ibtIndex,
         ),
-        parseEther("0.9999999"), // 0.00001
+        parseEther("0.9999999"), // 0.0000001% buffer because exact value doesn't work
       );
 
       srcAmount = await this.previewIBTRedeem(ibt, swapAmount);

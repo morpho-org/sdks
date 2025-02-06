@@ -22,8 +22,7 @@ import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelisted-erc4626-1inch.js";
-import { OneInch, Paraswap } from "../../src/index.js";
-import { Spectra } from "../../src/tokens/spectra.js";
+import { OneInch, Paraswap, Spectra } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import spectraTokens from "../mockData/spectraTokens.json";
 import { type LiquidationTestContext, test } from "../setupSpectra.js";
@@ -436,134 +435,181 @@ describe("should liquidate Spectra Tokens", () => {
     },
   );
 
-  // // Cannot run concurrently because `fetch` is mocked globally.
-  // test.sequential(
-  //   `should liquidate on a PT standard market after maturity`,
-  //   async ({ client, encoder }) => {
-  //     const collateralPriceUsd = 1;
-  //     const ethPriceUsd = 2_644;
+  // Cannot run concurrently because `fetch` is mocked globally.
+  test.sequential(
+    `should liquidate on a PT standard market after maturity`,
+    async ({ client, encoder }) => {
+      const collateralPriceUsd = 1;
+      const ethPriceUsd = 2_644;
 
-  //     const marketId =
-  //       "0x8f46cd82c4c44a090c3d72bd7a84baf4e69ee50331d5deae514f86fe062b0748" as MarketId; // PT-sUSDE-24OCT2024 / DAI (86%)
+      const marketParams = {
+        collateralToken:
+          "0xD0097149AA4CC0d0e1fC99B8BD73fC17dC32C1E9" as `0x${string}`,
+        loanToken:
+          "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as `0x${string}`,
+        lltv: 860000000000000000n,
+        oracle: "0x1325Eb089Ac14B437E78D5D481e32611F6907eF8" as `0x${string}`,
+        irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC" as `0x${string}`,
+      };
 
-  //     const market = await fetchMarket(marketId, client);
-  //     const [collateralToken, loanToken] = await Promise.all([
-  //       fetchToken(market.params.collateralToken, client),
-  //       fetchToken(market.params.loanToken, client),
-  //     ]);
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "createMarket",
+        args: [marketParams],
+      });
 
-  //     const collateral = parseUnits("10000", collateralToken.decimals);
-  //     await client.deal({
-  //       erc20: collateralToken.address,
-  //       account: borrower.address,
-  //       amount: collateral,
-  //     });
-  //     await client.approve({
-  //       account: borrower,
-  //       address: collateralToken.address,
-  //       args: [morpho, maxUint256],
-  //     });
-  //     await client.writeContract({
-  //       account: borrower,
-  //       address: morpho,
-  //       abi: blueAbi,
-  //       functionName: "supplyCollateral",
-  //       args: [market.params, collateral, borrower.address, "0x"],
-  //     });
+      const marketId =
+        "0x5cf7f105260f7a8b8896c2d33cf765640d722b6dd01fbaae2dcc6a867261aae0" as MarketId;
 
-  //     await client.writeContract({
-  //       account: borrower,
-  //       address: morpho,
-  //       abi: blueAbi,
-  //       functionName: "borrow",
-  //       args: [
-  //         market.params as InputMarketParams,
-  //         market.getMaxBorrowAssets(collateral)! - 1n,
-  //         0n,
-  //         borrower.address,
-  //         borrower.address,
-  //       ],
-  //     });
+      const collateralToken = {
+        address: marketParams.collateralToken as Address,
+        decimals: 18,
+      };
+      const loanToken = {
+        address: marketParams.loanToken as Address,
+        decimals: 6,
+      };
 
-  //     const postMaturity = BigInt(
-  //       new Date("2024-10-24T00:00:00.000Z").getTime() / 1000 + 1,
-  //     );
-  //     await syncTimestamp(client, postMaturity);
+      const collateral = parseUnits("10000", collateralToken.decimals);
+      const borrowed = parseUnits("8600", loanToken.decimals);
 
-  //     const newCollateralPriceUsd = collateralPriceUsd * 0.5; // 50% price drop
+      await client.deal({
+        erc20: collateralToken.address,
+        account: borrower.address,
+        amount: collateral,
+      });
+      await client.deal({
+        erc20: marketParams.loanToken,
+        account: borrower.address,
+        amount: borrowed,
+      });
+      await client.approve({
+        account: borrower,
+        address: collateralToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.approve({
+        account: borrower,
+        address: loanToken.address,
+        args: [morpho, maxUint256],
+      });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supply",
+        args: [marketParams, borrowed, 0n, borrower.address, "0x"],
+      });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supplyCollateral",
+        args: [marketParams, collateral, borrower.address, "0x"],
+      });
 
-  //     nock(BLUE_API_BASE_URL)
-  //       .post("/graphql")
-  //       .reply(200, {
-  //         data: { markets: { items: [{ uniqueKey: marketId }] } },
-  //       })
-  //       .post("/graphql")
-  //       .reply(200, {
-  //         data: {
-  //           assetByAddress: {
-  //             priceUsd: ethPriceUsd,
-  //             spotPriceEth: 1,
-  //           },
-  //           marketPositions: {
-  //             items: [
-  //               {
-  //                 user: {
-  //                   address: borrower.address,
-  //                 },
-  //                 market: {
-  //                   uniqueKey: marketId,
-  //                   collateralAsset: {
-  //                     address: market.params.collateralToken,
-  //                     decimals: collateralToken.decimals,
-  //                     priceUsd: newCollateralPriceUsd,
-  //                     spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
-  //                   },
-  //                   loanAsset: {
-  //                     address: market.params.loanToken,
-  //                     decimals: loanToken.decimals,
-  //                     priceUsd: null,
-  //                     spotPriceEth: 1 / ethPriceUsd,
-  //                   },
-  //                 },
-  //               },
-  //             ],
-  //           },
-  //         },
-  //       });
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "borrow",
+        args: [
+          marketParams as InputMarketParams,
+          borrowed,
+          0n,
+          borrower.address,
+          borrower.address,
+        ],
+      });
+      const maturity = 1740182579n;
+      const timestamp = await syncTimestamp(client, maturity);
 
-  //     const accrualPosition = await fetchAccrualPosition(
-  //       borrower.address as Address,
-  //       marketId,
-  //       client,
-  //     );
-  //     const accruedPosition = accrualPosition.accrueInterest(postMaturity);
-  //     const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
+      nock(BLUE_API_BASE_URL)
+        .post("/graphql")
+        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
+        .post("/graphql")
+        .reply(200, {
+          data: {
+            assetByAddress: {
+              priceUsd: ethPriceUsd,
+              spotPriceEth: 1,
+            },
+            marketPositions: {
+              items: [
+                {
+                  user: {
+                    address: borrower.address,
+                  },
+                  market: {
+                    uniqueKey: marketId,
+                    collateralAsset: {
+                      address: marketParams.collateralToken,
+                      decimals: collateralToken.decimals,
+                      priceUsd: collateralPriceUsd,
+                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
+                    },
+                    loanAsset: {
+                      address: marketParams.loanToken,
+                      decimals: loanToken.decimals,
+                      priceUsd: 1,
+                      spotPriceEth: 1 / ethPriceUsd,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        });
 
-  //     mockOneInch(encoder, [
-  //       {
-  //         srcAmount: seizedCollateral,
-  //         dstAmount: "11669266773005108147657",
-  //       },
-  //     ]);
-  //     mockParaSwap(encoder, [
-  //       { srcAmount: seizedCollateral, dstAmount: "11669266773005108147656" },
-  //     ]);
+      await client.writeContract({
+        account: borrower,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "accrueInterest",
+        args: [marketParams],
+      });
 
-  //     await check(encoder.address, client, client.account, [marketId]);
+      const accrualPosition = await fetchAccrualPosition(
+        borrower.address as Address,
+        marketId,
+        client,
+      );
+      accrualPosition.accrueInterest(timestamp);
 
-  //     const decimals = Number(loanToken.decimals);
+      await client.deal({
+        erc20: marketParams.collateralToken,
+        account: "0x23228469b3439d81dc64e3523068976201ba08c3",
+        amount: 8977038222000000000000n,
+      });
 
-  //     const decimalBalance = await client.readContract({
-  //       address: market.params.loanToken,
-  //       abi: erc20Abi,
-  //       functionName: "balanceOf",
-  //       args: [encoder.address],
-  //     });
+      // const seizedCollateral = accruedPosition.seizableCollateral!;
+      mockOneInch(encoder, [
+        {
+          srcAmount: 9637436568896036315634n,
+          dstAmount: "10000000000",
+        },
+      ]);
+      mockParaSwap(encoder, [
+        { srcAmount: 9637436568896036315634n, dstAmount: "10000000000" },
+      ]);
 
-  //     expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-  //       7325.591893,
-  //       6,
-  //     );
-  //   },
-  // );
+      await check(encoder.address, client, client.account, [marketId]);
+
+      const decimals = Number(loanToken.decimals);
+
+      const decimalBalance = await client.readContract({
+        address: loanToken.address,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [encoder.address],
+      });
+
+      expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
+        419.999998,
+        6,
+      );
+    },
+  );
 });
