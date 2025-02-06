@@ -159,12 +159,12 @@ export class LiquidationEncoder<
       const ibtIndex = ptIndex === 0n ? 1n : 0n;
 
       const swapAmount = MathLib.wMulDown(
-        await this.getCurveSwapOutputAmountFromInput(
-          poolAddress,
-          seizedAssets,
-          ptIndex,
-          ibtIndex,
-        ),
+        await readContract(this.client, {
+          address: poolAddress,
+          abi: SpectraCurveAbi,
+          functionName: "get_dy",
+          args: [ptIndex, ibtIndex, seizedAssets],
+        }),
         parseEther("0.9999999"), // 0.0000001% buffer because exact value doesn't work
       );
 

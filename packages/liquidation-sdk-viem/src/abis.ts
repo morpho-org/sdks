@@ -943,11 +943,11 @@ export const curveStableSwapNGAbi = [
     inputs: [
       {
         name: "i",
-        type: "uint256",
+        type: "int128",
       },
       {
         name: "j",
-        type: "uint256",
+        type: "int128",
       },
       {
         name: "dx",
@@ -2421,22 +2421,6 @@ export const SpectraCurveAbi = [
         type: "uint256",
       },
     ],
-  },
-];
-
-export const testAbi = [
-  {
-    type: "function",
-    name: "maxRedeem",
-    inputs: [{ name: "owner", type: "address", internalType: "address" }],
-    outputs: [
-      {
-        name: "maxWstUSRAmount",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    stateMutability: "view",
   },
 ] as const;
 
