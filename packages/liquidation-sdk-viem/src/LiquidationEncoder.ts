@@ -130,24 +130,17 @@ export class LiquidationEncoder<
     seizedAssets: bigint,
     spectraTokens: Spectra.PrincipalToken[],
   ) {
-    if (!Spectra.isPTToken(collateralToken, spectraTokens)) {
-      return {
-        srcAmount: seizedAssets,
-        srcToken: collateralToken,
-      };
-    }
-
     const pt = Spectra.getPTInfo(collateralToken, spectraTokens);
     const maturity = pt.maturity;
 
     let srcAmount = seizedAssets;
     let srcToken = collateralToken;
 
-    if (maturity > Date.now()) {
+    if (Number(maturity) < Date.now() / 1000) {
       this.spectraPTRedeem(collateralToken, seizedAssets);
 
       srcAmount = await this.spectraRedeemAmount(collateralToken, seizedAssets);
-      srcToken = pt.underlying.address as Address;
+      srcToken = getAddress(pt.underlying.address) as Address;
     } else {
       if (pt.pools.length === 0 || pt.pools[0] === undefined)
         return { srcAmount: seizedAssets, srcToken: collateralToken };
@@ -155,7 +148,7 @@ export class LiquidationEncoder<
       const poolAddress = getAddress(pt.pools[0].address) as `0x${string}`;
 
       const index0Token = await this.getCurveSwapIndex0Token(poolAddress);
-      const ptIndex = index0Token === pt.underlying.address ? 0n : 1n;
+      const ptIndex = index0Token === collateralToken ? 0n : 1n;
       const ibtIndex = ptIndex === 0n ? 1n : 0n;
 
       const swapAmount = MathLib.wMulDown(

@@ -524,7 +524,7 @@ describe("should liquidate Spectra Tokens", () => {
         ],
       });
       const maturity = 1740182579n;
-      const timestamp = await syncTimestamp(client, maturity);
+      const timestamp = await syncTimestamp(client, maturity + 10n);
 
       nock(BLUE_API_BASE_URL)
         .post("/graphql")
@@ -584,15 +584,14 @@ describe("should liquidate Spectra Tokens", () => {
         amount: 8977038222000000000000n,
       });
 
-      // const seizedCollateral = accruedPosition.seizableCollateral!;
       mockOneInch(encoder, [
         {
-          srcAmount: 9637436568896036315634n,
+          srcAmount: 10000000000000000000794n,
           dstAmount: "10000000000",
         },
       ]);
       mockParaSwap(encoder, [
-        { srcAmount: 9637436568896036315634n, dstAmount: "10000000000" },
+        { srcAmount: 10000000000000000000794n, dstAmount: "10000000000" },
       ]);
 
       await check(encoder.address, client, client.account, [marketId]);

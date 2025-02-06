@@ -1,4 +1,5 @@
 import { ChainId } from "@morpho-org/blue-sdk";
+import { getAddress } from "viem";
 
 export namespace Spectra {
   export const apiUrl = (chainId: ChainId) => {
@@ -133,13 +134,13 @@ export namespace Spectra {
 
   export function isPTToken(token: string, spectraTokens: PrincipalToken[]) {
     return spectraTokens.some(
-      (tokenInfo) => tokenInfo.address === token.toLocaleLowerCase(),
+      (tokenInfo) => getAddress(tokenInfo.address) === token,
     );
   }
 
   export function getPTInfo(token: string, spectraTokens: PrincipalToken[]) {
     return spectraTokens.find(
-      (tokenInfo) => tokenInfo.address === token.toLocaleLowerCase(),
+      (tokenInfo) => getAddress(tokenInfo.address) === token,
     )!;
   }
 }
