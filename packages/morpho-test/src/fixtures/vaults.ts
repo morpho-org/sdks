@@ -18,6 +18,14 @@ export const vaults = {
       asset: usdc,
     }),
 
+    steakEth: new VaultConfig({
+      address: "0xBEEf050ecd6a16c4e7bfFbB52Ebba7846C4b8cD4",
+      asset: wNative,
+      name: "Steakhouse ETH",
+      decimalsOffset: 0,
+      symbol: "steakETH",
+    }),
+
     steakPaxg: new VaultConfig({
       address: "0xBeeF7959aE71D4e45e1863dae0B94C35244AF816",
       asset: "0x45804880De22913dAFE09f4980848ECE6EcbAf78",

@@ -81,6 +81,52 @@ importers:
         specifier: ^5.7.2
         version: 5.7.2
 
+  packages/migration-sdk-viem:
+    dependencies:
+      '@morpho-org/bundler-sdk-viem':
+        specifier: workspace:^
+        version: link:../bundler-sdk-viem
+    devDependencies:
+      '@morpho-org/blue-sdk':
+        specifier: workspace:^
+        version: link:../blue-sdk
+      '@morpho-org/blue-sdk-viem':
+        specifier: workspace:^
+        version: link:../blue-sdk-viem
+      '@morpho-org/morpho-test':
+        specifier: workspace:^
+        version: link:../morpho-test
+      '@morpho-org/morpho-ts':
+        specifier: workspace:^
+        version: link:../morpho-ts
+      '@morpho-org/simulation-sdk':
+        specifier: workspace:^
+        version: link:../simulation-sdk
+      '@morpho-org/simulation-sdk-wagmi':
+        specifier: workspace:^
+        version: link:../simulation-sdk-wagmi
+      '@morpho-org/test':
+        specifier: workspace:^
+        version: link:../test
+      '@morpho-org/test-wagmi':
+        specifier: workspace:^
+        version: link:../test-wagmi
+      '@types/lodash':
+        specifier: ^4.17.12
+        version: 4.17.12
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
+      typescript:
+        specifier: ^5.7.2
+        version: 5.7.2
+      viem:
+        specifier: ^2.22.2
+        version: 2.22.2(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
+      vitest:
+        specifier: ^2.1.8
+        version: 2.1.8(@types/node@22.10.1)(happy-dom@16.5.3)(terser@5.36.0)
+
   packages/blue-sdk:
     dependencies:
       '@noble/hashes':
@@ -9104,7 +9150,7 @@ snapshots:
 
   elliptic@6.5.7:
     dependencies:
-      bn.js: 4.12.0
+      bn.js: 4.12.1
       brorand: 1.1.0
       hash.js: 1.1.7
       hmac-drbg: 1.0.1
@@ -9267,7 +9313,7 @@ snapshots:
   ethereumjs-util@6.2.1:
     dependencies:
       '@types/bn.js': 4.11.6
-      bn.js: 4.12.0
+      bn.js: 4.12.1
       create-hash: 1.2.0
       elliptic: 6.5.7
       ethereum-cryptography: 0.1.3
@@ -11343,7 +11389,7 @@ snapshots:
       '@vitest/spy': 2.1.8
       '@vitest/utils': 2.1.8
       chai: 5.1.2
-      debug: 4.3.7
+      debug: 4.4.0(supports-color@8.1.1)
       expect-type: 1.1.0
       magic-string: 0.30.12
       pathe: 1.1.2

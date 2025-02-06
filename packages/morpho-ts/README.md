@@ -212,7 +212,7 @@ customFormat.short.of(1234.5678); // "1234.567"
 customFormat.number.of(1234.5678); // "+1234.56"
 customFormat.custom.of(1234.5678); // "$1234.56"
 
-// Default options can be normally overriden
+// Default options can be normally overridden
 customFormat.short.digits(1).of(1234.5678); // "1234.5"
 ```
 

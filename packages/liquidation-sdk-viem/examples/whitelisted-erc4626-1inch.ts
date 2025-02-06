@@ -18,7 +18,9 @@ import {
 import {
   Flashbots,
   LiquidationEncoder,
+  Midas,
   Pendle,
+  Spectra,
   apiSdk,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
@@ -42,7 +44,8 @@ import {
   readContract,
   sendTransaction,
 } from "viem/actions";
-import { Spectra } from "../src/tokens/spectra";
+
+const warn = process.env.IS_LOGGING_DISABLED ? () => {} : console.warn;
 
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
@@ -97,7 +100,7 @@ export const check = async <
         accrualPosition.accrueInterest(Time.timestamp());
 
       if (seizableCollateral == null)
-        return console.warn(`Unknown oracle price for market "${market.id}"`);
+        return warn(`Unknown oracle price for market "${market.id}"`);
 
       try {
         const collateralToken = converter.getToken(
@@ -224,6 +227,14 @@ export const check = async <
                   srcToken = mainnetAddresses.usds!;
                 }
 
+                // Handle Midas Tokens
+
+                if (Midas.isMidasToken(srcToken, chainId))
+                  ({ srcAmount, srcToken } = await encoder.handleMidasTokens(
+                    srcToken,
+                    seizedAssets,
+                  ));
+
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
                   // Process USD0/USD0++ collateral liquidation with specific process (using curve)
@@ -262,7 +273,7 @@ export const check = async <
                       srcToken,
                       srcAmount,
                       market.params,
-                      slippage / 10n ** 16n,
+                      slippage / 10n ** 14n,
                       repaidAssets,
                       client.account.address,
                     );
@@ -365,7 +376,7 @@ export const check = async <
 
                 return await sendTransaction(client, transaction);
               } catch (error) {
-                console.warn(
+                warn(
                   `Tried liquidating "${seizedAssets}" collateral ("${withdrawnAssets}" underlying) from "${user}" on market "${market.id}":\n`,
                   error instanceof Error ? error.stack : error,
                 );
@@ -378,7 +389,7 @@ export const check = async <
       } catch (error) {
         if (error instanceof Error)
           // eslint-disable-next-line no-console
-          console.warn(
+          warn(
             `Could not liquidate user "${user}" on market "${market.id}":`,
             error.message,
           );
