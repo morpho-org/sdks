@@ -131,7 +131,7 @@ export const check = async <
             functionName: "allowance",
             args: [executorAddress, morpho],
           }),
-          ...new Array(10)
+          ...new Array(1)
             .fill(undefined)
             .map((_v, i) => seizableCollateral / 2n ** BigInt(i))
             .filter(
@@ -197,7 +197,7 @@ export const check = async <
                 }
 
                 ({ srcAmount, srcToken } = await encoder.handleSpectraTokens(
-                  market.params.collateralToken,
+                  srcToken,
                   seizedAssets,
                   spectraTokens,
                 ));

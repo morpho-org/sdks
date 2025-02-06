@@ -154,17 +154,21 @@ export class LiquidationEncoder<
       const ptIndex = index0Token === pt.underlying.address ? 0n : 1n;
       const ibtIndex = ptIndex === 0n ? 1n : 0n;
 
-      const swapAmount = await this.getCurveSwapOutputAmountFromInput(
-        poolAddress,
-        seizedAssets,
-        ptIndex,
-        ibtIndex,
+      const swapAmount = MathLib.wMulDown(
+        await this.getCurveSwapOutputAmountFromInput(
+          poolAddress,
+          seizedAssets,
+          ptIndex,
+          ibtIndex,
+        ),
+        BigInt(0.98 * 10 ** 18),
       );
 
       srcAmount = await this.previewIBTRedeem(ibt, swapAmount);
       srcToken = pt.underlying.address as Address;
 
       this.erc20Approve(collateralToken, poolAddress, MathLib.MAX_UINT_256);
+
       this.spectraCurveSwap(
         poolAddress,
         seizedAssets,

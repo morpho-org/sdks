@@ -262,6 +262,8 @@ describe("should liquidate Spectra Tokens", () => {
   test.sequential(
     `should liquidate on a PT standard market before maturity`,
     async ({ client, encoder }) => {
+      /* client.transport.tracer.all = true; */
+
       const collateralPriceUsd = 1;
       const ethPriceUsd = 2_644;
 
@@ -295,8 +297,8 @@ describe("should liquidate Spectra Tokens", () => {
         decimals: 6,
       };
 
-      const collateral = parseUnits("100000", collateralToken.decimals);
-      const borrowed = parseUnits("86000", loanToken.decimals);
+      const collateral = parseUnits("10000", collateralToken.decimals);
+      const borrowed = parseUnits("8600", loanToken.decimals);
 
       await client.deal({
         erc20: collateralToken.address,
@@ -401,16 +403,21 @@ describe("should liquidate Spectra Tokens", () => {
       );
       accrualPosition.accrueInterest(timestamp);
 
-      // const seizedCollateral = accruedPosition.seizableCollateral!;
+      await client.deal({
+        erc20: marketParams.collateralToken,
+        account: "0x23228469b3439d81dc64e3523068976201ba08c3",
+        amount: 8977038222000000000000n,
+      });
 
+      // const seizedCollateral = accruedPosition.seizableCollateral!;
       mockOneInch(encoder, [
         {
-          srcAmount: 43963302441388432190925n,
-          dstAmount: "100000000000",
+          srcAmount: 8619150349511109684637n,
+          dstAmount: "9000000000",
         },
       ]);
       mockParaSwap(encoder, [
-        { srcAmount: 43963302441388432190925n, dstAmount: "100000000000" },
+        { srcAmount: 8619150349511109684637n, dstAmount: "9000000000" },
       ]);
 
       await check(encoder.address, client, client.account, [marketId]);
@@ -425,7 +432,7 @@ describe("should liquidate Spectra Tokens", () => {
       });
 
       expect(format.number.of(decimalBalance, decimals)).toBeCloseTo(
-        13999.97382,
+        399.997382,
         6,
       );
     },
