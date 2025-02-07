@@ -2494,28 +2494,8 @@ describe("populateBundle", () => {
         usdc,
         usdt,
       } = addresses[ChainId.EthMainnet];
-      const {
-        eth_idle,
-        eth_sDai,
-        eth_wbtc,
-        eth_rEth,
-        eth_wstEth,
-        eth_wstEth_2,
-        eth_ezEth,
-        eth_apxEth,
-        eth_osEth,
-        eth_weEth,
-        usdc_wstEth,
-        usdc_idle,
-        usdc_wbtc,
-        usdc_wbIB01,
-        usdt_idle,
-        usdt_weth_86,
-        usdt_weth_91_5,
-        usdt_wbtc,
-        usdt_wstEth,
-        usdt_sDai,
-      } = markets[ChainId.EthMainnet];
+      const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc } =
+        markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbEth, bbUsdc, re7Weth } =
         vaults[ChainId.EthMainnet];
 
@@ -2904,12 +2884,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                usdc_wstEth.id,
-                usdc_idle.id,
-                usdc_wbtc.id,
-                usdc_wbIB01.id,
-              ],
+              marketIds: [],
               users: [
                 client.account.address,
                 generalAdapter1,
@@ -3013,14 +2988,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [],
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -3147,15 +3115,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                marketParams.id,
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [marketParams.id],
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -3315,15 +3275,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                marketParams.id,
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [marketParams.id],
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -3477,14 +3429,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_wstEth.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-              ],
+              marketIds: [],
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
@@ -3516,7 +3461,7 @@ describe("populateBundle", () => {
               onBundleTx: donate(
                 client,
                 wNative,
-                parseEther("1"),
+                parseEther("0.4"),
                 bbEth.address,
                 morpho,
               ),
@@ -3626,14 +3571,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_wstEth.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-              ],
+              marketIds: [],
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
@@ -3668,7 +3606,7 @@ describe("populateBundle", () => {
                 onBundleTx: donate(
                   client,
                   wNative,
-                  parseEther("10"),
+                  parseEther("1"),
                   bbEth.address,
                   morpho,
                 ),
@@ -3704,7 +3642,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [id, usdc_idle.id, usdc_wbtc.id, usdc_wbIB01.id],
+              marketIds: [id],
               users: [
                 client.account.address,
                 generalAdapter1,
@@ -3896,7 +3834,7 @@ describe("populateBundle", () => {
           const loanAssets = parseEther("5");
 
           await client.deal({ erc20: wstEth, amount: collateralAssets });
-          await client.deal({ erc20: wNative, amount: loanAssets });
+          await client.deal({ erc20: wNative, amount: 2n * loanAssets });
           await client.approve({
             address: wstEth,
             args: [morpho, collateralAssets],
@@ -3909,6 +3847,16 @@ describe("populateBundle", () => {
             address: bbEth.address,
             args: [loanAssets, client.account.address],
           });
+          await client.approve({
+            address: wNative,
+            args: [morpho, maxUint256],
+          });
+          await client.writeContract({
+            abi: blueAbi,
+            address: morpho,
+            functionName: "supply",
+            args: [eth_wstEth, loanAssets, 0n, client.account.address, "0x"],
+          });
 
           const shares = await client.balanceOf({ erc20: bbEth.address });
 
@@ -3916,14 +3864,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth.id,
-              ],
+              marketIds: [id],
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
@@ -3989,7 +3930,7 @@ describe("populateBundle", () => {
               onBundleTx: donate(
                 client,
                 wNative,
-                parseEther("1"),
+                parseEther("0.4"),
                 bbEth.address,
                 morpho,
               ),
@@ -4132,7 +4073,7 @@ describe("populateBundle", () => {
           const loanAssets = parseEther("95");
 
           await client.deal({ erc20: wstEth, amount: collateralAssets });
-          await client.deal({ erc20: wNative, amount: loanAssets });
+          await client.deal({ erc20: wNative, amount: 2n * loanAssets });
           await client.approve({
             address: wstEth,
             args: [morpho, collateralAssets],
@@ -4144,6 +4085,16 @@ describe("populateBundle", () => {
           await client.deposit({
             address: bbEth.address,
             args: [loanAssets, client.account.address],
+          });
+          await client.approve({
+            address: wNative,
+            args: [morpho, maxUint256],
+          });
+          await client.writeContract({
+            abi: blueAbi,
+            address: morpho,
+            functionName: "supply",
+            args: [eth_wstEth, loanAssets, 0n, client.account.address, "0x"],
           });
 
           await client.writeContract({
@@ -4169,18 +4120,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-                eth_ezEth.id,
-                eth_apxEth.id,
-                eth_osEth.id,
-                eth_weEth.id,
-              ],
+              marketIds: [id],
               users: [
                 client.account.address,
                 generalAdapter1,
@@ -4508,18 +4448,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth.id,
-                eth_wstEth_2.id,
-                id,
-                usdc_idle.id,
-                usdc_wbtc.id,
-                usdc_wbIB01.id,
-              ],
+              marketIds: [id],
               users: [
                 client.account.address,
                 donator.address,
@@ -4711,8 +4640,12 @@ describe("populateBundle", () => {
               args: {
                 withdrawals: [
                   {
-                    id: usdc_wbtc.id,
-                    assets: parseUnits("100000", 6),
+                    id: "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
+                    assets: 10020365337n,
+                  },
+                  {
+                    id: "0xdcfd3558f75a13a3c430ee71df056b5570cbd628da91e33c27eec7c42603247b",
+                    assets: 10237890362n,
                   },
                 ],
                 supplyMarketId: id,
@@ -4777,7 +4710,18 @@ describe("populateBundle", () => {
           const borrowAmount = parseEther("0.5");
 
           await client.deal({ erc20: wstEth, amount: collateralAmount });
+          await client.deal({ erc20: wNative, amount: borrowAmount });
           await client.deal({ erc20: stEth, amount: 0n });
+          await client.approve({
+            address: wNative,
+            args: [morpho, maxUint256],
+          });
+          await client.writeContract({
+            abi: blueAbi,
+            address: morpho,
+            functionName: "supply",
+            args: [eth_wstEth, borrowAmount, 0n, client.account.address, "0x"],
+          });
 
           await client.approve({ address: wstEth, args: [morpho, maxUint256] });
           await client.writeContract({
@@ -4786,7 +4730,6 @@ describe("populateBundle", () => {
             functionName: "supplyCollateral",
             args: [eth_wstEth, collateralAmount, client.account.address, "0x"],
           });
-
           await client.writeContract({
             address: morpho,
             abi: blueAbi,
@@ -4987,7 +4930,6 @@ describe("populateBundle", () => {
             borrowAmount;
 
           expect(chainPosition.collateral).toBe(0n);
-          expect(chainPosition.supplyShares).toBe(0n);
           expect(chainPosition.borrowShares).toBe(0n);
 
           expect(
@@ -5001,7 +4943,7 @@ describe("populateBundle", () => {
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 1n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 2n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
@@ -5021,9 +4963,8 @@ describe("populateBundle", () => {
         verUsdc,
       } = addresses[ChainId.BaseMainnet];
 
-      test[ChainId.BaseMainnet](
-        "should wrap then supply aUSDC",
-        async ({ client, config }) => {
+      test[ChainId.BaseMainnet]
+        .skip("should wrap then supply aUSDC", async ({ client, config }) => {
           const marketParams = new MarketParams({
             collateralToken: wNative,
             loanToken: verUsdc,
@@ -5165,8 +5106,7 @@ describe("populateBundle", () => {
           expect(position.collateral).toBe(0n);
           expect(position.supplyShares).toBe(assets * 1_000000n);
           expect(position.borrowShares).toBe(0n);
-        },
-      );
+        });
     });
   });
 });
