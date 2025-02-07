@@ -106,7 +106,7 @@ export const addresses = {
   },
   [ChainId.ArbitrumMainnet]: {
     morpho: "0x6c247b1F6182318877311737BaC0844bAa518F5e",
-    bundler: "0x23055618898e202386e6c13955a58D3C68200BFB",
+    bundler: "0x044aE7bA624a047535F4A6ae5FE6E9EA8d1D93B0",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     adaptiveCurveIrm: "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA",
     publicAllocator: "0x769583Af5e9D03589F159EbEC31Cc2c23E8C355E",
@@ -117,7 +117,7 @@ export const addresses = {
   },
   [ChainId.OptimismMainnet]: {
     morpho: "0xce95AfbB8EA029495c66020883F87aaE8864AF92",
-    bundler: "0x23055618898e202386e6c13955a58D3C68200BFB",
+    bundler: "0x0b812d4592e8af9f0d2ffC51cf05F6BAB7d344A1",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     adaptiveCurveIrm: "0x8cD70A8F399428456b29546BC5dBe10ab6a06ef6",
     publicAllocator: "0x0d68a97324E602E02799CD83B42D337207B40658",
