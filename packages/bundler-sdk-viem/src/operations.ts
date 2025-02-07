@@ -356,9 +356,11 @@ export const populateSubBundle = (
           MathLib.wDivDown(newTotalBorrowAssets, MathLib.WAD) -
           newTotalSupplyAssets;
 
-        withdrawals = data.getMarketPublicReallocations(market.id, {
+        ({ withdrawals } = data.getMarketPublicReallocations(market.id, {
+          ...publicAllocatorOptions,
           defaultMaxWithdrawalUtilization: MathLib.WAD,
-        }).withdrawals;
+          maxWithdrawalUtilization: {},
+        }));
       }
 
       for (const { vault, ...withdrawal } of withdrawals) {
