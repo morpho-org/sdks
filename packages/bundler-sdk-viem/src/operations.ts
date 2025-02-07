@@ -179,7 +179,6 @@ export const populateInputTransfer = (
         address,
         args: {
           amount,
-          spender: bundler3,
           expiration: MathLib.MAX_UINT_48, // Always approve indefinitely.
           nonce: permit2BundlerAllowance.nonce,
         },
@@ -568,8 +567,7 @@ export const finalizeBundle = (
         const duplicatePermit2 = permit2s.find(
           (permit2) =>
             permit2.address === operation.address &&
-            permit2.sender === operation.sender &&
-            permit2.args.spender === operation.args.spender,
+            permit2.sender === operation.sender,
         );
 
         if (duplicatePermit2 == null) {
