@@ -199,16 +199,11 @@ export const check = async <
                   ));
                 }
 
-                if (
-                  spectraTokens &&
-                  Spectra.isPTToken(srcToken, spectraTokens)
-                ) {
-                  ({ srcAmount, srcToken } = await encoder.handleSpectraTokens(
-                    srcToken,
-                    seizedAssets,
-                    spectraTokens,
-                  ));
-                }
+                ({ srcAmount, srcToken } = await encoder.handleSpectraTokens(
+                  srcToken,
+                  seizedAssets,
+                  spectraTokens,
+                ));
 
                 // As there is no liquidity for sUSDS, we use the sUSDS withdrawal function to get USDS instead
                 if (

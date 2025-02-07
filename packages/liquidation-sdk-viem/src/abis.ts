@@ -2332,7 +2332,7 @@ export const daiUsdsConverterAbi = [
   },
 ] as const;
 
-export const SpectraPrincipalToken = [
+export const spectraPrincipalTokenAbi = [
   {
     type: "function",
     name: "redeem",
@@ -2359,7 +2359,7 @@ export const SpectraPrincipalToken = [
   },
 ] as const;
 
-export const SpectraCurveAbi = [
+export const spectraCurveAbi = [
   {
     stateMutability: "view",
     type: "function",

@@ -18,14 +18,14 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import {
-  SpectraCurveAbi,
-  SpectraPrincipalToken,
   curveStableSwapNGAbi,
   daiUsdsConverterAbi,
   midasDataFeedAbi,
   mkrSkyConverterAbi,
   redemptionVaultAbi,
   sUsdsAbi,
+  spectraCurveAbi,
+  spectraPrincipalTokenAbi,
 } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";
@@ -48,9 +48,7 @@ export class LiquidationEncoder<
     seizedAssets: bigint,
     pendleTokens: Pendle.TokenListResponse,
   ) {
-    if (
-      !Pendle.isPTToken(collateralToken, this.client.chain.id, pendleTokens)
-    ) {
+    if (!Pendle.isPT(collateralToken, this.client.chain.id, pendleTokens)) {
       return {
         srcAmount: seizedAssets,
         srcToken: collateralToken,
@@ -130,6 +128,13 @@ export class LiquidationEncoder<
     seizedAssets: bigint,
     spectraTokens: Spectra.PrincipalToken[],
   ) {
+    if (!Spectra.isPT(collateralToken, spectraTokens)) {
+      return {
+        srcAmount: seizedAssets,
+        srcToken: collateralToken,
+      };
+    }
+
     const pt = Spectra.getPTInfo(collateralToken, spectraTokens);
     const maturity = pt.maturity;
 
@@ -154,7 +159,7 @@ export class LiquidationEncoder<
       const swapAmount = MathLib.wMulDown(
         await readContract(this.client, {
           address: poolAddress,
-          abi: SpectraCurveAbi,
+          abi: spectraCurveAbi,
           functionName: "get_dy",
           args: [ptIndex, ibtIndex, seizedAssets],
         }),
@@ -484,7 +489,7 @@ export class LiquidationEncoder<
        * @return Actual amount of `j` received
        */
       encodeFunctionData({
-        abi: SpectraCurveAbi,
+        abi: spectraCurveAbi,
         functionName: "exchange",
         args: [
           inputTokenIndex,
@@ -579,7 +584,7 @@ export class LiquidationEncoder<
   public spectraRedeemAmount(pt: Address, amount: bigint) {
     return readContract(this.client, {
       address: pt,
-      abi: SpectraPrincipalToken,
+      abi: spectraPrincipalTokenAbi,
       functionName: "convertToUnderlying",
       args: [amount],
     });
@@ -590,7 +595,7 @@ export class LiquidationEncoder<
       pt,
       0n,
       encodeFunctionData({
-        abi: SpectraPrincipalToken,
+        abi: spectraPrincipalTokenAbi,
         functionName: "redeem",
         args: [amount, this.address, this.address],
       }),

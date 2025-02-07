@@ -132,7 +132,7 @@ export namespace Spectra {
     return (await res.json()) as PrincipalToken[];
   }
 
-  export function isPTToken(token: string, spectraTokens: PrincipalToken[]) {
+  export function isPT(token: string, spectraTokens: PrincipalToken[]) {
     return spectraTokens.some(
       (tokenInfo) => getAddress(tokenInfo.address) === token,
     );
