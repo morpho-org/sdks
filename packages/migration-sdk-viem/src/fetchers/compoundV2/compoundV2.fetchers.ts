@@ -27,6 +27,8 @@ import { fetchAccruedExchangeRate } from "./compoundV2.helpers.js";
 const COMPOUNDING_PERIOD: { [chainID in ChainId]: Time.PeriodLike } = {
   [ChainId.BaseMainnet]: "s",
   [ChainId.EthMainnet]: { unit: "s", duration: 12 }, // 1 block
+  [ChainId.ArbitrumMainnet]: "s",
+  [ChainId.OptimismMainnet]: "s",
 };
 
 async function fetchCompoundV2InstancePosition(
