@@ -113,7 +113,19 @@ describe("Market", () => {
           client.account.address,
         ],
       }),
-    ).rejects.toThrow("insufficient collateral");
+    ).rejects.toThrowErrorMatchingInlineSnapshot(`
+      [ContractFunctionExecutionError: The contract function "borrow" reverted with the following reason:
+      insufficient collateral
+
+      Contract Call:
+        address:   0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb
+        function:  borrow((address loanToken, address collateralToken, address oracle, address irm, uint256 lltv), uint256 assets, uint256 shares, address onBehalf, address receiver)
+        args:            ({"collateralToken":"0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0","loanToken":"0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48","oracle":"0x48F7E36EB6B826B2dF4B2E630B62Cd25e89E40e2","irm":"0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC","lltv":"860000000000000000","id":"0xb323495f7e4148be5643a4ea4a8221eef163e4bccfdedc2a6f4696baacbc86cc","liquidationIncentiveFactor":"1043841336116910229"}, 3461590871, 0, 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266, 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266)
+        sender:    0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+
+      Docs: https://viem.sh/docs/contract/writeContract
+      Version: viem@2.22.2]
+    `);
 
     const hash = await client.writeContract({
       abi: blueAbi,

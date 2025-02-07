@@ -4,11 +4,7 @@ import { parseUnits } from "viem";
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import {
-  Erc20Errors,
-  UnknownContractError,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, tokenA, tokenB, userA, userB } from "../../fixtures.js";
 
 const type = "Erc20_Transfer2";
@@ -82,7 +78,9 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new UnknownContractError(permit2));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: unknown contract "0x000000000022D473030F116dDEE9F6B43aC78BA3"]`,
+    );
   });
 
   test("should throw if insufficient allowance", () => {
@@ -100,8 +98,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new Erc20Errors.InsufficientPermit2Allowance(tokenB, userA, "bundler"),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient permit2 allowance for token "0x2222222222222222222222222222222222222222" from owner "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" to spender "bundler"]`,
     );
   });
 
@@ -120,6 +118,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new Erc20Errors.InsufficientBalance(tokenA, userA));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"]`,
+    );
   });
 });

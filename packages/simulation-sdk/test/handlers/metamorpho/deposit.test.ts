@@ -1,11 +1,7 @@
 import _ from "lodash";
 import { maxUint256, parseUnits } from "viem";
 
-import {
-  Erc20Errors,
-  MetaMorphoErrors,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -204,7 +200,9 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new Erc20Errors.InsufficientBalance(tokenA, userA));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"]`,
+    );
   });
 
   test("should throw if all caps reached", () => {
@@ -221,8 +219,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new MetaMorphoErrors.AllCapsReached(vaultA.address, parseUnits("890", 6)),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: all caps reached on vault "0x000000000000000000000000000000000000000A" (remaining requested: 890000000)]`,
     );
   });
 });
