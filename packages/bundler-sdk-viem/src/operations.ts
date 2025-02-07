@@ -339,22 +339,15 @@ export const populateSubBundle = (
         publicAllocatorOptions,
       );
 
-      const asssetsWithdrawn = withdrawals.reduce(
+      const reallocatedAssets = withdrawals.reduce(
         (total, { assets }) => total + assets,
         0n,
       );
 
-      if (
-        MarketUtils.getUtilization({
-          totalSupplyAssets: newTotalSupplyAssets + asssetsWithdrawn,
-          totalBorrowAssets: newTotalBorrowAssets,
-        }) > MathLib.WAD
-      ) {
+      if (newTotalSupplyAssets + reallocatedAssets < newTotalBorrowAssets) {
         // If the "friendly" reallocations are not enough, we fully withdraw from every market.
 
-        requiredAssets =
-          MathLib.wDivDown(newTotalBorrowAssets, MathLib.WAD) -
-          newTotalSupplyAssets;
+        requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
 
         ({ withdrawals } = data.getMarketPublicReallocations(market.id, {
           ...publicAllocatorOptions,
