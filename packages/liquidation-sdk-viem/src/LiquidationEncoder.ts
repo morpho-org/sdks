@@ -18,13 +18,13 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import {
+  curveCryptoSwapAbi,
   curveStableSwapNGAbi,
   daiUsdsConverterAbi,
   midasDataFeedAbi,
   mkrSkyConverterAbi,
   redemptionVaultAbi,
   sUsdsAbi,
-  spectraCurveAbi,
   spectraPrincipalTokenAbi,
 } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
@@ -159,7 +159,7 @@ export class LiquidationEncoder<
       const swapAmount = MathLib.wMulDown(
         await readContract(this.client, {
           address: poolAddress,
-          abi: spectraCurveAbi,
+          abi: curveCryptoSwapAbi,
           functionName: "get_dy",
           args: [ptIndex, ibtIndex, seizedAssets],
         }),
@@ -489,7 +489,7 @@ export class LiquidationEncoder<
        * @return Actual amount of `j` received
        */
       encodeFunctionData({
-        abi: spectraCurveAbi,
+        abi: curveCryptoSwapAbi,
         functionName: "exchange",
         args: [
           inputTokenIndex,

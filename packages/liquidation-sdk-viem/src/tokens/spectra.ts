@@ -29,13 +29,13 @@ export namespace Spectra {
     maturityValue: MaturityValue;
   };
 
-  type YieldToken = {
+  export type YieldToken = {
     address: string;
     decimals: bigint;
     chainId: bigint;
   };
 
-  type InterestBearingToken = {
+  export type InterestBearingToken = {
     address: string;
     name: string;
     symbol: string;
@@ -47,7 +47,7 @@ export namespace Spectra {
     protocol: string;
   };
 
-  type APR = {
+  export type APR = {
     total: number;
     details: {
       base: number;
@@ -55,12 +55,12 @@ export namespace Spectra {
     };
   };
 
-  type Price = {
+  export type Price = {
     underlying: number;
     usd: number;
   };
 
-  type UnderlyingAsset = {
+  export type UnderlyingAsset = {
     address: string;
     name: string;
     symbol: string;
@@ -71,7 +71,7 @@ export namespace Spectra {
     };
   };
 
-  type Pool = {
+  export type Pool = {
     address: string;
     chainId: bigint;
     lpt: LPToken;
@@ -87,19 +87,19 @@ export namespace Spectra {
     feeRate: bigint;
   };
 
-  type LPToken = {
+  export type LPToken = {
     address: string;
     decimals: bigint;
     chainId: bigint;
     supply: bigint;
   };
 
-  type Liquidity = {
+  export type Liquidity = {
     underlying: number;
     usd: number;
   };
 
-  type LPApy = {
+  export type LPApy = {
     total: number | null;
     details: {
       fees: number;
@@ -108,12 +108,12 @@ export namespace Spectra {
     };
   };
 
-  type TokenPrice = {
+  export type TokenPrice = {
     underlying: number;
     usd: number;
   };
 
-  type MaturityValue = {
+  export type MaturityValue = {
     underlying: bigint;
     usd: number;
   };

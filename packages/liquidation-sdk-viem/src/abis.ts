@@ -2359,7 +2359,7 @@ export const spectraPrincipalTokenAbi = [
   },
 ] as const;
 
-export const spectraCurveAbi = [
+export const curveCryptoSwapAbi = [
   {
     stateMutability: "view",
     type: "function",
