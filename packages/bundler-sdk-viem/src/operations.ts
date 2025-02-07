@@ -350,7 +350,7 @@ export const populateSubBundle = (
           totalBorrowAssets: newTotalBorrowAssets,
         }) > MathLib.WAD
       ) {
-        // If the target friendly reallocation is not enough, we fully withdraw from every market.
+        // If the "friendly" reallocations are not enough, we fully withdraw from every market.
 
         requiredAssets =
           MathLib.wDivDown(newTotalBorrowAssets, MathLib.WAD) -
