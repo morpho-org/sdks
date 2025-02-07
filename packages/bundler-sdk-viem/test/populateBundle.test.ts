@@ -3856,7 +3856,7 @@ describe("populateBundle", () => {
 
             [37m      [36m3 ↳ [37m[33mCALL[37m ([37m0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2[37m).[1m[31mtransferFrom[37m[22m([90m0x4095F0…0x40[37m, [90m0x38989B…0x38[37m, [90m99589194140393339359[37m)[39m
             [37m[39m
-            Version: viem@2.22.2.
+            Version: viem@2.22.23.
 
             Request Arguments:
               from:   0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
@@ -4009,8 +4009,8 @@ describe("populateBundle", () => {
 
             [37m      [36m3 ↳ [37m[33mCALL[37m ([37m0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2[37m).[1m[31mtransferFrom[37m[22m([90m0x4095F0…0x40[37m, [90m0x38989B…0x38[37m, [90m99589194140393339359[37m)[39m
             [37m[39m
-            Version: viem@2.22.2
-            Version: viem@2.22.2]
+            Version: viem@2.22.23
+            Version: viem@2.22.23]
           `);
         },
       );
