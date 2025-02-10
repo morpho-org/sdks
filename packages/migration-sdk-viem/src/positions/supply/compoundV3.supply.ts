@@ -74,6 +74,8 @@ export class MigratableSupplyPosition_CompoundV3
     const {
       bundler3: { compoundV3MigrationAdapter },
     } = getChainAddresses(chainId);
+    if (compoundV3MigrationAdapter == null)
+      throw new Error("missing compoundV3MigrationAdapter address");
 
     const migrateMax =
       this.max.limiter === SupplyMigrationLimiter.position &&

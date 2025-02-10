@@ -4,7 +4,6 @@ import {
   ChainUtils,
   ExchangeRateWrappedToken,
   NATIVE_ADDRESS,
-  UnknownDataError,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { type Time, isDefined, values } from "@morpho-org/morpho-ts";
@@ -103,16 +102,16 @@ async function fetchCompoundV2InstancePosition(
     } as const;
   })();
 
-  const { compoundV2Bundler: bundler, wNative } = getChainAddresses(chainId);
+  const {
+    wNative,
+    bundler3: { compoundV2MigrationAdapter },
+  } = getChainAddresses(chainId);
+  if (compoundV2MigrationAdapter == null)
+    throw new Error("missing compoundV2MigrationAdapter address");
+
   const compoundingPeriod = COMPOUNDING_PERIOD[chainId];
-  if (!bundler)
-    throw new UnknownDataError(
-      `missing compoundV2Bundler addresses on chain ${chainId}`,
-    );
-  if (!compoundingPeriod)
-    throw new UnknownDataError(
-      `missing compounding period on chain ${chainId}`,
-    );
+  if (compoundingPeriod == null)
+    throw new Error(`missing compounding period on chain ${chainId}`);
 
   const [
     cTokenBalance,
@@ -137,7 +136,7 @@ async function fetchCompoundV2InstancePosition(
       abi,
       address: cTokenAddress,
       functionName: "allowance",
-      args: [user, bundler],
+      args: [user, compoundV2MigrationAdapter],
     }),
     readContract(client, {
       ...parameters,

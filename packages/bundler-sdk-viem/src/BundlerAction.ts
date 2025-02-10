@@ -1519,6 +1519,8 @@ export namespace BundlerAction {
     const {
       bundler3: { aaveV3CoreMigrationAdapter }, // TODO: choose between core & prime
     } = getChainAddresses(chainId);
+    if (aaveV3CoreMigrationAdapter == null)
+      throw new BundlerErrors.UnexpectedAction("aaveV3Repay", chainId);
 
     return [
       {
@@ -1549,6 +1551,8 @@ export namespace BundlerAction {
     const {
       bundler3: { aaveV3CoreMigrationAdapter }, // TODO: choose between core & prime
     } = getChainAddresses(chainId);
+    if (aaveV3CoreMigrationAdapter == null)
+      throw new BundlerErrors.UnexpectedAction("aaveV3Withdraw", chainId);
 
     recipient ??= aaveV3CoreMigrationAdapter;
 
@@ -1860,6 +1864,8 @@ export namespace BundlerAction {
     const {
       bundler3: { compoundV3MigrationAdapter },
     } = getChainAddresses(chainId);
+    if (compoundV3MigrationAdapter == null)
+      throw new BundlerErrors.UnexpectedAction("compoundV3Repay", chainId);
 
     return [
       {
@@ -1891,6 +1897,11 @@ export namespace BundlerAction {
     const {
       bundler3: { compoundV3MigrationAdapter },
     } = getChainAddresses(chainId);
+    if (compoundV3MigrationAdapter == null)
+      throw new BundlerErrors.UnexpectedAction(
+        "compoundV3WithdrawFrom",
+        chainId,
+      );
 
     recipient ??= compoundV3MigrationAdapter;
 
@@ -1932,6 +1943,9 @@ export namespace BundlerAction {
     const {
       bundler3: { compoundV3MigrationAdapter },
     } = getChainAddresses(chainId);
+    if (compoundV3MigrationAdapter == null)
+      throw new BundlerErrors.UnexpectedAction("compoundV3AllowBySig", chainId);
+
     const { r, s, yParity } = parseSignature(signature);
 
     manager ??= compoundV3MigrationAdapter;
