@@ -4,10 +4,7 @@ import { parseEther, parseUnits } from "viem";
 import { NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import {
-  PublicAllocatorErrors,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -97,8 +94,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new PublicAllocatorErrors.MaxOutflowExceeded(vaultA.address, marketA2.id),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: max outflow exceeded for vault "0x000000000000000000000000000000000000000A" on market "0x82b7572458381128c105a67bc944e36b6318aa3c8095074efe9da6274b8e236a"]`,
     );
   });
 
@@ -121,8 +118,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new PublicAllocatorErrors.MaxInflowExceeded(vaultA.address, marketA2.id),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: max inflow exceeded for vault "0x000000000000000000000000000000000000000A" on market "0x82b7572458381128c105a67bc944e36b6318aa3c8095074efe9da6274b8e236a"]`,
     );
   });
 });

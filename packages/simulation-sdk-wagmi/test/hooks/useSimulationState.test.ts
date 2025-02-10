@@ -1,7 +1,6 @@
 import { ChainId, Market, MathLib, addresses } from "@morpho-org/blue-sdk";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import {
-  Erc20Errors,
   type MinimalBlock,
   SimulationState,
   simulateOperations,
@@ -269,6 +268,7 @@ describe("useSimulationState", () => {
   test("should fail transfer with insufficient balance", async ({
     config,
     client,
+    expect,
   }) => {
     const block = await client.getBlock();
 
@@ -300,14 +300,15 @@ describe("useSimulationState", () => {
         ],
         result.current.data!,
       ),
-    ).toThrow(
-      new Erc20Errors.InsufficientBalance(usdc, client.account.address).message,
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]`,
     );
   });
 
   test("should fail transfer with insufficient allowance", async ({
     config,
     client,
+    expect,
   }) => {
     const amount = 1_000000n;
 
@@ -346,12 +347,8 @@ describe("useSimulationState", () => {
         ],
         result.current.data!,
       ),
-    ).toThrow(
-      new Erc20Errors.InsufficientAllowance(
-        usdc,
-        client.account.address,
-        morpho,
-      ).message,
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient allowance for token "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" from owner "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" to spender "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"]`,
     );
   });
 

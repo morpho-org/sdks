@@ -2,11 +2,7 @@ import _ from "lodash";
 import { maxUint256, parseUnits } from "viem";
 
 import { describe, expect, test } from "vitest";
-import {
-  Erc20Errors,
-  MetaMorphoErrors,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -199,7 +195,9 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new Erc20Errors.InsufficientBalance(vaultA.address, userA));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x000000000000000000000000000000000000000A"]`,
+    );
   });
 
   test("should throw if not enough liquidity", () => {
@@ -217,11 +215,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new MetaMorphoErrors.NotEnoughLiquidity(
-        vaultC.address,
-        parseUnits("14000", 6),
-      ),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: not enough liquidity on vault "0x000000000000000000000000000000000000000C" (remaining requested: 14000000000)]`,
     );
   });
 });
