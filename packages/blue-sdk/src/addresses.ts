@@ -112,7 +112,7 @@ export interface ChainAddresses {
   /**
    * @deprecated All bundles should use Bundler3 instead.
    */
-  bundler: Address;
+  bundler?: Address;
   aaveV3OptimizerBundler?: Address;
   aaveV2Bundler?: Address;
   aaveV3Bundler?: Address;
