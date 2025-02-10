@@ -69,7 +69,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
       bundler3: { aaveV3OptimizerMigrationAdapter },
     } = getChainAddresses(chainId);
     if (aaveV3OptimizerMigrationAdapter == null)
-      throw new Error("missing aaveV3OptimizerBundler address");
+      throw new Error("missing aaveV3OptimizerMigrationAdapter address");
 
     const migrationAddresses =
       MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3Optimizer];

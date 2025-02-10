@@ -84,4 +84,6 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
       redemptionAsset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
     },
   },
+  [ChainId.ArbitrumMainnet]: {},
+  [ChainId.OptimismMainnet]: {},
 };

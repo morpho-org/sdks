@@ -4,7 +4,6 @@ import {
   ChainUtils,
   ExchangeRateWrappedToken,
   NATIVE_ADDRESS,
-  UnknownDataError,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { type Time, isDefined, values } from "@morpho-org/morpho-ts";
@@ -24,7 +23,7 @@ import { getChainId, readContract } from "viem/actions";
 import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.js";
 import { fetchAccruedExchangeRate } from "./compoundV2.helpers.js";
 
-const COMPOUNDING_PERIOD: { [chainID in ChainId]: Time.PeriodLike } = {
+const COMPOUNDING_PERIOD: { [chainID in ChainId]?: Time.PeriodLike } = {
   [ChainId.BaseMainnet]: "s",
   [ChainId.EthMainnet]: { unit: "s", duration: 12 }, // 1 block
 };
@@ -103,8 +102,16 @@ async function fetchCompoundV2InstancePosition(
     } as const;
   })();
 
-  const { compoundV2Bundler: bundler, wNative } = getChainAddresses(chainId);
-  if (!bundler) throw new UnknownDataError("missing migration addresses");
+  const {
+    wNative,
+    bundler3: { compoundV2MigrationAdapter },
+  } = getChainAddresses(chainId);
+  if (compoundV2MigrationAdapter == null)
+    throw new Error("missing compoundV2MigrationAdapter address");
+
+  const compoundingPeriod = COMPOUNDING_PERIOD[chainId];
+  if (compoundingPeriod == null)
+    throw new Error(`missing compounding period on chain ${chainId}`);
 
   const [
     cTokenBalance,
@@ -129,7 +136,7 @@ async function fetchCompoundV2InstancePosition(
       abi,
       address: cTokenAddress,
       functionName: "allowance",
-      args: [user, bundler],
+      args: [user, compoundV2MigrationAdapter],
     }),
     readContract(client, {
       ...parameters,
@@ -199,7 +206,7 @@ async function fetchCompoundV2InstancePosition(
     cTokenBalance,
     loanToken: baseToken === NATIVE_ADDRESS ? wNative : baseToken,
     max,
-    supplyApy: rateToApy(supplyRatePerUnit, COMPOUNDING_PERIOD[chainId]),
+    supplyApy: rateToApy(supplyRatePerUnit, compoundingPeriod),
     bundlerAllowance,
   };
 }
