@@ -593,7 +593,7 @@ describe("populateBundle", () => {
         },
       );
 
-      test[ChainId.EthMainnet].only(
+      test[ChainId.EthMainnet](
         "should deposit bbUsdt via permit2",
         async ({ client, config }) => {
           const amount = parseUnits("1000000", 6);
