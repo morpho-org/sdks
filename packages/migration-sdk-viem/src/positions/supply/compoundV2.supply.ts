@@ -18,7 +18,6 @@ import {
 
 import type { Action } from "@morpho-org/bundler-sdk-viem";
 import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import { encodeFunctionData, maxUint256 } from "viem";
 import { cErc20Abi } from "../../abis/compoundV2.js";
 import {
@@ -59,8 +58,11 @@ export class MigratableSupplyPosition_CompoundV2
     const user = this.user;
     const cToken = this.cToken;
 
-    const bundler = getChainAddresses(chainId).compoundV2Bundler;
-    if (!bundler) throw new Error("missing compoundV2Bundler address");
+    const {
+      bundler3: { compoundV2MigrationAdapter },
+    } = getChainAddresses(chainId);
+    if (compoundV2MigrationAdapter == null)
+      throw new Error("missing compoundV2MigrationAdapter address");
 
     const migrateMax =
       this.max.limiter === SupplyMigrationLimiter.position &&
@@ -73,13 +75,13 @@ export class MigratableSupplyPosition_CompoundV2
     // TODO use allowance + test
     txRequirements.push({
       type: "erc20Approve",
-      args: [cToken.address, bundler, transferredAmount],
+      args: [cToken.address, compoundV2MigrationAdapter, transferredAmount],
       tx: {
         to: cToken.address,
         data: encodeFunctionData({
           abi: cErc20Abi,
           functionName: "approve",
-          args: [bundler, transferredAmount],
+          args: [compoundV2MigrationAdapter, transferredAmount],
         }),
       },
     });
@@ -116,15 +118,7 @@ export class MigratableSupplyPosition_CompoundV2
         signatures: [],
         txs: txRequirements,
       },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
+      tx: () => BundlerAction.encodeBundle(chainId, actions, 0n),
     };
   }
 }

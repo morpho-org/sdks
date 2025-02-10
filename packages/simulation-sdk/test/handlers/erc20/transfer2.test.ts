@@ -10,39 +10,16 @@ import { dataFixture, tokenA, tokenB, userA, userB } from "../../fixtures.js";
 const type = "Erc20_Transfer2";
 
 const amount = parseUnits("1", 6);
-const { morpho, bundler, permit2 } = addresses[ChainId.EthMainnet];
+const {
+  bundler3: { bundler3, generalAdapter1 },
+} = addresses[ChainId.EthMainnet];
 
 describe(type, () => {
-  test("should transfer with sender morpho", () => {
-    const result = simulateOperation(
-      {
-        type,
-        sender: morpho,
-        address: tokenA,
-        args: {
-          amount,
-          from: userB,
-          to: userA,
-        },
-      },
-      dataFixture,
-    );
-
-    const expected = _.cloneDeep(dataFixture);
-    expected.holdings[userA]![tokenA]!.balance += amount;
-    expected.holdings[userB]![tokenA]!.balance -= amount;
-    expected.holdings[userB]![tokenA]!.erc20Allowances.permit2 -= amount;
-    expected.holdings[userB]![tokenA]!.permit2Allowances.morpho.amount -=
-      amount;
-
-    expect(result).toEqual(expected);
-  });
-
   test("should transfer with sender bundler", () => {
     const result = simulateOperation(
       {
         type,
-        sender: bundler,
+        sender: generalAdapter1,
         address: tokenA,
         args: {
           amount,
@@ -57,30 +34,9 @@ describe(type, () => {
     expected.holdings[userA]![tokenA]!.balance += amount;
     expected.holdings[userB]![tokenA]!.balance -= amount;
     expected.holdings[userB]![tokenA]!.erc20Allowances.permit2 -= amount;
-    expected.holdings[userB]![tokenA]!.permit2Allowances.bundler.amount -=
-      amount;
+    expected.holdings[userB]![tokenA]!.permit2BundlerAllowance.amount -= amount;
 
     expect(result).toEqual(expected);
-  });
-
-  test("should throw with sender permit2", () => {
-    expect(() =>
-      simulateOperation(
-        {
-          type,
-          sender: permit2,
-          address: tokenA,
-          args: {
-            amount,
-            from: userB,
-            to: userA,
-          },
-        },
-        dataFixture,
-      ),
-    ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: unknown contract "0x000000000022D473030F116dDEE9F6B43aC78BA3"]`,
-    );
   });
 
   test("should throw if insufficient allowance", () => {
@@ -88,7 +44,7 @@ describe(type, () => {
       simulateOperation(
         {
           type,
-          sender: bundler,
+          sender: generalAdapter1,
           address: tokenB,
           args: {
             amount,
@@ -108,7 +64,7 @@ describe(type, () => {
       simulateOperation(
         {
           type,
-          sender: morpho,
+          sender: bundler3,
           address: tokenA,
           args: {
             amount,
