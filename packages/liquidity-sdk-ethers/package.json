@@ -42,7 +42,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "@types/node": "^22.10.1",
+    "@types/node": "^22.13.1",
     "graphql": "^16.10.0",
     "nock": "beta",
     "typescript": "^5.7.2",
