@@ -697,8 +697,8 @@ importers:
         specifier: ^2.0.3
         version: 2.0.4(viem@2.22.23(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
       viem-tracer:
-        specifier: ^1.4.1
-        version: 1.4.1(viem@2.22.23(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+        specifier: ^1.5.5
+        version: 1.5.5(viem@2.22.23(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
     devDependencies:
       '@playwright/test':
         specifier: ^1.48.1
@@ -5466,8 +5466,8 @@ packages:
     peerDependencies:
       viem: ^2.21.18
 
-  viem-tracer@1.4.1:
-    resolution: {integrity: sha512-KG3yt+goEbm6kgRMvOC8rAVEmkKtEEbbclo0RRPpvcmUAJ36SXECdXVB8cj2w5RUkppv8yUBRmFdGbI9LS4shQ==}
+  viem-tracer@1.5.5:
+    resolution: {integrity: sha512-C6fEeO2hfvGEtiRd4ZE/82rWdSzf98YBuWxG7qmrSjOAcz7gVJEt8jpSFHUvVP0IZl0/1N+eix7JHDXGZ6iyHQ==}
     peerDependencies:
       viem: ^2.21.0
 
@@ -11391,7 +11391,7 @@ snapshots:
     dependencies:
       viem: 2.22.23(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
 
-  viem-tracer@1.4.1(viem@2.22.23(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)):
+  viem-tracer@1.5.5(viem@2.22.23(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)):
     dependencies:
       colors: 1.4.0
       viem: 2.22.23(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)

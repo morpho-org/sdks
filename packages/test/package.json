@@ -28,7 +28,7 @@
   "dependencies": {
     "lodash.kebabcase": "^4.1.1",
     "viem-deal": "^2.0.3",
-    "viem-tracer": "^1.4.1"
+    "viem-tracer": "^1.5.5"
   },
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
