@@ -75,7 +75,7 @@ export class MigratableSupplyPosition_AaveV2
       bundler3: { aaveV2MigrationAdapter },
     } = getChainAddresses(chainId);
     if (aaveV2MigrationAdapter == null)
-      throw new Error("missing aaveV2Bundler address");
+      throw new Error("missing aaveV2MigrationAdapter address");
 
     let migratedAmount = amount;
 

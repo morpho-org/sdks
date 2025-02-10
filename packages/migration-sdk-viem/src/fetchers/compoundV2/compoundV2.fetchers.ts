@@ -24,11 +24,9 @@ import { getChainId, readContract } from "viem/actions";
 import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.js";
 import { fetchAccruedExchangeRate } from "./compoundV2.helpers.js";
 
-const COMPOUNDING_PERIOD: { [chainID in ChainId]: Time.PeriodLike } = {
+const COMPOUNDING_PERIOD: { [chainID in ChainId]?: Time.PeriodLike } = {
   [ChainId.BaseMainnet]: "s",
   [ChainId.EthMainnet]: { unit: "s", duration: 12 }, // 1 block
-  [ChainId.ArbitrumMainnet]: "s",
-  [ChainId.OptimismMainnet]: "s",
 };
 
 async function fetchCompoundV2InstancePosition(
@@ -106,7 +104,15 @@ async function fetchCompoundV2InstancePosition(
   })();
 
   const { compoundV2Bundler: bundler, wNative } = getChainAddresses(chainId);
-  if (!bundler) throw new UnknownDataError("missing migration addresses");
+  const compoundingPeriod = COMPOUNDING_PERIOD[chainId];
+  if (!bundler)
+    throw new UnknownDataError(
+      `missing compoundV2Bundler addresses on chain ${chainId}`,
+    );
+  if (!compoundingPeriod)
+    throw new UnknownDataError(
+      `missing compounding period on chain ${chainId}`,
+    );
 
   const [
     cTokenBalance,
@@ -201,7 +207,7 @@ async function fetchCompoundV2InstancePosition(
     cTokenBalance,
     loanToken: baseToken === NATIVE_ADDRESS ? wNative : baseToken,
     max,
-    supplyApy: rateToApy(supplyRatePerUnit, COMPOUNDING_PERIOD[chainId]),
+    supplyApy: rateToApy(supplyRatePerUnit, compoundingPeriod),
     bundlerAllowance,
   };
 }
