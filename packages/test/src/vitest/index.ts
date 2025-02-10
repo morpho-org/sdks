@@ -24,6 +24,7 @@ export const createViemTest = <chain extends Chain>(
   parameters.autoImpersonate ??= true;
   parameters.order ??= "fifo";
   parameters.stepsTracing ??= true;
+  parameters.pruneHistory ??= true;
 
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
