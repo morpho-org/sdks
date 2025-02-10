@@ -17,5 +17,6 @@ describe("ChainUtils", () => {
   test("should support chain id", () => {
     expect(ChainUtils.isSupported(ChainId.EthMainnet)).toBe(true);
     expect(ChainUtils.isSupported(ChainId.BaseMainnet)).toBe(true);
+    expect(ChainUtils.isSupported(3)).toBe(false);
   });
 });
