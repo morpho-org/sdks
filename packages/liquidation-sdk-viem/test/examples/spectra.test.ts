@@ -25,7 +25,7 @@ import { check } from "../../examples/whitelistedMarkets.js";
 import { OneInch, Paraswap, Spectra } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import spectraTokens from "../mockData/spectraTokens.json";
-import { type LiquidationTestContext, test } from "../setupSpectra.js";
+import { type LiquidationTestContext, spectraTest } from "../setup.js";
 
 interface SwapAmountConfig {
   srcAmount: bigint;
@@ -258,7 +258,7 @@ describe("should liquidate Spectra Tokens", () => {
   };
 
   // Cannot run concurrently because `fetch` is mocked globally.
-  test.sequential(
+  spectraTest.sequential(
     `should liquidate on a PT standard market before maturity`,
     async ({ client, encoder }) => {
       const collateralPriceUsd = 1;
@@ -436,7 +436,7 @@ describe("should liquidate Spectra Tokens", () => {
   );
 
   // Cannot run concurrently because `fetch` is mocked globally.
-  test.sequential(
+  spectraTest.sequential(
     `should liquidate on a PT standard market after maturity`,
     async ({ client, encoder }) => {
       const collateralPriceUsd = 1;
