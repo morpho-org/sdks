@@ -345,8 +345,11 @@ importers:
         specifier: workspace:^
         version: link:../test
       '@types/node':
-        specifier: ^22.10.1
-        version: 22.10.1
+        specifier: ^22.13.1
+        version: 22.13.1
+      dotenv:
+        specifier: ^16.4.7
+        version: 16.4.7
       evm-maths:
         specifier: ^7.0.1
         version: 7.0.1
@@ -7002,8 +7005,8 @@ snapshots:
       '@types/js-yaml': 4.0.9
       '@whatwg-node/fetch': 0.9.22
       chalk: 4.1.2
-      debug: 4.3.7(supports-color@8.1.1)
-      dotenv: 16.4.5
+      debug: 4.4.0(supports-color@8.1.1)
+      dotenv: 16.4.7
       graphql: 16.10.0
       graphql-request: 6.1.0(encoding@0.1.13)(graphql@16.10.0)
       http-proxy-agent: 7.0.2
