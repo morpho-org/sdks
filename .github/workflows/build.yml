@@ -31,6 +31,8 @@ jobs:
           - liquidity-sdk-ethers
           - liquidity-sdk-viem
 
+          - migration-sdk-viem
+
     name: "@morpho-org/${{ matrix.package }}"
     runs-on: ubuntu-latest
 
@@ -44,6 +46,6 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
 
       - run: pnpm --filter @morpho-org/${{ matrix.package }} build

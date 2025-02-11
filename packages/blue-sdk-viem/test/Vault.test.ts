@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup";
+import { test, test2 } from "./setup";
 
 import {
   ChainId,
@@ -13,7 +13,7 @@ import { zeroAddress, zeroHash } from "viem";
 import { metaMorphoAbi, publicAllocatorAbi } from "../src";
 import { Vault } from "../src/augment/Vault";
 
-const { steakUsdc } = vaults[ChainId.EthMainnet];
+const { steakUsdc, steakPaxg } = vaults[ChainId.EthMainnet];
 
 describe("augment/Vault", () => {
   test("should fetch vault data", async ({ client }) => {
@@ -90,5 +90,55 @@ describe("augment/Vault", () => {
     const value = await Vault.fetch(steakUsdc.address, client);
 
     expect(value).toStrictEqual(expectedData);
+  });
+
+  test2("should fetch vault v1.1 data", async ({ client }) => {
+    const expectedData = new Vault({
+      ...steakPaxg,
+      curator: zeroAddress,
+      fee: 50000000000000000n,
+      feeRecipient: "0x255c7705e8BB334DfCae438197f7C4297988085a",
+      guardian: "0x5148Db8942C69A431167C1B7FA7590c15DF934f1",
+      owner: "0x0A0e559bc3b0950a7e448F0d4894db195b9cf8DD",
+      pendingGuardian: {
+        validAt: 0n,
+        value: zeroAddress,
+      },
+      pendingOwner: zeroAddress,
+      pendingTimelock: {
+        validAt: 0n,
+        value: 0n,
+      },
+      skimRecipient: zeroAddress,
+      publicAllocatorConfig: {
+        admin: "0xfeed46c11F57B7126a773EeC6ae9cA7aE1C03C9a",
+        fee: 0n,
+        accruedFee: 0n,
+      },
+      supplyQueue: [
+        "0xb1963517b52c4315a4ed5f6811aee279ab7adc90d9dfbd8f187e05f2758f4d1a" as MarketId,
+      ],
+      timelock: 604800n,
+      withdrawQueue: [
+        "0xb1963517b52c4315a4ed5f6811aee279ab7adc90d9dfbd8f187e05f2758f4d1a" as MarketId,
+      ],
+      lastTotalAssets: 206000400000000000000n,
+      lostAssets: 0n,
+      totalAssets: 206000400000000000000n,
+      totalSupply: 206000400000000000000n,
+      eip5267Domain: new Eip5267Domain({
+        fields: "0x0f",
+        name: "",
+        version: "1",
+        chainId: 1n,
+        verifyingContract: steakPaxg.address,
+        salt: zeroHash,
+        extensions: [],
+      }),
+    });
+
+    const value = await Vault.fetch(steakPaxg.address, client);
+
+    expect(value).toEqual(expectedData);
   });
 });

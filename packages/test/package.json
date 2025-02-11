@@ -28,13 +28,13 @@
   "dependencies": {
     "lodash.kebabcase": "^4.1.1",
     "viem-deal": "^2.0.3",
-    "viem-tracer": "^1.4.1"
+    "viem-tracer": "^1.5.5"
   },
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
     "ethers": "^6.13.0",
     "viem": "^2.21.10",
-    "vitest": "^2.1.0"
+    "vitest": ">=2.0.0 <4.0.0"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
@@ -50,12 +50,12 @@
   "devDependencies": {
     "@playwright/test": "^1.48.1",
     "@types/lodash.kebabcase": "^4.1.9",
-    "@types/node": "^22.10.1",
-    "ethers": "^6.13.4",
+    "@types/node": "^22.13.1",
+    "ethers": "^6.13.5",
     "typescript": "^5.7.2",
-    "viem": "^2.22.2",
-    "vitest": "^2.1.8",
-    "wagmi": "^2.14.6"
+    "viem": "^2.23.0",
+    "vitest": "^3.0.5",
+    "wagmi": "^2.14.10"
   },
   "publishConfig": {
     "main": "lib/index.js",

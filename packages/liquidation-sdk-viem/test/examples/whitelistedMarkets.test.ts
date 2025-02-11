@@ -43,8 +43,8 @@ import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelistedMarkets.js";
 import { OneInch, Paraswap, Pendle } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
-import pendleMarketData from "../pendleMockData/pendleMarketData.json";
-import pendleTokens from "../pendleMockData/pendleTokens.json";
+import pendleMarketData from "../mockData/pendleMarketData.json";
+import pendleTokens from "../mockData/pendleTokens.json";
 import { type LiquidationTestContext, test } from "../setup.js";
 
 interface SwapAmountConfig {

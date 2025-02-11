@@ -314,7 +314,7 @@ export namespace Pendle {
     );
   }
 
-  export function isPTToken(
+  export function isPT(
     token: string,
     chainId: ChainId,
     pendleTokens: TokenListResponse,

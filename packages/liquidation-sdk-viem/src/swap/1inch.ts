@@ -14,10 +14,15 @@ export namespace OneInch {
     apiKey = process.env.ONE_INCH_SWAP_API_KEY,
   ) {
     const url = new URL(getSwapApiPath(swapParams.chainId), API_BASE_URL);
-    url.searchParams.set("slippage", BigInt(swapParams.slippage).toString(16));
     Object.entries(swapParams).forEach(([key, value]) => {
-      if (value != null) {
-        url.searchParams.set(key, value.toString());
+      if (value == null) return;
+      switch (key) {
+        case "slippage":
+          // 1inch expects slippage as a percentage, so we divide our value (in basis points) by 100
+          url.searchParams.set(key, (Number(value) / 100).toString(10));
+          break;
+        default:
+          url.searchParams.set(key, value);
       }
     });
 

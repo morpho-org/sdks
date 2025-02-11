@@ -14,7 +14,9 @@ import { safeGetAddress, safeParseNumber } from "@morpho-org/blue-sdk-viem";
 import {
   Flashbots,
   LiquidationEncoder,
+  Midas,
   Pendle,
+  Spectra,
   apiSdk,
   getPositions,
   getRepayDataPreLiquidation,
@@ -39,6 +41,8 @@ import {
   readContract,
   sendTransaction,
 } from "viem/actions";
+
+const warn = process.env.IS_LOGGING_DISABLED ? () => {} : console.warn;
 
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
@@ -174,10 +178,12 @@ export const check = async <
         const slippage =
           (market.params.liquidationIncentiveFactor - BigInt.WAD) / 2n;
 
-        const pendleTokens =
+        const [pendleTokens, spectraTokens] = await Promise.all([
           chainId === ChainId.EthMainnet
-            ? await Pendle.getTokens(chainId)
-            : undefined;
+            ? Pendle.getTokens(chainId)
+            : undefined,
+          Spectra.getTokens(chainId),
+        ]);
 
         await Promise.allSettled(
           triedLiquidity.map(
@@ -202,6 +208,12 @@ export const check = async <
                   ));
                 }
 
+                ({ srcAmount, srcToken } = await encoder.handleSpectraTokens(
+                  srcToken,
+                  seizedAssets,
+                  spectraTokens,
+                ));
+
                 // As there is no liquidity for sUSDS, we use the sUSDS withdrawal function to get USDS instead
                 if (
                   market.params.collateralToken === mainnetAddresses.sUsds &&
@@ -223,6 +235,14 @@ export const check = async <
                   srcAmount = usdsWithdrawalAmount;
                   srcToken = mainnetAddresses.usds!;
                 }
+
+                // Handle Midas Tokens
+
+                if (Midas.isMidasToken(srcToken, chainId))
+                  ({ srcAmount, srcToken } = await encoder.handleMidasTokens(
+                    srcToken,
+                    seizedAssets,
+                  ));
 
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
@@ -262,8 +282,9 @@ export const check = async <
                       srcToken,
                       srcAmount,
                       market.params,
-                      slippage,
+                      slippage / 10n ** 14n,
                       repaidAssets,
+                      client.account.address,
                     );
 
                     if (result) {
@@ -374,7 +395,7 @@ export const check = async <
 
                 return await sendTransaction(client, transaction);
               } catch (error) {
-                console.warn(
+                warn(
                   `Tried liquidating "${seizedAssets}" collateral ("${withdrawnAssets}" underlying) from "${user}" on market "${market.id}":\n`,
                   error instanceof Error ? error.stack : error,
                 );
@@ -387,7 +408,7 @@ export const check = async <
       } catch (error) {
         if (error instanceof Error)
           // eslint-disable-next-line no-console
-          console.warn(
+          warn(
             `Could not liquidate user "${user}" on market "${market.id}":`,
             error.message,
           );

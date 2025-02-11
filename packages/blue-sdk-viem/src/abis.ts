@@ -3686,6 +3686,19 @@ export const metaMorphoAbi = [
   },
   {
     type: "function",
+    name: "lostAssets", // Only defined for MetaMorpho V1.1 vaults.
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "maxDeposit",
     inputs: [
       {
@@ -4961,6 +4974,32 @@ export const metaMorphoAbi = [
         type: "bool",
         indexed: false,
         internalType: "bool",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetName",
+    inputs: [
+      {
+        name: "name",
+        type: "string",
+        indexed: false,
+        internalType: "string",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetSymbol",
+    inputs: [
+      {
+        name: "symbol",
+        type: "string",
+        indexed: false,
+        internalType: "string",
       },
     ],
     anonymous: false,

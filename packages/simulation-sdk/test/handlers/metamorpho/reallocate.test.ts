@@ -2,11 +2,7 @@ import _ from "lodash";
 import { maxUint256, parseUnits } from "viem";
 
 import { describe, expect, test } from "vitest";
-import {
-  MetaMorphoErrors,
-  UnknownVaultMarketConfigError,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -83,12 +79,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new MetaMorphoErrors.InconsistentReallocation(
-        vaultA.address,
-        parseUnits("30", 6),
-        parseUnits("50", 6),
-      ),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: inconsistent reallocation for vault "0x000000000000000000000000000000000000000A": total supplied (30000000) != total withdrawn (50000000)]`,
     );
   });
 
@@ -112,7 +104,9 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new UnknownVaultMarketConfigError(vaultA.address, marketB1.id));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: unknown config for vault "0x000000000000000000000000000000000000000A" on market "0x6ac1b39121c55504e845c0a07000bee40d85b9d432992ee34b00fa03b5d19b95"]`,
+    );
   });
 
   test("should not reallocate if not allocator", () => {
@@ -135,6 +129,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new MetaMorphoErrors.NotAllocatorRole(vaultB.address, userB));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: account 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB not allocator of vault "0x000000000000000000000000000000000000000b"]`,
+    );
   });
 });

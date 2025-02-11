@@ -27,11 +27,9 @@ import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelistedMarkets.js";
-import { OneInch, Paraswap, Pendle } from "../../src/index.js";
+import { OneInch, Paraswap } from "../../src/index.js";
 import { PreLiquidationPosition } from "../../src/preLiquidation/types.js";
 import * as swapMock from "../contracts/SwapMock.js";
-import pendleMarketData from "../pendleMockData/pendleMarketData.json";
-import pendleTokens from "../pendleMockData/pendleTokens.json";
 import { type LiquidationTestContext, preLiquidationTest } from "../setup.js";
 
 interface SwapAmountConfig {
@@ -63,12 +61,6 @@ describe("pre liquidation", () => {
         await client.sendRawTransaction({ serializedTransaction });
       }
     });
-
-    fetchMock.get(new RegExp(`${Pendle.getTokensApiUrl(1)}.*`), pendleTokens);
-    fetchMock.get(
-      new RegExp(`${Pendle.getMarketsApiUrl(1)}.*`),
-      pendleMarketData,
-    );
   });
 
   afterEach(async () => {
