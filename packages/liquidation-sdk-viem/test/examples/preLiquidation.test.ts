@@ -32,7 +32,7 @@ import { PreLiquidationPosition } from "../../src/preLiquidation/types.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import pendleMarketData from "../pendleMockData/pendleMarketData.json";
 import pendleTokens from "../pendleMockData/pendleTokens.json";
-import { type LiquidationTestContext, test } from "../preLiquidationSetup.js";
+import { type LiquidationTestContext, preLiquidationTest } from "../setup.js";
 
 interface SwapAmountConfig {
   srcAmount: bigint;
@@ -269,7 +269,7 @@ describe("pre liquidation", () => {
   };
 
   // Cannot run concurrently because `fetch` is mocked globally.
-  test.sequential(
+  preLiquidationTest.sequential(
     `should pre-liquidate on standard market`,
     async ({ client, encoder }) => {
       const collateralPriceUsd = 63_300;

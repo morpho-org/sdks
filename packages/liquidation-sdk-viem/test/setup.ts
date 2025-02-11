@@ -29,3 +29,18 @@ export const test = createViemTest(mainnet, {
     await use(new LiquidationEncoder(receipt.contractAddress, client));
   },
 });
+
+export const preLiquidationTest = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  forkBlockNumber: 21_429_913,
+}).extend<LiquidationEncoderTestContext<typeof mainnet>>({
+  encoder: async ({ client }, use) => {
+    const receipt = await client.deployContractWait({
+      abi: executorAbi,
+      bytecode,
+      args: [client.account.address],
+    });
+
+    await use(new LiquidationEncoder(receipt.contractAddress, client));
+  },
+});

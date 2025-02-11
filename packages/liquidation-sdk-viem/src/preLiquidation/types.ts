@@ -3,16 +3,17 @@ import {
   AccrualPosition,
   type Address,
   type MarketId,
+  MathLib,
+  ORACLE_PRICE_SCALE,
+  SharesMath,
 } from "@morpho-org/blue-sdk";
-import { getPreSeizableCollateral } from "./helpers";
+import { parseEther } from "viem";
 
 export class PreLiquidationPosition extends AccrualPosition {
   public collateralAsset: PartialApiToken;
   public loanAsset: PartialApiToken;
 
   public preLiquidation?: PreLiquidation;
-
-  public preSeizableCollateral?: bigint;
 
   constructor(
     position: AccrualPosition,
@@ -25,9 +26,56 @@ export class PreLiquidationPosition extends AccrualPosition {
     this.collateralAsset = collateralAsset;
     this.loanAsset = loanAsset;
     this.preLiquidation = preLiquidation;
-    this.preSeizableCollateral = preLiquidation
-      ? getPreSeizableCollateral(position, preLiquidation)
-      : undefined;
+  }
+
+  get preSeizableCollateral() {
+    if (this.preLiquidation == null) return undefined;
+
+    const preLiquidationParams = this.preLiquidation.preLiquidationParams;
+    const lltv = this.market.params.lltv;
+    const preLltv = preLiquidationParams.preLltv;
+    if (
+      this.borrowAssets > MathLib.wMulDown(this.collateralValue!, lltv) ||
+      this.borrowAssets < MathLib.wMulDown(this.collateralValue!, preLltv)
+    )
+      return undefined;
+
+    const ltv = MathLib.wDivUp(this.borrowAssets, this.collateralValue!);
+    const quotient = MathLib.wDivDown(ltv - preLltv, lltv - preLltv);
+    const preLIF =
+      preLiquidationParams.preLIF1 +
+      MathLib.wMulDown(
+        quotient,
+        preLiquidationParams.preLIF2 - preLiquidationParams.preLIF1,
+      );
+    const preLCF =
+      preLiquidationParams.preLCF1 +
+      MathLib.wMulDown(
+        quotient,
+        preLiquidationParams.preLCF2 - preLiquidationParams.preLCF1,
+      );
+
+    const repayableShares = MathLib.mulDivDown(
+      this.borrowShares,
+      preLCF,
+      parseEther("1.01"), // adding a 1% security to not repay too much
+    );
+
+    const repayableAssets = MathLib.wMulDown(
+      SharesMath.toAssets(
+        repayableShares,
+        this.market.totalBorrowAssets,
+        this.market.totalBorrowShares,
+        "Down",
+      ),
+      preLIF,
+    );
+
+    return MathLib.mulDivDown(
+      repayableAssets,
+      ORACLE_PRICE_SCALE,
+      this.market.price!,
+    );
   }
 }
 

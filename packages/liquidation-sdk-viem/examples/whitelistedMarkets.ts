@@ -16,6 +16,8 @@ import {
   LiquidationEncoder,
   Pendle,
   apiSdk,
+  getPositions,
+  getRepayDataPreLiquidation,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
 import {
@@ -37,8 +39,6 @@ import {
   readContract,
   sendTransaction,
 } from "viem/actions";
-import { getPositions } from "../src/positions/getters";
-import { getRepayDataPreLiquidation } from "../src/preLiquidation/helpers";
 
 const converter = new BlueSdkConverter({
   parseAddress: safeGetAddress,
