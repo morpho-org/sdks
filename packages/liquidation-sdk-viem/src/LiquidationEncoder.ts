@@ -399,16 +399,6 @@ export class LiquidationEncoder<
     this.pushCall(
       preLiquidation,
       0n,
-      /**
-       * @notice Perform an preLiquidation
-       * @dev Index values can be found via the `coins` public getter method
-       * @param i Index value for the coin to send
-       * @param j Index value of the coin to receive
-       * @param _dx Amount of `i` being exchanged
-       * @param _min_dy Minimum amount of `j` to receive
-       * @param _receiver Address that receives `j`
-       * @return Actual amount of `j` received
-       */
       encodeFunctionData({
         abi: preLiquidationAbi,
         functionName: "preLiquidate",
