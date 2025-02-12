@@ -1,7 +1,9 @@
 import { type Address, ChainUtils, type MarketId } from "@morpho-org/blue-sdk";
 import { addresses } from "@morpho-org/blue-sdk";
+import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import type { Account, Chain, Client, Transport } from "viem";
-import { getBlockNumber, getLogs } from "viem/actions";
+import { getBlockNumber, getContractEvents } from "viem/actions";
+import { preLiquidationFactoryAbi } from "../abis";
 import { preLiquidationFactoryConfigs } from "../addresses";
 import type { PreLiquidation, PreLiquidationParams } from "./types";
 
@@ -20,67 +22,13 @@ export async function preLiquidationLogs<chain extends Chain = Chain>(
     const logs = (
       await Promise.all(
         intervals.map((interval) =>
-          getLogs(client, {
+          getContractEvents(client, {
             address: preLiquidationFactoryConfigs[chainId].address,
             fromBlock: interval.startBlock,
             toBlock: interval.endBlock,
+            abi: preLiquidationFactoryAbi,
+            eventName: "CreatePreLiquidation",
             strict: true,
-            event: {
-              type: "event",
-              name: "CreatePreLiquidation",
-              inputs: [
-                {
-                  name: "preLiquidation",
-                  type: "address",
-                  indexed: true,
-                  internalType: "address",
-                },
-                {
-                  name: "id",
-                  type: "bytes32",
-                  indexed: false,
-                  internalType: "Id",
-                },
-                {
-                  name: "preLiquidationParams",
-                  type: "tuple",
-                  indexed: false,
-                  internalType: "struct PreLiquidationParams",
-                  components: [
-                    {
-                      name: "preLltv",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "preLCF1",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "preLCF2",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "preLIF1",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "preLIF2",
-                      type: "uint256",
-                      internalType: "uint256",
-                    },
-                    {
-                      name: "preLiquidationOracle",
-                      type: "address",
-                      internalType: "address",
-                    },
-                  ],
-                },
-              ],
-            },
           }),
         ),
       )
@@ -117,52 +65,24 @@ export async function authorizationLogs<chain extends Chain = Chain>(
     const logs = (
       await Promise.all(
         intervals.map((interval) =>
-          getLogs(client, {
+          getContractEvents(client, {
             address: addresses[chainId].morpho,
             fromBlock: interval.startBlock,
             toBlock: interval.endBlock,
-            event: {
-              type: "event",
-              name: "SetAuthorization",
-              inputs: [
-                {
-                  name: "caller",
-                  type: "address",
-                  indexed: true,
-                  internalType: "address",
-                },
-                {
-                  name: "authorizer",
-                  type: "address",
-                  indexed: true,
-                  internalType: "address",
-                },
-                {
-                  name: "authorized",
-                  type: "address",
-                  indexed: true,
-                  internalType: "address",
-                },
-                {
-                  name: "newIsAuthorized",
-                  type: "bool",
-                  indexed: false,
-                  internalType: "bool",
-                },
-              ],
-              anonymous: false,
-            },
+            abi: blueAbi,
+            eventName: "SetAuthorization",
             args: {
               authorized: preLiquidation.address,
             },
+            strict: true,
           }),
         ),
       )
     ).flat();
 
     return logs
-      .filter((log) => log.args.newIsAuthorized! === true)
-      .map((log) => log.args.authorizer! as Address);
+      .filter((log) => log.args.newIsAuthorized === true)
+      .map((log) => log.args.authorizer as Address);
   } catch (e) {
     console.error(e);
     return [];
