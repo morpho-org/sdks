@@ -17,8 +17,22 @@ import type { Provider } from "ethers";
 import { apiSdk } from "./api";
 
 export interface LiquidityParameters {
-  /* The delay to consider between the moment reallocations are calculated and the moment they are committed onchain. Defaults to 1h. */
+  /**
+   * The delay to consider between the moment reallocations are calculated and the moment they are committed onchain.
+   * Defaults to 1h.
+   */
   delay?: bigint;
+
+  /**
+   * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
+   */
+  defaultMaxWithdrawalUtilization?: bigint;
+
+  /**
+   * If provided, defines the maximum utilization allowed to reach for each market, defaulting to `defaultMaxWithdrawalUtilization`.
+   * If not, these values are fetched from Morpho API.
+   */
+  maxWithdrawalUtilization?: Record<MarketId, bigint>;
 }
 
 export class LiquidityLoader {
@@ -199,22 +213,24 @@ export class LiquidityLoader {
         ),
       });
 
-      const maxWithdrawalUtilization = fromEntries(
-        allVaultsMarkets.flatMap(([, markets]) =>
-          markets.map((market) => [
-            market.uniqueKey,
-            market.targetWithdrawUtilization,
-          ]),
-        ),
-      );
+      const maxWithdrawalUtilization =
+        parameters.maxWithdrawalUtilization ??
+        fromEntries(
+          allVaultsMarkets.flatMap(([, markets]) =>
+            markets.map((market) => [
+              market.uniqueKey,
+              market.targetWithdrawUtilization,
+            ]),
+          ),
+        );
 
       return apiMarkets.map(({ uniqueKey, targetBorrowUtilization }) => {
         try {
           const { data: endState, withdrawals } =
             startState.getMarketPublicReallocations(uniqueKey, {
-              enabled: true,
+              ...parameters,
               maxWithdrawalUtilization,
-              delay: parameters.delay,
+              enabled: true,
             });
 
           return {

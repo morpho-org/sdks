@@ -1,7 +1,5 @@
 import _ from "lodash";
 
-import { BlueErrors } from "@morpho-org/blue-sdk";
-
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, marketA1, userA } from "../../fixtures.js";
@@ -49,7 +47,7 @@ describe(type, () => {
     expect(result).toEqual(dataFixture);
   });
 
-  test("should throw if accruing interest in the past", () => {
+  test("should throw if accruing interest in the past", ({ expect }) => {
     const dataFixtureCopy = _.cloneDeep(dataFixture);
     dataFixtureCopy.block.timestamp -= 1n;
 
@@ -62,8 +60,8 @@ describe(type, () => {
         },
         dataFixtureCopy,
       ),
-    ).toThrow(
-      new BlueErrors.InvalidInterestAccrual(marketA1.id, 12344n, 12345n),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: invalid interest accrual on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd: accrual timestamp 12344 can't be prior to last update 12345]`,
     );
   });
 });

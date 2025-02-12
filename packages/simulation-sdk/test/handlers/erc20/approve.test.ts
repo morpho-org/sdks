@@ -3,10 +3,7 @@ import _ from "lodash";
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import {
-  UnknownAllowanceError,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
   tokenA,
@@ -115,6 +112,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new UnknownAllowanceError(tokenA, userB, tokenA));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: unknown allowance for token "0x1111111111111111111111111111111111111111" from owner "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB" to spender "0x1111111111111111111111111111111111111111"]`,
+    );
   });
 });

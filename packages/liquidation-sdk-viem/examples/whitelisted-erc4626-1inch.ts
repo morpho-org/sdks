@@ -20,6 +20,7 @@ import {
   LiquidationEncoder,
   Midas,
   Pendle,
+  Spectra,
   apiSdk,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
@@ -167,10 +168,12 @@ export const check = async <
         const slippage =
           (market.params.liquidationIncentiveFactor - BigInt.WAD) / 2n;
 
-        const pendleTokens =
+        const [pendleTokens, spectraTokens] = await Promise.all([
           chainId === ChainId.EthMainnet
-            ? await Pendle.getTokens(chainId)
-            : undefined;
+            ? Pendle.getTokens(chainId)
+            : undefined,
+          Spectra.getTokens(chainId),
+        ]);
 
         await Promise.allSettled(
           triedLiquidity.map(
@@ -195,6 +198,12 @@ export const check = async <
                     pendleTokens,
                   ));
                 }
+
+                ({ srcAmount, srcToken } = await encoder.handleSpectraTokens(
+                  srcToken,
+                  seizedAssets,
+                  spectraTokens,
+                ));
 
                 // As there is no liquidity for sUSDS, we use the sUSDS withdrawal function to get USDS instead
                 if (

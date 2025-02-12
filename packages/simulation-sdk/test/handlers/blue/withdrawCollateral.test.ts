@@ -1,9 +1,7 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
-
-import { BlueErrors } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
-import { SimulationErrors, simulateOperation } from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, marketA1, userA, userB } from "../../fixtures.js";
 
 const type = "Blue_WithdrawCollateral";
@@ -51,7 +49,7 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new SimulationErrors.InvalidInput({ assets: -1n }));
+    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: assets=-1]`);
   });
 
   test("should throw if insufficient balance", () => {
@@ -69,7 +67,9 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new BlueErrors.InsufficientPosition(userB, marketA1.id));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient position for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+    );
   });
 
   test("should throw if not healthy", () => {
@@ -87,6 +87,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new BlueErrors.InsufficientCollateral(userB, marketA1.id));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient collateral for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+    );
   });
 });

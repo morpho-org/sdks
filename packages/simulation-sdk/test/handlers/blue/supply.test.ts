@@ -1,14 +1,10 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
-import { BlueErrors, ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import {
-  Erc20Errors,
-  SimulationErrors,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -88,7 +84,7 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new SimulationErrors.InvalidInput({ assets: -1n }));
+    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: assets=-1]`);
   });
 
   test("should throw if shares is negative", () => {
@@ -105,7 +101,7 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new SimulationErrors.InvalidInput({ shares: -1n }));
+    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: shares=-1]`);
   });
 
   test("should throw if insufficient wallet balance", () => {
@@ -122,7 +118,9 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new Erc20Errors.InsufficientBalance(tokenA, userA));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"]`,
+    );
   });
 
   test("should supply & withdraw in callback", () => {
@@ -193,6 +191,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new BlueErrors.InsufficientPosition(userB, marketA1.id));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient position for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+    );
   });
 });

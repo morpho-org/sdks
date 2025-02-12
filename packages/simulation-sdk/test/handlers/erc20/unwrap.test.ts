@@ -2,11 +2,7 @@ import _ from "lodash";
 import { parseUnits } from "viem";
 
 import { describe, expect, test } from "vitest";
-import {
-  Erc20Errors,
-  UnknownWrappedTokenError,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import { tokenA, tokenB, userA, userB, wrapFixtures } from "../../fixtures.js";
 
 const type = "Erc20_Unwrap";
@@ -49,7 +45,9 @@ describe(type, () => {
         },
         wrapFixtures,
       ),
-    ).toThrow(new UnknownWrappedTokenError(tokenA));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: unknown wrapped token "0x1111111111111111111111111111111111111111"]`,
+    );
   });
 
   test("should throw if insufficient wallet balance", () => {
@@ -66,6 +64,8 @@ describe(type, () => {
         },
         wrapFixtures,
       ),
-    ).toThrow(new Erc20Errors.InsufficientBalance(tokenB, userA));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x2222222222222222222222222222222222222222"]`,
+    );
   });
 });
