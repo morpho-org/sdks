@@ -257,14 +257,13 @@ function formatBI(
       break;
   }
 
-  const formattedValue =
+  return (
     (isNegative && !/^0\.0+$/.test(value)
       ? "-"
       : formatOptions.sign
         ? "+"
-        : "") + _withUnit(value, formatOptions.unit);
-
-  return formattedValue;
+        : "") + _withUnit(value, formatOptions.unit)
+  );
 }
 
 type FormatterWithDefault<F extends BaseFormatter> = {
