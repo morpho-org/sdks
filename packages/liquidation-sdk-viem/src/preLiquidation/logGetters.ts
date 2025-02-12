@@ -3,7 +3,7 @@ import { addresses } from "@morpho-org/blue-sdk";
 import type { Account, Chain, Client, Transport } from "viem";
 import { getBlockNumber, getLogs } from "viem/actions";
 import { preLiquidationFactoryConfigs } from "../addresses";
-import type { PreLiquidation } from "./types";
+import type { PreLiquidation, PreLiquidationParams } from "./types";
 
 export async function preLiquidationLogs<chain extends Chain = Chain>(
   client: Client<Transport, chain, Account>,
@@ -24,6 +24,7 @@ export async function preLiquidationLogs<chain extends Chain = Chain>(
             address: preLiquidationFactoryConfigs[chainId].address,
             fromBlock: interval.startBlock,
             toBlock: interval.endBlock,
+            strict: true,
             event: {
               type: "event",
               name: "CreatePreLiquidation",
@@ -87,11 +88,10 @@ export async function preLiquidationLogs<chain extends Chain = Chain>(
 
     return logs.map((log) => {
       return {
-        marketId: log.args.id! as MarketId,
-        address: log.args.preLiquidation! as Address,
-        preLiquidationParams: formatPreLiquidationParams(
-          log.args.preLiquidationParams!,
-        ),
+        marketId: log.args.id as MarketId,
+        address: log.args.preLiquidation as Address,
+        preLiquidationParams: log.args
+          .preLiquidationParams as PreLiquidationParams,
       };
     });
   } catch (e) {
@@ -167,24 +167,6 @@ export async function authorizationLogs<chain extends Chain = Chain>(
     console.error(e);
     return [];
   }
-}
-
-function formatPreLiquidationParams(preLiquidiationParams: {
-  preLltv: bigint;
-  preLCF1: bigint;
-  preLCF2: bigint;
-  preLIF1: bigint;
-  preLIF2: bigint;
-  preLiquidationOracle: `0x${string}`;
-}) {
-  return {
-    preLltv: preLiquidiationParams.preLltv,
-    preLCF1: preLiquidiationParams.preLCF1,
-    preLCF2: preLiquidiationParams.preLCF2,
-    preLIF1: preLiquidiationParams.preLIF1,
-    preLIF2: preLiquidiationParams.preLIF2,
-    preLiquidationOracle: preLiquidiationParams.preLiquidationOracle as Address,
-  };
 }
 
 function sliceBlockInterval(

@@ -442,8 +442,6 @@ describe("pre liquidation", () => {
       const preSeizableCollateral =
         preLiquidablePosition.preSeizableCollateral!;
 
-      console.log("preSeizableCollateral", preSeizableCollateral);
-
       mockOneInch(encoder, [
         { srcAmount: preSeizableCollateral, dstAmount: "73000000000" },
       ]);

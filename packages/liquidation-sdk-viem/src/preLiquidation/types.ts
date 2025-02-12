@@ -7,7 +7,6 @@ import {
   ORACLE_PRICE_SCALE,
   SharesMath,
 } from "@morpho-org/blue-sdk";
-import { parseEther } from "viem";
 
 export class PreLiquidationPosition extends AccrualPosition {
   public collateralAsset: PartialApiToken;
@@ -55,11 +54,7 @@ export class PreLiquidationPosition extends AccrualPosition {
         preLiquidationParams.preLCF2 - preLiquidationParams.preLCF1,
       );
 
-    const repayableShares = MathLib.mulDivDown(
-      this.borrowShares,
-      preLCF,
-      parseEther("1.01"), // adding a 1% security to not repay too much
-    );
+    const repayableShares = MathLib.wMulDown(this.borrowShares, preLCF);
 
     const repayableAssets = MathLib.wMulDown(
       SharesMath.toAssets(
