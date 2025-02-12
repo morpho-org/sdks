@@ -1,10 +1,8 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
-import { BlueErrors } from "@morpho-org/blue-sdk";
-
 import { describe, expect, test } from "vitest";
-import { SimulationErrors, simulateOperation } from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, marketA1, tokenA, userA, userB } from "../../fixtures.js";
 
 const type = "Blue_Withdraw";
@@ -79,7 +77,7 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new SimulationErrors.InvalidInput({ assets: -1n }));
+    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: assets=-1]`);
   });
 
   test("should throw if shares is negative", () => {
@@ -97,7 +95,7 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new SimulationErrors.InvalidInput({ shares: -1n }));
+    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: shares=-1]`);
   });
 
   test("should throw if insufficient liquidity", () => {
@@ -115,7 +113,9 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new BlueErrors.InsufficientLiquidity(marketA1.id));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient liquidity on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+    );
   });
 
   test("should throw if insufficient balance", () => {
@@ -133,6 +133,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new BlueErrors.InsufficientPosition(userA, marketA1.id));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient position for user 0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+    );
   });
 });
