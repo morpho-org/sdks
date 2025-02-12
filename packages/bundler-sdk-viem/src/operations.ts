@@ -334,12 +334,15 @@ export const populateSubBundle = (
           : MathLib.wDivDown(newTotalBorrowAssets, supplyTargetUtilization) -
             newTotalSupplyAssets;
 
-      let { withdrawals, data: simulationState } =
+      let { withdrawals, data: simulationStatePostFriendlyReallocation } =
         data.getMarketPublicReallocations(market.id, publicAllocatorOptions);
 
+      const marketPostFriendlyReallocation =
+        simulationStatePostFriendlyReallocation.getMarket(market.id);
+
       if (
-        simulationState.getMarket(market.id).totalBorrowAssets >
-        simulationState.getMarket(market.id).totalSupplyAssets
+        marketPostFriendlyReallocation.totalBorrowAssets + borrowedAssets >
+        marketPostFriendlyReallocation.totalSupplyAssets - withdrawnAssets
       ) {
         // If the "friendly" reallocations are not enough, we fully withdraw from every market.
 
