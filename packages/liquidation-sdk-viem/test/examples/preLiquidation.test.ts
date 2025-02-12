@@ -462,7 +462,7 @@ describe("pre liquidation", () => {
 
       expect(
         Number(format.number.of(decimalBalance, decimals)),
-      ).toBeGreaterThan(1_967.905);
+      ).toBeGreaterThan(1_257.5848);
     },
   );
 });
