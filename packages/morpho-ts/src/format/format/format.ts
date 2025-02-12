@@ -171,11 +171,10 @@ const _formatNumber = (
 };
 
 const _withUnit = (value: string, unit?: string) => {
+  if (!unit) return value;
   switch (unit) {
     case "$":
       return `$${value}`;
-    case undefined:
-      return value;
     case "":
     case "%":
       return `${value}${unit}`;
