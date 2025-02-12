@@ -170,18 +170,12 @@ const _formatNumber = (
   );
 };
 
-const _withUnit = (
-  value: string,
-  unit: string,
-  isNegative: boolean,
-  sign?: boolean,
-) => {
+const _withUnit = (value: string, unit?: string) => {
   switch (unit) {
     case "$":
-      if (sign) {
-        return `${isNegative ? "-" : "+"}$${value.slice(1)}`;
-      }
       return `$${value}`;
+    case undefined:
+      return value;
     case "":
     case "%":
       return `${value}${unit}`;
@@ -269,16 +263,7 @@ function formatBI(
       ? "-"
       : formatOptions.sign
         ? "+"
-        : "") + value;
-
-  if (formatOptions.unit) {
-    return _withUnit(
-      formattedValue,
-      formatOptions.unit,
-      isNegative,
-      formatOptions.sign,
-    );
-  }
+        : "") + _withUnit(value, formatOptions.unit);
 
   return formattedValue;
 }
