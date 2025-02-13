@@ -5,11 +5,9 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { ExecutorEncoder } from "executooor-viem";
+import type { Account, Chain, Client, Hex, Transport } from "viem";
 import {
-  type Account,
-  type Chain,
-  type Client,
-  type Transport,
+  encodeAbiParameters,
   encodeFunctionData,
   erc20Abi,
   erc4626Abi,
@@ -23,6 +21,7 @@ import {
   daiUsdsConverterAbi,
   midasDataFeedAbi,
   mkrSkyConverterAbi,
+  preLiquidationAbi,
   redemptionVaultAbi,
   sUsdsAbi,
   spectraPrincipalTokenAbi,
@@ -967,5 +966,36 @@ export class LiquidationEncoder<
       functionName: "getPaymentTokens",
       args: [],
     });
+  }
+
+  public preLiquidationPreLiquidate(
+    preLiquidation: Address,
+    borrower: Address,
+    seizedAssets: bigint,
+    repaidShares: bigint,
+    callbackCalls?: Hex[],
+  ) {
+    callbackCalls ??= [];
+    this.pushCall(
+      preLiquidation,
+      0n,
+      encodeFunctionData({
+        abi: preLiquidationAbi,
+        functionName: "preLiquidate",
+        args: [
+          borrower,
+          seizedAssets,
+          repaidShares,
+          encodeAbiParameters(
+            [{ type: "bytes[]" }, { type: "bytes" }],
+            [callbackCalls, "0x"],
+          ),
+        ],
+      }),
+      {
+        sender: preLiquidation,
+        dataIndex: 1n, // onPreLiquidate(uint256,bytes)
+      },
+    );
   }
 }

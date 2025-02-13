@@ -36,6 +36,11 @@ declare module "@morpho-org/blue-sdk" {
   }
 }
 
+type PreLiquidationFactoryConfig = {
+  address: Address;
+  startBlock: bigint;
+};
+
 export const mainnetAddresses = addresses[ChainId.EthMainnet] as ChainAddresses;
 export const baseAddresses = addresses[ChainId.BaseMainnet] as ChainAddresses;
 
@@ -83,5 +88,19 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
       instantRedemptionVault: "0xF804a646C034749b5484bF7dfE875F6A4F969840",
       redemptionAsset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
     },
+  },
+};
+
+export const preLiquidationFactoryConfigs: Record<
+  ChainId,
+  PreLiquidationFactoryConfig
+> = {
+  [ChainId.EthMainnet]: {
+    address: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
+    startBlock: 21429900n,
+  },
+  [ChainId.BaseMainnet]: {
+    address: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
+    startBlock: 23779056n,
   },
 };
