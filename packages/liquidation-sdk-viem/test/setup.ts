@@ -1,11 +1,8 @@
 import type { AnvilTestClient } from "@morpho-org/test";
 import { type ViemTestContext, createViemTest } from "@morpho-org/test/vitest";
-import dotenv from "dotenv";
 import { bytecode, executorAbi } from "executooor-viem";
 import { type Chain, mainnet } from "viem/chains";
 import { LiquidationEncoder } from "../src/index.js";
-
-dotenv.config();
 
 export interface LiquidationEncoderTestContext<chain extends Chain = Chain> {
   encoder: LiquidationEncoder<AnvilTestClient<chain>>;

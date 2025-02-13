@@ -46,7 +46,6 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@types/node": "^22.13.1",
-    "dotenv": "^16.4.7",
     "evm-maths": "^7.0.1",
     "executooor-viem": "^1.3.3",
     "fetch-mock": "^11.1.5",
