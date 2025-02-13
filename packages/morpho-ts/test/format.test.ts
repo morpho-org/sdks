@@ -236,6 +236,15 @@ describe("format", () => {
         expect(format.number.unit("$").of(number)).toEqual("$12345.6789");
       });
 
+      test("with unit with sign", () => {
+        expect(format.number.unit("$").sign().of(number)).toEqual(
+          "+$12345.6789",
+        );
+        expect(format.number.unit("$").sign().of(-number)).toEqual(
+          "-$12345.6789",
+        );
+      });
+
       test("without trailing zeros", () => {
         expect(format.number.digits(6).of(number)).toEqual("12345.678900");
         expect(format.number.digits(6).removeTrailingZero().of(number)).toEqual(
@@ -312,6 +321,15 @@ describe("format", () => {
         );
       });
 
+      test("with unit with sign", () => {
+        expect(format.number.unit("$").sign().of(bigint, decimals)).toEqual(
+          "+$12345.6789",
+        );
+        expect(format.number.unit("$").sign().of(-bigint, decimals)).toEqual(
+          "-$12345.6789",
+        );
+      });
+
       test("without trailing zeros", () => {
         expect(format.number.digits(6).of(bigint, decimals)).toEqual(
           "12345.678900",
@@ -383,6 +401,15 @@ describe("format", () => {
         expect(format.short.unit("€").of(number)).toEqual("12.3456789k €");
       });
 
+      test("with unit with sign", () => {
+        expect(format.short.unit("€").sign().of(number)).toEqual(
+          "+12.3456789k €",
+        );
+        expect(format.short.unit("€").sign().of(-number)).toEqual(
+          "-12.3456789k €",
+        );
+      });
+
       test("without trailing zeros", () => {
         expect(format.short.digits(8).of(number)).toEqual("12.34567890k");
         expect(format.short.digits(8).removeTrailingZero().of(number)).toEqual(
@@ -447,6 +474,15 @@ describe("format", () => {
       test("with unit", () => {
         expect(format.short.unit("€").of(bigint, decimals)).toEqual(
           "12.3456789k €",
+        );
+      });
+
+      test("with unit with sign", () => {
+        expect(format.short.unit("€").sign().of(bigint, decimals)).toEqual(
+          "+12.3456789k €",
+        );
+        expect(format.short.unit("€").sign().of(-bigint, decimals)).toEqual(
+          "-12.3456789k €",
         );
       });
 
@@ -531,6 +567,15 @@ describe("format", () => {
         expect(format.commas.unit("ETH").of(number)).toEqual("12,345.6789 ETH");
       });
 
+      test("with unit with sign", () => {
+        expect(format.commas.unit("ETH").sign().of(number)).toEqual(
+          "+12,345.6789 ETH",
+        );
+        expect(format.commas.unit("ETH").sign().of(-number)).toEqual(
+          "-12,345.6789 ETH",
+        );
+      });
+
       test("without trailing zeros", () => {
         expect(format.commas.digits(6).of(number)).toEqual("12,345.678900");
         expect(format.commas.digits(6).removeTrailingZero().of(number)).toEqual(
@@ -589,6 +634,15 @@ describe("format", () => {
       test("with unit", () => {
         expect(format.commas.unit("ETH").of(bigint, decimals)).toEqual(
           "12,345.6789 ETH",
+        );
+      });
+
+      test("with unit with sign", () => {
+        expect(format.commas.unit("ETH").sign().of(bigint, decimals)).toEqual(
+          "+12,345.6789 ETH",
+        );
+        expect(format.commas.unit("ETH").sign().of(-bigint, decimals)).toEqual(
+          "-12,345.6789 ETH",
         );
       });
 
@@ -660,6 +714,15 @@ describe("format", () => {
         expect(format.percent.unit("%").of(number)).toEqual("1234567.8900%");
       });
 
+      test("with unit with sign", () => {
+        expect(format.percent.unit("%").sign().of(number)).toEqual(
+          "+1234567.8900%",
+        );
+        expect(format.percent.unit("%").sign().of(-number)).toEqual(
+          "-1234567.8900%",
+        );
+      });
+
       test("without trailing zeros", () => {
         expect(format.percent.removeTrailingZero().of(number)).toEqual(
           "1234567.89",
@@ -717,6 +780,15 @@ describe("format", () => {
       test("with unit", () => {
         expect(format.percent.unit("%").of(bigint, decimals)).toEqual(
           "1234567.8900%",
+        );
+      });
+
+      test("with unit with sign", () => {
+        expect(format.percent.unit("%").sign().of(bigint, decimals)).toEqual(
+          "+1234567.8900%",
+        );
+        expect(format.percent.unit("%").sign().of(-bigint, decimals)).toEqual(
+          "-1234567.8900%",
         );
       });
 
