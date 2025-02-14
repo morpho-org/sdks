@@ -10,19 +10,18 @@ import {
   isMarketId,
 } from "@morpho-org/blue-sdk";
 
-import {
-  fetchAccrualPosition,
-  safeGetAddress,
-  safeParseNumber,
-} from "@morpho-org/blue-sdk-viem";
+import { safeGetAddress, safeParseNumber } from "@morpho-org/blue-sdk-viem";
 import {
   Flashbots,
   LiquidationEncoder,
+  Midas,
   Pendle,
+  Spectra,
   apiSdk,
+  getPositions,
+  getRepayDataPreLiquidation,
   mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
 import {
   type Account,
   type Chain,
@@ -68,16 +67,14 @@ export const check = async <
 
   const { morpho, wNative } = getChainAddresses(chainId);
 
-  const {
-    assetByAddress: { priceUsd: wethPriceUsd },
-    marketPositions: { items: positions },
-  } = await apiSdk.getLiquidatablePositions({
+  const { positions, wethPriceUsd } = await getPositions(
+    client,
     chainId,
     wNative,
-    marketIds: additionalMarketIds.concat(
+    additionalMarketIds.concat(
       markets?.map(({ uniqueKey }) => uniqueKey) ?? [],
     ),
-  });
+  );
 
   if (wethPriceUsd == null) return [];
 
@@ -85,33 +82,32 @@ export const check = async <
 
   return Promise.all(
     (positions ?? []).map(async (position) => {
-      if (position.market.collateralAsset == null) return;
+      const user = position.user;
+      const market = position.market;
+      const seizableCollateral =
+        position.seizableCollateral !== undefined &&
+        position.seizableCollateral !== 0n
+          ? { value: position.seizableCollateral, preLiquidation: false }
+          : { value: position.preSeizableCollateral, preLiquidation: true };
 
-      const accrualPosition = await fetchAccrualPosition(
-        position.user.address,
-        position.market.uniqueKey,
-        client,
-        { chainId },
-      );
+      if (seizableCollateral.value === undefined)
+        return console.warn(`Unknown oracle price for market "${market.id}"`);
 
-      const { user, market, seizableCollateral } =
-        accrualPosition.accrueInterest(Time.timestamp());
-
-      if (seizableCollateral == null)
-        return warn(`Unknown oracle price for market "${market.id}"`);
+      if (
+        seizableCollateral.preLiquidation &&
+        position.preLiquidation === undefined
+      )
+        return console.warn(`Unknown pre liquidation address`);
 
       try {
         const collateralToken = converter.getToken(
-          position.market.collateralAsset,
+          position.collateralAsset,
           wethPriceUsd,
         );
         if (collateralToken.price == null)
           throw new UnknownTokenPriceError(collateralToken.address);
 
-        const loanToken = converter.getToken(
-          position.market.loanAsset,
-          wethPriceUsd,
-        );
+        const loanToken = converter.getToken(position.loanAsset, wethPriceUsd);
         if (loanToken.price == null)
           throw new UnknownTokenPriceError(loanToken.address);
 
@@ -130,24 +126,40 @@ export const check = async <
             address: loanToken.address,
             abi: erc20Abi,
             functionName: "allowance",
-            args: [executorAddress, morpho],
+            args: [
+              executorAddress,
+              seizableCollateral.preLiquidation
+                ? position.preLiquidation!.address
+                : morpho,
+            ],
           }),
           ...new Array(10)
             .fill(undefined)
-            .map((_v, i) => seizableCollateral / 2n ** BigInt(i))
+            .map((_v, i) => seizableCollateral.value! / 2n ** BigInt(i))
             .filter(
               (seizedAssets) =>
                 collateralToken.toUsd(seizedAssets)! > parseEther("1000") ||
-                accrualPosition.collateral === seizedAssets,
+                position.collateral === seizedAssets,
             ) // Do not try seizing less than $1000 collateral, except if we can realize debt.
             .map(async (seizedAssets) => {
-              const repaidShares =
-                market.getLiquidationRepaidShares(seizedAssets)!;
+              const repayData = seizableCollateral.preLiquidation
+                ? getRepayDataPreLiquidation(
+                    position,
+                    position.preLiquidation!,
+                    seizedAssets,
+                  )
+                : {
+                    repaidShares:
+                      market.getLiquidationRepaidShares(seizedAssets)!,
+                    repaidAssets: market.toBorrowAssets(
+                      market.getLiquidationRepaidShares(seizedAssets)!,
+                    ),
+                  };
 
               return {
                 seizedAssets,
-                repaidShares,
-                repaidAssets: market.toBorrowAssets(repaidShares),
+                repaidShares: repayData.repaidShares,
+                repaidAssets: repayData.repaidAssets,
                 withdrawnAssets: await readContract(client, {
                   address: market.params.collateralToken,
                   abi: erc4626Abi,
@@ -166,17 +178,18 @@ export const check = async <
         const slippage =
           (market.params.liquidationIncentiveFactor - BigInt.WAD) / 2n;
 
-        const pendleTokens =
+        const [pendleTokens, spectraTokens] = await Promise.all([
           chainId === ChainId.EthMainnet
-            ? await Pendle.getTokens(chainId)
-            : undefined;
+            ? Pendle.getTokens(chainId)
+            : undefined,
+          Spectra.getTokens(chainId),
+        ]);
 
         await Promise.allSettled(
           triedLiquidity.map(
             async ({ seizedAssets, repaidAssets, withdrawnAssets }) => {
               try {
-                const badDebtRealization =
-                  seizedAssets === accrualPosition.collateral;
+                const badDebtRealization = seizedAssets === position.collateral;
 
                 let srcToken =
                   collateralUnderlyingAsset ?? market.params.collateralToken;
@@ -194,6 +207,12 @@ export const check = async <
                     pendleTokens,
                   ));
                 }
+
+                ({ srcAmount, srcToken } = await encoder.handleSpectraTokens(
+                  srcToken,
+                  seizedAssets,
+                  spectraTokens,
+                ));
 
                 // As there is no liquidity for sUSDS, we use the sUSDS withdrawal function to get USDS instead
                 if (
@@ -217,6 +236,14 @@ export const check = async <
                   srcToken = mainnetAddresses.usds!;
                 }
 
+                // Handle Midas Tokens
+
+                if (Midas.isMidasToken(srcToken, chainId))
+                  ({ srcAmount, srcToken } = await encoder.handleMidasTokens(
+                    srcToken,
+                    seizedAssets,
+                  ));
+
                 switch (true) {
                   // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
                   // Process USD0/USD0++ collateral liquidation with specific process (using curve)
@@ -225,8 +252,8 @@ export const check = async <
                     chainId === ChainId.EthMainnet:
                     dstAmount = await encoder.curveSwapUsd0Usd0PPForUsdc(
                       srcAmount,
-                      accrualPosition.market.toBorrowAssets(
-                        accrualPosition.market.getLiquidationRepaidShares(
+                      position.market.toBorrowAssets(
+                        position.market.getLiquidationRepaidShares(
                           seizedAssets,
                         )!,
                       ),
@@ -239,8 +266,8 @@ export const check = async <
                     chainId === ChainId.EthMainnet: {
                     dstAmount = await encoder.swapUSD0PPToUSDC(
                       srcAmount,
-                      accrualPosition.market.toBorrowAssets(
-                        accrualPosition.market.getLiquidationRepaidShares(
+                      position.market.toBorrowAssets(
+                        position.market.getLiquidationRepaidShares(
                           seizedAssets,
                         )!,
                       ),
@@ -255,7 +282,7 @@ export const check = async <
                       srcToken,
                       srcAmount,
                       market.params,
-                      slippage / 10n ** 16n,
+                      slippage / 10n ** 14n,
                       repaidAssets,
                       client.account.address,
                     );
@@ -297,18 +324,28 @@ export const check = async <
                   // Allows to handle changes in repaidAssets due to price changes and saves gas.
                   encoder.erc20Approve(
                     market.params.loanToken,
-                    morpho,
+                    seizableCollateral.preLiquidation
+                      ? position.preLiquidation!.address
+                      : morpho,
                     maxUint256,
                   );
 
-                encoder.morphoBlueLiquidate(
-                  morpho,
-                  market.params,
-                  user,
-                  seizedAssets,
-                  0n,
-                  encoder.flush(),
-                );
+                seizableCollateral.preLiquidation
+                  ? encoder.preLiquidationPreLiquidate(
+                      position.preLiquidation!.address,
+                      user,
+                      seizedAssets,
+                      0n,
+                      encoder.flush(),
+                    )
+                  : encoder.morphoBlueLiquidate(
+                      morpho,
+                      market.params,
+                      user,
+                      seizedAssets,
+                      0n,
+                      encoder.flush(),
+                    );
 
                 const populatedTx = await encoder.encodeExec();
                 const [gasLimit, blockNumber, txCount, { maxFeePerGas }] =

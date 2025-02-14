@@ -15,7 +15,6 @@ import {
   publicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
-import { Erc20Errors } from "@morpho-org/simulation-sdk";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
@@ -114,11 +113,8 @@ describe("populateBundle", () => {
                 },
               },
             ]),
-          ).rejects.toEqual(
-            new Erc20Errors.InsufficientBalance(
-              wNative,
-              client.account.address,
-            ),
+          ).rejects.toThrowErrorMatchingInlineSnapshot(
+            `[Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]`,
           );
         },
       );
@@ -2617,11 +2613,8 @@ describe("populateBundle", () => {
               ],
               { supportsSignature: false },
             ),
-          ).rejects.toEqual(
-            new Erc20Errors.InsufficientBalance(
-              wNative,
-              client.account.address,
-            ),
+          ).rejects.toThrowErrorMatchingInlineSnapshot(
+            `[Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]`,
           );
         },
       );
@@ -3690,6 +3683,8 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
+          client.transport.tracer.failed = false;
+
           await expect(
             setupBundle(
               client,
@@ -3717,7 +3712,18 @@ describe("populateBundle", () => {
                 ),
               },
             ),
-          ).rejects.toThrow();
+          ).rejects.toThrowErrorMatchingInlineSnapshot(`
+            [TransactionExecutionError: Execution reverted with reason: custom error 0x1425ea42.
+
+            Request Arguments:
+              from:   0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
+              to:     0x4095F064B8d3c3548A3bebfd0Bbfd04750E30077
+              value:  0 ETH
+              data:   0xac9650d800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000000e000000000000000000000000000000000000000000000000000000000000001a0000000000000000000000000000000000000000000000000000000000000004470dc41fe000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000000000000000000000000005657cba98ed862ce200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008439029ab600000000000000000000000038989bba00bdf8181f4082995b3deae96163ac5d0000000000000000000000000000000000000000000000055de6a779bbac0000000000000000000000000000000000000000000000000005657cba98ed862ce2000000000000000000000000a0ee7a142d267c1f36714e4a8f75612f20a797200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000643790767d000000000000000000000000c02aaa39b223fe8d0a0e5c4f27ead9083c756cc2000000000000000000000000f39fd6e51aad88f6f4ce6ab8827279cfffb92266ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff00000000000000000000000000000000000000000000000000000000
+
+            Details: execution reverted: custom error 0x1425ea42
+            Version: viem@2.23.0]
+          `);
         },
       );
 

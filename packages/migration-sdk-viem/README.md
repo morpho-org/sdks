@@ -105,7 +105,7 @@ await sendTransaction(client, migrationBundle.tx());
 
 The obtained bundle is made of:
 - `actions`: The list of actions being performed by the bundler contract.
-- `requirements`: The list of requirements that should be fullfilled for the tx to succeed. It is made of:
+- `requirements`: The list of requirements that should be fulfilled for the tx to succeed. It is made of:
   - `txs`: The list of transactions that should be executed before the main bundle.
     - `type`: action performed (approval, ...)
     - `args`: arguments used in the transaction

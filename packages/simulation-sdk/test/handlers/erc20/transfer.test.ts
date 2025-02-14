@@ -4,7 +4,7 @@ import { parseUnits } from "viem";
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import { Erc20Errors, simulateOperation } from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, tokenA, userA, userB, vaultA } from "../../fixtures.js";
 
 const type = "Erc20_Transfer";
@@ -119,8 +119,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new Erc20Errors.InsufficientAllowance(vaultA.address, userA, morpho),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient allowance for token "0x000000000000000000000000000000000000000A" from owner "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" to spender "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"]`,
     );
   });
 
@@ -139,6 +139,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new Erc20Errors.InsufficientBalance(tokenA, userA));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"]`,
+    );
   });
 });

@@ -5,19 +5,30 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { ExecutorEncoder } from "executooor-viem";
+import type { Account, Chain, Client, Hex, Transport } from "viem";
 import {
-  type Account,
-  type Chain,
-  type Client,
-  type Transport,
+  encodeAbiParameters,
   encodeFunctionData,
+  erc20Abi,
+  erc4626Abi,
+  getAddress,
+  parseEther,
 } from "viem";
 import { readContract } from "viem/actions";
-import { daiUsdsConverterAbi, mkrSkyConverterAbi } from "./abis.js";
-import { curveStableSwapNGAbi, sUsdsAbi } from "./abis.js";
+import {
+  curveCryptoSwapAbi,
+  curveStableSwapNGAbi,
+  daiUsdsConverterAbi,
+  midasDataFeedAbi,
+  mkrSkyConverterAbi,
+  preLiquidationAbi,
+  redemptionVaultAbi,
+  sUsdsAbi,
+  spectraPrincipalTokenAbi,
+} from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";
-import { Pendle, Sky, Usual } from "./tokens/index.js";
+import { Midas, Pendle, Sky, Spectra, Usual } from "./tokens/index.js";
 
 interface SwapAttempt {
   srcAmount: bigint;
@@ -36,9 +47,7 @@ export class LiquidationEncoder<
     seizedAssets: bigint,
     pendleTokens: Pendle.TokenListResponse,
   ) {
-    if (
-      !Pendle.isPTToken(collateralToken, this.client.chain.id, pendleTokens)
-    ) {
+    if (!Pendle.isPT(collateralToken, this.client.chain.id, pendleTokens)) {
       return {
         srcAmount: seizedAssets,
         srcToken: collateralToken,
@@ -108,6 +117,68 @@ export class LiquidationEncoder<
           swapCallData.tx.data,
         );
       srcAmount = BigInt(swapCallData.data.amountOut);
+    }
+
+    return { srcAmount, srcToken };
+  }
+
+  async handleSpectraTokens(
+    collateralToken: Address,
+    seizedAssets: bigint,
+    spectraTokens: Spectra.PrincipalToken[],
+  ) {
+    if (!Spectra.isPT(collateralToken, spectraTokens)) {
+      return {
+        srcAmount: seizedAssets,
+        srcToken: collateralToken,
+      };
+    }
+
+    const pt = Spectra.getPTInfo(collateralToken, spectraTokens);
+    const maturity = pt.maturity;
+
+    let srcAmount = seizedAssets;
+    let srcToken = collateralToken;
+
+    if (Number(maturity) < Date.now() / 1000) {
+      this.spectraPTRedeem(collateralToken, seizedAssets);
+
+      srcAmount = await this.spectraRedeemAmount(collateralToken, seizedAssets);
+      srcToken = getAddress(pt.underlying.address) as Address;
+    } else {
+      if (pt.pools.length === 0 || pt.pools[0] === undefined)
+        return { srcAmount: seizedAssets, srcToken: collateralToken };
+      const ibt = pt.ibt.address as `0x${string}`;
+      const poolAddress = getAddress(pt.pools[0].address) as `0x${string}`;
+
+      const index0Token = await this.getCurveSwapIndex0Token(poolAddress);
+      const ptIndex = index0Token === collateralToken ? 0n : 1n;
+      const ibtIndex = ptIndex === 0n ? 1n : 0n;
+
+      const swapAmount = MathLib.wMulDown(
+        await readContract(this.client, {
+          address: poolAddress,
+          abi: curveCryptoSwapAbi,
+          functionName: "get_dy",
+          args: [ptIndex, ibtIndex, seizedAssets],
+        }),
+        parseEther("0.9999999"), // 0.0000001% buffer because exact value doesn't work
+      );
+
+      srcAmount = await this.previewIBTRedeem(ibt, swapAmount);
+      srcToken = pt.underlying.address as Address;
+
+      this.erc20Approve(collateralToken, poolAddress, MathLib.MAX_UINT_256);
+
+      this.spectraCurveSwap(
+        poolAddress,
+        seizedAssets,
+        ptIndex,
+        ibtIndex,
+        swapAmount,
+        this.address,
+      );
+      this.spectraIBTRedeem(ibt, swapAmount);
     }
 
     return { srcAmount, srcToken };
@@ -325,6 +396,15 @@ export class LiquidationEncoder<
     });
   }
 
+  public getCurveSwapIndex0Token(pool: Address) {
+    return readContract(this.client, {
+      address: pool,
+      abi: curveStableSwapNGAbi,
+      functionName: "coins",
+      args: [0n],
+    });
+  }
+
   public removeLiquidityFromCurvePool(
     pool: Address,
     amount: bigint,
@@ -380,6 +460,42 @@ export class LiquidationEncoder<
           outputTokenIndex,
           amount,
           minDestAmount,
+          receiver,
+        ],
+      }),
+    );
+  }
+
+  public spectraCurveSwap(
+    pool: Address,
+    amount: bigint,
+    inputTokenIndex: bigint,
+    outputTokenIndex: bigint,
+    minDestAmount: bigint,
+    receiver: Address,
+  ) {
+    this.pushCall(
+      pool,
+      0n,
+      /**
+       * @notice Perform an exchange between two coins
+       * @dev Index values can be found via the `coins` public getter method
+       * @param i Index value for the coin to send
+       * @param j Index value of the coin to receive
+       * @param _dx Amount of `i` being exchanged
+       * @param _min_dy Minimum amount of `j` to receive
+       * @param _receiver Address that receives `j`
+       * @return Actual amount of `j` received
+       */
+      encodeFunctionData({
+        abi: curveCryptoSwapAbi,
+        functionName: "exchange",
+        args: [
+          inputTokenIndex,
+          outputTokenIndex,
+          amount,
+          minDestAmount,
+          false,
           receiver,
         ],
       }),
@@ -455,6 +571,48 @@ export class LiquidationEncoder<
     );
   }
 
+  public previewIBTRedeem(ibt: Address, shares: bigint) {
+    return readContract(this.client, {
+      address: ibt,
+      abi: erc4626Abi,
+      functionName: "previewRedeem",
+      args: [shares],
+    });
+  }
+
+  public spectraRedeemAmount(pt: Address, amount: bigint) {
+    return readContract(this.client, {
+      address: pt,
+      abi: spectraPrincipalTokenAbi,
+      functionName: "convertToUnderlying",
+      args: [amount],
+    });
+  }
+
+  public spectraPTRedeem(pt: Address, amount: bigint) {
+    this.pushCall(
+      pt,
+      0n,
+      encodeFunctionData({
+        abi: spectraPrincipalTokenAbi,
+        functionName: "redeem",
+        args: [amount, this.address, this.address],
+      }),
+    );
+  }
+
+  public spectraIBTRedeem(ibt: Address, amount: bigint) {
+    this.pushCall(
+      ibt,
+      0n,
+      encodeFunctionData({
+        abi: erc4626Abi,
+        functionName: "redeem",
+        args: [amount, this.address, this.address],
+      }),
+    );
+  }
+
   public async handleTokenSwap(
     chainId: ChainId,
     initialSrcToken: Address,
@@ -468,6 +626,10 @@ export class LiquidationEncoder<
     const srcAmount = initialSrcAmount;
     const tries: SwapAttempt[] = [];
     let dstAmount = 0n;
+
+    if (initialSrcToken === marketParams.loanToken) {
+      return { dstAmount: srcAmount };
+    }
 
     while (true) {
       const bestSwap = await fetchBestSwap({
@@ -587,5 +749,253 @@ export class LiquidationEncoder<
     }
 
     return { dstAmount };
+  }
+
+  // MIDAS
+
+  async handleMidasTokens(collateralToken: Address, seizedAssets: bigint) {
+    const tokenOut = Midas.postRedeemToken(
+      collateralToken,
+      this.client.chain.id,
+    );
+
+    const redemptionVault = Midas.redemptionVault(
+      collateralToken,
+      this.client.chain.id,
+    );
+
+    const redemptionParams = await this.getRedemptionParams(
+      redemptionVault,
+      tokenOut,
+      seizedAssets,
+    );
+
+    if (!redemptionParams) {
+      return {
+        srcAmount: seizedAssets,
+        srcToken: collateralToken,
+      };
+    }
+
+    const previewRedeemInstantData =
+      Midas.previewRedeemInstant(redemptionParams);
+
+    if (!previewRedeemInstantData) {
+      return {
+        srcAmount: seizedAssets,
+        srcToken: collateralToken,
+      };
+    }
+
+    const { amountTokenOutWithoutFee, feeAmount } = previewRedeemInstantData;
+
+    if (feeAmount > 0n) {
+      this.erc20Approve(collateralToken, redemptionVault, feeAmount);
+    }
+
+    this.pushCall(
+      redemptionVault,
+      0n,
+      encodeFunctionData({
+        abi: redemptionVaultAbi,
+        functionName: "redeemInstant",
+        args: [tokenOut, seizedAssets, amountTokenOutWithoutFee],
+      }),
+    );
+
+    return {
+      srcAmount: Midas.convertFromBase18(
+        amountTokenOutWithoutFee,
+        redemptionParams.tokenOutDecimals,
+      ),
+      srcToken: tokenOut,
+    };
+  }
+
+  async getRedemptionParams(
+    vault: Address,
+    tokenOut: Address,
+    seizedCollateral: bigint,
+  ): Promise<Midas.PreviewRedeemInstantParams | undefined> {
+    try {
+      const [
+        minAmount,
+        instantFee,
+        instantDailyLimit,
+        STABLECOIN_RATE,
+        waivedFeeRestriction,
+        dailyLimits,
+        mTokenDataFeed,
+        tokenOutConfig,
+        tokenOutDecimals,
+      ] = await Promise.all([
+        this.getRedemptionVaultMinAmount(vault),
+        this.getRedemptionVaultInstantFee(vault),
+        this.getRedemptionVaultInstantDailyLimit(vault),
+        this.getRedemptionVaultStableCoinRate(vault),
+        this.getRedemptionVaultWaivedFeeRestriction(vault),
+        this.getRedemptionVaultDailyLimits(vault),
+        this.getRedemptionVaultmTokenDataFeed(vault),
+        this.getRedemptionVaultMTokenOutConfig(vault, tokenOut),
+        readContract(this.client, {
+          address: tokenOut,
+          abi: erc20Abi,
+          functionName: "decimals",
+          args: [],
+        }),
+      ]);
+
+      const [mTokenRate, tokenOutRate] = await Promise.all([
+        this.getMidasRate(mTokenDataFeed),
+        this.getMidasRate(tokenOutConfig[0]),
+      ]);
+
+      return {
+        amountMTokenIn: seizedCollateral,
+        tokenOutConfig: {
+          dataFeed: tokenOutConfig[0],
+          fee: tokenOutConfig[1],
+          allowance: tokenOutConfig[2],
+          stable: tokenOutConfig[3],
+        },
+        tokenOutDecimals: BigInt(tokenOutDecimals),
+        minAmount,
+        instantFee,
+        instantDailyLimit,
+        STABLECOIN_RATE,
+        waivedFeeRestriction,
+        dailyLimits,
+        mTokenRate,
+        tokenOutRate,
+      };
+    } catch (e) {
+      console.error(e);
+      return undefined;
+    }
+  }
+
+  async getRedemptionVaultMinAmount(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "minAmount",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultInstantFee(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "instantFee",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultInstantDailyLimit(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "instantDailyLimit",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultStableCoinRate(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "STABLECOIN_RATE",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultWaivedFeeRestriction(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "waivedFeeRestriction",
+      args: [this.address],
+    });
+  }
+
+  async getRedemptionVaultDailyLimits(vault: Address) {
+    const currentDayNumber = Math.round(Date.now() / 1000 / (60 * 60 * 24));
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "dailyLimits",
+      args: [BigInt(currentDayNumber)],
+    });
+  }
+
+  async getRedemptionVaultmTokenDataFeed(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "mTokenDataFeed",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultMTokenOutConfig(
+    vault: Address,
+    tokenOutAddress: Address,
+  ) {
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "tokensConfig",
+      args: [tokenOutAddress],
+    });
+  }
+
+  async getMidasRate(dataFeed: Address) {
+    return readContract(this.client, {
+      address: dataFeed,
+      abi: midasDataFeedAbi,
+      functionName: "getDataInBase18",
+      args: [],
+    });
+  }
+
+  async getRedemptionVaultPaymentTokens(vault: Address) {
+    return readContract(this.client, {
+      address: vault,
+      abi: redemptionVaultAbi,
+      functionName: "getPaymentTokens",
+      args: [],
+    });
+  }
+
+  public preLiquidationPreLiquidate(
+    preLiquidation: Address,
+    borrower: Address,
+    seizedAssets: bigint,
+    repaidShares: bigint,
+    callbackCalls?: Hex[],
+  ) {
+    callbackCalls ??= [];
+    this.pushCall(
+      preLiquidation,
+      0n,
+      encodeFunctionData({
+        abi: preLiquidationAbi,
+        functionName: "preLiquidate",
+        args: [
+          borrower,
+          seizedAssets,
+          repaidShares,
+          encodeAbiParameters(
+            [{ type: "bytes[]" }, { type: "bytes" }],
+            [callbackCalls, "0x"],
+          ),
+        ],
+      }),
+      {
+        sender: preLiquidation,
+        dataIndex: 1n, // onPreLiquidate(uint256,bytes)
+      },
+    );
   }
 }

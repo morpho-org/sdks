@@ -1,19 +1,10 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
-import {
-  BlueErrors,
-  ChainId,
-  SharesMath,
-  addresses,
-} from "@morpho-org/blue-sdk";
+import { ChainId, SharesMath, addresses } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
-import {
-  Erc20Errors,
-  SimulationErrors,
-  simulateOperation,
-} from "../../../src/index.js";
+import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
   marketA1,
@@ -66,7 +57,7 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new SimulationErrors.InvalidInput({ assets: -1n }));
+    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: assets=-1]`);
   });
 
   test("should throw if insufficient wallet balance", () => {
@@ -83,11 +74,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(
-      new Erc20Errors.InsufficientBalance(
-        marketA1.params.collateralToken,
-        userA,
-      ),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0xBF3FCDD92C14a1EF02C787C379c0aA941d239Af2"]`,
     );
   });
 
@@ -162,6 +150,8 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrow(new BlueErrors.InsufficientLiquidity(marketA1.id));
+    ).toThrowErrorMatchingInlineSnapshot(
+      `[Error: insufficient liquidity on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+    );
   });
 });
