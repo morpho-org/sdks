@@ -22,6 +22,7 @@ export const addresses = {
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
     metaMorphoFactory: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
+    preLiquidationFactory: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
 
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     morphoToken: "0x9994E35Db50125E0DF82e4c2dde62496CE330999",
@@ -69,6 +70,7 @@ export const addresses = {
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
     metaMorphoFactory: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
+    preLiquidationFactory: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
 
     wNative: "0x4200000000000000000000000000000000000006",
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
@@ -89,6 +91,7 @@ export interface ChainAddresses {
   adaptiveCurveIrm: Address;
   publicAllocator: Address;
   metaMorphoFactory: Address;
+  preLiquidationFactory: Address;
 
   wNative: Address;
   morphoToken?: Address;
