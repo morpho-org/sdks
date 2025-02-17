@@ -19,6 +19,7 @@ import {
   useVaultUsers,
   useVaults,
 } from "@morpho-org/blue-sdk-wagmi";
+import { values } from "@morpho-org/morpho-ts";
 import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
 import { useMemo } from "react";
 import type { ReadContractErrorType, UnionOmit } from "viem";
@@ -137,8 +138,27 @@ export function useSimulationState<
     },
   });
 
+  const vaults = useVaults({
+    ...parameters,
+    blockNumber: block?.number,
+    query: {
+      ...parameters.query,
+      enabled: block != null && parameters.query?.enabled,
+    },
+  });
+
+  const marketIds = useMemo(
+    () =>
+      Array.from(parameters.marketIds).concat(
+        values(vaults.data).flatMap((vault) =>
+          vault.supplyQueue.concat(vault.withdrawQueue),
+        ),
+      ),
+    [parameters.marketIds, vaults.data],
+  );
   const markets = useMarkets({
     ...parameters,
+    marketIds,
     blockNumber: block?.number,
     query: {
       ...parameters.query,
@@ -164,14 +184,6 @@ export function useSimulationState<
       enabled: block != null && parameters.query?.enabled,
     },
   });
-  const vaults = useVaults({
-    ...parameters,
-    blockNumber: block?.number,
-    query: {
-      ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
-    },
-  });
 
   const positions = usePositions({
     ...parameters,
@@ -179,9 +191,9 @@ export function useSimulationState<
     positions: useMemo(
       () =>
         Array.from(parameters.users).flatMap((user) =>
-          Array.from(parameters.marketIds, (marketId) => ({ user, marketId })),
+          Array.from(marketIds, (marketId) => ({ user, marketId })),
         ),
-      [parameters.users, parameters.marketIds],
+      [parameters.users, marketIds],
     ),
     query: {
       ...parameters.query,
@@ -209,9 +221,9 @@ export function useSimulationState<
     configs: useMemo(
       () =>
         Array.from(parameters.vaults).flatMap((vault) =>
-          Array.from(parameters.marketIds, (marketId) => ({ vault, marketId })),
+          Array.from(marketIds, (marketId) => ({ vault, marketId })),
         ),
-      [parameters.vaults, parameters.marketIds],
+      [parameters.vaults, marketIds],
     ),
     query: {
       ...parameters.query,

@@ -3,21 +3,23 @@ import { parseUnits } from "viem";
 
 import { ChainId, addresses } from "@morpho-org/blue-sdk";
 
-import { describe, expect, test } from "vitest";
+import { expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, tokenA, tokenB, userA, userB } from "../../fixtures.js";
 
 const type = "Erc20_Transfer2";
 
 const amount = parseUnits("1", 6);
-const { bundler } = addresses[ChainId.EthMainnet];
+const {
+  bundler3: { bundler3, generalAdapter1 },
+} = addresses[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should transfer with sender bundler", () => {
     const result = simulateOperation(
       {
         type,
-        sender: bundler,
+        sender: generalAdapter1,
         address: tokenA,
         args: {
           amount,
@@ -42,7 +44,7 @@ describe(type, () => {
       simulateOperation(
         {
           type,
-          sender: bundler,
+          sender: generalAdapter1,
           address: tokenB,
           args: {
             amount,
@@ -62,7 +64,7 @@ describe(type, () => {
       simulateOperation(
         {
           type,
-          sender: bundler,
+          sender: bundler3,
           address: tokenA,
           args: {
             amount,

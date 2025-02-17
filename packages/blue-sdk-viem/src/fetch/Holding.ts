@@ -11,7 +11,7 @@ import {
 import { type Address, type Client, erc20Abi, maxUint256 } from "viem";
 import { getBalance, getChainId, readContract } from "viem/actions";
 
-import { fromEntries } from "@morpho-org/morpho-ts";
+import { fromEntries, getValue } from "@morpho-org/morpho-ts";
 import {
   erc2612Abi,
   permissionedErc20WrapperAbi,
@@ -54,12 +54,16 @@ export async function fetchHolding(
     });
 
   if (deployless) {
-    const { morpho, permit2, bundler } = addresses[parameters.chainId];
+    const {
+      morpho,
+      permit2,
+      bundler3: { bundler3, generalAdapter1 },
+    } = addresses[parameters.chainId];
     try {
       const {
         balance,
         erc20Allowances: {
-          bundler: generalAdapter1Erc20Allowance,
+          generalAdapter1: generalAdapter1Erc20Allowance,
           ...erc20Allowances
         },
         permit2BundlerAllowance,
@@ -76,7 +80,8 @@ export async function fetchHolding(
           user,
           morpho,
           permit2,
-          bundler,
+          bundler3,
+          generalAdapter1,
           permissionedBackedTokens[parameters.chainId].has(token),
           permissionedWrapperTokens[parameters.chainId].has(token),
         ],
@@ -86,7 +91,7 @@ export async function fetchHolding(
         user,
         token,
         erc20Allowances: {
-          bundler: generalAdapter1Erc20Allowance,
+          "bundler3.generalAdapter1": generalAdapter1Erc20Allowance,
           ...erc20Allowances,
         },
         permit2BundlerAllowance,
@@ -126,7 +131,7 @@ export async function fetchHolding(
               abi: erc20Abi,
               address: token,
               functionName: "allowance",
-              args: [user, chainAddresses[label]],
+              args: [user, getValue(chainAddresses, label)],
             }),
           ] as const,
       ),
@@ -136,7 +141,7 @@ export async function fetchHolding(
       abi: permit2Abi,
       address: chainAddresses.permit2,
       functionName: "allowance",
-      args: [user, token, chainAddresses.bundler],
+      args: [user, token, chainAddresses.bundler3.bundler3],
     }).then(([amount, expiration, nonce]) => ({
       amount,
       expiration: BigInt(expiration),

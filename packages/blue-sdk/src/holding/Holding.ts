@@ -6,7 +6,7 @@ import type { Address, BigIntish } from "../types.js";
 export const ERC20_ALLOWANCE_RECIPIENTS = [
   "morpho",
   "permit2",
-  "bundler",
+  "bundler3.generalAdapter1",
 ] as const satisfies readonly AddressLabel[];
 
 export type Erc20AllowanceRecipient =

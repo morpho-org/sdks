@@ -18,11 +18,14 @@ export async function fetchUser(
     chainId ?? (await runner.provider.getNetwork()).chainId,
   );
 
-  const { morpho, bundler } = getChainAddresses(chainId);
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(chainId);
   const blue = MorphoBlue__factory.connect(morpho, runner);
 
   const [isBundlerAuthorized, morphoNonce] = await Promise.all([
-    blue.isAuthorized(address, bundler, overrides),
+    blue.isAuthorized(address, generalAdapter1, overrides),
     blue.nonce(address, overrides),
   ]);
 

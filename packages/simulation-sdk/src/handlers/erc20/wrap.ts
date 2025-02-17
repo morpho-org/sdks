@@ -9,11 +9,13 @@ import { handleErc20TransferOperation } from "./transfer.js";
 export const handleErc20WrapOperation: OperationHandler<
   Erc20Operations["Erc20_Wrap"]
 > = ({ address, args: { amount, owner, slippage = 0n }, sender }, data) => {
-  const { bundler } = getChainAddresses(data.chainId);
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(data.chainId);
 
   // Simulate the bundler's behavior on wraps only with MaxUint256.
-  if (sender === bundler && amount === MathLib.MAX_UINT_256)
-    amount = MathLib.min(amount, data.getHolding(bundler, address).balance);
+  if (sender === generalAdapter1 && amount === MathLib.MAX_UINT_256)
+    amount = data.getHolding(sender, address).balance;
 
   const wrappedToken = data.getWrappedToken(address);
   const wrappedAmount = wrappedToken.toWrappedExactAmountIn(amount, slippage);

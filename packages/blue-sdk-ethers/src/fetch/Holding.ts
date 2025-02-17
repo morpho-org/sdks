@@ -18,7 +18,7 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { fromEntries } from "@morpho-org/morpho-ts";
+import { fromEntries, getValue } from "@morpho-org/morpho-ts";
 import type { FetchOptions } from "../types";
 
 export async function fetchHolding(
@@ -66,11 +66,15 @@ export async function fetchHolding(
         async (label) =>
           [
             label,
-            await erc20.allowance(user, chainAddresses[label], overrides),
+            await erc20.allowance(
+              user,
+              getValue(chainAddresses, label),
+              overrides,
+            ),
           ] as const,
       ),
     ),
-    permit2.allowance(user, token, chainAddresses.bundler, overrides),
+    permit2.allowance(user, token, chainAddresses.bundler3.bundler3, overrides),
     erc2612.nonces(user, overrides).catch(() => undefined),
     permissionedBackedTokens[chainId].has(token)
       ? WrappedBackedToken__factory.connect(

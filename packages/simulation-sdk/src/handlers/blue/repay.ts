@@ -15,7 +15,10 @@ export const handleBlueRepayOperation: OperationHandler<
   },
   data,
 ) => {
-  const { morpho, bundler } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(data.chainId);
 
   handleBlueAccrueInterestOperation(
     {
@@ -29,11 +32,8 @@ export const handleBlueRepayOperation: OperationHandler<
   const market = data.getMarket(id);
 
   // Simulate the bundler's behavior on supply.
-  if (sender === bundler && assets === MathLib.MAX_UINT_256)
-    assets = MathLib.min(
-      assets,
-      data.getHolding(bundler, market.params.loanToken).balance,
-    );
+  if (sender === generalAdapter1 && assets === MathLib.MAX_UINT_256)
+    assets = data.getHolding(sender, market.params.loanToken).balance;
 
   if (assets === 0n && shares === 0n) throw new BlueErrors.InconsistentInput();
 

@@ -5,7 +5,10 @@ import { ChainId, addresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "../src";
 import { User } from "../src/augment/User";
 
-const { morpho, bundler } = addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+} = addresses[ChainId.EthMainnet];
 
 describe("augment/User", () => {
   test("should fetch user data", async ({ client }) => {
@@ -13,7 +16,7 @@ describe("augment/User", () => {
       address: morpho,
       abi: blueAbi,
       functionName: "setAuthorization",
-      args: [bundler, true],
+      args: [generalAdapter1, true],
     });
 
     const expectedData = new User({

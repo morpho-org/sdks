@@ -40,60 +40,70 @@ export interface ActionArgs {
   /* ERC20 */
   nativeTransfer: [recipient: Address, amount: bigint];
   erc20Transfer: [asset: Address, recipient: Address, amount: bigint];
-  erc20TransferFrom: [asset: Address, amount: bigint];
+  erc20TransferFrom: [asset: Address, amount: bigint, recipient?: Address];
 
   /* ERC20Wrapper */
   erc20WrapperDepositFor: [wrapper: Address, amount: bigint];
-  erc20WrapperWithdrawTo: [wrapper: Address, account: Address, amount: bigint];
+  erc20WrapperWithdrawTo: [wrapper: Address, receiver: Address, amount: bigint];
 
   /* Permit */
   permit: [
+    owner: Address,
     asset: Address,
     amount: bigint,
     deadline: bigint,
     signature: Hex | null,
+    spender?: Address,
     skipRevert?: boolean,
   ];
   permitDai: [
+    owner: Address,
     nonce: bigint,
     expiry: bigint,
     allowed: boolean,
     signature: Hex | null,
+    spender?: Address,
     skipRevert?: boolean,
   ];
 
   /* Permit2 */
   approve2: [
+    owner: Address,
     permitSingle: Permit2PermitSingle,
     signature: Hex | null,
     skipRevert?: boolean,
   ];
-  transferFrom2: [asset: Address, amount: bigint];
+  transferFrom2: [
+    asset: Address,
+    owner: Address,
+    amount: bigint,
+    recipient?: Address,
+  ];
 
   /* ERC4626 */
   erc4626Mint: [
     erc4626: Address,
     shares: bigint,
-    maxAssets: bigint,
+    maxSharePrice: bigint,
     receiver: Address,
   ];
   erc4626Deposit: [
     erc4626: Address,
     assets: bigint,
-    minShares: bigint,
+    maxSharePrice: bigint,
     receiver: Address,
   ];
   erc4626Withdraw: [
     erc4626: Address,
     assets: bigint,
-    maxShares: bigint,
+    minSharePrice: bigint,
     receiver: Address,
     owner: Address,
   ];
   erc4626Redeem: [
     erc4626: Address,
     shares: bigint,
-    minAssets: bigint,
+    minSharePrice: bigint,
     receiver: Address,
     owner: Address,
   ];
@@ -155,9 +165,8 @@ export interface ActionArgs {
   /* MetaMorpho */
 
   reallocateTo: [
-    publicAllocator: Address,
     vault: Address,
-    value: bigint,
+    fee: bigint,
     withdrawals: InputReallocation[],
     supplyMarket: InputMarketParams,
   ];
@@ -174,53 +183,86 @@ export interface ActionArgs {
   ];
 
   /* Wrapped Native */
-  wrapNative: [amount: bigint];
-  unwrapNative: [amount: bigint];
+  wrapNative: [amount: bigint, recipient?: Address];
+  unwrapNative: [amount: bigint, recipient?: Address];
 
   /* stETH */
-  stakeEth: [amount: bigint, minShares: bigint, referral: Address];
+  stakeEth: [
+    amount: bigint,
+    minShares: bigint,
+    referral: Address,
+    recipient?: Address,
+  ];
 
   /* Wrapped stETH */
-  wrapStEth: [amount: bigint];
-  unwrapStEth: [amount: bigint];
+  wrapStEth: [amount: bigint, recipient?: Address];
+  unwrapStEth: [amount: bigint, recipient?: Address];
 
   /* AaveV2 */
-  aaveV2Repay: [asset: Address, amount: bigint, rateMode?: bigint];
-  aaveV2Withdraw: [asset: Address, amount: bigint];
+  aaveV2Repay: [
+    asset: Address,
+    amount: bigint,
+    onBehalf: Address,
+    rateMode?: bigint,
+  ];
+  aaveV2Withdraw: [asset: Address, amount: bigint, recipient?: Address];
 
   /* AaveV3 */
-  aaveV3Repay: [asset: Address, amount: bigint, rateMode?: bigint];
-  aaveV3Withdraw: [asset: Address, amount: bigint];
+  aaveV3Repay: [
+    asset: Address,
+    amount: bigint,
+    onBehalf: Address,
+    rateMode?: bigint,
+  ];
+  aaveV3Withdraw: [asset: Address, amount: bigint, recipient?: Address];
 
   /* AaveV3 Optimizer */
-  aaveV3OptimizerRepay: [underlying: Address, amount: bigint];
+  aaveV3OptimizerRepay: [
+    underlying: Address,
+    amount: bigint,
+    onBehalf: Address,
+  ];
   aaveV3OptimizerWithdraw: [
     underlying: Address,
     amount: bigint,
     maxIterations: bigint,
+    recipient?: Address,
   ];
-  aaveV3OptimizerWithdrawCollateral: [underlying: Address, amount: bigint];
+  aaveV3OptimizerWithdrawCollateral: [
+    underlying: Address,
+    amount: bigint,
+    recipient?: Address,
+  ];
   aaveV3OptimizerApproveManagerWithSig: [
+    owner: Address,
     isApproved: boolean,
     nonce: bigint,
     deadline: bigint,
     signature: Hex | null,
+    manager?: Address,
     skipRevert?: boolean,
   ];
 
   /* CompoundV2 */
-  compoundV2Repay: [cToken: Address, amount: bigint];
-  compoundV2Redeem: [cToken: Address, amount: bigint];
+  compoundV2Repay: [cToken: Address, amount: bigint, onBehalf: Address];
+  compoundV2Redeem: [cToken: Address, amount: bigint, recipient?: Address];
 
   /* CompoundV3 */
-  compoundV3Repay: [instance: Address, amount: bigint];
-  compoundV3WithdrawFrom: [instance: Address, asset: Address, amount: bigint];
+  compoundV3Repay: [instance: Address, amount: bigint, onBehalf: Address];
+  compoundV3WithdrawFrom: [
+    instance: Address,
+    asset: Address,
+    amount: bigint,
+    recipient?: Address,
+  ];
   compoundV3AllowBySig: [
     instance: Address,
+    owner: Address,
     isAllowed: boolean,
     nonce: bigint,
     expiry: bigint,
     signature: Hex | null,
+    manager?: Address,
     skipRevert?: boolean,
   ];
 }
