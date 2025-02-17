@@ -90,10 +90,8 @@ export const populateInputTransfer = (
       },
     ];
 
-  const { erc20Allowances, permit2Allowances, erc2612Nonce } = data.getHolding(
-    from,
-    address,
-  );
+  const { erc20Allowances, permit2BundlerAllowance, erc2612Nonce } =
+    data.getHolding(from, address);
 
   // ERC20 allowance to the bundler is enough, consume it.
   if (erc20Allowances.bundler >= amount)
@@ -169,8 +167,8 @@ export const populateInputTransfer = (
       });
 
     if (
-      permit2Allowances.bundler.amount < amount ||
-      permit2Allowances.bundler.expiration < data.block.timestamp
+      permit2BundlerAllowance.amount < amount ||
+      permit2BundlerAllowance.expiration < data.block.timestamp
     )
       operations.push({
         type: "Erc20_Permit2",
@@ -178,9 +176,8 @@ export const populateInputTransfer = (
         address,
         args: {
           amount,
-          spender: bundler,
           expiration: MathLib.MAX_UINT_48, // Always approve indefinitely.
-          nonce: permit2Allowances.bundler.nonce,
+          nonce: permit2BundlerAllowance.nonce,
         },
       });
 
@@ -574,8 +571,7 @@ export const finalizeBundle = (
         const duplicatePermit2 = permit2s.find(
           (permit2) =>
             permit2.address === operation.address &&
-            permit2.sender === operation.sender &&
-            permit2.args.spender === operation.args.spender,
+            permit2.sender === operation.sender,
         );
 
         if (duplicatePermit2 == null) {

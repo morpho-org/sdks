@@ -479,17 +479,10 @@ export const blueFixture = {
         user: userA,
         token: NATIVE_ADDRESS,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenA]: new Holding({
@@ -501,17 +494,10 @@ export const blueFixture = {
         user: userA,
         token: tokenA,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: parseUnits("1000", 6),
-            expiration: MathLib.MAX_UINT_48,
-            nonce: 1n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: parseUnits("1000", 6),
+          expiration: MathLib.MAX_UINT_48,
+          nonce: 1n,
         },
         erc2612Nonce: 0n,
       }),
@@ -524,17 +510,10 @@ export const blueFixture = {
         user: userA,
         token: tokenB,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA1.params.collateralToken]: new Holding({
@@ -546,17 +525,10 @@ export const blueFixture = {
         user: userA,
         token: marketA1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA2.params.collateralToken]: new Holding({
@@ -568,17 +540,10 @@ export const blueFixture = {
         user: userA,
         token: marketA2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB1.params.collateralToken]: new Holding({
@@ -590,17 +555,10 @@ export const blueFixture = {
         user: userA,
         token: marketB1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB2.params.collateralToken]: new Holding({
@@ -612,17 +570,10 @@ export const blueFixture = {
         user: userA,
         token: marketB2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [vaultA.address]: new Holding({
@@ -634,17 +585,10 @@ export const blueFixture = {
         user: userA,
         token: vaultA.address,
         balance: parseUnits("800", 18),
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -657,17 +601,10 @@ export const blueFixture = {
         user: userA,
         token: vaultB.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -680,17 +617,10 @@ export const blueFixture = {
         user: userA,
         token: vaultC.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -705,17 +635,10 @@ export const blueFixture = {
         user: userB,
         token: NATIVE_ADDRESS,
         balance: parseEther("0.05"),
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenA]: new Holding({
@@ -727,17 +650,10 @@ export const blueFixture = {
         user: userB,
         token: tokenA,
         balance: parseUnits("1200", 6),
-        permit2Allowances: {
-          morpho: {
-            amount: parseUnits("800", 6),
-            expiration: MathLib.MAX_UINT_48,
-            nonce: 1n,
-          },
-          bundler: {
-            amount: parseUnits("800", 6),
-            expiration: MathLib.MAX_UINT_48,
-            nonce: 1n,
-          },
+        permit2BundlerAllowance: {
+          amount: parseUnits("800", 6),
+          expiration: MathLib.MAX_UINT_48,
+          nonce: 1n,
         },
         erc2612Nonce: 0n,
       }),
@@ -750,17 +666,10 @@ export const blueFixture = {
         user: userB,
         token: tokenB,
         balance: parseEther("6789"),
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA1.params.collateralToken]: new Holding({
@@ -772,17 +681,10 @@ export const blueFixture = {
         user: userB,
         token: marketA1.params.collateralToken,
         balance: parseEther("1000"),
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA2.params.collateralToken]: new Holding({
@@ -794,17 +696,10 @@ export const blueFixture = {
         user: userB,
         token: marketA2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB1.params.collateralToken]: new Holding({
@@ -816,17 +711,10 @@ export const blueFixture = {
         user: userB,
         token: marketB1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB2.params.collateralToken]: new Holding({
@@ -838,17 +726,10 @@ export const blueFixture = {
         user: userB,
         token: marketB2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [vaultA.address]: new Holding({
@@ -860,17 +741,10 @@ export const blueFixture = {
         user: userB,
         token: vaultA.address,
         balance: parseUnits("200", 18),
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -883,17 +757,10 @@ export const blueFixture = {
         user: userB,
         token: vaultB.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -906,17 +773,10 @@ export const blueFixture = {
         user: userB,
         token: vaultC.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -931,17 +791,10 @@ export const blueFixture = {
         user: userC,
         token: NATIVE_ADDRESS,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenA]: new Holding({
@@ -953,17 +806,10 @@ export const blueFixture = {
         user: userC,
         token: tokenA,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -976,17 +822,10 @@ export const blueFixture = {
         user: userC,
         token: tokenB,
         balance: parseEther("6789"),
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA1.params.collateralToken]: new Holding({
@@ -998,17 +837,10 @@ export const blueFixture = {
         user: userC,
         token: marketA1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA2.params.collateralToken]: new Holding({
@@ -1020,17 +852,10 @@ export const blueFixture = {
         user: userC,
         token: marketA2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB1.params.collateralToken]: new Holding({
@@ -1042,17 +867,10 @@ export const blueFixture = {
         user: userC,
         token: marketB1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB2.params.collateralToken]: new Holding({
@@ -1064,17 +882,10 @@ export const blueFixture = {
         user: userC,
         token: marketB2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [vaultA.address]: new Holding({
@@ -1086,17 +897,10 @@ export const blueFixture = {
         user: userC,
         token: vaultA.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1109,17 +913,10 @@ export const blueFixture = {
         user: userC,
         token: vaultB.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1132,17 +929,10 @@ export const blueFixture = {
         user: userC,
         token: vaultC.address,
         balance: parseEther("30000"),
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1157,17 +947,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: NATIVE_ADDRESS,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenA]: new Holding({
@@ -1179,17 +962,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: tokenA,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenB]: new Holding({
@@ -1201,17 +977,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: tokenB,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA1.params.collateralToken]: new Holding({
@@ -1223,17 +992,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: marketA1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA2.params.collateralToken]: new Holding({
@@ -1245,17 +1007,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: marketA2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB1.params.collateralToken]: new Holding({
@@ -1267,17 +1022,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: marketB1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB2.params.collateralToken]: new Holding({
@@ -1289,17 +1037,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: marketB2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [vaultA.address]: new Holding({
@@ -1311,17 +1052,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: vaultA.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1334,17 +1068,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: vaultB.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1357,17 +1084,10 @@ export const blueFixture = {
         user: vaultA.address,
         token: vaultC.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1382,17 +1102,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: NATIVE_ADDRESS,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenA]: new Holding({
@@ -1404,17 +1117,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: tokenA,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenB]: new Holding({
@@ -1426,17 +1132,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: tokenB,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA1.params.collateralToken]: new Holding({
@@ -1448,17 +1147,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: marketA1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA2.params.collateralToken]: new Holding({
@@ -1470,17 +1162,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: marketA2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB1.params.collateralToken]: new Holding({
@@ -1492,17 +1177,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: marketB1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB2.params.collateralToken]: new Holding({
@@ -1514,17 +1192,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: marketB2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [vaultA.address]: new Holding({
@@ -1536,17 +1207,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: vaultA.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1559,17 +1223,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: vaultB.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1582,17 +1239,10 @@ export const blueFixture = {
         user: vaultB.address,
         token: vaultC.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1607,17 +1257,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: NATIVE_ADDRESS,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenA]: new Holding({
@@ -1629,17 +1272,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: tokenA,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [tokenB]: new Holding({
@@ -1651,17 +1287,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: tokenB,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA1.params.collateralToken]: new Holding({
@@ -1673,17 +1302,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: marketA1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketA2.params.collateralToken]: new Holding({
@@ -1695,17 +1317,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: marketA2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB1.params.collateralToken]: new Holding({
@@ -1717,17 +1332,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: marketB1.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [marketB2.params.collateralToken]: new Holding({
@@ -1739,17 +1347,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: marketB2.params.collateralToken,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
       }),
       [vaultA.address]: new Holding({
@@ -1761,17 +1362,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: vaultA.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1784,17 +1378,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: vaultB.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
@@ -1807,17 +1394,10 @@ export const blueFixture = {
         user: vaultC.address,
         token: vaultC.address,
         balance: 0n,
-        permit2Allowances: {
-          morpho: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-          bundler: {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
+        permit2BundlerAllowance: {
+          amount: 0n,
+          expiration: 0n,
+          nonce: 0n,
         },
         erc2612Nonce: 0n,
       }),
