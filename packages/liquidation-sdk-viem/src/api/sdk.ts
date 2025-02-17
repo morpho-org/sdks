@@ -52,6 +52,29 @@ export const GetWhitelistedMarketIdsDocument = gql`
 }
     `;
 
+export const GetMarketAssetsDocument = gql `
+    query getMarketAsset($chainId: Int!, $marketId: String!) {
+  markets(where: {chainId_in: [$chainId], uniqueKey_in: [$marketId]}) {
+    items {
+      collateralAsset {
+        address
+        decimals
+        symbol
+        priceUsd
+        spotPriceEth
+      }
+      loanAsset {
+        address
+        decimals
+        symbol
+        priceUsd
+        spotPriceEth
+      }
+    }
+  } 
+}
+`;
+
 export type SdkFunctionWrapper = <T>(action: (requestHeaders?:Record<string, string>) => Promise<T>, operationName: string, operationType?: string, variables?: any) => Promise<T>;
 
 
@@ -64,6 +87,9 @@ export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = 
     },
     getWhitelistedMarketIds(variables: Types.GetWhitelistedMarketIdsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetWhitelistedMarketIdsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<Types.GetWhitelistedMarketIdsQuery>(GetWhitelistedMarketIdsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getWhitelistedMarketIds', 'query', variables);
+    },
+    getMarketAssets(variables: Types.GetMarketAssetsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetMarketAssetsQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<Types.GetMarketAssetsQuery>(GetMarketAssetsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getMarketAssets', 'query', variables);
     }
   };
 }

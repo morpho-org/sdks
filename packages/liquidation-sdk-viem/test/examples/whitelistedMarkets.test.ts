@@ -40,7 +40,7 @@ import {
 } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
-import { check } from "../../examples/whitelisted-erc4626-1inch.js";
+import { check } from "../../examples/whitelistedMarkets.js";
 import { OneInch, Paraswap, Pendle } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import pendleMarketData from "../mockData/pendleMarketData.json";
@@ -68,7 +68,7 @@ const { morpho } = addresses[ChainId.EthMainnet];
 const borrower = testAccount(1);
 const liquidator = testAccount(2);
 
-describe("erc4626-1inch", () => {
+describe("whitelisted markets", () => {
   let swapMockAddress: Address;
 
   beforeEach<LiquidationTestContext<typeof mainnet>>(async ({ client }) => {

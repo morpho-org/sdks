@@ -170,7 +170,8 @@ const _formatNumber = (
   );
 };
 
-const _withUnit = (value: string, unit: string) => {
+const _withUnit = (value: string, unit?: string) => {
+  if (!unit) return value;
   switch (unit) {
     case "$":
       return `$${value}`;
@@ -256,18 +257,13 @@ function formatBI(
       break;
   }
 
-  const formattedValue =
+  return (
     (isNegative && !/^0\.0+$/.test(value)
       ? "-"
       : formatOptions.sign
         ? "+"
-        : "") + value;
-
-  if (formatOptions.unit) {
-    return _withUnit(formattedValue, formatOptions.unit);
-  }
-
-  return formattedValue;
+        : "") + _withUnit(value, formatOptions.unit)
+  );
 }
 
 type FormatterWithDefault<F extends BaseFormatter> = {
