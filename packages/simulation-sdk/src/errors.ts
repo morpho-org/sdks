@@ -139,11 +139,10 @@ export namespace Erc20Errors {
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
-      public readonly spender: "morpho" | "bundler",
       public readonly nonce: bigint,
     ) {
       super(
-        `invalid permit2 nonce "${nonce}" for token "${token}" from owner "${owner}" to spender "${spender}"`,
+        `invalid permit2 nonce "${nonce}" for token "${token}" from owner "${owner}"`,
       );
     }
   }
@@ -152,10 +151,9 @@ export namespace Erc20Errors {
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
-      public readonly spender: "morpho" | "bundler",
     ) {
       super(
-        `insufficient permit2 allowance for token "${token}" from owner "${owner}" to spender "${spender}"`,
+        `insufficient permit2 allowance for token "${token}" from owner "${owner}"`,
       );
     }
   }

@@ -208,7 +208,6 @@ export interface Erc20OperationArgs {
     nonce: bigint;
   };
   Erc20_Permit2: {
-    spender: Address;
     amount: bigint;
     expiration: bigint;
     nonce: bigint;

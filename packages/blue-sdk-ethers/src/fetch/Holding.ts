@@ -14,7 +14,6 @@ import {
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
   NATIVE_ADDRESS,
-  PERMIT2_ALLOWANCE_RECIPIENTS,
   getChainAddresses,
   permissionedBackedTokens,
   permissionedWrapperTokens,
@@ -41,16 +40,11 @@ export async function fetchHolding(
       erc20Allowances: fromEntries(
         ERC20_ALLOWANCE_RECIPIENTS.map((label) => [label, MaxUint256]),
       ),
-      permit2Allowances: fromEntries(
-        PERMIT2_ALLOWANCE_RECIPIENTS.map((label) => [
-          label,
-          {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-        ]),
-      ),
+      permit2BundlerAllowance: {
+        amount: 0n,
+        expiration: 0n,
+        nonce: 0n,
+      },
       balance: await runner.provider.getBalance(user, overrides.blockTag),
     });
 
@@ -61,7 +55,7 @@ export async function fetchHolding(
   const [
     balance,
     erc20Allowances,
-    permit2Allowances,
+    permit2BundlerAllowance,
     erc2612Nonce,
     whitelistControllerAggregator,
     hasErc20WrapperPermission,
@@ -76,21 +70,7 @@ export async function fetchHolding(
           ] as const,
       ),
     ),
-    Promise.all(
-      PERMIT2_ALLOWANCE_RECIPIENTS.map(
-        async (label) =>
-          [
-            label,
-            await permit2
-              .allowance(user, token, chainAddresses[label], overrides)
-              .then(({ amount, nonce, expiration }) => ({
-                amount,
-                expiration,
-                nonce,
-              })),
-          ] as const,
-      ),
-    ),
+    permit2.allowance(user, token, chainAddresses.bundler, overrides),
     erc2612.nonces(user, overrides).catch(() => undefined),
     permissionedBackedTokens[chainId].has(token)
       ? WrappedBackedToken__factory.connect(
@@ -107,7 +87,7 @@ export async function fetchHolding(
     user,
     token,
     erc20Allowances: fromEntries(erc20Allowances),
-    permit2Allowances: fromEntries(permit2Allowances),
+    permit2BundlerAllowance,
     erc2612Nonce,
     balance,
     canTransfer: hasErc20WrapperPermission,
