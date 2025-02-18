@@ -65,7 +65,7 @@ else if (releaseType != null) {
       .bump(whatBump);
 
     releaseType = `pre${mainReleaseType}`;
-    version = inc(version, mainReleaseType, branch, "0");
+    version = inc(version, releaseType, branch, "0");
 
     const newChannelVersion = inc(channelVersion, "prerelease", branch, "0");
     if (gt(newChannelVersion, version)) {
