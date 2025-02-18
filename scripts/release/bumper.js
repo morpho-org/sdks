@@ -29,6 +29,7 @@ export const whatBump = async (_commits) => {
 
 export const git = new ConventionalGitClient();
 export const branch = await git.getCurrentBranch();
+export const channel = branch !== "main" ? branch : "latest";
 
 export const packageName = `@morpho-org/${basename(process.cwd())}`;
 export const tagParams = {
@@ -36,37 +37,42 @@ export const tagParams = {
   skipUnstable: branch === "main",
 };
 
-export const lastVersion = await git.getVersionFromTags(tagParams);
+let [{ version }, { version: channelVersion }] = await Promise.all([
+  fetch(`https://registry.npmjs.org/${packageName}/latest`)
+    .then((res) => res.json())
+    .catch(() => ({})),
+  fetch(`https://registry.npmjs.org/${packageName}/${channel}`)
+    .then((res) => res.json())
+    .catch(() => ({})),
+]);
 
 export const lastTag =
-  lastVersion != null ? `${tagParams.prefix}v${lastVersion}` : null;
-export const channel = branch !== "main" ? branch : "latest";
+  channelVersion != null ? `${tagParams.prefix}v${channelVersion}` : null;
 
-export const bumper = new Bumper(git)
+const bumper = new Bumper(git)
   .tag(tagParams)
   .commits({ ...commitOpts, path: "." }, parser);
 
 let { releaseType } = await bumper.bump(whatBump);
 
-let version = lastVersion;
-if (lastVersion == null) version = "1.0.0";
-else if (releaseType) {
-  if (branch !== "main") releaseType = "prerelease";
+if (channelVersion == null)
+  version = branch === "main" ? "1.0.0" : `1.0.0-${channel}.0`;
+else if (releaseType != null) {
+  if (branch === "main") version = inc(version, releaseType);
+  else {
+    const { releaseType: mainReleaseType } = await bumper
+      .tag({ ...tagParams, skipUnstable: true })
+      .bump(whatBump);
 
-  const npmReq = await fetch(
-    `https://registry.npmjs.org/${packageName}/${channel}`,
-  );
-  const npmPackage = await npmReq.json();
-  const npmVersion = npmPackage.version;
+    releaseType = `pre${mainReleaseType}`;
+    version = inc(version, mainReleaseType, branch, "0");
 
-  version = inc(
-    npmVersion == null || gt(lastVersion, npmVersion)
-      ? lastVersion
-      : npmVersion,
-    releaseType,
-    branch !== "main" ? branch : undefined,
-    "0",
-  );
+    const newChannelVersion = inc(channelVersion, "prerelease", branch, "0");
+    if (gt(newChannelVersion, version)) {
+      releaseType = "prerelease";
+      version = newChannelVersion;
+    }
+  }
 }
 
 if (!version) {
