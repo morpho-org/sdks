@@ -175,6 +175,9 @@ importers:
       '@morpho-org/blue-sdk-viem':
         specifier: workspace:^
         version: link:../blue-sdk-viem
+      '@morpho-org/morpho-test':
+        specifier: workspace:^
+        version: link:../morpho-test
       '@morpho-org/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts

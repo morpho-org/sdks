@@ -87,26 +87,29 @@ export interface InputSimulationState {
   chainId: ChainId;
   block: MinimalBlock;
   global?: { feeRecipient?: Address };
-  markets?: Record<MarketId, Market>;
-  users?: Record<Address, User>;
-  tokens?: Record<Address, Token>;
-  vaults?: Record<Address, Vault>;
+  markets?: Record<MarketId, Market | undefined>;
+  users?: Record<Address, User | undefined>;
+  tokens?: Record<Address, Token | undefined>;
+  vaults?: Record<Address, Vault | undefined>;
   /**
    * Positions indexed by user then by market.
    */
-  positions?: Record<Address, Record<MarketId, Position>>;
+  positions?: Record<Address, Record<MarketId, Position | undefined>>;
   /**
    * Holdings indexed by user then by token.
    */
-  holdings?: Record<Address, Record<Address, Holding>>;
+  holdings?: Record<Address, Record<Address, Holding | undefined>>;
   /**
    * VaultMarketConfigs indexed by vault then by market.
    */
-  vaultMarketConfigs?: Record<Address, Record<MarketId, VaultMarketConfig>>;
+  vaultMarketConfigs?: Record<
+    Address,
+    Record<MarketId, VaultMarketConfig | undefined>
+  >;
   /**
    * VaultUsers indexed by vault then by user.
    */
-  vaultUsers?: Record<Address, Record<Address, VaultUser>>;
+  vaultUsers?: Record<Address, Record<Address, VaultUser | undefined>>;
 }
 
 export class SimulationState implements InputSimulationState {
@@ -114,29 +117,38 @@ export class SimulationState implements InputSimulationState {
   public block: MinimalBlock;
 
   public readonly global: { feeRecipient?: Address };
-  public readonly markets: Record<MarketId, Market>;
-  public readonly users: Record<Address, User>;
-  public readonly tokens: Record<Address, Token>;
-  public readonly vaults: Record<Address, Vault>;
+  public readonly markets: Record<MarketId, Market | undefined>;
+  public readonly users: Record<Address, User | undefined>;
+  public readonly tokens: Record<Address, Token | undefined>;
+  public readonly vaults: Record<Address, Vault | undefined>;
   /**
    * Positions indexed by user then by market.
    */
-  public readonly positions: Record<Address, Record<MarketId, Position>>;
+  public readonly positions: Record<
+    Address,
+    Record<MarketId, Position | undefined>
+  >;
   /**
    * Holdings indexed by user then by token.
    */
-  public readonly holdings: Record<Address, Record<Address, Holding>>;
+  public readonly holdings: Record<
+    Address,
+    Record<Address, Holding | undefined>
+  >;
   /**
    * VaultMarketConfigs indexed by vault then by market.
    */
   public readonly vaultMarketConfigs: Record<
     Address,
-    Record<MarketId, VaultMarketConfig>
+    Record<MarketId, VaultMarketConfig | undefined>
   >;
   /**
    * VaultUsers indexed by vault then by user.
    */
-  public readonly vaultUsers: Record<Address, Record<Address, VaultUser>>;
+  public readonly vaultUsers: Record<
+    Address,
+    Record<Address, VaultUser | undefined>
+  >;
 
   constructor({
     chainId,

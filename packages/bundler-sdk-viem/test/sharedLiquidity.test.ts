@@ -20,18 +20,7 @@ configure({ asyncUtilTimeout: 10_000 });
 describe("sharedLiquidity", () => {
   const { morpho, bundler, publicAllocator, wNative, wstEth, stEth, usdc } =
     addresses[ChainId.EthMainnet];
-  const {
-    eth_idle,
-    eth_wstEth_2,
-    eth_rEth,
-    eth_sDai,
-    eth_wbtc,
-    usdc_wstEth,
-    usdc_idle,
-    usdc_wbtc,
-    usdc_wbIB01,
-  } = markets[ChainId.EthMainnet];
-  const { eth_wstEth } = markets[ChainId.EthMainnet];
+  const { usdc_wstEth, usdc_wbtc } = markets[ChainId.EthMainnet];
 
   const { steakUsdc, bbUsdc, bbEth } = vaults[ChainId.EthMainnet];
 
@@ -121,18 +110,7 @@ describe("sharedLiquidity", () => {
 
       const { result } = await renderHook(config, () =>
         useSimulationState({
-          marketIds: [
-            eth_idle.id,
-            eth_rEth.id,
-            eth_sDai.id,
-            eth_wbtc.id,
-            eth_wstEth.id,
-            eth_wstEth_2.id,
-            id,
-            usdc_idle.id,
-            usdc_wbtc.id,
-            usdc_wbIB01.id,
-          ],
+          marketIds: [id],
           users: [
             client.account.address,
             donator.address,
@@ -352,18 +330,7 @@ describe("sharedLiquidity", () => {
 
       const { result } = await renderHook(config, () =>
         useSimulationState({
-          marketIds: [
-            eth_idle.id,
-            eth_rEth.id,
-            eth_sDai.id,
-            eth_wbtc.id,
-            eth_wstEth.id,
-            eth_wstEth_2.id,
-            id,
-            usdc_idle.id,
-            usdc_wbtc.id,
-            usdc_wbIB01.id,
-          ],
+          marketIds: [id],
           users: [
             client.account.address,
             donator.address,
@@ -612,18 +579,7 @@ describe("sharedLiquidity", () => {
 
       const { result } = await renderHook(config, () =>
         useSimulationState({
-          marketIds: [
-            eth_idle.id,
-            eth_rEth.id,
-            eth_sDai.id,
-            eth_wbtc.id,
-            eth_wstEth.id,
-            eth_wstEth_2.id,
-            id,
-            usdc_idle.id,
-            usdc_wbtc.id,
-            usdc_wbIB01.id,
-          ],
+          marketIds: [id],
           users: [
             client.account.address,
             donator.address,
