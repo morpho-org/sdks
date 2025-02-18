@@ -28,7 +28,9 @@ import { type Config, type ResolvedRegister, useReadContract } from "wagmi";
 export type FetchSimulationStateParameters = FetchMarketsParameters &
   FetchUsersParameters &
   FetchTokensParameters &
-  FetchVaultsParameters;
+  FetchVaultsParameters & {
+    includeVaultQueues?: boolean;
+  };
 
 export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
@@ -114,6 +116,7 @@ export function useSimulationState<
 >({
   block,
   accrueInterest = true,
+  includeVaultQueues = true,
   ...parameters
 }: UseSimulationStateParameters<config>): UseSimulationStateReturnType {
   const staleTime =
@@ -147,18 +150,16 @@ export function useSimulationState<
     },
   });
 
-  const marketIds = useMemo(
-    () =>
-      Array.from(parameters.marketIds).concat(
+  const marketIds = includeVaultQueues
+    ? Array.from(parameters.marketIds).concat(
         values(vaults.data).flatMap(
           (vault) => vault?.supplyQueue.concat(vault.withdrawQueue) ?? [],
         ),
-      ),
-    [parameters.marketIds, vaults.data],
-  );
+      )
+    : parameters.marketIds;
   const markets = useMarkets({
     ...parameters,
-    marketIds,
+    ...(includeVaultQueues && { marketIds }),
     blockNumber: block?.number,
     query: {
       ...parameters.query,
