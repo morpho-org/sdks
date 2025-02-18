@@ -849,8 +849,10 @@ export const finalizeBundle = (
     skims.push(
       ...entries(endBundlerTokenData)
         .filter(
-          ([token, { balance }]) =>
-            balance - (startBundlerTokenData[token]?.balance ?? 0n) > 5n,
+          ([token, holding]) =>
+            holding != null &&
+            holding.balance - (startBundlerTokenData[token]?.balance ?? 0n) >
+              5n,
         )
         .map(
           ([address]) =>
@@ -913,6 +915,8 @@ export const simulateRequiredTokenAmounts = (
   const virtualBundlerData = produceImmutable(data, (draft) => {
     Object.values(draft.holdings[generalAdapter1] ?? {}).forEach(
       (bundlerTokenData) => {
+        if (bundlerTokenData == null) return;
+
         // Virtual balance to calculate the amount required.
         bundlerTokenData.balance += MathLib.MAX_UINT_160;
       },

@@ -1669,7 +1669,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [],
+              marketIds: [id],
               users: [
                 client.account.address,
                 generalAdapter1,
