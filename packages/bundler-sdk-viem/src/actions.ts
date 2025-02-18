@@ -16,6 +16,7 @@ import {
   convexWrapperTokens,
   erc20WrapperTokens,
   getChainAddresses,
+  getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
 import { Time, getValue } from "@morpho-org/morpho-ts";
 import {
@@ -553,9 +554,13 @@ export const encodeOperation = (
         }
         default: {
           if (erc20WrapperTokens[chainId].has(address)) {
+            const underlying = getUnwrappedToken(address, chainId);
+            if (underlying == null)
+              throw Error(`unknown wrapped token: ${address}`);
+
             actions.push({
               type: "erc20WrapperDepositFor",
-              args: [address, amount],
+              args: [address, underlying, amount],
             });
 
             break;
@@ -710,9 +715,13 @@ export const encodeOperation = (
       const { params } = dataBefore.getMarket(id);
 
       if (convexWrapperTokens[chainId].has(params.collateralToken)) {
+        const underlying = getUnwrappedToken(address, chainId);
+        if (underlying == null)
+          throw Error(`unknown wrapped token: ${address}`);
+
         actions.push({
           type: "erc20WrapperDepositFor",
-          args: [params.collateralToken, assets],
+          args: [params.collateralToken, underlying, assets],
         });
 
         break;

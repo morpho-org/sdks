@@ -19,8 +19,9 @@ export const addresses = {
     bundler: "0x4095F064B8d3c3548A3bebfd0Bbfd04750E30077",
     bundler3: {
       bundler3: "0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245",
-      generalAdapter1: "0xC459b97a3447e3D31dD88069030ABC63a6FFBd4a",
+      generalAdapter1: "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0",
       paraswapAdapter: "0x03b5259Bd204BfD4A616E5B79b0B786d90c6C38f",
+      erc20WrapperAdapter: "0xf83D17dFE160597b19e4FdD8ea61A23e9a87F962",
       compoundV2MigrationAdapter: "0x9B89c07f480Df1945279031b5fC6fF241b8f1101",
       compoundV3MigrationAdapter: "0xdBa5bdE29eA030Bfa6A608592dFcA1D02CB26773",
       aaveV2MigrationAdapter: "0x40288815C399709dFC0875A384B637fFe387961B",
@@ -87,8 +88,9 @@ export const addresses = {
     bundler: "0x23055618898e202386e6c13955a58D3C68200BFB",
     bundler3: {
       bundler3: "0x6BFd8137e702540E7A42B74178A4a49Ba43920C4",
-      generalAdapter1: "0x5cf147D7dBdC03c313F895633d18CbA62C80c2C1",
+      generalAdapter1: "0xb98c948CFA24072e58935BC004a8A7b376AE746A",
       paraswapAdapter: "0x6abE8ABd0275E5564ed1336F0243A52C32562F71",
+      erc20WrapperAdapter: "0xdeEf55F0A7366cC3Baf5E04313269389Fe17E9AE",
       compoundV3MigrationAdapter: "0x85D4812Ef92c040d4270eD8547b6835e41FbbB70",
       aaveV3CoreMigrationAdapter: "0xb27Aa2a964eAd5ed661D86974b37e4fB995b36f5",
     },
@@ -122,6 +124,7 @@ export interface ChainAddresses {
     bundler3: Address;
     generalAdapter1: Address;
     paraswapAdapter: Address;
+    erc20WrapperAdapter: Address;
     compoundV2MigrationAdapter?: Address;
     compoundV3MigrationAdapter: Address;
     aaveV2MigrationAdapter?: Address;
@@ -179,7 +182,6 @@ export const unwrappedTokensMapping: Record<
       addresses[ChainId.EthMainnet].tryLSD,
     [addresses[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"]]:
       addresses[ChainId.EthMainnet].crvUSDETHCRV,
-
     [addresses[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"]]:
       addresses[ChainId.EthMainnet]["2BTC-f"],
   },

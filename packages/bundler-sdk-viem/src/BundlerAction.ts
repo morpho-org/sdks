@@ -6,6 +6,7 @@ import {
   compoundV2MigrationAdapterAbi,
   compoundV3MigrationAdapterAbi,
   coreAdapterAbi,
+  erc20WrapperAdapterAbi,
   ethereumGeneralAdapter1Abi,
   generalAdapter1Abi,
   universalRewardsDistributorAbi,
@@ -27,6 +28,7 @@ import {
   type Hex,
   encodeFunctionData,
   keccak256,
+  maxUint256,
   parseSignature,
   toFunctionSelector,
   zeroHash,
@@ -683,10 +685,11 @@ export namespace BundlerAction {
   export function erc20WrapperDepositFor(
     chainId: ChainId,
     wrapper: Address,
+    underlying: Address,
     amount: bigint,
   ): BundlerCall[] {
     const {
-      bundler3: { generalAdapter1 },
+      bundler3: { generalAdapter1, erc20WrapperAdapter },
     } = getChainAddresses(chainId);
 
     return [
@@ -694,8 +697,30 @@ export namespace BundlerAction {
         to: generalAdapter1,
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
+          functionName: "erc20Transfer",
+          args: [underlying, erc20WrapperAdapter, maxUint256],
+        }),
+        value: 0n,
+        skipRevert: false,
+        callbackHash: zeroHash,
+      },
+      {
+        to: erc20WrapperAdapter,
+        data: encodeFunctionData({
+          abi: erc20WrapperAdapterAbi,
           functionName: "erc20WrapperDepositFor",
           args: [wrapper, amount],
+        }),
+        value: 0n,
+        skipRevert: false,
+        callbackHash: zeroHash,
+      },
+      {
+        to: erc20WrapperAdapter,
+        data: encodeFunctionData({
+          abi: erc20WrapperAdapterAbi,
+          functionName: "erc20Transfer",
+          args: [underlying, generalAdapter1, maxUint256],
         }),
         value: 0n,
         skipRevert: false,
@@ -717,7 +742,7 @@ export namespace BundlerAction {
     amount: bigint,
   ): BundlerCall[] {
     const {
-      bundler3: { generalAdapter1 },
+      bundler3: { generalAdapter1, erc20WrapperAdapter },
     } = getChainAddresses(chainId);
 
     return [
@@ -725,8 +750,30 @@ export namespace BundlerAction {
         to: generalAdapter1,
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
+          functionName: "erc20Transfer",
+          args: [wrapper, erc20WrapperAdapter, maxUint256],
+        }),
+        value: 0n,
+        skipRevert: false,
+        callbackHash: zeroHash,
+      },
+      {
+        to: erc20WrapperAdapter,
+        data: encodeFunctionData({
+          abi: erc20WrapperAdapterAbi,
           functionName: "erc20WrapperWithdrawTo",
           args: [wrapper, receiver, amount],
+        }),
+        value: 0n,
+        skipRevert: false,
+        callbackHash: zeroHash,
+      },
+      {
+        to: erc20WrapperAdapter,
+        data: encodeFunctionData({
+          abi: erc20WrapperAdapterAbi,
+          functionName: "erc20Transfer",
+          args: [wrapper, generalAdapter1, maxUint256],
         }),
         value: 0n,
         skipRevert: false,
