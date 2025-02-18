@@ -46,29 +46,8 @@ describe("populateBundle", () => {
         usdt,
         dai,
       } = addresses[ChainId.EthMainnet];
-      const {
-        eth_idle,
-        eth_wstEth,
-        eth_wstEth_2,
-        eth_rEth,
-        eth_sDai,
-        eth_wbtc,
-        eth_ezEth,
-        eth_apxEth,
-        eth_osEth,
-        eth_weEth,
-        usdc_wstEth,
-        usdc_idle,
-        usdc_wbtc,
-        usdc_wbIB01,
-        usdt_idle,
-        usdt_weth_86,
-        usdt_weth_91_5,
-        usdt_wbtc,
-        usdt_wstEth,
-        usdt_sDai,
-        dai_sUsde,
-      } = markets[ChainId.EthMainnet];
+      const { eth_wstEth, usdc_wstEth, usdc_wbtc, dai_sUsde } =
+        markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbUsdc, bbEth, re7Weth } =
         vaults[ChainId.EthMainnet];
 
@@ -528,12 +507,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                usdc_wstEth.id,
-                usdc_idle.id,
-                usdc_wbtc.id,
-                usdc_wbIB01.id,
-              ],
+              marketIds: [],
               users: [client.account.address, bundler, steakUsdc.address],
               tokens: [usdc, steakUsdc.address],
               vaults: [steakUsdc.address],
@@ -622,14 +596,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [],
               users: [client.account.address, bundler, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -750,15 +717,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                marketParams.id,
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [marketParams.id],
               users: [client.account.address, bundler, bbUsdt.address],
               tokens: [usdt, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -909,15 +868,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                marketParams.id,
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [marketParams.id],
               users: [client.account.address, bundler, bbUsdt.address],
               tokens: [usdt, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -1065,14 +1016,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_wstEth.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-              ],
+              marketIds: [],
               users: [client.account.address, bundler, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
@@ -1209,14 +1153,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_wstEth.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-              ],
+              marketIds: [],
               users: [client.account.address, bundler, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
@@ -1273,7 +1210,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [id, usdc_idle.id, usdc_wbtc.id, usdc_wbIB01.id],
+              marketIds: [id],
               users: [
                 client.account.address,
                 bundler,
@@ -1473,14 +1410,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-              ],
+              marketIds: [id],
               users: [client.account.address, bundler, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
@@ -1709,18 +1639,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-                eth_ezEth.id,
-                eth_apxEth.id,
-                eth_osEth.id,
-                eth_weEth.id,
-              ],
+              marketIds: [id],
               users: [
                 client.account.address,
                 bundler,
@@ -2036,18 +1955,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth.id,
-                eth_wstEth_2.id,
-                id,
-                usdc_idle.id,
-                usdc_wbtc.id,
-                usdc_wbIB01.id,
-              ],
+              marketIds: [id],
               users: [
                 client.account.address,
                 donator.address,
@@ -2533,28 +2441,8 @@ describe("populateBundle", () => {
         usdc,
         usdt,
       } = addresses[ChainId.EthMainnet];
-      const {
-        eth_idle,
-        eth_sDai,
-        eth_wbtc,
-        eth_rEth,
-        eth_wstEth,
-        eth_wstEth_2,
-        eth_ezEth,
-        eth_apxEth,
-        eth_osEth,
-        eth_weEth,
-        usdc_wstEth,
-        usdc_idle,
-        usdc_wbtc,
-        usdc_wbIB01,
-        usdt_idle,
-        usdt_weth_86,
-        usdt_weth_91_5,
-        usdt_wbtc,
-        usdt_wstEth,
-        usdt_sDai,
-      } = markets[ChainId.EthMainnet];
+      const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc } =
+        markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbEth, bbUsdc, re7Weth } =
         vaults[ChainId.EthMainnet];
 
@@ -2939,12 +2827,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                usdc_wstEth.id,
-                usdc_idle.id,
-                usdc_wbtc.id,
-                usdc_wbIB01.id,
-              ],
+              marketIds: [],
               users: [client.account.address, bundler, steakUsdc.address],
               tokens: [usdc, stEth, wstEth, steakUsdc.address],
               vaults: [steakUsdc.address],
@@ -3044,14 +2927,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [],
               users: [client.account.address, bundler, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -3177,15 +3053,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                marketParams.id,
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [marketParams.id],
               users: [client.account.address, bundler, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -3344,15 +3212,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                marketParams.id,
-                usdt_wstEth.id,
-                usdt_idle.id,
-                usdt_wbtc.id,
-                usdt_weth_86.id,
-                usdt_weth_91_5.id,
-                usdt_sDai.id,
-              ],
+              marketIds: [marketParams.id],
               users: [client.account.address, bundler, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
@@ -3505,14 +3365,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_wstEth.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-              ],
+              marketIds: [],
               users: [client.account.address, bundler, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
@@ -3650,14 +3503,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_wstEth.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-              ],
+              marketIds: [],
               users: [client.account.address, bundler, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
@@ -3728,7 +3574,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [id, usdc_idle.id, usdc_wbtc.id, usdc_wbIB01.id],
+              marketIds: [id],
               users: [
                 client.account.address,
                 bundler,
@@ -3940,14 +3786,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth.id,
-              ],
+              marketIds: [id],
               users: [client.account.address, bundler, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
@@ -4193,18 +4032,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth_2.id,
-                eth_ezEth.id,
-                eth_apxEth.id,
-                eth_osEth.id,
-                eth_weEth.id,
-              ],
+              marketIds: [id],
               users: [
                 client.account.address,
                 bundler,
@@ -4531,18 +4359,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [
-                eth_idle.id,
-                eth_rEth.id,
-                eth_sDai.id,
-                eth_wbtc.id,
-                eth_wstEth.id,
-                eth_wstEth_2.id,
-                id,
-                usdc_idle.id,
-                usdc_wbtc.id,
-                usdc_wbIB01.id,
-              ],
+              marketIds: [id],
               users: [
                 client.account.address,
                 donator.address,
