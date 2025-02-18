@@ -491,7 +491,6 @@ describe("useSimulationState", () => {
           address: steakUsdc.asset,
           args: {
             amount,
-            spender: bundler,
             expiration: MathLib.MAX_UINT_48,
             nonce: 0n,
           },
@@ -530,7 +529,7 @@ describe("useSimulationState", () => {
     ).toBe(0n);
     expect(
       steps[0].getHolding(client.account.address, steakUsdc.asset)
-        .permit2Allowances.bundler.amount,
+        .permit2BundlerAllowance.amount,
     ).toBe(0n);
     expect(
       steps[0].getHolding(client.account.address, steakUsdc.address).balance,
@@ -549,7 +548,7 @@ describe("useSimulationState", () => {
     ).toBe(amount);
     expect(
       step1.getHolding(client.account.address, steakUsdc.asset)
-        .permit2Allowances.bundler.amount,
+        .permit2BundlerAllowance.amount,
     ).toBe(0n);
     expect(
       step1.getHolding(client.account.address, steakUsdc.address).balance,
@@ -568,7 +567,7 @@ describe("useSimulationState", () => {
     ).toBe(amount);
     expect(
       step2.getHolding(client.account.address, steakUsdc.asset)
-        .permit2Allowances.bundler.amount,
+        .permit2BundlerAllowance.amount,
     ).toBe(amount);
     expect(
       step2.getHolding(client.account.address, steakUsdc.address).balance,

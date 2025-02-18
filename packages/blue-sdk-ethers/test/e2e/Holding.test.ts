@@ -24,17 +24,10 @@ describe("augment/Holding", async () => {
         permit2: 3n,
         bundler: 2n,
       },
-      permit2Allowances: {
-        morpho: {
-          amount: 4n,
-          expiration: MathLib.MAX_UINT_48 - 1n,
-          nonce: 0n,
-        },
-        bundler: {
-          amount: 7n,
-          expiration: MathLib.MAX_UINT_48 - 2n,
-          nonce: 0n,
-        },
+      permit2BundlerAllowance: {
+        amount: 7n,
+        expiration: MathLib.MAX_UINT_48 - 2n,
+        nonce: 0n,
       },
       balance: 10n * MathLib.WAD,
       canTransfer: true,
@@ -62,20 +55,9 @@ describe("augment/Holding", async () => {
       functionName: "approve",
       args: [
         wNative,
-        morpho,
-        expectedData.permit2Allowances.morpho.amount,
-        Number(expectedData.permit2Allowances.morpho.expiration),
-      ],
-    });
-    await client.writeContract({
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "approve",
-      args: [
-        wNative,
         bundler,
-        expectedData.permit2Allowances.bundler.amount,
-        Number(expectedData.permit2Allowances.bundler.expiration),
+        expectedData.permit2BundlerAllowance.amount,
+        Number(expectedData.permit2BundlerAllowance.expiration),
       ],
     });
 
@@ -95,17 +77,10 @@ describe("augment/Holding", async () => {
         permit2: maxUint256,
         bundler: maxUint256,
       },
-      permit2Allowances: {
-        morpho: {
-          amount: 0n,
-          expiration: 0n,
-          nonce: 0n,
-        },
-        bundler: {
-          amount: 0n,
-          expiration: 0n,
-          nonce: 0n,
-        },
+      permit2BundlerAllowance: {
+        amount: 0n,
+        expiration: 0n,
+        nonce: 0n,
       },
       balance: 10000000000000000000000n,
       canTransfer: undefined,
@@ -125,17 +100,10 @@ describe("augment/Holding", async () => {
         permit2: 5n,
         bundler: 4n,
       },
-      permit2Allowances: {
-        morpho: {
-          amount: 9n,
-          expiration: MathLib.MAX_UINT_48 - 2n,
-          nonce: 0n,
-        },
-        bundler: {
-          amount: 8n,
-          expiration: MathLib.MAX_UINT_48 - 7n,
-          nonce: 0n,
-        },
+      permit2BundlerAllowance: {
+        amount: 8n,
+        expiration: MathLib.MAX_UINT_48 - 7n,
+        nonce: 0n,
       },
       balance: 2853958n,
       erc2612Nonce: 0n,
@@ -164,20 +132,9 @@ describe("augment/Holding", async () => {
       functionName: "approve",
       args: [
         wbC3M,
-        morpho,
-        expectedData.permit2Allowances.morpho.amount,
-        Number(expectedData.permit2Allowances.morpho.expiration),
-      ],
-    });
-    await client.writeContract({
-      address: permit2,
-      abi: permit2Abi,
-      functionName: "approve",
-      args: [
-        wbC3M,
         bundler,
-        expectedData.permit2Allowances.bundler.amount,
-        Number(expectedData.permit2Allowances.bundler.expiration),
+        expectedData.permit2BundlerAllowance.amount,
+        Number(expectedData.permit2BundlerAllowance.expiration),
       ],
     });
 
