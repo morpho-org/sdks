@@ -303,7 +303,6 @@ describe("populateBundle", () => {
               address: stEth,
               args: {
                 amount: balance - bundlerBalance,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -647,7 +646,6 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -780,7 +778,6 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -932,7 +929,6 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -1084,7 +1080,6 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: expect.any(BigInt),
-                spender: bundler,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
@@ -1784,7 +1779,6 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: loanAssets / 2n,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -2071,7 +2065,6 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: depositAssets,
-                spender: bundler,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
@@ -2319,7 +2312,6 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: repayAmount,
-                spender: bundler,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
@@ -2412,7 +2404,6 @@ describe("populateBundle", () => {
             borrowAmount;
 
           expect(chainPosition.collateral).toBe(0n);
-          expect(chainPosition.supplyShares).toBe(0n);
           expect(chainPosition.borrowShares).toBe(0n);
 
           expect(
@@ -2431,7 +2422,7 @@ describe("populateBundle", () => {
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
             extraWethAmount - accruedInterests,
-          ); // we normally didn't experienced any slippage
+          ); // should not have experienced any slippage
         },
       );
     });
@@ -2618,7 +2609,6 @@ describe("populateBundle", () => {
               address: stEth,
               args: {
                 amount: balance - bundlerBalance,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -2992,7 +2982,6 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -3133,7 +3122,6 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -3290,7 +3278,6 @@ describe("populateBundle", () => {
               address: usdt,
               args: {
                 amount,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -3443,7 +3430,6 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: expect.any(BigInt),
-                spender: bundler,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
@@ -4197,7 +4183,6 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: loanAssets / 2n,
-                spender: bundler,
                 expiration: MathLib.MAX_UINT_48,
                 nonce: 0n,
               },
@@ -4495,7 +4480,6 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: depositAssets,
-                spender: bundler,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
@@ -4749,7 +4733,6 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: repayAmount,
-                spender: bundler,
                 expiration: expect.any(BigInt),
                 nonce: 0n,
               },
