@@ -26,6 +26,7 @@ import {
 import {
   type Address,
   type Hex,
+  encodeAbiParameters,
   encodeFunctionData,
   keccak256,
   maxUint256,
@@ -392,8 +393,8 @@ export namespace BundlerAction {
 
         return BundlerAction.compoundV3AllowBySig(
           chainId,
-          owner,
           instance,
+          owner,
           isAllowed,
           nonce,
           expiry,
@@ -974,7 +975,13 @@ export namespace BundlerAction {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
 
-    const useCallback = callbackCalls.length > 0;
+    const reenter = callbackCalls.length > 0;
+    const reenterData = reenter
+      ? encodeAbiParameters(
+          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
+          [callbackCalls],
+        )
+      : "0x";
 
     return [
       {
@@ -982,26 +989,11 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoSupply",
-          args: [
-            market,
-            assets,
-            shares,
-            slippageAmount,
-            onBehalf,
-            useCallback
-              ? encodeFunctionData({
-                  abi: bundler3Abi,
-                  functionName: "reenter",
-                  args: [callbackCalls],
-                })
-              : "0x",
-          ],
+          args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
         }),
         value: 0n,
         skipRevert: false,
-        callbackHash: useCallback
-          ? keccak256(`${generalAdapter1}${reenterSelectorHash}`)
-          : zeroHash,
+        callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
   }
@@ -1024,7 +1016,13 @@ export namespace BundlerAction {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
 
-    const useCallback = callbackCalls.length > 0;
+    const reenter = callbackCalls.length > 0;
+    const reenterData = reenter
+      ? encodeAbiParameters(
+          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
+          [callbackCalls],
+        )
+      : "0x";
 
     return [
       {
@@ -1032,24 +1030,11 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoSupplyCollateral",
-          args: [
-            market,
-            assets,
-            onBehalf,
-            useCallback
-              ? encodeFunctionData({
-                  abi: bundler3Abi,
-                  functionName: "reenter",
-                  args: [callbackCalls],
-                })
-              : "0x",
-          ],
+          args: [market, assets, onBehalf, reenterData],
         }),
         value: 0n,
         skipRevert: false,
-        callbackHash: useCallback
-          ? keccak256(`${generalAdapter1}${reenterSelectorHash}`)
-          : zeroHash,
+        callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
   }
@@ -1111,7 +1096,13 @@ export namespace BundlerAction {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
 
-    const useCallback = callbackCalls.length > 0;
+    const reenter = callbackCalls.length > 0;
+    const reenterData = reenter
+      ? encodeAbiParameters(
+          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
+          [callbackCalls],
+        )
+      : "0x";
 
     return [
       {
@@ -1119,26 +1110,11 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoRepay",
-          args: [
-            market,
-            assets,
-            shares,
-            slippageAmount,
-            onBehalf,
-            useCallback
-              ? encodeFunctionData({
-                  abi: bundler3Abi,
-                  functionName: "reenter",
-                  args: [callbackCalls],
-                })
-              : "0x",
-          ],
+          args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
         }),
         value: 0n,
         skipRevert: false,
-        callbackHash: useCallback
-          ? keccak256(`${generalAdapter1}${reenterSelectorHash}`)
-          : zeroHash,
+        callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
   }

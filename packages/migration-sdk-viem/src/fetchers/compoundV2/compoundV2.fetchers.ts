@@ -103,8 +103,12 @@ async function fetchCompoundV2InstancePosition(
     } as const;
   })();
 
-  const { compoundV2Bundler: bundler, wNative } = getChainAddresses(chainId);
-  if (!bundler) throw new UnknownDataError("missing migration addresses");
+  const {
+    bundler3: { compoundV2MigrationAdapter },
+    wNative,
+  } = getChainAddresses(chainId);
+  if (compoundV2MigrationAdapter == null)
+    throw new UnknownDataError("missing migration adapter");
 
   const [
     cTokenBalance,
@@ -129,7 +133,7 @@ async function fetchCompoundV2InstancePosition(
       abi,
       address: cTokenAddress,
       functionName: "allowance",
-      args: [user, bundler],
+      args: [user, compoundV2MigrationAdapter],
     }),
     readContract(client, {
       ...parameters,

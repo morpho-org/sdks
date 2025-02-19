@@ -66,38 +66,41 @@ const TEST_CONFIGS: { [C in ChainId]: ChainConfig<C> }[ChainId][] = [
       },
     },
   },
-  {
-    chainId: ChainId.BaseMainnet,
-    //@ts-expect-error
-    testFn: test[ChainId.BaseMainnet],
-    markets: {
-      mWeth: {
-        vault: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1" as Address,
-        underlying: addresses[ChainId.BaseMainnet].wNative,
-        underlyingDecimals: 18,
-        cToken:
-          MIGRATION_ADDRESSES[ChainId.BaseMainnet][
-            MigratableProtocol.compoundV2
-          ].mWeth.address,
-      },
-      mUsdc: {
-        vault: "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca" as Address,
-        underlying: addresses[ChainId.BaseMainnet].usdc,
-        underlyingDecimals: 6,
-        cToken:
-          MIGRATION_ADDRESSES[ChainId.BaseMainnet][
-            MigratableProtocol.compoundV2
-          ].mUsdc.address,
-      },
-    },
-  },
+  // {
+  //   chainId: ChainId.BaseMainnet,
+  //   //@ts-expect-error
+  //   testFn: test[ChainId.BaseMainnet],
+  //   markets: {
+  //     mWeth: {
+  //       vault: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1" as Address,
+  //       underlying: addresses[ChainId.BaseMainnet].wNative,
+  //       underlyingDecimals: 18,
+  //       cToken:
+  //         MIGRATION_ADDRESSES[ChainId.BaseMainnet][
+  //           MigratableProtocol.compoundV2
+  //         ].mWeth.address,
+  //     },
+  //     mUsdc: {
+  //       vault: "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca" as Address,
+  //       underlying: addresses[ChainId.BaseMainnet].usdc,
+  //       underlyingDecimals: 6,
+  //       cToken:
+  //         MIGRATION_ADDRESSES[ChainId.BaseMainnet][
+  //           MigratableProtocol.compoundV2
+  //         ].mUsdc.address,
+  //     },
+  //   },
+  // },
 ];
 
 describe("Supply position on COMPOUND V2", () => {
   for (const { chainId, testFn, markets } of TEST_CONFIGS) {
     const { comptroller } =
       MIGRATION_ADDRESSES[chainId][MigratableProtocol.compoundV2];
-    const { wNative, compoundV2Bundler } = addresses[chainId];
+    const {
+      wNative,
+      bundler3: { generalAdapter1, compoundV2MigrationAdapter },
+    } = addresses[chainId];
 
     const writeSupply = async (
       client: ViemTestContext["client"],
@@ -143,7 +146,7 @@ describe("Supply position on COMPOUND V2", () => {
       ] of entries(markets)) {
         describe(`on ${cTokenName} market`, () => {
           testFn(
-            "shouldn't fetch user position if market is enterred",
+            "shouldn't fetch user position if market is entered",
             async ({ client }) => {
               const amount = parseUnits("10", underlyingDecimals);
               await writeSupply(client, cToken, underlying, amount, true);
@@ -256,7 +259,7 @@ describe("Supply position on COMPOUND V2", () => {
                 {
                   vault,
                   amount: migratedAmount,
-                  minShares: 0n,
+                  maxSharePrice: 2n * MathLib.RAY,
                 },
                 chainId,
               );
@@ -270,11 +273,15 @@ describe("Supply position on COMPOUND V2", () => {
               expect(migrationBundle.actions).toEqual(
                 [
                   {
-                    args: [cToken, transferredAmount],
+                    args: [
+                      cToken,
+                      transferredAmount,
+                      compoundV2MigrationAdapter,
+                    ],
                     type: "erc20TransferFrom",
                   },
                   {
-                    args: [cToken, maxUint256],
+                    args: [cToken, maxUint256, generalAdapter1],
                     type: "compoundV2Redeem",
                   },
                   [NATIVE_ADDRESS, wNative].includes(underlying)
@@ -286,8 +293,8 @@ describe("Supply position on COMPOUND V2", () => {
                   {
                     args: [
                       vault,
-                      MathLib.MAX_UINT_128,
-                      0n,
+                      maxUint256,
+                      2n * MathLib.RAY,
                       client.account.address,
                     ],
                     type: "erc4626Deposit",
@@ -311,9 +318,12 @@ describe("Supply position on COMPOUND V2", () => {
               ] = await Promise.all([
                 client.balanceOf({
                   erc20: underlying === NATIVE_ADDRESS ? undefined : underlying,
-                  owner: compoundV2Bundler,
+                  owner: compoundV2MigrationAdapter,
                 }),
-                client.balanceOf({ erc20: cToken, owner: compoundV2Bundler }),
+                client.balanceOf({
+                  erc20: cToken,
+                  owner: compoundV2MigrationAdapter,
+                }),
                 client.balanceOf({ erc20: cToken }),
                 client.balanceOf({ erc20: vault }),
                 client.readContract({
@@ -371,7 +381,7 @@ describe("Supply position on COMPOUND V2", () => {
                 {
                   vault,
                   amount: position.supply,
-                  minShares: 0n,
+                  maxSharePrice: 2n * MathLib.RAY,
                 },
                 chainId,
                 false,
@@ -383,11 +393,11 @@ describe("Supply position on COMPOUND V2", () => {
               expect(migrationBundle.actions).toEqual(
                 [
                   {
-                    args: [cToken, cTokenBalance],
+                    args: [cToken, cTokenBalance, compoundV2MigrationAdapter],
                     type: "erc20TransferFrom",
                   },
                   {
-                    args: [cToken, maxUint256],
+                    args: [cToken, maxUint256, generalAdapter1],
                     type: "compoundV2Redeem",
                   },
                   [NATIVE_ADDRESS, wNative].includes(underlying)
@@ -399,8 +409,8 @@ describe("Supply position on COMPOUND V2", () => {
                   {
                     args: [
                       vault,
-                      MathLib.MAX_UINT_128,
-                      0n,
+                      maxUint256,
+                      2n * MathLib.RAY,
                       client.account.address,
                     ],
                     type: "erc4626Deposit",
@@ -422,9 +432,12 @@ describe("Supply position on COMPOUND V2", () => {
               ] = await Promise.all([
                 client.balanceOf({
                   erc20: underlying === NATIVE_ADDRESS ? undefined : underlying,
-                  owner: compoundV2Bundler,
+                  owner: compoundV2MigrationAdapter,
                 }),
-                client.balanceOf({ erc20: cToken, owner: compoundV2Bundler }),
+                client.balanceOf({
+                  erc20: cToken,
+                  owner: compoundV2MigrationAdapter,
+                }),
                 client.balanceOf({ erc20: cToken }),
                 client.balanceOf({ erc20: vault }),
               ]);

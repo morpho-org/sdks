@@ -16,8 +16,8 @@ export namespace MigratableSupplyPosition {
   export interface Args {
     /** The amount to migrate. */
     amount: bigint;
-    /** The minimum vault shares expected after migration. */
-    minShares: bigint;
+    /** The maximum vault share price expected (scaled by RAY). */
+    maxSharePrice: bigint;
     /** The address of the vault to migrate to. */
     vault: Address;
   }

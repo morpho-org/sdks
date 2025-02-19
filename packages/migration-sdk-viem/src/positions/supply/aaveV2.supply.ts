@@ -1,6 +1,5 @@
 import {
   type ChainId,
-  MathLib,
   type Token,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -60,7 +59,7 @@ export class MigratableSupplyPosition_AaveV2
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
   ): MigrationBundle {
@@ -72,10 +71,10 @@ export class MigratableSupplyPosition_AaveV2
     const aToken = this.aToken;
 
     const {
-      bundler3: { aaveV2MigrationAdapter },
+      bundler3: { generalAdapter1, aaveV2MigrationAdapter },
     } = getChainAddresses(chainId);
     if (aaveV2MigrationAdapter == null)
-      throw new Error("missing aaveV2Bundler address");
+      throw new Error("missing aaveV2MigrationAdapter address");
 
     let migratedAmount = amount;
 
@@ -108,7 +107,7 @@ export class MigratableSupplyPosition_AaveV2
             {
               erc20: aToken,
               owner: user,
-              spender: aaveV2MigrationAdapter,
+              spender: generalAdapter1,
               allowance: migratedAmount,
               nonce,
               deadline,
@@ -132,13 +131,13 @@ export class MigratableSupplyPosition_AaveV2
     } else {
       txRequirements.push({
         type: "erc20Approve",
-        args: [aToken.address, aaveV2MigrationAdapter, migratedAmount],
+        args: [aToken.address, generalAdapter1, migratedAmount],
         tx: {
           to: aToken.address,
           data: encodeFunctionData({
             abi: aTokenV2Abi,
             functionName: "approve",
-            args: [aaveV2MigrationAdapter, migratedAmount],
+            args: [generalAdapter1, migratedAmount],
           }),
         },
       });
@@ -146,17 +145,17 @@ export class MigratableSupplyPosition_AaveV2
 
     actions.push({
       type: "erc20TransferFrom",
-      args: [aToken.address, migratedAmount],
+      args: [aToken.address, migratedAmount, aaveV2MigrationAdapter],
     });
 
     actions.push(
       {
         type: "aaveV2Withdraw",
-        args: [this.loanToken, maxUint256],
+        args: [this.loanToken, maxUint256, generalAdapter1],
       },
       {
         type: "erc4626Deposit",
-        args: [vault, MathLib.MAX_UINT_128, minShares, user],
+        args: [vault, maxUint256, maxSharePrice, user],
       },
     );
 

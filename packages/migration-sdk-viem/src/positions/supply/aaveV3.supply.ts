@@ -1,6 +1,5 @@
 import {
   type ChainId,
-  MathLib,
   type Token,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -60,7 +59,7 @@ export class MigratableSupplyPosition_AaveV3
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
   ): MigrationBundle {
@@ -71,7 +70,7 @@ export class MigratableSupplyPosition_AaveV3
     const user = this.user;
 
     const {
-      bundler3: { aaveV3CoreMigrationAdapter },
+      bundler3: { generalAdapter1, aaveV3CoreMigrationAdapter },
     } = getChainAddresses(chainId);
 
     const aToken = this.aToken;
@@ -107,7 +106,7 @@ export class MigratableSupplyPosition_AaveV3
             {
               erc20: aToken,
               owner: user,
-              spender: aaveV3CoreMigrationAdapter,
+              spender: generalAdapter1,
               allowance: migratedAmount,
               nonce,
               deadline,
@@ -131,13 +130,13 @@ export class MigratableSupplyPosition_AaveV3
     } else {
       txRequirements.push({
         type: "erc20Approve",
-        args: [aToken.address, aaveV3CoreMigrationAdapter, migratedAmount],
+        args: [aToken.address, generalAdapter1, migratedAmount],
         tx: {
           to: aToken.address,
           data: encodeFunctionData({
             abi: aTokenV3Abi,
             functionName: "approve",
-            args: [aaveV3CoreMigrationAdapter, migratedAmount],
+            args: [generalAdapter1, migratedAmount],
           }),
         },
       });
@@ -145,17 +144,17 @@ export class MigratableSupplyPosition_AaveV3
 
     actions.push({
       type: "erc20TransferFrom",
-      args: [aToken.address, migratedAmount],
+      args: [aToken.address, migratedAmount, aaveV3CoreMigrationAdapter],
     });
 
     actions.push(
       {
         type: "aaveV3Withdraw",
-        args: [this.loanToken, maxUint256],
+        args: [this.loanToken, maxUint256, generalAdapter1],
       },
       {
         type: "erc4626Deposit",
-        args: [vault, MathLib.MAX_UINT_128, minShares, user],
+        args: [vault, maxUint256, maxSharePrice, user],
       },
     );
 
