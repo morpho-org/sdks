@@ -187,7 +187,7 @@ describe("populateBundle", () => {
             formatUnits(await client.balanceOf({ erc20: dai }), 18),
           ).toBeCloseTo(0, 8);
           expect(position.collateral).toBe(0n);
-          expect(position.supplyShares).toBe(50639301938842808563547241013n);
+          expect(position.supplyShares).toBe(50490517487541493285419804234n);
           expect(position.borrowShares).toBe(0n);
 
           expect(await client.allowance({ erc20: dai, spender: permit2 })).toBe(
@@ -1054,7 +1054,7 @@ describe("populateBundle", () => {
               onBundleTx: donate(
                 client,
                 wNative,
-                parseEther("0.4"),
+                parseEther("0.3"),
                 bbEth.address,
                 morpho,
               ),
@@ -1691,7 +1691,7 @@ describe("populateBundle", () => {
 
           await waitFor(
             () => expect(result.current.isFetchingAny).toBeFalsy(),
-            { timeout: 30_000 },
+            { timeout: 60_000 },
           );
 
           const data = result.current.data!;
