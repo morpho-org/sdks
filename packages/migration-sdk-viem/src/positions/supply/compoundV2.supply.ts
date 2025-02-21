@@ -117,7 +117,7 @@ export class MigratableSupplyPosition_CompoundV2
         signatures: [],
         txs: txRequirements,
       },
-      tx: () => BundlerAction.encodeBundle(chainId, actions, 0n),
+      tx: () => BundlerAction.encodeBundle(chainId, actions),
     };
   }
 }

@@ -154,7 +154,7 @@ const fetchSimulationState = async (
 describe("Borrow position on blue", () => {
   for (const { chainId, testFn, marketFrom, marketTo } of TEST_CONFIGS) {
     const {
-      bundler3: { generalAdapter1 },
+      bundler3: { bundler3, generalAdapter1 },
       morpho,
     } = addresses[chainId];
 
@@ -321,7 +321,7 @@ describe("Borrow position on blue", () => {
               callback: [
                 {
                   type: "Blue_SetAuthorization",
-                  sender: generalAdapter1,
+                  sender: bundler3,
                   address: morpho,
                   args: {
                     owner: client.account.address,
@@ -492,7 +492,7 @@ describe("Borrow position on blue", () => {
               callback: [
                 {
                   type: "Blue_SetAuthorization",
-                  sender: generalAdapter1,
+                  sender: bundler3,
                   address: morpho,
                   args: {
                     owner: client.account.address,
