@@ -109,9 +109,9 @@ export const addresses = {
   [ChainId.ArbitrumMainnet]: {
     morpho: "0x6c247b1F6182318877311737BaC0844bAa518F5e",
     bundler3: {
-      bundler3: "0x044aE7bA624a047535F4A6ae5FE6E9EA8d1D93B0",
-      generalAdapter1: "0x1B15458e2688c8ced79d88DC460Eb2017bbaC36b",
-      paraswapAdapter: "0xAE745bA0BbB59476BD9fe94a8df4EB93a92AdCf4",
+      bundler3: "0x1FA4431bC113D308beE1d46B0e98Cb805FB48C13",
+      generalAdapter1: "0x9954aFB60BB5A222714c478ac86990F221788B88",
+      paraswapAdapter: "0xAA5c30C1482c189cA0d56057D3ac4dD7Af1e4726",
     },
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     adaptiveCurveIrm: "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA",
@@ -124,9 +124,9 @@ export const addresses = {
   [ChainId.OptimismMainnet]: {
     morpho: "0xce95AfbB8EA029495c66020883F87aaE8864AF92",
     bundler3: {
-      bundler3: "0x0b812d4592e8af9f0d2ffC51cf05F6BAB7d344A1",
-      generalAdapter1: "0x67Df9629F29E4502f87343c759FeDdDdAB12dB85",
-      paraswapAdapter: "0xF445B0864190a1eA333eb6f7B0B9dddA7ec46340",
+      bundler3: "0xFBCd3C258feB131D8E038F2A3a670A7bE0507C05",
+      generalAdapter1: "0x79481C87f24A3C4332442A2E9faaf675e5F141f0",
+      paraswapAdapter: "0x31F539f4Ed14fA1fd18781e93f6739249692aDC5",
     },
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     adaptiveCurveIrm: "0x8cD70A8F399428456b29546BC5dBe10ab6a06ef6",
