@@ -220,7 +220,7 @@ export const populateSubBundle = (
   const { sender } = inputOperation;
   const {
     morpho,
-    bundler3: { generalAdapter1 },
+    bundler3: { bundler3, generalAdapter1 },
   } = getChainAddresses(data.chainId);
   const {
     withSimplePermit = new Set(),
@@ -278,7 +278,7 @@ export const populateSubBundle = (
   if (needsBundlerAuthorization && !data.getUser(sender).isBundlerAuthorized)
     operations.push({
       type: "Blue_SetAuthorization",
-      sender: generalAdapter1,
+      sender: bundler3,
       address: morpho,
       args: {
         owner: sender,
@@ -375,6 +375,9 @@ export const populateSubBundle = (
         vaultReallocations.push(withdrawal);
       }
 
+      // TODO: we know there are no unwrap native in the middle
+      // of the bundle so we are certain we need to add an input transfer.
+      // This could be handled by `simulateRequiredTokenAmounts` below.
       const fees = keys(reallocations).reduce(
         (total, vault) =>
           total + data.getVault(vault).publicAllocatorConfig!.fee,
@@ -390,7 +393,7 @@ export const populateSubBundle = (
           args: {
             amount: fees,
             from: sender,
-            to: generalAdapter1,
+            to: bundler3,
           },
         });
     }
@@ -401,7 +404,7 @@ export const populateSubBundle = (
         ([vault, vaultWithdrawals]) =>
           ({
             type: "MetaMorpho_PublicReallocate",
-            sender: generalAdapter1,
+            sender: bundler3,
             address: vault,
             args: {
               // Reallocation withdrawals must be sorted by market id in ascending alphabetical order.

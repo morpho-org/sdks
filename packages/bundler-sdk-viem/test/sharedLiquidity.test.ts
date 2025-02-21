@@ -20,7 +20,7 @@ configure({ asyncUtilTimeout: 10_000 });
 describe("sharedLiquidity", () => {
   const {
     morpho,
-    bundler3: { generalAdapter1 },
+    bundler3: { bundler3, generalAdapter1 },
     publicAllocator,
     wNative,
     wstEth,
@@ -226,7 +226,7 @@ describe("sharedLiquidity", () => {
         },
         {
           type: "Blue_SetAuthorization",
-          sender: generalAdapter1,
+          sender: bundler3,
           address: morpho,
           args: {
             owner: client.account.address,

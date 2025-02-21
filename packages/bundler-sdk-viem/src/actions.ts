@@ -143,7 +143,6 @@ export const encodeOperation = (
     stEth,
   } = getChainAddresses(chainId);
 
-  let value = 0n;
   const actions: Action[] = [];
   const requirements: ActionBundle["requirements"] = {
     signatures: [],
@@ -430,17 +429,17 @@ export const encodeOperation = (
     case "Erc20_Transfer": {
       const { amount, from, to } = operation.args;
 
+      if (address === NATIVE_ADDRESS) {
+        actions.push({
+          type: "nativeTransfer",
+          args: [from, to, amount],
+        });
+
+        break;
+      }
+
       // Output transfer from the bundler.
       if (from === generalAdapter1) {
-        if (address === NATIVE_ADDRESS) {
-          actions.push({
-            type: "nativeTransfer",
-            args: [to, amount],
-          });
-
-          break;
-        }
-
         actions.push({
           type: "erc20Transfer",
           args: [address, to, amount],
@@ -449,78 +448,31 @@ export const encodeOperation = (
         break;
       }
 
-      // Input transfer to the bundler.
-      if (to === generalAdapter1) {
-        // Native token transfer is added to the call value (thus batched at the start of the bundle).
-        if (address === NATIVE_ADDRESS) {
-          value += amount;
-
-          break;
-        }
-
-        actions.push({
-          type: "erc20TransferFrom",
-          args: [address, amount],
-        });
-
-        break;
-      }
-
-      // Any other transfer is ignored.
+      actions.push({
+        type: "erc20TransferFrom",
+        args: [address, amount, to],
+      });
 
       break;
     }
     case "Erc20_Transfer2": {
       const { amount, from, to } = operation.args;
 
-      // Output transfer2 from the bundler is treated like a standard output transfer.
-      if (from === generalAdapter1) {
-        if (address === NATIVE_ADDRESS) {
-          actions.push({
-            type: "nativeTransfer",
-            args: [to, amount],
-          });
-
-          break;
-        }
-
+      if (supportsSignature) {
         actions.push({
-          type: "erc20Transfer",
-          args: [address, to, amount],
+          type: "transferFrom2",
+          args: [address, from, amount, to],
         });
 
         break;
       }
 
-      // Input transfer2 to the bundler.
-      if (to === generalAdapter1) {
-        // Native token transfer is added to the call value (thus batched at the start of the bundle).
-        if (address === NATIVE_ADDRESS) {
-          value += amount;
+      // Signatures are not supported, fallback to standard transfer.
 
-          break;
-        }
-
-        if (supportsSignature) {
-          actions.push({
-            type: "transferFrom2",
-            args: [address, from, amount],
-          });
-
-          break;
-        }
-
-        // Signatures are not supported, fallback to standard transfer.
-
-        actions.push({
-          type: "erc20TransferFrom",
-          args: [address, amount],
-        });
-
-        break;
-      }
-
-      // Any other transfer is ignored.
+      actions.push({
+        type: "erc20TransferFrom",
+        args: [address, amount, to],
+      });
 
       break;
     }
@@ -820,7 +772,6 @@ export const encodeOperation = (
 
   return {
     dataAfter,
-    value,
     actions,
     requirements,
   };
@@ -833,7 +784,6 @@ export function encodeBundle(
 ): ActionBundle {
   const { chainId } = startData;
 
-  let value = 0n;
   const actions: Action[] = [];
   const requirements: ActionBundle["requirements"] = {
     signatures: [],
@@ -852,7 +802,6 @@ export function encodeBundle(
 
     steps.push(bundle.dataAfter);
 
-    value += bundle.value;
     actions.push(...bundle.actions);
     requirements.signatures.push(...bundle.requirements.signatures);
     requirements.txs.push(...bundle.requirements.txs);
@@ -862,6 +811,6 @@ export function encodeBundle(
     steps,
     actions,
     requirements,
-    tx: () => BundlerAction.encodeBundle(chainId, actions, value),
+    tx: () => BundlerAction.encodeBundle(chainId, actions),
   };
 }
