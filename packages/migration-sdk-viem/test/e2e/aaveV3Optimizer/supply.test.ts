@@ -26,6 +26,19 @@ const writeSupply = async (
   market: Address,
   amount: bigint,
 ) => {
+  const owner = await client.readContract({
+    ...morpho,
+    functionName: "owner",
+  });
+
+  await client.deal({ account: owner, amount: parseEther("1") });
+  await client.writeContract({
+    ...morpho,
+    functionName: "setIsSupplyPaused",
+    args: [market, false],
+    account: owner,
+  });
+
   await client.deal({
     erc20: market,
     amount: amount,
@@ -44,7 +57,7 @@ const writeSupply = async (
 };
 
 // AaveV3Optimizer is deprecated (supply is paused).
-describe.skip("Supply position on Morpho AAVE V3", () => {
+describe("Supply position on Morpho AAVE V3", () => {
   test[ChainId.EthMainnet]("should fetch user position", async ({ client }) => {
     const amount = parseEther("1");
 
@@ -218,11 +231,11 @@ describe.skip("Supply position on Morpho AAVE V3", () => {
       expect(migrationBundle.requirements.signatures).toHaveLength(1);
       expect(migrationBundle.actions).toEqual([
         {
-          args: [true, 0n, expect.any(BigInt), null],
+          args: [client.account.address, true, 0n, expect.any(BigInt), null],
           type: "aaveV3OptimizerApproveManagerWithSig",
         },
         {
-          args: [wNative, migratedAmount, 4n],
+          args: [wNative, migratedAmount, 4n, generalAdapter1],
           type: "aaveV3OptimizerWithdraw",
         },
         {
@@ -386,7 +399,7 @@ describe.skip("Supply position on Morpho AAVE V3", () => {
       expect(migrationBundle.requirements.signatures).toHaveLength(0);
       expect(migrationBundle.actions).toEqual([
         {
-          args: [wNative, migratedAmount, 4n],
+          args: [wNative, migratedAmount, 4n, generalAdapter1],
           type: "aaveV3OptimizerWithdraw",
         },
         {
