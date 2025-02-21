@@ -140,6 +140,20 @@ export const MIGRATION_ADDRESSES = {
     [MigratableProtocol.aaveV2]: null,
     [MigratableProtocol.aaveV3Optimizer]: null,
   },
+  [ChainId.ArbitrumMainnet]: {
+    [MigratableProtocol.aaveV3]: null,
+    [MigratableProtocol.compoundV3]: null,
+    [MigratableProtocol.compoundV2]: null,
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
+  },
+  [ChainId.OptimismMainnet]: {
+    [MigratableProtocol.aaveV3]: null,
+    [MigratableProtocol.compoundV3]: null,
+    [MigratableProtocol.compoundV2]: null,
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
+  },
 } as const satisfies {
   [id in ChainId]: ProtocolMigrationContracts;
 };

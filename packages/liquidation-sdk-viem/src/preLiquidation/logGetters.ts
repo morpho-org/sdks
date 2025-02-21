@@ -11,11 +11,15 @@ export async function preLiquidationLogs<chain extends Chain = Chain>(
   client: Client<Transport, chain, Account>,
 ): Promise<PreLiquidation[]> {
   const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
+  const preLiquidationFactory = preLiquidationFactoryConfigs[chainId];
+
+  if (preLiquidationFactory == null) return [];
 
   try {
     const head = await getBlockNumber(client);
+
     const intervals = sliceBlockInterval(
-      preLiquidationFactoryConfigs[chainId].startBlock,
+      preLiquidationFactory.startBlock,
       BigInt(head),
     );
 
@@ -23,7 +27,7 @@ export async function preLiquidationLogs<chain extends Chain = Chain>(
       await Promise.all(
         intervals.map((interval) =>
           getContractEvents(client, {
-            address: preLiquidationFactoryConfigs[chainId].address,
+            address: preLiquidationFactory.address,
             fromBlock: interval.startBlock,
             toBlock: interval.endBlock,
             abi: preLiquidationFactoryAbi,
@@ -53,12 +57,15 @@ export async function authorizationLogs<chain extends Chain = Chain>(
   preLiquidation: PreLiquidation,
 ) {
   const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
+  const preLiquidationFactory = preLiquidationFactoryConfigs[chainId];
+
+  if (preLiquidationFactory == null) return [];
 
   try {
     const head = await getBlockNumber(client);
 
     const intervals = sliceBlockInterval(
-      preLiquidationFactoryConfigs[chainId].startBlock,
+      preLiquidationFactory.startBlock,
       BigInt(head),
     );
 

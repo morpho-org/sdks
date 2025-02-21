@@ -89,11 +89,13 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
       redemptionAsset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
     },
   },
+  [ChainId.ArbitrumMainnet]: {},
+  [ChainId.OptimismMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
   ChainId,
-  PreLiquidationFactoryConfig
+  PreLiquidationFactoryConfig | undefined
 > = {
   [ChainId.EthMainnet]: {
     address: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
@@ -103,4 +105,6 @@ export const preLiquidationFactoryConfigs: Record<
     address: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
     startBlock: 23779056n,
   },
+  [ChainId.ArbitrumMainnet]: undefined,
+  [ChainId.OptimismMainnet]: undefined,
 };
