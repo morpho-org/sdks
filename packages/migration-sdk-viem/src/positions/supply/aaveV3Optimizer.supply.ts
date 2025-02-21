@@ -1,6 +1,5 @@
 import {
   type ChainId,
-  MathLib,
   UnsupportedChainIdError,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -18,11 +17,11 @@ import type {
   SignatureRequirement,
 } from "@morpho-org/bundler-sdk-viem";
 import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import {
   type Account,
   type Client,
   encodeFunctionData,
+  maxUint256,
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
@@ -57,7 +56,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
   ) {
@@ -66,8 +65,11 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     const actions: Action[] = [];
 
     const user = this.user;
-    const bundler = getChainAddresses(chainId).aaveV3OptimizerBundler;
-    if (!bundler) throw new Error("missing aaveV3OptimizerBundler address");
+    const {
+      bundler3: { generalAdapter1, aaveV3OptimizerMigrationAdapter },
+    } = getChainAddresses(chainId);
+    if (aaveV3OptimizerMigrationAdapter == null)
+      throw new Error("missing aaveV3OptimizerMigrationAdapter address");
 
     const migrationAddresses =
       MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3Optimizer];
@@ -81,27 +83,27 @@ export class MigratableSupplyPosition_AaveV3Optimizer
 
         const managerApprovalAction: Action = {
           type: "aaveV3OptimizerApproveManagerWithSig",
-          args: [true, nonce, deadline, null],
+          args: [user, true, nonce, deadline, null],
         };
 
         actions.push(managerApprovalAction);
         signRequirements.push({
           action: managerApprovalAction,
           async sign(client: Client, account: Account = client.account!) {
-            if (managerApprovalAction.args[3] != null)
-              return managerApprovalAction.args[3]; // action is already signed
+            let signature = managerApprovalAction.args[4];
+            if (signature != null) return signature; // action is already signed
 
             const typedData = getMorphoAaveV3ManagerApprovalTypedData(
               {
                 delegator: user,
-                manager: bundler,
+                manager: aaveV3OptimizerMigrationAdapter,
                 nonce,
                 deadline,
                 isAllowed: true,
               },
               chainId,
             );
-            const signature = await signTypedData(client, {
+            signature = await signTypedData(client, {
               ...typedData,
               account,
             });
@@ -112,19 +114,19 @@ export class MigratableSupplyPosition_AaveV3Optimizer
               signature,
             });
 
-            return (managerApprovalAction.args[3] = signature);
+            return (managerApprovalAction.args[4] = signature);
           },
         });
       } else {
         txRequirements.push({
           type: "aaveV3OptimizerApproveManager",
-          args: [bundler, true],
+          args: [aaveV3OptimizerMigrationAdapter, true],
           tx: {
             to: migrationAddresses.morpho.address,
             data: encodeFunctionData({
               abi: morphoAaveV3Abi,
               functionName: "approveManager",
-              args: [bundler, true],
+              args: [aaveV3OptimizerMigrationAdapter, true],
             }),
           },
         });
@@ -134,25 +136,24 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     let migratedAmount = amount;
 
     /*
-    When we want to move the whole position of the user, we use MaxUint as an amount because:
+      When we want to move the whole position of the user, we use MaxUint as an amount because:
       - for `aaveV3OptimizerWithdraw`, aaveV3Optimizer is taking the min between the amount and the user's balance (on pool + in p2p).
-      - for `erc4626Deposit`, the bundler is taking the  min between the amount and his balance
      */
     if (
       this.max.limiter === SupplyMigrationLimiter.position &&
       this.max.value <= amount
     ) {
-      migratedAmount = MathLib.MAX_UINT_160;
+      migratedAmount = maxUint256;
     }
 
     actions.push(
       {
         type: "aaveV3OptimizerWithdraw",
-        args: [this.loanToken, migratedAmount, 4n],
+        args: [this.loanToken, migratedAmount, 4n, generalAdapter1],
       },
       {
         type: "erc4626Deposit",
-        args: [vault, MathLib.MAX_UINT_128, minShares, user],
+        args: [vault, maxUint256, maxSharePrice, user],
       },
     );
 
@@ -162,15 +163,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
         signatures: signRequirements,
         txs: txRequirements,
       },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
+      tx: () => BundlerAction.encodeBundle(chainId, actions),
     };
   }
 }

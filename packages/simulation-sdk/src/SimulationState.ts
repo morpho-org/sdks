@@ -341,9 +341,11 @@ export class SimulationState implements InputSimulationState {
 
       if (!accountBundlerBalance) return balance;
 
-      const { bundler } = getChainAddresses(this.chainId);
+      const {
+        bundler3: { generalAdapter1 },
+      } = getChainAddresses(this.chainId);
       _try(() => {
-        balance += this.getHolding(bundler, token).balance;
+        balance += this.getHolding(generalAdapter1, token).balance;
       }, UnknownDataError);
 
       return balance;

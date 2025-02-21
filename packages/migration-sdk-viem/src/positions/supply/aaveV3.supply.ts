@@ -1,6 +1,5 @@
 import {
   type ChainId,
-  MathLib,
   type Token,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -22,7 +21,6 @@ import type {
   SignatureRequirement,
 } from "@morpho-org/bundler-sdk-viem";
 import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import {
   type Account,
   type Client,
@@ -61,7 +59,7 @@ export class MigratableSupplyPosition_AaveV3
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
   ): MigrationBundle {
@@ -71,8 +69,9 @@ export class MigratableSupplyPosition_AaveV3
 
     const user = this.user;
 
-    const bundler = getChainAddresses(chainId).aaveV3Bundler;
-    if (!bundler) throw new Error("missing aaveV3Bundler address");
+    const {
+      bundler3: { generalAdapter1, aaveV3CoreMigrationAdapter },
+    } = getChainAddresses(chainId);
 
     const aToken = this.aToken;
 
@@ -92,7 +91,7 @@ export class MigratableSupplyPosition_AaveV3
 
       const permitAction: Action = {
         type: "permit",
-        args: [aToken.address, migratedAmount, deadline, null],
+        args: [user, aToken.address, migratedAmount, deadline, null],
       };
 
       actions.push(permitAction);
@@ -100,20 +99,21 @@ export class MigratableSupplyPosition_AaveV3
       signRequirements.push({
         action: permitAction,
         async sign(client: Client, account: Account = client.account!) {
-          if (permitAction.args[3] != null) return permitAction.args[3]; // action is already signed
+          let signature = permitAction.args[4];
+          if (signature != null) return signature; // action is already signed
 
           const typedData = getPermitTypedData(
             {
               erc20: aToken,
               owner: user,
-              spender: bundler,
+              spender: generalAdapter1,
               allowance: migratedAmount,
               nonce,
               deadline,
             },
             chainId,
           );
-          const signature = await signTypedData(client, {
+          signature = await signTypedData(client, {
             ...typedData,
             account,
           });
@@ -124,19 +124,19 @@ export class MigratableSupplyPosition_AaveV3
             signature,
           });
 
-          return (permitAction.args[3] = signature);
+          return (permitAction.args[4] = signature);
         },
       });
     } else {
       txRequirements.push({
         type: "erc20Approve",
-        args: [aToken.address, bundler, migratedAmount],
+        args: [aToken.address, generalAdapter1, migratedAmount],
         tx: {
           to: aToken.address,
           data: encodeFunctionData({
             abi: aTokenV3Abi,
             functionName: "approve",
-            args: [bundler, migratedAmount],
+            args: [generalAdapter1, migratedAmount],
           }),
         },
       });
@@ -144,17 +144,17 @@ export class MigratableSupplyPosition_AaveV3
 
     actions.push({
       type: "erc20TransferFrom",
-      args: [aToken.address, migratedAmount],
+      args: [aToken.address, migratedAmount, aaveV3CoreMigrationAdapter],
     });
 
     actions.push(
       {
         type: "aaveV3Withdraw",
-        args: [this.loanToken, maxUint256],
+        args: [this.loanToken, maxUint256, generalAdapter1],
       },
       {
         type: "erc4626Deposit",
-        args: [vault, MathLib.MAX_UINT_128, minShares, user],
+        args: [vault, maxUint256, maxSharePrice, user],
       },
     );
 
@@ -164,15 +164,7 @@ export class MigratableSupplyPosition_AaveV3
         signatures: signRequirements,
         txs: txRequirements,
       },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
+      tx: () => BundlerAction.encodeBundle(chainId, actions),
     };
   }
 }

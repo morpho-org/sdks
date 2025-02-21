@@ -11,8 +11,13 @@ import { permit2Abi } from "../src";
 import { Holding } from "../src/augment/Holding";
 import { test } from "./setup";
 
-const { morpho, bundler, permit2, wNative, wbC3M } =
-  addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { bundler3, generalAdapter1 },
+  permit2,
+  wNative,
+  wbC3M,
+} = addresses[ChainId.EthMainnet];
 
 describe("augment/Holding", () => {
   test("should fetch user WETH data with deployless", async ({ client }) => {
@@ -22,7 +27,7 @@ describe("augment/Holding", () => {
       erc20Allowances: {
         morpho: 1n,
         permit2: 3n,
-        bundler: 2n,
+        "bundler3.generalAdapter1": 2n,
       },
       permit2BundlerAllowance: {
         amount: 7n,
@@ -43,7 +48,10 @@ describe("augment/Holding", () => {
     });
     await client.approve({
       address: wNative,
-      args: [bundler, expectedData.erc20Allowances.bundler],
+      args: [
+        generalAdapter1,
+        expectedData.erc20Allowances["bundler3.generalAdapter1"],
+      ],
     });
     await client.approve({
       address: wNative,
@@ -55,7 +63,7 @@ describe("augment/Holding", () => {
       functionName: "approve",
       args: [
         wNative,
-        bundler,
+        bundler3,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],
@@ -73,7 +81,7 @@ describe("augment/Holding", () => {
       erc20Allowances: {
         morpho: 1n,
         permit2: 3n,
-        bundler: 2n,
+        "bundler3.generalAdapter1": 2n,
       },
       permit2BundlerAllowance: {
         amount: 7n,
@@ -94,7 +102,10 @@ describe("augment/Holding", () => {
     });
     await client.approve({
       address: wNative,
-      args: [bundler, expectedData.erc20Allowances.bundler],
+      args: [
+        generalAdapter1,
+        expectedData.erc20Allowances["bundler3.generalAdapter1"],
+      ],
     });
     await client.approve({
       address: wNative,
@@ -106,7 +117,7 @@ describe("augment/Holding", () => {
       functionName: "approve",
       args: [
         wNative,
-        bundler,
+        bundler3,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],
@@ -128,7 +139,7 @@ describe("augment/Holding", () => {
       erc20Allowances: {
         morpho: maxUint256,
         permit2: maxUint256,
-        bundler: maxUint256,
+        "bundler3.generalAdapter1": maxUint256,
       },
       permit2BundlerAllowance: {
         amount: 0n,
@@ -153,7 +164,7 @@ describe("augment/Holding", () => {
       erc20Allowances: {
         morpho: 6n,
         permit2: 5n,
-        bundler: 4n,
+        "bundler3.generalAdapter1": 4n,
       },
       permit2BundlerAllowance: {
         amount: 8n,
@@ -175,7 +186,10 @@ describe("augment/Holding", () => {
     });
     await client.approve({
       address: wbC3M,
-      args: [bundler, expectedData.erc20Allowances.bundler],
+      args: [
+        generalAdapter1,
+        expectedData.erc20Allowances["bundler3.generalAdapter1"],
+      ],
     });
     await client.approve({
       address: wbC3M,
@@ -187,7 +201,7 @@ describe("augment/Holding", () => {
       functionName: "approve",
       args: [
         wbC3M,
-        bundler,
+        bundler3,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],
@@ -207,7 +221,7 @@ describe("augment/Holding", () => {
       erc20Allowances: {
         morpho: 6n,
         permit2: 5n,
-        bundler: 4n,
+        "bundler3.generalAdapter1": 4n,
       },
       permit2BundlerAllowance: {
         amount: 8n,
@@ -229,7 +243,10 @@ describe("augment/Holding", () => {
     });
     await client.approve({
       address: wbC3M,
-      args: [bundler, expectedData.erc20Allowances.bundler],
+      args: [
+        generalAdapter1,
+        expectedData.erc20Allowances["bundler3.generalAdapter1"],
+      ],
     });
     await client.approve({
       address: wbC3M,
@@ -241,7 +258,7 @@ describe("augment/Holding", () => {
       functionName: "approve",
       args: [
         wbC3M,
-        bundler,
+        bundler3,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],

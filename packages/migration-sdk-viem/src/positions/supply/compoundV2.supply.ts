@@ -1,7 +1,6 @@
 import {
   type ChainId,
   type ExchangeRateWrappedToken,
-  MathLib,
   NATIVE_ADDRESS,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -18,7 +17,6 @@ import {
 
 import type { Action } from "@morpho-org/bundler-sdk-viem";
 import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
 import { encodeFunctionData, maxUint256 } from "viem";
 import { cErc20Abi } from "../../abis/compoundV2.js";
 import {
@@ -50,7 +48,7 @@ export class MigratableSupplyPosition_CompoundV2
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
   ): MigrationBundle {
     const txRequirements: MigrationTransactionRequirement[] = [];
@@ -59,8 +57,11 @@ export class MigratableSupplyPosition_CompoundV2
     const user = this.user;
     const cToken = this.cToken;
 
-    const bundler = getChainAddresses(chainId).compoundV2Bundler;
-    if (!bundler) throw new Error("missing compoundV2Bundler address");
+    const {
+      bundler3: { generalAdapter1, compoundV2MigrationAdapter },
+    } = getChainAddresses(chainId);
+    if (compoundV2MigrationAdapter == null)
+      throw new Error("missing compoundV2MigrationAdapter address");
 
     const migrateMax =
       this.max.limiter === SupplyMigrationLimiter.position &&
@@ -73,25 +74,25 @@ export class MigratableSupplyPosition_CompoundV2
     // TODO use allowance + test
     txRequirements.push({
       type: "erc20Approve",
-      args: [cToken.address, bundler, transferredAmount],
+      args: [cToken.address, generalAdapter1, transferredAmount],
       tx: {
         to: cToken.address,
         data: encodeFunctionData({
           abi: cErc20Abi,
           functionName: "approve",
-          args: [bundler, transferredAmount],
+          args: [generalAdapter1, transferredAmount],
         }),
       },
     });
 
     actions.push({
       type: "erc20TransferFrom",
-      args: [cToken.address, transferredAmount],
+      args: [cToken.address, transferredAmount, compoundV2MigrationAdapter],
     });
 
     actions.push({
       type: "compoundV2Redeem",
-      args: [cToken.address, maxUint256],
+      args: [cToken.address, maxUint256, generalAdapter1],
     });
 
     if (
@@ -107,7 +108,7 @@ export class MigratableSupplyPosition_CompoundV2
 
     actions.push({
       type: "erc4626Deposit",
-      args: [vault, MathLib.MAX_UINT_128, minShares, user],
+      args: [vault, maxUint256, maxSharePrice, user],
     });
 
     return {
@@ -116,15 +117,7 @@ export class MigratableSupplyPosition_CompoundV2
         signatures: [],
         txs: txRequirements,
       },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
+      tx: () => BundlerAction.encodeBundle(chainId, actions),
     };
   }
 }

@@ -474,7 +474,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userA,
         token: NATIVE_ADDRESS,
@@ -489,7 +489,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userA,
         token: tokenA,
@@ -505,7 +505,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userA,
         token: tokenB,
@@ -520,7 +520,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userA,
         token: marketA1.params.collateralToken,
@@ -535,7 +535,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userA,
         token: marketA2.params.collateralToken,
@@ -550,7 +550,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userA,
         token: marketB1.params.collateralToken,
@@ -565,7 +565,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userA,
         token: marketB2.params.collateralToken,
@@ -580,7 +580,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userA,
         token: vaultA.address,
@@ -596,7 +596,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userA,
         token: vaultB.address,
@@ -612,7 +612,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userA,
         token: vaultC.address,
@@ -630,7 +630,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userB,
         token: NATIVE_ADDRESS,
@@ -645,7 +645,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: parseUnits("800", 6),
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userB,
         token: tokenA,
@@ -661,7 +661,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userB,
         token: tokenB,
@@ -676,7 +676,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userB,
         token: marketA1.params.collateralToken,
@@ -691,7 +691,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userB,
         token: marketA2.params.collateralToken,
@@ -706,7 +706,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userB,
         token: marketB1.params.collateralToken,
@@ -721,7 +721,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userB,
         token: marketB2.params.collateralToken,
@@ -736,7 +736,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userB,
         token: vaultA.address,
@@ -752,7 +752,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userB,
         token: vaultB.address,
@@ -768,7 +768,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userB,
         token: vaultC.address,
@@ -786,7 +786,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userC,
         token: NATIVE_ADDRESS,
@@ -801,7 +801,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userC,
         token: tokenA,
@@ -817,7 +817,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userC,
         token: tokenB,
@@ -832,7 +832,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userC,
         token: marketA1.params.collateralToken,
@@ -847,7 +847,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userC,
         token: marketA2.params.collateralToken,
@@ -862,7 +862,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userC,
         token: marketB1.params.collateralToken,
@@ -877,7 +877,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: userC,
         token: marketB2.params.collateralToken,
@@ -892,7 +892,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userC,
         token: vaultA.address,
@@ -908,7 +908,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userC,
         token: vaultB.address,
@@ -924,7 +924,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: userC,
         token: vaultC.address,
@@ -942,7 +942,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: vaultA.address,
         token: NATIVE_ADDRESS,
@@ -957,7 +957,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: vaultA.address,
         token: tokenA,
@@ -972,7 +972,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultA.address,
         token: tokenB,
@@ -987,7 +987,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultA.address,
         token: marketA1.params.collateralToken,
@@ -1002,7 +1002,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultA.address,
         token: marketA2.params.collateralToken,
@@ -1017,7 +1017,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultA.address,
         token: marketB1.params.collateralToken,
@@ -1032,7 +1032,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultA.address,
         token: marketB2.params.collateralToken,
@@ -1047,7 +1047,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultA.address,
         token: vaultA.address,
@@ -1063,7 +1063,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultA.address,
         token: vaultB.address,
@@ -1079,7 +1079,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultA.address,
         token: vaultC.address,
@@ -1097,7 +1097,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: vaultB.address,
         token: NATIVE_ADDRESS,
@@ -1112,7 +1112,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultB.address,
         token: tokenA,
@@ -1127,7 +1127,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: vaultB.address,
         token: tokenB,
@@ -1142,7 +1142,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultB.address,
         token: marketA1.params.collateralToken,
@@ -1157,7 +1157,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultB.address,
         token: marketA2.params.collateralToken,
@@ -1172,7 +1172,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultB.address,
         token: marketB1.params.collateralToken,
@@ -1187,7 +1187,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultB.address,
         token: marketB2.params.collateralToken,
@@ -1202,7 +1202,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultB.address,
         token: vaultA.address,
@@ -1218,7 +1218,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultB.address,
         token: vaultB.address,
@@ -1234,7 +1234,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultB.address,
         token: vaultC.address,
@@ -1252,7 +1252,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: vaultC.address,
         token: NATIVE_ADDRESS,
@@ -1267,7 +1267,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: vaultC.address,
         token: tokenA,
@@ -1282,7 +1282,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultC.address,
         token: tokenB,
@@ -1297,7 +1297,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: maxUint256,
           permit2: maxUint256,
-          bundler: maxUint256,
+          "bundler3.generalAdapter1": maxUint256,
         },
         user: vaultC.address,
         token: marketA1.params.collateralToken,
@@ -1312,7 +1312,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultC.address,
         token: marketA2.params.collateralToken,
@@ -1327,7 +1327,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultC.address,
         token: marketB1.params.collateralToken,
@@ -1342,7 +1342,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultC.address,
         token: marketB2.params.collateralToken,
@@ -1357,7 +1357,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultC.address,
         token: vaultA.address,
@@ -1373,7 +1373,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultC.address,
         token: vaultB.address,
@@ -1389,7 +1389,7 @@ export const blueFixture = {
         erc20Allowances: {
           morpho: 0n,
           permit2: 0n,
-          bundler: 0n,
+          "bundler3.generalAdapter1": 0n,
         },
         user: vaultC.address,
         token: vaultC.address,

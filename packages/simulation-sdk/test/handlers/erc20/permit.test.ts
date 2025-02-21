@@ -8,7 +8,10 @@ import { dataFixture, tokenA, userA, userB, vaultA } from "../../fixtures.js";
 
 const type = "Erc20_Permit";
 
-const { morpho, bundler } = addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+} = addresses[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should permit morpho", () => {
@@ -40,7 +43,7 @@ describe(type, () => {
         sender: userA,
         address: tokenA,
         args: {
-          spender: bundler,
+          spender: generalAdapter1,
           amount: 2n,
           nonce: 0n,
         },
@@ -49,7 +52,9 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    expected.holdings[userA]![tokenA]!.erc20Allowances.bundler = 2n;
+    expected.holdings[userA]![tokenA]!.erc20Allowances[
+      "bundler3.generalAdapter1"
+    ] = 2n;
     expected.holdings[userA]![tokenA]!.erc2612Nonce = 1n;
 
     expect(result).toEqual(expected);

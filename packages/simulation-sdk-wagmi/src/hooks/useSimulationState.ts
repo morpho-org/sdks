@@ -159,7 +159,7 @@ export function useSimulationState<
     : parameters.marketIds;
   const markets = useMarkets({
     ...parameters,
-    ...(includeVaultQueues && { marketIds }),
+    marketIds,
     blockNumber: block?.number,
     query: {
       ...parameters.query,
