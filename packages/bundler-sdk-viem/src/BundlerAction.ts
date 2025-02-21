@@ -6,6 +6,7 @@ import {
   compoundV2MigrationAdapterAbi,
   compoundV3MigrationAdapterAbi,
   coreAdapterAbi,
+  erc20WrapperAdapterAbi,
   ethereumGeneralAdapter1Abi,
   generalAdapter1Abi,
   universalRewardsDistributorAbi,
@@ -25,8 +26,10 @@ import {
 import {
   type Address,
   type Hex,
+  encodeAbiParameters,
   encodeFunctionData,
   keccak256,
+  maxUint256,
   parseSignature,
   toFunctionSelector,
   zeroHash,
@@ -390,8 +393,8 @@ export namespace BundlerAction {
 
         return BundlerAction.compoundV3AllowBySig(
           chainId,
-          owner,
           instance,
+          owner,
           isAllowed,
           nonce,
           expiry,
@@ -683,19 +686,48 @@ export namespace BundlerAction {
   export function erc20WrapperDepositFor(
     chainId: ChainId,
     wrapper: Address,
+    underlying: Address,
     amount: bigint,
   ): BundlerCall[] {
     const {
-      bundler3: { generalAdapter1 },
+      bundler3: { generalAdapter1, erc20WrapperAdapter },
     } = getChainAddresses(chainId);
+
+    if (erc20WrapperAdapter == null)
+      throw new BundlerErrors.UnexpectedAction(
+        "erc20WrapperDepositFor",
+        chainId,
+      );
 
     return [
       {
         to: generalAdapter1,
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
+          functionName: "erc20Transfer",
+          args: [underlying, erc20WrapperAdapter, maxUint256],
+        }),
+        value: 0n,
+        skipRevert: false,
+        callbackHash: zeroHash,
+      },
+      {
+        to: erc20WrapperAdapter,
+        data: encodeFunctionData({
+          abi: erc20WrapperAdapterAbi,
           functionName: "erc20WrapperDepositFor",
           args: [wrapper, amount],
+        }),
+        value: 0n,
+        skipRevert: false,
+        callbackHash: zeroHash,
+      },
+      {
+        to: erc20WrapperAdapter,
+        data: encodeFunctionData({
+          abi: erc20WrapperAdapterAbi,
+          functionName: "erc20Transfer",
+          args: [underlying, generalAdapter1, maxUint256],
         }),
         value: 0n,
         skipRevert: false,
@@ -717,16 +749,44 @@ export namespace BundlerAction {
     amount: bigint,
   ): BundlerCall[] {
     const {
-      bundler3: { generalAdapter1 },
+      bundler3: { generalAdapter1, erc20WrapperAdapter },
     } = getChainAddresses(chainId);
+
+    if (erc20WrapperAdapter == null)
+      throw new BundlerErrors.UnexpectedAction(
+        "erc20WrapperWithdrawTo",
+        chainId,
+      );
 
     return [
       {
         to: generalAdapter1,
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
+          functionName: "erc20Transfer",
+          args: [wrapper, erc20WrapperAdapter, maxUint256],
+        }),
+        value: 0n,
+        skipRevert: false,
+        callbackHash: zeroHash,
+      },
+      {
+        to: erc20WrapperAdapter,
+        data: encodeFunctionData({
+          abi: erc20WrapperAdapterAbi,
           functionName: "erc20WrapperWithdrawTo",
           args: [wrapper, receiver, amount],
+        }),
+        value: 0n,
+        skipRevert: false,
+        callbackHash: zeroHash,
+      },
+      {
+        to: erc20WrapperAdapter,
+        data: encodeFunctionData({
+          abi: erc20WrapperAdapterAbi,
+          functionName: "erc20Transfer",
+          args: [wrapper, generalAdapter1, maxUint256],
         }),
         value: 0n,
         skipRevert: false,
@@ -927,7 +987,13 @@ export namespace BundlerAction {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
 
-    const useCallback = callbackCalls.length > 0;
+    const reenter = callbackCalls.length > 0;
+    const reenterData = reenter
+      ? encodeAbiParameters(
+          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
+          [callbackCalls],
+        )
+      : "0x";
 
     return [
       {
@@ -935,26 +1001,11 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoSupply",
-          args: [
-            market,
-            assets,
-            shares,
-            slippageAmount,
-            onBehalf,
-            useCallback
-              ? encodeFunctionData({
-                  abi: bundler3Abi,
-                  functionName: "reenter",
-                  args: [callbackCalls],
-                })
-              : "0x",
-          ],
+          args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
         }),
         value: 0n,
         skipRevert: false,
-        callbackHash: useCallback
-          ? keccak256(`${generalAdapter1}${reenterSelectorHash}`)
-          : zeroHash,
+        callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
   }
@@ -977,7 +1028,13 @@ export namespace BundlerAction {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
 
-    const useCallback = callbackCalls.length > 0;
+    const reenter = callbackCalls.length > 0;
+    const reenterData = reenter
+      ? encodeAbiParameters(
+          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
+          [callbackCalls],
+        )
+      : "0x";
 
     return [
       {
@@ -985,24 +1042,11 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoSupplyCollateral",
-          args: [
-            market,
-            assets,
-            onBehalf,
-            useCallback
-              ? encodeFunctionData({
-                  abi: bundler3Abi,
-                  functionName: "reenter",
-                  args: [callbackCalls],
-                })
-              : "0x",
-          ],
+          args: [market, assets, onBehalf, reenterData],
         }),
         value: 0n,
         skipRevert: false,
-        callbackHash: useCallback
-          ? keccak256(`${generalAdapter1}${reenterSelectorHash}`)
-          : zeroHash,
+        callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
   }
@@ -1064,7 +1108,13 @@ export namespace BundlerAction {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
 
-    const useCallback = callbackCalls.length > 0;
+    const reenter = callbackCalls.length > 0;
+    const reenterData = reenter
+      ? encodeAbiParameters(
+          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
+          [callbackCalls],
+        )
+      : "0x";
 
     return [
       {
@@ -1072,26 +1122,11 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoRepay",
-          args: [
-            market,
-            assets,
-            shares,
-            slippageAmount,
-            onBehalf,
-            useCallback
-              ? encodeFunctionData({
-                  abi: bundler3Abi,
-                  functionName: "reenter",
-                  args: [callbackCalls],
-                })
-              : "0x",
-          ],
+          args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
         }),
         value: 0n,
         skipRevert: false,
-        callbackHash: useCallback
-          ? keccak256(`${generalAdapter1}${reenterSelectorHash}`)
-          : zeroHash,
+        callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
   }

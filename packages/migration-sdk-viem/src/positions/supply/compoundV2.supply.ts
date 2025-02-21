@@ -1,7 +1,6 @@
 import {
   type ChainId,
   type ExchangeRateWrappedToken,
-  MathLib,
   NATIVE_ADDRESS,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -49,7 +48,7 @@ export class MigratableSupplyPosition_CompoundV2
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
   ): MigrationBundle {
     const txRequirements: MigrationTransactionRequirement[] = [];
@@ -59,7 +58,7 @@ export class MigratableSupplyPosition_CompoundV2
     const cToken = this.cToken;
 
     const {
-      bundler3: { compoundV2MigrationAdapter },
+      bundler3: { generalAdapter1, compoundV2MigrationAdapter },
     } = getChainAddresses(chainId);
     if (compoundV2MigrationAdapter == null)
       throw new Error("missing compoundV2MigrationAdapter address");
@@ -75,25 +74,25 @@ export class MigratableSupplyPosition_CompoundV2
     // TODO use allowance + test
     txRequirements.push({
       type: "erc20Approve",
-      args: [cToken.address, compoundV2MigrationAdapter, transferredAmount],
+      args: [cToken.address, generalAdapter1, transferredAmount],
       tx: {
         to: cToken.address,
         data: encodeFunctionData({
           abi: cErc20Abi,
           functionName: "approve",
-          args: [compoundV2MigrationAdapter, transferredAmount],
+          args: [generalAdapter1, transferredAmount],
         }),
       },
     });
 
     actions.push({
       type: "erc20TransferFrom",
-      args: [cToken.address, transferredAmount],
+      args: [cToken.address, transferredAmount, compoundV2MigrationAdapter],
     });
 
     actions.push({
       type: "compoundV2Redeem",
-      args: [cToken.address, maxUint256],
+      args: [cToken.address, maxUint256, generalAdapter1],
     });
 
     if (
@@ -109,7 +108,7 @@ export class MigratableSupplyPosition_CompoundV2
 
     actions.push({
       type: "erc4626Deposit",
-      args: [vault, MathLib.MAX_UINT_128, minShares, user],
+      args: [vault, maxUint256, maxSharePrice, user],
     });
 
     return {

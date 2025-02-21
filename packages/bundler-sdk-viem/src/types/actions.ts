@@ -43,7 +43,11 @@ export interface ActionArgs {
   erc20TransferFrom: [asset: Address, amount: bigint, recipient?: Address];
 
   /* ERC20Wrapper */
-  erc20WrapperDepositFor: [wrapper: Address, amount: bigint];
+  erc20WrapperDepositFor: [
+    wrapper: Address,
+    underlying: Address,
+    amount: bigint,
+  ];
   erc20WrapperWithdrawTo: [wrapper: Address, receiver: Address, amount: bigint];
 
   /* Permit */

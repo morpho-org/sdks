@@ -1,7 +1,6 @@
 import {
   type Address,
   type ChainId,
-  MathLib,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
@@ -61,7 +60,7 @@ export class MigratableSupplyPosition_CompoundV3
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
   ): MigrationBundle {
@@ -72,7 +71,7 @@ export class MigratableSupplyPosition_CompoundV3
     const user = this.user;
 
     const {
-      bundler3: { compoundV3MigrationAdapter },
+      bundler3: { generalAdapter1, compoundV3MigrationAdapter },
     } = getChainAddresses(chainId);
     if (compoundV3MigrationAdapter == null)
       throw new Error("missing compoundV3MigrationAdapter address");
@@ -151,11 +150,11 @@ export class MigratableSupplyPosition_CompoundV3
     actions.push(
       {
         type: "compoundV3WithdrawFrom",
-        args: [instance, this.loanToken, migratedAmount],
+        args: [instance, this.loanToken, migratedAmount, generalAdapter1],
       },
       {
         type: "erc4626Deposit",
-        args: [vault, MathLib.MAX_UINT_128, minShares, user],
+        args: [vault, maxUint256, maxSharePrice, user],
       },
     );
 

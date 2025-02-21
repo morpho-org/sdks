@@ -87,7 +87,9 @@ const TEST_CONFIGS: { [C in ChainId]: ChainConfig<C> }[ChainId][] = [
 
 describe("Supply position on COMPOUND V3", () => {
   for (const { chainId, testFn, markets } of TEST_CONFIGS) {
-    const { compoundV3Bundler } = addresses[chainId];
+    const {
+      bundler3: { generalAdapter1, compoundV3MigrationAdapter },
+    } = addresses[chainId];
 
     const writeSupply = async (
       client: ViemTestContext["client"],
@@ -176,7 +178,7 @@ describe("Supply position on COMPOUND V3", () => {
                 {
                   vault,
                   amount: migratedAmount,
-                  minShares: 0n,
+                  maxSharePrice: 2n * MathLib.RAY,
                 },
                 chainId,
                 true,
@@ -184,21 +186,27 @@ describe("Supply position on COMPOUND V3", () => {
 
               expect(migrationBundle.requirements.txs).toHaveLength(0);
               expect(migrationBundle.requirements.signatures).toHaveLength(1);
-              const deadline = migrationBundle.actions[0]?.args[3];
               expect(migrationBundle.actions).toEqual([
                 {
-                  args: [comet, true, 0n, deadline, null],
+                  args: [
+                    comet,
+                    client.account.address,
+                    true,
+                    0n,
+                    expect.any(BigInt),
+                    null,
+                  ],
                   type: "compoundV3AllowBySig",
                 },
                 {
-                  args: [comet, underlying, migratedAmount],
+                  args: [comet, underlying, migratedAmount, generalAdapter1],
                   type: "compoundV3WithdrawFrom",
                 },
                 {
                   args: [
                     vault,
-                    MathLib.MAX_UINT_128,
-                    0n,
+                    maxUint256,
+                    2n * MathLib.RAY,
                     client.account.address,
                   ],
                   type: "erc4626Deposit",
@@ -213,7 +221,7 @@ describe("Supply position on COMPOUND V3", () => {
                 await Promise.all([
                   client.balanceOf({
                     erc20: underlying,
-                    owner: compoundV3Bundler,
+                    owner: compoundV3MigrationAdapter,
                   }),
                   client.balanceOf({ erc20: comet }),
                   client.balanceOf({ erc20: vault }),
@@ -255,7 +263,7 @@ describe("Supply position on COMPOUND V3", () => {
               {
                 vault,
                 amount: position.supply,
-                minShares: 0n,
+                maxSharePrice: 2n * MathLib.RAY,
               },
               chainId,
               true,
@@ -263,18 +271,29 @@ describe("Supply position on COMPOUND V3", () => {
 
             expect(migrationBundle.requirements.txs).toHaveLength(0);
             expect(migrationBundle.requirements.signatures).toHaveLength(1);
-            const deadline = migrationBundle.actions[0]?.args[3];
             expect(migrationBundle.actions).toEqual([
               {
-                args: [comet, true, 0n, deadline, null],
+                args: [
+                  comet,
+                  client.account.address,
+                  true,
+                  0n,
+                  expect.any(BigInt),
+                  null,
+                ],
                 type: "compoundV3AllowBySig",
               },
               {
-                args: [comet, underlying, maxUint256],
+                args: [comet, underlying, maxUint256, generalAdapter1],
                 type: "compoundV3WithdrawFrom",
               },
               {
-                args: [vault, MathLib.MAX_UINT_128, 0n, client.account.address],
+                args: [
+                  vault,
+                  maxUint256,
+                  2n * MathLib.RAY,
+                  client.account.address,
+                ],
                 type: "erc4626Deposit",
               },
             ]);
@@ -287,7 +306,7 @@ describe("Supply position on COMPOUND V3", () => {
               await Promise.all([
                 client.balanceOf({
                   erc20: underlying,
-                  owner: compoundV3Bundler,
+                  owner: compoundV3MigrationAdapter,
                 }),
                 client.balanceOf({ erc20: comet }),
                 client.balanceOf({ erc20: vault }),
@@ -328,7 +347,7 @@ describe("Supply position on COMPOUND V3", () => {
                 {
                   vault,
                   amount: migratedAmount,
-                  minShares: 0n,
+                  maxSharePrice: 2n * MathLib.RAY,
                 },
                 chainId,
                 false,
@@ -338,14 +357,14 @@ describe("Supply position on COMPOUND V3", () => {
               expect(migrationBundle.requirements.signatures).toHaveLength(0);
               expect(migrationBundle.actions).toEqual([
                 {
-                  args: [comet, underlying, migratedAmount],
+                  args: [comet, underlying, migratedAmount, generalAdapter1],
                   type: "compoundV3WithdrawFrom",
                 },
                 {
                   args: [
                     vault,
-                    MathLib.MAX_UINT_128,
-                    0n,
+                    maxUint256,
+                    2n * MathLib.RAY,
                     client.account.address,
                   ],
                   type: "erc4626Deposit",
@@ -363,7 +382,7 @@ describe("Supply position on COMPOUND V3", () => {
                 await Promise.all([
                   client.balanceOf({
                     erc20: underlying,
-                    owner: compoundV3Bundler,
+                    owner: compoundV3MigrationAdapter,
                   }),
                   client.balanceOf({ erc20: comet }),
                   client.balanceOf({ erc20: vault }),
@@ -407,7 +426,7 @@ describe("Supply position on COMPOUND V3", () => {
                 {
                   vault,
                   amount: position.supply,
-                  minShares: 0n,
+                  maxSharePrice: 2n * MathLib.RAY,
                 },
                 chainId,
                 false,
@@ -417,14 +436,14 @@ describe("Supply position on COMPOUND V3", () => {
               expect(migrationBundle.requirements.signatures).toHaveLength(0);
               expect(migrationBundle.actions).toEqual([
                 {
-                  args: [comet, underlying, maxUint256],
+                  args: [comet, underlying, maxUint256, generalAdapter1],
                   type: "compoundV3WithdrawFrom",
                 },
                 {
                   args: [
                     vault,
-                    MathLib.MAX_UINT_128,
-                    0n,
+                    maxUint256,
+                    2n * MathLib.RAY,
                     client.account.address,
                   ],
                   type: "erc4626Deposit",
@@ -441,7 +460,7 @@ describe("Supply position on COMPOUND V3", () => {
                 await Promise.all([
                   client.balanceOf({
                     erc20: underlying,
-                    owner: compoundV3Bundler,
+                    owner: compoundV3MigrationAdapter,
                   }),
                   client.balanceOf({ erc20: comet }),
                   client.balanceOf({ erc20: vault }),

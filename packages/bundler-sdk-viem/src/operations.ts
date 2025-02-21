@@ -330,17 +330,34 @@ export const populateSubBundle = (
     ) {
       // Liquidity is insufficient: trigger a public reallocation and try to have a resulting utilization as low as possible, above the target.
       // Solve: newTotalBorrowAssets / (newTotalSupplyAssets + reallocatedAssets) = supplyTargetUtilization
-      // Worst case is: there is not enough withdrawals available to fill reallocatedAssets, so utilization is above supplyTargetUtilization.
+      // We first try to find public reallocations that respect every markets targets.
+      // If this is not enough, the first market to be pushed above target is the supply market. Then we fully withdraw from every market.
       let requiredAssets =
         supplyTargetUtilization === 0n
           ? MathLib.MAX_UINT_160
           : MathLib.wDivDown(newTotalBorrowAssets, supplyTargetUtilization) -
             newTotalSupplyAssets;
 
-      const { withdrawals } = data.getMarketPublicReallocations(
-        market.id,
-        publicAllocatorOptions,
-      );
+      let { withdrawals, data: simulationStatePostFriendlyReallocation } =
+        data.getMarketPublicReallocations(market.id, publicAllocatorOptions);
+
+      const marketPostFriendlyReallocation =
+        simulationStatePostFriendlyReallocation.getMarket(market.id);
+
+      if (
+        marketPostFriendlyReallocation.totalBorrowAssets + borrowedAssets >
+        marketPostFriendlyReallocation.totalSupplyAssets - withdrawnAssets
+      ) {
+        // If the "friendly" reallocations are not enough, we fully withdraw from every market.
+
+        requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
+
+        ({ withdrawals } = data.getMarketPublicReallocations(market.id, {
+          ...publicAllocatorOptions,
+          defaultMaxWithdrawalUtilization: MathLib.WAD,
+          maxWithdrawalUtilization: {},
+        }));
+      }
 
       for (const { vault, ...withdrawal } of withdrawals) {
         const vaultReallocations = (reallocations[vault] ??= []);
@@ -832,8 +849,10 @@ export const finalizeBundle = (
     skims.push(
       ...entries(endBundlerTokenData)
         .filter(
-          ([token, { balance }]) =>
-            balance - (startBundlerTokenData[token]?.balance ?? 0n) > 5n,
+          ([token, holding]) =>
+            holding != null &&
+            holding.balance - (startBundlerTokenData[token]?.balance ?? 0n) >
+              5n,
         )
         .map(
           ([address]) =>
@@ -896,6 +915,8 @@ export const simulateRequiredTokenAmounts = (
   const virtualBundlerData = produceImmutable(data, (draft) => {
     Object.values(draft.holdings[generalAdapter1] ?? {}).forEach(
       (bundlerTokenData) => {
+        if (bundlerTokenData == null) return;
+
         // Virtual balance to calculate the amount required.
         bundlerTokenData.balance += MathLib.MAX_UINT_160;
       },

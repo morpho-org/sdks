@@ -1357,47 +1357,6 @@ export const generalAdapter1Abi = [
   },
   {
     type: "function",
-    name: "erc20WrapperDepositFor",
-    inputs: [
-      {
-        name: "wrapper",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "amount",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "erc20WrapperWithdrawTo",
-    inputs: [
-      {
-        name: "wrapper",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "receiver",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "amount",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
     name: "erc4626Deposit",
     inputs: [
       {
@@ -2029,11 +1988,6 @@ export const generalAdapter1Abi = [
   },
   {
     type: "error",
-    name: "DepositFailed",
-    inputs: [],
-  },
-  {
-    type: "error",
     name: "SlippageExceeded",
     inputs: [],
   },
@@ -2045,11 +1999,6 @@ export const generalAdapter1Abi = [
   {
     type: "error",
     name: "UnsafeCast",
-    inputs: [],
-  },
-  {
-    type: "error",
-    name: "WithdrawFailed",
     inputs: [],
   },
   {
@@ -2151,36 +2100,8 @@ export const ethereumGeneralAdapter1Abi = [
   },
   {
     type: "function",
-    name: "erc20WrapperDepositFor",
+    name: "morphoWrapperDepositFor",
     inputs: [
-      {
-        name: "wrapper",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "receiver",
-        type: "address",
-        internalType: "address",
-      },
-      {
-        name: "amount",
-        type: "uint256",
-        internalType: "uint256",
-      },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
-    name: "erc20WrapperWithdrawTo",
-    inputs: [
-      {
-        name: "wrapper",
-        type: "address",
-        internalType: "address",
-      },
       {
         name: "receiver",
         type: "address",
@@ -2553,6 +2474,72 @@ export const paraswapAdapterAbi = [
   {
     type: "error",
     name: "SellAmountTooHigh",
+    inputs: [],
+  },
+] as const;
+
+export const erc20WrapperAdapterAbi = [
+  ...coreAdapterAbi,
+  {
+    type: "constructor",
+    inputs: [
+      {
+        name: "bundler3",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "erc20WrapperDepositFor",
+    inputs: [
+      {
+        name: "wrapper",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "erc20WrapperWithdrawTo",
+    inputs: [
+      {
+        name: "wrapper",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "amount",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "error",
+    name: "DepositFailed",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "WithdrawFailed",
     inputs: [],
   },
 ] as const;

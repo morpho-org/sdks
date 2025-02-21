@@ -16,8 +16,8 @@ import { type AnvilTestClient, testAccount } from "@morpho-org/test";
 import { erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
-import { check } from "../../examples/whitelisted-erc4626-1inch.js";
-import { type LiquidationTestContext, test } from "../midasSetup.js";
+import { check } from "../../examples/whitelistedMarkets.js";
+import { type LiquidationTestContext, midasTest } from "../setup.js";
 
 fetchMock.config.fallbackToNetwork = true;
 fetchMock.config.overwriteRoutes = false;
@@ -59,7 +59,7 @@ describe("midas liquidation", () => {
   };
 
   // Cannot run concurrently because `fetch` is mocked globally.
-  test.sequential(
+  midasTest.sequential(
     `should liquidate on the mTBILL/USDC market`,
     async ({ client, encoder }) => {
       const collateralPriceUsd = 1.015852;

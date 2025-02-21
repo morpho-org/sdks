@@ -1,4 +1,4 @@
-import { type Address, erc20Abi, parseEther } from "viem";
+import { type Address, erc20Abi, maxUint256, parseEther } from "viem";
 import {
   MigratableProtocol,
   SupplyMigrationLimiter,
@@ -16,13 +16,29 @@ import { MigratableSupplyPosition_AaveV3Optimizer } from "../../../src/positions
 import { test } from "../setup.js";
 
 const { morpho } = MIGRATION_ADDRESSES[ChainId.EthMainnet].aaveV3Optimizer;
-const { aaveV3OptimizerBundler, wNative } = addresses[ChainId.EthMainnet];
+const {
+  bundler3: { generalAdapter1, aaveV3OptimizerMigrationAdapter },
+  wNative,
+} = addresses[ChainId.EthMainnet];
 
 const writeSupply = async (
   client: AnvilTestClient,
   market: Address,
   amount: bigint,
 ) => {
+  const owner = await client.readContract({
+    ...morpho,
+    functionName: "owner",
+  });
+
+  await client.deal({ account: owner, amount: parseEther("1") });
+  await client.writeContract({
+    ...morpho,
+    functionName: "setIsSupplyPaused",
+    args: [market, false],
+    account: owner,
+  });
+
   await client.deal({
     erc20: market,
     amount: amount,
@@ -40,6 +56,7 @@ const writeSupply = async (
   await client.mine({ blocks: 500 }); //accrue some interests
 };
 
+// AaveV3Optimizer is deprecated (supply is paused).
 describe("Supply position on Morpho AAVE V3", () => {
   test[ChainId.EthMainnet]("should fetch user position", async ({ client }) => {
     const amount = parseEther("1");
@@ -79,7 +96,7 @@ describe("Supply position on Morpho AAVE V3", () => {
       await writeContract(client, {
         ...morpho,
         functionName: "approveManager",
-        args: [aaveV3OptimizerBundler, true],
+        args: [aaveV3OptimizerMigrationAdapter, true],
       });
 
       const allPositions = await fetchMigratablePositions(
@@ -204,7 +221,7 @@ describe("Supply position on Morpho AAVE V3", () => {
         {
           vault: mmWeth,
           amount: migratedAmount,
-          minShares: 0n,
+          maxSharePrice: 2n * MathLib.RAY,
         },
         ChainId.EthMainnet,
         true,
@@ -212,18 +229,17 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       expect(migrationBundle.requirements.txs).toHaveLength(0);
       expect(migrationBundle.requirements.signatures).toHaveLength(1);
-      const deadline = migrationBundle.actions[0]?.args[2];
       expect(migrationBundle.actions).toEqual([
         {
-          args: [true, 0n, deadline, null],
+          args: [client.account.address, true, 0n, expect.any(BigInt), null],
           type: "aaveV3OptimizerApproveManagerWithSig",
         },
         {
-          args: [wNative, migratedAmount, 4n],
+          args: [wNative, migratedAmount, 4n, generalAdapter1],
           type: "aaveV3OptimizerWithdraw",
         },
         {
-          args: [mmWeth, MathLib.MAX_UINT_128, 0n, client.account.address],
+          args: [mmWeth, maxUint256, 2n * MathLib.RAY, client.account.address],
           type: "erc4626Deposit",
         },
       ]);
@@ -238,7 +254,7 @@ describe("Supply position on Morpho AAVE V3", () => {
             abi: erc20Abi,
             address: wNative,
             functionName: "balanceOf",
-            args: [aaveV3OptimizerBundler],
+            args: [aaveV3OptimizerMigrationAdapter],
           }),
           client.readContract({
             ...morpho,
@@ -289,7 +305,7 @@ describe("Supply position on Morpho AAVE V3", () => {
         {
           vault: mmWeth,
           amount: position.supply,
-          minShares: 0n,
+          maxSharePrice: 2n * MathLib.RAY,
         },
         ChainId.EthMainnet,
         true,
@@ -297,18 +313,17 @@ describe("Supply position on Morpho AAVE V3", () => {
 
       expect(migrationBundle.requirements.txs).toHaveLength(0);
       expect(migrationBundle.requirements.signatures).toHaveLength(1);
-      const deadline = migrationBundle.actions[0]?.args[2];
       expect(migrationBundle.actions).toEqual([
         {
-          args: [true, 0n, deadline, null],
+          args: [client.account.address, true, 0n, expect.any(BigInt), null],
           type: "aaveV3OptimizerApproveManagerWithSig",
         },
         {
-          args: [wNative, MathLib.MAX_UINT_160, 4n],
+          args: [wNative, maxUint256, 4n, generalAdapter1],
           type: "aaveV3OptimizerWithdraw",
         },
         {
-          args: [mmWeth, MathLib.MAX_UINT_128, 0n, client.account.address],
+          args: [mmWeth, maxUint256, 2n * MathLib.RAY, client.account.address],
           type: "erc4626Deposit",
         },
       ]);
@@ -323,7 +338,7 @@ describe("Supply position on Morpho AAVE V3", () => {
             abi: erc20Abi,
             address: wNative,
             functionName: "balanceOf",
-            args: [aaveV3OptimizerBundler],
+            args: [aaveV3OptimizerMigrationAdapter],
           }),
           client.readContract({
             ...morpho,
@@ -374,7 +389,7 @@ describe("Supply position on Morpho AAVE V3", () => {
         {
           vault: mmWeth,
           amount: migratedAmount,
-          minShares: 0n,
+          maxSharePrice: 2n * MathLib.RAY,
         },
         ChainId.EthMainnet,
         false,
@@ -384,11 +399,11 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(migrationBundle.requirements.signatures).toHaveLength(0);
       expect(migrationBundle.actions).toEqual([
         {
-          args: [wNative, migratedAmount, 4n],
+          args: [wNative, migratedAmount, 4n, generalAdapter1],
           type: "aaveV3OptimizerWithdraw",
         },
         {
-          args: [mmWeth, MathLib.MAX_UINT_128, 0n, client.account.address],
+          args: [mmWeth, maxUint256, 2n * MathLib.RAY, client.account.address],
           type: "erc4626Deposit",
         },
       ]);
@@ -402,7 +417,7 @@ describe("Supply position on Morpho AAVE V3", () => {
             abi: erc20Abi,
             address: wNative,
             functionName: "balanceOf",
-            args: [aaveV3OptimizerBundler],
+            args: [aaveV3OptimizerMigrationAdapter],
           }),
           client.readContract({
             ...morpho,
@@ -454,7 +469,7 @@ describe("Supply position on Morpho AAVE V3", () => {
         {
           vault: mmWeth,
           amount: position.supply,
-          minShares: 0n,
+          maxSharePrice: 2n * MathLib.RAY,
         },
         ChainId.EthMainnet,
         false,
@@ -464,11 +479,11 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(migrationBundle.requirements.signatures).toHaveLength(0);
       expect(migrationBundle.actions).toEqual([
         {
-          args: [wNative, MathLib.MAX_UINT_160, 4n],
+          args: [wNative, maxUint256, 4n, generalAdapter1],
           type: "aaveV3OptimizerWithdraw",
         },
         {
-          args: [mmWeth, MathLib.MAX_UINT_128, 0n, client.account.address],
+          args: [mmWeth, maxUint256, 2n * MathLib.RAY, client.account.address],
           type: "erc4626Deposit",
         },
       ]);
@@ -482,7 +497,7 @@ describe("Supply position on Morpho AAVE V3", () => {
             abi: erc20Abi,
             address: wNative,
             functionName: "balanceOf",
-            args: [aaveV3OptimizerBundler],
+            args: [aaveV3OptimizerMigrationAdapter],
           }),
           client.readContract({
             ...morpho,

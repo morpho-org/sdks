@@ -55,7 +55,7 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient permit2 allowance for token "0x2222222222222222222222222222222222222222" from owner "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" to spender "bundler"]`,
+      `[Error: insufficient permit2 allowance for token "0x2222222222222222222222222222222222222222" from owner "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"]`,
     );
   });
 

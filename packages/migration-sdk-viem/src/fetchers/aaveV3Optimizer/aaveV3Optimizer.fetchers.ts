@@ -52,7 +52,10 @@ export async function fetchAaveV3OptimizerPositions(
       abi: migrationContracts.morpho.abi,
       address: migrationContracts.morpho.address,
       functionName: "isManagedBy",
-      args: [user, addresses[ChainId.EthMainnet].aaveV3OptimizerBundler],
+      args: [
+        user,
+        addresses[ChainId.EthMainnet].bundler3.aaveV3OptimizerMigrationAdapter,
+      ],
     }),
     readContract(client, {
       ...parameters,

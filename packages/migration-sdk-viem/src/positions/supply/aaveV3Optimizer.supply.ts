@@ -1,6 +1,5 @@
 import {
   type ChainId,
-  MathLib,
   UnsupportedChainIdError,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -22,6 +21,7 @@ import {
   type Account,
   type Client,
   encodeFunctionData,
+  maxUint256,
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
@@ -56,7 +56,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
   ) {
@@ -66,7 +66,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
 
     const user = this.user;
     const {
-      bundler3: { aaveV3OptimizerMigrationAdapter },
+      bundler3: { generalAdapter1, aaveV3OptimizerMigrationAdapter },
     } = getChainAddresses(chainId);
     if (aaveV3OptimizerMigrationAdapter == null)
       throw new Error("missing aaveV3OptimizerMigrationAdapter address");
@@ -136,25 +136,24 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     let migratedAmount = amount;
 
     /*
-    When we want to move the whole position of the user, we use MaxUint as an amount because:
+      When we want to move the whole position of the user, we use MaxUint as an amount because:
       - for `aaveV3OptimizerWithdraw`, aaveV3Optimizer is taking the min between the amount and the user's balance (on pool + in p2p).
-      - for `erc4626Deposit`, the bundler is taking the  min between the amount and his balance
      */
     if (
       this.max.limiter === SupplyMigrationLimiter.position &&
       this.max.value <= amount
     ) {
-      migratedAmount = MathLib.MAX_UINT_160;
+      migratedAmount = maxUint256;
     }
 
     actions.push(
       {
         type: "aaveV3OptimizerWithdraw",
-        args: [this.loanToken, migratedAmount, 4n],
+        args: [this.loanToken, migratedAmount, 4n, generalAdapter1],
       },
       {
         type: "erc4626Deposit",
-        args: [vault, MathLib.MAX_UINT_128, minShares, user],
+        args: [vault, maxUint256, maxSharePrice, user],
       },
     );
 

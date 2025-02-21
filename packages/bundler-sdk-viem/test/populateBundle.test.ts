@@ -187,7 +187,7 @@ describe("populateBundle", () => {
             formatUnits(await client.balanceOf({ erc20: dai }), 18),
           ).toBeCloseTo(0, 8);
           expect(position.collateral).toBe(0n);
-          expect(position.supplyShares).toBe(50639301938842808563547241013n);
+          expect(position.supplyShares).toBe(50490517487541493285419804234n);
           expect(position.borrowShares).toBe(0n);
 
           expect(await client.allowance({ erc20: dai, spender: permit2 })).toBe(
@@ -1054,7 +1054,7 @@ describe("populateBundle", () => {
               onBundleTx: donate(
                 client,
                 wNative,
-                parseEther("0.4"),
+                parseEther("0.3"),
                 bbEth.address,
                 morpho,
               ),
@@ -1669,7 +1669,7 @@ describe("populateBundle", () => {
 
           const { result } = await renderHook(config, () =>
             useSimulationState({
-              marketIds: [],
+              marketIds: [id],
               users: [
                 client.account.address,
                 generalAdapter1,
@@ -1691,7 +1691,7 @@ describe("populateBundle", () => {
 
           await waitFor(
             () => expect(result.current.isFetchingAny).toBeFalsy(),
-            { timeout: 30_000 },
+            { timeout: 60_000 },
           );
 
           const data = result.current.data!;
@@ -2164,16 +2164,12 @@ describe("populateBundle", () => {
             {
               type: "MetaMorpho_PublicReallocate",
               sender: generalAdapter1,
-              address: bbUsdc.address,
+              address: steakUsdc.address,
               args: {
                 withdrawals: [
                   {
-                    id: "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
-                    assets: 10020365337n,
-                  },
-                  {
-                    id: "0xdcfd3558f75a13a3c430ee71df056b5570cbd628da91e33c27eec7c42603247b",
-                    assets: 10237890362n,
+                    id: usdc_wbtc.id,
+                    assets: parseUnits("10000", 6),
                   },
                 ],
                 supplyMarketId: id,
@@ -2182,12 +2178,16 @@ describe("populateBundle", () => {
             {
               type: "MetaMorpho_PublicReallocate",
               sender: generalAdapter1,
-              address: steakUsdc.address,
+              address: bbUsdc.address,
               args: {
                 withdrawals: [
                   {
-                    id: usdc_wbtc.id,
-                    assets: parseUnits("10000", 6),
+                    id: "0x3bb29b62affbedc60b8446b235aaa349d5e3bad96c09bca1d7a2d693c06669aa",
+                    assets: 885632997n,
+                  },
+                  {
+                    id: "0xdcfd3558f75a13a3c430ee71df056b5570cbd628da91e33c27eec7c42603247b",
+                    assets: 5708100977n,
                   },
                 ],
                 supplyMarketId: id,
@@ -2465,7 +2465,7 @@ describe("populateBundle", () => {
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 2n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 3n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
@@ -3452,7 +3452,7 @@ describe("populateBundle", () => {
               onBundleTx: donate(
                 client,
                 wNative,
-                parseEther("0.4"),
+                parseEther("0.3"),
                 bbEth.address,
                 morpho,
               ),
@@ -3907,7 +3907,7 @@ describe("populateBundle", () => {
               onBundleTx: donate(
                 client,
                 wNative,
-                parseEther("0.4"),
+                parseEther("0.3"),
                 bbEth.address,
                 morpho,
               ),
@@ -4614,16 +4614,12 @@ describe("populateBundle", () => {
             {
               type: "MetaMorpho_PublicReallocate",
               sender: generalAdapter1,
-              address: bbUsdc.address,
+              address: steakUsdc.address,
               args: {
                 withdrawals: [
                   {
-                    id: "0x64d65c9a2d91c36d56fbc42d69e979335320169b3df63bf92789e2c8883fcc64",
-                    assets: 10020365337n,
-                  },
-                  {
-                    id: "0xdcfd3558f75a13a3c430ee71df056b5570cbd628da91e33c27eec7c42603247b",
-                    assets: 10237890362n,
+                    id: usdc_wbtc.id,
+                    assets: parseUnits("10000", 6),
                   },
                 ],
                 supplyMarketId: id,
@@ -4632,12 +4628,16 @@ describe("populateBundle", () => {
             {
               type: "MetaMorpho_PublicReallocate",
               sender: generalAdapter1,
-              address: steakUsdc.address,
+              address: bbUsdc.address,
               args: {
                 withdrawals: [
                   {
-                    id: usdc_wbtc.id,
-                    assets: parseUnits("10000", 6),
+                    id: "0x3bb29b62affbedc60b8446b235aaa349d5e3bad96c09bca1d7a2d693c06669aa",
+                    assets: 885632997n,
+                  },
+                  {
+                    id: "0xdcfd3558f75a13a3c430ee71df056b5570cbd628da91e33c27eec7c42603247b",
+                    assets: 5708100977n,
                   },
                 ],
                 supplyMarketId: id,
@@ -4920,7 +4920,7 @@ describe("populateBundle", () => {
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 2n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 3n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
