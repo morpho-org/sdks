@@ -140,6 +140,13 @@ export const MIGRATION_ADDRESSES = {
     [MigratableProtocol.aaveV2]: null,
     [MigratableProtocol.aaveV3Optimizer]: null,
   },
+  [ChainId.PolygonMainnet]: {
+    [MigratableProtocol.aaveV3]: null,
+    [MigratableProtocol.compoundV3]: null,
+    [MigratableProtocol.compoundV2]: null,
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
+  },
   [ChainId.ArbitrumMainnet]: {
     [MigratableProtocol.aaveV3]: null,
     [MigratableProtocol.compoundV3]: null,
@@ -154,9 +161,35 @@ export const MIGRATION_ADDRESSES = {
     [MigratableProtocol.aaveV2]: null,
     [MigratableProtocol.aaveV3Optimizer]: null,
   },
-} as const satisfies {
-  [id in ChainId]: ProtocolMigrationContracts;
-};
+  [ChainId.WorldChainMainnet]: {
+    [MigratableProtocol.aaveV3]: null,
+    [MigratableProtocol.compoundV3]: null,
+    [MigratableProtocol.compoundV2]: null,
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
+  },
+  [ChainId.FraxtalMainnet]: {
+    [MigratableProtocol.aaveV3]: null,
+    [MigratableProtocol.compoundV3]: null,
+    [MigratableProtocol.compoundV2]: null,
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
+  },
+  [ChainId.ScrollMainnet]: {
+    [MigratableProtocol.aaveV3]: null,
+    [MigratableProtocol.compoundV3]: null,
+    [MigratableProtocol.compoundV2]: null,
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
+  },
+  [ChainId.InkMainnet]: {
+    [MigratableProtocol.aaveV3]: null,
+    [MigratableProtocol.compoundV3]: null,
+    [MigratableProtocol.compoundV2]: null,
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
+  },
+} as const;
 
 export default MIGRATION_ADDRESSES as {
   [id in ChainId]: ProtocolMigrationContracts;

@@ -106,6 +106,21 @@ export const addresses = {
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
   },
+  [ChainId.PolygonMainnet]: {
+    morpho: "0x1bF0c2541F820E775182832f06c0B7Fc27A25f67",
+    bundler3: {
+      bundler3: "0x2d9C3A9E67c966C711208cc78b34fB9E9f8db589",
+      generalAdapter1: "0xB261B51938A9767406ef83bbFbaAFE16691b7047",
+      paraswapAdapter: "0x5F2617F12D1fDd1e43e72Cb80C92dFcE8124Db8d",
+    },
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    adaptiveCurveIrm: "0xe675A2161D4a6E2de2eeD70ac98EEBf257FBF0B0",
+    publicAllocator: "0xfac15aff53ADd2ff80C2962127C434E8615Df0d3",
+    metaMorphoFactory: "0xa9c87daB340631C34BB738625C70499e29ddDC98",
+
+    wNative: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+    usdc: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
+  },
   [ChainId.ArbitrumMainnet]: {
     morpho: "0x6c247b1F6182318877311737BaC0844bAa518F5e",
     bundler3: {
@@ -136,11 +151,63 @@ export const addresses = {
     wNative: "0x4200000000000000000000000000000000000006",
     usdc: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
   },
+  [ChainId.WorldChainMainnet]: {
+    morpho: "0xE741BC7c34758b4caE05062794E8Ae24978AF432",
+    bundler3: {
+      bundler3: "0x3D07BF2FFb23248034bF704F3a4786F1ffE2a448",
+      generalAdapter1: "0x30fa9A3cF56931ACEea42E28D35519a97D90aA67",
+    },
+    adaptiveCurveIrm: "0x34E99D604751a72cF8d0CFDf87069292d82De472",
+    publicAllocator: "0xef9889B4e443DEd35FA0Bd060f2104Cca94e6A43",
+    metaMorphoFactory: "0x4DBB3a642a2146d5413750Cca3647086D9ba5F12",
+
+    wNative: "0x4200000000000000000000000000000000000006",
+    usdc: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
+  },
+  [ChainId.FraxtalMainnet]: {
+    morpho: "0xa6030627d724bA78a59aCf43Be7550b4C5a0653b",
+    bundler3: {
+      bundler3: "0xA7a414823Ef0F8CFb2c4f67f2F445DA940641d91",
+      generalAdapter1: "0x228dDF333DDf6D1895dA1dE8a846EDD27F1284eD",
+    },
+    adaptiveCurveIrm: "0xA0D4D77b5D9933073572E19C172BFE866312673b",
+    publicAllocator: "0x37a888192165fC39884f87c64E2476BfD2C09675",
+    metaMorphoFactory: "0x27D4Af0AC9E7FDfA6D0853236f249CC27AE79488",
+
+    wNative: "0xfc00000000000000000000000000000000000006",
+    usdc: "0xDcc0F2D8F90FDe85b10aC1c8Ab57dc0AE946A543",
+  },
+  [ChainId.ScrollMainnet]: {
+    morpho: "0x2d012EdbAdc37eDc2BC62791B666f9193FDF5a55",
+    bundler3: {
+      bundler3: "0x60F9159d4dCd724e743212416FD57d8aC0B60768",
+      generalAdapter1: "0xD2780fae0869cDc06EE202152304A39653361525",
+    },
+    adaptiveCurveIrm: "0xa5EA7500A27C0079961D93366A6e93aafF18CB90",
+    publicAllocator: "0x8a7f671E45E51dE245649Cf916cA0256FB8a9927",
+    metaMorphoFactory: "0x56b65742ade55015e6480959808229Ad6dbc9295",
+
+    wNative: "0x5300000000000000000000000000000000000004",
+    usdc: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4",
+  },
+  [ChainId.InkMainnet]: {
+    morpho: "0x857f3EefE8cbda3Bc49367C996cd664A880d3042",
+    bundler3: {
+      bundler3: "0x7db0F1E2bf1f47ec82220090F388d75D8B9BB6BC",
+      generalAdapter1: "0xB8B2aDdCDe1cdC94AaE18a0F8A19df03D8683610",
+    },
+    adaptiveCurveIrm: "0x9515407b1512F53388ffE699524100e7270Ee57B",
+    publicAllocator: "0x85416891752a6B81106c1C2999AE1AF5d8Cd3357",
+    metaMorphoFactory: "0xd3f39505d0c48AFED3549D625982FdC38Ea9904b",
+
+    wNative: "0x4200000000000000000000000000000000000006",
+    usdc: "0xF1815bd50389c46847f0Bda824eC8da914045D14",
+  },
 } as const;
 
 export interface ChainAddresses {
   morpho: Address;
-  permit2: Address;
+  permit2?: Address;
   /**
    * @deprecated All bundles should use Bundler3 instead.
    */
@@ -153,7 +220,7 @@ export interface ChainAddresses {
   bundler3: {
     bundler3: Address;
     generalAdapter1: Address;
-    paraswapAdapter: Address;
+    paraswapAdapter?: Address;
     erc20WrapperAdapter?: Address;
     compoundV2MigrationAdapter?: Address;
     compoundV3MigrationAdapter?: Address;
@@ -222,8 +289,13 @@ export const unwrappedTokensMapping: Record<
     [addresses[ChainId.BaseMainnet].testUsdc]:
       addresses[ChainId.BaseMainnet].usdc,
   },
+  [ChainId.PolygonMainnet]: {},
   [ChainId.ArbitrumMainnet]: {},
   [ChainId.OptimismMainnet]: {},
+  [ChainId.WorldChainMainnet]: {},
+  [ChainId.FraxtalMainnet]: {},
+  [ChainId.ScrollMainnet]: {},
+  [ChainId.InkMainnet]: {},
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {
@@ -236,8 +308,13 @@ export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {
 export const erc20WrapperTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set(),
   [ChainId.BaseMainnet]: new Set(),
+  [ChainId.PolygonMainnet]: new Set(),
   [ChainId.ArbitrumMainnet]: new Set(),
   [ChainId.OptimismMainnet]: new Set(),
+  [ChainId.WorldChainMainnet]: new Set(),
+  [ChainId.FraxtalMainnet]: new Set(),
+  [ChainId.ScrollMainnet]: new Set(),
+  [ChainId.InkMainnet]: new Set(),
 };
 
 /**
@@ -247,8 +324,13 @@ export const erc20WrapperTokens: Record<ChainId, Set<Address>> = {
 export const permissionedWrapperTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set(),
   [ChainId.BaseMainnet]: new Set([addresses[ChainId.BaseMainnet].testUsdc]),
+  [ChainId.PolygonMainnet]: new Set(),
   [ChainId.ArbitrumMainnet]: new Set(),
   [ChainId.OptimismMainnet]: new Set(),
+  [ChainId.WorldChainMainnet]: new Set(),
+  [ChainId.FraxtalMainnet]: new Set(),
+  [ChainId.ScrollMainnet]: new Set(),
+  [ChainId.InkMainnet]: new Set(),
 };
 
 /**
@@ -261,8 +343,13 @@ export const permissionedBackedTokens: Record<ChainId, Set<Address>> = {
     addresses[ChainId.EthMainnet].wbC3M,
   ]),
   [ChainId.BaseMainnet]: new Set(),
+  [ChainId.PolygonMainnet]: new Set(),
   [ChainId.ArbitrumMainnet]: new Set(),
   [ChainId.OptimismMainnet]: new Set(),
+  [ChainId.WorldChainMainnet]: new Set(),
+  [ChainId.FraxtalMainnet]: new Set(),
+  [ChainId.ScrollMainnet]: new Set(),
+  [ChainId.InkMainnet]: new Set(),
 };
 
 /**
@@ -272,8 +359,13 @@ export const permissionedBackedTokens: Record<ChainId, Set<Address>> = {
 export const permissionedCoinbaseTokens: Record<ChainId, Set<Address>> = {
   [ChainId.EthMainnet]: new Set(),
   [ChainId.BaseMainnet]: new Set([addresses[ChainId.BaseMainnet].verUsdc]),
+  [ChainId.PolygonMainnet]: new Set(),
   [ChainId.ArbitrumMainnet]: new Set(),
   [ChainId.OptimismMainnet]: new Set(),
+  [ChainId.WorldChainMainnet]: new Set(),
+  [ChainId.FraxtalMainnet]: new Set(),
+  [ChainId.ScrollMainnet]: new Set(),
+  [ChainId.InkMainnet]: new Set(),
 };
 
 entries(permissionedBackedTokens).forEach(([chainId, tokens]) => {
@@ -301,6 +393,11 @@ export const convexWrapperTokens: Record<ChainId, Set<Address>> = {
     addresses[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"],
   ]),
   [ChainId.BaseMainnet]: new Set(),
+  [ChainId.PolygonMainnet]: new Set(),
   [ChainId.ArbitrumMainnet]: new Set(),
   [ChainId.OptimismMainnet]: new Set(),
+  [ChainId.WorldChainMainnet]: new Set(),
+  [ChainId.FraxtalMainnet]: new Set(),
+  [ChainId.ScrollMainnet]: new Set(),
+  [ChainId.InkMainnet]: new Set(),
 };

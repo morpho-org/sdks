@@ -1,6 +1,6 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { Erc20Errors } from "../../errors.js";
+import { Erc20Errors, UnexpectedOperation } from "../../errors.js";
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
@@ -14,6 +14,8 @@ export const handleErc20Transfer2Operation: OperationHandler<
     throw new Erc20Errors.InsufficientBalance(address, from);
 
   const { permit2 } = getChainAddresses(data.chainId);
+  if (permit2 == null)
+    throw new UnexpectedOperation("Erc20_Transfer2", data.chainId);
 
   const { permit2BundlerAllowance } = fromHolding;
   if (

@@ -28,7 +28,7 @@ export async function fetchAaveV2Positions(
   const chainId = parameters.chainId;
 
   const migrationContracts =
-    MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV2];
+    MIGRATION_ADDRESSES[chainId]?.[MigratableProtocol.aaveV2];
 
   if (!migrationContracts) return [];
 

@@ -49,7 +49,6 @@ export async function fetchHolding(
     });
 
   const erc20 = ERC20__factory.connect(token, runner);
-  const permit2 = Permit2__factory.connect(chainAddresses.permit2, runner);
   const erc2612 = ERC2612__factory.connect(token, runner);
 
   const [
@@ -62,19 +61,24 @@ export async function fetchHolding(
   ] = await Promise.all([
     erc20.balanceOf(user, overrides),
     Promise.all(
-      ERC20_ALLOWANCE_RECIPIENTS.map(
-        async (label) =>
-          [
-            label,
-            await erc20.allowance(
-              user,
-              getValue(chainAddresses, label),
-              overrides,
-            ),
-          ] as const,
-      ),
+      ERC20_ALLOWANCE_RECIPIENTS.map(async (label) => {
+        const spender = getValue(chainAddresses, label);
+        if (spender == null) return [label, 0n] as const;
+
+        return [
+          label,
+          await erc20.allowance(user, spender, overrides),
+        ] as const;
+      }),
     ),
-    permit2.allowance(user, token, chainAddresses.bundler3.bundler3, overrides),
+    chainAddresses.permit2 != null
+      ? Permit2__factory.connect(chainAddresses.permit2, runner).allowance(
+          user,
+          token,
+          chainAddresses.bundler3.bundler3,
+          overrides,
+        )
+      : { amount: 0n, expiration: 0n, nonce: 0n },
     erc2612.nonces(user, overrides).catch(() => undefined),
     permissionedBackedTokens[chainId].has(token)
       ? WrappedBackedToken__factory.connect(
