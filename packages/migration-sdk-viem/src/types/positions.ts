@@ -7,3 +7,5 @@ export enum SupplyMigrationLimiter {
 }
 
 export enum BorrowMigrationLimiter {}
+
+export enum CollateralMigrationLimiter {}
