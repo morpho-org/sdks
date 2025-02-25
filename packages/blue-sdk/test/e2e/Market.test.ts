@@ -18,7 +18,7 @@ const params = new MarketParams({
 });
 
 describe("Market", () => {
-  test("should borrow borrowable assets", async ({ client }) => {
+  test("should borrow borrowable assets", async ({ client, expect }) => {
     const collateral = parseUnits("1", 18);
     await client.deal({
       erc20: params.collateralToken,

@@ -118,7 +118,9 @@ export const populateInputTransfer = (
     erc2612Nonce != null &&
     (data.tryGetVault(address) != null || // MetaMorpho vaults implement EIP-2612.
       hasSimplePermit);
-  const isPermissioned =
+  const useSimpleTransfer =
+    permit2 == null ||
+    // Token is permissioned and Permit2 may not be authorized so Permit2 cannot be used.
     permissionedWrapperTokens[data.chainId].has(address) ||
     permissionedBackedTokens[data.chainId].has(address);
 
@@ -133,8 +135,7 @@ export const populateInputTransfer = (
         nonce: erc2612Nonce,
       },
     });
-  // Token is permissioned and Permit2 may not be authorized so Permit2 cannot be used.
-  else if (isPermissioned)
+  else if (useSimpleTransfer)
     operations.push({
       type: "Erc20_Approve",
       sender: from,
@@ -145,7 +146,7 @@ export const populateInputTransfer = (
       },
     });
 
-  if (useSimplePermit || isPermissioned)
+  if (useSimplePermit || useSimpleTransfer)
     operations.push({
       type: "Erc20_Transfer",
       sender: generalAdapter1,
@@ -156,7 +157,7 @@ export const populateInputTransfer = (
         to: generalAdapter1,
       },
     });
-  // Simple permit is not supported and token is not permissioned: fallback to Permit2.
+  // Simple permit is not supported: fallback to Permit2.
   else {
     if (erc20Allowances.permit2 < amount)
       operations.push({

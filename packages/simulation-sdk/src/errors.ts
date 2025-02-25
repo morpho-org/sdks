@@ -6,7 +6,13 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { entries } from "@morpho-org/morpho-ts";
-import type { Operation } from "./operations.js";
+import type { Operation, OperationType } from "./operations.js";
+
+export class UnexpectedOperation extends Error {
+  constructor(type: OperationType, chainId: number) {
+    super(`unexpected operation "${type}" on chain "${chainId}"`);
+  }
+}
 
 export class UnknownMarketError extends UnknownDataError {
   constructor(public readonly marketId: MarketId) {

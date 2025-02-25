@@ -89,8 +89,13 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
       redemptionAsset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
     },
   },
+  [ChainId.PolygonMainnet]: {},
   [ChainId.ArbitrumMainnet]: {},
   [ChainId.OptimismMainnet]: {},
+  [ChainId.WorldChainMainnet]: {},
+  [ChainId.FraxtalMainnet]: {},
+  [ChainId.ScrollMainnet]: {},
+  [ChainId.InkMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
@@ -105,12 +110,32 @@ export const preLiquidationFactoryConfigs: Record<
     address: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
     startBlock: 23779056n,
   },
-  [ChainId.ArbitrumMainnet]: {
+  [ChainId.PolygonMainnet]: {
     address: "0x635c31B5DF1F7EFbCbC07E302335Ef4230758e3d",
+    startBlock: 68074185n,
+  },
+  [ChainId.ArbitrumMainnet]: {
+    address: "0x910b2151Ff41Fa117107B460FB93b2f70Ba098b2",
     startBlock: 307326238n,
   },
   [ChainId.OptimismMainnet]: {
     address: "0x3d05C01EE8e97361b9E19D172128255eaE5F98B9",
     startBlock: 132139369n,
+  },
+  [ChainId.WorldChainMainnet]: {
+    address: "0x0ef3DbbBa3909dFe8B0F0fdaD18a51fefBc0B2a4",
+    startBlock: 10273494n,
+  },
+  [ChainId.FraxtalMainnet]: {
+    address: "0x953D48a09eb077591463e8957aBcCd12085c1715",
+    startBlock: 16536231n,
+  },
+  [ChainId.ScrollMainnet]: {
+    address: "0x2cA5dE6fE096F50605F963ac237F2f1BEE37971c",
+    startBlock: 13504587n,
+  },
+  [ChainId.InkMainnet]: {
+    address: "0x347947AC7D45Bba44a0a19F2C6513aA326DFdCd6",
+    startBlock: 6385077n,
   },
 };

@@ -3,8 +3,13 @@ import { UnsupportedChainIdError } from "./errors.js";
 export enum ChainId {
   EthMainnet = 1,
   BaseMainnet = 8453,
+  PolygonMainnet = 137,
   ArbitrumMainnet = 42161,
   OptimismMainnet = 10,
+  WorldChainMainnet = 480,
+  FraxtalMainnet = 252,
+  ScrollMainnet = 534352,
+  InkMainnet = 57073,
 }
 
 export interface ChainMetadata {
@@ -63,19 +68,54 @@ export namespace ChainUtils {
       explorerUrl: "https://basescan.org",
       identifier: "base",
     },
+    [ChainId.PolygonMainnet]: {
+      name: "Polygon",
+      id: ChainId.PolygonMainnet,
+      nativeCurrency: { name: "Polygon", symbol: "POL", decimals: 18 },
+      explorerUrl: "https://polygonscan.com",
+      identifier: "polygon",
+    },
     [ChainId.ArbitrumMainnet]: {
-      name: "Arbitrum Mainnet",
+      name: "Arbitrum One",
       id: ChainId.ArbitrumMainnet,
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://arbiscan.io",
       identifier: "arbitrum",
     },
     [ChainId.OptimismMainnet]: {
-      name: "Optimism Mainnet",
+      name: "OP Mainnet",
       id: ChainId.OptimismMainnet,
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://optimistic.etherscan.io",
       identifier: "optimism",
+    },
+    [ChainId.WorldChainMainnet]: {
+      name: "World Chain",
+      id: ChainId.WorldChainMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://worldscan.org",
+      identifier: "worldchain",
+    },
+    [ChainId.FraxtalMainnet]: {
+      name: "Fraxtal",
+      id: ChainId.FraxtalMainnet,
+      nativeCurrency: { name: "Frax Ether", symbol: "frxETH", decimals: 18 },
+      explorerUrl: "https://fraxscan.com",
+      identifier: "fraxtal",
+    },
+    [ChainId.ScrollMainnet]: {
+      name: "Scroll",
+      id: ChainId.ScrollMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://scrollscan.com",
+      identifier: "scroll",
+    },
+    [ChainId.InkMainnet]: {
+      name: "Ink",
+      id: ChainId.InkMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://explorer.inkonchain.com",
+      identifier: "ink",
     },
   };
 }

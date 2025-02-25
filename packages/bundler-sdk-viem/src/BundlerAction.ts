@@ -652,6 +652,8 @@ export namespace BundlerAction {
     skipRevert = true,
   ): BundlerCall[] {
     const { permit2 } = getChainAddresses(chainId);
+    if (permit2 == null)
+      throw new BundlerErrors.UnexpectedAction("approve2", chainId);
 
     return [
       {
@@ -687,6 +689,8 @@ export namespace BundlerAction {
       permit2,
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
+    if (permit2 == null)
+      throw new BundlerErrors.UnexpectedAction("transferFrom2", chainId);
 
     recipient ??= generalAdapter1;
 

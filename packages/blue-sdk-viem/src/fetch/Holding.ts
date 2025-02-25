@@ -3,12 +3,17 @@ import {
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
   NATIVE_ADDRESS,
-  addresses,
   getChainAddresses,
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { type Address, type Client, erc20Abi, maxUint256 } from "viem";
+import {
+  type Address,
+  type Client,
+  erc20Abi,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { getBalance, getChainId, readContract } from "viem/actions";
 
 import { fromEntries, getValue } from "@morpho-org/morpho-ts";
@@ -56,9 +61,10 @@ export async function fetchHolding(
   if (deployless) {
     const {
       morpho,
-      permit2,
+      permit2 = zeroAddress,
       bundler3: { bundler3, generalAdapter1 },
-    } = addresses[parameters.chainId];
+    } = getChainAddresses(parameters.chainId);
+
     try {
       const {
         balance,
@@ -122,31 +128,35 @@ export async function fetchHolding(
       args: [user],
     }),
     Promise.all(
-      ERC20_ALLOWANCE_RECIPIENTS.map(
-        async (label) =>
-          [
-            label,
-            await readContract(client, {
-              ...parameters,
-              abi: erc20Abi,
-              address: token,
-              functionName: "allowance",
-              args: [user, getValue(chainAddresses, label)],
-            }),
-          ] as const,
-      ),
+      ERC20_ALLOWANCE_RECIPIENTS.map(async (label) => {
+        const spender = getValue(chainAddresses, label);
+        if (spender == null) return [label, 0n] as const;
+
+        return [
+          label,
+          await readContract(client, {
+            ...parameters,
+            abi: erc20Abi,
+            address: token,
+            functionName: "allowance",
+            args: [user, spender],
+          }),
+        ] as const;
+      }),
     ),
-    readContract(client, {
-      ...parameters,
-      abi: permit2Abi,
-      address: chainAddresses.permit2,
-      functionName: "allowance",
-      args: [user, token, chainAddresses.bundler3.bundler3],
-    }).then(([amount, expiration, nonce]) => ({
-      amount,
-      expiration: BigInt(expiration),
-      nonce: BigInt(nonce),
-    })),
+    chainAddresses.permit2 != null
+      ? readContract(client, {
+          ...parameters,
+          abi: permit2Abi,
+          address: chainAddresses.permit2,
+          functionName: "allowance",
+          args: [user, token, chainAddresses.bundler3.bundler3],
+        }).then(([amount, expiration, nonce]) => ({
+          amount,
+          expiration: BigInt(expiration),
+          nonce: BigInt(nonce),
+        }))
+      : { amount: 0n, expiration: 0n, nonce: 0n },
     readContract(client, {
       ...parameters,
       abi: erc2612Abi,
