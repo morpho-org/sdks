@@ -119,7 +119,6 @@ export const addresses = {
     metaMorphoFactory: "0xa9c87daB340631C34BB738625C70499e29ddDC98",
 
     wNative: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
-    usdc: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174",
   },
   [ChainId.ArbitrumMainnet]: {
     morpho: "0x6c247b1F6182318877311737BaC0844bAa518F5e",
