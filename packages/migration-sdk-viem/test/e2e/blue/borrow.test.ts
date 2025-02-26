@@ -3,7 +3,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MarketParams,
   MathLib,
-  addresses,
+  addressesRegistry,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
@@ -31,15 +31,15 @@ import {
 } from "@morpho-org/bundler-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";
 import { fromEntries } from "@morpho-org/morpho-ts";
+import { SimulationState } from "@morpho-org/simulation-sdk";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
-import { SimulationState } from "../../../../simulation-sdk/src/SimulationState.js";
 import { MigratableBorrowPosition_Blue } from "../../../src/index.js";
 import { test } from "../setup.js";
 
 const TEST_CONFIGS: {
-  chainId: ChainId;
+  chainId: ChainId.EthMainnet | ChainId.BaseMainnet;
   testFn: TestAPI<ViemTestContext>;
   marketFrom: MarketParams;
   marketTo: MarketParams;
@@ -156,7 +156,7 @@ describe("Borrow position on blue", () => {
     const {
       bundler3: { bundler3, generalAdapter1 },
       morpho,
-    } = addresses[chainId];
+    } = addressesRegistry[chainId];
 
     const writeSupply = async (
       client: ViemTestContext["client"],

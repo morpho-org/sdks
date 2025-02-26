@@ -1,7 +1,7 @@
-import { type Address, ChainUtils, MathLib, Token } from "@morpho-org/blue-sdk";
+import { type Address, MathLib, Token } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 
-import { MIGRATION_ADDRESSES } from "../../config.js";
+import { migrationAddresses } from "../../config.js";
 import type { MigratablePosition } from "../../positions/index.js";
 import { MigratableSupplyPosition_AaveV2 } from "../../positions/supply/aaveV2.supply.js";
 import {
@@ -21,14 +21,12 @@ export async function fetchAaveV2Positions(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const chainId = parameters.chainId;
 
   const migrationContracts =
-    MIGRATION_ADDRESSES[chainId]?.[MigratableProtocol.aaveV2];
+    migrationAddresses[chainId]?.[MigratableProtocol.aaveV2];
 
   if (!migrationContracts) return [];
 

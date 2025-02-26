@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import type { TypedDataDefinition } from "viem";
-import MIGRATION_ADDRESSES from "../../config.js";
+import { migrationAddresses } from "../../config.js";
 import { MigratableProtocol } from "../../types/index.js";
 
 interface MorphoAaveV3ManagerApprovalArgs {
@@ -48,16 +48,16 @@ export const getMorphoAaveV3ManagerApprovalTypedData = (
   typeof morphoAaveV3ManagerApprovalTypes,
   "Authorization"
 > => {
-  const migrationAddresses =
-    MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3Optimizer];
+  const aaveV3OptimizerAddresses =
+    migrationAddresses[chainId]?.[MigratableProtocol.aaveV3Optimizer];
 
-  if (!migrationAddresses) throw new UnsupportedChainIdError(chainId);
+  if (!aaveV3OptimizerAddresses) throw new UnsupportedChainIdError(chainId);
 
   return {
     domain: {
       name: "Morpho-AaveV3",
       chainId,
-      verifyingContract: migrationAddresses.morpho.address,
+      verifyingContract: aaveV3OptimizerAddresses.morpho.address,
       version: "0",
     },
     types: morphoAaveV3ManagerApprovalTypes,

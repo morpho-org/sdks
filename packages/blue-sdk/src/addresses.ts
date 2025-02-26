@@ -1,6 +1,7 @@
 import { type DottedKeys, entries } from "@morpho-org/morpho-ts";
 
-import { ChainId, ChainUtils } from "./chain.js";
+import { ChainId } from "./chain.js";
+import { UnsupportedChainIdError } from "./errors.js";
 import type { Address } from "./types.js";
 
 /** Address used to replicate an erc20-behaviour for native token.
@@ -9,7 +10,50 @@ import type { Address } from "./types.js";
  */
 export const NATIVE_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 
-export const addresses = {
+export interface ChainAddresses {
+  morpho: Address;
+  permit2?: Address;
+  /**
+   * @deprecated All bundles should use Bundler3 instead.
+   */
+  bundler?: Address;
+  aaveV3OptimizerBundler?: Address;
+  aaveV2Bundler?: Address;
+  aaveV3Bundler?: Address;
+  compoundV3Bundler?: Address;
+  compoundV2Bundler?: Address;
+  bundler3: {
+    bundler3: Address;
+    generalAdapter1: Address;
+    paraswapAdapter?: Address;
+    erc20WrapperAdapter?: Address;
+    compoundV2MigrationAdapter?: Address;
+    compoundV3MigrationAdapter?: Address;
+    aaveV2MigrationAdapter?: Address;
+    aaveV3CoreMigrationAdapter?: Address;
+    aaveV3PrimeMigrationAdapter?: Address;
+    aaveV3EtherFiMigrationAdapter?: Address;
+    aaveV3OptimizerMigrationAdapter?: Address;
+  };
+  adaptiveCurveIrm: Address;
+  publicAllocator?: Address;
+  metaMorphoFactory?: Address;
+
+  wNative?: Address;
+  morphoToken?: Address;
+  /**
+   * Must implement DAI specific permit (otherwise breaks permit signatures).
+   */
+  dai?: Address;
+  /**
+   * Must implement USDC permit version 2 (otherwise breaks permit signatures).
+   */
+  usdc?: Address;
+  stEth?: Address;
+  wstEth?: Address;
+}
+
+export const addressesRegistry = {
   [ChainId.EthMainnet]: {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
@@ -43,13 +87,12 @@ export const addresses = {
 
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     morphoToken: "0x9994E35Db50125E0DF82e4c2dde62496CE330999",
-    aaveV3Optimizer: "0x33333aea097c193e66081E930c33020272b33333",
+    // Must implement DAI specific permit (otherwise breaks permit signatures).
     dai: "0x6B175474E89094C44Da98b954EedeAC495271d0F",
     sDai: "0x83F20F44975D03b1b09e64809B757c47f942BEeA",
     mkr: "0x9f8F72aA9304c8B593d555F12eF6589cC3A579A2",
     stEth: "0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84",
     wstEth: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
-    cEth: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
     osEth: "0xf1C9acDc66974dFB6dEcB12aA385b9cD01190E38",
     bIB01: "0xCA30c93B02514f86d5C86a6e375E3A330B435Fb5",
     // If we want to change the wbIB01 address, we have to check if the new one has simple permit or not.
@@ -59,6 +102,7 @@ export const addresses = {
     // If we want to change the wbC3M address, we have to check if the new one has simple permit or not.
     // Currently, wbC3M is considered to have simple permit.
     wbC3M: "0x95D7337d43340E2721960Dc402D9b9117f0d81a2",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     usdt: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
     crvUsd: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
@@ -102,6 +146,7 @@ export const addresses = {
     metaMorphoFactory: "0xFf62A7c278C62eD665133147129245053Bbf5918",
 
     wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
@@ -133,6 +178,7 @@ export const addresses = {
     metaMorphoFactory: "0x878988f5f561081deEa117717052164ea1Ef0c82",
 
     wNative: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xaf88d065e77c8cC2239327C5EDb3A432268e5831",
   },
   [ChainId.OptimismMainnet]: {
@@ -148,6 +194,7 @@ export const addresses = {
     metaMorphoFactory: "0x3Bb6A6A0Bc85b367EFE0A5bAc81c5E52C892839a",
 
     wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85",
   },
   [ChainId.WorldChainMainnet]: {
@@ -161,7 +208,6 @@ export const addresses = {
     metaMorphoFactory: "0x4DBB3a642a2146d5413750Cca3647086D9ba5F12",
 
     wNative: "0x4200000000000000000000000000000000000006",
-    usdc: "0x79A02482A880bCE3F13e09Da970dC34db4CD24d1",
   },
   [ChainId.FraxtalMainnet]: {
     morpho: "0xa6030627d724bA78a59aCf43Be7550b4C5a0653b",
@@ -174,7 +220,6 @@ export const addresses = {
     metaMorphoFactory: "0x27D4Af0AC9E7FDfA6D0853236f249CC27AE79488",
 
     wNative: "0xfc00000000000000000000000000000000000006",
-    usdc: "0xDcc0F2D8F90FDe85b10aC1c8Ab57dc0AE946A543",
   },
   [ChainId.ScrollMainnet]: {
     morpho: "0x2d012EdbAdc37eDc2BC62791B666f9193FDF5a55",
@@ -187,6 +232,7 @@ export const addresses = {
     metaMorphoFactory: "0x56b65742ade55015e6480959808229Ad6dbc9295",
 
     wNative: "0x5300000000000000000000000000000000000004",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x06eFdBFf2a14a7c8E15944D1F4A48F9F95F663A4",
   },
   [ChainId.InkMainnet]: {
@@ -200,58 +246,20 @@ export const addresses = {
     metaMorphoFactory: "0xd3f39505d0c48AFED3549D625982FdC38Ea9904b",
 
     wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xF1815bd50389c46847f0Bda824eC8da914045D14",
   },
 } as const;
 
-export interface ChainAddresses {
-  morpho: Address;
-  permit2?: Address;
-  /**
-   * @deprecated All bundles should use Bundler3 instead.
-   */
-  bundler?: Address;
-  aaveV3OptimizerBundler?: Address;
-  aaveV2Bundler?: Address;
-  aaveV3Bundler?: Address;
-  compoundV3Bundler?: Address;
-  compoundV2Bundler?: Address;
-  bundler3: {
-    bundler3: Address;
-    generalAdapter1: Address;
-    paraswapAdapter?: Address;
-    erc20WrapperAdapter?: Address;
-    compoundV2MigrationAdapter?: Address;
-    compoundV3MigrationAdapter?: Address;
-    aaveV2MigrationAdapter?: Address;
-    aaveV3CoreMigrationAdapter?: Address;
-    aaveV3PrimeMigrationAdapter?: Address;
-    aaveV3EtherFiMigrationAdapter?: Address;
-    aaveV3OptimizerMigrationAdapter?: Address;
-  };
-  adaptiveCurveIrm: Address;
-  publicAllocator: Address;
-  metaMorphoFactory: Address;
+export const addresses = addressesRegistry as Record<number, ChainAddresses>;
 
-  wNative: Address;
-  morphoToken?: Address;
-  aaveV3Optimizer?: Address;
-  dai?: Address;
-  mkr?: Address;
-  usdc?: Address;
-  stEth?: Address;
-  wstEth?: Address;
-  cEth?: Address;
-}
-
-export type AddressLabel = DottedKeys<(typeof addresses)[ChainId]>;
-
-export default addresses as {
-  [n in ChainId]: ChainAddresses;
-};
+export type AddressLabel = DottedKeys<(typeof addressesRegistry)[ChainId]>;
 
 export const getChainAddresses = (chainId: number): ChainAddresses => {
-  return addresses[ChainUtils.parseSupportedChainId(chainId)];
+  const chainAddresses = addresses[chainId];
+  if (chainAddresses == null) throw new UnsupportedChainIdError(chainId);
+
+  return chainAddresses;
 };
 
 /**
@@ -263,30 +271,33 @@ export const unwrappedTokensMapping: Record<
   Record<Address, Address>
 > = {
   [ChainId.EthMainnet]: {
-    [addresses[ChainId.EthMainnet].wbIB01]: addresses[ChainId.EthMainnet].bIB01,
-    [addresses[ChainId.EthMainnet].wbC3M]: addresses[ChainId.EthMainnet].bC3M,
-    [addresses[ChainId.EthMainnet].wNative]: NATIVE_ADDRESS,
-    [addresses[ChainId.EthMainnet].stEth]: NATIVE_ADDRESS,
-    [addresses[ChainId.EthMainnet].wstEth]: addresses[ChainId.EthMainnet].stEth,
-    [addresses[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"]]:
-      addresses[ChainId.EthMainnet].crvUSDTWBTCWETH,
-    [addresses[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"]]:
-      addresses[ChainId.EthMainnet].crvUSDCWBTCWETH,
-    [addresses[ChainId.EthMainnet]["stkcvxcrvCRVUSDTBTCWSTETH-morpho"]]:
-      addresses[ChainId.EthMainnet].crvCRVUSDTBTCWSTETH,
-    [addresses[ChainId.EthMainnet]["stkcvxTryLSD-morpho"]]:
-      addresses[ChainId.EthMainnet].tryLSD,
-    [addresses[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"]]:
-      addresses[ChainId.EthMainnet].crvUSDETHCRV,
-    [addresses[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"]]:
-      addresses[ChainId.EthMainnet]["2BTC-f"],
+    [addressesRegistry[ChainId.EthMainnet].wbIB01]:
+      addressesRegistry[ChainId.EthMainnet].bIB01,
+    [addressesRegistry[ChainId.EthMainnet].wbC3M]:
+      addressesRegistry[ChainId.EthMainnet].bC3M,
+    [addressesRegistry[ChainId.EthMainnet].wNative]: NATIVE_ADDRESS,
+    [addressesRegistry[ChainId.EthMainnet].stEth]: NATIVE_ADDRESS,
+    [addressesRegistry[ChainId.EthMainnet].wstEth]:
+      addressesRegistry[ChainId.EthMainnet].stEth,
+    [addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"]]:
+      addressesRegistry[ChainId.EthMainnet].crvUSDTWBTCWETH,
+    [addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"]]:
+      addressesRegistry[ChainId.EthMainnet].crvUSDCWBTCWETH,
+    [addressesRegistry[ChainId.EthMainnet]["stkcvxcrvCRVUSDTBTCWSTETH-morpho"]]:
+      addressesRegistry[ChainId.EthMainnet].crvCRVUSDTBTCWSTETH,
+    [addressesRegistry[ChainId.EthMainnet]["stkcvxTryLSD-morpho"]]:
+      addressesRegistry[ChainId.EthMainnet].tryLSD,
+    [addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"]]:
+      addressesRegistry[ChainId.EthMainnet].crvUSDETHCRV,
+    [addressesRegistry[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"]]:
+      addressesRegistry[ChainId.EthMainnet]["2BTC-f"],
   },
   [ChainId.BaseMainnet]: {
-    [addresses[ChainId.BaseMainnet].wNative]: NATIVE_ADDRESS,
-    [addresses[ChainId.BaseMainnet].verUsdc]:
-      addresses[ChainId.BaseMainnet].usdc,
-    [addresses[ChainId.BaseMainnet].testUsdc]:
-      addresses[ChainId.BaseMainnet].usdc,
+    [addressesRegistry[ChainId.BaseMainnet].wNative]: NATIVE_ADDRESS,
+    [addressesRegistry[ChainId.BaseMainnet].verUsdc]:
+      addressesRegistry[ChainId.BaseMainnet].usdc,
+    [addressesRegistry[ChainId.BaseMainnet].testUsdc]:
+      addressesRegistry[ChainId.BaseMainnet].usdc,
   },
   [ChainId.PolygonMainnet]: {},
   [ChainId.ArbitrumMainnet]: {},
@@ -304,99 +315,70 @@ export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {
 /**
  * The registry of all known ERC20Wrapper tokens.
  */
-export const erc20WrapperTokens: Record<ChainId, Set<Address>> = {
-  [ChainId.EthMainnet]: new Set(),
-  [ChainId.BaseMainnet]: new Set(),
-  [ChainId.PolygonMainnet]: new Set(),
-  [ChainId.ArbitrumMainnet]: new Set(),
-  [ChainId.OptimismMainnet]: new Set(),
-  [ChainId.WorldChainMainnet]: new Set(),
-  [ChainId.FraxtalMainnet]: new Set(),
-  [ChainId.ScrollMainnet]: new Set(),
-  [ChainId.InkMainnet]: new Set(),
-};
+export const erc20WrapperTokens: Record<number, Set<Address>> = {};
 
 /**
  * The registry of all known PermissionedERC20Wrapper with a `hasPermission` getter.
  * All permissioned wrapper tokens are considered ERC20Wrapper and automatically added to the erc20WrapperTokens registry.
  */
-export const permissionedWrapperTokens: Record<ChainId, Set<Address>> = {
-  [ChainId.EthMainnet]: new Set(),
-  [ChainId.BaseMainnet]: new Set([addresses[ChainId.BaseMainnet].testUsdc]),
-  [ChainId.PolygonMainnet]: new Set(),
-  [ChainId.ArbitrumMainnet]: new Set(),
-  [ChainId.OptimismMainnet]: new Set(),
-  [ChainId.WorldChainMainnet]: new Set(),
-  [ChainId.FraxtalMainnet]: new Set(),
-  [ChainId.ScrollMainnet]: new Set(),
-  [ChainId.InkMainnet]: new Set(),
+export const permissionedWrapperTokens: Record<number, Set<Address>> = {
+  [ChainId.BaseMainnet]: new Set([
+    addressesRegistry[ChainId.BaseMainnet].testUsdc,
+  ]),
 };
 
 /**
  * The registry of all known permissioned wrapped Backed tokens.
  * All permissioned Backed tokens are considered ERC20Wrapper and automatically added to the erc20WrapperTokens registry.
  */
-export const permissionedBackedTokens: Record<ChainId, Set<Address>> = {
+export const permissionedBackedTokens: Record<number, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
-    addresses[ChainId.EthMainnet].wbIB01,
-    addresses[ChainId.EthMainnet].wbC3M,
+    addressesRegistry[ChainId.EthMainnet].wbIB01,
+    addressesRegistry[ChainId.EthMainnet].wbC3M,
   ]),
-  [ChainId.BaseMainnet]: new Set(),
-  [ChainId.PolygonMainnet]: new Set(),
-  [ChainId.ArbitrumMainnet]: new Set(),
-  [ChainId.OptimismMainnet]: new Set(),
-  [ChainId.WorldChainMainnet]: new Set(),
-  [ChainId.FraxtalMainnet]: new Set(),
-  [ChainId.ScrollMainnet]: new Set(),
-  [ChainId.InkMainnet]: new Set(),
 };
 
 /**
  * The registry of all known permissioned wrapped tokens that require a Coinbase attestation.
  * All permissioned Coinbase tokens are considered PermissionedERC20Wrapper and automatically added to the permissionedWrapperTokens registry.
  */
-export const permissionedCoinbaseTokens: Record<ChainId, Set<Address>> = {
-  [ChainId.EthMainnet]: new Set(),
-  [ChainId.BaseMainnet]: new Set([addresses[ChainId.BaseMainnet].verUsdc]),
-  [ChainId.PolygonMainnet]: new Set(),
-  [ChainId.ArbitrumMainnet]: new Set(),
-  [ChainId.OptimismMainnet]: new Set(),
-  [ChainId.WorldChainMainnet]: new Set(),
-  [ChainId.FraxtalMainnet]: new Set(),
-  [ChainId.ScrollMainnet]: new Set(),
-  [ChainId.InkMainnet]: new Set(),
+export const permissionedCoinbaseTokens: Record<number, Set<Address>> = {
+  [ChainId.BaseMainnet]: new Set([
+    addressesRegistry[ChainId.BaseMainnet].verUsdc,
+  ]),
 };
 
+export const getPermissionedCoinbaseTokens = (chainId: number) =>
+  permissionedCoinbaseTokens[chainId] ?? new Set();
+
 entries(permissionedBackedTokens).forEach(([chainId, tokens]) => {
-  tokens.forEach((token) => erc20WrapperTokens[chainId].add(token));
+  tokens.forEach((token) =>
+    (erc20WrapperTokens[chainId] ??= new Set()).add(token),
+  );
 });
 
 entries(permissionedCoinbaseTokens).forEach(([chainId, tokens]) => {
-  tokens.forEach((token) => permissionedWrapperTokens[chainId].add(token));
+  tokens.forEach((token) =>
+    (permissionedWrapperTokens[chainId] ??= new Set()).add(token),
+  );
 });
 
 entries(permissionedWrapperTokens).forEach(([chainId, tokens]) => {
-  tokens.forEach((token) => erc20WrapperTokens[chainId].add(token));
+  tokens.forEach((token) =>
+    (erc20WrapperTokens[chainId] ??= new Set()).add(token),
+  );
 });
 
 /** /!\  These tokens can not be listed in `erc20WrapperTokens` because the following specs are different:
  * - calling `depositFor` supplies on blue instead of minting wrapped token to the user
  */
-export const convexWrapperTokens: Record<ChainId, Set<Address>> = {
+export const convexWrapperTokens: Record<number, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
-    addresses[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"],
-    addresses[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"],
-    addresses[ChainId.EthMainnet]["stkcvxcrvCRVUSDTBTCWSTETH-morpho"],
-    addresses[ChainId.EthMainnet]["stkcvxTryLSD-morpho"],
-    addresses[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"],
-    addresses[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"],
+    addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"],
+    addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"],
+    addressesRegistry[ChainId.EthMainnet]["stkcvxcrvCRVUSDTBTCWSTETH-morpho"],
+    addressesRegistry[ChainId.EthMainnet]["stkcvxTryLSD-morpho"],
+    addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"],
+    addressesRegistry[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"],
   ]),
-  [ChainId.BaseMainnet]: new Set(),
-  [ChainId.PolygonMainnet]: new Set(),
-  [ChainId.ArbitrumMainnet]: new Set(),
-  [ChainId.OptimismMainnet]: new Set(),
-  [ChainId.WorldChainMainnet]: new Set(),
-  [ChainId.FraxtalMainnet]: new Set(),
-  [ChainId.ScrollMainnet]: new Set(),
-  [ChainId.InkMainnet]: new Set(),
 };

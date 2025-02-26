@@ -11,6 +11,7 @@ declare module "@morpho-org/blue-sdk" {
     timeBoundedUrd?: Address;
     marketRewardsProgramRegistry?: Address;
 
+    mkr?: Address;
     weEth?: Address;
     ezEth?: Address;
     rsEth?: Address;
@@ -99,7 +100,7 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
 };
 
 export const preLiquidationFactoryConfigs: Record<
-  ChainId,
+  number,
   PreLiquidationFactoryConfig
 > = {
   [ChainId.EthMainnet]: {

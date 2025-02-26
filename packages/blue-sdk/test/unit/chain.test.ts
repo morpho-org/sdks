@@ -13,10 +13,4 @@ describe("ChainUtils", () => {
   test("should convert correctly a chainId to hexChainId", () => {
     expect(ChainUtils.toHexChainId(ChainId.BaseMainnet)).toEqual("0x2105");
   });
-
-  test("should support chain id", () => {
-    expect(ChainUtils.isSupported(ChainId.EthMainnet)).toBe(true);
-    expect(ChainUtils.isSupported(ChainId.BaseMainnet)).toBe(true);
-    expect(ChainUtils.isSupported(3)).toBe(false);
-  });
 });

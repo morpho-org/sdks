@@ -1,4 +1,4 @@
-import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import { entries } from "@morpho-org/morpho-ts";
@@ -8,7 +8,7 @@ import { type Address, maxUint256, parseUnits } from "viem";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
 import { cometAbi } from "../../../src/abis/compoundV3.js";
-import { MIGRATION_ADDRESSES } from "../../../src/config.js";
+import { migrationAddressesRegistry } from "../../../src/config.js";
 import {
   MigratableProtocol,
   SupplyMigrationLimiter,
@@ -17,13 +17,13 @@ import {
 import { MigratableSupplyPosition_CompoundV3 } from "../../../src/positions/supply/compoundV3.supply.js";
 import { test } from "../setup.js";
 
-interface ChainConfig<C extends ChainId> {
+interface ChainConfig<C extends ChainId.EthMainnet | ChainId.BaseMainnet> {
   chainId: C;
   testFn: TestAPI<ViemTestContext>;
   markets: {
-    [Ch in ChainId]: {
+    [Ch in C]: {
       [K in Exclude<
-        keyof (typeof MIGRATION_ADDRESSES)[Ch][MigratableProtocol.compoundV3],
+        keyof (typeof migrationAddressesRegistry)[Ch][MigratableProtocol.compoundV3],
         "comptroller"
       >]: {
         vault: Address;
@@ -35,26 +35,30 @@ interface ChainConfig<C extends ChainId> {
   }[C];
 }
 
-const TEST_CONFIGS: { [C in ChainId]: ChainConfig<C> }[ChainId][] = [
+const TEST_CONFIGS: {
+  [C in ChainId.EthMainnet | ChainId.BaseMainnet]: ChainConfig<C>;
+}[ChainId.EthMainnet | ChainId.BaseMainnet][] = [
   {
     chainId: ChainId.EthMainnet,
     testFn: test[ChainId.EthMainnet],
     markets: {
       weth: {
         vault: vaults[ChainId.EthMainnet].steakEth.address,
-        underlying: addresses[ChainId.EthMainnet].wNative,
+        underlying: addressesRegistry[ChainId.EthMainnet].wNative,
         underlyingDecimals: 18,
         comet:
-          MIGRATION_ADDRESSES[ChainId.EthMainnet][MigratableProtocol.compoundV3]
-            .weth.address,
+          migrationAddressesRegistry[ChainId.EthMainnet][
+            MigratableProtocol.compoundV3
+          ].weth.address,
       },
       usdc: {
         vault: vaults[ChainId.EthMainnet].steakUsdc.address,
-        underlying: addresses[ChainId.EthMainnet].usdc,
+        underlying: addressesRegistry[ChainId.EthMainnet].usdc,
         underlyingDecimals: 6,
         comet:
-          MIGRATION_ADDRESSES[ChainId.EthMainnet][MigratableProtocol.compoundV3]
-            .usdc.address,
+          migrationAddressesRegistry[ChainId.EthMainnet][
+            MigratableProtocol.compoundV3
+          ].usdc.address,
       },
     },
   },
@@ -65,19 +69,19 @@ const TEST_CONFIGS: { [C in ChainId]: ChainConfig<C> }[ChainId][] = [
     markets: {
       weth: {
         vault: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1",
-        underlying: addresses[ChainId.BaseMainnet].wNative,
+        underlying: addressesRegistry[ChainId.BaseMainnet].wNative,
         underlyingDecimals: 18,
         comet:
-          MIGRATION_ADDRESSES[ChainId.BaseMainnet][
+          migrationAddressesRegistry[ChainId.BaseMainnet][
             MigratableProtocol.compoundV3
           ].weth.address,
       },
       usdc: {
         vault: "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca",
-        underlying: addresses[ChainId.BaseMainnet].usdc,
+        underlying: addressesRegistry[ChainId.BaseMainnet].usdc,
         underlyingDecimals: 6,
         comet:
-          MIGRATION_ADDRESSES[ChainId.BaseMainnet][
+          migrationAddressesRegistry[ChainId.BaseMainnet][
             MigratableProtocol.compoundV3
           ].usdc.address,
       },
@@ -89,7 +93,7 @@ describe("Supply position on COMPOUND V3", () => {
   for (const { chainId, testFn, markets } of TEST_CONFIGS) {
     const {
       bundler3: { generalAdapter1, compoundV3MigrationAdapter },
-    } = addresses[chainId];
+    } = addressesRegistry[chainId];
 
     const writeSupply = async (
       client: ViemTestContext["client"],

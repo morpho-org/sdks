@@ -4,7 +4,7 @@ import {
   fetchMigratablePositions,
 } from "../../../src/index.js";
 
-import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { type Address, maxUint256, parseEther, parseUnits } from "viem";
 
@@ -13,12 +13,12 @@ import { vaults } from "@morpho-org/morpho-test";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
-import { MIGRATION_ADDRESSES } from "../../../src/config.js";
+import { migrationAddressesRegistry } from "../../../src/config.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../../src/positions/supply/aaveV3.supply.js";
 import { test } from "../setup.js";
 
 const TEST_CONFIGS: {
-  chainId: ChainId;
+  chainId: ChainId.EthMainnet | ChainId.BaseMainnet;
   aWeth: Address;
   testFn: TestAPI<ViemTestContext>;
   mmWeth: Address;
@@ -40,12 +40,12 @@ const TEST_CONFIGS: {
 
 describe("Supply position on AAVE V3", () => {
   for (const { chainId, aWeth, testFn, mmWeth } of TEST_CONFIGS) {
-    const { pool } = MIGRATION_ADDRESSES[chainId].aaveV3;
+    const { pool } = migrationAddressesRegistry[chainId].aaveV3;
     const {
       bundler3: { generalAdapter1, aaveV3CoreMigrationAdapter },
       wNative,
       usdc,
-    } = addresses[chainId];
+    } = addressesRegistry[chainId];
 
     const writeSupply = async (
       client: ViemTestContext["client"],
