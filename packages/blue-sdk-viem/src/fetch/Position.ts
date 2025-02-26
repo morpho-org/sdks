@@ -1,9 +1,8 @@
 import {
   AccrualPosition,
-  ChainUtils,
   type MarketId,
   Position,
-  addresses,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import type { Address, Client } from "viem";
@@ -18,10 +17,9 @@ export async function fetchPosition(
   client: Client,
   parameters: FetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
-  const { morpho } = addresses[parameters.chainId];
+  parameters.chainId ??= await getChainId(client);
+
+  const { morpho } = getChainAddresses(parameters.chainId);
   const [supplyShares, borrowShares, collateral] = await readContract(client, {
     ...parameters,
     address: morpho,
@@ -45,9 +43,8 @@ export async function fetchAccrualPosition(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
+
   const [position, market] = await Promise.all([
     await fetchPosition(user, marketId, client, parameters),
     await fetchMarket(marketId, client, parameters),

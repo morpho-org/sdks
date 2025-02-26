@@ -1,4 +1,4 @@
-import { ChainId, ChainUtils, MathLib } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib } from "@morpho-org/blue-sdk";
 import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import type { Address, Client } from "viem";
 import { getBlock, getChainId, readContract } from "viem/actions";
@@ -60,9 +60,7 @@ export const fetchAccruedExchangeRate = async (
   client: Client,
   parameters: FetchParameters = {},
 ) => {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const chainId = parameters.chainId;
 

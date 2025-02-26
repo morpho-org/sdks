@@ -27,7 +27,7 @@ export const handleErc20UnwrapOperation: OperationHandler<
     slippage,
   );
 
-  if (!erc20WrapperTokens[data.chainId].has(address)) receiver = sender;
+  if (!erc20WrapperTokens[data.chainId]?.has(address)) receiver = sender;
 
   // Burn wrapped assets.
   handleErc20TransferOperation(

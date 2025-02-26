@@ -1,12 +1,17 @@
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { ChainId, Market, MarketParams, addresses } from "../../src/index.js";
+import {
+  ChainId,
+  Market,
+  MarketParams,
+  addressesRegistry,
+} from "../../src/index.js";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "./abis.js";
 import { test } from "./setup.js";
 
 const { morpho, usdc, wstEth, adaptiveCurveIrm } =
-  addresses[ChainId.EthMainnet];
+  addressesRegistry[ChainId.EthMainnet];
 
 const params = new MarketParams({
   // USDC(wstETH, 86%, Chainlink, AdaptiveCurve)

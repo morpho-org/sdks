@@ -16,13 +16,12 @@ import type {
 import {
   type Address,
   ChainId,
-  ChainUtils,
   ConstantWrappedToken,
   Eip5267Domain,
   ExchangeRateWrappedToken,
   NATIVE_ADDRESS,
   Token,
-  addresses,
+  addressesRegistry,
   getChainAddresses,
   getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
@@ -31,7 +30,7 @@ import type { FetchOptions } from "../types";
 export const isBytes32ERC20Metadata = (address: string, chainId: ChainId) => {
   switch (chainId) {
     case ChainId.EthMainnet:
-      return address === addresses[ChainId.EthMainnet].mkr;
+      return address === addressesRegistry[ChainId.EthMainnet].mkr;
     default:
       return false;
   }
@@ -145,9 +144,7 @@ export async function fetchToken(
   runner: { provider: Provider },
   { chainId, overrides = {} }: FetchOptions = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   if (address === NATIVE_ADDRESS) return Token.native(chainId);
 

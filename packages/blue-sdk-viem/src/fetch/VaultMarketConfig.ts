@@ -1,10 +1,6 @@
 import type { Address, Client } from "viem";
 
-import {
-  ChainUtils,
-  type MarketId,
-  VaultMarketConfig,
-} from "@morpho-org/blue-sdk";
+import { type MarketId, VaultMarketConfig } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis";
@@ -17,9 +13,7 @@ export async function fetchVaultMarketConfig(
   client: Client,
   parameters: FetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const [[cap, enabled, removableAt], pendingCap, publicAllocatorConfig] =
     await Promise.all([

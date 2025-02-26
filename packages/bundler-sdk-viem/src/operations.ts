@@ -121,8 +121,8 @@ export const populateInputTransfer = (
   const useSimpleTransfer =
     permit2 == null ||
     // Token is permissioned and Permit2 may not be authorized so Permit2 cannot be used.
-    permissionedWrapperTokens[data.chainId].has(address) ||
-    permissionedBackedTokens[data.chainId].has(address);
+    !!permissionedWrapperTokens[data.chainId]?.has(address) ||
+    !!permissionedBackedTokens[data.chainId]?.has(address);
 
   if (useSimplePermit)
     operations.push({
@@ -238,7 +238,7 @@ export const populateSubBundle = (
 
   const isErc20Wrapper =
     !!wrappedToken &&
-    erc20WrapperTokens[data.chainId].has(wrappedToken.address);
+    !!erc20WrapperTokens[data.chainId]?.has(wrappedToken.address);
 
   // Transform input operation to act on behalf of the sender, via the bundler.
   const mainOperation = produceImmutable(inputOperation, (draft) => {
@@ -615,7 +615,7 @@ export const finalizeBundle = (
         if (
           from !== generalAdapter1 &&
           to === generalAdapter1 &&
-          !erc20WrapperTokens[startData.chainId].has(address)
+          !erc20WrapperTokens[startData.chainId]?.has(address)
         ) {
           const duplicateTransfer = inputTransfers.find(
             (transfer) =>

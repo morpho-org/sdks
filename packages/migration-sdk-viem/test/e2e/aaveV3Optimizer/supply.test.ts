@@ -5,21 +5,22 @@ import {
   fetchMigratablePositions,
 } from "../../../src/index.js";
 
-import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { sendTransaction, writeContract } from "viem/actions";
 import { describe, expect } from "vitest";
-import { MIGRATION_ADDRESSES } from "../../../src/config.js";
+import { migrationAddressesRegistry } from "../../../src/config.js";
 import { MigratableSupplyPosition_AaveV3Optimizer } from "../../../src/positions/supply/aaveV3Optimizer.supply.js";
 import { test } from "../setup.js";
 
-const { morpho } = MIGRATION_ADDRESSES[ChainId.EthMainnet].aaveV3Optimizer;
+const { morpho } =
+  migrationAddressesRegistry[ChainId.EthMainnet].aaveV3Optimizer;
 const {
   bundler3: { generalAdapter1, aaveV3OptimizerMigrationAdapter },
   wNative,
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 
 const writeSupply = async (
   client: AnvilTestClient,
@@ -231,7 +232,16 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(migrationBundle.requirements.signatures).toHaveLength(1);
       expect(migrationBundle.actions).toEqual([
         {
-          args: [client.account.address, true, 0n, expect.any(BigInt), null],
+          args: [
+            migrationAddressesRegistry[ChainId.EthMainnet][
+              MigratableProtocol.aaveV3Optimizer
+            ].morpho.address,
+            client.account.address,
+            true,
+            0n,
+            expect.any(BigInt),
+            null,
+          ],
           type: "aaveV3OptimizerApproveManagerWithSig",
         },
         {
@@ -315,7 +325,16 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(migrationBundle.requirements.signatures).toHaveLength(1);
       expect(migrationBundle.actions).toEqual([
         {
-          args: [client.account.address, true, 0n, expect.any(BigInt), null],
+          args: [
+            migrationAddressesRegistry[ChainId.EthMainnet][
+              MigratableProtocol.aaveV3Optimizer
+            ].morpho.address,
+            client.account.address,
+            true,
+            0n,
+            expect.any(BigInt),
+            null,
+          ],
           type: "aaveV3OptimizerApproveManagerWithSig",
         },
         {

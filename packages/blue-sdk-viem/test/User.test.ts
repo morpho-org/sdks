@@ -1,14 +1,14 @@
 import { describe, expect } from "vitest";
 import { test } from "./setup";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 import { blueAbi } from "../src";
 import { User } from "../src/augment/User";
 
 const {
   morpho,
   bundler3: { generalAdapter1 },
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe("augment/User", () => {
   test("should fetch user data", async ({ client }) => {

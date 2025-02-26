@@ -342,6 +342,7 @@ export namespace BundlerAction {
       }
       case "aaveV3OptimizerApproveManagerWithSig": {
         const [
+          aaveV3Optimizer,
           owner,
           isApproved,
           nonce,
@@ -354,6 +355,7 @@ export namespace BundlerAction {
 
         return BundlerAction.aaveV3OptimizerApproveManagerWithSig(
           chainId,
+          aaveV3Optimizer,
           owner,
           isApproved,
           nonce,
@@ -1301,6 +1303,8 @@ export namespace BundlerAction {
     supplyMarketParams: InputMarketParams,
   ): BundlerCall[] {
     const { publicAllocator } = getChainAddresses(chainId);
+    if (publicAllocator == null)
+      throw new BundlerErrors.UnexpectedAction("reallocateTo", chainId);
 
     return [
       {
@@ -1799,6 +1803,7 @@ export namespace BundlerAction {
    */
   export function aaveV3OptimizerApproveManagerWithSig(
     chainId: ChainId,
+    aaveV3Optimizer: Address,
     owner: Address,
     isApproved: boolean,
     nonce: bigint,
@@ -1808,10 +1813,9 @@ export namespace BundlerAction {
     skipRevert = true,
   ): BundlerCall[] {
     const {
-      aaveV3Optimizer,
       bundler3: { aaveV3OptimizerMigrationAdapter },
     } = getChainAddresses(chainId);
-    if (aaveV3Optimizer == null || aaveV3OptimizerMigrationAdapter == null)
+    if (aaveV3OptimizerMigrationAdapter == null)
       throw new BundlerErrors.UnexpectedAction(
         "aaveV3OptimizerApproveManagerWithSig",
         chainId,
@@ -1880,18 +1884,14 @@ export namespace BundlerAction {
     chainId: ChainId,
     cToken: Address,
     amount: bigint,
-    recipient?: Address,
+    isEth: boolean,
+    onBehalf: Address,
   ): BundlerCall[] {
     const {
-      cEth,
       bundler3: { compoundV2MigrationAdapter },
     } = getChainAddresses(chainId);
-    if (cEth == null || compoundV2MigrationAdapter == null)
+    if (compoundV2MigrationAdapter == null)
       throw new BundlerErrors.UnexpectedAction("compoundV2Repay", chainId);
-
-    const isEth = cToken === cEth;
-
-    recipient ??= compoundV2MigrationAdapter;
 
     return [
       {
@@ -1900,12 +1900,12 @@ export namespace BundlerAction {
           ? encodeFunctionData({
               abi: compoundV2MigrationAdapterAbi,
               functionName: "compoundV2RepayEth",
-              args: [amount, recipient],
+              args: [amount, onBehalf],
             })
           : encodeFunctionData({
               abi: compoundV2MigrationAdapterAbi,
               functionName: "compoundV2RepayErc20",
-              args: [cToken, amount, recipient],
+              args: [cToken, amount, onBehalf],
             }),
         value: isEth ? amount : 0n,
         skipRevert: false,
@@ -1925,16 +1925,14 @@ export namespace BundlerAction {
     chainId: ChainId,
     cToken: Address,
     amount: bigint,
+    isEth: boolean,
     recipient?: Address,
   ): BundlerCall[] {
     const {
-      cEth,
       bundler3: { compoundV2MigrationAdapter },
     } = getChainAddresses(chainId);
-    if (cEth == null || compoundV2MigrationAdapter == null)
+    if (compoundV2MigrationAdapter == null)
       throw new BundlerErrors.UnexpectedAction("compoundV2Repay", chainId);
-
-    const isEth = cToken === cEth;
 
     recipient ??= compoundV2MigrationAdapter;
 

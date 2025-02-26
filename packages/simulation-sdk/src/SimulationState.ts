@@ -84,7 +84,7 @@ export interface MinimalBlock {
 }
 
 export interface InputSimulationState {
-  chainId: ChainId;
+  chainId: number;
   block: MinimalBlock;
   global?: { feeRecipient?: Address };
   markets?: Record<MarketId, Market | undefined>;
@@ -113,7 +113,7 @@ export interface InputSimulationState {
 }
 
 export class SimulationState implements InputSimulationState {
-  public readonly chainId: ChainId;
+  public readonly chainId: number;
   public block: MinimalBlock;
 
   public readonly global: { feeRecipient?: Address };
@@ -452,7 +452,12 @@ export class SimulationState implements InputSimulationState {
       const { wstEth, stEth, wNative } = getChainAddresses(this.chainId);
 
       // staking is only available on mainnet for now
-      if (this.chainId === ChainId.EthMainnet && token === wstEth && stEth) {
+      if (
+        this.chainId === ChainId.EthMainnet &&
+        token === wstEth &&
+        wNative != null &&
+        stEth != null
+      ) {
         _try(() => {
           const wEthBalance = this.getBundleBalance(user, wNative);
 
@@ -611,8 +616,10 @@ export class SimulationState implements InputSimulationState {
                         defaultMaxWithdrawalUtilization,
                     );
 
-                  const maxOut = data.getVaultMarketConfig(vault, srcMarketId)
-                    .publicAllocatorConfig.maxOut;
+                  const srcPublicAllocatorConfig = data.getVaultMarketConfig(
+                    vault,
+                    srcMarketId,
+                  ).publicAllocatorConfig;
 
                   return {
                     id: srcMarketId,
@@ -620,8 +627,8 @@ export class SimulationState implements InputSimulationState {
                       srcPosition.supplyAssets, // Cannot reallocate more than what the vault supplied on the source market.
                       targetUtilizationLiquidity, // Cannot reallocate more than the liquidity directly available on the source market under target utilization.
                       suppliable, // Cannot supply over the destination market's configured cap.
-                      publicAllocatorConfig.maxIn, // Cannot supply over the destination market's configured maxIn.
-                      maxOut, // Cannot reallocate more than the source market's configured maxOut.
+                      publicAllocatorConfig?.maxIn ?? 0n, // Cannot supply over the destination market's configured maxIn.
+                      srcPublicAllocatorConfig?.maxOut ?? 0n, // Cannot reallocate more than the source market's configured maxOut.
                     ),
                   };
                 } catch {

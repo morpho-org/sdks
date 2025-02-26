@@ -1,15 +1,16 @@
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
+import type { Address } from "viem";
 
-export const withSimplePermit = {
+export const withSimplePermit: Record<number, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
-    addresses[ChainId.EthMainnet].wstEth,
-    addresses[ChainId.EthMainnet].sDai,
-    addresses[ChainId.EthMainnet].osEth,
-    addresses[ChainId.EthMainnet].usdc,
-    addresses[ChainId.EthMainnet].dai,
+    addressesRegistry[ChainId.EthMainnet].wstEth,
+    addressesRegistry[ChainId.EthMainnet].sDai,
+    addressesRegistry[ChainId.EthMainnet].osEth,
+    addressesRegistry[ChainId.EthMainnet].usdc,
+    addressesRegistry[ChainId.EthMainnet].dai,
   ]),
   [ChainId.BaseMainnet]: new Set([
-    addresses[ChainId.BaseMainnet].usdc,
-    addresses[ChainId.BaseMainnet].verUsdc,
+    addressesRegistry[ChainId.BaseMainnet].usdc,
+    addressesRegistry[ChainId.BaseMainnet].verUsdc,
   ]),
-} as const;
+};

@@ -2,7 +2,7 @@ import {
   ChainId,
   MathLib,
   NATIVE_ADDRESS,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import { maxUint256 } from "viem";
@@ -17,7 +17,7 @@ const {
   permit2,
   wNative,
   wbC3M,
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe("augment/Holding", () => {
   test("should fetch user WETH data with deployless", async ({ client }) => {

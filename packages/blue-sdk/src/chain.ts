@@ -1,5 +1,3 @@
-import { UnsupportedChainIdError } from "./errors.js";
-
 export enum ChainId {
   EthMainnet = 1,
   BaseMainnet = 8453,
@@ -40,18 +38,6 @@ export namespace ChainUtils {
   export const getExplorerTransactionUrl = (chainId: ChainId, tx: string) => {
     return `${getExplorerUrl(chainId)}/tx/${tx}`;
   };
-
-  export function isSupported(chainId: number): chainId is ChainId {
-    return Object.values(ChainId).includes(chainId);
-  }
-
-  export function parseSupportedChainId(candidate: unknown): ChainId {
-    const chainId = Number.parseInt(candidate as string); // Force cast to string to silence TS because it works.
-
-    if (!isSupported(chainId)) throw new UnsupportedChainIdError(chainId);
-
-    return chainId;
-  }
 
   export const CHAIN_METADATA: Record<ChainId, ChainMetadata> = {
     [ChainId.EthMainnet]: {
