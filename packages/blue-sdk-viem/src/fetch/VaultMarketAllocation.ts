@@ -1,10 +1,6 @@
 import type { Address, Client } from "viem";
 
-import {
-  ChainUtils,
-  type MarketId,
-  VaultMarketAllocation,
-} from "@morpho-org/blue-sdk";
+import { type MarketId, VaultMarketAllocation } from "@morpho-org/blue-sdk";
 
 import { getChainId } from "viem/actions";
 import type { DeploylessFetchParameters } from "../types";
@@ -17,9 +13,7 @@ export async function fetchVaultMarketAllocation(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const [config, position] = await Promise.all([
     fetchVaultMarketConfig(vault, marketId, client, parameters),

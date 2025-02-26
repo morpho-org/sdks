@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
@@ -20,7 +20,7 @@ const type = "Blue_Repay";
 const {
   morpho,
   bundler3: { generalAdapter1 },
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 const userBMarketData = dataFixture.positions[userB]![marketA1.id]!;
 
 const assets = parseUnits("10", 6);

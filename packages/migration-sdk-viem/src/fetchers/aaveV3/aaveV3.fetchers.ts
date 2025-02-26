@@ -1,4 +1,4 @@
-import { type Address, ChainUtils, MathLib, Token } from "@morpho-org/blue-sdk";
+import { type Address, MathLib, Token } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 
 import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
@@ -6,7 +6,7 @@ import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
 import { type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { aTokenV3Abi } from "../../abis/aaveV3.js";
-import { MIGRATION_ADDRESSES } from "../../config.js";
+import { migrationAddresses } from "../../config.js";
 import type { MigratablePosition } from "../../positions/index.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../positions/supply/aaveV3.supply.js";
 
@@ -19,14 +19,12 @@ export async function fetchAaveV3Positions(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const chainId = parameters.chainId;
 
   const migrationContracts =
-    MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3];
+    migrationAddresses[chainId]?.[MigratableProtocol.aaveV3];
 
   if (!migrationContracts) return [];
 

@@ -4,7 +4,7 @@ import {
   ExchangeRateWrappedToken,
   MathLib,
   NATIVE_ADDRESS,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
@@ -15,7 +15,7 @@ import { maxUint256, parseUnits } from "viem";
 import { sendTransaction, writeContract } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
 import { cErc20Abi } from "../../../src/abis/compoundV2.js";
-import { MIGRATION_ADDRESSES } from "../../../src/config.js";
+import { migrationAddressesRegistry } from "../../../src/config.js";
 import { fetchAccruedExchangeRate } from "../../../src/fetchers/compoundV2/compoundV2.helpers.js";
 import {
   MigratableProtocol,
@@ -25,13 +25,13 @@ import {
 import { MigratableSupplyPosition_CompoundV2 } from "../../../src/positions/supply/compoundV2.supply.js";
 import { test } from "../setup.js";
 
-interface ChainConfig<C extends ChainId> {
+interface ChainConfig<C extends ChainId.EthMainnet> {
   chainId: C;
   testFn: TestAPI<ViemTestContext>;
   markets: {
-    [Ch in ChainId]: {
+    [Ch in C]: {
       [K in Exclude<
-        keyof (typeof MIGRATION_ADDRESSES)[Ch][MigratableProtocol.compoundV2],
+        keyof (typeof migrationAddressesRegistry)[Ch][MigratableProtocol.compoundV2],
         "comptroller"
       >]: {
         vault: Address;
@@ -43,7 +43,9 @@ interface ChainConfig<C extends ChainId> {
   }[C];
 }
 
-const TEST_CONFIGS: { [C in ChainId]: ChainConfig<C> }[ChainId][] = [
+const TEST_CONFIGS: {
+  [C in ChainId.EthMainnet]: ChainConfig<C>;
+}[ChainId.EthMainnet][] = [
   {
     chainId: ChainId.EthMainnet,
     testFn: test[ChainId.EthMainnet],
@@ -53,16 +55,18 @@ const TEST_CONFIGS: { [C in ChainId]: ChainConfig<C> }[ChainId][] = [
         underlying: NATIVE_ADDRESS as Address,
         underlyingDecimals: 18,
         cToken:
-          MIGRATION_ADDRESSES[ChainId.EthMainnet][MigratableProtocol.compoundV2]
-            .cEth.address,
+          migrationAddressesRegistry[ChainId.EthMainnet][
+            MigratableProtocol.compoundV2
+          ].cEth.address,
       },
       cUsdc: {
         vault: vaults[ChainId.EthMainnet].steakUsdc.address,
-        underlying: addresses[ChainId.EthMainnet].usdc,
+        underlying: addressesRegistry[ChainId.EthMainnet].usdc,
         underlyingDecimals: 6,
         cToken:
-          MIGRATION_ADDRESSES[ChainId.EthMainnet][MigratableProtocol.compoundV2]
-            .cUsdc.address,
+          migrationAddressesRegistry[ChainId.EthMainnet][
+            MigratableProtocol.compoundV2
+          ].cUsdc.address,
       },
     },
   },
@@ -73,19 +77,19 @@ const TEST_CONFIGS: { [C in ChainId]: ChainConfig<C> }[ChainId][] = [
   //   markets: {
   //     mWeth: {
   //       vault: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1" as Address,
-  //       underlying: addresses[ChainId.BaseMainnet].wNative,
+  //       underlying: addressesRegistry[ChainId.BaseMainnet].wNative,
   //       underlyingDecimals: 18,
   //       cToken:
-  //         MIGRATION_ADDRESSES[ChainId.BaseMainnet][
+  //         migrationAddressesRegistry[ChainId.BaseMainnet][
   //           MigratableProtocol.compoundV2
   //         ].mWeth.address,
   //     },
   //     mUsdc: {
   //       vault: "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca" as Address,
-  //       underlying: addresses[ChainId.BaseMainnet].usdc,
+  //       underlying: addressesRegistry[ChainId.BaseMainnet].usdc,
   //       underlyingDecimals: 6,
   //       cToken:
-  //         MIGRATION_ADDRESSES[ChainId.BaseMainnet][
+  //         migrationAddressesRegistry[ChainId.BaseMainnet][
   //           MigratableProtocol.compoundV2
   //         ].mUsdc.address,
   //     },
@@ -96,11 +100,11 @@ const TEST_CONFIGS: { [C in ChainId]: ChainConfig<C> }[ChainId][] = [
 describe("Supply position on COMPOUND V2", () => {
   for (const { chainId, testFn, markets } of TEST_CONFIGS) {
     const { comptroller } =
-      MIGRATION_ADDRESSES[chainId][MigratableProtocol.compoundV2];
+      migrationAddressesRegistry[chainId][MigratableProtocol.compoundV2];
     const {
       wNative,
       bundler3: { generalAdapter1, compoundV2MigrationAdapter },
-    } = addresses[chainId];
+    } = addressesRegistry[chainId];
 
     const writeSupply = async (
       client: ViemTestContext["client"],
@@ -173,8 +177,8 @@ describe("Supply position on COMPOUND V2", () => {
 
             await client.mine({ blocks: 1_000 });
 
-            if (chainId === ChainId.BaseMainnet)
-              await client.setBlockTimestampInterval({ interval: 2 });
+            // if (chainId === ChainId.BaseMainnet)
+            //   await client.setBlockTimestampInterval({ interval: 2 });
 
             const projectedExchangeRate = await fetchAccruedExchangeRate(
               cToken,
@@ -281,7 +285,12 @@ describe("Supply position on COMPOUND V2", () => {
                     type: "erc20TransferFrom",
                   },
                   {
-                    args: [cToken, maxUint256, generalAdapter1],
+                    args: [
+                      cToken,
+                      maxUint256,
+                      underlying === NATIVE_ADDRESS,
+                      generalAdapter1,
+                    ],
                     type: "compoundV2Redeem",
                   },
                   [NATIVE_ADDRESS, wNative].includes(underlying)
@@ -397,7 +406,12 @@ describe("Supply position on COMPOUND V2", () => {
                     type: "erc20TransferFrom",
                   },
                   {
-                    args: [cToken, maxUint256, generalAdapter1],
+                    args: [
+                      cToken,
+                      maxUint256,
+                      underlying === NATIVE_ADDRESS,
+                      generalAdapter1,
+                    ],
                     type: "compoundV2Redeem",
                   },
                   [NATIVE_ADDRESS, wNative].includes(underlying)

@@ -1,6 +1,6 @@
 import _ from "lodash";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
@@ -19,7 +19,7 @@ const {
   morpho,
   bundler3: { generalAdapter1 },
   permit2,
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should approve morpho", () => {

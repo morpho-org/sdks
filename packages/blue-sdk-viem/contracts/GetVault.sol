@@ -82,7 +82,7 @@ contract GetVault {
             res.withdrawQueue[i] = vault.withdrawQueue(i);
         }
 
-        if (vault.isAllocator(address(publicAllocator))) {
+        if (address(publicAllocator) != address(0) && vault.isAllocator(address(publicAllocator))) {
             res.publicAllocatorConfig = PublicAllocatorConfig({
                 admin: publicAllocator.admin(address(vault)),
                 fee: publicAllocator.fee(address(vault)),

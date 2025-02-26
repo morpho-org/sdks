@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
@@ -12,7 +12,7 @@ const type = "Erc20_Transfer2";
 const amount = parseUnits("1", 6);
 const {
   bundler3: { bundler3, generalAdapter1 },
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should transfer with sender bundler", () => {

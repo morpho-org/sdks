@@ -1,11 +1,6 @@
 import type { Provider } from "ethers";
 
-import {
-  type Address,
-  ChainUtils,
-  User,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
+import { type Address, User, getChainAddresses } from "@morpho-org/blue-sdk";
 import { MorphoBlue__factory } from "ethers-types";
 import type { FetchOptions } from "../types";
 
@@ -14,9 +9,7 @@ export async function fetchUser(
   runner: { provider: Provider },
   { chainId, overrides = {} }: FetchOptions = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const {
     morpho,

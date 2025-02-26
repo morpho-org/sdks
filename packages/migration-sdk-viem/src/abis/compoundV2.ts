@@ -1372,7 +1372,7 @@ export const comptrollerAbi = [
   },
 ] as const;
 
-const crossChainCErc20Abi = [
+export const crossChainCErc20Abi = [
   {
     constant: true,
     inputs: [],

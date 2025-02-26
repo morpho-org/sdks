@@ -1,4 +1,9 @@
-import { ChainId, Market, MathLib, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  Market,
+  MathLib,
+  addressesRegistry,
+} from "@morpho-org/blue-sdk";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import {
   type MinimalBlock,
@@ -17,7 +22,7 @@ const {
   bundler3: { generalAdapter1 },
   permit2,
   usdc,
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 

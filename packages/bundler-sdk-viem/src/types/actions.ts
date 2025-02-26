@@ -238,6 +238,7 @@ export interface ActionArgs {
     recipient?: Address,
   ];
   aaveV3OptimizerApproveManagerWithSig: [
+    aaveV3Optimizer: Address,
     owner: Address,
     isApproved: boolean,
     nonce: bigint,
@@ -248,8 +249,18 @@ export interface ActionArgs {
   ];
 
   /* CompoundV2 */
-  compoundV2Repay: [cToken: Address, amount: bigint, onBehalf: Address];
-  compoundV2Redeem: [cToken: Address, amount: bigint, recipient?: Address];
+  compoundV2Repay: [
+    cToken: Address,
+    amount: bigint,
+    isEth: boolean,
+    onBehalf: Address,
+  ];
+  compoundV2Redeem: [
+    cToken: Address,
+    amount: bigint,
+    isEth: boolean,
+    recipient?: Address,
+  ];
 
   /* CompoundV3 */
   compoundV3Repay: [instance: Address, amount: bigint, onBehalf: Address];

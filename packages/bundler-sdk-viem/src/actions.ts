@@ -43,14 +43,16 @@ import type {
   TransactionRequirement,
 } from "./types/index.js";
 
-export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<ChainId, Address[]>> = {
+export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<number, Address[]>> = {
   [ChainId.EthMainnet]: [
     "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
     "0xD533a949740bb3306d119CC777fa900bA034cd52", // CRV
   ],
 };
 
-const MAX_TOKEN_APPROVALS: Partial<Record<ChainId, Record<Address, bigint>>> = {
+export const MAX_TOKEN_APPROVALS: Partial<
+  Record<number, Record<Address, bigint>>
+> = {
   [ChainId.EthMainnet]: {
     "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": MathLib.maxUint(96), // UNI --> see https://github.com/Uniswap/governance/blob/eabd8c71ad01f61fb54ed6945162021ee419998e/contracts/Uni.sol#L154
   },
@@ -505,7 +507,7 @@ export const encodeOperation = (
           break;
         }
         default: {
-          if (erc20WrapperTokens[chainId].has(address)) {
+          if (erc20WrapperTokens[chainId]?.has(address)) {
             const underlying = getUnwrappedToken(address, chainId);
             if (underlying == null)
               throw Error(`unknown wrapped token: ${address}`);
@@ -519,7 +521,7 @@ export const encodeOperation = (
           }
 
           // Convex token wrapping is executed onchain along with supplyCollateral, via depositFor.
-          if (!convexWrapperTokens[chainId].has(address))
+          if (!convexWrapperTokens[chainId]?.has(address))
             throw Error(`unexpected token wrap: ${address}`);
         }
       }
@@ -547,7 +549,7 @@ export const encodeOperation = (
           break;
         }
         default: {
-          if (!erc20WrapperTokens[chainId].has(address))
+          if (!erc20WrapperTokens[chainId]?.has(address))
             throw Error(`unexpected token unwrap: ${address}`);
 
           actions.push({
@@ -666,7 +668,7 @@ export const encodeOperation = (
 
       const { params } = dataBefore.getMarket(id);
 
-      if (convexWrapperTokens[chainId].has(params.collateralToken)) {
+      if (convexWrapperTokens[chainId]?.has(params.collateralToken)) {
         const underlying = getUnwrappedToken(address, chainId);
         if (underlying == null)
           throw Error(`unknown wrapped token: ${address}`);

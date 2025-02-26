@@ -1,11 +1,10 @@
 import { type Client, zeroAddress } from "viem";
 
 import {
-  ChainUtils,
   Market,
   type MarketId,
   MarketParams,
-  addresses,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
@@ -19,11 +18,9 @@ export async function fetchMarket(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
-  const { morpho, adaptiveCurveIrm } = addresses[parameters.chainId];
+  const { morpho, adaptiveCurveIrm } = getChainAddresses(parameters.chainId);
 
   if (deployless) {
     try {

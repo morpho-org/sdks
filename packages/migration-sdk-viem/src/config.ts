@@ -1,4 +1,4 @@
-import { type Address, ChainId } from "@morpho-org/blue-sdk";
+import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import type { Abi } from "viem";
 import {
@@ -14,38 +14,53 @@ import {
   cErc20Abi,
   cEtherAbi,
   comptrollerAbi,
+  type crossChainCErc20Abi,
   mErc20Abi,
 } from "./abis/compoundV2.js";
 import { cometAbi } from "./abis/compoundV3.js";
 import { MigratableProtocol } from "./types/index.js";
 
-interface Contract {
-  abi: Abi;
+declare module "@morpho-org/blue-sdk" {
+  interface ChainAddresses {
+    aaveV3Optimizer?: Address;
+    cEth?: Address;
+  }
+}
+
+const mainnetAddresses = addresses[ChainId.EthMainnet]!;
+mainnetAddresses.aaveV3Optimizer = "0x33333aea097c193e66081E930c33020272b33333";
+mainnetAddresses.cEth = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5";
+
+interface Contract<abi extends Abi> {
+  abi: abi;
   address: Address;
 }
 
 export interface ProtocolMigrationContracts {
   [MigratableProtocol.aaveV3Optimizer]: {
-    morpho: Contract;
-    poolDataProvider: Contract;
+    morpho: Contract<typeof morphoAaveV3Abi>;
+    poolDataProvider: Contract<typeof protocolDataProviderAbi_v3>;
   } | null;
   [MigratableProtocol.aaveV2]: {
-    protocolDataProvider: Contract;
-    lendingPool: Contract;
+    protocolDataProvider: Contract<typeof protocolDataProviderAbi_v2>;
+    lendingPool: Contract<typeof lendingPoolAbi>;
   } | null;
   [MigratableProtocol.aaveV3]: {
-    pool: Contract;
-    protocolDataProvider: Contract;
+    pool: Contract<typeof poolAbi>;
+    protocolDataProvider: Contract<typeof protocolDataProviderAbi_v3>;
   } | null;
-  [MigratableProtocol.compoundV3]: Record<string, Contract> | null;
+  [MigratableProtocol.compoundV3]: Record<
+    string,
+    Contract<typeof cometAbi>
+  > | null;
   [MigratableProtocol.compoundV2]:
-    | (Record<string, Contract> & {
-        comptroller: Contract;
+    | (Record<string, Contract<typeof crossChainCErc20Abi>> & {
+        comptroller: Contract<typeof comptrollerAbi>;
       })
     | null;
 }
 
-export const MIGRATION_ADDRESSES = {
+export const migrationAddressesRegistry = {
   [ChainId.EthMainnet]: {
     [MigratableProtocol.aaveV3Optimizer]: {
       morpho: {
@@ -140,57 +155,10 @@ export const MIGRATION_ADDRESSES = {
     [MigratableProtocol.aaveV2]: null,
     [MigratableProtocol.aaveV3Optimizer]: null,
   },
-  [ChainId.PolygonMainnet]: {
-    [MigratableProtocol.aaveV3]: null,
-    [MigratableProtocol.compoundV3]: null,
-    [MigratableProtocol.compoundV2]: null,
-    [MigratableProtocol.aaveV2]: null,
-    [MigratableProtocol.aaveV3Optimizer]: null,
-  },
-  [ChainId.ArbitrumMainnet]: {
-    [MigratableProtocol.aaveV3]: null,
-    [MigratableProtocol.compoundV3]: null,
-    [MigratableProtocol.compoundV2]: null,
-    [MigratableProtocol.aaveV2]: null,
-    [MigratableProtocol.aaveV3Optimizer]: null,
-  },
-  [ChainId.OptimismMainnet]: {
-    [MigratableProtocol.aaveV3]: null,
-    [MigratableProtocol.compoundV3]: null,
-    [MigratableProtocol.compoundV2]: null,
-    [MigratableProtocol.aaveV2]: null,
-    [MigratableProtocol.aaveV3Optimizer]: null,
-  },
-  [ChainId.WorldChainMainnet]: {
-    [MigratableProtocol.aaveV3]: null,
-    [MigratableProtocol.compoundV3]: null,
-    [MigratableProtocol.compoundV2]: null,
-    [MigratableProtocol.aaveV2]: null,
-    [MigratableProtocol.aaveV3Optimizer]: null,
-  },
-  [ChainId.FraxtalMainnet]: {
-    [MigratableProtocol.aaveV3]: null,
-    [MigratableProtocol.compoundV3]: null,
-    [MigratableProtocol.compoundV2]: null,
-    [MigratableProtocol.aaveV2]: null,
-    [MigratableProtocol.aaveV3Optimizer]: null,
-  },
-  [ChainId.ScrollMainnet]: {
-    [MigratableProtocol.aaveV3]: null,
-    [MigratableProtocol.compoundV3]: null,
-    [MigratableProtocol.compoundV2]: null,
-    [MigratableProtocol.aaveV2]: null,
-    [MigratableProtocol.aaveV3Optimizer]: null,
-  },
-  [ChainId.InkMainnet]: {
-    [MigratableProtocol.aaveV3]: null,
-    [MigratableProtocol.compoundV3]: null,
-    [MigratableProtocol.compoundV2]: null,
-    [MigratableProtocol.aaveV2]: null,
-    [MigratableProtocol.aaveV3Optimizer]: null,
-  },
 } as const;
 
-export default MIGRATION_ADDRESSES as {
-  [id in ChainId]: ProtocolMigrationContracts;
-};
+export const migrationAddresses =
+  migrationAddressesRegistry as unknown as Record<
+    number,
+    ProtocolMigrationContracts
+  >;
