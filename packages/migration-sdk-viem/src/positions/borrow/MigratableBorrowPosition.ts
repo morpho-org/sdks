@@ -1,10 +1,10 @@
-import type { Address, ChainId, MarketId } from "@morpho-org/blue-sdk";
+import type { Address, ChainId, MarketId, Token } from "@morpho-org/blue-sdk";
 
 import type { MigrationBundle } from "../../types/actions.js";
 import type {
   BorrowMigrationLimiter,
-  CollateralMigrationLimiter,
   MigratableProtocol,
+  SupplyMigrationLimiter,
 } from "../../types/index.js";
 
 /**
@@ -38,10 +38,10 @@ export interface IMigratableBorrowPosition {
   protocol: MigratableProtocol;
   /** The user's address. */
   user: Address;
-  /** The address of the token being used as collateral. */
-  collateralToken: Address;
-  /** The address of the loan token being borrow. */
-  loanToken: Address;
+  /** The token being used as collateral. */
+  collateralToken: Token;
+  /** The loan token being borrowed. */
+  loanToken: Token;
   /** The total collateral balance of the position. */
   collateral: bigint;
   /** The total borrow balance of the position. */
@@ -51,9 +51,11 @@ export interface IMigratableBorrowPosition {
   /** The annual percentage yield (APY) of the borrow position. */
   borrowApy: number;
   /** The maximum collateral migration limit and its corresponding limiter. */
-  maxCollateral: { value: bigint; limiter: CollateralMigrationLimiter };
+  maxWithdraw: { value: bigint; limiter: SupplyMigrationLimiter };
   /** The maximum borrow migration limit and its corresponding limiter. */
-  maxBorrow: { value: bigint; limiter: BorrowMigrationLimiter };
+  maxRepay: { value: bigint; limiter: BorrowMigrationLimiter };
+  /** The liquidation loan to value (LLTV) of the market */
+  lltv: bigint;
 }
 
 /**
@@ -67,12 +69,13 @@ export abstract class MigratableBorrowPosition
   public readonly loanToken;
   public readonly borrow;
   public readonly borrowApy;
-  public readonly maxCollateral;
   public readonly chainId;
   public readonly collateralToken;
   public readonly collateral;
   public readonly collateralApy;
-  public readonly maxBorrow;
+  public readonly maxRepay;
+  public readonly maxWithdraw;
+  public readonly lltv;
 
   /**
    * Creates an instance of MigratableBorrowPosition.
@@ -85,13 +88,18 @@ export abstract class MigratableBorrowPosition
     this.loanToken = config.loanToken;
     this.borrow = config.borrow;
     this.borrowApy = config.borrowApy;
-    this.maxCollateral = config.maxCollateral;
+    this.maxWithdraw = config.maxWithdraw;
     this.chainId = config.chainId;
     this.collateralToken = config.collateralToken;
     this.collateral = config.collateral;
     this.collateralApy = config.collateralApy;
-    this.maxBorrow = config.maxBorrow;
+    this.maxRepay = config.maxRepay;
+    this.lltv = config.lltv;
   }
+
+  abstract getLtv(options?: { withdrawn?: bigint; repaid?: bigint }):
+    | bigint
+    | null;
 
   /**
    * Method to retrieve a migration operation for the borrow position.

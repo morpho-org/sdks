@@ -14,26 +14,21 @@ import type { ViemTestContext } from "@morpho-org/test/vitest";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
 import { migrationAddressesRegistry } from "../../../src/config.js";
+import { MigratableBorrowPosition_AaveV3 } from "../../../src/positions/borrow/aaveV3.borrow.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../../src/positions/supply/aaveV3.supply.js";
 import { test } from "../setup.js";
 
-const TEST_CONFIGS: {
-  chainId: ChainId.EthMainnet | ChainId.BaseMainnet;
-  aWeth: Address;
-  testFn: TestAPI<ViemTestContext>;
-  mmWeth: Address;
-}[] = [
+const TEST_CONFIGS = [
   {
     chainId: ChainId.EthMainnet,
     aWeth: "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8",
-    testFn: test[ChainId.EthMainnet],
+    testFn: test[ChainId.EthMainnet] as TestAPI<ViemTestContext>,
     mmWeth: vaults[ChainId.EthMainnet].steakEth.address,
   },
   {
     chainId: ChainId.BaseMainnet,
     aWeth: "0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7",
-    //@ts-expect-error
-    testFn: test[ChainId.BaseMainnet],
+    testFn: test[ChainId.BaseMainnet] as TestAPI<ViemTestContext>,
     mmWeth: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1",
   },
 ] as const;
@@ -166,7 +161,10 @@ describe("Supply position on AAVE V3", () => {
 
           const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
           expect(aaveV3Positions).toBeDefined();
-          expect(aaveV3Positions).toHaveLength(0);
+          expect(aaveV3Positions).toHaveLength(1);
+          expect(aaveV3Positions[0]).toBeInstanceOf(
+            MigratableBorrowPosition_AaveV3,
+          );
         },
       );
 
@@ -219,8 +217,13 @@ describe("Supply position on AAVE V3", () => {
         const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
         expect(aaveV3Positions).toBeDefined();
         expect(aaveV3Positions).toHaveLength(1);
+        expect(aaveV3Positions[0]).toBeInstanceOf(
+          MigratableSupplyPosition_AaveV3,
+        );
 
-        const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+        const position = aaveV3Positions[0] as MigratableSupplyPosition_AaveV3;
+
+        const migrationBundle = position.getMigrationTx(
           {
             vault: mmWeth,
             amount: migratedAmount,
@@ -308,10 +311,13 @@ describe("Supply position on AAVE V3", () => {
         const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
         expect(aaveV3Positions).toBeDefined();
         expect(aaveV3Positions).toHaveLength(1);
+        expect(aaveV3Positions[0]).toBeInstanceOf(
+          MigratableSupplyPosition_AaveV3,
+        );
 
-        const position = aaveV3Positions[0]!;
+        const position = aaveV3Positions[0] as MigratableSupplyPosition_AaveV3;
 
-        const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+        const migrationBundle = position.getMigrationTx(
           {
             vault: mmWeth,
             amount: position.supply,
@@ -402,8 +408,14 @@ describe("Supply position on AAVE V3", () => {
           const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
           expect(aaveV3Positions).toBeDefined();
           expect(aaveV3Positions).toHaveLength(1);
+          expect(aaveV3Positions[0]).toBeInstanceOf(
+            MigratableSupplyPosition_AaveV3,
+          );
 
-          const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+          const position =
+            aaveV3Positions[0] as MigratableSupplyPosition_AaveV3;
+
+          const migrationBundle = position.getMigrationTx(
             {
               vault: mmWeth,
               amount: migratedAmount,
@@ -490,10 +502,14 @@ describe("Supply position on AAVE V3", () => {
           const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
           expect(aaveV3Positions).toBeDefined();
           expect(aaveV3Positions).toHaveLength(1);
+          expect(aaveV3Positions[0]).toBeInstanceOf(
+            MigratableSupplyPosition_AaveV3,
+          );
 
-          const position = aaveV3Positions[0]!;
+          const position =
+            aaveV3Positions[0] as MigratableSupplyPosition_AaveV3;
 
-          const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+          const migrationBundle = position.getMigrationTx(
             {
               vault: mmWeth,
               amount: position.supply,

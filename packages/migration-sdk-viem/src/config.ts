@@ -6,6 +6,7 @@ import {
   protocolDataProviderAbi as protocolDataProviderAbi_v2,
 } from "./abis/aaveV2.js";
 import {
+  addressesProviderAbi as addressesProviderAbi_v3,
   poolAbi,
   protocolDataProviderAbi as protocolDataProviderAbi_v3,
 } from "./abis/aaveV3.js";
@@ -48,6 +49,7 @@ export interface ProtocolMigrationContracts {
   [MigratableProtocol.aaveV3]: {
     pool: Contract<typeof poolAbi>;
     protocolDataProvider: Contract<typeof protocolDataProviderAbi_v3>;
+    addressesProvider: Contract<typeof addressesProviderAbi_v3>;
   } | null;
   [MigratableProtocol.compoundV3]: Record<
     string,
@@ -91,6 +93,10 @@ export const migrationAddressesRegistry = {
         address: "0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3",
         abi: protocolDataProviderAbi_v3,
       },
+      addressesProvider: {
+        address: "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e",
+        abi: addressesProviderAbi_v3,
+      },
     },
     [MigratableProtocol.compoundV3]: {
       usdc: {
@@ -126,6 +132,10 @@ export const migrationAddressesRegistry = {
       protocolDataProvider: {
         address: "0x2d8A3C5677189723C4cB8873CfC9C8976FDF38Ac",
         abi: protocolDataProviderAbi_v3,
+      },
+      addressesProvider: {
+        address: "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D",
+        abi: addressesProviderAbi_v3,
       },
     },
     [MigratableProtocol.compoundV3]: {
