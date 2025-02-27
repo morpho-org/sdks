@@ -1,4 +1,9 @@
-import type { Address, ChainId, MarketId, Token } from "@morpho-org/blue-sdk";
+import type {
+  Address,
+  ChainId,
+  MarketParams,
+  Token,
+} from "@morpho-org/blue-sdk";
 
 import type { MigrationBundle } from "../../types/actions.js";
 import type {
@@ -19,12 +24,12 @@ export namespace MigratableBorrowPosition {
     collateralAmount: bigint;
     /** The borrow amount to migrate. */
     borrowAmount: bigint;
-    /** The id of the market to migrate to. */
-    marketTo: MarketId;
+    /** The market to migrate to. */
+    marketTo: MarketParams;
     /** Slippage tolerance for the current position (optional). */
     slippageFrom?: bigint;
-    /** Slippage tolerance for the target market (optional). */
-    slippageTo?: bigint;
+    /** The maximum amount of borrow shares mint (protects the sender from unexpected slippage). */
+    minSharePrice: bigint;
   }
 }
 
@@ -56,6 +61,10 @@ export interface IMigratableBorrowPosition {
   maxRepay: { value: bigint; limiter: BorrowMigrationLimiter };
   /** The liquidation loan to value (LLTV) of the market */
   lltv: bigint;
+  /** Whether the migration adapter is authorized to manage user's position on blue */
+  isBundlerManaging: boolean;
+  /** User nonce on morpho contract */
+  morphoNonce: bigint;
 }
 
 /**
@@ -76,6 +85,8 @@ export abstract class MigratableBorrowPosition
   public readonly maxRepay;
   public readonly maxWithdraw;
   public readonly lltv;
+  public readonly isBundlerManaging;
+  public readonly morphoNonce;
 
   /**
    * Creates an instance of MigratableBorrowPosition.
@@ -95,6 +106,8 @@ export abstract class MigratableBorrowPosition
     this.collateralApy = config.collateralApy;
     this.maxRepay = config.maxRepay;
     this.lltv = config.lltv;
+    this.isBundlerManaging = config.isBundlerManaging;
+    this.morphoNonce = config.morphoNonce;
   }
 
   abstract getLtv(options?: { withdrawn?: bigint; repaid?: bigint }):
@@ -112,7 +125,6 @@ export abstract class MigratableBorrowPosition
    */
   abstract getMigrationTx(
     args: MigratableBorrowPosition.Args,
-    chainId: ChainId,
     supportsSignature: boolean,
   ): MigrationBundle;
 }

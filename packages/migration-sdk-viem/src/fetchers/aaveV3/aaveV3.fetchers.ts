@@ -1,7 +1,11 @@
-import { type Address, MathLib } from "@morpho-org/blue-sdk";
+import { type Address, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 
-import { type FetchParameters, fetchToken } from "@morpho-org/blue-sdk-viem";
+import {
+  type FetchParameters,
+  blueAbi,
+  fetchToken,
+} from "@morpho-org/blue-sdk-viem";
 
 import { type Client, erc20Abi, parseUnits } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -31,6 +35,10 @@ export async function fetchAaveV3Positions(
   parameters.chainId ??= await getChainId(client);
 
   const chainId = parameters.chainId;
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(chainId);
 
   const migrationContracts =
     migrationAddresses[chainId]?.[MigratableProtocol.aaveV3];
@@ -179,21 +187,36 @@ export async function fetchAaveV3Positions(
           fetchToken(underlyingAddress, client, parameters),
         ]);
 
-        const [totalBorrow, eModeCategoryData] = await Promise.all([
-          readContract(client, {
-            ...parameters,
-            abi: variableDebtTokenV3Abi,
-            address: variableDebtTokenAddress,
-            functionName: "balanceOf",
-            args: [user],
-          }),
-          readContract(client, {
-            ...parameters,
-            ...migrationContracts.pool,
-            functionName: "getEModeCategoryData",
-            args: [Number(eModeId)],
-          }),
-        ]);
+        const [totalBorrow, eModeCategoryData, morphoNonce, isBundlerManaging] =
+          await Promise.all([
+            readContract(client, {
+              ...parameters,
+              abi: variableDebtTokenV3Abi,
+              address: variableDebtTokenAddress,
+              functionName: "balanceOf",
+              args: [user],
+            }),
+            readContract(client, {
+              ...parameters,
+              ...migrationContracts.pool,
+              functionName: "getEModeCategoryData",
+              args: [Number(eModeId)],
+            }),
+            readContract(client, {
+              ...parameters,
+              abi: blueAbi,
+              address: morpho,
+              functionName: "nonce",
+              args: [user],
+            }),
+            readContract(client, {
+              ...parameters,
+              abi: blueAbi,
+              address: morpho,
+              functionName: "isAuthorized",
+              args: [user, generalAdapter1],
+            }),
+          ]);
 
         const ethPrice = await readContract(client, {
           ...parameters,
@@ -231,6 +254,8 @@ export async function fetchAaveV3Positions(
             totalBorrow,
             isActive,
             ethPrice,
+            morphoNonce,
+            isBundlerManaging,
           },
         };
       }),
@@ -376,6 +401,8 @@ export async function fetchAaveV3Positions(
         maxWithdraw: maxCollateral,
         collateralPriceEth: collateralData.ethPrice,
         loanPriceEth: loanData.ethPrice,
+        morphoNonce: loanData.morphoNonce,
+        isBundlerManaging: loanData.isBundlerManaging,
       }),
     );
   }

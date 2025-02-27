@@ -13,6 +13,9 @@ export interface MigrationTransactionRequirementArgs {
 
   /* ERC20 */
   erc20Approve: [asset: Address, recipient: Address, amount: bigint];
+
+  /* Morpho */
+  morphoSetAuthorization: [authorized: Address, isAuthorized: boolean];
 }
 
 export type MigrationTransactionRequirementType =

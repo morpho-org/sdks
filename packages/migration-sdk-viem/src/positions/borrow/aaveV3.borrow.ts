@@ -1,8 +1,40 @@
-import { MathLib, type Token } from "@morpho-org/blue-sdk";
+import {
+  DEFAULT_SLIPPAGE_TOLERANCE,
+  MathLib,
+  type Token,
+  getChainAddresses,
+} from "@morpho-org/blue-sdk";
 
-import { maxUint256, parseUnits } from "viem";
-import type { MigrationBundle } from "../../types/actions.js";
-import { MigratableProtocol } from "../../types/index.js";
+import {
+  blueAbi,
+  getAuthorizationTypedData,
+  getPermitTypedData,
+} from "@morpho-org/blue-sdk-viem";
+import type {
+  Action,
+  SignatureRequirement,
+} from "@morpho-org/bundler-sdk-viem";
+import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
+import { Time } from "@morpho-org/morpho-ts";
+import {
+  type Account,
+  type Client,
+  encodeFunctionData,
+  maxUint256,
+  parseUnits,
+  verifyTypedData,
+} from "viem";
+import { signTypedData } from "viem/actions";
+import { aTokenV3Abi } from "../../abis/aaveV3.js";
+import type {
+  MigrationBundle,
+  MigrationTransactionRequirement,
+} from "../../types/actions.js";
+import {
+  BorrowMigrationLimiter,
+  MigratableProtocol,
+  SupplyMigrationLimiter,
+} from "../../types/index.js";
 import {
   type IMigratableBorrowPosition,
   MigratableBorrowPosition,
@@ -55,7 +87,238 @@ export class MigratableBorrowPosition_AaveV3
     return this._nonce;
   }
 
-  getMigrationTx(): MigrationBundle {
-    throw "not implemented"; // TODO
+  getMigrationTx(
+    {
+      collateralAmount,
+      borrowAmount,
+      marketTo,
+      slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE,
+      minSharePrice,
+    }: MigratableBorrowPosition.Args,
+    supportsSignature = true,
+  ): MigrationBundle {
+    if (
+      marketTo.collateralToken !== this.collateralToken.address ||
+      marketTo.loanToken !== this.loanToken.address
+    )
+      throw new Error("Invalid market");
+
+    const signRequirements: SignatureRequirement[] = [];
+    const txRequirements: MigrationTransactionRequirement[] = [];
+    const actions: Action[] = [];
+
+    const user = this.user;
+    const chainId = this.chainId;
+
+    const {
+      morpho,
+      bundler3: { generalAdapter1, aaveV3CoreMigrationAdapter },
+    } = getChainAddresses(chainId);
+    if (aaveV3CoreMigrationAdapter == null)
+      throw new Error("missing aaveV3CoreMigrationAdapter address");
+
+    const aToken = this.aToken;
+
+    let migratedBorrow = borrowAmount;
+    let migratedCollateral = collateralAmount;
+
+    const migrateMaxBorrow =
+      this.maxRepay.limiter === BorrowMigrationLimiter.position &&
+      this.maxRepay.value === migratedBorrow;
+    if (migrateMaxBorrow) {
+      migratedBorrow = maxUint256;
+    }
+
+    const migrateMaxCollateral =
+      this.maxWithdraw.limiter === SupplyMigrationLimiter.position &&
+      this.maxWithdraw.value === migratedCollateral;
+    if (migrateMaxCollateral) {
+      migratedCollateral = maxUint256;
+    }
+
+    if (supportsSignature) {
+      const deadline = Time.timestamp() + Time.s.from.d(1n);
+      const nonce = this._nonce;
+
+      if (migratedBorrow > 0n && !this.isBundlerManaging) {
+        const authorization = {
+          authorizer: user,
+          authorized: generalAdapter1,
+          isAuthorized: true,
+          deadline,
+          nonce: this.morphoNonce,
+        };
+
+        const authorizeAction: Action = {
+          type: "morphoSetAuthorizationWithSig",
+          args: [authorization, null],
+        };
+
+        actions.push(authorizeAction);
+
+        signRequirements.push({
+          action: authorizeAction,
+          async sign(client: Client, account: Account = client.account!) {
+            let signature = authorizeAction.args[1];
+            if (signature != null) return signature;
+
+            const typedData = getAuthorizationTypedData(authorization, chainId);
+            signature = await signTypedData(client, {
+              ...typedData,
+              account,
+            });
+
+            await verifyTypedData({
+              ...typedData,
+              address: user, // Verify against the authorization's owner.
+              signature,
+            });
+
+            return (authorizeAction.args[1] = signature);
+          },
+        });
+      }
+
+      if (migratedCollateral > 0n) {
+        const permitAction: Action = {
+          type: "permit",
+          args: [user, aToken.address, migratedCollateral, deadline, null],
+        };
+
+        actions.push(permitAction);
+
+        signRequirements.push({
+          action: permitAction,
+          async sign(client: Client, account: Account = client.account!) {
+            let signature = permitAction.args[4];
+            if (signature != null) return signature; // action is already signed
+
+            const typedData = getPermitTypedData(
+              {
+                erc20: aToken,
+                owner: user,
+                spender: generalAdapter1,
+                allowance: migratedCollateral,
+                nonce,
+                deadline,
+              },
+              chainId,
+            );
+            signature = await signTypedData(client, {
+              ...typedData,
+              account,
+            });
+
+            await verifyTypedData({
+              ...typedData,
+              address: user, // Verify against the permit's owner.
+              signature,
+            });
+
+            return (permitAction.args[4] = signature);
+          },
+        });
+      }
+    } else {
+      if (migratedBorrow > 0n && !this.isBundlerManaging) {
+        txRequirements.push({
+          type: "morphoSetAuthorization",
+          args: [generalAdapter1, true],
+          tx: {
+            to: morpho,
+            data: encodeFunctionData({
+              abi: blueAbi,
+              functionName: "setAuthorization",
+              args: [generalAdapter1, true],
+            }),
+          },
+        });
+      }
+
+      if (migratedCollateral > 0n)
+        txRequirements.push({
+          type: "erc20Approve",
+          args: [aToken.address, generalAdapter1, migratedCollateral],
+          tx: {
+            to: aToken.address,
+            data: encodeFunctionData({
+              abi: aTokenV3Abi,
+              functionName: "approve",
+              args: [generalAdapter1, migratedCollateral],
+            }),
+          },
+        });
+    }
+
+    const borrowActions: Action[] =
+      migratedBorrow > 0n
+        ? [
+            {
+              type: "morphoBorrow",
+              args: [
+                marketTo,
+                migrateMaxBorrow
+                  ? MathLib.wMulUp(this.borrow, MathLib.WAD + slippageFrom)
+                  : migratedBorrow,
+                0n,
+                minSharePrice,
+                aaveV3CoreMigrationAdapter,
+              ],
+            },
+            {
+              type: "aaveV3Repay",
+              args: [this.loanToken.address, maxUint256, user, 2n],
+            },
+          ]
+        : [];
+
+    if (migratedCollateral > 0n) {
+      const callbackActions = borrowActions.concat(
+        {
+          type: "erc20TransferFrom",
+          args: [
+            aToken.address,
+            migratedCollateral,
+            aaveV3CoreMigrationAdapter,
+          ],
+        },
+        {
+          type: "aaveV3Withdraw",
+          args: [
+            this.collateralToken.address,
+            migratedCollateral,
+            generalAdapter1,
+          ],
+        },
+      );
+      actions.push(
+        {
+          type: "morphoSupplyCollateral",
+          args: [marketTo, collateralAmount, user, callbackActions],
+        },
+        {
+          type: "erc20Transfer",
+          args: [
+            migrateMaxCollateral
+              ? this.collateralToken.address
+              : this.aToken.address,
+            user,
+            maxUint256,
+          ],
+        },
+      );
+      if (migrateMaxCollateral) actions.push();
+    } else {
+      actions.push(...borrowActions);
+    }
+
+    return {
+      actions,
+      requirements: {
+        signatures: signRequirements,
+        txs: txRequirements,
+      },
+      tx: () => BundlerAction.encodeBundle(chainId, actions),
+    };
   }
 }
