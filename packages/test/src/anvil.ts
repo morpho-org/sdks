@@ -1,6 +1,8 @@
 import { spawn } from "node:child_process";
 import _kebabCase from "lodash.kebabcase";
 
+import type { TestInfo } from "@playwright/test";
+
 export interface AnvilArgs {
   /**
    * Number of dev accounts to generate and configure.
@@ -302,6 +304,7 @@ let workerInstances = 0;
 export const spawnAnvil = async (
   args: AnvilArgs,
   index = workerInstances++,
+  testInfo?: TestInfo,
 ): Promise<{
   rpcUrl: `http://localhost:${number}`;
   stop: () => boolean;
@@ -309,6 +312,7 @@ export const spawnAnvil = async (
   const port = basePort + index;
 
   let started = false;
+  const anvilLogs: string[] = [];
 
   const stop = await new Promise<() => boolean>((resolve, reject) => {
     const subprocess = spawn("anvil", toArgs({ ...args, port }));
@@ -316,6 +320,9 @@ export const spawnAnvil = async (
     subprocess.stdout.on("data", (data) => {
       const message = `[port ${port}] ${data.toString()}`;
 
+      if (testInfo) {
+        anvilLogs.push(message);
+      }
       // console.debug(message);
 
       if (message.includes("Listening on")) {
@@ -329,6 +336,15 @@ export const spawnAnvil = async (
 
       if (!started) reject(message);
       else console.warn(message);
+    });
+
+    subprocess.on("close", () => {
+      if (testInfo) {
+        testInfo.attach("Anvil Logs", {
+          body: anvilLogs.join("\n"),
+          contentType: "text/plain",
+        });
+      }
     });
   });
 

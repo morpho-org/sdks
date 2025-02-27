@@ -7,9 +7,17 @@ export interface PlaywrightTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
 }
 
+/**
+ * Creates a Playwright test that spawns an Anvil instance and injects a test client.
+ *
+ * @param chain - The chain to use.
+ * @param parameters - The parameters to pass to the Anvil instance.
+ * @param attachedAnvilLogs - Whether to attach the Anvil logs to the test that can be seen in the Playwright report (attachments tabs).
+ */
 export const createViemTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
+  attachAnvilLogs = false,
 ) => {
   parameters.forkChainId ??= chain?.id;
   parameters.forkUrl ??= chain?.rpcUrls.default.http[0];
@@ -22,10 +30,11 @@ export const createViemTest = <chain extends Chain>(
 
   return test.extend<PlaywrightTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by playwright at runtime
-    client: async ({}, use) => {
+    client: async ({}, use, testInfo) => {
       const { rpcUrl, stop } = await spawnAnvil(
         parameters,
         test.info().workerIndex,
+        attachAnvilLogs ? testInfo : undefined,
       );
 
       const client = createAnvilTestClient(http(rpcUrl), chain);
