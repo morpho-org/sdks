@@ -2,7 +2,6 @@ import type { Provider } from "ethers";
 
 import {
   type Address,
-  ChainUtils,
   type MarketId,
   VaultMarketAllocation,
   type VaultMarketConfig,
@@ -17,9 +16,7 @@ export async function fetchVaultMarketAllocation(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const config = await fetchVaultMarketConfig(vault, marketId, runner, options);
 
@@ -37,9 +34,7 @@ export async function fetchVaultMarketAllocationFromConfig(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   return new VaultMarketAllocation({
     config,

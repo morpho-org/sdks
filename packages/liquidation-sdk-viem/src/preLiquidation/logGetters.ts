@@ -1,5 +1,8 @@
-import { type Address, ChainUtils, type MarketId } from "@morpho-org/blue-sdk";
-import { addresses } from "@morpho-org/blue-sdk";
+import {
+  type Address,
+  type MarketId,
+  getChainAddresses,
+} from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import type { Account, Chain, Client, Transport } from "viem";
 import { getBlockNumber, getContractEvents } from "viem/actions";
@@ -10,7 +13,7 @@ import type { PreLiquidation, PreLiquidationParams } from "./types";
 export async function preLiquidationLogs<chain extends Chain = Chain>(
   client: Client<Transport, chain, Account>,
 ): Promise<PreLiquidation[]> {
-  const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
+  const chainId = client.chain.id;
   const preLiquidationFactory = preLiquidationFactoryConfigs[chainId];
 
   if (preLiquidationFactory == null) return [];
@@ -56,7 +59,7 @@ export async function authorizationLogs<chain extends Chain = Chain>(
   client: Client<Transport, chain>,
   preLiquidation: PreLiquidation,
 ) {
-  const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
+  const chainId = client.chain.id;
   const preLiquidationFactory = preLiquidationFactoryConfigs[chainId];
 
   if (preLiquidationFactory == null) return [];
@@ -73,7 +76,7 @@ export async function authorizationLogs<chain extends Chain = Chain>(
       await Promise.all(
         intervals.map((interval) =>
           getContractEvents(client, {
-            address: addresses[chainId].morpho,
+            address: getChainAddresses(chainId).morpho,
             fromBlock: interval.startBlock,
             toBlock: interval.endBlock,
             abi: blueAbi,

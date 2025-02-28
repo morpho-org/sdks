@@ -20,7 +20,7 @@
   "scripts": {
     "prebuild": "$npm_execpath type",
     "prepublish": "$npm_execpath build",
-    "build": "tsc --build tsconfig.build.json",
+    "build": "tsc --noEmit && tsc --build tsconfig.build.json",
     "type": "typechain --target ethers-v6 --out-dir src/types/ abis/*.json"
   },
   "peerDependencies": {

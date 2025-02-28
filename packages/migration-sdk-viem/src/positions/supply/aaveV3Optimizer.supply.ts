@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 
-import MIGRATION_ADDRESSES from "../../config.js";
+import { migrationAddresses } from "../../config.js";
 import type { MigrationTransactionRequirement } from "../../types/actions.js";
 import {
   MigratableProtocol,
@@ -71,10 +71,10 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     if (aaveV3OptimizerMigrationAdapter == null)
       throw new Error("missing aaveV3OptimizerMigrationAdapter address");
 
-    const migrationAddresses =
-      MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3Optimizer];
+    const aaveV3OptimizerAddresses =
+      migrationAddresses[chainId]?.[MigratableProtocol.aaveV3Optimizer];
 
-    if (!migrationAddresses) throw new UnsupportedChainIdError(chainId);
+    if (!aaveV3OptimizerAddresses) throw new UnsupportedChainIdError(chainId);
 
     if (!this.isBundlerManaging) {
       if (supportsSignature) {
@@ -83,14 +83,21 @@ export class MigratableSupplyPosition_AaveV3Optimizer
 
         const managerApprovalAction: Action = {
           type: "aaveV3OptimizerApproveManagerWithSig",
-          args: [user, true, nonce, deadline, null],
+          args: [
+            aaveV3OptimizerAddresses.morpho.address,
+            user,
+            true,
+            nonce,
+            deadline,
+            null,
+          ],
         };
 
         actions.push(managerApprovalAction);
         signRequirements.push({
           action: managerApprovalAction,
           async sign(client: Client, account: Account = client.account!) {
-            let signature = managerApprovalAction.args[4];
+            let signature = managerApprovalAction.args[5];
             if (signature != null) return signature; // action is already signed
 
             const typedData = getMorphoAaveV3ManagerApprovalTypedData(
@@ -114,7 +121,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
               signature,
             });
 
-            return (managerApprovalAction.args[4] = signature);
+            return (managerApprovalAction.args[5] = signature);
           },
         });
       } else {
@@ -122,7 +129,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
           type: "aaveV3OptimizerApproveManager",
           args: [aaveV3OptimizerMigrationAdapter, true],
           tx: {
-            to: migrationAddresses.morpho.address,
+            to: aaveV3OptimizerAddresses.morpho.address,
             data: encodeFunctionData({
               abi: morphoAaveV3Abi,
               functionName: "approveManager",

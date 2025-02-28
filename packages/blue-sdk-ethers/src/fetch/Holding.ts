@@ -10,7 +10,6 @@ import {
 
 import {
   type Address,
-  ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
   NATIVE_ADDRESS,
@@ -27,9 +26,7 @@ export async function fetchHolding(
   runner: { provider: Provider },
   { chainId, overrides = {} }: FetchOptions = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const chainAddresses = getChainAddresses(chainId);
 
@@ -80,7 +77,7 @@ export async function fetchHolding(
         )
       : { amount: 0n, expiration: 0n, nonce: 0n },
     erc2612.nonces(user, overrides).catch(() => undefined),
-    permissionedBackedTokens[chainId].has(token)
+    permissionedBackedTokens[chainId]?.has(token)
       ? WrappedBackedToken__factory.connect(
           token,
           runner,
@@ -88,7 +85,7 @@ export async function fetchHolding(
       : undefined,
     PermissionedERC20Wrapper__factory.connect(token, runner)
       .hasPermission(user, overrides)
-      .catch(() => !permissionedWrapperTokens[chainId].has(token)),
+      .catch(() => !permissionedWrapperTokens[chainId]?.has(token)),
   ]);
 
   const holding = new Holding({

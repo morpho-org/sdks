@@ -14,7 +14,7 @@
   "files": ["lib"],
   "scripts": {
     "prepublish": "$npm_execpath build",
-    "build": "tsc --build tsconfig.build.json",
+    "build": "tsc --noEmit && tsc --build tsconfig.build.json",
     "codegen": "graphql-codegen --config codegen.ts"
   },
   "peerDependencies": {

@@ -8,7 +8,6 @@ import {
 import {
   AccrualVault,
   type Address,
-  ChainUtils,
   type MarketId,
   Vault,
   type VaultPublicAllocatorConfig,
@@ -23,9 +22,7 @@ export async function fetchVault(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const chainAddresses = getChainAddresses(options.chainId);
   const mm = MetaMorpho__factory.connect(address, runner);
@@ -139,9 +136,7 @@ export async function fetchAccrualVault(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const vault = await fetchVault(address, runner, options);
 

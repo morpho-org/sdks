@@ -1,5 +1,4 @@
 import {
-  ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
   NATIVE_ADDRESS,
@@ -35,9 +34,7 @@ export async function fetchHolding(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   if (token === NATIVE_ADDRESS)
     return new Holding({
@@ -88,8 +85,8 @@ export async function fetchHolding(
           permit2,
           bundler3,
           generalAdapter1,
-          permissionedBackedTokens[parameters.chainId].has(token),
-          permissionedWrapperTokens[parameters.chainId].has(token),
+          !!permissionedBackedTokens[parameters.chainId]?.has(token),
+          !!permissionedWrapperTokens[parameters.chainId]?.has(token),
         ],
       });
 
@@ -164,7 +161,7 @@ export async function fetchHolding(
       functionName: "nonces",
       args: [user],
     }).catch(() => undefined),
-    permissionedBackedTokens[parameters.chainId].has(token)
+    permissionedBackedTokens[parameters.chainId]?.has(token)
       ? readContract(client, {
           ...parameters,
           abi: wrappedBackedTokenAbi,
@@ -178,7 +175,7 @@ export async function fetchHolding(
       address: token,
       functionName: "hasPermission",
       args: [user],
-    }).catch(() => !permissionedWrapperTokens[parameters.chainId!].has(token)),
+    }).catch(() => !permissionedWrapperTokens[parameters.chainId!]?.has(token)),
   ]);
 
   const holding = new Holding({

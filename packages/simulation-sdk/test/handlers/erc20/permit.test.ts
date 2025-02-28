@@ -1,6 +1,10 @@
 import _ from "lodash";
 
-import { ChainId, NATIVE_ADDRESS, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  NATIVE_ADDRESS,
+  addressesRegistry,
+} from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
@@ -11,7 +15,7 @@ const type = "Erc20_Permit";
 const {
   morpho,
   bundler3: { generalAdapter1 },
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should permit morpho", () => {

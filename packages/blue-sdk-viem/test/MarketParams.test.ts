@@ -1,6 +1,10 @@
 import { zeroAddress } from "viem";
 
-import { ChainId, type MarketId, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  type MarketId,
+  addressesRegistry,
+} from "@morpho-org/blue-sdk";
 
 import { MarketParams } from "../src/augment/MarketParams";
 import { test } from "./setup";
@@ -20,7 +24,7 @@ describe("augment/MarketParams", () => {
   test("should fetch config from chain", async ({ client }) => {
     const marketParams = {
       collateralToken: zeroAddress,
-      loanToken: addresses[ChainId.EthMainnet].wNative,
+      loanToken: addressesRegistry[ChainId.EthMainnet].wNative,
       lltv: 0n,
       irm: zeroAddress,
       oracle: zeroAddress,

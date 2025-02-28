@@ -2,7 +2,7 @@ import {
   ChainId,
   MathLib,
   NATIVE_ADDRESS,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { describe, expect } from "vitest";
 import { test } from "./setup";
@@ -17,7 +17,7 @@ const {
   permit2,
   wNative,
   wbC3M,
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe("augment/Holding", async () => {
   test("should fetch user WETH data ", async ({ client, wallet }) => {

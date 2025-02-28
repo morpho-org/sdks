@@ -89,7 +89,7 @@ export const setupBundle = async <chain extends Chain = Chain>(
   let { operations } = populateBundle(inputOperations, startData, {
     ...options,
     withSimplePermit: new Set([
-      ...withSimplePermit[startData.chainId],
+      ...(withSimplePermit[startData.chainId] ?? []),
       ...(options?.withSimplePermit ?? []),
     ]),
     publicAllocatorOptions: {

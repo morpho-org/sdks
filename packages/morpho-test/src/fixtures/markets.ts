@@ -2,13 +2,13 @@ import {
   ChainId,
   type IMarketParams,
   MarketParams,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { parseEther, parseUnits } from "viem";
 
 const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt, dai } =
-  addresses[ChainId.EthMainnet];
+  addressesRegistry[ChainId.EthMainnet];
 
 export const markets = {
   [ChainId.EthMainnet]: {

@@ -4,7 +4,7 @@ import {
   MarketParams,
   MathLib,
   NATIVE_ADDRESS,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import {
@@ -45,7 +45,7 @@ describe("populateBundle", () => {
         usdc,
         usdt,
         dai,
-      } = addresses[ChainId.EthMainnet];
+      } = addressesRegistry[ChainId.EthMainnet];
       const { eth_wstEth, usdc_wstEth, usdc_wbtc, dai_sUsde } =
         markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbUsdc, bbEth, re7Weth } =
@@ -2405,7 +2405,7 @@ describe("populateBundle", () => {
         stEth,
         usdc,
         usdt,
-      } = addresses[ChainId.EthMainnet];
+      } = addressesRegistry[ChainId.EthMainnet];
       const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc } =
         markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbEth, bbUsdc, re7Weth } =
@@ -4771,7 +4771,7 @@ describe("populateBundle", () => {
         wNative,
         usdc,
         verUsdc,
-      } = addresses[ChainId.BaseMainnet];
+      } = addressesRegistry[ChainId.BaseMainnet];
 
       test[ChainId.BaseMainnet]
         .skip("should wrap then supply verUSDC", async ({ client, config }) => {

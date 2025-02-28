@@ -5,7 +5,7 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import MIGRATION_ADDRESSES from "../../config.js";
+import { migrationAddresses } from "../../config.js";
 import type {
   MigrationBundle,
   MigrationTransactionRequirement,
@@ -90,15 +90,17 @@ export class MigratableSupplyPosition_CompoundV2
       args: [cToken.address, transferredAmount, compoundV2MigrationAdapter],
     });
 
+    const isEth = this.cToken.underlying === NATIVE_ADDRESS;
+
     actions.push({
       type: "compoundV2Redeem",
-      args: [cToken.address, maxUint256, generalAdapter1],
+      args: [cToken.address, maxUint256, isEth, generalAdapter1],
     });
 
     if (
-      this.cToken.underlying === NATIVE_ADDRESS ||
+      isEth ||
       this.cToken.address ===
-        MIGRATION_ADDRESSES[this.chainId][MigratableProtocol.compoundV2]?.mWeth
+        migrationAddresses[this.chainId]?.[MigratableProtocol.compoundV2]?.mWeth
           ?.address // Moonwell mWeth automatically unwraps weth on redeem
     )
       actions.push({

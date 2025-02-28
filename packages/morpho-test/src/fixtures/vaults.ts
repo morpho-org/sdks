@@ -2,11 +2,11 @@ import {
   ChainId,
   type IVaultConfig,
   VaultConfig,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 
-const { wNative, usdc, dai } = addresses[ChainId.EthMainnet];
+const { wNative, usdc, dai } = addressesRegistry[ChainId.EthMainnet];
 
 export const vaults = {
   [ChainId.EthMainnet]: {

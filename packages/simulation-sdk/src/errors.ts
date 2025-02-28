@@ -107,6 +107,17 @@ export class UnknownVaultPublicAllocatorConfigError extends UnknownDataError {
   }
 }
 
+export class UnknownVaultMarketPublicAllocatorConfigError extends UnknownDataError {
+  constructor(
+    public readonly vault: Address,
+    public readonly marketId: MarketId,
+  ) {
+    super(
+      `missing public allocator config for vault "${vault}" on market "${marketId}"`,
+    );
+  }
+}
+
 export namespace Erc20Errors {
   export class InsufficientBalance extends Error {
     constructor(

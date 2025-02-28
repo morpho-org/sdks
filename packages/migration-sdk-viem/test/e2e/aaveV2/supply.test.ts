@@ -6,22 +6,22 @@ import {
 } from "../../../src/index.js";
 import { MigratableSupplyPosition_AaveV2 } from "../../../src/positions/supply/aaveV2.supply.js";
 
-import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { sendTransaction } from "viem/actions";
 import { describe, expect } from "vitest";
-import { MIGRATION_ADDRESSES } from "../../../src/config.js";
+import { migrationAddressesRegistry } from "../../../src/config.js";
 import { test } from "../setup.js";
 
 const aWeth = "0x030bA81f1c18d280636F32af80b9AAd02Cf0854e";
-const { lendingPool } = MIGRATION_ADDRESSES[ChainId.EthMainnet].aaveV2;
+const { lendingPool } = migrationAddressesRegistry[ChainId.EthMainnet].aaveV2;
 const {
   bundler3: { generalAdapter1, aaveV2MigrationAdapter },
   wNative,
   usdc,
-} = addresses[ChainId.EthMainnet];
+} = addressesRegistry[ChainId.EthMainnet];
 
 const writeSupply = async (
   client: AnvilTestClient,

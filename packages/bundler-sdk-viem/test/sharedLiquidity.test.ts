@@ -3,7 +3,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
   NATIVE_ADDRESS,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi, publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
@@ -26,7 +26,7 @@ describe("sharedLiquidity", () => {
     wstEth,
     stEth,
     usdc,
-  } = addresses[ChainId.EthMainnet];
+  } = addressesRegistry[ChainId.EthMainnet];
   const { usdc_wstEth, usdc_wbtc, usdc_idle } = markets[ChainId.EthMainnet];
 
   const { steakUsdc, bbUsdc, bbEth } = vaults[ChainId.EthMainnet];
