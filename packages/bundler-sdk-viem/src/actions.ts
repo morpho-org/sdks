@@ -568,16 +568,15 @@ export const encodeOperation = (
         slippage = 0n,
       } = operation.args;
 
-      const { params, totalSupplyAssets, totalSupplyShares } =
-        dataBefore.getMarket(id);
-      const maxSharePrice =
-        (totalSupplyAssets * MathLib.wToRay(MathLib.WAD + slippage)) /
-        totalSupplyShares;
+      const market = dataBefore.getMarket(id);
+      const maxSharePrice = market.toSupplyAssets(
+        MathLib.wToRay(MathLib.WAD + slippage),
+      );
 
       actions.push({
         type: "morphoSupply",
         args: [
-          params,
+          market.params,
           assets,
           shares,
           maxSharePrice,
@@ -597,15 +596,14 @@ export const encodeOperation = (
         slippage = 0n,
       } = operation.args;
 
-      const { params, totalSupplyAssets, totalSupplyShares } =
-        dataBefore.getMarket(id);
-      const minSharePrice =
-        (totalSupplyAssets * MathLib.wToRay(MathLib.WAD - slippage)) /
-        totalSupplyShares;
+      const market = dataBefore.getMarket(id);
+      const minSharePrice = market.toSupplyAssets(
+        MathLib.wToRay(MathLib.WAD - slippage),
+      );
 
       actions.push({
         type: "morphoWithdraw",
-        args: [params, assets, shares, minSharePrice, receiver],
+        args: [market.params, assets, shares, minSharePrice, receiver],
       });
 
       break;
@@ -619,15 +617,14 @@ export const encodeOperation = (
         slippage = 0n,
       } = operation.args;
 
-      const { params, totalBorrowAssets, totalBorrowShares } =
-        dataBefore.getMarket(id);
-      const minSharePrice =
-        (totalBorrowAssets * MathLib.wToRay(MathLib.WAD - slippage)) /
-        totalBorrowShares;
+      const market = dataBefore.getMarket(id);
+      const minSharePrice = market.toBorrowAssets(
+        MathLib.wToRay(MathLib.WAD - slippage),
+      );
 
       actions.push({
         type: "morphoBorrow",
-        args: [params, assets, shares, minSharePrice, receiver],
+        args: [market.params, assets, shares, minSharePrice, receiver],
       });
 
       break;
@@ -641,16 +638,15 @@ export const encodeOperation = (
         slippage = 0n,
       } = operation.args;
 
-      const { params, totalBorrowAssets, totalBorrowShares } =
-        dataBefore.getMarket(id);
-      const maxSharePrice =
-        (totalBorrowAssets * MathLib.wToRay(MathLib.WAD + slippage)) /
-        totalBorrowShares;
+      const market = dataBefore.getMarket(id);
+      const maxSharePrice = market.toBorrowAssets(
+        MathLib.wToRay(MathLib.WAD + slippage),
+      );
 
       actions.push({
         type: "morphoRepay",
         args: [
-          params,
+          market.params,
           assets,
           shares,
           maxSharePrice,
@@ -702,9 +698,9 @@ export const encodeOperation = (
       const { assets = 0n, shares = 0n, owner, slippage = 0n } = operation.args;
 
       const vault = dataBefore.getVault(address);
-      const maxSharePrice =
-        (vault.totalAssets * MathLib.wToRay(MathLib.WAD + slippage)) /
-        vault.totalSupply;
+      const maxSharePrice = vault.toAssets(
+        MathLib.wToRay(MathLib.WAD + slippage),
+      );
 
       if (shares === 0n)
         actions.push({
@@ -729,9 +725,9 @@ export const encodeOperation = (
       } = operation.args;
 
       const vault = dataBefore.getVault(address);
-      const minSharePrice =
-        (vault.totalAssets * MathLib.wToRay(MathLib.WAD - slippage)) /
-        vault.totalSupply;
+      const minSharePrice = vault.toAssets(
+        MathLib.wToRay(MathLib.WAD - slippage),
+      );
 
       if (assets > 0n)
         actions.push({
