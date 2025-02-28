@@ -314,12 +314,6 @@ const basePort =
 
 let workerInstances = 0;
 
-export interface Props {
-  args: AnvilArgs;
-  index?: number;
-  callbacks?: AnvilProcessCallbacks;
-}
-
 export const spawnAnvil = async (
   args: AnvilArgs,
   index = workerInstances++,
