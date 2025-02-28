@@ -1,8 +1,6 @@
 import { spawn } from "node:child_process";
 import _kebabCase from "lodash.kebabcase";
 
-import type { TestInfo } from "@playwright/test";
-
 export interface AnvilArgs {
   /**
    * Number of dev accounts to generate and configure.
@@ -250,6 +248,21 @@ export interface AnvilArgs {
   transactionBlockKeeper?: number | undefined;
 }
 
+export interface AnvilProcessCallbacks {
+  /**
+   * Called when a message is received from the Anvil process.
+   */
+  onMessage?: (message: string) => void;
+  /**
+   * Called when an error is received from the Anvil process.
+   */
+  onError?: (message: string) => void;
+  /**
+   * Called when the Anvil process is closed.
+   */
+  onClose?: (message: string) => void;
+}
+
 /**
  * Converts an object of options to an array of command line arguments.
  *
@@ -301,10 +314,16 @@ const basePort =
 
 let workerInstances = 0;
 
+export interface Props {
+  args: AnvilArgs;
+  index?: number;
+  callbacks?: AnvilProcessCallbacks;
+}
+
 export const spawnAnvil = async (
   args: AnvilArgs,
   index = workerInstances++,
-  testInfo?: TestInfo,
+  callbacks?: AnvilProcessCallbacks,
 ): Promise<{
   rpcUrl: `http://localhost:${number}`;
   stop: () => boolean;
@@ -312,7 +331,6 @@ export const spawnAnvil = async (
   const port = basePort + index;
 
   let started = false;
-  const anvilLogs: string[] = [];
 
   const stop = await new Promise<() => boolean>((resolve, reject) => {
     const subprocess = spawn("anvil", toArgs({ ...args, port }));
@@ -320,9 +338,7 @@ export const spawnAnvil = async (
     subprocess.stdout.on("data", (data) => {
       const message = `[port ${port}] ${data.toString()}`;
 
-      if (testInfo) {
-        anvilLogs.push(message);
-      }
+      callbacks?.onMessage?.(message);
       // console.debug(message);
 
       if (message.includes("Listening on")) {
@@ -334,17 +350,16 @@ export const spawnAnvil = async (
     subprocess.stderr.on("data", (data) => {
       const message = `[port ${port}] ${data.toString()}`;
 
+      callbacks?.onError?.(message);
+
       if (!started) reject(message);
       else console.warn(message);
     });
 
-    subprocess.on("close", () => {
-      if (testInfo) {
-        testInfo.attach("Anvil Logs", {
-          body: anvilLogs.join("\n"),
-          contentType: "text/plain",
-        });
-      }
+    subprocess.on("close", (code) => {
+      const message = `[port ${port}] Anvil exited with code ${code}`;
+
+      callbacks?.onClose?.(message);
     });
   });
 

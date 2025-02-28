@@ -1,4 +1,4 @@
-import { test } from "@playwright/test";
+import { type TestInfo, test } from "@playwright/test";
 import { http, type Chain, formatUnits } from "viem";
 import { type AnvilArgs, spawnAnvil } from "./anvil";
 import { type AnvilTestClient, createAnvilTestClient } from "./client";
@@ -6,6 +6,29 @@ import { type AnvilTestClient, createAnvilTestClient } from "./client";
 export interface PlaywrightTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
 }
+
+const attachLogToPlaywright = (testInfo: TestInfo) => {
+  const anvilLogs: string[] = [];
+
+  const attachLog = (message: string) => {
+    anvilLogs.push(message);
+  };
+
+  const onClose = (message: string) => {
+    attachLog(message);
+
+    testInfo.attach("Anvil Logs", {
+      body: anvilLogs.join("\n"),
+      contentType: "text/plain",
+    });
+  };
+
+  return {
+    onMessage: attachLog,
+    onError: attachLog,
+    onClose: onClose,
+  };
+};
 
 /**
  * Creates a Playwright test that spawns an Anvil instance and injects a test client.
@@ -34,7 +57,7 @@ export const createViemTest = <chain extends Chain>(
       const { rpcUrl, stop } = await spawnAnvil(
         parameters,
         test.info().workerIndex,
-        attachAnvilLogs ? testInfo : undefined,
+        attachAnvilLogs ? attachLogToPlaywright(testInfo) : undefined,
       );
 
       const client = createAnvilTestClient(http(rpcUrl), chain);
