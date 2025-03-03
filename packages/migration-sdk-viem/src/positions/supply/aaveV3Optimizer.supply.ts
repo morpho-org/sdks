@@ -6,17 +6,12 @@ import {
 import { Time } from "@morpho-org/morpho-ts";
 
 import { migrationAddresses } from "../../config.js";
-import type { MigrationTransactionRequirement } from "../../types/actions.js";
 import {
   MigratableProtocol,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
-import type {
-  Action,
-  SignatureRequirement,
-} from "@morpho-org/bundler-sdk-viem";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
+import type { Action } from "@morpho-org/bundler-sdk-viem";
 import {
   type Account,
   type Client,
@@ -25,6 +20,7 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
+import { MigrationBundle } from "../../MigrationBundle.js";
 import { morphoAaveV3Abi } from "../../abis/aaveV3Optimizer.js";
 import { getMorphoAaveV3ManagerApprovalTypedData } from "../signature/aaveV3Optimizer.js";
 import {
@@ -60,9 +56,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     chainId: ChainId,
     supportsSignature = true,
   ) {
-    const signRequirements: SignatureRequirement[] = [];
-    const txRequirements: MigrationTransactionRequirement[] = [];
-    const actions: Action[] = [];
+    const bundle = new MigrationBundle(chainId);
 
     const user = this.user;
     const {
@@ -93,8 +87,8 @@ export class MigratableSupplyPosition_AaveV3Optimizer
           ],
         };
 
-        actions.push(managerApprovalAction);
-        signRequirements.push({
+        bundle.actions.push(managerApprovalAction);
+        bundle.requirements.signatures.push({
           action: managerApprovalAction,
           async sign(client: Client, account: Account = client.account!) {
             let signature = managerApprovalAction.args[5];
@@ -125,7 +119,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
           },
         });
       } else {
-        txRequirements.push({
+        bundle.requirements.txs.push({
           type: "aaveV3OptimizerApproveManager",
           args: [aaveV3OptimizerMigrationAdapter, true],
           tx: {
@@ -153,7 +147,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
       migratedAmount = maxUint256;
     }
 
-    actions.push(
+    bundle.actions.push(
       {
         type: "aaveV3OptimizerWithdraw",
         args: [this.loanToken, migratedAmount, 4n, generalAdapter1],
@@ -164,13 +158,6 @@ export class MigratableSupplyPosition_AaveV3Optimizer
       },
     );
 
-    return {
-      actions,
-      requirements: {
-        signatures: signRequirements,
-        txs: txRequirements,
-      },
-      tx: () => BundlerAction.encodeBundle(chainId, actions),
-    };
+    return bundle;
   }
 }

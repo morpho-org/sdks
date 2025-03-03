@@ -1,5 +1,5 @@
 import type { SimulationResult } from "@morpho-org/simulation-sdk";
-import type { Account, Chain, Client, Hex, Transport } from "viem";
+import type { Account, Address, Chain, Client, Hex, Transport } from "viem";
 import { BundlerAction } from "./BundlerAction.js";
 import type {
   Action,
@@ -7,10 +7,13 @@ import type {
   TransactionRequirement,
 } from "./types/index.js";
 
-export class ActionBundleRequirements {
+export class ActionBundleRequirements<
+  TR extends { tx: { to: Address; data: Hex } } = TransactionRequirement,
+  SR extends SignatureRequirement = SignatureRequirement,
+> {
   constructor(
-    public readonly txs: TransactionRequirement[] = [],
-    public readonly signatures: SignatureRequirement[] = [],
+    public readonly txs: TR[] = [],
+    public readonly signatures: SR[] = [],
   ) {}
 
   sign(client: Client<Transport, Chain | undefined, Account>): Promise<Hex[]>;
@@ -22,11 +25,14 @@ export class ActionBundleRequirements {
   }
 }
 
-export class ActionBundle {
+export class ActionBundle<
+  TR extends { tx: { to: Address; data: Hex } } = TransactionRequirement,
+  SR extends SignatureRequirement = SignatureRequirement,
+> {
   constructor(
     public readonly steps: SimulationResult,
     public readonly actions: Action[] = [],
-    public readonly requirements = new ActionBundleRequirements(),
+    public readonly requirements = new ActionBundleRequirements<TR, SR>(),
   ) {}
 
   tx() {

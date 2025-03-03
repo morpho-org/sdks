@@ -1,6 +1,6 @@
 import type { Address, ChainId } from "@morpho-org/blue-sdk";
 
-import type { MigrationBundle } from "../../types/actions.js";
+import type { MigrationBundle } from "../../MigrationBundle.js";
 import type {
   MigratableProtocol,
   SupplyMigrationLimiter,
