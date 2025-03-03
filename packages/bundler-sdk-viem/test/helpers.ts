@@ -10,9 +10,7 @@ import { format } from "@morpho-org/morpho-ts";
 import {
   type BundlingOptions,
   type InputBundlerOperation,
-  encodeBundle,
-  finalizeBundle,
-  populateBundle,
+  setupBundle,
 } from "../src/index.js";
 
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
@@ -65,7 +63,7 @@ export const donate =
     });
   };
 
-export const setupBundle = async <chain extends Chain = Chain>(
+export const setupTestBundle = async <chain extends Chain = Chain>(
   client: AnvilTestClient<chain>,
   startData: SimulationState,
   inputOperations: InputBundlerOperation[],
@@ -86,26 +84,22 @@ export const setupBundle = async <chain extends Chain = Chain>(
 ) => {
   const account = parseAccount(account_);
 
-  let { operations } = populateBundle(inputOperations, startData, {
-    ...options,
-    withSimplePermit: new Set([
-      ...(withSimplePermit[startData.chainId] ?? []),
-      ...(options?.withSimplePermit ?? []),
-    ]),
-    publicAllocatorOptions: {
-      enabled: true,
-      ...options.publicAllocatorOptions,
-    },
-  });
-  operations = finalizeBundle(
-    operations,
+  const { operations, bundle } = setupBundle(
+    inputOperations,
     startData,
     account.address,
-    unwrapTokens,
-    unwrapSlippage,
+    {
+      ...options,
+      withSimplePermit: new Set([
+        ...(withSimplePermit[startData.chainId] ?? []),
+        ...(options?.withSimplePermit ?? []),
+      ]),
+      publicAllocatorOptions: {
+        enabled: true,
+        ...options.publicAllocatorOptions,
+      },
+    },
   );
-
-  const bundle = encodeBundle(operations, startData, supportsSignature);
 
   const tokens = new Set<Address>();
 
@@ -146,15 +140,9 @@ export const setupBundle = async <chain extends Chain = Chain>(
 
   await onBundleTx?.(startData);
 
-  await Promise.all(
-    bundle.requirements.signatures.map((requirement) =>
-      requirement.sign(client, account),
-    ),
-  );
+  await bundle.requirements.sign(client, account);
 
-  const txs = bundle.requirements.txs.map(({ tx }) => tx).concat([bundle.tx()]);
-
-  for (const tx of txs) {
+  for (const tx of bundle.txs()) {
     await client.sendTransaction(
       // @ts-ignore
       { ...tx, account },

@@ -26,7 +26,7 @@ import {
   zeroAddress,
 } from "viem";
 import { describe, expect } from "vitest";
-import { donate, donator, setupBundle } from "./helpers.js";
+import { donate, donator, setupTestBundle as setupBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
 configure({ asyncUtilTimeout: 10_000 });
