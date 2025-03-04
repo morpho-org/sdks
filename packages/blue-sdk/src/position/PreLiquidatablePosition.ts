@@ -33,12 +33,12 @@ export class PreLiquidatablePosition
   implements IPreLiquidatablePosition
 {
   /**
-   * The pre-liquidation parameters.
+   * The pre-liquidation parameters of the associated PreLiquidation contract.
    */
   public readonly preLiquidationParams: PreLiquidationParams;
 
   /**
-   * The address of the preLiquidation contract.
+   * The address of the PreLiquidation contract this position is associated to.
    */
   public readonly preLiquidation: Address;
 
@@ -55,7 +55,7 @@ export class PreLiquidatablePosition
   }
 
   /**
-   * Whether this position is preLiquidatable.
+   * Whether this position is liquidatable via the Pre liquidation contract.
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isPreLiquidatable() {
