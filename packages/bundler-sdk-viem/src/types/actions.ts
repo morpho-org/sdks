@@ -39,7 +39,12 @@ export interface Permit2PermitSingle {
 export interface ActionArgs {
   /* ERC20 */
   nativeTransfer: [owner: Address, recipient: Address, amount: bigint];
-  erc20Transfer: [asset: Address, recipient: Address, amount: bigint];
+  erc20Transfer: [
+    asset: Address,
+    recipient: Address,
+    amount: bigint,
+    adapter?: Address,
+  ];
   erc20TransferFrom: [asset: Address, amount: bigint, recipient?: Address];
 
   /* ERC20Wrapper */
