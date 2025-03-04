@@ -60,7 +60,7 @@ export async function fetchPreLiquidationParams(
   return { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle };
 }
 
-async function fetchPreLiquidationAuthorization(
+async function fetchisPreLiquidationAuthorized(
   user: Address,
   preLiquidation: Address,
   client: Client,
@@ -106,12 +106,12 @@ export async function fetchPreLiquidatablePosition(
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
   );
-  const [position, market, preLiquidationParams, preLiquidationAuthorization] =
+  const [position, market, preLiquidationParams, isPreLiquidationAuthorized] =
     await Promise.all([
       await fetchPosition(user, marketId, client, parameters),
       await fetchMarket(marketId, client, parameters),
       await fetchPreLiquidationParams(preLiquidation, client, parameters),
-      await fetchPreLiquidationAuthorization(user, preLiquidation, client),
+      await fetchisPreLiquidationAuthorized(user, preLiquidation, client),
     ]);
 
   return new PreLiquidatablePosition(
@@ -119,7 +119,7 @@ export async function fetchPreLiquidatablePosition(
       ...position,
       preLiquidationParams,
       preLiquidation,
-      preLiquidationAuthorization,
+      isPreLiquidationAuthorized,
     },
     market,
   );

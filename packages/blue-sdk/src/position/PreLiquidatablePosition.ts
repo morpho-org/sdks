@@ -22,7 +22,7 @@ export interface PreLiquidationParams {
 export interface IPreLiquidatablePosition extends IAccrualPosition {
   preLiquidationParams: PreLiquidationParams;
   preLiquidation: Address;
-  preLiquidationAuthorization: boolean;
+  isPreLiquidationAuthorized: boolean;
 }
 
 export class PreLiquidatablePosition
@@ -42,14 +42,14 @@ export class PreLiquidatablePosition
   /**
    * Whether the PreLiquidation contract is authorized to manage this position.
    */
-  public readonly preLiquidationAuthorization: boolean;
+  public readonly isPreLiquidationAuthorized: boolean;
 
   constructor(position: IPreLiquidatablePosition, market: Market) {
     super(position, market);
 
     this.preLiquidationParams = position.preLiquidationParams;
     this.preLiquidation = position.preLiquidation;
-    this.preLiquidationAuthorization = position.preLiquidationAuthorization;
+    this.isPreLiquidationAuthorized = position.isPreLiquidationAuthorized;
   }
 
   /**
@@ -57,17 +57,14 @@ export class PreLiquidatablePosition
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isPreLiquidatable() {
-    const { ltv } = this;
+    const { ltv, collateralValue } = this;
     if (ltv == null) return ltv;
 
     return (
-      (this.borrowAssets > MathLib.wMulDown(this.collateralValue!, ltv) ||
+      this.isPreLiquidationAuthorized &&
+      (this.borrowAssets > MathLib.wMulDown(collateralValue!, ltv) ||
         this.borrowAssets <=
-          MathLib.wMulDown(
-            this.collateralValue!,
-            this.preLiquidationParams.preLltv,
-          )) &&
-      this.preLiquidationAuthorization
+          MathLib.wMulDown(collateralValue!, this.preLiquidationParams.preLltv))
     );
   }
 
@@ -108,7 +105,7 @@ export class PreLiquidatablePosition
    * The price variation required for the position to reach its pre-liquidation threshold (scaled by WAD).
    * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
    * `undefined` iff the market's oracle is undefined or reverts.
-   * Null if the position is not a borrow.
+   * `null` if the position is not a borrow.
    */
   get priceVariationToLiquidationPrice() {
     if (this.market.price == null) return;

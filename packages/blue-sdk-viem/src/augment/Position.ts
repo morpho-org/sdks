@@ -17,15 +17,12 @@ declare module "@morpho-org/blue-sdk" {
 
   namespace AccrualPosition {
     let fetch: typeof fetchAccrualPosition;
-  }
-
-  namespace PreLiquidatablePosition {
-    let fetch: typeof fetchPreLiquidatablePosition;
+    let fetchPreLiquidatable: typeof fetchPreLiquidatablePosition;
   }
 }
 
 Position.fetch = fetchPosition;
 AccrualPosition.fetch = fetchAccrualPosition;
-PreLiquidatablePosition.fetch = fetchPreLiquidatablePosition;
+AccrualPosition.fetchPreLiquidatable = fetchPreLiquidatablePosition;
 
 export { Position, AccrualPosition, PreLiquidatablePosition };

@@ -151,7 +151,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * The price variation required for the position to reach its liquidation threshold (scaled by WAD).
    * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
    * `undefined` iff the market's oracle is undefined or reverts.
-   * Null if the position is not a borrow.
+   * `null` if the position is not a borrow.
    */
   get priceVariationToLiquidationPrice() {
     return this.market.getPriceVariationToLiquidationPrice(this);
