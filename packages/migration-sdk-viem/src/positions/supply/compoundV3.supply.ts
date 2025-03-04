@@ -5,11 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 
-import type {
-  Action,
-  SignatureRequirement,
-} from "@morpho-org/bundler-sdk-viem";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
+import type { Action } from "@morpho-org/bundler-sdk-viem";
 import {
   type Account,
   type Client,
@@ -18,11 +14,8 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
+import { MigrationBundle } from "../../MigrationBundle.js";
 import { cometExtAbi } from "../../abis/compoundV3.js";
-import type {
-  MigrationBundle,
-  MigrationTransactionRequirement,
-} from "../../types/actions.js";
 import {
   MigratableProtocol,
   SupplyMigrationLimiter,
@@ -63,10 +56,8 @@ export class MigratableSupplyPosition_CompoundV3
     { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
-  ): MigrationBundle {
-    const signRequirements: SignatureRequirement[] = [];
-    const txRequirements: MigrationTransactionRequirement[] = [];
-    const actions: Action[] = [];
+  ) {
+    const bundle = new MigrationBundle(chainId);
 
     const user = this.user;
 
@@ -98,9 +89,9 @@ export class MigratableSupplyPosition_CompoundV3
         args: [instance, user, true, nonce, expiry, null],
       };
 
-      actions.push(allowAction);
+      bundle.actions.push(allowAction);
 
-      signRequirements.push({
+      bundle.requirements.signatures.push({
         action: allowAction,
         async sign(client: Client, account: Account = client.account!) {
           let signature = allowAction.args[5];
@@ -133,7 +124,7 @@ export class MigratableSupplyPosition_CompoundV3
         },
       });
     } else {
-      txRequirements.push({
+      bundle.requirements.txs.push({
         type: "compoundV3ApproveManager",
         args: [compoundV3MigrationAdapter, true],
         tx: {
@@ -147,7 +138,7 @@ export class MigratableSupplyPosition_CompoundV3
       });
     }
 
-    actions.push(
+    bundle.actions.push(
       {
         type: "compoundV3WithdrawFrom",
         args: [instance, this.loanToken, migratedAmount, generalAdapter1],
@@ -158,13 +149,6 @@ export class MigratableSupplyPosition_CompoundV3
       },
     );
 
-    return {
-      actions,
-      requirements: {
-        signatures: signRequirements,
-        txs: txRequirements,
-      },
-      tx: () => BundlerAction.encodeBundle(chainId, actions),
-    };
+    return bundle;
   }
 }

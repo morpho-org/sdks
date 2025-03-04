@@ -12,7 +12,7 @@ import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
 import { parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { donator, setupBundle } from "./helpers.js";
+import { donator, setupTestBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
 configure({ asyncUtilTimeout: 10_000 });
@@ -152,7 +152,7 @@ describe("sharedLiquidity", () => {
         target - data.getMarket(id).utilization,
       );
 
-      const { operations } = await setupBundle(
+      const { operations } = await setupTestBundle(
         client,
         data,
         [
@@ -345,7 +345,7 @@ describe("sharedLiquidity", () => {
       const maxFriendlyReallocationAmount =
         amountForWbtcUsdcToReachTarget + data.getMarket(id).liquidity;
 
-      const { operations } = await setupBundle(
+      const { operations } = await setupTestBundle(
         client,
         data,
         [
@@ -553,7 +553,7 @@ describe("sharedLiquidity", () => {
       const withdrawnAssets =
         amountForWbtcUsdcToReachTarget + additionnalReallocationAmount;
 
-      const { operations } = await setupBundle(
+      const { operations } = await setupTestBundle(
         client,
         data,
         [

@@ -8,7 +8,6 @@ import type {
 } from "viem";
 
 import type { Address, InputMarketParams } from "@morpho-org/blue-sdk";
-import type { SimulationResult } from "@morpho-org/simulation-sdk";
 
 export interface Authorization {
   authorizer: Address;
@@ -326,14 +325,4 @@ export interface SignatureRequirementFunction {
 export interface SignatureRequirement {
   action: Action;
   sign: SignatureRequirementFunction;
-}
-
-export interface ActionBundle {
-  steps: SimulationResult;
-  actions: Action[];
-  requirements: {
-    signatures: SignatureRequirement[];
-    txs: TransactionRequirement[];
-  };
-  tx: () => TransactionRequest & { to: Address; data: Hex };
 }

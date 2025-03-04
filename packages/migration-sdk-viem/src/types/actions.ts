@@ -1,7 +1,4 @@
-import type {
-  Action,
-  SignatureRequirement,
-} from "@morpho-org/bundler-sdk-viem";
+import type {} from "@morpho-org/bundler-sdk-viem";
 import type { Address, Hex, TransactionRequest } from "viem";
 
 export interface MigrationTransactionRequirementArgs {
@@ -31,12 +28,3 @@ export type Requirements = {
 
 export type MigrationTransactionRequirement =
   Requirements[MigrationTransactionRequirementType];
-
-export interface MigrationBundle {
-  actions: Action[];
-  requirements: {
-    signatures: SignatureRequirement[];
-    txs: MigrationTransactionRequirement[];
-  };
-  tx: () => TransactionRequest & { to: Address; data: Hex };
-}

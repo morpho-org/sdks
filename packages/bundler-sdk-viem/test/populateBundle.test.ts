@@ -26,7 +26,7 @@ import {
   zeroAddress,
 } from "viem";
 import { describe, expect } from "vitest";
-import { donate, donator, setupBundle } from "./helpers.js";
+import { donate, donator, setupTestBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
 configure({ asyncUtilTimeout: 10_000 });
@@ -80,7 +80,7 @@ describe("populateBundle", () => {
           const assets = balance + wBalance + 1n;
 
           await expect(
-            setupBundle(client, result.current.data!, [
+            setupTestBundle(client, result.current.data!, [
               {
                 type: "Blue_Supply",
                 sender: client.account.address,
@@ -125,7 +125,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(client, data, [
+          const { operations, bundle } = await setupTestBundle(client, data, [
             {
               type: "Blue_Supply",
               sender: client.account.address,
@@ -247,7 +247,7 @@ describe("populateBundle", () => {
               DEFAULT_SLIPPAGE_TOLERANCE,
             ) + wBalance;
 
-          const { operations, bundle } = await setupBundle(client, data, [
+          const { operations, bundle } = await setupTestBundle(client, data, [
             {
               type: "Erc20_Wrap",
               sender: client.account.address,
@@ -425,7 +425,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(client, data, [
+          const { operations, bundle } = await setupTestBundle(client, data, [
             {
               type: "Blue_Borrow",
               sender: client.account.address,
@@ -526,7 +526,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(client, data, [
+          const { operations, bundle } = await setupTestBundle(client, data, [
             {
               type: "MetaMorpho_Deposit",
               sender: client.account.address,
@@ -615,7 +615,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(client, data, [
+          const { operations, bundle } = await setupTestBundle(client, data, [
             {
               type: "MetaMorpho_Deposit",
               sender: client.account.address,
@@ -736,7 +736,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(client, data, [
+          const { operations, bundle } = await setupTestBundle(client, data, [
             {
               type: "MetaMorpho_Deposit",
               sender: client.account.address,
@@ -887,7 +887,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(client, data, [
+          const { operations, bundle } = await setupTestBundle(client, data, [
             {
               type: "MetaMorpho_Deposit",
               sender: client.account.address,
@@ -1035,7 +1035,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -1176,7 +1176,7 @@ describe("populateBundle", () => {
           const data = result.current.data!;
 
           await expect(
-            setupBundle(
+            setupTestBundle(
               client,
               data,
               [
@@ -1237,7 +1237,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -1442,7 +1442,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -1696,7 +1696,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -2032,7 +2032,7 @@ describe("populateBundle", () => {
             .getMarketPublicReallocations(id)
             .data.getMarket(id).liquidity;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -2216,7 +2216,7 @@ describe("populateBundle", () => {
             eth_wstEth.id,
           );
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -2440,7 +2440,7 @@ describe("populateBundle", () => {
           const assets = balance + wBalance + 1n;
 
           await expect(
-            setupBundle(
+            setupTestBundle(
               client,
               result.current.data!,
               [
@@ -2508,7 +2508,7 @@ describe("populateBundle", () => {
               DEFAULT_SLIPPAGE_TOLERANCE,
             ) + wBalance;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -2696,7 +2696,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -2811,7 +2811,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -2911,7 +2911,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -3037,7 +3037,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -3196,7 +3196,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -3349,7 +3349,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -3491,7 +3491,7 @@ describe("populateBundle", () => {
           const data = result.current.data!;
 
           await expect(
-            setupBundle(
+            setupTestBundle(
               client,
               data,
               [
@@ -3553,7 +3553,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -3770,7 +3770,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -4041,7 +4041,7 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -4388,7 +4388,7 @@ describe("populateBundle", () => {
             .getMarketPublicReallocations(id)
             .data.getMarket(id).liquidity;
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -4582,7 +4582,7 @@ describe("populateBundle", () => {
             eth_wstEth.id,
           );
 
-          const { operations, bundle } = await setupBundle(
+          const { operations, bundle } = await setupTestBundle(
             client,
             data,
             [
@@ -4813,7 +4813,7 @@ describe("populateBundle", () => {
 
           await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
-          const { operations } = await setupBundle(
+          const { operations } = await setupTestBundle(
             client,
             result.current.data!,
             [
