@@ -3,13 +3,14 @@ import {
   MigratableProtocol,
   SupplyMigrationLimiter,
   fetchMigratablePositions,
+  migrationAddressesRegistry,
 } from "../../../src/index.js";
 
 import {
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import { blueAbi, fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
@@ -29,7 +30,6 @@ import {
   aTokenV3Abi,
   variableDebtTokenV3Abi,
 } from "../../../src/abis/aaveV3.js";
-import { MIGRATION_ADDRESSES } from "../../../src/config.js";
 import { MigratableBorrowPosition_AaveV3 } from "../../../src/positions/borrow/aaveV3.borrow.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../../src/positions/supply/aaveV3.supply.js";
 import { test } from "../setup.js";
@@ -38,7 +38,7 @@ const TEST_CONFIGS = [
   {
     chainId: ChainId.EthMainnet,
     aWstEth: "0x0B925eD163218f6662a35e0f0371Ac234f9E9371",
-    wstEth: addresses[ChainId.EthMainnet].wstEth,
+    wstEth: addressesRegistry[ChainId.EthMainnet].wstEth,
     variableDebtToken: "0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE",
     testFn: test[ChainId.EthMainnet] as TestAPI<ViemTestContext>,
     marketTo: markets[ChainId.EthMainnet].eth_wstEth_2,
@@ -62,13 +62,13 @@ describe("Borrow position on AAVE V3", () => {
     marketTo,
     variableDebtToken,
   } of TEST_CONFIGS) {
-    const { pool } = MIGRATION_ADDRESSES[chainId].aaveV3;
+    const { pool } = migrationAddressesRegistry[chainId].aaveV3;
     const {
       bundler3: { generalAdapter1, aaveV3CoreMigrationAdapter },
       wNative,
       usdc,
       morpho,
-    } = addresses[chainId];
+    } = addressesRegistry[chainId];
 
     const writeSupply = async (
       client: ViemTestContext["client"],

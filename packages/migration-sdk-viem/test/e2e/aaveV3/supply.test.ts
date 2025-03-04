@@ -2,6 +2,7 @@ import {
   MigratableProtocol,
   SupplyMigrationLimiter,
   fetchMigratablePositions,
+  migrationAddressesRegistry,
 } from "../../../src/index.js";
 
 import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
@@ -13,7 +14,6 @@ import { vaults } from "@morpho-org/morpho-test";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
-import { migrationAddressesRegistry } from "../../../src/config.js";
 import { MigratableBorrowPosition_AaveV3 } from "../../../src/positions/borrow/aaveV3.borrow.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../../src/positions/supply/aaveV3.supply.js";
 import { test } from "../setup.js";
