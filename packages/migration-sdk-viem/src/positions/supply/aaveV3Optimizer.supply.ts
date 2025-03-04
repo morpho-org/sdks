@@ -13,12 +13,13 @@ import {
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
-import type {
-  Action,
-  SignatureRequirement,
+import {
+  type Action,
+  BundlerAction,
+  type SignatureRequirement,
+  baseBundlerAbi,
 } from "@morpho-org/bundler-sdk-viem";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
+
 import {
   type Account,
   type Client,
