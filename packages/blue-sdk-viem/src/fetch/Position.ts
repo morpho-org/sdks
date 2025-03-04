@@ -66,7 +66,6 @@ export async function fetchPreLiquidationParameters(
     address: preLiquidation,
     abi: preLiquidationAbi,
     functionName: "preLiquidationParams",
-    args: [],
   });
 
   return preLiquidationParameters as PreLiquidationParams;

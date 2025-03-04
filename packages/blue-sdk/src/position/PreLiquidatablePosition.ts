@@ -55,12 +55,12 @@ export class PreLiquidatablePosition
   }
 
   /**
-   * Whether this position is liquidatable via the Pre liquidation contract.
+   * Whether this position is liquidatable via the PreLiquidation contract.
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isPreLiquidatable() {
     const { ltv } = this;
-    if (ltv == null) return undefined;
+    if (ltv == null) return ltv;
 
     return (
       ltv > this.preLiquidationParams.preLltv && ltv <= this.market.params.lltv
@@ -73,8 +73,8 @@ export class PreLiquidatablePosition
    */
   get isHealthy() {
     const { isPreLiquidatable, isLiquidatable } = this;
-    if (isPreLiquidatable === undefined || isLiquidatable === undefined)
-      return undefined;
+    if (isPreLiquidatable == null) return isPreLiquidatable;
+    if (isLiquidatable == null) return isLiquidatable;
 
     return !isPreLiquidatable && !isLiquidatable;
   }
