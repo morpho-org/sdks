@@ -10,7 +10,7 @@ import {
 
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi, preLiquidationAbi, preLiquidationFactoryAbi } from "../abis";
+import { blueAbi, preLiquidationAbi } from "../abis";
 import type { DeploylessFetchParameters, FetchParameters } from "../types";
 import { fetchMarket } from "./Market";
 
@@ -41,34 +41,23 @@ export async function fetchPosition(
   });
 }
 
-export async function fetchPreLiquidationParameters(
+export async function fetchPreLiquidationParams(
   preLiquidation: Address,
   client: Client,
   parameters: DeploylessFetchParameters = {},
-) {
+): Promise<PreLiquidationParams> {
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
   );
-  const isPreLiquidation = await readContract(client, {
-    ...parameters,
-    address: addresses[parameters.chainId].preLiquidationFactory,
-    abi: preLiquidationFactoryAbi,
-    functionName: "isPreLiquidation",
-    args: [preLiquidation],
-  });
+  const { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle } =
+    await readContract(client, {
+      ...parameters,
+      address: preLiquidation,
+      abi: preLiquidationAbi,
+      functionName: "preLiquidationParams",
+    });
 
-  if (!isPreLiquidation) {
-    return undefined;
-  }
-
-  const preLiquidationParameters = await readContract(client, {
-    ...parameters,
-    address: preLiquidation,
-    abi: preLiquidationAbi,
-    functionName: "preLiquidationParams",
-  });
-
-  return preLiquidationParameters as PreLiquidationParams;
+  return { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle };
 }
 
 async function fetchPreLiquidationAuthorization(
@@ -117,22 +106,21 @@ export async function fetchPreLiquidatablePosition(
   parameters.chainId = ChainUtils.parseSupportedChainId(
     parameters.chainId ?? (await getChainId(client)),
   );
-  const [position, market, preLiquidationParams, isPreLiquidationAuthorized] =
+  const [position, market, preLiquidationParams, preLiquidationAuthorization] =
     await Promise.all([
       await fetchPosition(user, marketId, client, parameters),
       await fetchMarket(marketId, client, parameters),
-      await fetchPreLiquidationParameters(preLiquidation, client, parameters),
+      await fetchPreLiquidationParams(preLiquidation, client, parameters),
       await fetchPreLiquidationAuthorization(user, preLiquidation, client),
     ]);
 
-  if (!preLiquidationParams || !isPreLiquidationAuthorized) {
-    return new AccrualPosition(position, market);
-  }
-
   return new PreLiquidatablePosition(
-    position,
+    {
+      ...position,
+      preLiquidationParams,
+      preLiquidation,
+      preLiquidationAuthorization,
+    },
     market,
-    preLiquidationParams,
-    preLiquidation,
   );
 }

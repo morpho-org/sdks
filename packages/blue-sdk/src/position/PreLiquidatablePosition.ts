@@ -8,11 +8,7 @@ import {
   type MaxWithdrawCollateralOptions,
 } from "../market";
 import { MathLib, SharesMath } from "../math";
-import {
-  AccrualPosition,
-  type IAccrualPosition,
-  type IPosition,
-} from "./Position";
+import { AccrualPosition, type IAccrualPosition } from "./Position";
 
 export interface PreLiquidationParams {
   preLltv: bigint;
@@ -23,9 +19,10 @@ export interface PreLiquidationParams {
   preLiquidationOracle: Address;
 }
 
-export interface IPreLiquidatablePosition extends IPosition {
+export interface IPreLiquidatablePosition extends IAccrualPosition {
   preLiquidationParams: PreLiquidationParams;
   preLiquidation: Address;
+  preLiquidationAuthorization: boolean;
 }
 
 export class PreLiquidatablePosition
@@ -42,16 +39,17 @@ export class PreLiquidatablePosition
    */
   public readonly preLiquidation: Address;
 
-  constructor(
-    position: IAccrualPosition,
-    market: Market,
-    preLiquidationParams: PreLiquidationParams,
-    preLiquidation: Address,
-  ) {
+  /**
+   * Whether the PreLiquidation contract is authorized to manage this position.
+   */
+  public readonly preLiquidationAuthorization: boolean;
+
+  constructor(position: IPreLiquidatablePosition, market: Market) {
     super(position, market);
 
-    this.preLiquidationParams = preLiquidationParams;
-    this.preLiquidation = preLiquidation;
+    this.preLiquidationParams = position.preLiquidationParams;
+    this.preLiquidation = position.preLiquidation;
+    this.preLiquidationAuthorization = position.preLiquidationAuthorization;
   }
 
   /**
@@ -63,7 +61,13 @@ export class PreLiquidatablePosition
     if (ltv == null) return ltv;
 
     return (
-      ltv > this.preLiquidationParams.preLltv && ltv <= this.market.params.lltv
+      (this.borrowAssets > MathLib.wMulDown(this.collateralValue!, ltv) ||
+        this.borrowAssets <=
+          MathLib.wMulDown(
+            this.collateralValue!,
+            this.preLiquidationParams.preLltv,
+          )) &&
+      this.preLiquidationAuthorization
     );
   }
 
@@ -81,6 +85,7 @@ export class PreLiquidatablePosition
 
   /**
    * The price of the collateral quoted in loan assets that would allow this position to be pre-liquidated.
+   * `null` if the position has no borrow.
    */
   get preLiquidationPrice() {
     if (this.borrowShares === 0n || this.market.totalBorrowShares === 0n)
@@ -145,19 +150,12 @@ export class PreLiquidatablePosition
    */
   get preSeizableCollateral() {
     const ltv = this.ltv;
-    if (ltv === undefined || ltv === null || this.market.price === undefined) {
-      return undefined;
+    if (this.market.price == null) return;
+    if (ltv == null) {
+      return ltv;
     }
 
-    if (
-      this.borrowAssets > MathLib.wMulDown(this.collateralValue!, ltv) ||
-      this.borrowAssets <
-        MathLib.wMulDown(
-          this.collateralValue!,
-          this.preLiquidationParams.preLltv,
-        )
-    )
-      return 0n;
+    if (!this.isPreLiquidatable) return 0n;
 
     const quotient = MathLib.wDivDown(
       ltv - this.preLiquidationParams.preLltv,
