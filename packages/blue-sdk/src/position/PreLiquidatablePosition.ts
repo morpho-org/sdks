@@ -72,13 +72,11 @@ export class PreLiquidatablePosition
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isHealthy() {
-    if (
-      this.isPreLiquidatable === undefined ||
-      this.isLiquidatable === undefined
-    )
+    const { isPreLiquidatable, isLiquidatable } = this;
+    if (isPreLiquidatable === undefined || isLiquidatable === undefined)
       return undefined;
 
-    return !this.isPreLiquidatable && !this.isLiquidatable;
+    return !isPreLiquidatable && !isLiquidatable;
   }
 
   /**

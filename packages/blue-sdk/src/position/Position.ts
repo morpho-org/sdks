@@ -134,7 +134,10 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isLiquidatable() {
-    return !this.market.isHealthy(this);
+    const { isHealthy } = this;
+    if (isHealthy === null) return undefined;
+
+    return !isHealthy;
   }
 
   /**
