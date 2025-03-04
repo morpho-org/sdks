@@ -130,6 +130,14 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   }
 
   /**
+   * Whether this position is healthy.
+   * `undefined` iff the market's oracle is undefined or reverts.
+   */
+  get isLiquidatable() {
+    return !this.market.isHealthy(this);
+  }
+
+  /**
    * The price of the collateral quoted in loan assets that would allow this position to be liquidated.
    */
   get liquidationPrice() {

@@ -8,18 +8,30 @@ import {
   type MaxWithdrawCollateralOptions,
 } from "../market";
 import { MathLib, SharesMath } from "../math";
-import { AccrualPosition, type IAccrualPosition } from "./Position";
+import {
+  AccrualPosition,
+  type IAccrualPosition,
+  type IPosition,
+} from "./Position";
 
-export type PreLiquidationParams = {
+export interface PreLiquidationParams {
   preLltv: bigint;
   preLCF1: bigint;
   preLCF2: bigint;
   preLIF1: bigint;
   preLIF2: bigint;
   preLiquidationOracle: Address;
-};
+}
 
-export class PreLiquidatablePosition extends AccrualPosition {
+export interface IPreLiquidatablePosition extends IPosition {
+  preLiquidationParams: PreLiquidationParams;
+  preLiquidation: Address;
+}
+
+export class PreLiquidatablePosition
+  extends AccrualPosition
+  implements IPreLiquidatablePosition
+{
   /**
    * The pre-liquidation parameters.
    */
@@ -43,23 +55,15 @@ export class PreLiquidatablePosition extends AccrualPosition {
   }
 
   /**
-   * Whether this position is healthy.
-   * `undefined` iff the market's oracle is undefined or reverts.
-   */
-  get isLiquidatable() {
-    return this.market.isHealthy(this);
-  }
-
-  /**
    * Whether this position is preLiquidatable.
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isPreLiquidatable() {
-    if (this.ltv === undefined || this.ltv === null) return undefined;
+    const { ltv } = this;
+    if (ltv == null) return undefined;
 
     return (
-      this.ltv > this.preLiquidationParams.preLltv &&
-      this.ltv < this.market.params.lltv
+      ltv > this.preLiquidationParams.preLltv && ltv <= this.market.params.lltv
     );
   }
 
@@ -68,6 +72,12 @@ export class PreLiquidatablePosition extends AccrualPosition {
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isHealthy() {
+    if (
+      this.isPreLiquidatable === undefined ||
+      this.isLiquidatable === undefined
+    )
+      return undefined;
+
     return !this.isPreLiquidatable && !this.isLiquidatable;
   }
 
