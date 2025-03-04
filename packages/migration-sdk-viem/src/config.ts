@@ -2,6 +2,7 @@ import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import type { Abi } from "viem";
 import {
+  addressesProviderAbi_v2,
   lendingPoolAbi,
   protocolDataProviderAbi as protocolDataProviderAbi_v2,
 } from "./abis/aaveV2.js";
@@ -45,6 +46,7 @@ export interface ProtocolMigrationContracts {
   [MigratableProtocol.aaveV2]: {
     protocolDataProvider: Contract<typeof protocolDataProviderAbi_v2>;
     lendingPool: Contract<typeof lendingPoolAbi>;
+    addressesProvider: Contract<typeof addressesProviderAbi_v2>;
   } | null;
   [MigratableProtocol.aaveV3]: {
     pool: Contract<typeof poolAbi>;
@@ -82,6 +84,10 @@ export const migrationAddressesRegistry = {
       lendingPool: {
         address: "0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9",
         abi: lendingPoolAbi,
+      },
+      addressesProvider: {
+        address: "0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5",
+        abi: addressesProviderAbi_v2,
       },
     },
     [MigratableProtocol.aaveV3]: {
