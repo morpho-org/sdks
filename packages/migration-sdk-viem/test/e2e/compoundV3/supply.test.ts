@@ -178,7 +178,10 @@ describe("Supply position on COMPOUND V3", () => {
               expect(compoundV3Positions).toBeDefined();
               expect(compoundV3Positions).toHaveLength(1);
 
-              const migrationBundle = compoundV3Positions[0]!.getMigrationTx(
+              const position =
+                compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+
+              const migrationBundle = position.getMigrationTx(
                 {
                   vault,
                   amount: migratedAmount,
@@ -262,7 +265,9 @@ describe("Supply position on COMPOUND V3", () => {
             expect(compoundV3Positions).toBeDefined();
             expect(compoundV3Positions).toHaveLength(1);
 
-            const position = compoundV3Positions[0]!;
+            const position =
+              compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+
             const migrationBundle = position.getMigrationTx(
               {
                 vault,
@@ -347,7 +352,10 @@ describe("Supply position on COMPOUND V3", () => {
               expect(compoundV3Positions).toBeDefined();
               expect(compoundV3Positions).toHaveLength(1);
 
-              const migrationBundle = compoundV3Positions[0]!.getMigrationTx(
+              const position =
+                compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+
+              const migrationBundle = position.getMigrationTx(
                 {
                   vault,
                   amount: migratedAmount,
@@ -425,7 +433,9 @@ describe("Supply position on COMPOUND V3", () => {
               expect(compoundV3Positions).toBeDefined();
               expect(compoundV3Positions).toHaveLength(1);
 
-              const position = compoundV3Positions[0]!;
+              const position =
+                compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+
               const migrationBundle = position.getMigrationTx(
                 {
                   vault,

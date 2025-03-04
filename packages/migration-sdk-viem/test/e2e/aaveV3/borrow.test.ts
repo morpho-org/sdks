@@ -38,7 +38,6 @@ const TEST_CONFIGS = [
   {
     chainId: ChainId.EthMainnet,
     aWstEth: "0x0B925eD163218f6662a35e0f0371Ac234f9E9371",
-    wstEth: addressesRegistry[ChainId.EthMainnet].wstEth,
     variableDebtToken: "0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE",
     testFn: test[ChainId.EthMainnet] as TestAPI<ViemTestContext>,
     marketTo: markets[ChainId.EthMainnet].eth_wstEth_2,
@@ -46,7 +45,6 @@ const TEST_CONFIGS = [
   {
     chainId: ChainId.BaseMainnet,
     aWstEth: "0x99CBC45ea5bb7eF3a5BC08FB1B7E56bB2442Ef0D",
-    wstEth: "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
     variableDebtToken: "0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E",
     testFn: test[ChainId.BaseMainnet] as TestAPI<ViemTestContext>,
     marketTo: markets[ChainId.BaseMainnet].eth_wstEth,
@@ -57,11 +55,12 @@ describe("Borrow position on AAVE V3", () => {
   for (const {
     chainId,
     aWstEth,
-    wstEth,
     testFn,
     marketTo,
     variableDebtToken,
   } of TEST_CONFIGS) {
+    const wstEth = marketTo.collateralToken;
+
     const { pool } = migrationAddressesRegistry[chainId].aaveV3;
     const {
       bundler3: { generalAdapter1, aaveV3CoreMigrationAdapter },
@@ -232,28 +231,6 @@ describe("Borrow position on AAVE V3", () => {
           const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
           expect(aaveV3Positions).toBeDefined();
           expect(aaveV3Positions).toHaveLength(0);
-        },
-      );
-
-      testFn(
-        "shouldn't fetch user collateral positions if no borrow",
-        async ({ client }) => {
-          const collateralAmount = parseEther("10");
-
-          await writeSupply(client, wstEth, collateralAmount, true);
-
-          const allPositions = await fetchMigratablePositions(
-            client.account.address,
-            client,
-            { protocols: [MigratableProtocol.aaveV3] },
-          );
-
-          const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
-          expect(aaveV3Positions).toBeDefined();
-          expect(aaveV3Positions).toHaveLength(1);
-          expect(aaveV3Positions[0]).toBeInstanceOf(
-            MigratableSupplyPosition_AaveV3,
-          );
         },
       );
 

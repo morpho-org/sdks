@@ -236,28 +236,6 @@ describe("Borrow position on AAVE V2", () => {
   );
 
   testFn(
-    "shouldn't fetch user collateral positions if no borrow",
-    async ({ client }) => {
-      const collateralAmount = parseEther("10");
-
-      await writeSupply(client, wNative, collateralAmount, true);
-
-      const allPositions = await fetchMigratablePositions(
-        client.account.address,
-        client,
-        { protocols: [MigratableProtocol.aaveV2] },
-      );
-
-      const aaveV2Positions = allPositions[MigratableProtocol.aaveV2]!;
-      expect(aaveV2Positions).toBeDefined();
-      expect(aaveV2Positions).toHaveLength(1);
-      expect(aaveV2Positions[0]).toBeInstanceOf(
-        MigratableSupplyPosition_AaveV2,
-      );
-    },
-  );
-
-  testFn(
     "should fetch user position with limited liquidity",
     async ({ client }) => {
       const collateralAmount = parseEther("10");

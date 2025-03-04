@@ -218,7 +218,10 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).toBeDefined();
       expect(aaveV3Positions).toHaveLength(1);
 
-      const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+      const position =
+        aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
+
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: migratedAmount,
@@ -310,7 +313,8 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).toBeDefined();
       expect(aaveV3Positions).toHaveLength(1);
 
-      const position = aaveV3Positions[0]!;
+      const position =
+        aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
       const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
@@ -404,7 +408,10 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).toBeDefined();
       expect(aaveV3Positions).toHaveLength(1);
 
-      const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+      const position =
+        aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
+
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: migratedAmount,
@@ -482,7 +489,8 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).toBeDefined();
       expect(aaveV3Positions).toHaveLength(1);
 
-      const position = aaveV3Positions[0]!;
+      const position =
+        aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
 
       const migrationBundle = position.getMigrationTx(
         {
