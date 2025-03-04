@@ -69,9 +69,6 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
   inputOperations: InputBundlerOperation[],
   {
     account: account_ = client.account,
-    supportsSignature,
-    unwrapTokens,
-    unwrapSlippage,
     onBundleTx,
     ...options
   }: BundlingOptions & {

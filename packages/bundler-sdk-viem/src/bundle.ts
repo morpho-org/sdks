@@ -16,13 +16,11 @@ export const setupBundle = (
     supportsSignature,
     unwrapTokens,
     unwrapSlippage,
-    onBundleTx,
     ...options
   }: BundlingOptions & {
     supportsSignature?: boolean;
     unwrapTokens?: Set<Address>;
     unwrapSlippage?: bigint;
-    onBundleTx?: (data: SimulationState) => Promise<void> | void;
   } = {},
 ) => {
   let { operations } = populateBundle(inputOperations, startData, options);
