@@ -59,7 +59,7 @@ const reenterSelectorHash = keccak256(
 );
 
 /**
- * Namespace to easily encode calls to the Bundler contract, using ethers.
+ * Namespace to easily encode calls to the Bundler contract, using viem.
  */
 export namespace BundlerAction {
   export function encodeBundle(chainId: ChainId, actions: Action[]) {
@@ -2099,5 +2099,3 @@ export namespace BundlerAction {
     ];
   }
 }
-
-export default BundlerAction;

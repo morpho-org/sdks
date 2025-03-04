@@ -5,20 +5,14 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
+import { encodeFunctionData, maxUint256 } from "viem";
+import { MigrationBundle } from "../../MigrationBundle.js";
+import { cErc20Abi } from "../../abis/compoundV2.js";
 import { migrationAddresses } from "../../config.js";
-import type {
-  MigrationBundle,
-  MigrationTransactionRequirement,
-} from "../../types/actions.js";
 import {
   MigratableProtocol,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
-
-import type { Action } from "@morpho-org/bundler-sdk-viem";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { encodeFunctionData, maxUint256 } from "viem";
-import { cErc20Abi } from "../../abis/compoundV2.js";
 import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
@@ -50,9 +44,8 @@ export class MigratableSupplyPosition_CompoundV2
   getMigrationTx(
     { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
-  ): MigrationBundle {
-    const txRequirements: MigrationTransactionRequirement[] = [];
-    const actions: Action[] = [];
+  ) {
+    const bundle = new MigrationBundle(chainId);
 
     const user = this.user;
     const cToken = this.cToken;
@@ -72,7 +65,7 @@ export class MigratableSupplyPosition_CompoundV2
       : this.cToken.toUnwrappedExactAmountOut(amount);
 
     // TODO use allowance + test
-    txRequirements.push({
+    bundle.requirements.txs.push({
       type: "erc20Approve",
       args: [cToken.address, generalAdapter1, transferredAmount],
       tx: {
@@ -85,14 +78,14 @@ export class MigratableSupplyPosition_CompoundV2
       },
     });
 
-    actions.push({
+    bundle.actions.push({
       type: "erc20TransferFrom",
       args: [cToken.address, transferredAmount, compoundV2MigrationAdapter],
     });
 
     const isEth = this.cToken.underlying === NATIVE_ADDRESS;
 
-    actions.push({
+    bundle.actions.push({
       type: "compoundV2Redeem",
       args: [cToken.address, maxUint256, isEth, generalAdapter1],
     });
@@ -103,23 +96,16 @@ export class MigratableSupplyPosition_CompoundV2
         migrationAddresses[this.chainId]?.[MigratableProtocol.compoundV2]?.mWeth
           ?.address // Moonwell mWeth automatically unwraps weth on redeem
     )
-      actions.push({
+      bundle.actions.push({
         type: "wrapNative",
         args: [maxUint256],
       });
 
-    actions.push({
+    bundle.actions.push({
       type: "erc4626Deposit",
       args: [vault, maxUint256, maxSharePrice, user],
     });
 
-    return {
-      actions,
-      requirements: {
-        signatures: [],
-        txs: txRequirements,
-      },
-      tx: () => BundlerAction.encodeBundle(chainId, actions),
-    };
+    return bundle;
   }
 }

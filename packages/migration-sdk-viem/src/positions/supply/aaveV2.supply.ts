@@ -5,22 +5,13 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { Time } from "@morpho-org/morpho-ts";
-
-import type {
-  MigrationBundle,
-  MigrationTransactionRequirement,
-} from "../../types/actions.js";
 import {
   MigratableProtocol,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
-import type {
-  Action,
-  SignatureRequirement,
-} from "@morpho-org/bundler-sdk-viem";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
+import type { Action } from "@morpho-org/bundler-sdk-viem";
 import {
   type Account,
   type Client,
@@ -29,6 +20,7 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
+import { MigrationBundle } from "../../MigrationBundle.js";
 import { aTokenV2Abi } from "../../abis/aaveV2.js";
 import {
   type IMigratableSupplyPosition,
@@ -62,10 +54,8 @@ export class MigratableSupplyPosition_AaveV2
     { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
-  ): MigrationBundle {
-    const signRequirements: SignatureRequirement[] = [];
-    const txRequirements: MigrationTransactionRequirement[] = [];
-    const actions: Action[] = [];
+  ) {
+    const bundle = new MigrationBundle(chainId);
 
     const user = this.user;
     const aToken = this.aToken;
@@ -95,9 +85,9 @@ export class MigratableSupplyPosition_AaveV2
         args: [user, aToken.address, migratedAmount, deadline, null],
       };
 
-      actions.push(permitAction);
+      bundle.actions.push(permitAction);
 
-      signRequirements.push({
+      bundle.requirements.signatures.push({
         action: permitAction,
         async sign(client: Client, account: Account = client.account!) {
           let signature = permitAction.args[4];
@@ -129,7 +119,7 @@ export class MigratableSupplyPosition_AaveV2
         },
       });
     } else {
-      txRequirements.push({
+      bundle.requirements.txs.push({
         type: "erc20Approve",
         args: [aToken.address, generalAdapter1, migratedAmount],
         tx: {
@@ -143,12 +133,12 @@ export class MigratableSupplyPosition_AaveV2
       });
     }
 
-    actions.push({
+    bundle.actions.push({
       type: "erc20TransferFrom",
       args: [aToken.address, migratedAmount, aaveV2MigrationAdapter],
     });
 
-    actions.push(
+    bundle.actions.push(
       {
         type: "aaveV2Withdraw",
         args: [this.loanToken, maxUint256, generalAdapter1],
@@ -159,13 +149,6 @@ export class MigratableSupplyPosition_AaveV2
       },
     );
 
-    return {
-      actions,
-      requirements: {
-        signatures: signRequirements,
-        txs: txRequirements,
-      },
-      tx: () => BundlerAction.encodeBundle(chainId, actions),
-    };
+    return bundle;
   }
 }

@@ -22,7 +22,6 @@ import { Time, getValue } from "@morpho-org/morpho-ts";
 import {
   type MaybeDraft,
   type Operation,
-  type SimulationResult,
   type SimulationState,
   simulateOperation,
 } from "@morpho-org/simulation-sdk";
@@ -35,10 +34,9 @@ import {
   getPermitTypedData,
 } from "@morpho-org/blue-sdk-viem";
 import { signTypedData } from "viem/actions";
-import BundlerAction from "./BundlerAction.js";
+import { ActionBundle, ActionBundleRequirements } from "./ActionBundle.js";
 import type {
   Action,
-  ActionBundle,
   BundlerOperation,
   TransactionRequirement,
 } from "./types/index.js";
@@ -146,10 +144,7 @@ export const encodeOperation = (
   } = getChainAddresses(chainId);
 
   const actions: Action[] = [];
-  const requirements: ActionBundle["requirements"] = {
-    signatures: [],
-    txs: [],
-  };
+  const requirements = new ActionBundleRequirements();
 
   let callbackBundle: ActionBundle | undefined;
 
@@ -779,36 +774,23 @@ export function encodeBundle(
   operations: BundlerOperation[],
   startData: MaybeDraft<SimulationState>,
   supportsSignature = true,
-): ActionBundle {
-  const { chainId } = startData;
-
-  const actions: Action[] = [];
-  const requirements: ActionBundle["requirements"] = {
-    signatures: [],
-    txs: [],
-  };
-
-  const steps: SimulationResult = [startData];
+) {
+  const bundle = new ActionBundle([startData]);
 
   for (let index = 0; index < operations.length; ++index) {
-    const bundle = encodeOperation(
+    const { dataAfter, actions, requirements } = encodeOperation(
       operations[index]!,
-      steps[index]!,
+      bundle.steps[index]!,
       supportsSignature,
       index,
     );
 
-    steps.push(bundle.dataAfter);
+    bundle.steps.push(dataAfter);
 
-    actions.push(...bundle.actions);
-    requirements.signatures.push(...bundle.requirements.signatures);
-    requirements.txs.push(...bundle.requirements.txs);
+    bundle.actions.push(...actions);
+    bundle.requirements.signatures.push(...requirements.signatures);
+    bundle.requirements.txs.push(...requirements.txs);
   }
 
-  return {
-    steps,
-    actions,
-    requirements,
-    tx: () => BundlerAction.encodeBundle(chainId, actions),
-  };
+  return bundle;
 }
