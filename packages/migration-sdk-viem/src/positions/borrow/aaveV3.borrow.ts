@@ -272,6 +272,23 @@ export class MigratableBorrowPosition_AaveV3
           ]
         : [];
 
+    if (migrateMaxBorrow && slippageFrom > 0n)
+      borrowActions.push(
+        {
+          type: "erc20Transfer",
+          args: [
+            marketTo.loanToken,
+            generalAdapter1,
+            maxUint256,
+            aaveV3CoreMigrationAdapter,
+          ],
+        },
+        {
+          type: "morphoRepay",
+          args: [marketTo, maxUint256, 0n, maxUint256, user, []],
+        },
+      );
+
     if (migratedCollateral > 0n) {
       const callbackActions = borrowActions.concat(
         {

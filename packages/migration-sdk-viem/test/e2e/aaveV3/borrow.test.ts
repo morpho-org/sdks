@@ -5,7 +5,12 @@ import {
   fetchMigratablePositions,
 } from "../../../src/index.js";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  DEFAULT_SLIPPAGE_TOLERANCE,
+  MathLib,
+  addresses,
+} from "@morpho-org/blue-sdk";
 
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";
@@ -286,180 +291,358 @@ describe("Borrow position on AAVE V3", () => {
         },
       );
 
-      testFn.only(
-        "should partially migrate user position",
-        async ({ client }) => {
-          const collateralAmount = parseEther("10");
-          const borrowAmount = parseEther("3");
+      testFn("should partially migrate user position", async ({ client }) => {
+        const collateralAmount = parseEther("10");
+        const borrowAmount = parseEther("3");
 
-          const migratedBorrow = borrowAmount / 2n;
-          const migratedCollateral = collateralAmount / 2n;
+        const migratedBorrow = borrowAmount / 2n;
+        const migratedCollateral = collateralAmount / 2n;
 
-          await writeSupply(client, wstEth, collateralAmount, true);
-          await writeBorrow(client, wNative, borrowAmount);
+        await writeSupply(client, wstEth, collateralAmount, true);
+        await writeBorrow(client, wNative, borrowAmount);
 
-          const allPositions = await fetchMigratablePositions(
-            client.account.address,
-            client,
-            { protocols: [MigratableProtocol.aaveV3] },
-          );
+        const allPositions = await fetchMigratablePositions(
+          client.account.address,
+          client,
+          { protocols: [MigratableProtocol.aaveV3] },
+        );
 
-          const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
-          expect(aaveV3Positions).toBeDefined();
-          expect(aaveV3Positions).toHaveLength(1);
+        const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
+        expect(aaveV3Positions).toBeDefined();
+        expect(aaveV3Positions).toHaveLength(1);
 
-          const position =
-            aaveV3Positions[0]! as MigratableBorrowPosition_AaveV3;
-          expect(position).toBeInstanceOf(MigratableBorrowPosition_AaveV3);
+        const position = aaveV3Positions[0]! as MigratableBorrowPosition_AaveV3;
+        expect(position).toBeInstanceOf(MigratableBorrowPosition_AaveV3);
 
-          // initial share price is 10^-6 because of virtual shares
-          const minSharePrice = parseUnits("1", 21);
+        // initial share price is 10^-6 because of virtual shares
+        const minSharePrice = parseUnits("1", 21);
 
-          const migrationBundle = position.getMigrationTx(
-            {
+        const migrationBundle = position.getMigrationTx(
+          {
+            marketTo,
+            borrowAmount: migratedBorrow,
+            collateralAmount: migratedCollateral,
+            minSharePrice,
+          },
+          true,
+        );
+
+        expect(migrationBundle.requirements.txs).toHaveLength(0);
+        expect(migrationBundle.requirements.signatures).toHaveLength(2);
+        expect(migrationBundle.actions).toEqual([
+          {
+            args: [
+              {
+                authorizer: client.account.address,
+                authorized: generalAdapter1,
+                isAuthorized: true,
+                deadline: expect.any(BigInt),
+                nonce: 0n,
+              },
+              null,
+            ],
+            type: "morphoSetAuthorizationWithSig",
+          },
+          {
+            args: [
+              client.account.address,
+              aWstEth,
+              migratedCollateral,
+              expect.any(BigInt),
+              null,
+            ],
+            type: "permit",
+          },
+          {
+            args: [
               marketTo,
-              borrowAmount: migratedBorrow,
-              collateralAmount: migratedCollateral,
-              minSharePrice,
-            },
-            true,
-          );
-
-          expect(migrationBundle.requirements.txs).toHaveLength(0);
-          expect(migrationBundle.requirements.signatures).toHaveLength(2);
-          expect(migrationBundle.actions).toEqual([
-            {
-              args: [
+              migratedCollateral,
+              client.account.address,
+              [
                 {
-                  authorizer: client.account.address,
-                  authorized: generalAdapter1,
-                  isAuthorized: true,
-                  deadline: expect.any(BigInt),
-                  nonce: 0n,
+                  type: "morphoBorrow",
+                  args: [
+                    marketTo,
+                    migratedBorrow,
+                    0n,
+                    minSharePrice,
+                    aaveV3CoreMigrationAdapter,
+                  ],
                 },
-                null,
+                {
+                  type: "aaveV3Repay",
+                  args: [wNative, maxUint256, client.account.address, 2n],
+                },
+                {
+                  type: "erc20TransferFrom",
+                  args: [
+                    aWstEth,
+                    migratedCollateral,
+                    aaveV3CoreMigrationAdapter,
+                  ],
+                },
+                {
+                  type: "aaveV3Withdraw",
+                  args: [wstEth, migratedCollateral, generalAdapter1],
+                },
               ],
-              type: "morphoSetAuthorizationWithSig",
-            },
-            {
-              args: [
-                client.account.address,
-                aWstEth,
-                migratedCollateral,
-                expect.any(BigInt),
-                null,
-              ],
-              type: "permit",
-            },
-            {
-              args: [
-                marketTo,
-                migratedCollateral,
-                client.account.address,
-                [
-                  {
-                    type: "morphoBorrow",
-                    args: [
-                      marketTo,
-                      migratedBorrow,
-                      0n,
-                      minSharePrice,
-                      aaveV3CoreMigrationAdapter,
-                    ],
-                  },
-                  {
-                    type: "aaveV3Repay",
-                    args: [wNative, maxUint256, client.account.address, 2n],
-                  },
-                  {
-                    type: "erc20TransferFrom",
-                    args: [
-                      aWstEth,
-                      migratedCollateral,
-                      aaveV3CoreMigrationAdapter,
-                    ],
-                  },
-                  {
-                    type: "aaveV3Withdraw",
-                    args: [wstEth, migratedCollateral, generalAdapter1],
-                  },
-                ],
-              ],
-              type: "morphoSupplyCollateral",
-            },
-            {
-              type: "erc20Transfer",
-              args: [aWstEth, client.account.address, maxUint256],
-            },
-          ]);
+            ],
+            type: "morphoSupplyCollateral",
+          },
+          {
+            type: "erc20Transfer",
+            args: [aWstEth, client.account.address, maxUint256],
+          },
+        ]);
 
-          await migrationBundle.requirements.signatures[0]!.sign(client);
-          await migrationBundle.requirements.signatures[1]!.sign(client);
+        await migrationBundle.requirements.signatures[0]!.sign(client);
+        await migrationBundle.requirements.signatures[1]!.sign(client);
 
-          await sendTransaction(client, migrationBundle.tx());
+        await sendTransaction(client, migrationBundle.tx());
 
-          const transferredAssets = [wNative, wstEth, aWstEth];
-          const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
+        const transferredAssets = [wNative, wstEth, aWstEth];
+        const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
 
-          const [
-            finalPositionTo,
-            finalCollateralFrom,
-            finalDebtFrom,
-            adaptersBalances,
-          ] = await Promise.all([
-            fetchAccrualPosition(client.account.address, marketTo.id, client),
-            readContract(client, {
-              abi: aTokenV3Abi,
-              address: aWstEth,
-              functionName: "balanceOf",
-              args: [client.account.address],
-            }),
-            readContract(client, {
-              abi: variableDebtTokenV3Abi,
-              address: variableDebtToken,
-              functionName: "balanceOf",
-              args: [client.account.address],
-            }),
-            Promise.all(
-              transferredAssets.flatMap((asset) =>
-                adapters.map(async (adapter) => ({
-                  balance: await readContract(client, {
-                    abi: erc20Abi,
-                    address: asset,
-                    functionName: "balanceOf",
-                    args: [adapter],
-                  }),
-                  asset,
-                  adapter,
-                })),
-              ),
+        const [
+          finalPositionTo,
+          finalCollateralFrom,
+          finalDebtFrom,
+          adaptersBalances,
+        ] = await Promise.all([
+          fetchAccrualPosition(client.account.address, marketTo.id, client),
+          readContract(client, {
+            abi: aTokenV3Abi,
+            address: aWstEth,
+            functionName: "balanceOf",
+            args: [client.account.address],
+          }),
+          readContract(client, {
+            abi: variableDebtTokenV3Abi,
+            address: variableDebtToken,
+            functionName: "balanceOf",
+            args: [client.account.address],
+          }),
+          Promise.all(
+            transferredAssets.flatMap((asset) =>
+              adapters.map(async (adapter) => ({
+                balance: await readContract(client, {
+                  abi: erc20Abi,
+                  address: asset,
+                  functionName: "balanceOf",
+                  args: [adapter],
+                }),
+                asset,
+                adapter,
+              })),
             ),
-          ]);
+          ),
+        ]);
 
-          expect(finalPositionTo.collateral).toEqual(migratedCollateral);
-          expect(finalPositionTo.borrowAssets).approximately(
-            migratedBorrow,
-            2n,
+        expect(finalPositionTo.collateral).toEqual(migratedCollateral);
+        expect(finalPositionTo.borrowAssets).approximately(migratedBorrow, 2n);
+
+        expect(finalCollateralFrom).toBeGreaterThan(
+          collateralAmount - migratedCollateral,
+        );
+        expect(finalCollateralFrom).toBeLessThan(
+          collateralAmount - migratedCollateral + 10n ** 12n,
+        ); // interest accrued (empirical)
+
+        expect(finalDebtFrom).toBeGreaterThan(borrowAmount - migratedBorrow);
+        expect(finalDebtFrom).toBeLessThan(
+          borrowAmount - migratedBorrow + 10n ** 12n,
+        ); // interest accrued (empirical)
+
+        for (const { balance, asset, adapter } of adaptersBalances) {
+          expect(balance).to.equal(
+            0n,
+            `Adapter ${adapter} shouldn't hold ${asset}.`,
           );
+        }
+      });
 
-          expect(finalCollateralFrom).approximately(
-            collateralAmount - migratedCollateral,
-            10n ** 12n,
-          ); // interest accrued (empirical)
+      testFn.only("should fully migrate user position", async ({ client }) => {
+        const collateralAmount = parseEther("10");
+        const borrowAmount = parseEther("3");
 
-          expect(finalDebtFrom).approximately(
-            borrowAmount - migratedBorrow,
-            10n ** 12n,
-          ); // interest accrued (empirical)
+        await writeSupply(client, wstEth, collateralAmount, true);
+        await writeBorrow(client, wNative, borrowAmount);
 
-          for (const { balance, asset, adapter } of adaptersBalances) {
-            expect(balance).to.equal(
-              0n,
-              `Adapter ${adapter} shouldn't hold ${asset}.`,
-            );
-          }
-        },
-      );
+        const allPositions = await fetchMigratablePositions(
+          client.account.address,
+          client,
+          { protocols: [MigratableProtocol.aaveV3] },
+        );
+
+        const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
+        expect(aaveV3Positions).toBeDefined();
+        expect(aaveV3Positions).toHaveLength(1);
+
+        const position = aaveV3Positions[0]! as MigratableBorrowPosition_AaveV3;
+        expect(position).toBeInstanceOf(MigratableBorrowPosition_AaveV3);
+
+        // initial share price is 10^-6 because of virtual shares
+        const minSharePrice = parseUnits("1", 21);
+
+        const migrationBundle = position.getMigrationTx(
+          {
+            marketTo,
+            borrowAmount: position.borrow,
+            collateralAmount: position.collateral,
+            minSharePrice,
+          },
+          true,
+        );
+
+        expect(migrationBundle.requirements.txs).toHaveLength(0);
+        expect(migrationBundle.requirements.signatures).toHaveLength(2);
+        expect(migrationBundle.actions).toEqual([
+          {
+            args: [
+              {
+                authorizer: client.account.address,
+                authorized: generalAdapter1,
+                isAuthorized: true,
+                deadline: expect.any(BigInt),
+                nonce: 0n,
+              },
+              null,
+            ],
+            type: "morphoSetAuthorizationWithSig",
+          },
+          {
+            args: [
+              client.account.address,
+              aWstEth,
+              maxUint256,
+              expect.any(BigInt),
+              null,
+            ],
+            type: "permit",
+          },
+          {
+            args: [
+              marketTo,
+              position.collateral,
+              client.account.address,
+              [
+                {
+                  type: "morphoBorrow",
+                  args: [
+                    marketTo,
+                    MathLib.wMulUp(
+                      borrowAmount,
+                      MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+                    ),
+                    0n,
+                    minSharePrice,
+                    aaveV3CoreMigrationAdapter,
+                  ],
+                },
+                {
+                  type: "aaveV3Repay",
+                  args: [wNative, maxUint256, client.account.address, 2n],
+                },
+                {
+                  type: "erc20Transfer",
+                  args: [
+                    marketTo.loanToken,
+                    generalAdapter1,
+                    maxUint256,
+                    aaveV3CoreMigrationAdapter,
+                  ],
+                },
+                {
+                  type: "morphoRepay",
+                  args: [
+                    marketTo,
+                    maxUint256,
+                    0n,
+                    maxUint256,
+                    client.account.address,
+                    [],
+                  ],
+                },
+                {
+                  type: "erc20TransferFrom",
+                  args: [aWstEth, maxUint256, aaveV3CoreMigrationAdapter],
+                },
+                {
+                  type: "aaveV3Withdraw",
+                  args: [wstEth, maxUint256, generalAdapter1],
+                },
+              ],
+            ],
+            type: "morphoSupplyCollateral",
+          },
+          {
+            type: "erc20Transfer",
+            args: [wstEth, client.account.address, maxUint256],
+          },
+        ]);
+
+        await migrationBundle.requirements.signatures[0]!.sign(client);
+        await migrationBundle.requirements.signatures[1]!.sign(client);
+
+        await sendTransaction(client, migrationBundle.tx());
+
+        const transferredAssets = [wNative, wstEth, aWstEth];
+        const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
+
+        const [
+          finalPositionTo,
+          finalCollateralFrom,
+          finalDebtFrom,
+          adaptersBalances,
+        ] = await Promise.all([
+          fetchAccrualPosition(client.account.address, marketTo.id, client),
+          readContract(client, {
+            abi: aTokenV3Abi,
+            address: aWstEth,
+            functionName: "balanceOf",
+            args: [client.account.address],
+          }),
+          readContract(client, {
+            abi: variableDebtTokenV3Abi,
+            address: variableDebtToken,
+            functionName: "balanceOf",
+            args: [client.account.address],
+          }),
+          Promise.all(
+            transferredAssets.flatMap((asset) =>
+              adapters.map(async (adapter) => ({
+                balance: await readContract(client, {
+                  abi: erc20Abi,
+                  address: asset,
+                  functionName: "balanceOf",
+                  args: [adapter],
+                }),
+                asset,
+                adapter,
+              })),
+            ),
+          ),
+        ]);
+
+        expect(finalPositionTo.collateral).toBeGreaterThan(collateralAmount);
+        expect(finalPositionTo.collateral).toBeLessThanOrEqual(
+          collateralAmount + 10n ** 12n,
+        ); // interest accrued (empirical)
+        expect(finalPositionTo.borrowAssets).toBeGreaterThan(borrowAmount);
+        expect(finalPositionTo.borrowAssets).toBeLessThanOrEqual(
+          borrowAmount + 10n ** 12n,
+        ); // interest accrued (empirical)
+
+        expect(finalCollateralFrom).toBe(0n);
+        expect(finalDebtFrom).toBe(0n);
+
+        for (const { balance, asset, adapter } of adaptersBalances) {
+          expect(balance).to.equal(
+            0n,
+            `Adapter ${adapter} shouldn't hold ${asset}.`,
+          );
+        }
+      });
     });
   }
 });
