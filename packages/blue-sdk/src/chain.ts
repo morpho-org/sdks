@@ -119,7 +119,7 @@ export namespace ChainUtils {
       name: "Sonic",
       id: ChainId.SonicMainnet,
       nativeCurrency: { name: "Sonic", symbol: "S", decimals: 18 },
-      explorerUrl: "https://explorer.soniclabs.com",
+      explorerUrl: "https://sonicscan.org",
       identifier: "sonic",
     },
     [ChainId.HemiMainnet]: {

@@ -148,6 +148,10 @@ export const preLiquidationFactoryConfigs: Record<
     address: "0x347947AC7D45Bba44a0a19F2C6513aA326DFdCd6",
     startBlock: 9381237n,
   },
+  [ChainId.SonicMainnet]: {
+    address: "0xc72129DA4CC808e955699111b8c22B22Ca8A10b8",
+    startBlock: 9102286n,
+  },
   [ChainId.HemiMainnet]: {
     address: "0x40F2896C551194e364F7C846046C34d8a9FE97e4",
     startBlock: 1188907n,
