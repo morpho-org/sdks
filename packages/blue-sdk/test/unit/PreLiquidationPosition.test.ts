@@ -6,7 +6,7 @@ import {
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
-  PreLiquidatablePosition,
+  PreLiquidationPosition,
   addresses,
 } from "../../src/index.js";
 
@@ -56,92 +56,90 @@ const position = {
   collateral: 200000000000n,
 };
 
-describe("PreLiquidatablePosition", () => {
+describe("preLiquidationPosition", () => {
   test("should be undefined if the price is undefined", () => {
-    const preLiquidatablePosition = new PreLiquidatablePosition(
+    const preLiquidationPosition = new PreLiquidationPosition(
       position,
       new Market({ ...market, price: undefined }),
     );
 
-    expect(preLiquidatablePosition.isPreLiquidatable).toBe(undefined);
-    expect(preLiquidatablePosition.isLiquidatable).toBe(undefined);
-    expect(preLiquidatablePosition.ltv).toBe(undefined);
-    expect(preLiquidatablePosition.isHealthy).toBe(undefined);
-    expect(preLiquidatablePosition.priceVariationToLiquidationPrice).toBe(
+    expect(preLiquidationPosition.isPreLiquidatable).toBe(undefined);
+    expect(preLiquidationPosition.isLiquidatable).toBe(undefined);
+    expect(preLiquidationPosition.ltv).toBe(undefined);
+    expect(preLiquidationPosition.isHealthy).toBe(undefined);
+    expect(preLiquidationPosition.priceVariationToLiquidationPrice).toBe(
       undefined,
     );
-    expect(preLiquidatablePosition.maxBorrowAssets).toBe(undefined);
-    expect(preLiquidatablePosition.withdrawableCollateral).toBe(undefined);
-    expect(preLiquidatablePosition.preSeizableCollateral).toBe(undefined);
-    expect(preLiquidatablePosition.preHealthFactor).toBe(undefined);
-    expect(preLiquidatablePosition.borrowCapacityUsage).toBe(undefined);
+    expect(preLiquidationPosition.maxBorrowAssets).toBe(undefined);
+    expect(preLiquidationPosition.withdrawableCollateral).toBe(undefined);
+    expect(preLiquidationPosition.preSeizableCollateral).toBe(undefined);
+    expect(preLiquidationPosition.preHealthFactor).toBe(undefined);
+    expect(preLiquidationPosition.borrowCapacityUsage).toBe(undefined);
   });
 
   test("should not be preLiquidatable because pre liquidation is not authorized", () => {
-    const preLiquidatablePosition = new PreLiquidatablePosition(
+    const preLiquidationPosition = new PreLiquidationPosition(
       { ...position, isPreLiquidationAuthorized: false },
       new Market(market),
     );
 
-    expect(preLiquidatablePosition.isPreLiquidatable).toBe(false);
-    expect(preLiquidatablePosition.isHealthy).toBe(true);
+    expect(preLiquidationPosition.isPreLiquidatable).toBe(false);
+    expect(preLiquidationPosition.isHealthy).toBe(true);
   });
 
   test("should not be preLiquidatable because the position has no borrow", () => {
-    const preLiquidatablePosition = new PreLiquidatablePosition(
+    const preLiquidationPosition = new PreLiquidationPosition(
       { ...position, borrowShares: 0n },
       new Market(market),
     );
 
-    expect(preLiquidatablePosition.isPreLiquidatable).toBe(false);
-    expect(preLiquidatablePosition.isHealthy).toBe(true);
-    expect(preLiquidatablePosition.preHealthFactor).toEqual(
+    expect(preLiquidationPosition.isPreLiquidatable).toBe(false);
+    expect(preLiquidationPosition.isHealthy).toBe(true);
+    expect(preLiquidationPosition.preHealthFactor).toEqual(
       MathLib.MAX_UINT_256,
     );
-    expect(preLiquidatablePosition.preLiquidationPrice).toBe(null);
+    expect(preLiquidationPosition.preLiquidationPrice).toBe(null);
   });
 
   test("should not be preLiquidatable because the position is liquidatable", () => {
-    const preLiquidatablePosition = new PreLiquidatablePosition(
+    const preLiquidationPosition = new PreLiquidationPosition(
       { ...position, collateral: 100000000000n },
       new Market(market),
     );
 
-    expect(preLiquidatablePosition.isLiquidatable).toBe(true);
-    expect(preLiquidatablePosition.isHealthy).toBe(false);
-    expect(preLiquidatablePosition.isPreLiquidatable).toBe(false);
-    expect(preLiquidatablePosition.preSeizableCollateral).toBe(0n);
+    expect(preLiquidationPosition.isLiquidatable).toBe(true);
+    expect(preLiquidationPosition.isHealthy).toBe(false);
+    expect(preLiquidationPosition.isPreLiquidatable).toBe(false);
+    expect(preLiquidationPosition.preSeizableCollateral).toBe(0n);
   });
 
   test("should not be preLiquidatable because the position is healthy", () => {
-    const preLiquidatablePosition = new PreLiquidatablePosition(
+    const preLiquidationPosition = new PreLiquidationPosition(
       { ...position, borrowShares: 50000000000000000n },
       new Market(market),
     );
 
-    expect(preLiquidatablePosition.isHealthy).toBe(true);
-    expect(preLiquidatablePosition.isPreLiquidatable).toBe(false);
-    expect(preLiquidatablePosition.preSeizableCollateral).toBe(0n);
-    expect(preLiquidatablePosition.preHealthFactor).toEqual(
+    expect(preLiquidationPosition.isHealthy).toBe(true);
+    expect(preLiquidationPosition.isPreLiquidatable).toBe(false);
+    expect(preLiquidationPosition.preSeizableCollateral).toBe(0n);
+    expect(preLiquidationPosition.preHealthFactor).toEqual(
       3200000000000000000n,
     );
-    expect(preLiquidatablePosition.preLiquidationPrice).toEqual(
+    expect(preLiquidationPosition.preLiquidationPrice).toEqual(
       290697674418604651162790697674418605n,
     );
   });
 
   test("should be preLiquidatable", () => {
-    const preLiquidatablePosition = new PreLiquidatablePosition(
+    const preLiquidationPosition = new PreLiquidationPosition(
       { ...position, borrowShares: 170000000000000000n },
       new Market(market),
     );
 
-    expect(preLiquidatablePosition.isHealthy).toBe(false);
-    expect(preLiquidatablePosition.isPreLiquidatable).toBe(true);
-    expect(preLiquidatablePosition.preSeizableCollateral).toEqual(
-      120189999998n,
-    );
-    expect(preLiquidatablePosition.preHealthFactor).toBeLessThan(
+    expect(preLiquidationPosition.isHealthy).toBe(false);
+    expect(preLiquidationPosition.isPreLiquidatable).toBe(true);
+    expect(preLiquidationPosition.preSeizableCollateral).toEqual(120189999998n);
+    expect(preLiquidationPosition.preHealthFactor).toBeLessThan(
       parseEther("1"),
     );
   });

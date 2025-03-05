@@ -3,8 +3,8 @@ import {
   ChainUtils,
   type MarketId,
   Position,
-  PreLiquidatablePosition,
   type PreLiquidationParams,
+  PreLiquidationPosition,
   addresses,
 } from "@morpho-org/blue-sdk";
 
@@ -96,7 +96,7 @@ export async function fetchAccrualPosition(
   return new AccrualPosition(position, market);
 }
 
-export async function fetchPreLiquidatablePosition(
+export async function fetchPreLiquidationPosition(
   user: Address,
   marketId: MarketId,
   preLiquidation: Address,
@@ -114,7 +114,7 @@ export async function fetchPreLiquidatablePosition(
       await fetchisPreLiquidationAuthorized(user, preLiquidation, client),
     ]);
 
-  return new PreLiquidatablePosition(
+  return new PreLiquidationPosition(
     {
       ...position,
       preLiquidationParams,

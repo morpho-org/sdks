@@ -19,15 +19,15 @@ export interface PreLiquidationParams {
   preLiquidationOracle: Address;
 }
 
-export interface IPreLiquidatablePosition extends IAccrualPosition {
+export interface IPreLiquidationPosition extends IAccrualPosition {
   preLiquidationParams: PreLiquidationParams;
   preLiquidation: Address;
   isPreLiquidationAuthorized: boolean;
 }
 
-export class PreLiquidatablePosition
+export class PreLiquidationPosition
   extends AccrualPosition
-  implements IPreLiquidatablePosition
+  implements IPreLiquidationPosition
 {
   /**
    * The pre-liquidation parameters of the associated PreLiquidation contract.
@@ -44,7 +44,7 @@ export class PreLiquidatablePosition
    */
   public readonly isPreLiquidationAuthorized: boolean;
 
-  constructor(position: IPreLiquidatablePosition, market: Market) {
+  constructor(position: IPreLiquidationPosition, market: Market) {
     super(position, market);
 
     this.preLiquidationParams = position.preLiquidationParams;

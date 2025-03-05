@@ -1,13 +1,13 @@
 import {
   AccrualPosition,
   Position,
-  PreLiquidatablePosition,
+  PreLiquidationPosition,
 } from "@morpho-org/blue-sdk";
 
 import {
   fetchAccrualPosition,
   fetchPosition,
-  fetchPreLiquidatablePosition,
+  fetchPreLiquidationPosition,
 } from "../fetch";
 
 declare module "@morpho-org/blue-sdk" {
@@ -17,12 +17,12 @@ declare module "@morpho-org/blue-sdk" {
 
   namespace AccrualPosition {
     let fetch: typeof fetchAccrualPosition;
-    let fetchPreLiquidatable: typeof fetchPreLiquidatablePosition;
+    let fetchPreLiquidation: typeof fetchPreLiquidationPosition;
   }
 }
 
 Position.fetch = fetchPosition;
 AccrualPosition.fetch = fetchAccrualPosition;
-AccrualPosition.fetchPreLiquidatable = fetchPreLiquidatablePosition;
+AccrualPosition.fetchPreLiquidation = fetchPreLiquidationPosition;
 
-export { Position, AccrualPosition, PreLiquidatablePosition };
+export { Position, AccrualPosition, PreLiquidationPosition };
