@@ -57,14 +57,15 @@ export class PreLiquidatablePosition
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isPreLiquidatable() {
-    const { ltv, collateralValue } = this;
-    if (ltv == null) return ltv;
+    const { collateralValue } = this;
+    if (collateralValue == null) return;
 
     return (
       this.isPreLiquidationAuthorized &&
-      (this.borrowAssets > MathLib.wMulDown(collateralValue!, ltv) ||
-        this.borrowAssets <=
-          MathLib.wMulDown(collateralValue!, this.preLiquidationParams.preLltv))
+      this.borrowAssets <=
+        MathLib.wMulDown(collateralValue, this.market.params.lltv) &&
+      this.borrowAssets >
+        MathLib.wMulDown(collateralValue, this.preLiquidationParams.preLltv)
     );
   }
 
