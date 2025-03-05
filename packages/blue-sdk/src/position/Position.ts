@@ -173,31 +173,11 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   }
 
   /**
-   * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position
-   * and the reason for the limit.
-   * Returns `undefined` iff the market's price is undefined.
-   * @deprecated Use `getBorrowCapacityLimit` instead.
-   */
-  get borrowCapacityLimit() {
-    return this.market.getBorrowCapacityLimit(this);
-  }
-
-  /**
    * Returns the maximum amount of loan assets that can be withdrawn given a certain supply position
    * and a balance of loan assets, and the reason for the limit.
    */
   get withdrawCapacityLimit() {
     return this.market.getWithdrawCapacityLimit(this);
-  }
-
-  /**
-   * Returns the maximum amount of collateral assets that can be withdrawn given a certain borrow position
-   * and the reason for the limit.
-   * Returns `undefined` iff the market's price is undefined.
-   * @deprecated Use `getWithdrawCollateralCapacityLimit` instead.
-   */
-  get withdrawCollateralCapacityLimit() {
-    return this.market.getWithdrawCollateralCapacityLimit(this);
   }
 
   /**

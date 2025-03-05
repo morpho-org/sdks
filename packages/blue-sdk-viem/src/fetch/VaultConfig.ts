@@ -29,12 +29,9 @@ export async function fetchVaultConfig(
     }),
   ]);
 
-  return new VaultConfig(
-    {
-      ...token,
-      asset,
-      decimalsOffset: BigInt(decimalsOffset),
-    },
-    parameters.chainId,
-  );
+  return new VaultConfig({
+    ...token,
+    asset,
+    decimalsOffset: BigInt(decimalsOffset),
+  });
 }
