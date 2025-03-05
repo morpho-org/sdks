@@ -96,11 +96,11 @@ export const preLiquidationFactoryConfigs: Record<
   PreLiquidationFactoryConfig
 > = {
   [ChainId.EthMainnet]: {
-    address: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
+    address: mainnetAddresses.preLiquidationFactory,
     startBlock: 21429900n,
   },
   [ChainId.BaseMainnet]: {
-    address: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
+    address: baseAddresses.preLiquidationFactory,
     startBlock: 23779056n,
   },
 };

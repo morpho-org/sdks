@@ -8219,7 +8219,7 @@ export const preLiquidationAbi = [
   { type: "error", name: "LiquidatablePosition", inputs: [] },
   { type: "error", name: "NonexistentMarket", inputs: [] },
   { type: "error", name: "NotMorpho", inputs: [] },
-  { type: "error", name: "NotPreLiquidationPosition", inputs: [] },
+  { type: "error", name: "NotPreLiquidatablePosition", inputs: [] },
   { type: "error", name: "PreLCFDecreasing", inputs: [] },
   { type: "error", name: "PreLCFTooHigh", inputs: [] },
   { type: "error", name: "PreLIFDecreasing", inputs: [] },
