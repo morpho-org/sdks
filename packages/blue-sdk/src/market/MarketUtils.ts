@@ -518,10 +518,7 @@ export namespace MarketUtils {
     },
     marketParams: { lltv: BigIntish },
   ) {
-    borrowShares = BigInt(borrowShares);
-    market.totalBorrowShares = BigInt(market.totalBorrowShares);
-
-    const borrowAssets = toBorrowAssets(borrowShares, market);
+    const borrowAssets = toBorrowAssets(BigInt(borrowShares), market);
     if (borrowAssets === 0n) return MathLib.MAX_UINT_256;
 
     const maxBorrowAssets = getMaxBorrowAssets(
