@@ -5,7 +5,7 @@ import type {
   Token,
 } from "@morpho-org/blue-sdk";
 
-import type { MigrationBundle } from "../../types/actions.js";
+import type { MigrationBundle } from "../../MigrationBundle.js";
 import type {
   BorrowMigrationLimiter,
   MigratableProtocol,
@@ -127,4 +127,24 @@ export abstract class MigratableBorrowPosition
     args: MigratableBorrowPosition.Args,
     supportsSignature: boolean,
   ): MigrationBundle;
+
+  validateMigration({
+    marketTo,
+    borrowAmount,
+    collateralAmount,
+  }: Pick<
+    MigratableBorrowPosition.Args,
+    "marketTo" | "borrowAmount" | "collateralAmount"
+  >) {
+    if (
+      marketTo.collateralToken !== this.collateralToken.address ||
+      marketTo.loanToken !== this.loanToken.address
+    )
+      throw new Error("Invalid market");
+
+    if (borrowAmount > this.borrow)
+      throw new Error("Cannot migrate more than borrow position");
+    if (collateralAmount > this.collateral)
+      throw new Error("Cannot migrate more than collateral position");
+  }
 }

@@ -10,11 +10,7 @@ import {
   getAuthorizationTypedData,
   getPermitTypedData,
 } from "@morpho-org/blue-sdk-viem";
-import type {
-  Action,
-  SignatureRequirement,
-} from "@morpho-org/bundler-sdk-viem";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
+import type { Action } from "@morpho-org/bundler-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import {
   type Account,
@@ -25,11 +21,8 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
+import { MigrationBundle } from "../../MigrationBundle.js";
 import { aTokenV2Abi } from "../../abis/aaveV2.js";
-import type {
-  MigrationBundle,
-  MigrationTransactionRequirement,
-} from "../../types/actions.js";
 import {
   BorrowMigrationLimiter,
   MigratableProtocol,
@@ -96,19 +89,12 @@ export class MigratableBorrowPosition_AaveV2
       minSharePrice,
     }: MigratableBorrowPosition.Args,
     supportsSignature = true,
-  ): MigrationBundle {
-    if (
-      marketTo.collateralToken !== this.collateralToken.address ||
-      marketTo.loanToken !== this.loanToken.address
-    )
-      throw new Error("Invalid market");
-
-    const signRequirements: SignatureRequirement[] = [];
-    const txRequirements: MigrationTransactionRequirement[] = [];
-    const actions: Action[] = [];
+  ) {
+    this.validateMigration({ collateralAmount, borrowAmount, marketTo });
 
     const user = this.user;
     const chainId = this.chainId;
+    const migrationBundle = new MigrationBundle(chainId);
 
     const {
       morpho,
@@ -154,9 +140,9 @@ export class MigratableBorrowPosition_AaveV2
           args: [authorization, null],
         };
 
-        actions.push(authorizeAction);
+        migrationBundle.actions.push(authorizeAction);
 
-        signRequirements.push({
+        migrationBundle.requirements.signatures.push({
           action: authorizeAction,
           async sign(client: Client, account: Account = client.account!) {
             let signature = authorizeAction.args[1];
@@ -185,9 +171,9 @@ export class MigratableBorrowPosition_AaveV2
           args: [user, aToken.address, migratedCollateral, deadline, null],
         };
 
-        actions.push(permitAction);
+        migrationBundle.actions.push(permitAction);
 
-        signRequirements.push({
+        migrationBundle.requirements.signatures.push({
           action: permitAction,
           async sign(client: Client, account: Account = client.account!) {
             let signature = permitAction.args[4];
@@ -221,7 +207,7 @@ export class MigratableBorrowPosition_AaveV2
       }
     } else {
       if (migratedBorrow > 0n && !this.isBundlerManaging) {
-        txRequirements.push({
+        migrationBundle.requirements.txs.push({
           type: "morphoSetAuthorization",
           args: [generalAdapter1, true],
           tx: {
@@ -236,7 +222,7 @@ export class MigratableBorrowPosition_AaveV2
       }
 
       if (migratedCollateral > 0n)
-        txRequirements.push({
+        migrationBundle.requirements.txs.push({
           type: "erc20Approve",
           args: [aToken.address, generalAdapter1, migratedCollateral],
           tx: {
@@ -304,7 +290,7 @@ export class MigratableBorrowPosition_AaveV2
           ],
         },
       );
-      actions.push(
+      migrationBundle.actions.push(
         {
           type: "morphoSupplyCollateral",
           args: [marketTo, collateralAmount, user, callbackActions],
@@ -320,18 +306,10 @@ export class MigratableBorrowPosition_AaveV2
           ],
         },
       );
-      if (migrateMaxCollateral) actions.push();
     } else {
-      actions.push(...borrowActions);
+      migrationBundle.actions.push(...borrowActions);
     }
 
-    return {
-      actions,
-      requirements: {
-        signatures: signRequirements,
-        txs: txRequirements,
-      },
-      tx: () => BundlerAction.encodeBundle(chainId, actions),
-    };
+    return migrationBundle;
   }
 }
