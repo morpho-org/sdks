@@ -90,14 +90,11 @@ export class PreLiquidationPosition
       return null;
 
     const collateralPower = MarketUtils.getCollateralPower(this.collateral, {
-      lltv: this.market.params.lltv,
+      lltv: this.preLiquidationParams.preLltv,
     });
     if (collateralPower === 0n) return MathLib.MAX_UINT_256;
 
-    const borrowAssets = MarketUtils.toBorrowAssets(
-      this.borrowShares,
-      this.market,
-    );
+    const { borrowAssets } = this;
 
     return MathLib.mulDivUp(borrowAssets, ORACLE_PRICE_SCALE, collateralPower);
   }
@@ -221,10 +218,7 @@ export class PreLiquidationPosition
     if (this.maxBorrowAssets == null) return;
 
     // handle edge cases when the user is (pre)liquidatable (maxBorrow < borrow)
-    const maxBorrowableAssets = MathLib.zeroFloorSub(
-      this.maxBorrowAssets,
-      this.market.toBorrowAssets(this.borrowShares),
-    );
+    const { maxBorrowableAssets } = this;
 
     const liquidity = this.market.liquidity;
 
@@ -262,7 +256,8 @@ export class PreLiquidationPosition
     };
   }
 
-  public getBorrowCapacityLimit(options?: MaxBorrowOptions) {
+  public getBorrowCapacityLimit(options: MaxBorrowOptions = { maxLtv: this.preLiquidationParams.preLltv }) {
+    options.maxLtv ??= MathLib.min(...)
     const maxBorrowAssets = this.market.getMaxBorrowAssets(
       this.collateral,
       options?.maxLtv
@@ -277,10 +272,7 @@ export class PreLiquidationPosition
     if (maxBorrowAssets == null) return;
 
     // handle edge cases when the user is liquidatable (maxBorrow < borrow)
-    const maxBorrowableAssets = MathLib.zeroFloorSub(
-      maxBorrowAssets,
-      this.market.toBorrowAssets(this.borrowShares),
-    );
+    const { maxBorrowableAssets } = this;
 
     const liquidity = this.market.liquidity;
 
