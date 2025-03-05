@@ -57,6 +57,8 @@ export class MigratableSupplyPosition_CompoundV3
     chainId: ChainId,
     supportsSignature = true,
   ) {
+    this.validateMigration({ amount });
+
     const bundle = new MigrationBundle(chainId);
 
     const user = this.user;

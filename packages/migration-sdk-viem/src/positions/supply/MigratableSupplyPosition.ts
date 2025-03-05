@@ -86,4 +86,9 @@ export abstract class MigratableSupplyPosition
     chainId: ChainId,
     supportsSignature: boolean,
   ): MigrationBundle;
+
+  validateMigration({ amount }: Pick<MigratableSupplyPosition.Args, "amount">) {
+    if (amount > this.max.value)
+      throw new Error(`Max migration limited by: ${this.max.limiter}`);
+  }
 }

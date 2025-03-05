@@ -45,6 +45,8 @@ export class MigratableSupplyPosition_CompoundV2
     { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
   ) {
+    this.validateMigration({ amount });
+
     const bundle = new MigrationBundle(chainId);
 
     const user = this.user;

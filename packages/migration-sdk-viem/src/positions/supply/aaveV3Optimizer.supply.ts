@@ -56,6 +56,8 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     chainId: ChainId,
     supportsSignature = true,
   ) {
+    this.validateMigration({ amount });
+
     const bundle = new MigrationBundle(chainId);
 
     const user = this.user;
