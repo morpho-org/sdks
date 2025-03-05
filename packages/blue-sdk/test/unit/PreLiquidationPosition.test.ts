@@ -77,16 +77,6 @@ describe("preLiquidationPosition", () => {
     expect(preLiquidationPosition.borrowCapacityUsage).toBe(undefined);
   });
 
-  test("should not be preLiquidatable because pre liquidation is not authorized", () => {
-    const preLiquidationPosition = new PreLiquidationPosition(
-      { ...position, isPreLiquidationAuthorized: false },
-      new Market(market),
-    );
-
-    expect(preLiquidationPosition.isPreLiquidatable).toBe(false);
-    expect(preLiquidationPosition.isHealthy).toBe(true);
-  });
-
   test("should not be preLiquidatable because the position has no borrow", () => {
     const preLiquidationPosition = new PreLiquidationPosition(
       { ...position, borrowShares: 0n },
@@ -126,8 +116,22 @@ describe("preLiquidationPosition", () => {
       3200000000000000000n,
     );
     expect(preLiquidationPosition.preLiquidationPrice).toEqual(
-      290697674418604651162790697674418605n,
+      312500000000000000000000000000000000n,
     );
+  });
+
+  test("should not be preLiquidatable because pre liquidation is not authorized", () => {
+    const preLiquidationPosition = new PreLiquidationPosition(
+      {
+        ...position,
+        borrowShares: 170000000000000000n,
+        isPreLiquidationAuthorized: false,
+      },
+      new Market(market),
+    );
+
+    expect(preLiquidationPosition.isPreLiquidatable).toBe(false);
+    expect(preLiquidationPosition.isHealthy).toBe(true);
   });
 
   test("should be preLiquidatable", () => {

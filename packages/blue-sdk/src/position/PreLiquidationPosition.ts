@@ -215,10 +215,12 @@ export class PreLiquidationPosition
    * @deprecated Use `getBorrowCapacityLimit` instead.
    */
   get borrowCapacityLimit() {
-    if (this.maxBorrowAssets == null) return;
+    const { maxBorrowAssets } = this;
+    if (maxBorrowAssets == null) return;
 
     // handle edge cases when the user is (pre)liquidatable (maxBorrow < borrow)
     const { maxBorrowableAssets } = this;
+    if (maxBorrowableAssets == null) return;
 
     const liquidity = this.market.liquidity;
 
@@ -241,7 +243,7 @@ export class PreLiquidationPosition
    * @deprecated Use `getWithdrawCollateralCapacityLimit` instead.
    */
   get withdrawCollateralCapacityLimit() {
-    const withdrawableCollateral = this.withdrawableCollateral;
+    const { withdrawableCollateral } = this;
     if (withdrawableCollateral == null) return;
 
     if (this.collateral > withdrawableCollateral)
@@ -256,24 +258,21 @@ export class PreLiquidationPosition
     };
   }
 
-  public getBorrowCapacityLimit(options: MaxBorrowOptions = { maxLtv: this.preLiquidationParams.preLltv }) {
-    options.maxLtv ??= MathLib.min(...)
+  public getBorrowCapacityLimit(
+    options: MaxBorrowOptions = { maxLtv: this.preLiquidationParams.preLltv },
+  ) {
+    options.maxLtv = options.maxLtv
+      ? MathLib.min(options.maxLtv, this.preLiquidationParams.preLltv)
+      : this.preLiquidationParams.preLltv;
     const maxBorrowAssets = this.market.getMaxBorrowAssets(
       this.collateral,
-      options?.maxLtv
-        ? {
-            maxLtv: MathLib.min(
-              options.maxLtv,
-              this.preLiquidationParams.preLltv,
-            ),
-          }
-        : {},
+      options,
     );
     if (maxBorrowAssets == null) return;
 
     // handle edge cases when the user is liquidatable (maxBorrow < borrow)
     const { maxBorrowableAssets } = this;
-
+    if (maxBorrowableAssets == null) return;
     const liquidity = this.market.liquidity;
 
     if (maxBorrowableAssets > liquidity)
@@ -289,18 +288,17 @@ export class PreLiquidationPosition
   }
 
   public getWithdrawCollateralCapacityLimit(
-    options?: MaxWithdrawCollateralOptions,
+    options: MaxWithdrawCollateralOptions = {
+      maxLtv: this.preLiquidationParams.preLltv,
+    },
   ) {
+    options.maxLtv = options.maxLtv
+      ? MathLib.min(options.maxLtv, this.preLiquidationParams.preLltv)
+      : this.preLiquidationParams.preLltv;
+
     const withdrawableCollateral = this.market.getWithdrawableCollateral(
       this,
-      options?.maxLtv
-        ? {
-            maxLtv: MathLib.min(
-              options.maxLtv,
-              this.preLiquidationParams.preLltv,
-            ),
-          }
-        : {},
+      options,
     );
     if (withdrawableCollateral == null) return;
 
