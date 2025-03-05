@@ -1,6 +1,7 @@
 import { BlueErrors } from "../errors.js";
 import {
   CapacityLimitReason,
+  type IMarket,
   Market,
   type MaxBorrowOptions,
   type MaxPositionCapacities,
@@ -64,10 +65,11 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    */
   public readonly market: Market;
 
-  constructor(position: IAccrualPosition, market: Market) {
-    super({ ...position, marketId: market.id });
+  constructor(position: IAccrualPosition, market: IMarket) {
+    const _market = new Market(market);
+    super({ ...position, marketId: _market.id });
 
-    this.market = market;
+    this.market = _market;
   }
 
   get supplyAssets() {
