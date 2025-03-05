@@ -142,9 +142,13 @@ export abstract class MigratableBorrowPosition
     )
       throw new Error("Invalid market");
 
-    if (borrowAmount > this.borrow)
-      throw new Error("Cannot migrate more than borrow position");
-    if (collateralAmount > this.collateral)
-      throw new Error("Cannot migrate more than collateral position");
+    if (borrowAmount > this.maxRepay.value)
+      throw new Error(
+        `Max borrow migration limited by: ${this.maxRepay.limiter}`,
+      );
+    if (collateralAmount > this.maxWithdraw.value)
+      throw new Error(
+        `Max collateral migration limited by: ${this.maxWithdraw.limiter}`,
+      );
   }
 }
