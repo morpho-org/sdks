@@ -8,6 +8,11 @@ export enum ChainId {
   FraxtalMainnet = 252,
   ScrollMainnet = 534352,
   InkMainnet = 57073,
+  Unichain = 130,
+  SonicMainnet = 146,
+  HemiMainnet = 43111,
+  ModeMainnet = 34443,
+  CornMainnet = 21000000,
 }
 
 export interface ChainMetadata {
@@ -102,6 +107,41 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://explorer.inkonchain.com",
       identifier: "ink",
+    },
+    [ChainId.Unichain]: {
+      name: "Unichain",
+      id: ChainId.Unichain,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://uniscan.xyz",
+      identifier: "unichain",
+    },
+    [ChainId.SonicMainnet]: {
+      name: "Sonic",
+      id: ChainId.SonicMainnet,
+      nativeCurrency: { name: "Sonic", symbol: "S", decimals: 18 },
+      explorerUrl: "https://sonicscan.org",
+      identifier: "sonic",
+    },
+    [ChainId.HemiMainnet]: {
+      name: "Hemi",
+      id: ChainId.HemiMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://explorer.hemi.xyz",
+      identifier: "hemi",
+    },
+    [ChainId.ModeMainnet]: {
+      name: "Mode",
+      id: ChainId.ModeMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://modescan.io",
+      identifier: "mode",
+    },
+    [ChainId.CornMainnet]: {
+      name: "Corn",
+      id: ChainId.CornMainnet,
+      nativeCurrency: { name: "Bitcoin", symbol: "BTCN", decimals: 18 },
+      explorerUrl: "https://cornscan.io",
+      identifier: "corn",
     },
   };
 }

@@ -97,6 +97,11 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
   [ChainId.FraxtalMainnet]: {},
   [ChainId.ScrollMainnet]: {},
   [ChainId.InkMainnet]: {},
+  [ChainId.Unichain]: {},
+  [ChainId.SonicMainnet]: {},
+  [ChainId.HemiMainnet]: {},
+  [ChainId.ModeMainnet]: {},
+  [ChainId.CornMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
@@ -138,5 +143,25 @@ export const preLiquidationFactoryConfigs: Record<
   [ChainId.InkMainnet]: {
     address: "0x347947AC7D45Bba44a0a19F2C6513aA326DFdCd6",
     startBlock: 6385077n,
+  },
+  [ChainId.Unichain]: {
+    address: "0x347947AC7D45Bba44a0a19F2C6513aA326DFdCd6",
+    startBlock: 9381237n,
+  },
+  [ChainId.SonicMainnet]: {
+    address: "0xc72129DA4CC808e955699111b8c22B22Ca8A10b8",
+    startBlock: 9102286n,
+  },
+  [ChainId.HemiMainnet]: {
+    address: "0x40F2896C551194e364F7C846046C34d8a9FE97e4",
+    startBlock: 1188907n,
+  },
+  [ChainId.ModeMainnet]: {
+    address: "0x249E4808264c545861e43728186a731dE7c7D745",
+    startBlock: 19983599n,
+  },
+  [ChainId.CornMainnet]: {
+    address: "0xb9065AC18d3EBdb3263B77B587f9c5CD570545D1",
+    startBlock: 253107n,
   },
 };
