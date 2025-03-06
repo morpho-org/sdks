@@ -51,6 +51,8 @@ export type Asset = {
   /** Historical spot price in ETH */
   historicalSpotPriceEth: Maybe<Array<FloatDataPoint>>;
   id: Scalars["ID"]["output"];
+  /** Either the asset is whitelisted or not */
+  isWhitelisted: Scalars["Boolean"]["output"];
   /** Token logo URI, for display purpose */
   logoURI: Maybe<Scalars["String"]["output"]>;
   name: Scalars["String"]["output"];
@@ -64,7 +66,10 @@ export type Asset = {
   spotPriceEth: Maybe<Scalars["Float"]["output"]>;
   symbol: Scalars["String"]["output"];
   tags: Maybe<Array<Scalars["String"]["output"]>>;
-  /** ERC-20 token total supply */
+  /**
+   * ERC-20 token total supply
+   * @deprecated this data is not updated anymore
+   */
   totalSupply: Scalars["BigInt"]["output"];
   /** MetaMorpho vault */
   vault: Maybe<Vault>;
@@ -120,6 +125,8 @@ export type AssetsFilters = {
   symbol_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by token's tags  */
   tags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by whitelisted status */
+  whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
 export type BigIntDataPoint = {
@@ -132,6 +139,13 @@ export enum CacheControlScope {
   Private = "PRIVATE",
   Public = "PUBLIC",
 }
+
+/** Event data for cap-related operation */
+export type CapEventData = {
+  __typename?: "CapEventData";
+  cap: Scalars["BigInt"]["output"];
+  market: Market;
+};
 
 /** Chain */
 export type Chain = {
@@ -148,6 +162,15 @@ export type ChainSynchronizationState = {
   chain: Chain;
   id: Scalars["ID"]["output"];
   key: Scalars["String"]["output"];
+};
+
+/** Oracle creation tx */
+export type ChainlinkOracleV2Event = {
+  __typename?: "ChainlinkOracleV2Event";
+  blockNumber: Scalars["BigInt"]["output"];
+  chainId: Scalars["Int"]["output"];
+  timestamp: Scalars["BigInt"]["output"];
+  txHash: Scalars["HexString"]["output"];
 };
 
 /** Amount of collateral at risk of liquidation at collateralPriceRatio * oracle price */
@@ -1281,9 +1304,12 @@ export type MorphoChainlinkOracleData = {
   __typename?: "MorphoChainlinkOracleData";
   baseFeedOne: Maybe<OracleFeed>;
   baseFeedTwo: Maybe<OracleFeed>;
+  baseOracleVault: Maybe<OracleVault>;
+  chainId: Scalars["Int"]["output"];
   quoteFeedOne: Maybe<OracleFeed>;
   quoteFeedTwo: Maybe<OracleFeed>;
   scaleFactor: Scalars["BigInt"]["output"];
+  /** @deprecated Use `baseOracleVault` instead */
   vault: Scalars["String"]["output"];
   vaultConversionSample: Scalars["BigInt"]["output"];
 };
@@ -1293,10 +1319,15 @@ export type MorphoChainlinkOracleV2Data = {
   __typename?: "MorphoChainlinkOracleV2Data";
   baseFeedOne: Maybe<OracleFeed>;
   baseFeedTwo: Maybe<OracleFeed>;
+  baseOracleVault: Maybe<OracleVault>;
+  /** @deprecated Use `baseOracleVault` instead */
   baseVault: Scalars["String"]["output"];
   baseVaultConversionSample: Scalars["BigInt"]["output"];
+  chainId: Scalars["Int"]["output"];
   quoteFeedOne: Maybe<OracleFeed>;
   quoteFeedTwo: Maybe<OracleFeed>;
+  quoteOracleVault: Maybe<OracleVault>;
+  /** @deprecated Use `quoteOracleVault` instead */
   quoteVault: Scalars["String"]["output"];
   quoteVaultConversionSample: Scalars["BigInt"]["output"];
   scaleFactor: Scalars["BigInt"]["output"];
@@ -1308,6 +1339,7 @@ export type Oracle = {
   /** Oracle contract address */
   address: Scalars["Address"]["output"];
   chain: Chain;
+  creationEvent: Maybe<ChainlinkOracleV2Event>;
   data: Maybe<OracleData>;
   id: Scalars["ID"]["output"];
   markets: Array<Market>;
@@ -1325,9 +1357,12 @@ export type OracleFeed = {
   /** Feed contract address */
   address: Scalars["Address"]["output"];
   chain: Chain;
+  decimals: Maybe<Scalars["Int"]["output"]>;
   description: Maybe<Scalars["String"]["output"]>;
+  historicalPrice: Maybe<Array<BigIntDataPoint>>;
   id: Scalars["ID"]["output"];
   pair: Maybe<Array<Scalars["String"]["output"]>>;
+  price: Maybe<BigIntDataPoint>;
   vendor: Maybe<Scalars["String"]["output"]>;
 };
 
@@ -1345,6 +1380,20 @@ export enum OracleType {
   Unknown = "Unknown",
 }
 
+/** Oracle Vault */
+export type OracleVault = {
+  __typename?: "OracleVault";
+  /** Vault address */
+  address: Scalars["Address"]["output"];
+  asset: Maybe<Asset>;
+  chain: Chain;
+  id: Scalars["ID"]["output"];
+  isWhitelisted: Scalars["Boolean"]["output"];
+  metaMorpho: Maybe<Vault>;
+  pair: Maybe<Array<Scalars["String"]["output"]>>;
+  vendor: Maybe<Scalars["String"]["output"]>;
+};
+
 export type OraclesFilters = {
   /** Filter by oracle contract address. Case insensitive. */
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -1356,6 +1405,12 @@ export enum OrderDirection {
   Asc = "Asc",
   Desc = "Desc",
 }
+
+/** Event data for ownership-related operations */
+export type OwnershipEventData = {
+  __typename?: "OwnershipEventData";
+  owner: Scalars["Address"]["output"];
+};
 
 export type PageInfo = {
   __typename?: "PageInfo";
@@ -1447,6 +1502,12 @@ export type PaginatedUsers = {
   pageInfo: Maybe<PageInfo>;
 };
 
+export type PaginatedVaultAdminEvent = {
+  __typename?: "PaginatedVaultAdminEvent";
+  items: Maybe<Array<VaultAdminEvent>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
 export type PaginatedVaultReallocates = {
   __typename?: "PaginatedVaultReallocates";
   items: Maybe<Array<VaultReallocate>>;
@@ -1528,6 +1589,7 @@ export type PublicAllocatorSharedLiquidity = {
   assets: Scalars["BigInt"]["output"];
   id: Scalars["ID"]["output"];
   market: Market;
+  publicAllocator: PublicAllocator;
   vault: Vault;
 };
 
@@ -1825,6 +1887,34 @@ export type QueryVaultsArgs = {
   where?: InputMaybe<VaultFilters>;
 };
 
+/** ReallocateSupply event data */
+export type ReallocateSupplyEventData = {
+  __typename?: "ReallocateSupplyEventData";
+  market: Market;
+  suppliedAssets: Scalars["BigInt"]["output"];
+  suppliedShares: Scalars["BigInt"]["output"];
+};
+
+/** ReallocateWithdraw event data */
+export type ReallocateWithdrawEventData = {
+  __typename?: "ReallocateWithdrawEventData";
+  market: Market;
+  withdrawnAssets: Scalars["BigInt"]["output"];
+  withdrawnShares: Scalars["BigInt"]["output"];
+};
+
+/** Event data for revokeCap operation */
+export type RevokeCapEventData = {
+  __typename?: "RevokeCapEventData";
+  market: Market;
+};
+
+/** Event data for revokePendingMarketRemoval operation */
+export type RevokePendingMarketRemovalEventData = {
+  __typename?: "RevokePendingMarketRemovalEventData";
+  market: Market;
+};
+
 /** Risk analysis */
 export type RiskAnalysis = {
   __typename?: "RiskAnalysis";
@@ -1843,6 +1933,68 @@ export type SearchResults = {
   __typename?: "SearchResults";
   markets: Array<Market>;
   vaults: Array<Vault>;
+};
+
+/** SetCurator event data */
+export type SetCuratorEventData = {
+  __typename?: "SetCuratorEventData";
+  curatorAddress: Scalars["Address"]["output"];
+};
+
+/** SetFee event data */
+export type SetFeeEventData = {
+  __typename?: "SetFeeEventData";
+  fee: Scalars["BigInt"]["output"];
+};
+
+/** SetFeeRecipient event data */
+export type SetFeeRecipientEventData = {
+  __typename?: "SetFeeRecipientEventData";
+  feeRecipient: Scalars["Address"]["output"];
+};
+
+/** SetGuardian event data */
+export type SetGuardianEventData = {
+  __typename?: "SetGuardianEventData";
+  guardian: Scalars["Address"]["output"];
+};
+
+/** SetIsAllocator event data */
+export type SetIsAllocatorEventData = {
+  __typename?: "SetIsAllocatorEventData";
+  allocator: Scalars["Address"]["output"];
+  isAllocator: Scalars["Boolean"]["output"];
+};
+
+/** SetSkimRecipient event data */
+export type SetSkimRecipientEventData = {
+  __typename?: "SetSkimRecipientEventData";
+  skimRecipient: Scalars["Address"]["output"];
+};
+
+/** SetSupplyQueue event data */
+export type SetSupplyQueueEventData = {
+  __typename?: "SetSupplyQueueEventData";
+  supplyQueue: Array<Market>;
+};
+
+/** SetWithdrawQueue event data */
+export type SetWithdrawQueueEventData = {
+  __typename?: "SetWithdrawQueueEventData";
+  withdrawQueue: Array<Market>;
+};
+
+/** Skim event data */
+export type SkimEventData = {
+  __typename?: "SkimEventData";
+  amount: Scalars["BigInt"]["output"];
+  asset: Asset;
+};
+
+/** Event data for timelock-related operation */
+export type TimelockEventData = {
+  __typename?: "TimelockEventData";
+  timelock: Scalars["BigInt"]["output"];
 };
 
 export enum TimeseriesInterval {
@@ -2018,6 +2170,8 @@ export type UserHistory = {
   marketsBorrowAssetsUsd: Maybe<Array<FloatDataPoint>>;
   /** Total collateral of all the user's market positions, in USD. */
   marketsCollateralUsd: Maybe<Array<FloatDataPoint>>;
+  /** Total margin of all the user's market positions, in USD. */
+  marketsMarginUsd: Maybe<Array<FloatDataPoint>>;
   /**
    * Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's market positions, in USD.
    * @deprecated unstable
@@ -2041,6 +2195,11 @@ export type UserHistoryMarketsBorrowAssetsUsdArgs = {
 
 /** User state history */
 export type UserHistoryMarketsCollateralUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** User state history */
+export type UserHistoryMarketsMarginUsdArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2120,6 +2279,8 @@ export enum UsersOrderBy {
 export type Vault = {
   __typename?: "Vault";
   address: Scalars["Address"]["output"];
+  /** Vault admin events on the vault */
+  adminEvents: Maybe<PaginatedVaultAdminEvent>;
   /** Vault allocators */
   allocators: Maybe<Array<VaultAllocator>>;
   asset: Asset;
@@ -2166,6 +2327,46 @@ export type Vault = {
   /** Weekly vault APYs */
   weeklyApys: Maybe<VaultApyAggregates>;
   whitelisted: Scalars["Boolean"]["output"];
+};
+
+/** MetaMorpho Vaults */
+export type VaultAdminEventsArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+  where?: InputMaybe<VaultAdminEventsFilters>;
+};
+
+/** Meta Morpho vault event data */
+export type VaultAdminEvent = {
+  __typename?: "VaultAdminEvent";
+  data: Maybe<VaultAdminEventData>;
+  hash: Scalars["HexString"]["output"];
+  timestamp: Scalars["BigInt"]["output"];
+  type: Scalars["String"]["output"];
+};
+
+export type VaultAdminEventData =
+  | CapEventData
+  | OwnershipEventData
+  | ReallocateSupplyEventData
+  | ReallocateWithdrawEventData
+  | RevokeCapEventData
+  | RevokePendingMarketRemovalEventData
+  | SetCuratorEventData
+  | SetFeeEventData
+  | SetFeeRecipientEventData
+  | SetGuardianEventData
+  | SetIsAllocatorEventData
+  | SetSkimRecipientEventData
+  | SetSupplyQueueEventData
+  | SetWithdrawQueueEventData
+  | SkimEventData
+  | TimelockEventData;
+
+/** Filtering options for vault admin events. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
+export type VaultAdminEventsFilters = {
+  /** Filter by event type */
+  type_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 
 /** MetaMorpho vault allocation */
