@@ -279,7 +279,7 @@ async function fetchCompoundV3InstancePosition(
 
   /* MAX */
   const max = (() => {
-    if (!isWithdrawPaused)
+    if (isWithdrawPaused)
       return {
         value: 0n,
         limiter: SupplyMigrationLimiter.withdrawPaused,
