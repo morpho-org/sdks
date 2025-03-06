@@ -38,6 +38,7 @@ export interface ChainAddresses {
   adaptiveCurveIrm: Address;
   publicAllocator?: Address;
   metaMorphoFactory?: Address;
+  chainlinkOracleFactory?: Address;
 
   wNative?: Address;
   morphoToken?: Address;
@@ -84,6 +85,7 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
     metaMorphoFactory: "0x1897A8997241C1cD4bD0698647e4EB7213535c24",
+    chainlinkOracleFactory: "0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766",
 
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     morphoToken: "0x9994E35Db50125E0DF82e4c2dde62496CE330999",
@@ -144,6 +146,7 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
     metaMorphoFactory: "0xFf62A7c278C62eD665133147129245053Bbf5918",
+    chainlinkOracleFactory: "0x2DC205F24BCb6B311E5cdf0745B0741648Aebd3d",
 
     wNative: "0x4200000000000000000000000000000000000006",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -162,6 +165,7 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0xe675A2161D4a6E2de2eeD70ac98EEBf257FBF0B0",
     publicAllocator: "0xfac15aff53ADd2ff80C2962127C434E8615Df0d3",
     metaMorphoFactory: "0xa9c87daB340631C34BB738625C70499e29ddDC98",
+    chainlinkOracleFactory: "0x1ff7895Eb842794c5d07C4c547b6730e61295215",
 
     wNative: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
   },
@@ -176,6 +180,7 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA",
     publicAllocator: "0x769583Af5e9D03589F159EbEC31Cc2c23E8C355E",
     metaMorphoFactory: "0x878988f5f561081deEa117717052164ea1Ef0c82",
+    chainlinkOracleFactory: "0x98Ce5D183DC0c176f54D37162F87e7eD7f2E41b5",
 
     wNative: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -192,6 +197,7 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0x8cD70A8F399428456b29546BC5dBe10ab6a06ef6",
     publicAllocator: "0x0d68a97324E602E02799CD83B42D337207B40658",
     metaMorphoFactory: "0x3Bb6A6A0Bc85b367EFE0A5bAc81c5E52C892839a",
+    chainlinkOracleFactory: "0x1ec408D4131686f727F3Fd6245CF85Bc5c9DAD70",
 
     wNative: "0x4200000000000000000000000000000000000006",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -206,6 +212,7 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0x34E99D604751a72cF8d0CFDf87069292d82De472",
     publicAllocator: "0xef9889B4e443DEd35FA0Bd060f2104Cca94e6A43",
     metaMorphoFactory: "0x4DBB3a642a2146d5413750Cca3647086D9ba5F12",
+    chainlinkOracleFactory: "0xd706690BA1Fe26b70c4AD89e60ff62cEB3A2eD02",
 
     wNative: "0x4200000000000000000000000000000000000006",
   },
@@ -218,6 +225,7 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0xA0D4D77b5D9933073572E19C172BFE866312673b",
     publicAllocator: "0x37a888192165fC39884f87c64E2476BfD2C09675",
     metaMorphoFactory: "0x27D4Af0AC9E7FDfA6D0853236f249CC27AE79488",
+    chainlinkOracleFactory: "0x39d8622C607A691D7705E8842fbB12E3c38dCD41",
 
     wNative: "0xfc00000000000000000000000000000000000006",
   },
@@ -230,6 +238,7 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0xa5EA7500A27C0079961D93366A6e93aafF18CB90",
     publicAllocator: "0x8a7f671E45E51dE245649Cf916cA0256FB8a9927",
     metaMorphoFactory: "0x56b65742ade55015e6480959808229Ad6dbc9295",
+    chainlinkOracleFactory: "0xb5961902E60b188b1c665B7b72Ef616656A9e24E",
 
     wNative: "0x5300000000000000000000000000000000000004",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -244,10 +253,82 @@ export const addressesRegistry = {
     adaptiveCurveIrm: "0x9515407b1512F53388ffE699524100e7270Ee57B",
     publicAllocator: "0x85416891752a6B81106c1C2999AE1AF5d8Cd3357",
     metaMorphoFactory: "0xd3f39505d0c48AFED3549D625982FdC38Ea9904b",
+    chainlinkOracleFactory: "0x3FFFE273ee348b9E1ef89533025C7f165B17B439",
 
     wNative: "0x4200000000000000000000000000000000000006",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xF1815bd50389c46847f0Bda824eC8da914045D14",
+  },
+  [ChainId.Unichain]: {
+    morpho: "0x8f5ae9CddB9f68de460C77730b018Ae7E04a140A",
+    bundler3: {
+      bundler3: "0x7DD85759182495AF7F6757DA75036d24A9B58bc3",
+      generalAdapter1: "0xC11329d19C2275c9E759867e879ECFcEeD7e30A0",
+    },
+    adaptiveCurveIrm: "0x9a6061d51743B31D2c3Be75D83781Fa423f53F0E",
+    publicAllocator: "0xB0c9a107fA17c779B3378210A7a593e88938C7C9",
+    metaMorphoFactory: "0xe9EdE3929F43a7062a007C3e8652e4ACa610Bdc0",
+    chainlinkOracleFactory: "0x43269546e1D586a1f7200a0AC07e26f9631f7539",
+
+    wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0x078D782b760474a361dDA0AF3839290b0EF57AD6",
+  },
+  [ChainId.SonicMainnet]: {
+    morpho: "0xd6c916eB7542D0Ad3f18AEd0FCBD50C582cfa95f",
+    bundler3: {
+      bundler3: "0xB06F1Ad8c908b958E596c42973f67F2f1d9a9afF",
+      generalAdapter1: "0x31D5aee8D75EEab548cfA0d11C4f9843a5201eaf",
+    },
+    adaptiveCurveIrm: "0xDEfCf242226425f93d8DD0e314735C28517C473F",
+    publicAllocator: "0x6Cef2EDC70D87E8f1623f3096efF05d066E59B36",
+    metaMorphoFactory: "0x0cE9e3512CB4df8ae7e265e62Fb9258dc14f12e8",
+    chainlinkOracleFactory: "0x7DA59Fa482F1F49fADc486d8e47BADc506fEb86d",
+
+    wNative: "0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38",
+  },
+  [ChainId.HemiMainnet]: {
+    morpho: "0xa4Ca2c2e25b97DA19879201bA49422bc6f181f42",
+    bundler3: {
+      bundler3: "0x8eDa6E01a20E3Cd90B3B2AF6F790cB8FADEf3Ea8",
+      generalAdapter1: "0x9623090C3943ad63F7d794378273610Dd0deeFD4",
+    },
+    adaptiveCurveIrm: "0xdEbdEa31624552DF904A065221cD14088ABDeD70",
+    publicAllocator: "0x4107Ea1746909028d6212B315dE5fE9538F9eb39",
+    metaMorphoFactory: "0x8e52179BeB18E882040b01632440d8Ca0f01da82",
+    chainlinkOracleFactory: "0xB3cb32E6185446a6Bc7A047E4FfA138fA939e133",
+
+    wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0xad11a8BEb98bbf61dbb1aa0F6d6F2ECD87b35afA",
+  },
+  [ChainId.ModeMainnet]: {
+    morpho: "0xd85cE6BD68487E0AaFb0858FDE1Cd18c76840564",
+    bundler3: {
+      bundler3: "0xFEA0edFa081C8D5960Ec9Bf6684981dB1834305d",
+      generalAdapter1: "0xF53925b95Cc409447066cd5c1A7756084b2Ee0a4",
+    },
+    adaptiveCurveIrm: "0xE3d46Ae190Cb39ccA3655E966DcEF96b4eAe1d1c",
+    publicAllocator: "0xEE868Bf3359DA30c10ea472EAEBFC0a06E8F0120",
+    metaMorphoFactory: "0xae5b0884bfff430493D6C844B9fd052Af7d79278",
+    chainlinkOracleFactory: "0xf9380f7898423Bd7FDe3C9fDD1b2671A2471f39D",
+
+    wNative: "0x4200000000000000000000000000000000000006",
+  },
+  [ChainId.CornMainnet]: {
+    morpho: "0xc2B1E031540e3F3271C5F3819F0cC7479a8DdD90",
+    bundler3: {
+      bundler3: "0x086889F9bdE8349512dD77088A7114E6C1c42Af7",
+      generalAdapter1: "0x464a402244bCDdc0c2091D5193E8ffdb2be54Ca9",
+    },
+    adaptiveCurveIrm: "0x58a42117d753a0e69694545DfA19d64c2fB759fB",
+    publicAllocator: "0xDFde06e2B2A2D718eE5560b73dA4F830E56A2f10",
+    metaMorphoFactory: "0xe430821595602eA5DD0cD350f86987437c7362fA",
+    chainlinkOracleFactory: "0x16278156D366fC91536b6b81482ffaC47EEa06D6",
+
+    wNative: "0xda5dDd7270381A7C2717aD10D1c0ecB19e3CDFb2",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0xDF0B24095e15044538866576754F3C964e902Ee6",
   },
 } as const;
 
@@ -306,6 +387,11 @@ export const unwrappedTokensMapping: Record<
   [ChainId.FraxtalMainnet]: {},
   [ChainId.ScrollMainnet]: {},
   [ChainId.InkMainnet]: {},
+  [ChainId.Unichain]: {},
+  [ChainId.SonicMainnet]: {},
+  [ChainId.HemiMainnet]: {},
+  [ChainId.ModeMainnet]: {},
+  [ChainId.CornMainnet]: {},
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {
