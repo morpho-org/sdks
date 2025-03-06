@@ -1345,7 +1345,7 @@ export const aTokenV2Abi = [
   },
 ] as const;
 
-export const addressesProviderAbi_v2 = [
+export const addressesProviderAbi = [
   {
     inputs: [{ internalType: "string", name: "marketId", type: "string" }],
     stateMutability: "nonpayable",

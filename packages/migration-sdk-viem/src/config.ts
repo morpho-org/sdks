@@ -2,7 +2,7 @@ import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import type { Abi } from "viem";
 import {
-  addressesProviderAbi_v2,
+  addressesProviderAbi as addressesProviderAbi_v2,
   lendingPoolAbi,
   protocolDataProviderAbi as protocolDataProviderAbi_v2,
 } from "./abis/aaveV2.js";
