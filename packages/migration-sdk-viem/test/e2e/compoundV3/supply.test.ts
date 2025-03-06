@@ -3,7 +3,6 @@ import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import { entries } from "@morpho-org/morpho-ts";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
-import {} from "lodash";
 import { type Address, maxUint256, parseUnits } from "viem";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";

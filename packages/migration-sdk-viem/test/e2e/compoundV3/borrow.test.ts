@@ -8,7 +8,9 @@ import {
 
 import {
   ChainId,
+  DEFAULT_SLIPPAGE_TOLERANCE,
   type MarketParams,
+  MathLib,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
@@ -43,6 +45,7 @@ interface ChainConfig<C extends ChainId.EthMainnet | ChainId.BaseMainnet> {
         comet: Address;
         collateralAmount: bigint;
         borrowAmount: bigint;
+        extraCollateral: Address;
       };
     };
   }[C];
@@ -63,6 +66,7 @@ const TEST_CONFIGS: {
           ].weth.address,
         borrowAmount: parseEther("1"),
         collateralAmount: parseEther("10"),
+        extraCollateral: "0xae78736Cd615f374D3085123A210448E74Fc6393", // rEth
       },
       usdc: {
         marketTo: markets[ChainId.EthMainnet].usdc_wbtc,
@@ -72,6 +76,7 @@ const TEST_CONFIGS: {
           ].usdc.address,
         borrowAmount: parseUnits("1000", 6),
         collateralAmount: parseUnits("1", 8),
+        extraCollateral: addressesRegistry[ChainId.EthMainnet].wNative,
       },
     },
   },
@@ -88,6 +93,7 @@ const TEST_CONFIGS: {
           ].weth.address,
         borrowAmount: parseEther("1"),
         collateralAmount: parseEther("10"),
+        extraCollateral: addressesRegistry[ChainId.BaseMainnet].usdc,
       },
       usdc: {
         marketTo: markets[ChainId.BaseMainnet].usdc_eth,
@@ -97,6 +103,7 @@ const TEST_CONFIGS: {
           ].usdc.address,
         borrowAmount: parseUnits("1000", 6),
         collateralAmount: parseEther("1"),
+        extraCollateral: "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452", //wstEth
       },
     },
   },
@@ -151,7 +158,7 @@ describe("Borrow position on COMPOUND V3", () => {
     describe(`on chain ${chainId}`, async () => {
       for (const [
         instanceName,
-        { comet, marketTo, collateralAmount, borrowAmount },
+        { comet, marketTo, collateralAmount, borrowAmount, extraCollateral },
       ] of entries(markets)) {
         const { collateralToken, loanToken } = marketTo;
 
@@ -203,6 +210,38 @@ describe("Borrow position on COMPOUND V3", () => {
             );
             expect(position.maxWithdraw.value).toEqual(position.collateral);
           });
+
+          testFn(
+            "shouldn't fetch user position if multiple collaterals",
+            async ({ client }) => {
+              const extraCollateralAmount = 1000n;
+
+              await writeSupplyCollateral(
+                client,
+                comet,
+                extraCollateral,
+                extraCollateralAmount,
+              );
+              await writeSupplyCollateral(
+                client,
+                comet,
+                collateralToken,
+                collateralAmount,
+              );
+              await writeBorrow(client, comet, loanToken, borrowAmount);
+
+              const allPositions = await fetchMigratablePositions(
+                client.account.address,
+                client,
+                { protocols: [MigratableProtocol.compoundV3] },
+              );
+
+              const compoundV3Positions =
+                allPositions[MigratableProtocol.compoundV3]!;
+              expect(compoundV3Positions).toBeDefined();
+              expect(compoundV3Positions).toHaveLength(0);
+            },
+          );
 
           testFn(
             "Should partially migrate user position",
@@ -384,249 +423,514 @@ describe("Borrow position on COMPOUND V3", () => {
             },
           );
 
-          // testFn("Should fully migrate user position", async ({ client }) => {
-          //   const positionAmount = parseUnits("5", underlyingDecimals);
+          testFn("Should fully migrate user position", async ({ client }) => {
+            await writeSupplyCollateral(
+              client,
+              comet,
+              collateralToken,
+              collateralAmount,
+            );
+            await writeBorrow(client, comet, loanToken, borrowAmount);
 
-          //   await writeSupply(client, comet, underlying, positionAmount);
+            const allPositions = await fetchMigratablePositions(
+              client.account.address,
+              client,
+              { protocols: [MigratableProtocol.compoundV3] },
+            );
 
-          //   const allPositions = await fetchMigratablePositions(
-          //     client.account.address,
-          //     client,
-          //     { protocols: [MigratableProtocol.compoundV3] },
-          //   );
+            const compoundV3Positions =
+              allPositions[MigratableProtocol.compoundV3]!;
+            expect(compoundV3Positions).toBeDefined();
 
-          //   const compoundV3Positions =
-          //     allPositions[MigratableProtocol.compoundV3]!;
-          //   expect(compoundV3Positions).toBeDefined();
-          //   expect(compoundV3Positions).toHaveLength(1);
+            expect(compoundV3Positions).toHaveLength(1);
 
-          //   const position =
-          //     compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+            const position =
+              compoundV3Positions[0]! as MigratableBorrowPosition_CompoundV3;
+            expect(position).toBeInstanceOf(
+              MigratableBorrowPosition_CompoundV3,
+            );
 
-          //   const migrationBundle = position.getMigrationTx(
-          //     {
-          //       vault,
-          //       amount: position.supply,
-          //       maxSharePrice: 2n * MathLib.RAY,
-          //     },
-          //     chainId,
-          //     true,
-          //   );
+            // initial share price is 10^-6 because of virtual shares
+            const minSharePrice = parseUnits("1", 21);
 
-          //   expect(migrationBundle.requirements.txs).toHaveLength(0);
-          //   expect(migrationBundle.requirements.signatures).toHaveLength(1);
-          //   expect(migrationBundle.actions).toEqual([
-          //     {
-          //       args: [
-          //         comet,
-          //         client.account.address,
-          //         true,
-          //         0n,
-          //         expect.any(BigInt),
-          //         null,
-          //       ],
-          //       type: "compoundV3AllowBySig",
-          //     },
-          //     {
-          //       args: [comet, underlying, maxUint256, generalAdapter1],
-          //       type: "compoundV3WithdrawFrom",
-          //     },
-          //     {
-          //       args: [
-          //         vault,
-          //         maxUint256,
-          //         2n * MathLib.RAY,
-          //         client.account.address,
-          //       ],
-          //       type: "erc4626Deposit",
-          //     },
-          //   ]);
+            const migrationBundle = position.getMigrationTx(
+              {
+                marketTo,
+                borrowAmount: position.borrow,
+                collateralAmount: position.collateral,
+                minSharePrice,
+              },
+              true,
+            );
 
-          //   await migrationBundle.requirements.signatures[0]!.sign(client);
+            expect(migrationBundle.requirements.txs).toHaveLength(0);
+            expect(migrationBundle.requirements.signatures).toHaveLength(2);
+            expect(migrationBundle.actions).toEqual([
+              {
+                args: [
+                  {
+                    authorizer: client.account.address,
+                    authorized: generalAdapter1,
+                    isAuthorized: true,
+                    deadline: expect.any(BigInt),
+                    nonce: 0n,
+                  },
+                  null,
+                ],
+                type: "morphoSetAuthorizationWithSig",
+              },
+              {
+                args: [
+                  comet,
+                  client.account.address,
+                  true,
+                  0n,
+                  expect.any(BigInt),
+                  null,
+                ],
+                type: "compoundV3AllowBySig",
+              },
+              {
+                args: [
+                  marketTo,
+                  position.collateral,
+                  client.account.address,
+                  [
+                    {
+                      type: "morphoBorrow",
+                      args: [
+                        marketTo,
+                        MathLib.wMulUp(
+                          position.borrow,
+                          MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+                        ),
+                        0n,
+                        minSharePrice,
+                        compoundV3MigrationAdapter,
+                      ],
+                    },
+                    {
+                      type: "compoundV3Repay",
+                      args: [comet, maxUint256, client.account.address],
+                    },
+                    {
+                      type: "erc20Transfer",
+                      args: [
+                        loanToken,
+                        generalAdapter1,
+                        maxUint256,
+                        compoundV3MigrationAdapter,
+                      ],
+                    },
+                    {
+                      type: "morphoRepay",
+                      args: [
+                        marketTo,
+                        maxUint256,
+                        0n,
+                        maxUint256,
+                        client.account.address,
+                        [],
+                      ],
+                    },
+                    {
+                      type: "compoundV3WithdrawFrom",
+                      args: [
+                        comet,
+                        collateralToken,
+                        position.collateral,
+                        generalAdapter1,
+                      ],
+                    },
+                  ],
+                ],
+                type: "morphoSupplyCollateral",
+              },
+            ]);
 
-          //   await sendTransaction(client, migrationBundle.tx());
+            await migrationBundle.requirements.signatures[0]!.sign(client);
+            await migrationBundle.requirements.signatures[1]!.sign(client);
 
-          //   const [bundlerBalance, userPosition, userMMShares] =
-          //     await Promise.all([
-          //       client.balanceOf({
-          //         erc20: underlying,
-          //         owner: compoundV3MigrationAdapter,
-          //       }),
-          //       client.balanceOf({ erc20: comet }),
-          //       client.balanceOf({ erc20: vault }),
-          //     ]);
+            await sendTransaction(client, migrationBundle.tx());
 
-          //   const userMMBalance = await client.readContract({
-          //     address: vault,
-          //     abi: metaMorphoAbi,
-          //     functionName: "convertToAssets",
-          //     args: [userMMShares],
-          //   });
+            const transferredAssets = [collateralToken, loanToken];
+            const adapters = [generalAdapter1, compoundV3MigrationAdapter];
 
-          //   expect(bundlerBalance).toEqual(0n);
-          //   expect(userPosition).toEqual(0n);
-          //   expect(userMMBalance).toBeGreaterThan(positionAmount);
-          // });
+            const [
+              finalPositionTo,
+              finalCollateralFrom,
+              finalDebtFrom,
+              adaptersBalances,
+            ] = await Promise.all([
+              fetchAccrualPosition(client.account.address, marketTo.id, client),
+              client.readContract({
+                abi: cometExtAbi,
+                address: comet,
+                functionName: "collateralBalanceOf",
+                args: [client.account.address, collateralToken],
+              }),
+              client.readContract({
+                abi: cometAbi,
+                address: comet,
+                functionName: "borrowBalanceOf",
+                args: [client.account.address],
+              }),
+              Promise.all(
+                transferredAssets.flatMap((asset) =>
+                  adapters.map(async (adapter) => ({
+                    balance: await client.readContract({
+                      abi: erc20Abi,
+                      address: asset,
+                      functionName: "balanceOf",
+                      args: [adapter],
+                    }),
+                    asset,
+                    adapter,
+                  })),
+                ),
+              ),
+            ]);
 
-          // testFn(
-          //   "Should partially migrate user position without signature",
-          //   async ({ client }) => {
-          //     const positionAmount = parseUnits("5", underlyingDecimals);
-          //     const migratedAmount = parseUnits("3", underlyingDecimals);
+            expect(finalPositionTo.collateral).toEqual(collateralAmount);
+            expect(finalPositionTo.borrowAssets).toBeGreaterThan(borrowAmount);
+            expect(finalPositionTo.borrowAssets).toBeLessThanOrEqual(
+              borrowAmount + 10n ** 12n,
+            ); // interest accrued (empirical)
 
-          //     await writeSupply(client, comet, underlying, positionAmount);
+            expect(finalCollateralFrom).toEqual(0n);
 
-          //     const allPositions = await fetchMigratablePositions(
-          //       client.account.address,
-          //       client,
-          //       { protocols: [MigratableProtocol.compoundV3] },
-          //     );
+            expect(finalDebtFrom).toEqual(0n);
 
-          //     const compoundV3Positions =
-          //       allPositions[MigratableProtocol.compoundV3]!;
-          //     expect(compoundV3Positions).toBeDefined();
-          //     expect(compoundV3Positions).toHaveLength(1);
+            for (const { balance, asset, adapter } of adaptersBalances) {
+              expect(balance).to.equal(
+                0n,
+                `Adapter ${adapter} shouldn't hold ${asset}.`,
+              );
+            }
+          });
 
-          //     const position =
-          //       compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+          testFn(
+            "Should partially migrate user position without signature",
+            async ({ client }) => {
+              const migratedBorrow = borrowAmount / 2n;
+              const migratedCollateral = collateralAmount / 2n;
 
-          //     const migrationBundle = position.getMigrationTx(
-          //       {
-          //         vault,
-          //         amount: migratedAmount,
-          //         maxSharePrice: 2n * MathLib.RAY,
-          //       },
-          //       chainId,
-          //       false,
-          //     );
+              await writeSupplyCollateral(
+                client,
+                comet,
+                collateralToken,
+                collateralAmount,
+              );
+              await writeBorrow(client, comet, loanToken, borrowAmount);
 
-          //     expect(migrationBundle.requirements.txs).toHaveLength(1);
-          //     expect(migrationBundle.requirements.signatures).toHaveLength(0);
-          //     expect(migrationBundle.actions).toEqual([
-          //       {
-          //         args: [comet, underlying, migratedAmount, generalAdapter1],
-          //         type: "compoundV3WithdrawFrom",
-          //       },
-          //       {
-          //         args: [
-          //           vault,
-          //           maxUint256,
-          //           2n * MathLib.RAY,
-          //           client.account.address,
-          //         ],
-          //         type: "erc4626Deposit",
-          //       },
-          //     ]);
+              const allPositions = await fetchMigratablePositions(
+                client.account.address,
+                client,
+                { protocols: [MigratableProtocol.compoundV3] },
+              );
 
-          //     await sendTransaction(
-          //       client,
-          //       migrationBundle.requirements.txs[0]!.tx,
-          //     );
+              const compoundV3Positions =
+                allPositions[MigratableProtocol.compoundV3]!;
+              expect(compoundV3Positions).toBeDefined();
 
-          //     await sendTransaction(client, migrationBundle.tx());
+              expect(compoundV3Positions).toHaveLength(1);
 
-          //     const [bundlerBalance, userPosition, userMMShares] =
-          //       await Promise.all([
-          //         client.balanceOf({
-          //           erc20: underlying,
-          //           owner: compoundV3MigrationAdapter,
-          //         }),
-          //         client.balanceOf({ erc20: comet }),
-          //         client.balanceOf({ erc20: vault }),
-          //       ]);
+              const position =
+                compoundV3Positions[0]! as MigratableBorrowPosition_CompoundV3;
+              expect(position).toBeInstanceOf(
+                MigratableBorrowPosition_CompoundV3,
+              );
 
-          //     const userMMBalance = await client.readContract({
-          //       address: vault,
-          //       abi: metaMorphoAbi,
-          //       functionName: "convertToAssets",
-          //       args: [userMMShares],
-          //     });
+              // initial share price is 10^-6 because of virtual shares
+              const minSharePrice = parseUnits("1", 21);
 
-          //     expect(bundlerBalance).toEqual(0n);
-          //     expect(userPosition).toBeGreaterThan(
-          //       positionAmount - migratedAmount,
-          //     ); //interest have been accumulated
-          //     expect(userMMBalance).toBeGreaterThanOrEqual(migratedAmount - 2n);
-          //   },
-          // );
+              const migrationBundle = position.getMigrationTx(
+                {
+                  marketTo,
+                  borrowAmount: migratedBorrow,
+                  collateralAmount: migratedCollateral,
+                  minSharePrice,
+                },
+                false,
+              );
 
-          // testFn(
-          //   "Should fully migrate user position without signature",
-          //   async ({ client }) => {
-          //     const positionAmount = parseUnits("5", underlyingDecimals);
+              expect(migrationBundle.requirements.txs).toHaveLength(2);
+              expect(migrationBundle.requirements.signatures).toHaveLength(0);
+              expect(migrationBundle.actions).toEqual([
+                {
+                  args: [
+                    marketTo,
+                    migratedCollateral,
+                    client.account.address,
+                    [
+                      {
+                        type: "morphoBorrow",
+                        args: [
+                          marketTo,
+                          migratedBorrow,
+                          0n,
+                          minSharePrice,
+                          compoundV3MigrationAdapter,
+                        ],
+                      },
+                      {
+                        type: "compoundV3Repay",
+                        args: [comet, maxUint256, client.account.address],
+                      },
+                      {
+                        type: "compoundV3WithdrawFrom",
+                        args: [
+                          comet,
+                          collateralToken,
+                          migratedCollateral,
+                          generalAdapter1,
+                        ],
+                      },
+                    ],
+                  ],
+                  type: "morphoSupplyCollateral",
+                },
+              ]);
 
-          //     await writeSupply(client, comet, underlying, positionAmount);
+              for (const tx of migrationBundle.txs())
+                await sendTransaction(client, tx);
 
-          //     const allPositions = await fetchMigratablePositions(
-          //       client.account.address,
-          //       client,
-          //       { protocols: [MigratableProtocol.compoundV3] },
-          //     );
+              const transferredAssets = [collateralToken, loanToken];
+              const adapters = [generalAdapter1, compoundV3MigrationAdapter];
 
-          //     const compoundV3Positions =
-          //       allPositions[MigratableProtocol.compoundV3]!;
-          //     expect(compoundV3Positions).toBeDefined();
-          //     expect(compoundV3Positions).toHaveLength(1);
+              const [
+                finalPositionTo,
+                finalCollateralFrom,
+                finalDebtFrom,
+                adaptersBalances,
+              ] = await Promise.all([
+                fetchAccrualPosition(
+                  client.account.address,
+                  marketTo.id,
+                  client,
+                ),
+                client.readContract({
+                  abi: cometExtAbi,
+                  address: comet,
+                  functionName: "collateralBalanceOf",
+                  args: [client.account.address, collateralToken],
+                }),
+                client.readContract({
+                  abi: cometAbi,
+                  address: comet,
+                  functionName: "borrowBalanceOf",
+                  args: [client.account.address],
+                }),
+                Promise.all(
+                  transferredAssets.flatMap((asset) =>
+                    adapters.map(async (adapter) => ({
+                      balance: await client.readContract({
+                        abi: erc20Abi,
+                        address: asset,
+                        functionName: "balanceOf",
+                        args: [adapter],
+                      }),
+                      asset,
+                      adapter,
+                    })),
+                  ),
+                ),
+              ]);
 
-          //     const position =
-          //       compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+              expect(finalPositionTo.collateral).toEqual(migratedCollateral);
+              expect(finalPositionTo.borrowAssets).approximately(
+                migratedBorrow,
+                2n,
+              );
 
-          //     const migrationBundle = position.getMigrationTx(
-          //       {
-          //         vault,
-          //         amount: position.supply,
-          //         maxSharePrice: 2n * MathLib.RAY,
-          //       },
-          //       chainId,
-          //       false,
-          //     );
+              expect(finalCollateralFrom).toEqual(
+                collateralAmount - migratedCollateral,
+              );
 
-          //     expect(migrationBundle.requirements.txs).toHaveLength(1);
-          //     expect(migrationBundle.requirements.signatures).toHaveLength(0);
-          //     expect(migrationBundle.actions).toEqual([
-          //       {
-          //         args: [comet, underlying, maxUint256, generalAdapter1],
-          //         type: "compoundV3WithdrawFrom",
-          //       },
-          //       {
-          //         args: [
-          //           vault,
-          //           maxUint256,
-          //           2n * MathLib.RAY,
-          //           client.account.address,
-          //         ],
-          //         type: "erc4626Deposit",
-          //       },
-          //     ]);
+              expect(finalDebtFrom).toBeGreaterThan(
+                borrowAmount - migratedBorrow,
+              );
+              expect(finalDebtFrom).toBeLessThan(
+                borrowAmount - migratedBorrow + 10n ** 12n,
+              ); // interest accrued (empirical)
 
-          //     await sendTransaction(
-          //       client,
-          //       migrationBundle.requirements.txs[0]!.tx,
-          //     );
-          //     await sendTransaction(client, migrationBundle.tx());
+              for (const { balance, asset, adapter } of adaptersBalances) {
+                expect(balance).to.equal(
+                  0n,
+                  `Adapter ${adapter} shouldn't hold ${asset}.`,
+                );
+              }
+            },
+          );
 
-          //     const [bundlerBalance, userPosition, userMMShares] =
-          //       await Promise.all([
-          //         client.balanceOf({
-          //           erc20: underlying,
-          //           owner: compoundV3MigrationAdapter,
-          //         }),
-          //         client.balanceOf({ erc20: comet }),
-          //         client.balanceOf({ erc20: vault }),
-          //       ]);
+          testFn(
+            "Should fully migrate user position without signature",
+            async ({ client }) => {
+              await writeSupplyCollateral(
+                client,
+                comet,
+                collateralToken,
+                collateralAmount,
+              );
+              await writeBorrow(client, comet, loanToken, borrowAmount);
 
-          //     const userMMBalance = await client.readContract({
-          //       address: vault,
-          //       abi: metaMorphoAbi,
-          //       functionName: "convertToAssets",
-          //       args: [userMMShares],
-          //     });
+              const allPositions = await fetchMigratablePositions(
+                client.account.address,
+                client,
+                { protocols: [MigratableProtocol.compoundV3] },
+              );
 
-          //     expect(bundlerBalance).toEqual(0n);
-          //     expect(userPosition).toEqual(0n);
-          //     expect(userMMBalance).toBeGreaterThan(positionAmount);
-          //   },
-          // );
+              const compoundV3Positions =
+                allPositions[MigratableProtocol.compoundV3]!;
+              expect(compoundV3Positions).toBeDefined();
+
+              expect(compoundV3Positions).toHaveLength(1);
+
+              const position =
+                compoundV3Positions[0]! as MigratableBorrowPosition_CompoundV3;
+              expect(position).toBeInstanceOf(
+                MigratableBorrowPosition_CompoundV3,
+              );
+
+              // initial share price is 10^-6 because of virtual shares
+              const minSharePrice = parseUnits("1", 21);
+
+              const migrationBundle = position.getMigrationTx(
+                {
+                  marketTo,
+                  borrowAmount: position.borrow,
+                  collateralAmount: position.collateral,
+                  minSharePrice,
+                },
+                false,
+              );
+
+              expect(migrationBundle.requirements.txs).toHaveLength(2);
+              expect(migrationBundle.requirements.signatures).toHaveLength(0);
+              expect(migrationBundle.actions).toEqual([
+                {
+                  args: [
+                    marketTo,
+                    position.collateral,
+                    client.account.address,
+                    [
+                      {
+                        type: "morphoBorrow",
+                        args: [
+                          marketTo,
+                          MathLib.wMulUp(
+                            position.borrow,
+                            MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+                          ),
+                          0n,
+                          minSharePrice,
+                          compoundV3MigrationAdapter,
+                        ],
+                      },
+                      {
+                        type: "compoundV3Repay",
+                        args: [comet, maxUint256, client.account.address],
+                      },
+                      {
+                        type: "erc20Transfer",
+                        args: [
+                          loanToken,
+                          generalAdapter1,
+                          maxUint256,
+                          compoundV3MigrationAdapter,
+                        ],
+                      },
+                      {
+                        type: "morphoRepay",
+                        args: [
+                          marketTo,
+                          maxUint256,
+                          0n,
+                          maxUint256,
+                          client.account.address,
+                          [],
+                        ],
+                      },
+                      {
+                        type: "compoundV3WithdrawFrom",
+                        args: [
+                          comet,
+                          collateralToken,
+                          position.collateral,
+                          generalAdapter1,
+                        ],
+                      },
+                    ],
+                  ],
+                  type: "morphoSupplyCollateral",
+                },
+              ]);
+
+              for (const tx of migrationBundle.txs())
+                await sendTransaction(client, tx);
+
+              const transferredAssets = [collateralToken, loanToken];
+              const adapters = [generalAdapter1, compoundV3MigrationAdapter];
+
+              const [
+                finalPositionTo,
+                finalCollateralFrom,
+                finalDebtFrom,
+                adaptersBalances,
+              ] = await Promise.all([
+                fetchAccrualPosition(
+                  client.account.address,
+                  marketTo.id,
+                  client,
+                ),
+                client.readContract({
+                  abi: cometExtAbi,
+                  address: comet,
+                  functionName: "collateralBalanceOf",
+                  args: [client.account.address, collateralToken],
+                }),
+                client.readContract({
+                  abi: cometAbi,
+                  address: comet,
+                  functionName: "borrowBalanceOf",
+                  args: [client.account.address],
+                }),
+                Promise.all(
+                  transferredAssets.flatMap((asset) =>
+                    adapters.map(async (adapter) => ({
+                      balance: await client.readContract({
+                        abi: erc20Abi,
+                        address: asset,
+                        functionName: "balanceOf",
+                        args: [adapter],
+                      }),
+                      asset,
+                      adapter,
+                    })),
+                  ),
+                ),
+              ]);
+
+              expect(finalPositionTo.collateral).toEqual(collateralAmount);
+              expect(finalPositionTo.borrowAssets).toBeGreaterThan(
+                borrowAmount,
+              );
+              expect(finalPositionTo.borrowAssets).toBeLessThanOrEqual(
+                borrowAmount + 10n ** 12n,
+              ); // interest accrued (empirical)
+
+              expect(finalCollateralFrom).toEqual(0n);
+
+              expect(finalDebtFrom).toEqual(0n);
+
+              for (const { balance, asset, adapter } of adaptersBalances) {
+                expect(balance).to.equal(
+                  0n,
+                  `Adapter ${adapter} shouldn't hold ${asset}.`,
+                );
+              }
+            },
+          );
         });
       }
     });
