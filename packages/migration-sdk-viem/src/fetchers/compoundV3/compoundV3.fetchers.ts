@@ -271,7 +271,7 @@ async function fetchCompoundV3InstancePosition(
       cometName,
       user,
       collateralToken,
-      lltv: assetInInfo.liquidationFactor,
+      lltv: assetInInfo.liquidateCollateralFactor,
       maxWithdraw,
       maxRepay,
     });
