@@ -22,12 +22,9 @@ export async function fetchVaultConfig(
     mm.DECIMALS_OFFSET(overrides),
   ]);
 
-  return new VaultConfig(
-    {
-      ...token,
-      asset,
-      decimalsOffset,
-    },
-    options.chainId,
-  );
+  return new VaultConfig({
+    ...token,
+    asset,
+    decimalsOffset,
+  });
 }

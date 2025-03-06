@@ -56,14 +56,11 @@ export async function fetchVault(
       });
 
       return new Vault({
-        ...new VaultConfig(
-          {
-            ...config,
-            eip5267Domain: new Eip5267Domain(config.eip5267Domain),
-            address,
-          },
-          parameters.chainId,
-        ),
+        ...new VaultConfig({
+          ...config,
+          eip5267Domain: new Eip5267Domain(config.eip5267Domain),
+          address,
+        }),
         owner,
         curator,
         guardian,
