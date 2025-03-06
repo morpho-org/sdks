@@ -10,8 +10,11 @@ import { parseEther, parseUnits } from "viem";
 const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt, dai } =
   addressesRegistry[ChainId.EthMainnet];
 
-const { adaptiveCurveIrm: adaptiveCurveIrm_base, wNative: wNative_base } =
-  addressesRegistry[ChainId.BaseMainnet];
+const {
+  adaptiveCurveIrm: adaptiveCurveIrm_base,
+  wNative: wNative_base,
+  usdc: usdc_base,
+} = addressesRegistry[ChainId.BaseMainnet];
 
 export const markets = {
   [ChainId.EthMainnet]: {
@@ -217,6 +220,13 @@ export const markets = {
       oracle: "0x4A11590e5326138B514E08A9B52202D42077Ca65",
       irm: adaptiveCurveIrm_base,
       lltv: parseUnits("94.5", 16),
+    }),
+    usdc_eth: new MarketParams({
+      loanToken: usdc_base,
+      collateralToken: wNative_base,
+      oracle: "0xFEa2D58cEfCb9fcb597723c6bAE66fFE4193aFE4",
+      irm: adaptiveCurveIrm_base,
+      lltv: parseUnits("86", 16),
     }),
   },
 } as const;
