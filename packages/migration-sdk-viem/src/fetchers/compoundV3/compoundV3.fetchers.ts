@@ -232,7 +232,7 @@ async function fetchCompoundV3InstancePosition(
 
     /* MAX */
     const maxWithdraw = (() => {
-      if (!isWithdrawPaused)
+      if (isWithdrawPaused)
         return {
           value: 0n,
           limiter: SupplyMigrationLimiter.withdrawPaused,
@@ -243,13 +243,13 @@ async function fetchCompoundV3InstancePosition(
       };
     })();
     const maxRepay = (() => {
-      if (!isRepayPaused)
+      if (isRepayPaused)
         return {
           value: 0n,
           limiter: BorrowMigrationLimiter.repayPaused,
         };
       return {
-        value: collateralBalance,
+        value: borrowBalance,
         limiter: BorrowMigrationLimiter.position,
       };
     })();
