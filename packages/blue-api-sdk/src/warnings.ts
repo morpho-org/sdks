@@ -15,6 +15,7 @@ export enum MarketWarningType {
   NonWhitelisted = "not_whitelisted",
   OracleNotFromFactory = "oracle_not_from_factory",
   MisconfiguredOracleDecimals = "misconfigured_oracle_decimals",
+  IncorrectOracleConfiguration = "incorrect_oracle_configuration",
 }
 
 export enum VaultWarningType {
