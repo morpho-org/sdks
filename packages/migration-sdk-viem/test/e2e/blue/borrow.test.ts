@@ -241,7 +241,7 @@ describe("Borrow position on blue", () => {
         const operation = migratablePosition.getMigrationOperations(
           {
             marketTo: marketTo.id,
-            collateralassets: collateralToMigrate,
+            collateralAssets: collateralToMigrate,
             borrowAssets: borrowToMigrate,
             slippageFrom,
             slippageTo,
@@ -419,7 +419,7 @@ describe("Borrow position on blue", () => {
           const operation = migratablePosition.getMigrationOperations(
             {
               marketTo: marketTo.id,
-              collateralassets: collateralToMigrate,
+              collateralAssets: collateralToMigrate,
               borrowShares: sharesToMigrate,
               slippageFrom,
               slippageTo,
@@ -610,7 +610,7 @@ describe("Borrow position on blue", () => {
         const operation = migratablePosition.getMigrationOperations(
           {
             marketTo: marketTo.id,
-            collateralassets: migratablePosition.position.collateral,
+            collateralAssets: migratablePosition.position.collateral,
             borrowShares: migratablePosition.position.borrowShares,
             slippageFrom,
             slippageTo,

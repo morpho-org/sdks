@@ -19,15 +19,17 @@ export namespace MigratableBorrowPosition_Blue {
     marketTo: MarketId;
 
     /** The amount of collateral to migrate. */
-    collateralassets: bigint;
+    collateralAssets: bigint;
 
-    /** The amount to migrate. Must be `0n` if `borrowShares` is not `0n`.
+    /**
+     * The amount to migrate. Must be `0n` if `borrowShares` is not `0n`.
      *
      * @default 0n
      */
     borrowAssets?: bigint;
 
-    /** The number of shares to migrate. Must be `0n` if `borrowAssets` is not `0n`.
+    /**
+     * The number of shares to migrate. Must be `0n` if `borrowAssets` is not `0n`.
      *
      *  @default 0n
      */
@@ -84,7 +86,7 @@ export class MigratableBorrowPosition_Blue
   public getMigrationOperations(
     {
       marketTo,
-      collateralassets,
+      collateralAssets,
       borrowAssets = 0n,
       borrowShares = 0n,
       slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE,
@@ -96,7 +98,7 @@ export class MigratableBorrowPosition_Blue
 
     const shouldMigrateBorrow = borrowAssets > 0n || borrowShares > 0n;
 
-    if (collateralassets === 0n) throw new BlueSimulationErrors.ZeroAssets();
+    if (collateralAssets === 0n) throw new BlueSimulationErrors.ZeroAssets();
 
     if (borrowShares > 0n)
       borrowAssets = this.market.toBorrowAssets(borrowShares);
@@ -107,7 +109,7 @@ export class MigratableBorrowPosition_Blue
       sender: this.position.user,
       args: {
         id: marketTo,
-        assets: collateralassets,
+        assets: collateralAssets,
         onBehalf: this.position.user,
         callback: [
           ...(shouldMigrateBorrow
@@ -153,7 +155,7 @@ export class MigratableBorrowPosition_Blue
             sender: this.position.user,
             args: {
               id: this.market.id,
-              assets: collateralassets,
+              assets: collateralAssets,
               onBehalf: this.position.user,
               receiver: bundler,
             },
