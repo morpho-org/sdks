@@ -8,7 +8,7 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { BlueInputBundlerOperations } from "@morpho-org/bundler-sdk-viem";
-import { maxUint256 } from "viem";
+import { BlueSimulationErrors } from "@morpho-org/simulation-sdk";
 
 export namespace MigratableBorrowPosition_Blue {
   /**
@@ -19,10 +19,21 @@ export namespace MigratableBorrowPosition_Blue {
     marketTo: MarketId;
 
     /** The amount of collateral to migrate. */
-    collateralAmount: bigint;
+    collateralAssets: bigint;
 
-    /** The amount to migrate. */
-    borrowAmount: bigint;
+    /**
+     * The amount to migrate. Must be `0n` if `borrowShares` is not `0n`.
+     *
+     * @default 0n
+     */
+    borrowAssets?: bigint;
+
+    /**
+     * The number of shares to migrate. Must be `0n` if `borrowAssets` is not `0n`.
+     *
+     *  @default 0n
+     */
+    borrowShares?: bigint;
 
     /** Slippage tolerance for the current market (optional). */
     slippageFrom?: bigint;
@@ -75,8 +86,9 @@ export class MigratableBorrowPosition_Blue
   public getMigrationOperations(
     {
       marketTo,
-      collateralAmount,
-      borrowAmount,
+      collateralAssets,
+      borrowAssets = 0n,
+      borrowShares = 0n,
       slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE,
       slippageTo = DEFAULT_SLIPPAGE_TOLERANCE,
     }: MigratableBorrowPosition_Blue.Args,
@@ -84,19 +96,23 @@ export class MigratableBorrowPosition_Blue
   ): BlueInputBundlerOperations["Blue_SupplyCollateral"] {
     const { bundler } = getChainAddresses(chainId);
 
+    const shouldMigrateBorrow = borrowAssets > 0n || borrowShares > 0n;
+
+    if (collateralAssets === 0n) throw new BlueSimulationErrors.ZeroAssets();
+
+    if (borrowShares > 0n)
+      borrowAssets = this.market.toBorrowAssets(borrowShares);
+
     return {
       type: "Blue_SupplyCollateral",
       address: "0x",
       sender: this.position.user,
       args: {
         id: marketTo,
-        assets:
-          collateralAmount === maxUint256
-            ? this.position.collateral
-            : collateralAmount,
+        assets: collateralAssets,
         onBehalf: this.position.user,
         callback: [
-          ...(borrowAmount > 0n
+          ...(shouldMigrateBorrow
             ? ([
                 {
                   type: "Blue_Borrow",
@@ -105,14 +121,12 @@ export class MigratableBorrowPosition_Blue
                   args: {
                     id: marketTo,
                     assets:
-                      borrowAmount === maxUint256
+                      borrowShares > 0n
                         ? MathLib.wMulUp(
-                            this.market.toBorrowAssets(
-                              this.position.borrowShares,
-                            ),
+                            borrowAssets,
                             MathLib.WAD + slippageFrom,
                           )
-                        : borrowAmount,
+                        : borrowAssets,
                     receiver: bundler,
                     onBehalf: this.position.user,
                     slippage: slippageTo,
@@ -125,11 +139,11 @@ export class MigratableBorrowPosition_Blue
                   args: {
                     id: this.market.id,
                     slippage: slippageFrom,
-                    ...(borrowAmount !== maxUint256
+                    ...(borrowShares === 0n
                       ? {
-                          assets: borrowAmount,
+                          assets: borrowAssets,
                         }
-                      : { shares: this.position.borrowShares }),
+                      : { shares: borrowShares }),
                     onBehalf: this.position.user,
                   },
                 },
@@ -141,10 +155,7 @@ export class MigratableBorrowPosition_Blue
             sender: this.position.user,
             args: {
               id: this.market.id,
-              assets:
-                collateralAmount === maxUint256
-                  ? this.position.collateral
-                  : collateralAmount,
+              assets: collateralAssets,
               onBehalf: this.position.user,
               receiver: bundler,
             },
