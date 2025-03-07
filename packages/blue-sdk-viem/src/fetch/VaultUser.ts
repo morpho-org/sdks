@@ -1,6 +1,6 @@
 import { type Address, type Client, erc20Abi } from "viem";
 
-import { ChainUtils, VaultUser } from "@morpho-org/blue-sdk";
+import { VaultUser } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
 import type { DeploylessFetchParameters } from "../types";
@@ -15,9 +15,7 @@ export async function fetchVaultUser(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   if (deployless) {
     try {

@@ -1,18 +1,21 @@
 import {
-  ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
   NATIVE_ADDRESS,
-  PERMIT2_ALLOWANCE_RECIPIENTS,
-  addresses,
   getChainAddresses,
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { type Address, type Client, erc20Abi, maxUint256 } from "viem";
+import {
+  type Address,
+  type Client,
+  erc20Abi,
+  maxUint256,
+  zeroAddress,
+} from "viem";
 import { getBalance, getChainId, readContract } from "viem/actions";
 
-import { fromEntries } from "@morpho-org/morpho-ts";
+import { fromEntries, getValue } from "@morpho-org/morpho-ts";
 import {
   erc2612Abi,
   permissionedErc20WrapperAbi,
@@ -31,9 +34,7 @@ export async function fetchHolding(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   if (token === NATIVE_ADDRESS)
     return new Holding({
@@ -42,16 +43,11 @@ export async function fetchHolding(
       erc20Allowances: fromEntries(
         ERC20_ALLOWANCE_RECIPIENTS.map((label) => [label, maxUint256]),
       ),
-      permit2Allowances: fromEntries(
-        PERMIT2_ALLOWANCE_RECIPIENTS.map((label) => [
-          label,
-          {
-            amount: 0n,
-            expiration: 0n,
-            nonce: 0n,
-          },
-        ]),
-      ),
+      permit2BundlerAllowance: {
+        amount: 0n,
+        expiration: 0n,
+        nonce: 0n,
+      },
       balance: await getBalance(client, {
         // biome-ignore lint/suspicious/noExplicitAny: flattened union type
         ...(parameters as any),
@@ -60,12 +56,20 @@ export async function fetchHolding(
     });
 
   if (deployless) {
-    const { morpho, permit2, bundler } = addresses[parameters.chainId];
+    const {
+      morpho,
+      permit2 = zeroAddress,
+      bundler3: { bundler3, generalAdapter1 },
+    } = getChainAddresses(parameters.chainId);
+
     try {
       const {
         balance,
-        erc20Allowances,
-        permit2Allowances,
+        erc20Allowances: {
+          generalAdapter1: generalAdapter1Erc20Allowance,
+          ...erc20Allowances
+        },
+        permit2BundlerAllowance,
         isErc2612,
         erc2612Nonce,
         canTransfer,
@@ -79,17 +83,21 @@ export async function fetchHolding(
           user,
           morpho,
           permit2,
-          bundler,
-          permissionedBackedTokens[parameters.chainId].has(token),
-          permissionedWrapperTokens[parameters.chainId].has(token),
+          bundler3,
+          generalAdapter1,
+          !!permissionedBackedTokens[parameters.chainId]?.has(token),
+          !!permissionedWrapperTokens[parameters.chainId]?.has(token),
         ],
       });
 
       return new Holding({
         user,
         token,
-        erc20Allowances,
-        permit2Allowances,
+        erc20Allowances: {
+          "bundler3.generalAdapter1": generalAdapter1Erc20Allowance,
+          ...erc20Allowances,
+        },
+        permit2BundlerAllowance,
         erc2612Nonce: isErc2612 ? erc2612Nonce : undefined,
         balance,
         canTransfer: optionalBoolean[canTransfer],
@@ -104,7 +112,7 @@ export async function fetchHolding(
   const [
     balance,
     erc20Allowances,
-    permit2Allowances,
+    permit2BundlerAllowance,
     erc2612Nonce,
     whitelistControllerAggregator,
     hasErc20WrapperPermission,
@@ -117,39 +125,35 @@ export async function fetchHolding(
       args: [user],
     }),
     Promise.all(
-      ERC20_ALLOWANCE_RECIPIENTS.map(
-        async (label) =>
-          [
-            label,
-            await readContract(client, {
-              ...parameters,
-              abi: erc20Abi,
-              address: token,
-              functionName: "allowance",
-              args: [user, chainAddresses[label]],
-            }),
-          ] as const,
-      ),
+      ERC20_ALLOWANCE_RECIPIENTS.map(async (label) => {
+        const spender = getValue(chainAddresses, label);
+        if (spender == null) return [label, 0n] as const;
+
+        return [
+          label,
+          await readContract(client, {
+            ...parameters,
+            abi: erc20Abi,
+            address: token,
+            functionName: "allowance",
+            args: [user, spender],
+          }),
+        ] as const;
+      }),
     ),
-    Promise.all(
-      PERMIT2_ALLOWANCE_RECIPIENTS.map(
-        async (label) =>
-          [
-            label,
-            await readContract(client, {
-              ...parameters,
-              abi: permit2Abi,
-              address: chainAddresses.permit2,
-              functionName: "allowance",
-              args: [user, token, chainAddresses[label]],
-            }).then(([amount, expiration, nonce]) => ({
-              amount,
-              expiration: BigInt(expiration),
-              nonce: BigInt(nonce),
-            })),
-          ] as const,
-      ),
-    ),
+    chainAddresses.permit2 != null
+      ? readContract(client, {
+          ...parameters,
+          abi: permit2Abi,
+          address: chainAddresses.permit2,
+          functionName: "allowance",
+          args: [user, token, chainAddresses.bundler3.bundler3],
+        }).then(([amount, expiration, nonce]) => ({
+          amount,
+          expiration: BigInt(expiration),
+          nonce: BigInt(nonce),
+        }))
+      : { amount: 0n, expiration: 0n, nonce: 0n },
     readContract(client, {
       ...parameters,
       abi: erc2612Abi,
@@ -157,7 +161,7 @@ export async function fetchHolding(
       functionName: "nonces",
       args: [user],
     }).catch(() => undefined),
-    permissionedBackedTokens[parameters.chainId].has(token)
+    permissionedBackedTokens[parameters.chainId]?.has(token)
       ? readContract(client, {
           ...parameters,
           abi: wrappedBackedTokenAbi,
@@ -171,14 +175,14 @@ export async function fetchHolding(
       address: token,
       functionName: "hasPermission",
       args: [user],
-    }).catch(() => !permissionedWrapperTokens[parameters.chainId!].has(token)),
+    }).catch(() => !permissionedWrapperTokens[parameters.chainId!]?.has(token)),
   ]);
 
   const holding = new Holding({
     user,
     token,
     erc20Allowances: fromEntries(erc20Allowances),
-    permit2Allowances: fromEntries(permit2Allowances),
+    permit2BundlerAllowance,
     erc2612Nonce,
     balance,
     canTransfer: hasErc20WrapperPermission,

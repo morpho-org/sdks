@@ -1,6 +1,6 @@
 import type { Address, Client } from "viem";
 
-import { ChainUtils, User, addresses } from "@morpho-org/blue-sdk";
+import { User, getChainAddresses } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
 import type { FetchParameters } from "../types";
@@ -10,11 +10,12 @@ export async function fetchUser(
   client: Client,
   parameters: FetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
-  const { morpho, bundler } = addresses[parameters.chainId];
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(parameters.chainId);
 
   const [isBundlerAuthorized, morphoNonce] = await Promise.all([
     readContract(client, {
@@ -22,7 +23,7 @@ export async function fetchUser(
       address: morpho,
       abi: blueAbi,
       functionName: "isAuthorized",
-      args: [address, bundler],
+      args: [address, generalAdapter1],
     }),
     readContract(client, {
       ...parameters,

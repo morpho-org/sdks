@@ -5,13 +5,13 @@ import {
   ChainId,
   Eip5267Domain,
   ExchangeRateWrappedToken,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { zeroHash } from "viem";
 import { Token } from "../../src/augment/Token";
 
-const { mkr, usdc, stEth, wstEth } = addresses[ChainId.EthMainnet];
+const { mkr, usdc, stEth, wstEth } = addressesRegistry[ChainId.EthMainnet];
 
 describe("augment/Token", () => {
   test("should fetch token data", async ({ wallet }) => {

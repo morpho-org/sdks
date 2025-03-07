@@ -10,14 +10,14 @@ import {
   addresses,
 } from "../../src/index.js";
 
-const { usdc, wstEth, adaptiveCurveIrm } = addresses[ChainId.EthMainnet];
+const { usdc, wstEth, adaptiveCurveIrm } = addresses[ChainId.EthMainnet]!;
 
 const params = new MarketParams({
   // USDC(wstETH, 86%, Chainlink, AdaptiveCurve)
-  loanToken: usdc,
-  collateralToken: wstEth,
+  loanToken: usdc!,
+  collateralToken: wstEth!,
   oracle: "0x48F7E36EB6B826B2dF4B2E630B62Cd25e89E40e2",
-  irm: adaptiveCurveIrm,
+  irm: adaptiveCurveIrm!,
   lltv: parseUnits("86", 16),
 });
 

@@ -80,7 +80,7 @@ const customPosition = new MigratableSupplyPosition_AaveV2(positionConfig);
 ```typescript
 const migrationArgs = {
   amount: BigInt(500),
-  minShares: BigInt(50),
+  maxSharePrice: BigInt(50),
   vault: "0xvault...address",
 };
 
@@ -123,7 +123,7 @@ The obtained bundle is made of:
 #### `MigratableSupplyPosition.Args`
 Arguments required for executing a migration transaction:
 - `amount`: The amount to migrate.
-- `minShares`: The minimum vault shares expected after migration.
+- `maxSharePrice`: The maximum vault share price expected (scaled by RAY).
 - `vault`: The address of the vault to migrate to.
 
 #### `IMigratableSupplyPosition`

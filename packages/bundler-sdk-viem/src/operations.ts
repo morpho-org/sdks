@@ -33,7 +33,7 @@ import {
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
 
-import { maxUint256 } from "viem";
+import { isAddressEqual, maxUint256 } from "viem";
 import { BundlerErrors } from "./errors.js";
 import type {
   BundlerOperation,
@@ -73,7 +73,10 @@ export const populateInputTransfer = (
   data: MaybeDraft<SimulationState>,
   { hasSimplePermit = false }: { hasSimplePermit?: boolean } = {},
 ): Exclude<BundlerOperation, CallbackBundlerOperation>[] => {
-  const { bundler, permit2 } = getChainAddresses(data.chainId);
+  const {
+    bundler3: { bundler3, generalAdapter1 },
+    permit2,
+  } = getChainAddresses(data.chainId);
 
   // If native token, it is expected to be sent along as call value.
   if (address === NATIVE_ADDRESS)
@@ -85,27 +88,25 @@ export const populateInputTransfer = (
         args: {
           amount,
           from,
-          to: bundler,
+          to: generalAdapter1,
         },
       },
     ];
 
-  const { erc20Allowances, permit2Allowances, erc2612Nonce } = data.getHolding(
-    from,
-    address,
-  );
+  const { erc20Allowances, permit2BundlerAllowance, erc2612Nonce } =
+    data.getHolding(from, address);
 
   // ERC20 allowance to the bundler is enough, consume it.
-  if (erc20Allowances.bundler >= amount)
+  if (erc20Allowances["bundler3.generalAdapter1"] >= amount)
     return [
       {
         type: "Erc20_Transfer",
-        sender: bundler,
+        sender: generalAdapter1,
         address,
         args: {
           amount,
           from,
-          to: bundler,
+          to: generalAdapter1,
         },
       },
     ];
@@ -117,9 +118,11 @@ export const populateInputTransfer = (
     erc2612Nonce != null &&
     (data.tryGetVault(address) != null || // MetaMorpho vaults implement EIP-2612.
       hasSimplePermit);
-  const isPermissioned =
-    permissionedWrapperTokens[data.chainId].has(address) ||
-    permissionedBackedTokens[data.chainId].has(address);
+  const useSimpleTransfer =
+    permit2 == null ||
+    // Token is permissioned and Permit2 may not be authorized so Permit2 cannot be used.
+    !!permissionedWrapperTokens[data.chainId]?.has(address) ||
+    !!permissionedBackedTokens[data.chainId]?.has(address);
 
   if (useSimplePermit)
     operations.push({
@@ -128,34 +131,33 @@ export const populateInputTransfer = (
       address,
       args: {
         amount,
-        spender: bundler,
+        spender: generalAdapter1,
         nonce: erc2612Nonce,
       },
     });
-  // Token is permissioned and Permit2 may not be authorized so Permit2 cannot be used.
-  else if (isPermissioned)
+  else if (useSimpleTransfer)
     operations.push({
       type: "Erc20_Approve",
       sender: from,
       address,
       args: {
         amount,
-        spender: bundler,
+        spender: generalAdapter1,
       },
     });
 
-  if (useSimplePermit || isPermissioned)
+  if (useSimplePermit || useSimpleTransfer)
     operations.push({
       type: "Erc20_Transfer",
-      sender: bundler,
+      sender: generalAdapter1,
       address,
       args: {
         amount,
         from,
-        to: bundler,
+        to: generalAdapter1,
       },
     });
-  // Simple permit is not supported and token is not permissioned: fallback to Permit2.
+  // Simple permit is not supported: fallback to Permit2.
   else {
     if (erc20Allowances.permit2 < amount)
       operations.push({
@@ -169,8 +171,8 @@ export const populateInputTransfer = (
       });
 
     if (
-      permit2Allowances.bundler.amount < amount ||
-      permit2Allowances.bundler.expiration < data.block.timestamp
+      permit2BundlerAllowance.amount < amount ||
+      permit2BundlerAllowance.expiration < data.block.timestamp
     )
       operations.push({
         type: "Erc20_Permit2",
@@ -178,20 +180,19 @@ export const populateInputTransfer = (
         address,
         args: {
           amount,
-          spender: bundler,
           expiration: MathLib.MAX_UINT_48, // Always approve indefinitely.
-          nonce: permit2Allowances.bundler.nonce,
+          nonce: permit2BundlerAllowance.nonce,
         },
       });
 
     operations.push({
       type: "Erc20_Transfer2",
-      sender: bundler,
+      sender: bundler3,
       address,
       args: {
         amount,
         from,
-        to: bundler,
+        to: generalAdapter1,
       },
     });
   }
@@ -218,7 +219,10 @@ export const populateSubBundle = (
   options: BundlingOptions = {},
 ) => {
   const { sender } = inputOperation;
-  const { morpho, bundler } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { bundler3, generalAdapter1 },
+  } = getChainAddresses(data.chainId);
   const {
     withSimplePermit = new Set(),
     publicAllocatorOptions,
@@ -234,11 +238,11 @@ export const populateSubBundle = (
 
   const isErc20Wrapper =
     !!wrappedToken &&
-    erc20WrapperTokens[data.chainId].has(wrappedToken.address);
+    !!erc20WrapperTokens[data.chainId]?.has(wrappedToken.address);
 
   // Transform input operation to act on behalf of the sender, via the bundler.
   const mainOperation = produceImmutable(inputOperation, (draft) => {
-    draft.sender = bundler;
+    draft.sender = generalAdapter1;
 
     // Redirect MetaMorpho operation owner.
     switch (draft.type) {
@@ -252,7 +256,7 @@ export const populateSubBundle = (
       case "MetaMorpho_Deposit":
       case "MetaMorpho_Withdraw":
         // Only if sender is owner otherwise the owner would be lost.
-        if (draft.args.owner === sender) draft.args.owner = bundler;
+        if (draft.args.owner === sender) draft.args.owner = generalAdapter1;
     }
 
     // Redirect operation targets.
@@ -263,7 +267,8 @@ export const populateSubBundle = (
         draft.args.onBehalf = sender;
       case "MetaMorpho_Withdraw":
         // Only if sender is receiver otherwise the receiver would be lost.
-        if (draft.args.receiver === sender) draft.args.receiver = bundler;
+        if (draft.args.receiver === sender)
+          draft.args.receiver = generalAdapter1;
     }
   });
 
@@ -274,7 +279,7 @@ export const populateSubBundle = (
   if (needsBundlerAuthorization && !data.getUser(sender).isBundlerAuthorized)
     operations.push({
       type: "Blue_SetAuthorization",
-      sender: bundler,
+      sender: bundler3,
       address: morpho,
       args: {
         owner: sender,
@@ -371,6 +376,9 @@ export const populateSubBundle = (
         vaultReallocations.push(withdrawal);
       }
 
+      // TODO: we know there are no unwrap native in the middle
+      // of the bundle so we are certain we need to add an input transfer.
+      // This could be handled by `simulateRequiredTokenAmounts` below.
       const fees = keys(reallocations).reduce(
         (total, vault) =>
           total + data.getVault(vault).publicAllocatorConfig!.fee,
@@ -386,7 +394,7 @@ export const populateSubBundle = (
           args: {
             amount: fees,
             from: sender,
-            to: bundler,
+            to: bundler3,
           },
         });
     }
@@ -397,7 +405,7 @@ export const populateSubBundle = (
         ([vault, vaultWithdrawals]) =>
           ({
             type: "MetaMorpho_PublicReallocate",
-            sender: bundler,
+            sender: bundler3,
             address: vault,
             args: {
               // Reallocation withdrawals must be sorted by market id in ascending alphabetical order.
@@ -460,7 +468,7 @@ export const populateSubBundle = (
     ("shares" in mainOperation.args && mainOperation.args.shares === maxUint256)
   ) {
     if (mainOperation.type === "MetaMorpho_Withdraw")
-      mainOperation.args.owner = bundler;
+      mainOperation.args.owner = generalAdapter1;
 
     return allOperations;
   }
@@ -480,12 +488,12 @@ export const populateSubBundle = (
       ...populateInputTransfer(
         {
           type: "Erc20_Transfer",
-          sender: bundler,
+          sender: generalAdapter1,
           address: token,
           args: {
             amount: required,
             from: sender,
-            to: bundler,
+            to: generalAdapter1,
           },
         },
         data,
@@ -519,9 +527,15 @@ export const finalizeBundle = (
   const nbOperations = operations.length;
   if (nbOperations === 0) return operations;
 
-  const { bundler } = getChainAddresses(startData.chainId);
+  const {
+    bundler3: { bundler3, generalAdapter1 },
+  } = getChainAddresses(startData.chainId);
 
-  if (receiver === bundler) throw Error(`receiver is bundler`);
+  if (
+    isAddressEqual(receiver, bundler3) ||
+    isAddressEqual(receiver, generalAdapter1)
+  )
+    throw Error(`receiver is bundler`);
 
   const approvals = [] as Operations["Erc20_Approve"][];
   const permits = [] as Operations["Erc20_Permit"][];
@@ -574,8 +588,7 @@ export const finalizeBundle = (
         const duplicatePermit2 = permit2s.find(
           (permit2) =>
             permit2.address === operation.address &&
-            permit2.sender === operation.sender &&
-            permit2.args.spender === operation.args.spender,
+            permit2.sender === operation.sender,
         );
 
         if (duplicatePermit2 == null) {
@@ -600,9 +613,9 @@ export const finalizeBundle = (
         } = operation;
 
         if (
-          from !== bundler &&
-          to === bundler &&
-          !erc20WrapperTokens[startData.chainId].has(address)
+          from !== generalAdapter1 &&
+          to === generalAdapter1 &&
+          !erc20WrapperTokens[startData.chainId]?.has(address)
         ) {
           const duplicateTransfer = inputTransfers.find(
             (transfer) =>
@@ -634,7 +647,7 @@ export const finalizeBundle = (
           args: { amount, from, to },
         } = operation;
 
-        if (from !== bundler && to === bundler) {
+        if (from !== generalAdapter1 && to === generalAdapter1) {
           const duplicateTransfer2 = inputTransfer2s.find(
             (transfer) =>
               transfer.address === address &&
@@ -679,7 +692,7 @@ export const finalizeBundle = (
   operations.forEach((operation, index) => {
     if (
       operation.type !== "MetaMorpho_Deposit" ||
-      operation.args.owner !== bundler
+      operation.args.owner !== generalAdapter1
     )
       return;
 
@@ -687,13 +700,15 @@ export const finalizeBundle = (
 
     // shares are not defined when depositing assets, so we rely on simulation steps.
     const shares =
-      steps[index + 1]!.getHolding(bundler, token).balance -
-      steps[index]!.getHolding(bundler, token).balance;
+      steps[index + 1]!.getHolding(generalAdapter1, token).balance -
+      steps[index]!.getHolding(generalAdapter1, token).balance;
 
     if (
       steps
         .slice(index + 2)
-        .some((step) => step.getHolding(bundler, token).balance < shares)
+        .some(
+          (step) => step.getHolding(generalAdapter1, token).balance < shares,
+        )
     )
       // If the bundler's balance is at least once lower than assets, the bundler does need these assets.
       return;
@@ -719,17 +734,20 @@ export const finalizeBundle = (
         return;
     }
 
-    if (operation.args.receiver !== bundler || unwrapTokens.has(token)) return;
+    if (operation.args.receiver !== generalAdapter1 || unwrapTokens.has(token))
+      return;
 
     // assets are not defined when using shares, so we rely on simulation steps.
     const assets =
-      steps[index + 1]!.getHolding(bundler, token).balance -
-      steps[index]!.getHolding(bundler, token).balance;
+      steps[index + 1]!.getHolding(generalAdapter1, token).balance -
+      steps[index]!.getHolding(generalAdapter1, token).balance;
 
     if (
       steps
         .slice(index + 2)
-        .some((step) => step.getHolding(bundler, token).balance < assets)
+        .some(
+          (step) => step.getHolding(generalAdapter1, token).balance < assets,
+        )
     )
       // If the bundler's balance is at least once lower than assets, the bundler does need these assets.
       return;
@@ -741,21 +759,21 @@ export const finalizeBundle = (
   operations.forEach((operation, index) => {
     if (
       operation.type !== "MetaMorpho_Withdraw" ||
-      operation.args.owner !== bundler
+      operation.args.owner !== generalAdapter1
     )
       return;
 
     // shares are not defined when using assets, so we rely on simulation steps.
     const shares =
-      steps[index]!.getHolding(bundler, operation.address).balance -
-      steps[index + 1]!.getHolding(bundler, operation.address).balance;
+      steps[index]!.getHolding(generalAdapter1, operation.address).balance -
+      steps[index + 1]!.getHolding(generalAdapter1, operation.address).balance;
 
     const inputTransferIndex = operations.findIndex(
       (candidate) =>
         candidate.type === "Erc20_Transfer" &&
         candidate.address === operation.address &&
-        candidate.sender === bundler &&
-        candidate.args.to === bundler &&
+        candidate.sender === generalAdapter1 &&
+        candidate.args.to === generalAdapter1 &&
         candidate.args.amount >= shares,
     );
     if (inputTransferIndex <= 0) return;
@@ -775,14 +793,16 @@ export const finalizeBundle = (
 
     const { amount, from, to } = operation.args;
 
-    if (from === bundler || to !== bundler) return true;
+    if (from === generalAdapter1 || to !== generalAdapter1) return true;
 
     const token = operation.address;
 
     if (
       steps
         .slice(index + 2)
-        .some((step) => step.getHolding(bundler, token).balance < amount)
+        .some(
+          (step) => step.getHolding(generalAdapter1, token).balance < amount,
+        )
     )
       // If the bundler's balance is at least once less than amount, the bundler does need these assets.
       // Do not only keep the amount actually used in this case because some input transfers
@@ -798,7 +818,7 @@ export const finalizeBundle = (
   // Unwrap requested remaining wrapped tokens.
   const unwraps = [] as Erc20Operations["Erc20_Unwrap"][];
 
-  const endBundlerTokenData = getLast(steps).holdings[bundler] ?? {};
+  const endBundlerTokenData = getLast(steps).holdings[generalAdapter1] ?? {};
 
   unwrapTokens.forEach((wrappedToken) => {
     const remaining = endBundlerTokenData[wrappedToken]?.balance ?? 0n;
@@ -810,7 +830,7 @@ export const finalizeBundle = (
     unwraps.push({
       type: "Erc20_Unwrap",
       address: wrappedToken,
-      sender: bundler,
+      sender: generalAdapter1,
       args: {
         amount: maxUint256,
         receiver,
@@ -827,24 +847,26 @@ export const finalizeBundle = (
   // Skim any token expected to be left on the bundler.
   const skims = [] as Erc20Operations["Erc20_Transfer"][];
   {
-    const startBundlerTokenData = steps[0].holdings[bundler] ?? {};
-    const endBundlerTokenData = getLast(steps).holdings[bundler] ?? {};
+    const startBundlerTokenData = steps[0].holdings[generalAdapter1] ?? {};
+    const endBundlerTokenData = getLast(steps).holdings[generalAdapter1] ?? {};
 
     skims.push(
       ...entries(endBundlerTokenData)
         .filter(
-          ([token, { balance }]) =>
-            balance - (startBundlerTokenData[token]?.balance ?? 0n) > 5n,
+          ([token, holding]) =>
+            holding != null &&
+            holding.balance - (startBundlerTokenData[token]?.balance ?? 0n) >
+              5n,
         )
         .map(
           ([address]) =>
             ({
               type: "Erc20_Transfer",
               address,
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: receiver,
               },
             }) as Erc20Operations["Erc20_Transfer"],
@@ -890,40 +912,46 @@ export const simulateRequiredTokenAmounts = (
   operations: Operation[],
   data: MaybeDraft<SimulationState>,
 ) => {
-  const { bundler } = getChainAddresses(data.chainId);
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(data.chainId);
 
   const virtualBundlerData = produceImmutable(data, (draft) => {
-    Object.values(draft.holdings[bundler] ?? {}).forEach((bundlerTokenData) => {
-      // Virtual balance to calculate the amount required.
-      bundlerTokenData.balance += MathLib.MAX_UINT_160;
-    });
+    Object.values(draft.holdings[generalAdapter1] ?? {}).forEach(
+      (bundlerTokenData) => {
+        if (bundlerTokenData == null) return;
+
+        // Virtual balance to calculate the amount required.
+        bundlerTokenData.balance += MathLib.MAX_UINT_160;
+      },
+    );
   });
 
   const steps = simulateOperations(operations, virtualBundlerData);
 
-  const bundlerTokenDiffs = keys(virtualBundlerData.holdings[bundler]).map(
-    (token) => ({
-      token,
-      required: steps
-        .map(
-          (step) =>
-            // When recursively simulated, this will cause tokens to be required at the highest recursion level.
-            // For example: supplyCollateral(x, supplyCollateral(y, borrow(z)))   [provided x, y, z < MAX_UINT_160]
-            //              |                   |                   |=> MAX_UINT_160 - (3 * MAX_UINT_160 + z) < 0
-            //              |                   |=> MAX_UINT_160 - (2 * MAX_UINT_160 - y) < 0
-            //              |=> MAX_UINT_160 - (MAX_UINT_160 - y - x) > 0
-            MathLib.MAX_UINT_160 -
-            (step.holdings[bundler]?.[token]?.balance ?? 0n),
-        )
-        .sort(
-          bigIntComparator(
-            (required) => required,
-            // Take the highest required amount among all operations.
-            "desc",
-          ),
-        )[0]!,
-    }),
-  );
+  const bundlerTokenDiffs = keys(
+    virtualBundlerData.holdings[generalAdapter1],
+  ).map((token) => ({
+    token,
+    required: steps
+      .map(
+        (step) =>
+          // When recursively simulated, this will cause tokens to be required at the highest recursion level.
+          // For example: supplyCollateral(x, supplyCollateral(y, borrow(z)))   [provided x, y, z < MAX_UINT_160]
+          //              |                   |                   |=> MAX_UINT_160 - (3 * MAX_UINT_160 + z) < 0
+          //              |                   |=> MAX_UINT_160 - (2 * MAX_UINT_160 - y) < 0
+          //              |=> MAX_UINT_160 - (MAX_UINT_160 - y - x) > 0
+          MathLib.MAX_UINT_160 -
+          (step.holdings[generalAdapter1]?.[token]?.balance ?? 0n),
+      )
+      .sort(
+        bigIntComparator(
+          (required) => required,
+          // Take the highest required amount among all operations.
+          "desc",
+        ),
+      )[0]!,
+  }));
 
   return bundlerTokenDiffs.filter(({ required }) => required > 0n);
 };

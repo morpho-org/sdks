@@ -19,7 +19,8 @@ export function mergeDeepEqual(a: any, b: any): any {
     typeof a === "string" ||
     typeof a === "boolean" ||
     typeof a === "bigint" ||
-    typeof a === "symbol"
+    typeof a === "symbol" ||
+    b == null
   )
     return b;
 

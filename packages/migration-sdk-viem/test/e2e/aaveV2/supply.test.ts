@@ -6,18 +6,22 @@ import {
 } from "../../../src/index.js";
 import { MigratableSupplyPosition_AaveV2 } from "../../../src/positions/supply/aaveV2.supply.js";
 
-import { ChainId, MathLib, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
 import { sendTransaction } from "viem/actions";
 import { describe, expect } from "vitest";
-import { MIGRATION_ADDRESSES } from "../../../src/config.js";
+import { migrationAddressesRegistry } from "../../../src/config.js";
 import { test } from "../setup.js";
 
 const aWeth = "0x030bA81f1c18d280636F32af80b9AAd02Cf0854e";
-const { lendingPool } = MIGRATION_ADDRESSES[ChainId.EthMainnet].aaveV2;
-const { aaveV2Bundler, wNative, usdc } = addresses[ChainId.EthMainnet];
+const { lendingPool } = migrationAddressesRegistry[ChainId.EthMainnet].aaveV2;
+const {
+  bundler3: { generalAdapter1, aaveV2MigrationAdapter },
+  wNative,
+  usdc,
+} = addressesRegistry[ChainId.EthMainnet];
 
 const writeSupply = async (
   client: AnvilTestClient,
@@ -193,7 +197,7 @@ describe("Supply position on AAVE V2", () => {
         {
           vault: mmWeth,
           amount: migratedAmount,
-          minShares: 0n,
+          maxSharePrice: 2n * MathLib.RAY,
         },
         ChainId.EthMainnet,
         true,
@@ -201,22 +205,27 @@ describe("Supply position on AAVE V2", () => {
 
       expect(migrationBundle.requirements.txs).toHaveLength(0);
       expect(migrationBundle.requirements.signatures).toHaveLength(1);
-      const deadline = migrationBundle.actions[0]?.args[2];
       expect(migrationBundle.actions).toEqual([
         {
-          args: [aWeth, migratedAmount, deadline, null],
+          args: [
+            client.account.address,
+            aWeth,
+            migratedAmount,
+            expect.any(BigInt),
+            null,
+          ],
           type: "permit",
         },
         {
-          args: [aWeth, migratedAmount],
+          args: [aWeth, migratedAmount, aaveV2MigrationAdapter],
           type: "erc20TransferFrom",
         },
         {
-          args: [wNative, maxUint256],
+          args: [wNative, maxUint256, generalAdapter1],
           type: "aaveV2Withdraw",
         },
         {
-          args: [mmWeth, MathLib.MAX_UINT_128, 0n, client.account.address],
+          args: [mmWeth, maxUint256, 2n * MathLib.RAY, client.account.address],
           type: "erc4626Deposit",
         },
       ]);
@@ -227,8 +236,8 @@ describe("Supply position on AAVE V2", () => {
 
       const [bundlerPosition, wEthBundlerBalance, userPosition, userMMShares] =
         await Promise.all([
-          client.balanceOf({ erc20: aWeth, owner: aaveV2Bundler }),
-          client.balanceOf({ erc20: wNative, owner: aaveV2Bundler }),
+          client.balanceOf({ erc20: aWeth, owner: aaveV2MigrationAdapter }),
+          client.balanceOf({ erc20: wNative, owner: aaveV2MigrationAdapter }),
           client.balanceOf({ erc20: aWeth }),
           client.balanceOf({ erc20: mmWeth }),
         ]);
@@ -272,7 +281,7 @@ describe("Supply position on AAVE V2", () => {
         {
           vault: mmWeth,
           amount: position.supply,
-          minShares: 0n,
+          maxSharePrice: 2n * MathLib.RAY,
         },
         ChainId.EthMainnet,
         true,
@@ -280,22 +289,27 @@ describe("Supply position on AAVE V2", () => {
 
       expect(migrationBundle.requirements.txs).toHaveLength(0);
       expect(migrationBundle.requirements.signatures).toHaveLength(1);
-      const deadline = migrationBundle.actions[0]?.args[2];
       expect(migrationBundle.actions).toEqual([
         {
-          args: [aWeth, maxUint256, deadline, null],
+          args: [
+            client.account.address,
+            aWeth,
+            maxUint256,
+            expect.any(BigInt),
+            null,
+          ],
           type: "permit",
         },
         {
-          args: [aWeth, maxUint256],
+          args: [aWeth, maxUint256, aaveV2MigrationAdapter],
           type: "erc20TransferFrom",
         },
         {
-          args: [wNative, maxUint256],
+          args: [wNative, maxUint256, generalAdapter1],
           type: "aaveV2Withdraw",
         },
         {
-          args: [mmWeth, MathLib.MAX_UINT_128, 0n, client.account.address],
+          args: [mmWeth, maxUint256, 2n * MathLib.RAY, client.account.address],
           type: "erc4626Deposit",
         },
       ]);
@@ -306,8 +320,8 @@ describe("Supply position on AAVE V2", () => {
 
       const [bundlerPosition, wEthBundlerBalance, userPosition, userMMShares] =
         await Promise.all([
-          client.balanceOf({ erc20: aWeth, owner: aaveV2Bundler }),
-          client.balanceOf({ erc20: wNative, owner: aaveV2Bundler }),
+          client.balanceOf({ erc20: aWeth, owner: aaveV2MigrationAdapter }),
+          client.balanceOf({ erc20: wNative, owner: aaveV2MigrationAdapter }),
           client.balanceOf({ erc20: aWeth }),
           client.balanceOf({ erc20: mmWeth }),
         ]);
@@ -349,7 +363,7 @@ describe("Supply position on AAVE V2", () => {
         {
           vault: mmWeth,
           amount: migratedAmount,
-          minShares: 0n,
+          maxSharePrice: 2n * MathLib.RAY,
         },
         ChainId.EthMainnet,
         false,
@@ -359,15 +373,15 @@ describe("Supply position on AAVE V2", () => {
       expect(migrationBundle.requirements.signatures).toHaveLength(0);
       expect(migrationBundle.actions).toEqual([
         {
-          args: [aWeth, migratedAmount],
+          args: [aWeth, migratedAmount, aaveV2MigrationAdapter],
           type: "erc20TransferFrom",
         },
         {
-          args: [wNative, maxUint256],
+          args: [wNative, maxUint256, generalAdapter1],
           type: "aaveV2Withdraw",
         },
         {
-          args: [mmWeth, MathLib.MAX_UINT_128, 0n, client.account.address],
+          args: [mmWeth, maxUint256, 2n * MathLib.RAY, client.account.address],
           type: "erc4626Deposit",
         },
       ]);
@@ -378,8 +392,8 @@ describe("Supply position on AAVE V2", () => {
 
       const [bundlerPosition, wEthBundlerBalance, userPosition, userMMShares] =
         await Promise.all([
-          client.balanceOf({ erc20: aWeth, owner: aaveV2Bundler }),
-          client.balanceOf({ erc20: wNative, owner: aaveV2Bundler }),
+          client.balanceOf({ erc20: aWeth, owner: aaveV2MigrationAdapter }),
+          client.balanceOf({ erc20: wNative, owner: aaveV2MigrationAdapter }),
           client.balanceOf({ erc20: aWeth }),
           client.balanceOf({ erc20: mmWeth }),
         ]);
@@ -423,7 +437,7 @@ describe("Supply position on AAVE V2", () => {
         {
           vault: mmWeth,
           amount: position.supply,
-          minShares: 0n,
+          maxSharePrice: 2n * MathLib.RAY,
         },
         ChainId.EthMainnet,
         false,
@@ -433,15 +447,15 @@ describe("Supply position on AAVE V2", () => {
       expect(migrationBundle.requirements.signatures).toHaveLength(0);
       expect(migrationBundle.actions).toEqual([
         {
-          args: [aWeth, maxUint256],
+          args: [aWeth, maxUint256, aaveV2MigrationAdapter],
           type: "erc20TransferFrom",
         },
         {
-          args: [wNative, maxUint256],
+          args: [wNative, maxUint256, generalAdapter1],
           type: "aaveV2Withdraw",
         },
         {
-          args: [mmWeth, MathLib.MAX_UINT_128, 0n, client.account.address],
+          args: [mmWeth, maxUint256, 2n * MathLib.RAY, client.account.address],
           type: "erc4626Deposit",
         },
       ]);
@@ -451,8 +465,8 @@ describe("Supply position on AAVE V2", () => {
 
       const [bundlerPosition, wEthBundlerBalance, userPosition, userMMShares] =
         await Promise.all([
-          client.balanceOf({ erc20: aWeth, owner: aaveV2Bundler }),
-          client.balanceOf({ erc20: wNative, owner: aaveV2Bundler }),
+          client.balanceOf({ erc20: aWeth, owner: aaveV2MigrationAdapter }),
+          client.balanceOf({ erc20: wNative, owner: aaveV2MigrationAdapter }),
           client.balanceOf({ erc20: aWeth }),
           client.balanceOf({ erc20: mmWeth }),
         ]);

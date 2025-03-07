@@ -1,13 +1,12 @@
 import {
   type Address,
   ChainId,
-  ChainUtils,
   MathLib,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 
-import { MIGRATION_ADDRESSES } from "../../config.js";
+import { migrationAddresses } from "../../config.js";
 import type { MigratablePosition } from "../../positions/index.js";
 import { MigratableSupplyPosition_AaveV3Optimizer } from "../../positions/supply/aaveV3Optimizer.supply.js";
 import { MigratableProtocol } from "../../types/index.js";
@@ -34,25 +33,27 @@ export async function fetchAaveV3OptimizerPositions(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const chainId = parameters.chainId;
 
   const migrationContracts =
-    MIGRATION_ADDRESSES[chainId][MigratableProtocol.aaveV3Optimizer];
+    migrationAddresses[chainId]?.[MigratableProtocol.aaveV3Optimizer];
 
   if (!migrationContracts) return [];
 
   const [allMarkets, isBundlerManaging, nonce] = await Promise.all([
-    [addresses[ChainId.EthMainnet].wNative], // TODO we only focus on pure suppliers now
+    [addressesRegistry[ChainId.EthMainnet].wNative], // TODO we only focus on pure suppliers now
     readContract(client, {
       ...parameters,
       abi: migrationContracts.morpho.abi,
       address: migrationContracts.morpho.address,
       functionName: "isManagedBy",
-      args: [user, addresses[ChainId.EthMainnet].aaveV3OptimizerBundler],
+      args: [
+        user,
+        addressesRegistry[ChainId.EthMainnet].bundler3
+          .aaveV3OptimizerMigrationAdapter,
+      ],
     }),
     readContract(client, {
       ...parameters,

@@ -3,7 +3,7 @@ import { maxUint256, parseUnits } from "viem";
 import {
   ChainId,
   PreLiquidationPosition,
-  addresses,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { markets } from "@morpho-org/morpho-test";
 import { testAccount } from "@morpho-org/test";
@@ -16,7 +16,7 @@ import {
 } from "../src";
 import { preLiquidationTest } from "./setup";
 
-const { morpho } = addresses[ChainId.EthMainnet];
+const { morpho } = getChainAddresses(ChainId.EthMainnet);
 const { usdt_wbtc } = markets[ChainId.EthMainnet];
 
 const supplyAssets = parseUnits("10", 6);

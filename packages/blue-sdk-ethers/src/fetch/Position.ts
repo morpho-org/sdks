@@ -4,7 +4,6 @@ import { MorphoBlue__factory } from "ethers-types";
 import {
   AccrualPosition,
   type Address,
-  ChainUtils,
   type MarketId,
   type MarketParams,
   Position,
@@ -19,9 +18,7 @@ export async function fetchPosition(
   runner: { provider: Provider },
   { chainId, overrides = {} }: FetchOptions = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const { morpho } = getChainAddresses(chainId);
 
@@ -47,9 +44,7 @@ export async function fetchAccrualPosition(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const [position, market] = await Promise.all([
     await fetchPosition(user, marketId, runner, options),
@@ -65,9 +60,7 @@ export async function fetchAccrualPositionFromConfig(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const [position, market] = await Promise.all([
     await fetchPosition(user, config.id, runner, options),

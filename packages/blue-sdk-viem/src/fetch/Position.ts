@@ -1,11 +1,10 @@
 import {
   AccrualPosition,
-  ChainUtils,
   type MarketId,
   Position,
   type PreLiquidationParams,
   PreLiquidationPosition,
-  addresses,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import type { Address, Client } from "viem";
@@ -20,10 +19,9 @@ export async function fetchPosition(
   client: Client,
   parameters: FetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
-  const { morpho } = addresses[parameters.chainId];
+  parameters.chainId ??= await getChainId(client);
+
+  const { morpho } = getChainAddresses(parameters.chainId);
   const [supplyShares, borrowShares, collateral] = await readContract(client, {
     ...parameters,
     address: morpho,
@@ -46,9 +44,7 @@ export async function fetchPreLiquidationParams(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ): Promise<PreLiquidationParams> {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId = await getChainId(client);
   const { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle } =
     await readContract(client, {
       ...parameters,
@@ -66,10 +62,8 @@ async function fetchisPreLiquidationAuthorized(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
-  const { morpho } = addresses[parameters.chainId];
+  parameters.chainId = await getChainId(client);
+  const { morpho } = getChainAddresses(parameters.chainId);
   return await readContract(client, {
     ...parameters,
     address: morpho,
@@ -85,9 +79,8 @@ export async function fetchAccrualPosition(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
+
   const [position, market] = await Promise.all([
     await fetchPosition(user, marketId, client, parameters),
     await fetchMarket(marketId, client, parameters),
@@ -103,9 +96,7 @@ export async function fetchPreLiquidationPosition(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId = await getChainId(client);
   const [position, market, preLiquidationParams, isPreLiquidationAuthorized] =
     await Promise.all([
       await fetchPosition(user, marketId, client, parameters),

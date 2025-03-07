@@ -1,6 +1,6 @@
 import type { Address, ChainId } from "@morpho-org/blue-sdk";
 
-import type { MigrationBundle } from "../../types/actions.js";
+import type { MigrationBundle } from "../../MigrationBundle.js";
 import type {
   MigratableProtocol,
   SupplyMigrationLimiter,
@@ -16,8 +16,8 @@ export namespace MigratableSupplyPosition {
   export interface Args {
     /** The amount to migrate. */
     amount: bigint;
-    /** The minimum vault shares expected after migration. */
-    minShares: bigint;
+    /** The maximum vault share price expected (scaled by RAY). */
+    maxSharePrice: bigint;
     /** The address of the vault to migrate to. */
     vault: Address;
   }

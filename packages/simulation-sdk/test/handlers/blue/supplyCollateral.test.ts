@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
-import { ChainId, SharesMath, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, SharesMath, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
@@ -17,7 +17,7 @@ import {
 
 const type = "Blue_SupplyCollateral";
 
-const { morpho } = addresses[ChainId.EthMainnet];
+const { morpho } = addressesRegistry[ChainId.EthMainnet];
 
 const assets = parseUnits("1000", 18);
 

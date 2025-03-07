@@ -1,4 +1,9 @@
-import { ChainId, Market, MathLib, addresses } from "@morpho-org/blue-sdk";
+import {
+  ChainId,
+  Market,
+  MathLib,
+  addressesRegistry,
+} from "@morpho-org/blue-sdk";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import {
   type MinimalBlock,
@@ -12,9 +17,13 @@ import { describe, expect } from "vitest";
 import { useSimulationState } from "../../src/index.js";
 import { test } from "../setup.js";
 
-const { morpho, bundler, permit2, usdc } = addresses[ChainId.EthMainnet];
-const { usdc_wbIB01, usdc_wstEth, usdc_wbtc, usdc_idle } =
-  markets[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+  permit2,
+  usdc,
+} = addressesRegistry[ChainId.EthMainnet];
+const { usdc_wstEth } = markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 
 describe("useSimulationState", () => {
@@ -73,27 +82,27 @@ describe("useSimulationState", () => {
         global: {
           feeRecipient: null,
         },
-        markets: null,
-        tokens: null,
-        users: null,
-        positions: null,
-        holdings: null,
-        vaults: null,
-        vaultUsers: null,
-        vaultMarketConfigs: null,
+        markets: {},
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+        vaults: {},
+        vaultUsers: {},
+        vaultMarketConfigs: {},
       },
       isFetching: {
         global: {
           feeRecipient: true,
         },
-        markets: false,
-        tokens: false,
-        users: false,
-        positions: false,
-        holdings: false,
-        vaults: false,
-        vaultUsers: false,
-        vaultMarketConfigs: false,
+        markets: {},
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+        vaults: {},
+        vaultUsers: {},
+        vaultMarketConfigs: {},
       },
       isFetchingAny: true,
       isPending: false,
@@ -118,27 +127,27 @@ describe("useSimulationState", () => {
         global: {
           feeRecipient: null,
         },
-        markets: null,
-        tokens: null,
-        users: null,
-        positions: null,
-        holdings: null,
-        vaults: null,
-        vaultUsers: null,
-        vaultMarketConfigs: null,
+        markets: {},
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+        vaults: {},
+        vaultUsers: {},
+        vaultMarketConfigs: {},
       },
       isFetching: {
         global: {
           feeRecipient: false,
         },
-        markets: false,
-        tokens: false,
-        users: false,
-        positions: false,
-        holdings: false,
-        vaults: false,
-        vaultUsers: false,
-        vaultMarketConfigs: false,
+        markets: {},
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+        vaults: {},
+        vaultUsers: {},
+        vaultMarketConfigs: {},
       },
       isFetchingAny: false,
       isPending: false,
@@ -168,7 +177,9 @@ describe("useSimulationState", () => {
         global: {
           feeRecipient: undefined,
         },
-        markets: {},
+        markets: {
+          [usdc_wstEth.id]: undefined,
+        },
         tokens: {},
         users: {},
         positions: {},
@@ -181,27 +192,31 @@ describe("useSimulationState", () => {
         global: {
           feeRecipient: null,
         },
-        markets: null,
-        tokens: null,
-        users: null,
-        positions: null,
-        holdings: null,
-        vaults: null,
-        vaultUsers: null,
-        vaultMarketConfigs: null,
+        markets: {
+          [usdc_wstEth.id]: null,
+        },
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+        vaults: {},
+        vaultUsers: {},
+        vaultMarketConfigs: {},
       },
       isFetching: {
         global: {
           feeRecipient: true,
         },
-        markets: true,
-        tokens: false,
-        users: false,
-        positions: false,
-        holdings: false,
-        vaults: false,
-        vaultUsers: false,
-        vaultMarketConfigs: false,
+        markets: {
+          [usdc_wstEth.id]: true,
+        },
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+        vaults: {},
+        vaultUsers: {},
+        vaultMarketConfigs: {},
       },
       isFetchingAny: true,
       isPending: false,
@@ -238,27 +253,31 @@ describe("useSimulationState", () => {
         global: {
           feeRecipient: null,
         },
-        markets: null,
-        tokens: null,
-        users: null,
-        positions: null,
-        holdings: null,
-        vaults: null,
-        vaultUsers: null,
-        vaultMarketConfigs: null,
+        markets: {
+          [usdc_wstEth.id]: null,
+        },
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+        vaults: {},
+        vaultUsers: {},
+        vaultMarketConfigs: {},
       },
       isFetching: {
         global: {
           feeRecipient: false,
         },
-        markets: false,
-        tokens: false,
-        users: false,
-        positions: false,
-        holdings: false,
-        vaults: false,
-        vaultUsers: false,
-        vaultMarketConfigs: false,
+        markets: {
+          [usdc_wstEth.id]: false,
+        },
+        tokens: {},
+        users: {},
+        positions: {},
+        holdings: {},
+        vaults: {},
+        vaultUsers: {},
+        vaultMarketConfigs: {},
       },
       isFetchingAny: false,
       isPending: false,
@@ -462,8 +481,8 @@ describe("useSimulationState", () => {
 
     const { result } = await renderHook(config, () =>
       useSimulationState({
-        marketIds: [usdc_wstEth.id, usdc_idle.id, usdc_wbtc.id, usdc_wbIB01.id],
-        users: [client.account.address, steakUsdc.address, bundler],
+        marketIds: [],
+        users: [client.account.address, steakUsdc.address, generalAdapter1],
         tokens: [steakUsdc.asset, steakUsdc.address],
         vaults: [steakUsdc.address],
         block,
@@ -491,24 +510,23 @@ describe("useSimulationState", () => {
           address: steakUsdc.asset,
           args: {
             amount,
-            spender: bundler,
             expiration: MathLib.MAX_UINT_48,
             nonce: 0n,
           },
         },
         {
           type: "Erc20_Transfer2",
-          sender: bundler,
+          sender: generalAdapter1,
           address: steakUsdc.asset,
           args: {
             amount,
             from: client.account.address,
-            to: bundler,
+            to: generalAdapter1,
           },
         },
         {
           type: "MetaMorpho_Deposit",
-          sender: bundler,
+          sender: generalAdapter1,
           address: steakUsdc.address,
           args: {
             assets: amount,
@@ -530,7 +548,7 @@ describe("useSimulationState", () => {
     ).toBe(0n);
     expect(
       steps[0].getHolding(client.account.address, steakUsdc.asset)
-        .permit2Allowances.bundler.amount,
+        .permit2BundlerAllowance.amount,
     ).toBe(0n);
     expect(
       steps[0].getHolding(client.account.address, steakUsdc.address).balance,
@@ -549,7 +567,7 @@ describe("useSimulationState", () => {
     ).toBe(amount);
     expect(
       step1.getHolding(client.account.address, steakUsdc.asset)
-        .permit2Allowances.bundler.amount,
+        .permit2BundlerAllowance.amount,
     ).toBe(0n);
     expect(
       step1.getHolding(client.account.address, steakUsdc.address).balance,
@@ -568,7 +586,7 @@ describe("useSimulationState", () => {
     ).toBe(amount);
     expect(
       step2.getHolding(client.account.address, steakUsdc.asset)
-        .permit2Allowances.bundler.amount,
+        .permit2BundlerAllowance.amount,
     ).toBe(amount);
     expect(
       step2.getHolding(client.account.address, steakUsdc.address).balance,

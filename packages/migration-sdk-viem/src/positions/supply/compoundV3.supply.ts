@@ -1,17 +1,11 @@
 import {
   type Address,
   type ChainId,
-  MathLib,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 
-import type {
-  Action,
-  SignatureRequirement,
-} from "@morpho-org/bundler-sdk-viem";
-import BundlerAction from "@morpho-org/bundler-sdk-viem/src/BundlerAction.js";
-import { baseBundlerAbi } from "@morpho-org/bundler-sdk-viem/src/abis.js";
+import type { Action } from "@morpho-org/bundler-sdk-viem";
 import {
   type Account,
   type Client,
@@ -20,11 +14,8 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
+import { MigrationBundle } from "../../MigrationBundle.js";
 import { cometExtAbi } from "../../abis/compoundV3.js";
-import type {
-  MigrationBundle,
-  MigrationTransactionRequirement,
-} from "../../types/actions.js";
 import {
   MigratableProtocol,
   SupplyMigrationLimiter,
@@ -62,18 +53,19 @@ export class MigratableSupplyPosition_CompoundV3
   }
 
   getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
+    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
     chainId: ChainId,
     supportsSignature = true,
-  ): MigrationBundle {
-    const signRequirements: SignatureRequirement[] = [];
-    const txRequirements: MigrationTransactionRequirement[] = [];
-    const actions: Action[] = [];
+  ) {
+    const bundle = new MigrationBundle(chainId);
 
     const user = this.user;
 
-    const bundler = getChainAddresses(chainId).compoundV3Bundler;
-    if (!bundler) throw new Error("missing compoundV3Bundler address");
+    const {
+      bundler3: { generalAdapter1, compoundV3MigrationAdapter },
+    } = getChainAddresses(chainId);
+    if (compoundV3MigrationAdapter == null)
+      throw new Error("missing compoundV3MigrationAdapter address");
 
     const migrateMax =
       this.max.limiter === SupplyMigrationLimiter.position &&
@@ -94,29 +86,30 @@ export class MigratableSupplyPosition_CompoundV3
 
       const allowAction: Action = {
         type: "compoundV3AllowBySig",
-        args: [instance, true, nonce, expiry, null],
+        args: [instance, user, true, nonce, expiry, null],
       };
 
-      actions.push(allowAction);
+      bundle.actions.push(allowAction);
 
-      signRequirements.push({
+      bundle.requirements.signatures.push({
         action: allowAction,
         async sign(client: Client, account: Account = client.account!) {
-          if (allowAction.args[4] != null) return allowAction.args[4]; // action is already signed
+          let signature = allowAction.args[5];
+          if (signature != null) return signature; // action is already signed
 
           const typedData = getCompoundV3ManagerApprovalMessage(
             {
               name,
               instance,
               owner: user,
-              manager: bundler,
+              manager: compoundV3MigrationAdapter,
               isAllowed: true,
               nonce,
               expiry,
             },
             chainId,
           );
-          const signature = await signTypedData(client, {
+          signature = await signTypedData(client, {
             ...typedData,
             account,
           });
@@ -127,50 +120,35 @@ export class MigratableSupplyPosition_CompoundV3
             signature,
           });
 
-          return (allowAction.args[4] = signature);
+          return (allowAction.args[5] = signature);
         },
       });
     } else {
-      txRequirements.push({
+      bundle.requirements.txs.push({
         type: "compoundV3ApproveManager",
-        args: [bundler, true],
+        args: [compoundV3MigrationAdapter, true],
         tx: {
           to: instance,
           data: encodeFunctionData({
             abi: cometExtAbi,
             functionName: "allow",
-            args: [bundler, true],
+            args: [compoundV3MigrationAdapter, true],
           }),
         },
       });
     }
 
-    actions.push(
+    bundle.actions.push(
       {
         type: "compoundV3WithdrawFrom",
-        args: [instance, this.loanToken, migratedAmount],
+        args: [instance, this.loanToken, migratedAmount, generalAdapter1],
       },
       {
         type: "erc4626Deposit",
-        args: [vault, MathLib.MAX_UINT_128, minShares, user],
+        args: [vault, maxUint256, maxSharePrice, user],
       },
     );
 
-    return {
-      actions,
-      requirements: {
-        signatures: signRequirements,
-        txs: txRequirements,
-      },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
-    };
+    return bundle;
   }
 }

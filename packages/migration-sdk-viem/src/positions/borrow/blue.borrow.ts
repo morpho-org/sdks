@@ -82,7 +82,9 @@ export class MigratableBorrowPosition_Blue
     }: MigratableBorrowPosition_Blue.Args,
     chainId: ChainId,
   ): BlueInputBundlerOperations["Blue_SupplyCollateral"] {
-    const { bundler } = getChainAddresses(chainId);
+    const {
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(chainId);
 
     return {
       type: "Blue_SupplyCollateral",
@@ -113,7 +115,7 @@ export class MigratableBorrowPosition_Blue
                             MathLib.WAD + slippageFrom,
                           )
                         : borrowAmount,
-                    receiver: bundler,
+                    receiver: generalAdapter1,
                     onBehalf: this.position.user,
                     slippage: slippageTo,
                   },
@@ -146,7 +148,7 @@ export class MigratableBorrowPosition_Blue
                   ? this.position.collateral
                   : collateralAmount,
               onBehalf: this.position.user,
-              receiver: bundler,
+              receiver: generalAdapter1,
             },
           },
         ],
