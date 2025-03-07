@@ -87,6 +87,7 @@ export const addressesRegistry = {
     metaMorphoFactory: "0x1897A8997241C1cD4bD0698647e4EB7213535c24",
     chainlinkOracleFactory: "0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766",
     preLiquidationFactory: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
+
     wNative: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
     morphoToken: "0x9994E35Db50125E0DF82e4c2dde62496CE330999",
     // Must implement DAI specific permit (otherwise breaks permit signatures).
@@ -167,6 +168,7 @@ export const addressesRegistry = {
     publicAllocator: "0xfac15aff53ADd2ff80C2962127C434E8615Df0d3",
     metaMorphoFactory: "0xa9c87daB340631C34BB738625C70499e29ddDC98",
     chainlinkOracleFactory: "0x1ff7895Eb842794c5d07C4c547b6730e61295215",
+    preLiquidationFactory: "0xeDadDe37D76c72b98725614d0b41C20Fe612d304",
 
     wNative: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
   },
@@ -182,6 +184,7 @@ export const addressesRegistry = {
     publicAllocator: "0x769583Af5e9D03589F159EbEC31Cc2c23E8C355E",
     metaMorphoFactory: "0x878988f5f561081deEa117717052164ea1Ef0c82",
     chainlinkOracleFactory: "0x98Ce5D183DC0c176f54D37162F87e7eD7f2E41b5",
+    preLiquidationFactory: "0x635c31B5DF1F7EFbCbC07E302335Ef4230758e3d",
 
     wNative: "0x82aF49447D8a07e3bd95BD0d56f35241523fBab1",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -199,6 +202,7 @@ export const addressesRegistry = {
     publicAllocator: "0x0d68a97324E602E02799CD83B42D337207B40658",
     metaMorphoFactory: "0x3Bb6A6A0Bc85b367EFE0A5bAc81c5E52C892839a",
     chainlinkOracleFactory: "0x1ec408D4131686f727F3Fd6245CF85Bc5c9DAD70",
+    preLiquidationFactory: "0x3d05C01EE8e97361b9E19D172128255eaE5F98B9",
 
     wNative: "0x4200000000000000000000000000000000000006",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -214,6 +218,7 @@ export const addressesRegistry = {
     publicAllocator: "0xef9889B4e443DEd35FA0Bd060f2104Cca94e6A43",
     metaMorphoFactory: "0x4DBB3a642a2146d5413750Cca3647086D9ba5F12",
     chainlinkOracleFactory: "0xd706690BA1Fe26b70c4AD89e60ff62cEB3A2eD02",
+    preLiquidationFactory: "0xe3cE2051a24e58DBFC0eFBe4c2d9e89c5eAe4695",
 
     wNative: "0x4200000000000000000000000000000000000006",
   },
@@ -227,6 +232,7 @@ export const addressesRegistry = {
     publicAllocator: "0x37a888192165fC39884f87c64E2476BfD2C09675",
     metaMorphoFactory: "0x27D4Af0AC9E7FDfA6D0853236f249CC27AE79488",
     chainlinkOracleFactory: "0x39d8622C607A691D7705E8842fbB12E3c38dCD41",
+    preLiquidationFactory: "0xe3cE2051a24e58DBFC0eFBe4c2d9e89c5eAe4695",
 
     wNative: "0xfc00000000000000000000000000000000000006",
   },
@@ -240,6 +246,7 @@ export const addressesRegistry = {
     publicAllocator: "0x8a7f671E45E51dE245649Cf916cA0256FB8a9927",
     metaMorphoFactory: "0x56b65742ade55015e6480959808229Ad6dbc9295",
     chainlinkOracleFactory: "0xb5961902E60b188b1c665B7b72Ef616656A9e24E",
+    preLiquidationFactory: "0xeD960178e4aDA0296786Fa79D84e8FDF7bd44B25",
 
     wNative: "0x5300000000000000000000000000000000000004",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -255,6 +262,7 @@ export const addressesRegistry = {
     publicAllocator: "0x85416891752a6B81106c1C2999AE1AF5d8Cd3357",
     metaMorphoFactory: "0xd3f39505d0c48AFED3549D625982FdC38Ea9904b",
     chainlinkOracleFactory: "0x3FFFE273ee348b9E1ef89533025C7f165B17B439",
+    preLiquidationFactory: "0x30607fEa77168d2c0401B6f60F0B40E32F9339E3",
 
     wNative: "0x4200000000000000000000000000000000000006",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -270,6 +278,7 @@ export const addressesRegistry = {
     publicAllocator: "0xB0c9a107fA17c779B3378210A7a593e88938C7C9",
     metaMorphoFactory: "0xe9EdE3929F43a7062a007C3e8652e4ACa610Bdc0",
     chainlinkOracleFactory: "0x43269546e1D586a1f7200a0AC07e26f9631f7539",
+    preLiquidationFactory: "0xb04e4D3D59Ee47Ca9BA192707AF13A7D02969911",
 
     wNative: "0x4200000000000000000000000000000000000006",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -285,6 +294,7 @@ export const addressesRegistry = {
     publicAllocator: "0x6Cef2EDC70D87E8f1623f3096efF05d066E59B36",
     metaMorphoFactory: "0x0cE9e3512CB4df8ae7e265e62Fb9258dc14f12e8",
     chainlinkOracleFactory: "0x7DA59Fa482F1F49fADc486d8e47BADc506fEb86d",
+    preLiquidationFactory: "0xc72129DA4CC808e955699111b8c22B22Ca8A10b8",
 
     wNative: "0x039e2fB66102314Ce7b64Ce5Ce3E5183bc94aD38",
   },
@@ -298,6 +308,7 @@ export const addressesRegistry = {
     publicAllocator: "0x4107Ea1746909028d6212B315dE5fE9538F9eb39",
     metaMorphoFactory: "0x8e52179BeB18E882040b01632440d8Ca0f01da82",
     chainlinkOracleFactory: "0xB3cb32E6185446a6Bc7A047E4FfA138fA939e133",
+    preLiquidationFactory: "0x40F2896C551194e364F7C846046C34d8a9FE97e4",
 
     wNative: "0x4200000000000000000000000000000000000006",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
@@ -313,6 +324,7 @@ export const addressesRegistry = {
     publicAllocator: "0xEE868Bf3359DA30c10ea472EAEBFC0a06E8F0120",
     metaMorphoFactory: "0xae5b0884bfff430493D6C844B9fd052Af7d79278",
     chainlinkOracleFactory: "0xf9380f7898423Bd7FDe3C9fDD1b2671A2471f39D",
+    preLiquidationFactory: "0x249E4808264c545861e43728186a731dE7c7D745",
 
     wNative: "0x4200000000000000000000000000000000000006",
   },
@@ -326,6 +338,7 @@ export const addressesRegistry = {
     publicAllocator: "0xDFde06e2B2A2D718eE5560b73dA4F830E56A2f10",
     metaMorphoFactory: "0xe430821595602eA5DD0cD350f86987437c7362fA",
     chainlinkOracleFactory: "0x16278156D366fC91536b6b81482ffaC47EEa06D6",
+    preLiquidationFactory: "0xb9065AC18d3EBdb3263B77B587f9c5CD570545D1",
 
     wNative: "0xda5dDd7270381A7C2717aD10D1c0ecB19e3CDFb2",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
