@@ -1,5 +1,4 @@
 import {
-  type ChainId,
   type ExchangeRateWrappedToken,
   NATIVE_ADDRESS,
   getChainAddresses,
@@ -41,10 +40,12 @@ export class MigratableSupplyPosition_CompoundV2
     this.cTokenBalance = config.cTokenBalance;
   }
 
-  getMigrationTx(
-    { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
-    chainId: ChainId,
-  ) {
+  _getMigrationTx({
+    amount,
+    maxSharePrice,
+    vault,
+  }: MigratableSupplyPosition.Args) {
+    const chainId = this.chainId;
     const bundle = new MigrationBundle(chainId);
 
     const user = this.user;

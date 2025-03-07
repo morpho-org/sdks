@@ -1,5 +1,4 @@
 import {
-  type ChainId,
   UnsupportedChainIdError,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -51,11 +50,11 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     return this._nonce;
   }
 
-  getMigrationTx(
+  _getMigrationTx(
     { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
-    chainId: ChainId,
     supportsSignature = true,
   ) {
+    const chainId = this.chainId;
     const bundle = new MigrationBundle(chainId);
 
     const user = this.user;
