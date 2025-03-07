@@ -114,6 +114,11 @@ export abstract class MigratableBorrowPosition
     | bigint
     | null;
 
+  protected abstract _getMigrationTx(
+    args: MigratableBorrowPosition.Args,
+    supportsSignature: boolean,
+  ): MigrationBundle;
+
   /**
    * Method to retrieve a migration operation for the borrow position.
    *
@@ -123,12 +128,16 @@ export abstract class MigratableBorrowPosition
    *
    * @returns A migration bundle containing the migration details.
    */
-  abstract getMigrationTx(
+  getMigrationTx(
     args: MigratableBorrowPosition.Args,
     supportsSignature: boolean,
-  ): MigrationBundle;
+  ): MigrationBundle {
+    this._validateMigration(args);
 
-  validateMigration({
+    return this._getMigrationTx(args, supportsSignature);
+  }
+
+  private _validateMigration({
     marketTo,
     borrowAmount,
     collateralAmount,

@@ -265,7 +265,7 @@ describe("Supply position on COMPOUND V2", () => {
                   amount: migratedAmount,
                   maxSharePrice: 2n * MathLib.RAY,
                 },
-                chainId,
+                false,
               );
 
               expect(migrationBundle.requirements.txs).toHaveLength(1);
@@ -394,7 +394,7 @@ describe("Supply position on COMPOUND V2", () => {
                   amount: position.supply,
                   maxSharePrice: 2n * MathLib.RAY,
                 },
-                chainId,
+                false,
               );
 
               expect(migrationBundle.requirements.txs).toHaveLength(1);

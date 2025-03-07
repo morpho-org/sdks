@@ -1,8 +1,4 @@
-import {
-  type Address,
-  type ChainId,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
+import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 
 import type { Action } from "@morpho-org/bundler-sdk-viem";
@@ -52,13 +48,11 @@ export class MigratableSupplyPosition_CompoundV3
     return this._nonce;
   }
 
-  getMigrationTx(
+  _getMigrationTx(
     { amount, maxSharePrice, vault }: MigratableSupplyPosition.Args,
-    chainId: ChainId,
     supportsSignature = true,
   ) {
-    this.validateMigration({ amount });
-
+    const chainId = this.chainId;
     const bundle = new MigrationBundle(chainId);
 
     const user = this.user;

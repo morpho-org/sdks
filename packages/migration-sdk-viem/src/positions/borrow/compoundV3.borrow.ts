@@ -83,7 +83,7 @@ export class MigratableBorrowPosition_CompoundV3
     return this._nonce;
   }
 
-  getMigrationTx(
+  _getMigrationTx(
     {
       collateralAmount,
       borrowAmount,
@@ -93,8 +93,6 @@ export class MigratableBorrowPosition_CompoundV3
     }: MigratableBorrowPosition.Args,
     supportsSignature = true,
   ) {
-    this.validateMigration({ collateralAmount, borrowAmount, marketTo });
-
     const user = this.user;
     const chainId = this.chainId;
 

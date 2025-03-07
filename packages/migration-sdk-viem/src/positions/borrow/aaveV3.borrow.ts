@@ -80,7 +80,7 @@ export class MigratableBorrowPosition_AaveV3
     return this._nonce;
   }
 
-  getMigrationTx(
+  _getMigrationTx(
     {
       collateralAmount,
       borrowAmount,
@@ -90,8 +90,6 @@ export class MigratableBorrowPosition_AaveV3
     }: MigratableBorrowPosition.Args,
     supportsSignature = true,
   ): MigrationBundle {
-    this.validateMigration({ collateralAmount, borrowAmount, marketTo });
-
     const user = this.user;
     const chainId = this.chainId;
 

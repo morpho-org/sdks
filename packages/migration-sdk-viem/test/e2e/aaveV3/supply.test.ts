@@ -229,7 +229,6 @@ describe("Supply position on AAVE V3", () => {
             amount: migratedAmount,
             maxSharePrice: 2n * MathLib.RAY,
           },
-          chainId,
           true,
         );
 
@@ -323,7 +322,6 @@ describe("Supply position on AAVE V3", () => {
             amount: position.supply,
             maxSharePrice: 2n * MathLib.RAY,
           },
-          chainId,
           true,
         );
 
@@ -421,7 +419,6 @@ describe("Supply position on AAVE V3", () => {
               amount: migratedAmount,
               maxSharePrice: 2n * MathLib.RAY,
             },
-            chainId,
             false,
           );
 
@@ -515,7 +512,6 @@ describe("Supply position on AAVE V3", () => {
               amount: position.supply,
               maxSharePrice: 2n * MathLib.RAY,
             },
-            chainId,
             false,
           );
 
