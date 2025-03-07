@@ -233,16 +233,16 @@ describe("Borrow position on blue", () => {
           market: initialPositionFrom.market,
           position: initialPositionFrom,
         });
-        const collateralToMigrate = collateralAmount / 2n;
-        const borrowToMigrate = borrowAmount / 2n;
+        const collateralToMigrate = (2n * collateralAmount) / 3n;
+        const borrowToMigrate = (2n * borrowAmount) / 3n;
         const slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE;
         const slippageTo = DEFAULT_SLIPPAGE_TOLERANCE - 10n;
 
         const operation = migratablePosition.getMigrationOperations(
           {
             marketTo: marketTo.id,
-            collateralAmount: collateralToMigrate,
-            borrowAmount: borrowToMigrate,
+            collateralassets: collateralToMigrate,
+            borrowAssets: borrowToMigrate,
             slippageFrom,
             slippageTo,
           },
@@ -381,6 +381,206 @@ describe("Borrow position on blue", () => {
         expect(finalPositionTo.borrowAssets).approximately(borrowToMigrate, 2n);
       });
 
+      testFn(
+        "should partially migrate borrow position with shares",
+        async ({ client }) => {
+          const collateralAmount = parseEther("5");
+          const borrowAmount = parseEther("1");
+
+          // increase liquidities
+          const lp = getAddress(client.account.address.replace(/.$/, "0"));
+          await writeSupply(client, marketFrom, borrowAmount, lp);
+          await writeSupply(client, marketTo, borrowAmount * 2n, lp);
+
+          await writeBorrow(client, marketFrom, collateralAmount, borrowAmount);
+
+          const dataBefore = await fetchSimulationState(client, [
+            marketFrom,
+            marketTo,
+          ]);
+
+          const initialPositionFrom = dataBefore
+            .getAccrualPosition(client.account.address, marketFrom.id)
+            .accrueInterest(dataBefore.block.timestamp);
+
+          const migratablePosition = new MigratableBorrowPosition_Blue({
+            market: initialPositionFrom.market,
+            position: initialPositionFrom,
+          });
+          const collateralToMigrate = (2n * collateralAmount) / 3n;
+          const borrowToMigrate = (2n * borrowAmount) / 3n;
+
+          const slippageFrom = DEFAULT_SLIPPAGE_TOLERANCE;
+          const slippageTo = DEFAULT_SLIPPAGE_TOLERANCE - 10n;
+
+          const sharesToMigrate =
+            initialPositionFrom.market.toBorrowShares(borrowToMigrate);
+
+          const operation = migratablePosition.getMigrationOperations(
+            {
+              marketTo: marketTo.id,
+              collateralassets: collateralToMigrate,
+              borrowShares: sharesToMigrate,
+              slippageFrom,
+              slippageTo,
+            },
+            chainId,
+          );
+
+          expect(operation).toEqual({
+            type: "Blue_SupplyCollateral",
+            address: "0x",
+            sender: client.account.address,
+            args: {
+              id: marketTo.id,
+              assets: collateralToMigrate,
+              onBehalf: client.account.address,
+              callback: [
+                {
+                  type: "Blue_Borrow",
+                  address: "0x",
+                  sender: client.account.address,
+                  args: {
+                    id: marketTo.id,
+                    assets: MathLib.wMulUp(
+                      borrowToMigrate,
+                      MathLib.WAD + slippageFrom,
+                    ),
+                    receiver: bundler,
+                    onBehalf: client.account.address,
+                    slippage: slippageTo,
+                  },
+                },
+                {
+                  type: "Blue_Repay",
+                  address: "0x",
+                  sender: client.account.address,
+                  args: {
+                    id: marketFrom.id,
+                    shares: sharesToMigrate,
+                    slippage: slippageFrom,
+                    onBehalf: client.account.address,
+                  },
+                },
+                {
+                  type: "Blue_WithdrawCollateral",
+                  address: "0x",
+                  sender: client.account.address,
+                  args: {
+                    id: marketFrom.id,
+                    assets: collateralToMigrate,
+                    onBehalf: client.account.address,
+                    receiver: bundler,
+                  },
+                },
+              ],
+            },
+          });
+          const populatedBundle = populateBundle([operation], dataBefore);
+          const finalizedBundle = finalizeBundle(
+            populatedBundle.operations,
+            dataBefore,
+            client.account.address,
+          );
+          expect(finalizedBundle).toEqual([
+            {
+              type: "Blue_SupplyCollateral",
+              address: "0x",
+              sender: bundler,
+              args: {
+                id: marketTo.id,
+                assets: collateralToMigrate,
+                onBehalf: client.account.address,
+                callback: [
+                  {
+                    type: "Blue_SetAuthorization",
+                    sender: bundler,
+                    address: morpho,
+                    args: {
+                      owner: client.account.address,
+                      isBundlerAuthorized: true,
+                    },
+                  },
+                  {
+                    type: "Blue_Borrow",
+                    address: "0x",
+                    sender: bundler,
+                    args: {
+                      id: marketTo.id,
+                      assets: MathLib.wMulUp(
+                        borrowToMigrate,
+                        MathLib.WAD + slippageFrom,
+                      ),
+                      receiver: bundler,
+                      onBehalf: client.account.address,
+                      slippage: slippageTo,
+                    },
+                  },
+                  {
+                    type: "Blue_Repay",
+                    address: "0x",
+                    sender: bundler,
+                    args: {
+                      id: marketFrom.id,
+                      shares: sharesToMigrate,
+                      slippage: slippageFrom,
+                      onBehalf: client.account.address,
+                    },
+                  },
+                  {
+                    type: "Blue_WithdrawCollateral",
+                    address: "0x",
+                    sender: bundler,
+                    args: {
+                      id: marketFrom.id,
+                      assets: collateralToMigrate,
+                      onBehalf: client.account.address,
+                      receiver: bundler,
+                    },
+                  },
+                ],
+              },
+            },
+            {
+              address: marketFrom.loanToken,
+              args: {
+                amount: maxUint256,
+                from: bundler,
+                to: client.account.address,
+              },
+              sender: bundler,
+              type: "Erc20_Transfer",
+            },
+          ]);
+          const bundle = encodeBundle(finalizedBundle, dataBefore, false);
+          for (const req of bundle.requirements.txs) {
+            await sendTransaction(client, req.tx);
+          }
+          await sendTransaction(client, bundle.tx());
+
+          const [finalPositionFrom, finalPositionTo] = await Promise.all([
+            fetchAccrualPosition(client.account.address, marketFrom.id, client),
+            fetchAccrualPosition(client.account.address, marketTo.id, client),
+          ]);
+
+          expect(finalPositionFrom.collateral).toEqual(
+            collateralAmount - collateralToMigrate,
+          );
+          expect(finalPositionTo.collateral).toEqual(collateralToMigrate);
+          expect(finalPositionFrom.borrowShares).toEqual(
+            initialPositionFrom.borrowShares - sharesToMigrate,
+          );
+          const expectedBorrowAssets = MathLib.wMulUp(
+            borrowToMigrate,
+            MathLib.WAD + slippageFrom,
+          );
+          expect(finalPositionTo.borrowAssets).approximately(
+            expectedBorrowAssets,
+            2n,
+          );
+        },
+      );
+
       testFn("should fully migrate borrow position", async ({ client }) => {
         const collateralAmount = parseEther("5");
         const borrowAmount = parseEther("1");
@@ -410,8 +610,8 @@ describe("Borrow position on blue", () => {
         const operation = migratablePosition.getMigrationOperations(
           {
             marketTo: marketTo.id,
-            collateralAmount: maxUint256,
-            borrowAmount: maxUint256,
+            collateralassets: migratablePosition.position.collateral,
+            borrowShares: migratablePosition.position.borrowShares,
             slippageFrom,
             slippageTo,
           },
