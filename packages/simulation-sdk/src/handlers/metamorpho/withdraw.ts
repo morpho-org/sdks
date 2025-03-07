@@ -29,20 +29,22 @@ export const handleMetaMorphoWithdrawOperation: OperationHandler<
     data,
   );
 
-  const { bundler } = getChainAddresses(data.chainId);
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(data.chainId);
   const vault = data.getVault(address);
 
   if (shares === 0n) {
     // Simulate the bundler's behavior on withdrawals.
-    if (sender === bundler && assets === 0n)
+    if (sender === generalAdapter1 && assets === 0n)
       throw new MetaMorphoErrors.ZeroAssets();
 
     shares = MathLib.wMulUp(vault.toShares(assets), MathLib.WAD + slippage);
   } else {
-    if (sender === bundler) {
+    if (sender === generalAdapter1) {
       // Simulate the bundler's behavior on withdrawals only with MaxUint256.
       if (shares === MathLib.MAX_UINT_256)
-        shares = MathLib.min(shares, data.getHolding(owner, address).balance);
+        shares = data.getHolding(owner, address).balance;
 
       if (shares === 0n) throw new MetaMorphoErrors.ZeroShares();
     }

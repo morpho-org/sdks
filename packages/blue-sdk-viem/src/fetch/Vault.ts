@@ -1,14 +1,13 @@
-import type { Address, Client } from "viem";
+import { type Address, type Client, zeroAddress } from "viem";
 
 import {
   AccrualVault,
-  ChainUtils,
   Eip5267Domain,
   type MarketId,
   Vault,
   VaultConfig,
   type VaultPublicAllocatorConfig,
-  addresses,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
@@ -24,11 +23,9 @@ export async function fetchVault(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
-  const { publicAllocator } = addresses[parameters.chainId];
+  const { publicAllocator } = getChainAddresses(parameters.chainId);
 
   if (deployless) {
     try {
@@ -55,18 +52,15 @@ export async function fetchVault(
         abi,
         code,
         functionName: "query",
-        args: [address, publicAllocator],
+        args: [address, publicAllocator ?? zeroAddress],
       });
 
       return new Vault({
-        ...new VaultConfig(
-          {
-            ...config,
-            eip5267Domain: new Eip5267Domain(config.eip5267Domain),
-            address,
-          },
-          parameters.chainId,
-        ),
+        ...new VaultConfig({
+          ...config,
+          eip5267Domain: new Eip5267Domain(config.eip5267Domain),
+          address,
+        }),
         owner,
         curator,
         guardian,
@@ -77,7 +71,8 @@ export async function fetchVault(
         pendingOwner,
         pendingGuardian,
         pendingTimelock,
-        publicAllocatorConfig,
+        publicAllocatorConfig:
+          publicAllocator != null ? publicAllocatorConfig : undefined,
         supplyQueue: supplyQueue as MarketId[],
         withdrawQueue: withdrawQueue as MarketId[],
         totalSupply,
@@ -206,7 +201,7 @@ export async function fetchVault(
       abi: metaMorphoAbi,
       functionName: "withdrawQueueLength",
     }),
-    publicAllocator &&
+    publicAllocator != null &&
       readContract(client, {
         ...parameters,
         address,
@@ -223,21 +218,21 @@ export async function fetchVault(
     publicAllocatorConfigPromise = Promise.all([
       readContract(client, {
         ...parameters,
-        address: publicAllocator,
+        address: publicAllocator!,
         abi: publicAllocatorAbi,
         functionName: "admin",
         args: [address],
       }),
       readContract(client, {
         ...parameters,
-        address: publicAllocator,
+        address: publicAllocator!,
         abi: publicAllocatorAbi,
         functionName: "fee",
         args: [address],
       }),
       readContract(client, {
         ...parameters,
-        address: publicAllocator,
+        address: publicAllocator!,
         abi: publicAllocatorAbi,
         functionName: "accruedFee",
         args: [address],
@@ -300,9 +295,7 @@ export async function fetchAccrualVault(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const vault = await fetchVault(address, client, parameters);
   const allocations = await Promise.all(
