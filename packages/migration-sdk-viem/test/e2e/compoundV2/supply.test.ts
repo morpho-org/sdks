@@ -265,7 +265,7 @@ describe("Supply position on COMPOUND V2", () => {
                   amount: migratedAmount,
                   maxSharePrice: 2n * MathLib.RAY,
                 },
-                chainId,
+                false,
               );
 
               expect(migrationBundle.requirements.txs).toHaveLength(1);
@@ -385,14 +385,15 @@ describe("Supply position on COMPOUND V2", () => {
               expect(compoundV2Positions).toBeDefined();
               expect(compoundV2Positions).toHaveLength(1);
 
-              const position = compoundV2Positions[0]!;
+              const position =
+                compoundV2Positions[0]! as MigratableSupplyPosition_CompoundV2;
+
               const migrationBundle = position.getMigrationTx(
                 {
                   vault,
                   amount: position.supply,
                   maxSharePrice: 2n * MathLib.RAY,
                 },
-                chainId,
                 false,
               );
 

@@ -23,6 +23,7 @@ import {
   type MaybeDraft,
   type Operation,
   type SimulationState,
+  getCurrent,
   simulateOperation,
 } from "@morpho-org/simulation-sdk";
 
@@ -158,7 +159,7 @@ export const encodeOperation = (
         callback: (dataBefore) => {
           callbackBundle = encodeBundle(
             callback,
-            dataBefore,
+            getCurrent(dataBefore),
             supportsSignature,
           );
 
