@@ -10,7 +10,7 @@ export interface IVaultMarketConfig {
   pendingCap: Pending<bigint>;
   removableAt: bigint;
   enabled: boolean;
-  publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
+  publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
 }
 
 export class VaultMarketConfig implements IVaultMarketConfig {
@@ -47,7 +47,7 @@ export class VaultMarketConfig implements IVaultMarketConfig {
   /**
    * The vault's PublicAllocator configuration on the corresponding market.
    */
-  public readonly publicAllocatorConfig: VaultMarketPublicAllocatorConfig;
+  public readonly publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
 
   constructor({
     vault,

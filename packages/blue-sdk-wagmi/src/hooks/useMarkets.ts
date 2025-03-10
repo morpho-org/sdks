@@ -1,59 +1,43 @@
-import type { Market, MarketId } from "@morpho-org/blue-sdk";
-import { type UseQueryResult, useQueries } from "@tanstack/react-query";
-import type { ReadContractErrorType, UnionOmit } from "viem";
+import type { MarketId } from "@morpho-org/blue-sdk";
+import { isDefined } from "@morpho-org/morpho-ts";
+import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
+import type { UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
-
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   type MarketParameters,
   fetchMarketQueryOptions,
 } from "../queries/fetchMarket.js";
+import type { UseIndexedQueriesReturnType } from "../types/index.js";
 import { mergeDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
-import type { UseMarketParameters } from "./useMarket.js";
+import type { UseMarketParameters, UseMarketReturnType } from "./useMarket.js";
 
 export type FetchMarketsParameters = {
   marketIds: Iterable<MarketId | undefined>;
 };
 
-export type UseMarketsParameters<
-  config extends Config = Config,
-  TCombinedResult = ReturnType<typeof combineMarkets>,
-> = FetchMarketsParameters &
-  UnionOmit<UseMarketParameters<config>, keyof MarketParameters> & {
-    combine?: (
-      results: UseQueryResult<Market, ReadContractErrorType>[],
-    ) => TCombinedResult;
-  };
+export type UseMarketsParameters<config extends Config = Config> =
+  FetchMarketsParameters &
+    UnionOmit<UseMarketParameters<config>, keyof MarketParameters>;
 
-export type UseMarketsReturnType<
-  TCombinedResult = ReturnType<typeof combineMarkets>,
-> = TCombinedResult;
+export type UseMarketsReturnType = UseIndexedQueriesReturnType<
+  MarketId,
+  UseMarketReturnType
+>;
 
-export const combineMarkets = combineIndexedQueries<
-  Market,
-  [MarketId],
-  ReadContractErrorType
->((market) => [market.id]);
-
-export function useMarkets<
-  config extends Config = ResolvedRegister["config"],
-  TCombinedResult = ReturnType<typeof combineMarkets>,
->({
+export function useMarkets<config extends Config = ResolvedRegister["config"]>({
   marketIds,
-  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
-  combine = combineMarkets as any,
   query = {},
   ...parameters
-}: UseMarketsParameters<
-  config,
-  TCombinedResult
->): UseMarketsReturnType<TCombinedResult> {
+}: UseMarketsParameters<config>) {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  return useQueries({
-    queries: Array.from(new Set(marketIds), (marketId) => ({
+  const uniqueMarketIds = new Set(marketIds);
+
+  const orderedResults = useQueries({
+    queries: Array.from(uniqueMarketIds, (marketId) => ({
       ...query,
       ...fetchMarketQueryOptions(config, {
         ...parameters,
@@ -67,6 +51,30 @@ export function useMarkets<
           ? Number.POSITIVE_INFINITY
           : undefined,
     })),
-    combine,
   });
+
+  const result: UseMarketsReturnType = {
+    data: {},
+    error: {},
+    isFetching: {},
+    isFetchingAny: false,
+  };
+
+  uniqueMarketIds
+    .values()
+    .filter(isDefined)
+    .forEach((marketId, index) => {
+      const { data, error, isFetching } = orderedResults[index]!;
+
+      result.data[marketId] = data;
+      result.error[marketId] = error;
+      result.isFetching[marketId] = isFetching;
+
+      if (isFetching) result.isFetchingAny = true;
+    });
+
+  const resultRef = useRef(result);
+  resultRef.current = mergeDeepEqual(resultRef.current, result);
+
+  return resultRef.current;
 }
