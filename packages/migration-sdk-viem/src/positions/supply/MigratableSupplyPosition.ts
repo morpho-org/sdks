@@ -72,18 +72,32 @@ export abstract class MigratableSupplyPosition
     this.chainId = config.chainId;
   }
 
+  protected abstract _getMigrationTx(
+    args: MigratableSupplyPosition.Args,
+    supportsSignature: boolean,
+  ): MigrationBundle;
+
   /**
    * Method to retrieve a migration operation for the supply position.
    *
    * @param args - The arguments required to execute the migration.
-   * @param chainId - The chain ID of the migration.
    * @param supportsSignature - Whether the migration supports signature-based execution.
    *
    * @returns A migration bundle containing the migration details.
    */
-  abstract getMigrationTx(
+  getMigrationTx(
     args: MigratableSupplyPosition.Args,
-    chainId: ChainId,
     supportsSignature: boolean,
-  ): MigrationBundle;
+  ): MigrationBundle {
+    this._validateMigration(args);
+
+    return this._getMigrationTx(args, supportsSignature);
+  }
+
+  private _validateMigration({
+    amount,
+  }: Pick<MigratableSupplyPosition.Args, "amount">) {
+    if (amount > this.max.value)
+      throw new Error(`Max migration limited by: ${this.max.limiter}`);
+  }
 }

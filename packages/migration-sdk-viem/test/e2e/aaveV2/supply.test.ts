@@ -13,6 +13,7 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import { sendTransaction } from "viem/actions";
 import { describe, expect } from "vitest";
 import { migrationAddressesRegistry } from "../../../src/config.js";
+import { MigratableBorrowPosition_AaveV2 } from "../../../src/positions/borrow/aaveV2.borrow.js";
 import { test } from "../setup.js";
 
 const aWeth = "0x030bA81f1c18d280636F32af80b9AAd02Cf0854e";
@@ -141,7 +142,10 @@ describe("Supply position on AAVE V2", () => {
 
       const aaveV2Positions = allPositions[MigratableProtocol.aaveV2]!;
       expect(aaveV2Positions).toBeDefined();
-      expect(aaveV2Positions).toHaveLength(0);
+      expect(aaveV2Positions).toHaveLength(1);
+      expect(aaveV2Positions[0]).toBeInstanceOf(
+        MigratableBorrowPosition_AaveV2,
+      );
     },
   );
 
@@ -193,13 +197,14 @@ describe("Supply position on AAVE V2", () => {
       expect(aaveV2Positions).toBeDefined();
       expect(aaveV2Positions).toHaveLength(1);
 
-      const migrationBundle = aaveV2Positions[0]!.getMigrationTx(
+      const position = aaveV2Positions[0]! as MigratableSupplyPosition_AaveV2;
+
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: migratedAmount,
           maxSharePrice: 2n * MathLib.RAY,
         },
-        ChainId.EthMainnet,
         true,
       );
 
@@ -275,15 +280,14 @@ describe("Supply position on AAVE V2", () => {
       expect(aaveV2Positions).toBeDefined();
       expect(aaveV2Positions).toHaveLength(1);
 
-      const position = aaveV2Positions[0]!;
+      const position = aaveV2Positions[0]! as MigratableSupplyPosition_AaveV2;
 
-      const migrationBundle = aaveV2Positions[0]!.getMigrationTx(
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: position.supply,
           maxSharePrice: 2n * MathLib.RAY,
         },
-        ChainId.EthMainnet,
         true,
       );
 
@@ -359,13 +363,14 @@ describe("Supply position on AAVE V2", () => {
       expect(aaveV2Positions).toBeDefined();
       expect(aaveV2Positions).toHaveLength(1);
 
-      const migrationBundle = aaveV2Positions[0]!.getMigrationTx(
+      const position = aaveV2Positions[0]! as MigratableSupplyPosition_AaveV2;
+
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: migratedAmount,
           maxSharePrice: 2n * MathLib.RAY,
         },
-        ChainId.EthMainnet,
         false,
       );
 
@@ -431,15 +436,14 @@ describe("Supply position on AAVE V2", () => {
       expect(aaveV2Positions).toBeDefined();
       expect(aaveV2Positions).toHaveLength(1);
 
-      const position = aaveV2Positions[0]!;
+      const position = aaveV2Positions[0]! as MigratableSupplyPosition_AaveV2;
 
-      const migrationBundle = aaveV2Positions[0]!.getMigrationTx(
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: position.supply,
           maxSharePrice: 2n * MathLib.RAY,
         },
-        ChainId.EthMainnet,
         false,
       );
 

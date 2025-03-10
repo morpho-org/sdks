@@ -218,13 +218,15 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).toBeDefined();
       expect(aaveV3Positions).toHaveLength(1);
 
-      const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+      const position =
+        aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
+
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: migratedAmount,
           maxSharePrice: 2n * MathLib.RAY,
         },
-        ChainId.EthMainnet,
         true,
       );
 
@@ -310,14 +312,14 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).toBeDefined();
       expect(aaveV3Positions).toHaveLength(1);
 
-      const position = aaveV3Positions[0]!;
+      const position =
+        aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
       const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: position.supply,
           maxSharePrice: 2n * MathLib.RAY,
         },
-        ChainId.EthMainnet,
         true,
       );
 
@@ -404,13 +406,15 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).toBeDefined();
       expect(aaveV3Positions).toHaveLength(1);
 
-      const migrationBundle = aaveV3Positions[0]!.getMigrationTx(
+      const position =
+        aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
+
+      const migrationBundle = position.getMigrationTx(
         {
           vault: mmWeth,
           amount: migratedAmount,
           maxSharePrice: 2n * MathLib.RAY,
         },
-        ChainId.EthMainnet,
         false,
       );
 
@@ -482,7 +486,8 @@ describe("Supply position on Morpho AAVE V3", () => {
       expect(aaveV3Positions).toBeDefined();
       expect(aaveV3Positions).toHaveLength(1);
 
-      const position = aaveV3Positions[0]!;
+      const position =
+        aaveV3Positions[0]! as MigratableSupplyPosition_AaveV3Optimizer;
 
       const migrationBundle = position.getMigrationTx(
         {
@@ -490,7 +495,6 @@ describe("Supply position on Morpho AAVE V3", () => {
           amount: position.supply,
           maxSharePrice: 2n * MathLib.RAY,
         },
-        ChainId.EthMainnet,
         false,
       );
 
