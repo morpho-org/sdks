@@ -2,12 +2,14 @@ import {
   AccrualPosition,
   type MarketId,
   Position,
+  type PreLiquidationParams,
+  PreLiquidationPosition,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi } from "../abis";
+import { blueAbi, preLiquidationAbi } from "../abis";
 import type { DeploylessFetchParameters, FetchParameters } from "../types";
 import { fetchMarket } from "./Market";
 
@@ -37,6 +39,40 @@ export async function fetchPosition(
   });
 }
 
+export async function fetchPreLiquidationParams(
+  preLiquidation: Address,
+  client: Client,
+  parameters: DeploylessFetchParameters = {},
+): Promise<PreLiquidationParams> {
+  parameters.chainId = await getChainId(client);
+  const { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle } =
+    await readContract(client, {
+      ...parameters,
+      address: preLiquidation,
+      abi: preLiquidationAbi,
+      functionName: "preLiquidationParams",
+    });
+
+  return { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle };
+}
+
+async function fetchisPreLiquidationAuthorized(
+  user: Address,
+  preLiquidation: Address,
+  client: Client,
+  parameters: DeploylessFetchParameters = {},
+) {
+  parameters.chainId = await getChainId(client);
+  const { morpho } = getChainAddresses(parameters.chainId);
+  return await readContract(client, {
+    ...parameters,
+    address: morpho,
+    abi: blueAbi,
+    functionName: "isAuthorized",
+    args: [user, preLiquidation],
+  });
+}
+
 export async function fetchAccrualPosition(
   user: Address,
   marketId: MarketId,
@@ -51,4 +87,31 @@ export async function fetchAccrualPosition(
   ]);
 
   return new AccrualPosition(position, market);
+}
+
+export async function fetchPreLiquidationPosition(
+  user: Address,
+  marketId: MarketId,
+  preLiquidation: Address,
+  client: Client,
+  parameters: DeploylessFetchParameters = {},
+) {
+  parameters.chainId = await getChainId(client);
+  const [position, market, preLiquidationParams, isPreLiquidationAuthorized] =
+    await Promise.all([
+      await fetchPosition(user, marketId, client, parameters),
+      await fetchMarket(marketId, client, parameters),
+      await fetchPreLiquidationParams(preLiquidation, client, parameters),
+      await fetchisPreLiquidationAuthorized(user, preLiquidation, client),
+    ]);
+
+  return new PreLiquidationPosition(
+    {
+      ...position,
+      preLiquidationParams,
+      preLiquidation,
+      isPreLiquidationAuthorized,
+    },
+    market,
+  );
 }
