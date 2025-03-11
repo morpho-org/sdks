@@ -458,7 +458,7 @@ export abstract class CommonFormatter extends BaseFormatter {
    * const updatedFormatterDisabled = formatter.removeTrailingZero(true);
    * console.log(updatedFormatterDisabled.of(123.4500)); // Output: "123.4500"
    */
-  removeTrailingZero(disable: boolean = false) {
+  removeTrailingZero(disable: boolean | undefined | null = false) {
     const newOptions = { ...this._options, removeTrailingZero: !disable };
 
     return this._clone(newOptions);
