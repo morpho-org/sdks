@@ -250,6 +250,12 @@ describe("format", () => {
         expect(format.number.digits(6).removeTrailingZero().of(number)).toEqual(
           "12345.6789",
         );
+        expect(format.number.digits(6).trailingZero().of(number)).toEqual(
+          "12345.6789",
+        );
+        expect(format.number.digits(6).trailingZero(true).of(number)).toEqual(
+          "12345.678900",
+        );
       });
 
       test("with locale", () => {
@@ -337,6 +343,12 @@ describe("format", () => {
         expect(
           format.number.digits(6).removeTrailingZero().of(bigint, decimals),
         ).toEqual("12345.6789");
+        expect(format.number.digits(6).trailingZero(false).of(bigint, decimals)).toEqual(
+          "12345.6789",
+        );
+        expect(format.number.digits(6).trailingZero(true).of(bigint, decimals)).toEqual(
+          "12345.678900",
+        );
       });
 
       test("with locale", () => {
@@ -414,6 +426,12 @@ describe("format", () => {
         expect(format.short.digits(8).of(number)).toEqual("12.34567890k");
         expect(format.short.digits(8).removeTrailingZero().of(number)).toEqual(
           "12.3456789k",
+        );
+        expect(format.short.digits(8).trailingZero(false).of(number)).toEqual(
+          "12.3456789k",
+        );
+        expect(format.short.digits(8).trailingZero(true).of(number)).toEqual(
+          "12.34567890k",
         );
       });
 
@@ -493,6 +511,12 @@ describe("format", () => {
         expect(
           format.short.digits(8).removeTrailingZero().of(bigint, decimals),
         ).toEqual("12.3456789k");
+        expect(format.short.digits(8).trailingZero(false).of(bigint, decimals)).toEqual(
+          "12.3456789k",
+        );
+        expect(format.short.digits(8).trailingZero(true).of(bigint, decimals)).toEqual(
+          "12.34567890k",
+        );
       });
 
       test("with locale", () => {
@@ -581,6 +605,12 @@ describe("format", () => {
         expect(format.commas.digits(6).removeTrailingZero().of(number)).toEqual(
           "12,345.6789",
         );
+        expect(format.commas.digits(6).trailingZero(false).of(number)).toEqual(
+          "12,345.6789",
+        );
+        expect(format.commas.digits(6).trailingZero(true).of(number)).toEqual(
+          "12,345.678900",
+        );
       });
 
       test("with locale", () => {
@@ -653,6 +683,12 @@ describe("format", () => {
         expect(
           format.commas.digits(6).removeTrailingZero().of(bigint, decimals),
         ).toEqual("12,345.6789");
+        expect(format.commas.digits(6).trailingZero(false).of(bigint, decimals)).toEqual(
+          "12,345.6789",
+        );
+        expect(format.commas.digits(6).trailingZero(true).of(bigint, decimals)).toEqual(
+          "12,345.678900",
+        );
       });
 
       test("with locale", () => {
@@ -727,6 +763,9 @@ describe("format", () => {
         expect(format.percent.removeTrailingZero().of(number)).toEqual(
           "1234567.89",
         );
+        expect(format.percent.digits(6).trailingZero(false).of(number)).toEqual(
+          "1234567.89",
+        );
       });
 
       test("with locale", () => {
@@ -796,6 +835,9 @@ describe("format", () => {
         expect(
           format.percent.removeTrailingZero().of(bigint, decimals),
         ).toEqual("1234567.89");
+        expect(format.percent.digits(6).trailingZero(false).of(bigint, decimals)).toEqual(
+          "1234567.89",
+        );
       });
 
       test("with locale", () => {

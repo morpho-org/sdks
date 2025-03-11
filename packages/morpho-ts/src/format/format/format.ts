@@ -441,25 +441,43 @@ export abstract class CommonFormatter extends BaseFormatter {
   }
 
   /**
-   * Enables or disables the removal of trailing zeros in the formatted output.
+   * Enables the removal of trailing zeros in the formatted output.
+   *
+   * This method modifies the formatter's configuration to remove unnecessary trailing zeros
+   * from decimal numbers. A new formatter instance is created with this option enabled.
+   *
+   * @returns A new formatter instance with the `removeTrailingZero` option set to `true`.
+   *
+   * @example
+   * const updatedFormatter = formatter.removeTrailingZero();
+   * console.log(updatedFormatter.of(123.4500)); // Output: "123.45"
+   */
+  removeTrailingZero() {
+    const newOptions = { ...this._options, removeTrailingZero: true };
+
+    return this._clone(newOptions);
+  }
+
+  /**
+   * Enables or disables trailing zeros in the formatted output.
    *
    * This method modifies the formatter's configuration to remove or keep unnecessary trailing zeros
    * from decimal numbers based on the `disable` parameter. A new formatter instance is created with
    * this option enabled or disabled.
    *
-   * @param disable - A boolean indicating whether to disable the removal of trailing zeros. Defaults to `false`.
-   * @returns A new formatter instance with the `removeTrailingZero` option set to the opposite of `disable`.
+   * @param enable - A boolean indicating whether to enable trailing zeros. Defaults to `true`.
+   * @returns A new formatter instance with the `removeTrailingZero` option set to the opposite of `enable`.
    *
    * @example
-   * const updatedFormatter = formatter.removeTrailingZero();
+   * const updatedFormatter = formatter.trailingZero(false);
    * console.log(updatedFormatter.of(123.4500)); // Output: "123.45"
    *
    * @example
-   * const updatedFormatterDisabled = formatter.removeTrailingZero(true);
+   * const updatedFormatterDisabled = formatter.trailingZero(true);
    * console.log(updatedFormatterDisabled.of(123.4500)); // Output: "123.4500"
    */
-  removeTrailingZero(disable: boolean | undefined | null = false) {
-    const newOptions = { ...this._options, removeTrailingZero: !disable };
+  trailingZero(enable: boolean = true) {
+    const newOptions = { ...this._options, removeTrailingZero: !enable };
 
     return this._clone(newOptions);
   }
