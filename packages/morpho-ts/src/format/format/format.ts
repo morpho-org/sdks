@@ -19,6 +19,7 @@ interface UniversalFormatOptions {
 interface BaseFormatOptions extends UniversalFormatOptions {
   digits?: number;
   removeTrailingZero?: boolean;
+  trailingZero?: boolean;
   min?: number;
   max?: number;
   sign?: boolean;
@@ -462,7 +463,7 @@ export abstract class CommonFormatter extends BaseFormatter {
    * Enables or disables trailing zeros in the formatted output.
    *
    * This method modifies the formatter's configuration to remove or keep unnecessary trailing zeros
-   * from decimal numbers based on the `disable` parameter. A new formatter instance is created with
+   * from decimal numbers based on the `enable` parameter. A new formatter instance is created with
    * this option enabled or disabled.
    *
    * @param enable - A boolean indicating whether to enable trailing zeros. Defaults to `true`.
