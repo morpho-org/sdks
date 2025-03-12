@@ -118,7 +118,8 @@ format.number.of(123.45); // "123.45"
 **Customization Methods:**
 
 - `.digits(number)`: Sets the number of decimal digits. <span style="color:#C73E59">*</span>
-- `.removeTrailingZero()`: Removes trailing zeros after the decimal.
+- `.removeTrailingZero()`: (Deprecated) Removes trailing zeros after the decimal.
+- `.trailingZero(enable = true)`: Enables or disables trailing zeros in the formatted output. If `enable` is `true`, trailing zeros will be kept; if `false`, they will be removed. The default value is `true`.
 - `.min(number)`: Sets the minimum value; values below this will display as `< min`. <span style="color:#C73E59">*</span>
 - `.max(number)`: Sets the maximum value; values above this will display as `> max`. <span style="color:#C73E59">*</span>
 - `.sign()`: Adds a sign to the number (`+` or `-`).
