@@ -19,7 +19,6 @@ interface UniversalFormatOptions {
 interface BaseFormatOptions extends UniversalFormatOptions {
   digits?: number;
   removeTrailingZero?: boolean;
-  trailingZero?: boolean;
   min?: number;
   max?: number;
   sign?: boolean;
