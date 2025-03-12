@@ -451,6 +451,8 @@ export abstract class CommonFormatter extends BaseFormatter {
    * @example
    * const updatedFormatter = formatter.removeTrailingZero();
    * console.log(updatedFormatter.of(123.4500)); // Output: "123.45"
+   *
+   * @deprecated Use `trailingZero(false)` instead.
    */
   removeTrailingZero() {
     const newOptions = { ...this._options, removeTrailingZero: true };
