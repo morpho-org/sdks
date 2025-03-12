@@ -58,14 +58,18 @@ The return value will retain the nullability of the input value (giving priority
 > ```typescript
 > import { format } from "@morpho-org/morpho-ts";
 >
-> const dollarFormatter = format.short.smallValuesWithCommas().unit("$");
+> const dollarFormatter = format.short
+>   .smallValuesWithCommas()
+>   .unit("$");
 >
-> dollarFormatter.digits(2).of(123456.789); // "$123.45k"
-> dollarFormatter.digits(4).of(123456789n, 4); // "$12.3456k"
+> dollarFormatter
+>   .digits(2).of(123456.789); // "$123.45k"
+> dollarFormatter
+>   .digits(4).of(123456789n, 4); // "$12.3456k"
 > ```
 
-#### `createOf`
 
+#### `createOf`
 Alternatively, you can create a standalone formatting function by calling `createOf` on your populated formatter.
 
 ```typescript
@@ -91,7 +95,8 @@ import { format } from "@morpho-org/morpho-ts";
 format.hex.of(255n); // "ff"
 ```
 
-> [!NOTE] > `decimals` will be ignored if this formatter is used with BigInts
+> [!NOTE]
+> `decimals` will be ignored if this formatter is used with BigInts
 
 **Customization:**
 
@@ -112,19 +117,21 @@ format.number.of(123.45); // "123.45"
 
 **Customization Methods:**
 
-- `.digits(number)`: Sets the number of decimal digits. <span style="color:#C73E59">\*</span>
+- `.digits(number)`: Sets the number of decimal digits. <span style="color:#C73E59">*</span>
 - `.removeTrailingZero()`: (Deprecated) Removes trailing zeros after the decimal.
 - `.trailingZero(enable = true)`: Enables or disables trailing zeros in the formatted output. If `enable` is `true`, trailing zeros will be kept; if `false`, they will be removed. The default value is `true`.
-
-- `.min(number)`: Sets the minimum value; values below this will display as `< min`. <span style="color:#C73E59">\*</span>
-- `.max(number)`: Sets the maximum value; values above this will display as `> max`. <span style="color:#C73E59">\*</span>
+- `.min(number)`: Sets the minimum value; values below this will display as `< min`. <span style="color:#C73E59">*</span>
+- `.max(number)`: Sets the maximum value; values above this will display as `> max`. <span style="color:#C73E59">*</span>
 - `.sign()`: Adds a sign to the number (`+` or `-`).
-- `.unit(string)`: Adds a unit to the number (e.g., `$`, `%`). <span style="color:#C73E59">\*</span>
-- `.locale(string)`: Formats the number according to the specified locale. <span style="color:#C73E59">\*</span>
+- `.unit(string)`: Adds a unit to the number (e.g., `$`, `%`). <span style="color:#C73E59">*</span>
+- `.locale(string)`: Formats the number according to the specified locale. <span style="color:#C73E59">*</span>
 - `.readable()`: Makes the value more readable for small numbers.
-- `.default(string)`: Sets a default value in case `value` (or `decimals`) is `null` or `undefined`. <span style="color:#C73E59">\*</span>
+- `.default(string)`: Sets a default value in case `value` (or `decimals`) is `null` or `undefined`. <span style="color:#C73E59">*</span>
 
-_<sub><span style="color:#C73E59">\*</span> If the provided value is `null` or `undefined`, the option is ignored.</sub>_
+
+
+_<sub><span style="color:#C73E59">*</span> If the provided value is `null` or `undefined`, the option is ignored.</sub>_
+
 
 ---
 
@@ -224,6 +231,7 @@ The `Time` utility provides a robust way to handle and convert time units in Typ
 - [**Wait**](#timewait): Pause execution for a specified amount of time.
 - [**Timestamp**](#timetimestamp): Get the current Unix timestamp as a bigint.
 
+
 ### Period Types
 
 The `Time` utility also provides types to define periods:
@@ -276,7 +284,7 @@ Convert 5 days to hours:
 import { Time } from "@morpho-org/morpho-ts";
 
 const hours = Time.h.from.d(5n); // 120n
-const hoursFromPeriod = Time.h.fromPeriod({ unit: "d", duration: 5 }); // 120
+const hoursFromPeriod = Time.h.fromPeriod({unit: "d", duration: 5}); // 120
 ```
 
 Convert 2 weeks to days:
@@ -285,8 +293,9 @@ Convert 2 weeks to days:
 import { Time } from "@morpho-org/morpho-ts";
 
 const days = Time.d.from.w(2); // 14
-const daysFromPeriod = Time.w.fromPeriod({ unit: "w", duration: 2 }); // 14
+const daysFromPeriod = Time.w.fromPeriod({unit: "w", duration: 2}); // 14
 ```
+
 
 ---
 
@@ -316,3 +325,4 @@ import { Time } from "@morpho-org/morpho-ts";
 
 Time.timestamp(); // 1692671241n
 ```
+
