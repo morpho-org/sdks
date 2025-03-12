@@ -1,6 +1,6 @@
 import _ from "lodash";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
@@ -15,7 +15,11 @@ import {
 
 const type = "Erc20_Approve";
 
-const { morpho, bundler, permit2 } = addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+  permit2,
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should approve morpho", () => {
@@ -65,7 +69,7 @@ describe(type, () => {
         sender: userA,
         address: tokenB,
         args: {
-          spender: bundler,
+          spender: generalAdapter1,
           amount: 1n,
         },
       },
@@ -73,7 +77,9 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    expected.holdings[userA]![tokenB]!.erc20Allowances.bundler = 1n;
+    expected.holdings[userA]![tokenB]!.erc20Allowances[
+      "bundler3.generalAdapter1"
+    ] = 1n;
 
     expect(result).toEqual(expected);
   });

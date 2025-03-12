@@ -1,74 +1,87 @@
-import type { Holding } from "@morpho-org/blue-sdk";
-import { type UseQueryResult, useQueries } from "@tanstack/react-query";
-import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { useQueries } from "@tanstack/react-query";
+import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
+import { useRef } from "react";
 import {
   type HoldingParameters,
   fetchHoldingQueryOptions,
 } from "../queries/fetchHolding.js";
+import type { UseCompositeQueriesReturnType } from "../types/index.js";
 import { mergeDeepEqual, uniqBy } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
-import type { UseHoldingParameters } from "./useHolding.js";
+import type {
+  UseHoldingParameters,
+  UseHoldingReturnType,
+} from "./useHolding.js";
 
 export type FetchHoldingsParameters = {
   holdings: Iterable<Partial<HoldingParameters>>;
 };
 
-export type UseHoldingsParameters<
-  config extends Config = Config,
-  TCombinedResult = ReturnType<typeof combineHoldings>,
-> = FetchHoldingsParameters &
-  UnionOmit<UseHoldingParameters<config>, keyof HoldingParameters> & {
-    combine?: (
-      results: UseQueryResult<Holding, ReadContractErrorType>[],
-    ) => TCombinedResult;
-  };
+export type UseHoldingsParameters<config extends Config = Config> =
+  FetchHoldingsParameters &
+    UnionOmit<UseHoldingParameters<config>, keyof HoldingParameters>;
 
-export type UseHoldingsReturnType<
-  TCombinedResult = ReturnType<typeof combineHoldings>,
-> = TCombinedResult;
-
-export const combineHoldings = combineIndexedQueries<
-  Holding,
-  [Address, Address],
-  ReadContractErrorType
->((holding) => [holding.user, holding.token]);
+export type UseHoldingsReturnType = UseCompositeQueriesReturnType<
+  Address,
+  Address,
+  UseHoldingReturnType
+>;
 
 export function useHoldings<
   config extends Config = ResolvedRegister["config"],
-  TCombinedResult = ReturnType<typeof combineHoldings>,
 >({
   holdings,
-  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
-  combine = combineHoldings as any,
   query = {},
   ...parameters
-}: UseHoldingsParameters<
-  config,
-  TCombinedResult
->): UseHoldingsReturnType<TCombinedResult> {
+}: UseHoldingsParameters<config>): UseHoldingsReturnType {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  return useQueries({
-    queries: uniqBy(holdings, ({ user, token }) => `${user},${token}`).map(
-      (holding) => ({
-        ...query,
-        ...fetchHoldingQueryOptions(config, {
-          ...parameters,
-          ...holding,
-          chainId,
-        }),
-        enabled: holding.user != null && holding.token != null && query.enabled,
-        structuralSharing: query.structuralSharing ?? mergeDeepEqual,
-        staleTime:
-          (query.staleTime ?? parameters.blockNumber != null)
-            ? Number.POSITIVE_INFINITY
-            : undefined,
+  const uniqueHoldings = uniqBy(
+    holdings,
+    ({ user, token }) => `${user},${token}`,
+  );
+
+  const orderedResults = useQueries({
+    queries: uniqueHoldings.map((holding) => ({
+      ...query,
+      ...fetchHoldingQueryOptions(config, {
+        ...parameters,
+        ...holding,
+        chainId,
       }),
-    ),
-    combine,
+      enabled: holding.user != null && holding.token != null && query.enabled,
+      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      staleTime:
+        (query.staleTime ?? parameters.blockNumber != null)
+          ? Number.POSITIVE_INFINITY
+          : undefined,
+    })),
   });
+
+  const result: UseHoldingsReturnType = {
+    data: {},
+    error: {},
+    isFetching: {},
+    isFetchingAny: false,
+  };
+
+  uniqueHoldings.forEach(({ user, token }, index) => {
+    if (user == null || token == null) return;
+
+    const { data, error, isFetching } = orderedResults[index]!;
+
+    (result.data[user] ??= {})[token] = data;
+    (result.error[user] ??= {})[token] = error;
+    (result.isFetching[user] ??= {})[token] = isFetching;
+
+    if (isFetching) result.isFetchingAny = true;
+  });
+
+  const resultRef = useRef(result);
+  resultRef.current = mergeDeepEqual(resultRef.current, result);
+
+  return resultRef.current;
 }

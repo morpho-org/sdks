@@ -2,7 +2,6 @@ import { BlueSdkConverter } from "@morpho-org/blue-api-sdk";
 import {
   type Address,
   ChainId,
-  ChainUtils,
   type MarketId,
   UnknownTokenPriceError,
   erc20WrapperTokens,
@@ -57,7 +56,7 @@ export const check = async <
   flashbotsAccount: LocalAccount,
   additionalMarketIds: MarketId[] = [],
 ) => {
-  const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
+  const chainId = client.chain.id;
 
   const {
     markets: { items: markets },
@@ -66,6 +65,7 @@ export const check = async <
   });
 
   const { morpho, wNative } = getChainAddresses(chainId);
+  if (wNative == null) throw Error("Unknown wNative address");
 
   const { positions, wethPriceUsd } = await getPositions(
     client,
@@ -297,7 +297,9 @@ export const check = async <
 
                 // Handle ERC20Wrapper collateral tokens.
                 if (
-                  erc20WrapperTokens[chainId].has(market.params.collateralToken)
+                  erc20WrapperTokens[chainId]?.has(
+                    market.params.collateralToken,
+                  )
                 )
                   encoder.erc20WrapperWithdrawTo(
                     market.params.collateralToken,

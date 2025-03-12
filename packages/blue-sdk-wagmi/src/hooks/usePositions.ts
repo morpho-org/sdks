@@ -1,62 +1,51 @@
-import type { MarketId, Position } from "@morpho-org/blue-sdk";
-import { type UseQueryResult, useQueries } from "@tanstack/react-query";
-import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import type { MarketId } from "@morpho-org/blue-sdk";
+import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
+import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
-
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   type PositionParameters,
   fetchPositionQueryOptions,
 } from "../queries/fetchPosition.js";
+import type { UseCompositeQueriesReturnType } from "../types/index.js";
 import { mergeDeepEqual, uniqBy } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
-import type { UsePositionParameters } from "./usePosition.js";
+import type {
+  UsePositionParameters,
+  UsePositionReturnType,
+} from "./usePosition.js";
 
 export type FetchPositionsParameters = {
   positions: Iterable<Partial<PositionParameters>>;
 };
 
-export type UsePositionsParameters<
-  config extends Config = Config,
-  TCombinedResult = ReturnType<typeof combinePositions>,
-> = FetchPositionsParameters &
-  UnionOmit<UsePositionParameters<config>, keyof PositionParameters> & {
-    combine?: (
-      results: UseQueryResult<Position, ReadContractErrorType>[],
-    ) => TCombinedResult;
-  };
+export type UsePositionsParameters<config extends Config = Config> =
+  FetchPositionsParameters &
+    UnionOmit<UsePositionParameters<config>, keyof PositionParameters>;
 
-export type UsePositionsReturnType<
-  TCombinedResult = ReturnType<typeof combinePositions>,
-> = TCombinedResult;
-
-export const combinePositions = combineIndexedQueries<
-  Position,
-  [Address, MarketId],
-  ReadContractErrorType
->((position) => [position.user, position.marketId]);
+export type UsePositionsReturnType = UseCompositeQueriesReturnType<
+  Address,
+  MarketId,
+  UsePositionReturnType
+>;
 
 export function usePositions<
   config extends Config = ResolvedRegister["config"],
-  TCombinedResult = ReturnType<typeof combinePositions>,
 >({
   positions,
-  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
-  combine = combinePositions as any,
   query = {},
   ...parameters
-}: UsePositionsParameters<
-  config,
-  TCombinedResult
->): UsePositionsReturnType<TCombinedResult> {
+}: UsePositionsParameters<config>): UsePositionsReturnType {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  return useQueries({
-    queries: uniqBy(
-      positions,
-      ({ user, marketId }) => `${user},${marketId}`,
-    ).map((position) => ({
+  const uniquePositions = uniqBy(
+    positions,
+    ({ user, marketId }) => `${user},${marketId}`,
+  );
+
+  const orderedResults = useQueries({
+    queries: uniquePositions.map((position) => ({
       ...query,
       ...fetchPositionQueryOptions(config, {
         ...parameters,
@@ -71,6 +60,29 @@ export function usePositions<
           ? Number.POSITIVE_INFINITY
           : undefined,
     })),
-    combine,
   });
+
+  const result: UsePositionsReturnType = {
+    data: {},
+    error: {},
+    isFetching: {},
+    isFetchingAny: false,
+  };
+
+  uniquePositions.forEach(({ user, marketId }, index) => {
+    if (user == null || marketId == null) return;
+
+    const { data, error, isFetching } = orderedResults[index]!;
+
+    (result.data[user] ??= {})[marketId] = data;
+    (result.error[user] ??= {})[marketId] = error;
+    (result.isFetching[user] ??= {})[marketId] = isFetching;
+
+    if (isFetching) result.isFetchingAny = true;
+  });
+
+  const resultRef = useRef(result);
+  resultRef.current = mergeDeepEqual(resultRef.current, result);
+
+  return resultRef.current;
 }
