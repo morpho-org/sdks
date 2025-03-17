@@ -471,14 +471,17 @@ export namespace BundlerAction {
     asset: Address,
     recipient: Address,
     amount: bigint,
+    adapter?: Address,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
 
+    adapter ??= generalAdapter1;
+
     return [
       {
-        to: generalAdapter1,
+        to: adapter,
         data: encodeFunctionData({
           abi: coreAdapterAbi,
           functionName: "erc20Transfer",

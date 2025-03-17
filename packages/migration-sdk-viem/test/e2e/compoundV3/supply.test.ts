@@ -3,7 +3,6 @@ import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import { entries } from "@morpho-org/morpho-ts";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
-import {} from "lodash";
 import { type Address, maxUint256, parseUnits } from "viem";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
@@ -178,13 +177,15 @@ describe("Supply position on COMPOUND V3", () => {
               expect(compoundV3Positions).toBeDefined();
               expect(compoundV3Positions).toHaveLength(1);
 
-              const migrationBundle = compoundV3Positions[0]!.getMigrationTx(
+              const position =
+                compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+
+              const migrationBundle = position.getMigrationTx(
                 {
                   vault,
                   amount: migratedAmount,
                   maxSharePrice: 2n * MathLib.RAY,
                 },
-                chainId,
                 true,
               );
 
@@ -262,14 +263,15 @@ describe("Supply position on COMPOUND V3", () => {
             expect(compoundV3Positions).toBeDefined();
             expect(compoundV3Positions).toHaveLength(1);
 
-            const position = compoundV3Positions[0]!;
+            const position =
+              compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+
             const migrationBundle = position.getMigrationTx(
               {
                 vault,
                 amount: position.supply,
                 maxSharePrice: 2n * MathLib.RAY,
               },
-              chainId,
               true,
             );
 
@@ -347,13 +349,15 @@ describe("Supply position on COMPOUND V3", () => {
               expect(compoundV3Positions).toBeDefined();
               expect(compoundV3Positions).toHaveLength(1);
 
-              const migrationBundle = compoundV3Positions[0]!.getMigrationTx(
+              const position =
+                compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+
+              const migrationBundle = position.getMigrationTx(
                 {
                   vault,
                   amount: migratedAmount,
                   maxSharePrice: 2n * MathLib.RAY,
                 },
-                chainId,
                 false,
               );
 
@@ -425,14 +429,15 @@ describe("Supply position on COMPOUND V3", () => {
               expect(compoundV3Positions).toBeDefined();
               expect(compoundV3Positions).toHaveLength(1);
 
-              const position = compoundV3Positions[0]!;
+              const position =
+                compoundV3Positions[0]! as MigratableSupplyPosition_CompoundV3;
+
               const migrationBundle = position.getMigrationTx(
                 {
                   vault,
                   amount: position.supply,
                   maxSharePrice: 2n * MathLib.RAY,
                 },
-                chainId,
                 false,
               );
 

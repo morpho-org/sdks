@@ -2,10 +2,12 @@ import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
 
 import type { Abi } from "viem";
 import {
+  addressesProviderAbi as addressesProviderAbi_v2,
   lendingPoolAbi,
   protocolDataProviderAbi as protocolDataProviderAbi_v2,
 } from "./abis/aaveV2.js";
 import {
+  addressesProviderAbi as addressesProviderAbi_v3,
   poolAbi,
   protocolDataProviderAbi as protocolDataProviderAbi_v3,
 } from "./abis/aaveV3.js";
@@ -44,10 +46,12 @@ export interface ProtocolMigrationContracts {
   [MigratableProtocol.aaveV2]: {
     protocolDataProvider: Contract<typeof protocolDataProviderAbi_v2>;
     lendingPool: Contract<typeof lendingPoolAbi>;
+    addressesProvider: Contract<typeof addressesProviderAbi_v2>;
   } | null;
   [MigratableProtocol.aaveV3]: {
     pool: Contract<typeof poolAbi>;
     protocolDataProvider: Contract<typeof protocolDataProviderAbi_v3>;
+    addressesProvider: Contract<typeof addressesProviderAbi_v3>;
   } | null;
   [MigratableProtocol.compoundV3]: Record<
     string,
@@ -81,6 +85,10 @@ export const migrationAddressesRegistry = {
         address: "0x7d2768dE32b0b80b7a3454c06BdAc94A69DDc7A9",
         abi: lendingPoolAbi,
       },
+      addressesProvider: {
+        address: "0xB53C1a33016B2DC2fF3653530bfF1848a515c8c5",
+        abi: addressesProviderAbi_v2,
+      },
     },
     [MigratableProtocol.aaveV3]: {
       pool: {
@@ -90,6 +98,10 @@ export const migrationAddressesRegistry = {
       protocolDataProvider: {
         address: "0x7B4EB56E7CD4b454BA8ff71E4518426369a138a3",
         abi: protocolDataProviderAbi_v3,
+      },
+      addressesProvider: {
+        address: "0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e",
+        abi: addressesProviderAbi_v3,
       },
     },
     [MigratableProtocol.compoundV3]: {
@@ -126,6 +138,10 @@ export const migrationAddressesRegistry = {
       protocolDataProvider: {
         address: "0x2d8A3C5677189723C4cB8873CfC9C8976FDF38Ac",
         abi: protocolDataProviderAbi_v3,
+      },
+      addressesProvider: {
+        address: "0xe20fCBdBfFC4Dd138cE8b2E6FBb6CB49777ad64D",
+        abi: addressesProviderAbi_v3,
       },
     },
     [MigratableProtocol.compoundV3]: {
