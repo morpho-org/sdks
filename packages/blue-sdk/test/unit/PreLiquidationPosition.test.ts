@@ -75,6 +75,16 @@ describe("preLiquidationPosition", () => {
     expect(preLiquidationPosition.preSeizableCollateral).toBe(undefined);
     expect(preLiquidationPosition.preHealthFactor).toBe(undefined);
     expect(preLiquidationPosition.borrowCapacityUsage).toBe(undefined);
+    expect(preLiquidationPosition.borrowCapacityUsage).toBe(undefined);
+    expect(preLiquidationPosition.getBorrowCapacityLimit()).toBe(undefined);
+    expect(preLiquidationPosition.getWithdrawCollateralCapacityLimit()).toBe(
+      undefined,
+    );
+    expect(preLiquidationPosition.borrowCapacityUsage).toBe(undefined);
+    expect(preLiquidationPosition.getBorrowCapacityLimit()).toBe(undefined);
+    expect(preLiquidationPosition.getWithdrawCollateralCapacityLimit()).toBe(
+      undefined,
+    );
   });
 
   test("should not be preLiquidatable because the position has no borrow", () => {
@@ -108,6 +118,9 @@ describe("preLiquidationPosition", () => {
       { ...position, borrowShares: 50000000000000000n },
       new Market(market),
     );
+    const borrowCapacityLimit = preLiquidationPosition.getBorrowCapacityLimit();
+    const withdrawCollateralCapacityLimit =
+      preLiquidationPosition.getWithdrawCollateralCapacityLimit();
 
     expect(preLiquidationPosition.isHealthy).toBe(true);
     expect(preLiquidationPosition.isPreLiquidatable).toBe(false);
@@ -118,6 +131,14 @@ describe("preLiquidationPosition", () => {
     expect(preLiquidationPosition.preLiquidationPrice).toEqual(
       312500000000000000000000000000000000n,
     );
+    expect(preLiquidationPosition.borrowCapacityUsage).toEqual(
+      312500000000000000n,
+    );
+
+    expect(borrowCapacityLimit?.limiter).toEqual("Collateral");
+    expect(borrowCapacityLimit?.value).toEqual(110000000000n);
+    expect(withdrawCollateralCapacityLimit?.limiter).toEqual("Collateral");
+    expect(withdrawCollateralCapacityLimit?.value).toEqual(137500000000n);
   });
 
   test("should not be preLiquidatable because pre liquidation is not authorized", () => {
@@ -140,11 +161,23 @@ describe("preLiquidationPosition", () => {
       new Market(market),
     );
 
+    const borrowCapacityLimit = preLiquidationPosition.getBorrowCapacityLimit();
+    const withdrawCollateralCapacityLimit =
+      preLiquidationPosition.getWithdrawCollateralCapacityLimit();
+
     expect(preLiquidationPosition.isHealthy).toBe(false);
     expect(preLiquidationPosition.isPreLiquidatable).toBe(true);
     expect(preLiquidationPosition.preSeizableCollateral).toEqual(120189999998n);
     expect(preLiquidationPosition.preHealthFactor).toBeLessThan(
       parseEther("1"),
     );
+    expect(preLiquidationPosition.borrowCapacityUsage).toBeGreaterThan(
+      parseEther("1"),
+    );
+
+    expect(borrowCapacityLimit?.limiter).toEqual("Collateral");
+    expect(borrowCapacityLimit?.value).toEqual(0n);
+    expect(withdrawCollateralCapacityLimit?.limiter).toEqual("Collateral");
+    expect(withdrawCollateralCapacityLimit?.value).toEqual(0n);
   });
 });
