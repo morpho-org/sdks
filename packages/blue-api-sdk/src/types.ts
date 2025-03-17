@@ -120,10 +120,16 @@ export type AssetsFilters = {
   credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by asset id */
   id_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter assets that are listed as collateral on at least one market */
+  isCollateralAsset?: InputMaybe<Scalars["Boolean"]["input"]>;
+  /** Filter assets that are listed as loan on at least one market */
+  isLoanAsset?: InputMaybe<Scalars["Boolean"]["input"]>;
+  /** Filter assets that are listed by at least one vault */
+  isVaultAsset?: InputMaybe<Scalars["Boolean"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by token symbol */
   symbol_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  /** Filter by token's tags  */
+  /** Filter by token's tags */
   tags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by whitelisted status */
   whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
@@ -184,6 +190,7 @@ export type CollateralAtRiskDataPoint = {
 /** Vault curator */
 export type Curator = {
   __typename?: "Curator";
+  addresses: Maybe<Array<CuratorAddress>>;
   id: Scalars["ID"]["output"];
   /** Curator logo URI, for display purpose */
   image: Maybe<Scalars["String"]["output"]>;
@@ -193,6 +200,21 @@ export type Curator = {
   /** Link to curator website */
   url: Maybe<Scalars["String"]["output"]>;
   verified: Scalars["Boolean"]["output"];
+};
+
+/** Curator Address */
+export type CuratorAddress = {
+  __typename?: "CuratorAddress";
+  address: Scalars["String"]["output"];
+  chainId: Scalars["Int"]["output"];
+};
+
+/** Filtering options for curators. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
+export type CuratorFilters = {
+  address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  chainId?: InputMaybe<Scalars["Int"]["input"]>;
+  search?: InputMaybe<Scalars["String"]["input"]>;
+  verified?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
 /** Vault curator state */
@@ -250,7 +272,10 @@ export type Market = {
   /** Market bad debt values */
   badDebt: Maybe<MarketBadDebt>;
   collateralAsset: Maybe<Asset>;
-  /** Amount of collateral to borrow 1 loan asset scaled to both asset decimals */
+  /**
+   * Amount of collateral to borrow 1 loan asset scaled to both asset decimals
+   * @deprecated Use `state.price` instead.
+   */
   collateralPrice: Maybe<Scalars["BigInt"]["output"]>;
   /** Market concentrations */
   concentration: Maybe<MarketConcentration>;
@@ -778,10 +803,16 @@ export type MarketLiquidationTransactionData = {
 /** Market oracle accuracy versus spot price */
 export type MarketOracleAccuracy = {
   __typename?: "MarketOracleAccuracy";
-  /** Average oracle/spot prices deviation */
+  /**
+   * Average oracle/spot prices deviation
+   * @deprecated Not maintained anymore.
+   */
   averagePercentDifference: Maybe<Scalars["Float"]["output"]>;
   market: Market;
-  /** Maximum oracle/spot prices deviation */
+  /**
+   * Maximum oracle/spot prices deviation
+   * @deprecated Not maintained anymore.
+   */
   maxPercentDifference: Maybe<Scalars["Float"]["output"]>;
 };
 
@@ -1430,6 +1461,12 @@ export type PaginatedAssets = {
   pageInfo: Maybe<PageInfo>;
 };
 
+export type PaginatedCurators = {
+  __typename?: "PaginatedCurators";
+  items: Maybe<Array<Curator>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
 export type PaginatedMarketPositions = {
   __typename?: "PaginatedMarketPositions";
   items: Maybe<Array<MarketPosition>>;
@@ -1626,6 +1663,7 @@ export type Query = {
   chainSynchronizationState: ChainSynchronizationState;
   chainSynchronizationStates: Array<ChainSynchronizationState>;
   chains: Array<Chain>;
+  curators: PaginatedCurators;
   market: Market;
   marketAverageApys: Maybe<MarketApyAggregates>;
   marketByUniqueKey: Market;
@@ -1687,6 +1725,12 @@ export type QueryChainArgs = {
 export type QueryChainSynchronizationStateArgs = {
   chainId: Scalars["Int"]["input"];
   key: Scalars["String"]["input"];
+};
+
+export type QueryCuratorsArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+  where?: InputMaybe<CuratorFilters>;
 };
 
 export type QueryMarketArgs = {
@@ -2001,10 +2045,14 @@ export enum TimeseriesInterval {
   /** @deprecated Use startTimestamp and endTimestamp instead. */
   All = "ALL",
   Day = "DAY",
+  /** @deprecated HOUR is the minimum interval. */
   FifteenMinutes = "FIFTEEN_MINUTES",
+  /** @deprecated HOUR is the minimum interval. */
   FiveMinutes = "FIVE_MINUTES",
+  /** @deprecated HOUR is the minimum interval. */
   HalfHour = "HALF_HOUR",
   Hour = "HOUR",
+  /** @deprecated HOUR is the minimum interval. */
   Minute = "MINUTE",
   Month = "MONTH",
   Quarter = "QUARTER",
@@ -2503,7 +2551,7 @@ export type VaultFilters = {
   netApy_gte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by lower than or equal to given net APY. */
   netApy_lte?: InputMaybe<Scalars["Float"]["input"]>;
-  /** Filter by MetaMorpho current owner address */
+  /** Filter by MetaMorpho owner address */
   ownerAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by lower than or equal to given public allocator fee in dollar. */
   publicAllocatorFeeUsd_lte?: InputMaybe<Scalars["Float"]["input"]>;
@@ -2970,7 +3018,7 @@ export type VaultState = {
   monthlyApy: Maybe<Scalars["Float"]["output"]>;
   /** Monthly Vault APY including rewards, after deducting the performance fee. */
   monthlyNetApy: Maybe<Scalars["Float"]["output"]>;
-  /** Vault APY including rewards, after deducting the performance fee. */
+  /** Vault APY including rewards and underlying yield, after deducting the performance fee. */
   netApy: Maybe<Scalars["Float"]["output"]>;
   /** Vault APY excluding rewards, after deducting the performance fee. */
   netApyWithoutRewards: Scalars["Float"]["output"];

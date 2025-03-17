@@ -441,19 +441,25 @@ export abstract class CommonFormatter extends BaseFormatter {
   }
 
   /**
-   * Enables the removal of trailing zeros in the formatted output.
+   * Enables or disables trailing zeros in the formatted output.
    *
-   * This method modifies the formatter's configuration to remove unnecessary trailing zeros
-   * from decimal numbers. A new formatter instance is created with this option enabled.
+   * This method modifies the formatter's configuration to remove or keep unnecessary trailing zeros
+   * from decimal numbers based on the `enable` parameter. A new formatter instance is created with
+   * this option enabled or disabled.
    *
-   * @returns A new formatter instance with the `removeTrailingZero` option set to `true`.
+   * @param enable - A boolean indicating whether to enable trailing zeros. Defaults to `true`.
+   * @returns A new formatter instance with the `removeTrailingZero` option set to the opposite of `enable`.
    *
    * @example
-   * const updatedFormatter = formatter.removeTrailingZero();
+   * const updatedFormatter = formatter.trailingZero(false);
    * console.log(updatedFormatter.of(123.4500)); // Output: "123.45"
+   *
+   * @example
+   * const updatedFormatterDisabled = formatter.trailingZero(true);
+   * console.log(updatedFormatterDisabled.of(123.4500)); // Output: "123.4500"
    */
-  removeTrailingZero() {
-    const newOptions = { ...this._options, removeTrailingZero: true };
+  trailingZero(enable = true) {
+    const newOptions = { ...this._options, removeTrailingZero: !enable };
 
     return this._clone(newOptions);
   }
