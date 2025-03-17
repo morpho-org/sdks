@@ -31,12 +31,10 @@ const preLiquidationParams = {
   preLCF2: 800000000000000000n,
   preLIF1: 1010000000000000000n,
   preLIF2: 1010000000000000000n,
-  preLiquidationOracle:
-    "0x008bF4B1cDA0cc9f0e882E0697f036667652E1ef" as `0x${string}`,
-};
+  preLiquidationOracle: "0x008bF4B1cDA0cc9f0e882E0697f036667652E1ef",
+} as const;
 
-const preLiquidationAddress =
-  "0x0341b93dcb3b27fd4e2a6890cf06d67f64d9ac8e" as `0x${string}`;
+const preLiquidationAddress = "0x0341b93dcb3b27fd4e2a6890cf06d67f64d9ac8e";
 
 describe("augment/Position", () => {
   preLiquidationTest("should fetch position", async ({ client }) => {
@@ -101,17 +99,18 @@ describe("augment/Position", () => {
 
     const market = await fetchMarket(usdt_wbtc.id, client);
 
-    const position = {
-      preLiquidationParams,
-      preLiquidation: preLiquidationAddress,
-      isPreLiquidationAuthorized: true,
-      user: client.account.address,
-      supplyShares: 0n,
-      borrowShares,
-      collateral,
-    };
-
-    const expectedData = new PreLiquidationPosition(position, market);
+    const expectedData = new PreLiquidationPosition(
+      {
+        preLiquidationParams,
+        preLiquidation: preLiquidationAddress,
+        isPreLiquidationAuthorized: true,
+        user: client.account.address,
+        supplyShares: 0n,
+        borrowShares,
+        collateral,
+      },
+      market,
+    );
 
     const value = await fetchPreLiquidationPosition(
       client.account.address,

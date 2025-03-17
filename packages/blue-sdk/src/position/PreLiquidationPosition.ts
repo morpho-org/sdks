@@ -1,7 +1,6 @@
 import type { Address } from "viem";
 import { ORACLE_PRICE_SCALE } from "../constants";
 import {
-  CapacityLimitReason,
   type Market,
   MarketUtils,
   type MaxBorrowOptions,
@@ -60,11 +59,13 @@ export class PreLiquidationPosition
     const { collateralValue } = this;
     if (collateralValue == null) return;
 
+    const { borrowAssets } = this;
+
     return (
       this.isPreLiquidationAuthorized &&
-      this.borrowAssets <=
+      borrowAssets <=
         MathLib.wMulDown(collateralValue, this.market.params.lltv) &&
-      this.borrowAssets >
+      borrowAssets >
         MathLib.wMulDown(collateralValue, this.preLiquidationParams.preLltv)
     );
   }
@@ -74,8 +75,10 @@ export class PreLiquidationPosition
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get isHealthy() {
-    const { isPreLiquidatable, isLiquidatable } = this;
+    const { isPreLiquidatable } = this;
     if (isPreLiquidatable == null) return isPreLiquidatable;
+
+    const { isLiquidatable } = this;
     if (isLiquidatable == null) return isLiquidatable;
 
     return !isPreLiquidatable && !isLiquidatable;
@@ -108,12 +111,10 @@ export class PreLiquidationPosition
   get priceVariationToLiquidationPrice() {
     if (this.market.price == null) return;
 
-    if (this.market.price === 0n || this.preLiquidationPrice == null)
-      return null;
+    const { preLiquidationPrice } = this;
+    if (this.market.price === 0n || preLiquidationPrice == null) return null;
 
-    return (
-      MathLib.wDivUp(this.preLiquidationPrice, this.market.price) - MathLib.WAD
-    );
+    return MathLib.wDivUp(preLiquidationPrice, this.market.price) - MathLib.WAD;
   }
 
   /**
@@ -121,12 +122,10 @@ export class PreLiquidationPosition
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get maxBorrowAssets() {
-    if (this.collateralValue == null) return;
+    const { collateralValue } = this;
+    if (collateralValue == null) return;
 
-    return MathLib.wMulDown(
-      this.collateralValue,
-      this.preLiquidationParams.preLltv,
-    );
+    return MathLib.wMulDown(collateralValue, this.preLiquidationParams.preLltv);
   }
 
   /**
@@ -144,11 +143,10 @@ export class PreLiquidationPosition
    * `undefined` iff the market's oracle is undefined or reverts.
    */
   get preSeizableCollateral() {
-    const ltv = this.ltv;
     if (this.market.price == null) return;
-    if (ltv == null) {
-      return ltv;
-    }
+
+    const { ltv } = this;
+    if (ltv == null) return ltv;
 
     if (!this.isPreLiquidatable) return 0n;
 
@@ -208,109 +206,23 @@ export class PreLiquidationPosition
     });
   }
 
-  /**
-   * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position
-   * and the reason for the limit.
-   * Returns `undefined` iff the market's price is undefined.
-   * @deprecated Use `getBorrowCapacityLimit` instead.
-   */
-  get borrowCapacityLimit() {
-    const { maxBorrowAssets } = this;
-    if (maxBorrowAssets == null) return;
+  public getBorrowCapacityLimit(options: MaxBorrowOptions = {}) {
+    options.maxLtv =
+      options.maxLtv != null
+        ? MathLib.min(options.maxLtv, this.preLiquidationParams.preLltv)
+        : this.preLiquidationParams.preLltv;
 
-    // handle edge cases when the user is (pre)liquidatable (maxBorrow < borrow)
-    const { maxBorrowableAssets } = this;
-    if (maxBorrowableAssets == null) return;
-
-    const liquidity = this.market.liquidity;
-
-    if (maxBorrowableAssets > liquidity)
-      return {
-        value: liquidity,
-        limiter: CapacityLimitReason.liquidity,
-      };
-
-    return {
-      value: maxBorrowableAssets,
-      limiter: CapacityLimitReason.collateral,
-    };
-  }
-
-  /**
-   * Returns the maximum amount of collateral assets that can be withdrawn given a certain borrow position
-   * and the reason for the limit.
-   * Returns `undefined` iff the market's price is undefined.
-   * @deprecated Use `getWithdrawCollateralCapacityLimit` instead.
-   */
-  get withdrawCollateralCapacityLimit() {
-    const { withdrawableCollateral } = this;
-    if (withdrawableCollateral == null) return;
-
-    if (this.collateral > withdrawableCollateral)
-      return {
-        value: withdrawableCollateral,
-        limiter: CapacityLimitReason.collateral,
-      };
-
-    return {
-      value: this.collateral,
-      limiter: CapacityLimitReason.position,
-    };
-  }
-
-  public getBorrowCapacityLimit(
-    options: MaxBorrowOptions = { maxLtv: this.preLiquidationParams.preLltv },
-  ) {
-    options.maxLtv = options.maxLtv
-      ? MathLib.min(options.maxLtv, this.preLiquidationParams.preLltv)
-      : this.preLiquidationParams.preLltv;
-    const maxBorrowAssets = this.market.getMaxBorrowAssets(
-      this.collateral,
-      options,
-    );
-    if (maxBorrowAssets == null) return;
-
-    // handle edge cases when the user is liquidatable (maxBorrow < borrow)
-    const { maxBorrowableAssets } = this;
-    if (maxBorrowableAssets == null) return;
-    const liquidity = this.market.liquidity;
-
-    if (maxBorrowableAssets > liquidity)
-      return {
-        value: liquidity,
-        limiter: CapacityLimitReason.liquidity,
-      };
-
-    return {
-      value: maxBorrowableAssets,
-      limiter: CapacityLimitReason.collateral,
-    };
+    return this.market.getBorrowCapacityLimit(this, options);
   }
 
   public getWithdrawCollateralCapacityLimit(
-    options: MaxWithdrawCollateralOptions = {
-      maxLtv: this.preLiquidationParams.preLltv,
-    },
+    options: MaxWithdrawCollateralOptions = {},
   ) {
-    options.maxLtv = options.maxLtv
-      ? MathLib.min(options.maxLtv, this.preLiquidationParams.preLltv)
-      : this.preLiquidationParams.preLltv;
+    options.maxLtv =
+      options.maxLtv != null
+        ? MathLib.min(options.maxLtv, this.preLiquidationParams.preLltv)
+        : this.preLiquidationParams.preLltv;
 
-    const withdrawableCollateral = this.market.getWithdrawableCollateral(
-      this,
-      options,
-    );
-    if (withdrawableCollateral == null) return;
-
-    if (this.collateral > withdrawableCollateral)
-      return {
-        value: withdrawableCollateral,
-        limiter: CapacityLimitReason.collateral,
-      };
-
-    return {
-      value: this.collateral,
-      limiter: CapacityLimitReason.position,
-    };
+    return this.market.getWithdrawCollateralCapacityLimit(this, options);
   }
 }
