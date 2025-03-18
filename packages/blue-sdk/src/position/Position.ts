@@ -132,7 +132,18 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   }
 
   /**
+   * Whether this position can be liquidated.
+   * `undefined` iff the market's oracle is undefined or reverts.
+   */
+  get isLiquidatable() {
+    const isHealthy = this.market.isHealthy(this);
+    if (isHealthy == null) return isHealthy;
+    return !isHealthy;
+  }
+
+  /**
    * The price of the collateral quoted in loan assets that would allow this position to be liquidated.
+   * `null` if the position has no borrow.
    */
   get liquidationPrice() {
     return this.market.getLiquidationPrice(this);
@@ -142,7 +153,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
    * The price variation required for the position to reach its liquidation threshold (scaled by WAD).
    * Negative when healthy (the price needs to drop x%), positive when unhealthy (the price needs to soar x%).
    * `undefined` iff the market's oracle is undefined or reverts.
-   * Null if the position is not a borrow.
+   * `null` if the position is not a borrow.
    */
   get priceVariationToLiquidationPrice() {
     return this.market.getPriceVariationToLiquidationPrice(this);
@@ -175,31 +186,11 @@ export class AccrualPosition extends Position implements IAccrualPosition {
   }
 
   /**
-   * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position
-   * and the reason for the limit.
-   * Returns `undefined` iff the market's price is undefined.
-   * @deprecated Use `getBorrowCapacityLimit` instead.
-   */
-  get borrowCapacityLimit() {
-    return this.market.getBorrowCapacityLimit(this);
-  }
-
-  /**
    * Returns the maximum amount of loan assets that can be withdrawn given a certain supply position
    * and a balance of loan assets, and the reason for the limit.
    */
   get withdrawCapacityLimit() {
     return this.market.getWithdrawCapacityLimit(this);
-  }
-
-  /**
-   * Returns the maximum amount of collateral assets that can be withdrawn given a certain borrow position
-   * and the reason for the limit.
-   * Returns `undefined` iff the market's price is undefined.
-   * @deprecated Use `getWithdrawCollateralCapacityLimit` instead.
-   */
-  get withdrawCollateralCapacityLimit() {
-    return this.market.getWithdrawCollateralCapacityLimit(this);
   }
 
   /**

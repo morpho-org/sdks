@@ -6,7 +6,13 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { entries } from "@morpho-org/morpho-ts";
-import type { Operation } from "./operations.js";
+import type { Operation, OperationType } from "./operations.js";
+
+export class UnexpectedOperation extends Error {
+  constructor(type: OperationType, chainId: number) {
+    super(`unexpected operation "${type}" on chain "${chainId}"`);
+  }
+}
 
 export class UnknownMarketError extends UnknownDataError {
   constructor(public readonly marketId: MarketId) {
@@ -101,6 +107,17 @@ export class UnknownVaultPublicAllocatorConfigError extends UnknownDataError {
   }
 }
 
+export class UnknownVaultMarketPublicAllocatorConfigError extends UnknownDataError {
+  constructor(
+    public readonly vault: Address,
+    public readonly marketId: MarketId,
+  ) {
+    super(
+      `missing public allocator config for vault "${vault}" on market "${marketId}"`,
+    );
+  }
+}
+
 export namespace Erc20Errors {
   export class InsufficientBalance extends Error {
     constructor(
@@ -139,11 +156,10 @@ export namespace Erc20Errors {
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
-      public readonly spender: "morpho" | "bundler",
       public readonly nonce: bigint,
     ) {
       super(
-        `invalid permit2 nonce "${nonce}" for token "${token}" from owner "${owner}" to spender "${spender}"`,
+        `invalid permit2 nonce "${nonce}" for token "${token}" from owner "${owner}"`,
       );
     }
   }
@@ -152,10 +168,9 @@ export namespace Erc20Errors {
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
-      public readonly spender: "morpho" | "bundler",
     ) {
       super(
-        `insufficient permit2 allowance for token "${token}" from owner "${owner}" to spender "${spender}"`,
+        `insufficient permit2 allowance for token "${token}" from owner "${owner}"`,
       );
     }
   }

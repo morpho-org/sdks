@@ -3,10 +3,9 @@ import { PublicAllocator__factory } from "ethers-types";
 
 import {
   type Address,
-  ChainUtils,
   type MarketId,
   VaultMarketPublicAllocatorConfig,
-  addresses,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { FetchOptions } from "../types";
 
@@ -16,11 +15,10 @@ export async function fetchVaultMarketPublicAllocatorConfig(
   runner: { provider: Provider },
   { chainId, overrides = {} }: FetchOptions = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
-  const { publicAllocator } = addresses[chainId];
+  const { publicAllocator } = getChainAddresses(chainId);
+  if (publicAllocator == null) return;
 
   const [maxIn, maxOut] = await PublicAllocator__factory.connect(
     publicAllocator,

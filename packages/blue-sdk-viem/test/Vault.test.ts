@@ -5,7 +5,7 @@ import {
   ChainId,
   Eip5267Domain,
   type MarketId,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import { vaults } from "@morpho-org/morpho-test";
@@ -29,11 +29,11 @@ describe("augment/Vault", () => {
       address: steakUsdc.address,
       abi: metaMorphoAbi,
       functionName: "setIsAllocator",
-      args: [addresses[ChainId.EthMainnet].publicAllocator, true],
+      args: [addressesRegistry[ChainId.EthMainnet].publicAllocator, true],
     });
     await client.writeContract({
       account: owner,
-      address: addresses[ChainId.EthMainnet].publicAllocator,
+      address: addressesRegistry[ChainId.EthMainnet].publicAllocator,
       abi: publicAllocatorAbi,
       functionName: "setFee",
       args: [steakUsdc.address, 1n],

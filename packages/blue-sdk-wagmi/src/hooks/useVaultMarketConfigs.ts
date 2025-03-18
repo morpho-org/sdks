@@ -1,64 +1,54 @@
-import type { MarketId, VaultMarketConfig } from "@morpho-org/blue-sdk";
-import { type UseQueryResult, useQueries } from "@tanstack/react-query";
-import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import type { MarketId } from "@morpho-org/blue-sdk";
+import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
+import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   type VaultMarketConfigParameters,
   fetchVaultMarketConfigQueryOptions,
 } from "../queries/fetchVaultMarketConfig.js";
+import type { UseCompositeQueriesReturnType } from "../types/index.js";
 import { mergeDeepEqual, uniqBy } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
-import type { UseVaultMarketConfigParameters } from "./useVaultMarketConfig.js";
+import type {
+  UseVaultMarketConfigParameters,
+  UseVaultMarketConfigReturnType,
+} from "./useVaultMarketConfig.js";
 
 export type FetchVaultMarketConfigsParameters = {
   configs: Iterable<Partial<VaultMarketConfigParameters>>;
 };
 
-export type UseVaultMarketConfigsParameters<
-  config extends Config = Config,
-  TCombinedResult = ReturnType<typeof combineVaultMarketConfigs>,
-> = FetchVaultMarketConfigsParameters &
-  UnionOmit<
-    UseVaultMarketConfigParameters<config>,
-    keyof VaultMarketConfigParameters
-  > & {
-    combine?: (
-      results: UseQueryResult<VaultMarketConfig, ReadContractErrorType>[],
-    ) => TCombinedResult;
-  };
+export type UseVaultMarketConfigsParameters<config extends Config = Config> =
+  FetchVaultMarketConfigsParameters &
+    UnionOmit<
+      UseVaultMarketConfigParameters<config>,
+      keyof VaultMarketConfigParameters
+    >;
 
-export type UseVaultMarketConfigsReturnType<
-  TCombinedResult = ReturnType<typeof combineVaultMarketConfigs>,
-> = TCombinedResult;
-
-export const combineVaultMarketConfigs = combineIndexedQueries<
-  VaultMarketConfig,
-  [Address, MarketId],
-  ReadContractErrorType
->((config) => [config.vault, config.marketId]);
+export type UseVaultMarketConfigsReturnType = UseCompositeQueriesReturnType<
+  Address,
+  MarketId,
+  UseVaultMarketConfigReturnType
+>;
 
 export function useVaultMarketConfigs<
   config extends Config = ResolvedRegister["config"],
-  TCombinedResult = ReturnType<typeof combineVaultMarketConfigs>,
 >({
   configs,
-  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
-  combine = combineVaultMarketConfigs as any,
   query = {},
   ...parameters
-}: UseVaultMarketConfigsParameters<
-  config,
-  TCombinedResult
->): UseVaultMarketConfigsReturnType<TCombinedResult> {
+}: UseVaultMarketConfigsParameters<config>): UseVaultMarketConfigsReturnType {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  return useQueries({
-    queries: uniqBy(
-      configs,
-      ({ vault, marketId }) => `${vault},${marketId}`,
-    ).map((vaultMarketConfig) => ({
+  const uniqueVaultMarketConfigs = uniqBy(
+    configs,
+    ({ vault, marketId }) => `${vault},${marketId}`,
+  );
+
+  const orderedResults = useQueries({
+    queries: uniqueVaultMarketConfigs.map((vaultMarketConfig) => ({
       ...query,
       ...fetchVaultMarketConfigQueryOptions(config, {
         ...parameters,
@@ -75,6 +65,29 @@ export function useVaultMarketConfigs<
           ? Number.POSITIVE_INFINITY
           : undefined,
     })),
-    combine,
   });
+
+  const result: UseVaultMarketConfigsReturnType = {
+    data: {},
+    error: {},
+    isFetching: {},
+    isFetchingAny: false,
+  };
+
+  uniqueVaultMarketConfigs.forEach(({ vault, marketId }, index) => {
+    if (vault == null || marketId == null) return;
+
+    const { data, error, isFetching } = orderedResults[index]!;
+
+    (result.data[vault] ??= {})[marketId] = data;
+    (result.error[vault] ??= {})[marketId] = error;
+    (result.isFetching[vault] ??= {})[marketId] = isFetching;
+
+    if (isFetching) result.isFetchingAny = true;
+  });
+
+  const resultRef = useRef(result);
+  resultRef.current = mergeDeepEqual(resultRef.current, result);
+
+  return resultRef.current;
 }
