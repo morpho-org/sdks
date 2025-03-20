@@ -248,6 +248,21 @@ export interface AnvilArgs {
   transactionBlockKeeper?: number | undefined;
 }
 
+export interface AnvilProcessCallbacks {
+  /**
+   * Called when a message is received from the Anvil process.
+   */
+  onMessage?: (message: string) => void;
+  /**
+   * Called when an error is received from the Anvil process.
+   */
+  onError?: (message: string) => void;
+  /**
+   * Called when the Anvil process is closed.
+   */
+  onClose?: (message: string) => void;
+}
+
 /**
  * Converts an object of options to an array of command line arguments.
  *
@@ -302,6 +317,7 @@ let workerInstances = 0;
 export const spawnAnvil = async (
   args: AnvilArgs,
   index = workerInstances++,
+  callbacks?: AnvilProcessCallbacks,
 ): Promise<{
   rpcUrl: `http://localhost:${number}`;
   stop: () => boolean;
@@ -316,6 +332,7 @@ export const spawnAnvil = async (
     subprocess.stdout.on("data", (data) => {
       const message = `[port ${port}] ${data.toString()}`;
 
+      callbacks?.onMessage?.(message);
       // console.debug(message);
 
       if (message.includes("Listening on")) {
@@ -327,8 +344,16 @@ export const spawnAnvil = async (
     subprocess.stderr.on("data", (data) => {
       const message = `[port ${port}] ${data.toString()}`;
 
+      callbacks?.onError?.(message);
+
       if (!started) reject(message);
       else console.warn(message);
+    });
+
+    subprocess.on("close", (code) => {
+      const message = `[port ${port}] Anvil exited with code ${code}`;
+
+      callbacks?.onClose?.(message);
     });
   });
 
