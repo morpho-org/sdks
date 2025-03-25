@@ -7,20 +7,63 @@ import {
   type MaxWithdrawCollateralOptions,
 } from "../market";
 import { MathLib, SharesMath } from "../math";
+import type { BigIntish } from "../types";
 import { AccrualPosition, type IAccrualPosition } from "./Position";
 
-export interface PreLiquidationParams {
-  preLltv: bigint;
-  preLCF1: bigint;
-  preLCF2: bigint;
-  preLIF1: bigint;
-  preLIF2: bigint;
-  preLiquidationOracle: Address;
+export interface IPreLiquidationParams {
+  preLltv: BigIntish;
+  preLCF1: BigIntish;
+  preLCF2: BigIntish;
+  preLIF1: BigIntish;
+  preLIF2: BigIntish;
+}
+
+export class PreLiquidationParams implements IPreLiquidationParams {
+  public readonly preLltv: bigint;
+  public readonly preLCF1: bigint;
+  public readonly preLCF2: bigint;
+  public readonly preLIF1: bigint;
+  public readonly preLIF2: bigint;
+
+  constructor({
+    preLltv,
+    preLCF1,
+    preLCF2,
+    preLIF1,
+    preLIF2,
+  }: IPreLiquidationParams) {
+    this.preLltv = BigInt(preLltv);
+    this.preLCF1 = BigInt(preLCF1);
+    this.preLCF2 = BigInt(preLCF2);
+    this.preLIF1 = BigInt(preLIF1);
+    this.preLIF2 = BigInt(preLIF2);
+  }
+
+  public getCloseFactor(quotient: BigIntish) {
+    return (
+      this.preLCF1 + MathLib.wMulDown(quotient, this.preLCF2 - this.preLCF1)
+    );
+  }
+
+  public getIncentiveFactor(quotient: BigIntish) {
+    return (
+      this.preLIF1 + MathLib.wMulDown(quotient, this.preLIF2 - this.preLIF1)
+    );
+  }
 }
 
 export interface IPreLiquidationPosition extends IAccrualPosition {
-  preLiquidationParams: PreLiquidationParams;
+  /**
+   * The pre-liquidation parameters of the associated PreLiquidation contract.
+   */
+  preLiquidationParams: IPreLiquidationParams;
+  /**
+   * The address of the PreLiquidation contract this position is associated to.
+   */
   preLiquidation: Address;
+  /**
+   * Whether the PreLiquidation contract is authorized to manage this position.
+   */
   isPreLiquidationAuthorized: boolean;
 }
 
@@ -28,27 +71,24 @@ export class PreLiquidationPosition
   extends AccrualPosition
   implements IPreLiquidationPosition
 {
-  /**
-   * The pre-liquidation parameters of the associated PreLiquidation contract.
-   */
   public readonly preLiquidationParams: PreLiquidationParams;
+  public readonly preLiquidation;
+  public readonly isPreLiquidationAuthorized;
 
-  /**
-   * The address of the PreLiquidation contract this position is associated to.
-   */
-  public readonly preLiquidation: Address;
-
-  /**
-   * Whether the PreLiquidation contract is authorized to manage this position.
-   */
-  public readonly isPreLiquidationAuthorized: boolean;
-
-  constructor(position: IPreLiquidationPosition, market: Market) {
+  constructor(
+    {
+      preLiquidationParams,
+      preLiquidation,
+      isPreLiquidationAuthorized,
+      ...position
+    }: IPreLiquidationPosition,
+    market: Market,
+  ) {
     super(position, market);
 
-    this.preLiquidationParams = position.preLiquidationParams;
-    this.preLiquidation = position.preLiquidation;
-    this.isPreLiquidationAuthorized = position.isPreLiquidationAuthorized;
+    this.preLiquidationParams = new PreLiquidationParams(preLiquidationParams);
+    this.preLiquidation = preLiquidation;
+    this.isPreLiquidationAuthorized = isPreLiquidationAuthorized;
   }
 
   /**
@@ -154,19 +194,11 @@ export class PreLiquidationPosition
       ltv - this.preLiquidationParams.preLltv,
       this.market.params.lltv - this.preLiquidationParams.preLltv,
     );
-    const preLIF =
-      this.preLiquidationParams.preLIF1 +
-      MathLib.wMulDown(
-        quotient,
-        this.preLiquidationParams.preLIF2 - this.preLiquidationParams.preLIF1,
-      );
-    const preLCF =
-      this.preLiquidationParams.preLCF1 +
-      MathLib.wMulDown(
-        quotient,
-        this.preLiquidationParams.preLCF2 - this.preLiquidationParams.preLCF1,
-      );
-    const repayableShares = MathLib.wMulDown(this.borrowShares, preLCF);
+
+    const repayableShares = MathLib.wMulDown(
+      this.borrowShares,
+      this.preLiquidationParams.getIncentiveFactor(quotient),
+    );
 
     const repayableAssets = MathLib.wMulDown(
       SharesMath.toAssets(
@@ -175,7 +207,7 @@ export class PreLiquidationPosition
         this.market.totalBorrowShares,
         "Down",
       ),
-      preLIF,
+      this.preLiquidationParams.getIncentiveFactor(quotient),
     );
 
     return MathLib.mulDivDown(

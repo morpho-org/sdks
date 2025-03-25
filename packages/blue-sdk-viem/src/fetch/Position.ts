@@ -2,7 +2,7 @@ import {
   AccrualPosition,
   type MarketId,
   Position,
-  type PreLiquidationParams,
+  PreLiquidationParams,
   PreLiquidationPosition,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -45,15 +45,23 @@ export async function fetchPreLiquidationParams(
   parameters: DeploylessFetchParameters = {},
 ): Promise<PreLiquidationParams> {
   parameters.chainId = await getChainId(client);
-  const { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle } =
-    await readContract(client, {
+  const { preLltv, preLCF1, preLCF2, preLIF1, preLIF2 } = await readContract(
+    client,
+    {
       ...parameters,
       address: preLiquidation,
       abi: preLiquidationAbi,
       functionName: "preLiquidationParams",
-    });
+    },
+  );
 
-  return { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle };
+  return new PreLiquidationParams({
+    preLltv,
+    preLCF1,
+    preLCF2,
+    preLIF1,
+    preLIF2,
+  });
 }
 
 export async function fetchIsPreLiquidationAuthorized(

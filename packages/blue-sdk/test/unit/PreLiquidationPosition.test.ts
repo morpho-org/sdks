@@ -9,6 +9,7 @@ import {
   PreLiquidationPosition,
   addresses,
 } from "../../src/index.js";
+import { PreLiquidationParams } from "../../src/position/index.js";
 
 const { usdc, wstEth, adaptiveCurveIrm } = addresses[ChainId.EthMainnet]!;
 
@@ -33,14 +34,13 @@ const market = {
   rateAtTarget: 1672790194n,
 };
 
-const preLiquidationParams = {
+const preLiquidationParams = new PreLiquidationParams({
   preLltv: 800000000000000000n,
   preLCF1: 200000000000000000n,
   preLCF2: 800000000000000000n,
   preLIF1: 1010000000000000000n,
   preLIF2: 1010000000000000000n,
-  preLiquidationOracle: market.params.oracle,
-};
+});
 
 const preLiquidationAddress =
   "0x0000000000000000000000000000000000000001" as `0x${string}`;
