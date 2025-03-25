@@ -11,6 +11,7 @@ import {
 
 import {
   ChainId,
+  DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
   NATIVE_ADDRESS,
   convexWrapperTokens,
@@ -563,7 +564,7 @@ export const encodeOperation = (
         assets = 0n,
         shares = 0n,
         onBehalf,
-        slippage = 0n,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
       const market = dataBefore.getMarket(id);
@@ -591,7 +592,7 @@ export const encodeOperation = (
         assets = 0n,
         shares = 0n,
         receiver,
-        slippage = 0n,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
       const market = dataBefore.getMarket(id);
@@ -612,7 +613,7 @@ export const encodeOperation = (
         assets = 0n,
         shares = 0n,
         receiver,
-        slippage = 0n,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
       const market = dataBefore.getMarket(id);
@@ -633,7 +634,7 @@ export const encodeOperation = (
         assets = 0n,
         shares = 0n,
         onBehalf,
-        slippage = 0n,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
       const market = dataBefore.getMarket(id);
@@ -693,7 +694,12 @@ export const encodeOperation = (
       break;
     }
     case "MetaMorpho_Deposit": {
-      const { assets = 0n, shares = 0n, owner, slippage = 0n } = operation.args;
+      const {
+        assets = 0n,
+        shares = 0n,
+        owner,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
+      } = operation.args;
 
       const vault = dataBefore.getVault(address);
       const maxSharePrice = vault.toAssets(
@@ -719,7 +725,7 @@ export const encodeOperation = (
         shares = 0n,
         owner,
         receiver,
-        slippage = 0n,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
       const vault = dataBefore.getVault(address);
