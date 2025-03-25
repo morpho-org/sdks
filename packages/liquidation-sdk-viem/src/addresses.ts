@@ -76,6 +76,16 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
       instantRedemptionVault: "0x30d9D1e76869516AEa980390494AaEd45C3EfC1a",
       redemptionAsset: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // wBTC
     },
+    "0xbB51E2a15A9158EBE2b0Ceb8678511e063AB7a55": {
+      // mEdge
+      instantRedemptionVault: "0x9B2C5E30E3B1F6369FC746A1C1E47277396aF15D",
+      redemptionAsset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+    },
+    "0x030b69280892c888670EDCDCD8B69Fd8026A0BF3": {
+      // mMEV
+      instantRedemptionVault: "0xac14a14f578C143625Fc8F54218911e8F634184D",
+      redemptionAsset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48", // USDC
+    },
   },
   [ChainId.BaseMainnet]: {
     "0xDD629E5241CbC5919847783e6C96B2De4754e438": {
