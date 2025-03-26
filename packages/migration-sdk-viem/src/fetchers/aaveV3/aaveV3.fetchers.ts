@@ -1,5 +1,5 @@
 import { type Address, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
-import { isDefined } from "@morpho-org/morpho-ts";
+import { isDefined, values } from "@morpho-org/morpho-ts";
 
 import {
   type FetchParameters,
@@ -18,7 +18,6 @@ import { migrationAddresses } from "../../config.js";
 import type { MigratablePosition } from "../../positions/index.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../positions/supply/aaveV3.supply.js";
 
-import { values } from "lodash";
 import { MigratableBorrowPosition_AaveV3 } from "../../positions/borrow/index.js";
 import { MigratableProtocol } from "../../types/index.js";
 import {
