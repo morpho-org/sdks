@@ -2,6 +2,7 @@ import { maxUint256, parseUnits } from "viem";
 
 import {
   ChainId,
+  PreLiquidationParams,
   PreLiquidationPosition,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -25,14 +26,14 @@ const collateral = parseUnits("1", 8);
 
 const supplier = testAccount(1);
 
-const preLiquidationParams = {
+const preLiquidationParams = new PreLiquidationParams({
   preLltv: 832603694978000000n,
   preLCF1: 200000000000000000n,
   preLCF2: 800000000000000000n,
   preLIF1: 1010000000000000000n,
   preLIF2: 1010000000000000000n,
   preLiquidationOracle: "0x008bF4B1cDA0cc9f0e882E0697f036667652E1ef",
-} as const;
+});
 
 const preLiquidationAddress = "0x0341b93dcb3b27fd4e2a6890cf06d67f64d9ac8e";
 
@@ -87,7 +88,7 @@ describe("augment/Position", () => {
       address: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
       abi: preLiquidationFactoryAbi,
       functionName: "createPreLiquidation",
-      args: [usdt_wbtc.id, preLiquidationParams],
+      args: [usdt_wbtc.id, { ...preLiquidationParams }],
     });
 
     await client.writeContract({
@@ -103,7 +104,7 @@ describe("augment/Position", () => {
       {
         preLiquidationParams,
         preLiquidation: preLiquidationAddress,
-        isPreLiquidationAuthorized: true,
+        preLiquidationOraclePrice: market.price,
         user: client.account.address,
         supplyShares: 0n,
         borrowShares,

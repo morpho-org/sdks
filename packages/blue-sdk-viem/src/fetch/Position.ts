@@ -2,14 +2,14 @@ import {
   AccrualPosition,
   type MarketId,
   Position,
-  type PreLiquidationParams,
+  PreLiquidationParams,
   PreLiquidationPosition,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi, preLiquidationAbi } from "../abis";
+import { blueAbi, blueOracleAbi, preLiquidationAbi } from "../abis";
 import type { DeploylessFetchParameters, FetchParameters } from "../types";
 import { fetchMarket } from "./Market";
 
@@ -45,7 +45,7 @@ export async function fetchPreLiquidationParams(
   parameters: DeploylessFetchParameters = {},
 ): Promise<PreLiquidationParams> {
   parameters.chainId = await getChainId(client);
-  const { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle } =
+  const { preLltv, preLIF1, preLIF2, preLCF1, preLCF2, preLiquidationOracle } =
     await readContract(client, {
       ...parameters,
       address: preLiquidation,
@@ -53,25 +53,13 @@ export async function fetchPreLiquidationParams(
       functionName: "preLiquidationParams",
     });
 
-  return { preLltv, preLCF1, preLCF2, preLIF1, preLIF2, preLiquidationOracle };
-}
-
-export async function fetchIsPreLiquidationAuthorized(
-  user: Address,
-  preLiquidation: Address,
-  client: Client,
-  parameters: DeploylessFetchParameters = {},
-) {
-  parameters.chainId ??= await getChainId(client);
-
-  const { morpho } = getChainAddresses(parameters.chainId);
-
-  return readContract(client, {
-    ...parameters,
-    address: morpho,
-    abi: blueAbi,
-    functionName: "isAuthorized",
-    args: [user, preLiquidation],
+  return new PreLiquidationParams({
+    preLltv,
+    preLCF1,
+    preLCF2,
+    preLIF1,
+    preLIF2,
+    preLiquidationOracle,
   });
 }
 
@@ -100,20 +88,25 @@ export async function fetchPreLiquidationPosition(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const [position, market, preLiquidationParams, isPreLiquidationAuthorized] =
-    await Promise.all([
-      fetchPosition(user, marketId, client, parameters),
-      fetchMarket(marketId, client, parameters),
-      fetchPreLiquidationParams(preLiquidation, client, parameters),
-      fetchIsPreLiquidationAuthorized(user, preLiquidation, client),
-    ]);
+  const [position, market, preLiquidationParams] = await Promise.all([
+    fetchPosition(user, marketId, client, parameters),
+    fetchMarket(marketId, client, parameters),
+    fetchPreLiquidationParams(preLiquidation, client, parameters),
+  ]);
+
+  const preLiquidationOraclePrice = await readContract(client, {
+    ...parameters,
+    address: preLiquidationParams.preLiquidationOracle,
+    abi: blueOracleAbi,
+    functionName: "price",
+  }).catch(() => undefined);
 
   return new PreLiquidationPosition(
     {
       ...position,
       preLiquidationParams,
       preLiquidation,
-      isPreLiquidationAuthorized,
+      preLiquidationOraclePrice,
     },
     market,
   );
