@@ -210,7 +210,7 @@ export async function fetchAaveV3Positions(
       return {
         underlyingAddress,
         supply: totalSupply,
-        supplyApy: rateToApy(currentLiquidityRate, "s", 27),
+        supplyApy: rateToApy(currentLiquidityRate, "s", 27, true),
         max,
         nonce,
         aToken: aTokenData,
