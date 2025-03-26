@@ -1,5 +1,4 @@
 import { type BigIntish, MathLib } from "@morpho-org/blue-sdk";
-import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { rateToApy } from "../../utils/rates.js";
 
@@ -94,9 +93,8 @@ export namespace MorphoAaveMath {
    * @returns the compounded APY in BASE_UNITS _(4 decimals)_
    */
   function _rateToAPY(yearlyRate: bigint) {
-    const ratePerSeconds = yearlyRate / Time.s.from.y(1n);
     return parseUnits(
-      rateToApy(ratePerSeconds, "s", _indexesDecimals).toFixed(4),
+      rateToApy(yearlyRate, "s", _indexesDecimals, true).toFixed(4),
       4,
     );
   }

@@ -156,6 +156,8 @@ describe("Supply position on COMPOUND V3", () => {
               SupplyMigrationLimiter.position,
             );
             expect(position.max.value).toEqual(position.supply);
+            expect(position.supplyApy).not.toEqual(0);
+            expect(position.supplyApy).not.toEqual(Number.POSITIVE_INFINITY);
           });
 
           testFn(
