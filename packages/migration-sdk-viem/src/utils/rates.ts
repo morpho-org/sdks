@@ -11,9 +11,9 @@ export function rateToApy(
   const { unit, duration } = Time.toPeriod(period);
   const factor = Time[unit].from.y(1) / duration;
 
-  let rateBi = BigInt(rate);
+  rate = BigInt(rate);
 
-  if (isApr) rateBi /= Time[unit].from.y(1n);
+  if (isApr) rate /= Time[unit].from.y(1n);
 
-  return (1 + Number(formatUnits(BigInt(rateBi), rateDecimals))) ** factor - 1;
+  return (1 + Number(formatUnits(rate, rateDecimals))) ** factor - 1;
 }
