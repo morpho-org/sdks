@@ -157,7 +157,7 @@ export class PreLiquidationPosition
     if (!this.isLiquidatable) return 0n;
 
     const { ltv } = this;
-    if (ltv == null) return ltv;
+    if (ltv == null) return;
 
     const quotient = MathLib.wDivDown(
       ltv - this.preLiquidationParams.preLltv,
