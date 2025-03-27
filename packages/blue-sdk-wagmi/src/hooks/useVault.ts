@@ -44,8 +44,7 @@ export function useVault<
     enabled: parameters.vault != null && query.enabled,
     structuralSharing: query.structuralSharing ?? mergeDeepEqual,
     staleTime:
-      (query.staleTime ?? parameters.blockNumber != null)
-        ? Number.POSITIVE_INFINITY
-        : undefined,
+      query.staleTime ??
+      (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),
   });
 }
