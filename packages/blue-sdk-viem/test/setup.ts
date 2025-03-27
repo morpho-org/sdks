@@ -16,3 +16,11 @@ export const test2 = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 21_595_000,
 });
+
+/**
+ * This test will run on `mainnet` forked at block `21,950,00`.
+ */
+export const preLiquidationTest = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  forkBlockNumber: 21_950_000,
+});

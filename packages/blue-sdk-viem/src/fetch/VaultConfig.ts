@@ -1,6 +1,6 @@
 import type { Address, Client } from "viem";
 
-import { ChainUtils, VaultConfig } from "@morpho-org/blue-sdk";
+import { VaultConfig } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis";
 import type { DeploylessFetchParameters } from "../types";
@@ -11,9 +11,7 @@ export async function fetchVaultConfig(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const [token, asset, decimalsOffset] = await Promise.all([
     fetchToken(address, client, parameters), // TODO: avoid fetching decimals
@@ -31,12 +29,9 @@ export async function fetchVaultConfig(
     }),
   ]);
 
-  return new VaultConfig(
-    {
-      ...token,
-      asset,
-      decimalsOffset: BigInt(decimalsOffset),
-    },
-    parameters.chainId,
-  );
+  return new VaultConfig({
+    ...token,
+    asset,
+    decimalsOffset: BigInt(decimalsOffset),
+  });
 }

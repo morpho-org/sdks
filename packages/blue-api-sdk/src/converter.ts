@@ -242,14 +242,11 @@ export class BlueSdkConverter {
   }
 
   public getVaultConfig(dto: PartialApiVaultConfig) {
-    return new VaultConfig(
-      {
-        ...dto,
-        decimalsOffset: VaultUtils.decimalsOffset(dto.asset.decimals),
-        asset: dto.asset.address,
-      },
-      dto.chain.id,
-    );
+    return new VaultConfig({
+      ...dto,
+      decimalsOffset: VaultUtils.decimalsOffset(dto.asset.decimals),
+      asset: dto.asset.address,
+    });
   }
 
   public getVault(dto: PartialApiVault & { state: null }): null;

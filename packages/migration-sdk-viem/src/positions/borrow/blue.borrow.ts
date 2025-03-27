@@ -94,7 +94,9 @@ export class MigratableBorrowPosition_Blue
     }: MigratableBorrowPosition_Blue.Args,
     chainId: ChainId,
   ): BlueInputBundlerOperations["Blue_SupplyCollateral"] {
-    const { bundler } = getChainAddresses(chainId);
+    const {
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(chainId);
 
     const shouldMigrateBorrow = borrowAssets > 0n || borrowShares > 0n;
 
@@ -127,7 +129,7 @@ export class MigratableBorrowPosition_Blue
                             MathLib.WAD + slippageFrom,
                           )
                         : borrowAssets,
-                    receiver: bundler,
+                    receiver: generalAdapter1,
                     onBehalf: this.position.user,
                     slippage: slippageTo,
                   },
@@ -157,7 +159,7 @@ export class MigratableBorrowPosition_Blue
               id: this.market.id,
               assets: collateralAssets,
               onBehalf: this.position.user,
-              receiver: bundler,
+              receiver: generalAdapter1,
             },
           },
         ],

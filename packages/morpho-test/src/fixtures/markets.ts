@@ -2,13 +2,19 @@ import {
   ChainId,
   type IMarketParams,
   MarketParams,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { parseEther, parseUnits } from "viem";
 
 const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt, dai } =
-  addresses[ChainId.EthMainnet];
+  addressesRegistry[ChainId.EthMainnet];
+
+const {
+  adaptiveCurveIrm: adaptiveCurveIrm_base,
+  wNative: wNative_base,
+  usdc: usdc_base,
+} = addressesRegistry[ChainId.BaseMainnet];
 
 export const markets = {
   [ChainId.EthMainnet]: {
@@ -204,6 +210,22 @@ export const markets = {
       collateralToken: "0x78Fc2c2eD1A4cDb5402365934aE5648aDAd094d0",
       oracle: "0x76052A2A28fDCB8124f4686C63C68355b142de3B",
       irm: adaptiveCurveIrm,
+      lltv: parseUnits("86", 16),
+    }),
+  },
+  [ChainId.BaseMainnet]: {
+    eth_wstEth: new MarketParams({
+      loanToken: wNative_base,
+      collateralToken: "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
+      oracle: "0x4A11590e5326138B514E08A9B52202D42077Ca65",
+      irm: adaptiveCurveIrm_base,
+      lltv: parseUnits("94.5", 16),
+    }),
+    usdc_eth: new MarketParams({
+      loanToken: usdc_base,
+      collateralToken: wNative_base,
+      oracle: "0xFEa2D58cEfCb9fcb597723c6bAE66fFE4193aFE4",
+      irm: adaptiveCurveIrm_base,
       lltv: parseUnits("86", 16),
     }),
   },

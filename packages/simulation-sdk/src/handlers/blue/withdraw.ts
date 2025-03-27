@@ -16,9 +16,12 @@ export const handleBlueWithdrawOperation: OperationHandler<
   },
   data,
 ) => {
-  const { morpho, bundler } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(data.chainId);
 
-  if (sender === bundler) {
+  if (sender === generalAdapter1) {
     const userData = data.getUser(onBehalf);
 
     if (!userData.isBundlerAuthorized)
