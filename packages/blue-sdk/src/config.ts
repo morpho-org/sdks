@@ -1,3 +1,4 @@
+import { entries } from "@morpho-org/morpho-ts";
 import { type ChainAddresses, addresses } from "./addresses";
 
 /**
@@ -7,9 +8,8 @@ import { type ChainAddresses, addresses } from "./addresses";
  *
  * @param chainId - The numeric chain ID of the custom or unsupported network.
  * @param chainAddresses - An object containing the necessary addresses for the given chain.
- * @param override - Optional. If true, allows overriding an existing entry. Defaults to false.
  *
- * @throws Will throw an error if the chain ID already exists in the registry and `override` is false.
+ * @throws Will throw an error if the chain ID already exists in the registry.
  * @throws Will throw an error if some required addresses are missing.
  *
  * @example
@@ -23,14 +23,49 @@ import { type ChainAddresses, addresses } from "./addresses";
  *   wNative: "0x...",
  * });
  */
-export function registerCustomChain(
-  chainId: number,
-  chainAddresses: ChainAddresses,
-  override = false,
-) {
-  if (addresses[chainId] && !override) {
+function registerCustomChain(chainId: number, chainAddresses: ChainAddresses) {
+  if (addresses[chainId]) {
     throw new Error(`Chain ID ${chainId} is already supported.`);
   }
 
+  registerChain(chainId, chainAddresses);
+}
+
+function registerChain(chainId: number, chainAddresses: ChainAddresses) {
+  //TODO validate schema (with zod?)
   addresses[chainId] = chainAddresses;
+}
+
+export interface BlueSdkCustomConfig {
+  chains?: Record<number, ChainAddresses>;
+  chainsOverrides?: Record<number, ChainAddresses>;
+}
+
+export async function loadCustomConfig() {
+  try {
+    const userConfigModule = await import(
+      `${process.cwd()}/blue-sdk.config.ts`
+    );
+
+    const config: BlueSdkCustomConfig = userConfigModule.default;
+
+    if (config.chains) {
+      for (const [chainId, chainAddresses] of entries(config.chains)) {
+        try {
+          registerCustomChain(chainId, chainAddresses);
+        } catch (e) {
+          console.warn(`Could not add config on chain ${chainId}: ${e}`);
+        }
+      }
+    }
+    if (config.chainsOverrides) {
+      for (const [chainId, chainAddresses] of entries(config.chainsOverrides)) {
+        try {
+          registerChain(chainId, chainAddresses);
+        } catch (e) {
+          console.warn(`Could not override config on chain ${chainId}: ${e}`);
+        }
+      }
+    }
+  } catch {}
 }
