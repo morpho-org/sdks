@@ -8,9 +8,9 @@ export function isPlainArray(value: unknown) {
  * This can be used for structural sharing between JSON values for example.
  * It may be unsafe to use with JS classes or other non-plain objects because it will not preserve the prototype chain.
  */
-export function mergeDeepEqual<T>(a: unknown, b: T): T;
+export function replaceDeepEqual<T>(a: unknown, b: T): T;
 // biome-ignore lint/suspicious/noExplicitAny: safe implementation
-export function mergeDeepEqual(a: any, b: any): any {
+export function replaceDeepEqual(a: any, b: any): any {
   if (a === b) return a;
 
   if (
@@ -47,11 +47,16 @@ export function mergeDeepEqual(a: any, b: any): any {
       copy[key] = undefined;
       equalItems++;
     } else {
-      copy[key] = mergeDeepEqual(a[key], b[key]);
+      copy[key] = replaceDeepEqual(a[key], b[key]);
       if (copy[key] === a[key] && a[key] !== undefined) {
         equalItems++;
       }
     }
+  }
+
+  for (let i = 0; i < aSize; i++) {
+    const key = array ? i : aItems[i];
+    if (!array && !bItems.includes(key)) delete copy[key];
   }
 
   return aSize === bSize && equalItems === aSize ? a : copy;

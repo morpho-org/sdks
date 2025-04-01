@@ -9,7 +9,7 @@ import {
   fetchMarketQueryOptions,
 } from "../queries/fetchMarket.js";
 import type { UseIndexedQueriesReturnType } from "../types/index.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type { UseMarketParameters, UseMarketReturnType } from "./useMarket.js";
 
@@ -45,7 +45,7 @@ export function useMarkets<config extends Config = ResolvedRegister["config"]>({
         chainId,
       }),
       enabled: marketId != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      structuralSharing: query.structuralSharing ?? replaceDeepEqual,
       staleTime:
         (query.staleTime ?? parameters.blockNumber != null)
           ? Number.POSITIVE_INFINITY
@@ -74,7 +74,7 @@ export function useMarkets<config extends Config = ResolvedRegister["config"]>({
     });
 
   const resultRef = useRef(result);
-  resultRef.current = mergeDeepEqual(resultRef.current, result);
+  resultRef.current = replaceDeepEqual(resultRef.current, result);
 
   return resultRef.current;
 }

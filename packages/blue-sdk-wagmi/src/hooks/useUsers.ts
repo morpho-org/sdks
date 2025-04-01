@@ -8,7 +8,7 @@ import {
   fetchUserQueryOptions,
 } from "../queries/fetchUser.js";
 import type { UseIndexedQueriesReturnType } from "../types/index.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type { UseUserParameters, UseUserReturnType } from "./useUser.js";
 
@@ -44,7 +44,7 @@ export function useUsers<config extends Config = ResolvedRegister["config"]>({
         chainId,
       }),
       enabled: user != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      structuralSharing: query.structuralSharing ?? replaceDeepEqual,
       staleTime:
         (query.staleTime ?? parameters.blockNumber != null)
           ? Number.POSITIVE_INFINITY
@@ -73,7 +73,7 @@ export function useUsers<config extends Config = ResolvedRegister["config"]>({
     });
 
   const resultRef = useRef(result);
-  resultRef.current = mergeDeepEqual(resultRef.current, result);
+  resultRef.current = replaceDeepEqual(resultRef.current, result);
 
   return resultRef.current;
 }

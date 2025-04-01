@@ -7,7 +7,7 @@ import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 import { fetchMarketParamsQueryOptions } from "../queries/fetchMarketParams.js";
 import type { MarketParamsParameters } from "../queries/fetchMarketParams.js";
 import type { UseIndexedQueriesReturnType } from "../types/index.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type {
   UseMarketParamsParameters,
@@ -48,7 +48,7 @@ export function useMarketsParams<
         chainId,
       }),
       enabled: marketId != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      structuralSharing: query.structuralSharing ?? replaceDeepEqual,
     })),
   });
 
@@ -73,7 +73,7 @@ export function useMarketsParams<
     });
 
   const resultRef = useRef(result);
-  resultRef.current = mergeDeepEqual(resultRef.current, result);
+  resultRef.current = replaceDeepEqual(resultRef.current, result);
 
   return resultRef.current;
 }

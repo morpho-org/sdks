@@ -8,7 +8,7 @@ import {
   fetchVaultMarketConfigQueryOptions,
 } from "../queries/fetchVaultMarketConfig.js";
 import type { ConfigParameter, QueryParameter } from "../types/index.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 
 export type UseVaultMarketConfigParameters<
@@ -49,7 +49,7 @@ export function useVaultMarketConfig<
     ...options,
     enabled:
       parameters.vault != null && parameters.marketId != null && query.enabled,
-    structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+    structuralSharing: query.structuralSharing ?? replaceDeepEqual,
     staleTime:
       (query.staleTime ?? parameters.blockNumber != null)
         ? Number.POSITIVE_INFINITY
