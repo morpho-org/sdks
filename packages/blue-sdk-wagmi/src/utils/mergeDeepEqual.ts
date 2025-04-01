@@ -37,10 +37,15 @@ export function mergeDeepEqual(a: any, b: any): any {
 
   let equalItems = 0;
 
-  for (let i = 0; i < bSize; i++) {
-    const key = array ? i : bItems[i];
+  for (let i = 0; i < aSize; i++) {
+    const key = array ? i : aItems[i];
+
+    if (!array && !bItems.includes(key)) {
+      delete copy[key];
+      continue;
+    }
     if (
-      ((!array && aItems.includes(key)) || array) &&
+      ((!array && bItems.includes(key)) || array) &&
       a[key] === undefined &&
       b[key] === undefined
     ) {

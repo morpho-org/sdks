@@ -104,4 +104,18 @@ describe("structuralSharing", () => {
     // biome-ignore lint/suspicious/noPrototypeBuiltins: inside test
     expect(merged.constructor.prototype.isPrototypeOf(prevMarket)).toBe(true);
   });
+
+  test("mergeDeepEqual should update reference if b is a subset of a", () => {
+    const b = {
+      property1: "property1",
+      property2: "property2",
+    };
+    const a = { ...b, property3: "property3" };
+
+    const merged = mergeDeepEqual(a, b);
+
+    expect(merged).not.toBe(a);
+    expect(merged).not.toBe(b);
+    expect(merged).toEqual(b);
+  });
 });
