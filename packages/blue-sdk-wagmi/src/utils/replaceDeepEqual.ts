@@ -37,15 +37,10 @@ export function replaceDeepEqual(a: any, b: any): any {
 
   let equalItems = 0;
 
-  for (let i = 0; i < aSize; i++) {
-    const key = array ? i : aItems[i];
-
-    if (!array && !bItems.includes(key)) {
-      delete copy[key];
-      continue;
-    }
+  for (let i = 0; i < bSize; i++) {
+    const key = array ? i : bItems[i];
     if (
-      ((!array && bItems.includes(key)) || array) &&
+      ((!array && aItems.includes(key)) || array) &&
       a[key] === undefined &&
       b[key] === undefined
     ) {
@@ -57,6 +52,11 @@ export function replaceDeepEqual(a: any, b: any): any {
         equalItems++;
       }
     }
+  }
+
+  for (let i = 0; i < aSize; i++) {
+    const key = array ? i : aItems[i];
+    if (!array && !bItems.includes(key)) delete copy[key];
   }
 
   return aSize === bSize && equalItems === aSize ? a : copy;
