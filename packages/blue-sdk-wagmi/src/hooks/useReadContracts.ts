@@ -1,6 +1,6 @@
 import type { Abi, ContractFunctionArgs, ContractFunctionName } from "viem";
 import { type ReadContractData, readContractQueryOptions } from "wagmi/query";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 
 import { useQueries } from "@tanstack/react-query";
 import {
@@ -84,7 +84,7 @@ export function useReadContracts<
         ...query,
         ...options,
         enabled,
-        structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+        structuralSharing: query.structuralSharing ?? replaceDeepEqual,
       };
     }),
   });

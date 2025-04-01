@@ -7,7 +7,7 @@ import {
   fetchVaultUserQueryOptions,
 } from "../queries/fetchVaultUser.js";
 import type { UseCompositeQueriesReturnType } from "../types/index.js";
-import { mergeDeepEqual, uniqBy } from "../utils/index.js";
+import { replaceDeepEqual, uniqBy } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type {
   UseVaultUserParameters,
@@ -53,7 +53,7 @@ export function useVaultUsers<
         chainId,
       }),
       enabled: vault != null && user != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      structuralSharing: query.structuralSharing ?? replaceDeepEqual,
       staleTime:
         (query.staleTime ?? parameters.blockNumber != null)
           ? Number.POSITIVE_INFINITY
@@ -81,7 +81,7 @@ export function useVaultUsers<
   });
 
   const resultRef = useRef(result);
-  resultRef.current = mergeDeepEqual(resultRef.current, result);
+  resultRef.current = replaceDeepEqual(resultRef.current, result);
 
   return resultRef.current;
 }

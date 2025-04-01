@@ -8,7 +8,7 @@ import {
   fetchVaultConfigQueryOptions,
 } from "../queries/fetchVaultConfig.js";
 import type { UseIndexedQueriesReturnType } from "../types/index.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 import type {
   UseVaultConfigParameters,
@@ -49,7 +49,7 @@ export function useVaultConfigs<
         chainId,
       }),
       enabled: vault != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      structuralSharing: query.structuralSharing ?? replaceDeepEqual,
     })),
   });
 
@@ -74,7 +74,7 @@ export function useVaultConfigs<
     });
 
   const resultRef = useRef(result);
-  resultRef.current = mergeDeepEqual(resultRef.current, result);
+  resultRef.current = replaceDeepEqual(resultRef.current, result);
 
   return resultRef.current;
 }
