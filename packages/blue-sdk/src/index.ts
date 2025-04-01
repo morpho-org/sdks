@@ -10,8 +10,4 @@ export * from "./user/index.js";
 export * from "./holding/index.js";
 export * from "./position/index.js";
 export * from "./vault/index.js";
-
-export type { BlueSdkCustomConfig } from "./config";
-
-import { loadCustomConfig } from "./config";
-loadCustomConfig();
+export { registerCustomChain } from "./config";
