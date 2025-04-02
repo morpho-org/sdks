@@ -182,15 +182,15 @@ export const encodeOperation = (
 
   switch (operation.type) {
     case "Blue_SetAuthorization": {
-      const { owner } = operation.args;
+      const { owner, isAuthorized, authorized } = operation.args;
 
       if (supportsSignature) {
         const ownerData = dataBefore.getUser(owner);
 
         const authorization = {
           authorizer: owner,
-          authorized: generalAdapter1,
-          isAuthorized: true,
+          authorized,
+          isAuthorized,
           deadline,
           nonce: ownerData.morphoNonce,
         };
@@ -231,13 +231,13 @@ export const encodeOperation = (
 
       requirements.txs.push({
         type: "morphoSetAuthorization",
-        args: [generalAdapter1, true],
+        args: [authorized, isAuthorized],
         tx: {
           to: morpho,
           data: encodeFunctionData({
             abi: blueAbi,
             functionName: "setAuthorization",
-            args: [generalAdapter1, true],
+            args: [authorized, isAuthorized],
           }),
         },
       });
