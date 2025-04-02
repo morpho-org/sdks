@@ -42,6 +42,15 @@ export class UnsupportedPreLiquidationParamsError extends Error {
 }
 
 export namespace BlueErrors {
+  export class AlreadySet extends Error {
+    constructor(
+      public readonly name: string,
+      public readonly value: string,
+    ) {
+      super(`${name} is already set to ${value}`);
+    }
+  }
+
   export class InvalidInterestAccrual extends Error {
     constructor(
       public readonly marketId: MarketId,

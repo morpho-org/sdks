@@ -283,7 +283,8 @@ export const populateSubBundle = (
       address: morpho,
       args: {
         owner: sender,
-        isBundlerAuthorized: true,
+        isAuthorized: true,
+        authorized: generalAdapter1,
       },
     });
 
