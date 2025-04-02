@@ -31,7 +31,6 @@ import {
   keccak256,
   maxUint256,
   parseSignature,
-  toFunctionSelector,
   zeroHash,
 } from "viem";
 import { BundlerErrors } from "./errors.js";
@@ -50,13 +49,9 @@ export interface BundlerCall {
   callbackHash: Hex;
 }
 
-const reenterSelectorHash = keccak256(
-  toFunctionSelector(
-    bundler3Abi.find(
-      (item) => item.type === "function" && item.name === "reenter",
-    )!,
-  ),
-);
+const reenterAbiInputs = bundler3Abi.find(
+  (item) => item.name === "reenter",
+)!.inputs;
 
 /**
  * Namespace to easily encode calls to the Bundler contract, using viem.
@@ -1037,10 +1032,7 @@ export namespace BundlerAction {
 
     const reenter = callbackCalls.length > 0;
     const reenterData = reenter
-      ? encodeAbiParameters(
-          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
-          [callbackCalls],
-        )
+      ? encodeAbiParameters(reenterAbiInputs, [callbackCalls])
       : "0x";
 
     return [
@@ -1079,10 +1071,7 @@ export namespace BundlerAction {
 
     const reenter = callbackCalls.length > 0;
     const reenterData = reenter
-      ? encodeAbiParameters(
-          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
-          [callbackCalls],
-        )
+      ? encodeAbiParameters(reenterAbiInputs, [callbackCalls])
       : "0x";
 
     return [
@@ -1161,10 +1150,7 @@ export namespace BundlerAction {
 
     const reenter = callbackCalls.length > 0;
     const reenterData = reenter
-      ? encodeAbiParameters(
-          bundler3Abi.find((item) => item.name === "reenter")!.inputs,
-          [callbackCalls],
-        )
+      ? encodeAbiParameters(reenterAbiInputs, [callbackCalls])
       : "0x";
 
     return [
@@ -1267,6 +1253,11 @@ export namespace BundlerAction {
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
 
+    const reenter = callbackCalls.length > 0;
+    const reenterData = reenter
+      ? encodeAbiParameters(reenterAbiInputs, [callbackCalls])
+      : "0x";
+
     return [
       {
         to: generalAdapter1,
@@ -1285,7 +1276,7 @@ export namespace BundlerAction {
         }),
         value: 0n,
         skipRevert: false,
-        callbackHash: keccak256(`${generalAdapter1}${reenterSelectorHash}`),
+        callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
   }
