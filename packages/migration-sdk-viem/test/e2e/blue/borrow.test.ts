@@ -325,7 +325,8 @@ describe("Borrow position on blue", () => {
                   address: morpho,
                   args: {
                     owner: client.account.address,
-                    isBundlerAuthorized: true,
+                    isAuthorized: true,
+                    authorized: generalAdapter1,
                   },
                 },
                 {
@@ -506,7 +507,8 @@ describe("Borrow position on blue", () => {
                     address: morpho,
                     args: {
                       owner: client.account.address,
-                      isBundlerAuthorized: true,
+                      isAuthorized: true,
+                      authorized: generalAdapter1,
                     },
                   },
                   {
@@ -696,7 +698,8 @@ describe("Borrow position on blue", () => {
                   address: morpho,
                   args: {
                     owner: client.account.address,
-                    isBundlerAuthorized: true,
+                    isAuthorized: true,
+                    authorized: generalAdapter1,
                   },
                 },
                 {
