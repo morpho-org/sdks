@@ -32,7 +32,8 @@ export interface BlueOperationArgs {
   Blue_AccrueInterest: { id: MarketId };
   Blue_SetAuthorization: {
     owner: Address;
-    isBundlerAuthorized: boolean;
+    authorized: Address;
+    isAuthorized: boolean;
   };
 
   Blue_SupplyCollateral: {
