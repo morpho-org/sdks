@@ -71,6 +71,10 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
         erc4626: Address;
         assets: bigint;
       }): Promise<bigint>;
+      convertToAssets(args: {
+        erc4626: Address;
+        shares: bigint;
+      }): Promise<bigint>;
       deposit(args: DepositParameters<chain>): Promise<WriteContractReturnType>;
 
       deployContractWait<const abi extends Abi | readonly unknown[]>(
@@ -208,6 +212,17 @@ export const createAnvilTestClient = <chain extends Chain>(
             abi: erc4626Abi,
             functionName: "convertToShares",
             args: [assets],
+          });
+        },
+        async convertToAssets({
+          erc4626,
+          shares,
+        }: { erc4626: Address; shares: bigint }) {
+          return client.readContract({
+            address: erc4626,
+            abi: erc4626Abi,
+            functionName: "convertToAssets",
+            args: [shares],
           });
         },
         async deposit<chainOverride extends Chain | undefined = undefined>(
