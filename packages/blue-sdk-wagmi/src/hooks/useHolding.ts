@@ -50,8 +50,7 @@ export function useHolding<
       parameters.user != null && parameters.token != null && query.enabled,
     structuralSharing: query.structuralSharing ?? replaceDeepEqual,
     staleTime:
-      (query.staleTime ?? parameters.blockNumber != null)
-        ? Number.POSITIVE_INFINITY
-        : undefined,
+      query.staleTime ??
+      (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),
   });
 }
