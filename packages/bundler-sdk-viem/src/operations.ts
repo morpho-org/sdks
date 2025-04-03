@@ -24,6 +24,7 @@ import {
   type Operation,
   type Operations,
   type PublicAllocatorOptions,
+  type PublicReallocation,
   type SimulationResult,
   type SimulationState,
   handleOperation,
@@ -348,42 +349,43 @@ export const populateSubBundle = (
 
         requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
 
-        ({ withdrawals } = data.getMarketPublicReallocations(market.id, {
-          ...publicAllocatorOptions,
-          defaultMaxWithdrawalUtilization: MathLib.WAD,
-          maxWithdrawalUtilization: {},
-        }));
+        let additionalWithdrawals: PublicReallocation[] = [];
+
+        ({ withdrawals: additionalWithdrawals } =
+          simulationStatePostFriendlyReallocation.getMarketPublicReallocations(
+            market.id,
+            {
+              ...publicAllocatorOptions,
+              defaultMaxWithdrawalUtilization: MathLib.WAD,
+              maxWithdrawalUtilization: {},
+            },
+          ));
+
+        withdrawals = [...withdrawals, ...additionalWithdrawals];
       }
 
       for (const { vault, ...withdrawal } of withdrawals) {
         const vaultReallocations = (reallocations[vault] ??= []);
 
-        const index = vaultReallocations.findIndex(
+        const vaultMarketReallocation = vaultReallocations.find(
           (item) => item.id === withdrawal.id,
         );
 
-        if (withdrawal.assets > requiredAssets) {
-          index !== -1
-            ? (vaultReallocations[index] = {
-                ...withdrawal,
-                assets: vaultReallocations[index]!.assets + requiredAssets,
-              })
-            : vaultReallocations.push({
-                ...withdrawal,
-                assets: requiredAssets,
-              });
+        const reallocatedAssets = MathLib.min(
+          withdrawal.assets,
+          requiredAssets,
+        );
 
-          break;
-        }
+        requiredAssets -= reallocatedAssets;
 
-        requiredAssets -= withdrawal.assets;
-
-        index !== -1
-          ? (vaultReallocations[index] = {
+        vaultMarketReallocation !== undefined
+          ? (vaultMarketReallocation.assets += reallocatedAssets)
+          : vaultReallocations.push({
               ...withdrawal,
-              assets: vaultReallocations[index]!.assets + withdrawal.assets,
-            })
-          : vaultReallocations.push(withdrawal);
+              assets: reallocatedAssets,
+            });
+
+        if (requiredAssets === 0n) break;
       }
 
       const fees = keys(reallocations).reduce(
