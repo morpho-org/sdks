@@ -24,7 +24,6 @@ import {
   type Operation,
   type Operations,
   type PublicAllocatorOptions,
-  type PublicReallocation,
   type SimulationResult,
   type SimulationState,
   handleOperation,
@@ -335,36 +334,31 @@ export const populateSubBundle = (
           : MathLib.wDivDown(newTotalBorrowAssets, supplyTargetUtilization) -
             newTotalSupplyAssets;
 
-      let { withdrawals, data: simulationStatePostFriendlyReallocation } =
+      const { withdrawals, data: friendlyReallocationData } =
         data.getMarketPublicReallocations(market.id, publicAllocatorOptions);
 
-      const marketPostFriendlyReallocation =
-        simulationStatePostFriendlyReallocation.getMarket(market.id);
+      const friendlyReallocationMarket = friendlyReallocationData.getMarket(
+        market.id,
+      );
 
       if (
-        marketPostFriendlyReallocation.totalBorrowAssets + borrowedAssets >
-        marketPostFriendlyReallocation.totalSupplyAssets - withdrawnAssets
+        friendlyReallocationMarket.totalBorrowAssets + borrowedAssets >
+        friendlyReallocationMarket.totalSupplyAssets - withdrawnAssets
       ) {
         // If the "friendly" reallocations are not enough, we fully withdraw from every market.
-
         requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
 
-        const { withdrawals: additionalWithdrawals } =
-          simulationStatePostFriendlyReallocation.getMarketPublicReallocations(
-            market.id,
-            {
-              ...publicAllocatorOptions,
-              defaultMaxWithdrawalUtilization: MathLib.WAD,
-              maxWithdrawalUtilization: {},
-            },
-          );
-
-        withdrawals = [...withdrawals, ...additionalWithdrawals];
+        withdrawals.push(
+          ...friendlyReallocationData.getMarketPublicReallocations(market.id, {
+            ...publicAllocatorOptions,
+            defaultMaxWithdrawalUtilization: MathLib.WAD,
+            maxWithdrawalUtilization: {},
+          }).withdrawals,
+        );
       }
 
       for (const { vault, ...withdrawal } of withdrawals) {
         const vaultReallocations = (reallocations[vault] ??= []);
-
         const vaultMarketReallocation = vaultReallocations.find(
           (item) => item.id === withdrawal.id,
         );
@@ -374,16 +368,16 @@ export const populateSubBundle = (
           requiredAssets,
         );
 
-        if (vaultMarketReallocation != null) {
+        if (vaultMarketReallocation != null)
           vaultMarketReallocation.assets += reallocatedAssets;
-        } else {
+        else
           vaultReallocations.push({
             ...withdrawal,
             assets: reallocatedAssets,
           });
-        }
 
         requiredAssets -= reallocatedAssets;
+
         if (requiredAssets === 0n) break;
       }
 
