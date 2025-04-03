@@ -63,7 +63,6 @@ export namespace BundlerAction {
     } = getChainAddresses(chainId);
 
     let value = 0n;
-    let generalAdapter1Value = 0n;
 
     for (const { type, args } of actions) {
       if (type !== "nativeTransfer") continue;
@@ -76,22 +75,11 @@ export namespace BundlerAction {
         (recipient === bundler3 || recipient === generalAdapter1)
       )
         value += amount;
-
-      if (owner !== generalAdapter1 && recipient === generalAdapter1)
-        generalAdapter1Value += amount;
     }
 
     const encodedActions = actions.flatMap(
       BundlerAction.encode.bind(null, chainId),
     );
-    if (generalAdapter1Value > 0n)
-      encodedActions.unshift({
-        to: generalAdapter1,
-        value: generalAdapter1Value,
-        data: "0x",
-        skipRevert: false,
-        callbackHash: zeroHash,
-      });
 
     return {
       to: bundler3,

@@ -4773,6 +4773,93 @@ describe("populateBundle", () => {
           ); // we normally didn't experienced any slippage
         },
       );
+
+      test[ChainId.EthMainnet](
+        "should wrap ETH",
+        async ({ client, config }) => {
+          const assets = parseEther("1.234567");
+
+          await client.deal({
+            amount: assets,
+          });
+
+          const initialBalance = await client.balanceOf();
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [],
+              users: [client.account.address, generalAdapter1],
+              tokens: [NATIVE_ADDRESS, wNative],
+              vaults: [],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupTestBundle(
+            client,
+            data,
+            [
+              {
+                type: "Erc20_Wrap",
+                sender: client.account.address,
+                address: wNative,
+                args: {
+                  amount: assets,
+                  owner: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+            { gasPrice: 0n },
+          );
+
+          expect(bundle.requirements.signatures.length).toBe(0);
+
+          expect(bundle.requirements.txs).toStrictEqual([]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Transfer",
+              sender: client.account.address,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: assets,
+                from: client.account.address,
+                to: generalAdapter1,
+              },
+            },
+            {
+              type: "Erc20_Wrap",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: assets,
+                owner: generalAdapter1,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              address: wNative,
+              sender: generalAdapter1,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+          ]);
+
+          expect(await client.balanceOf()).toBe(initialBalance - assets);
+          expect(await client.balanceOf({ erc20: wNative })).toBe(assets);
+        },
+      );
     });
 
     describe("base", () => {
