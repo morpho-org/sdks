@@ -376,15 +376,16 @@ export const populateSubBundle = (
           requiredAssets,
         );
 
+        if (vaultMarketReallocation != null) {
+          vaultMarketReallocation.assets += reallocatedAssets;
+        } else {
+          vaultReallocations.push({
+            ...withdrawal,
+            assets: reallocatedAssets,
+          });
+        }
+
         requiredAssets -= reallocatedAssets;
-
-        vaultMarketReallocation !== undefined
-          ? (vaultMarketReallocation.assets += reallocatedAssets)
-          : vaultReallocations.push({
-              ...withdrawal,
-              assets: reallocatedAssets,
-            });
-
         if (requiredAssets === 0n) break;
       }
 
