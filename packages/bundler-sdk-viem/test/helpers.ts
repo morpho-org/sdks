@@ -70,6 +70,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
   {
     account: account_ = client.account,
     onBundleTx,
+    gasPrice,
     ...options
   }: BundlingOptions & {
     account?: Address | Account;
@@ -77,6 +78,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
     unwrapTokens?: Set<Address>;
     unwrapSlippage?: bigint;
     onBundleTx?: (data: SimulationState) => Promise<void> | void;
+    gasPrice?: bigint;
   } = {},
 ) => {
   const account = parseAccount(account_);
@@ -142,7 +144,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
   for (const tx of bundle.txs()) {
     await client.sendTransaction(
       // @ts-ignore
-      { ...tx, account },
+      { ...tx, account, gasPrice },
     );
   }
 
