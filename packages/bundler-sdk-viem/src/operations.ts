@@ -358,17 +358,32 @@ export const populateSubBundle = (
       for (const { vault, ...withdrawal } of withdrawals) {
         const vaultReallocations = (reallocations[vault] ??= []);
 
+        const index = vaultReallocations.findIndex(
+          (item) => item.id === withdrawal.id,
+        );
+
         if (withdrawal.assets > requiredAssets) {
-          vaultReallocations.push({
-            ...withdrawal,
-            assets: requiredAssets,
-          });
+          index !== -1
+            ? (vaultReallocations[index] = {
+                ...withdrawal,
+                assets: vaultReallocations[index]!.assets + requiredAssets,
+              })
+            : vaultReallocations.push({
+                ...withdrawal,
+                assets: requiredAssets,
+              });
 
           break;
         }
 
         requiredAssets -= withdrawal.assets;
-        vaultReallocations.push(withdrawal);
+
+        index !== -1
+          ? (vaultReallocations[index] = {
+              ...withdrawal,
+              assets: vaultReallocations[index]!.assets + withdrawal.assets,
+            })
+          : vaultReallocations.push(withdrawal);
       }
 
       const fees = keys(reallocations).reduce(
