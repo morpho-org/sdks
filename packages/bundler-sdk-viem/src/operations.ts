@@ -334,41 +334,51 @@ export const populateSubBundle = (
           : MathLib.wDivDown(newTotalBorrowAssets, supplyTargetUtilization) -
             newTotalSupplyAssets;
 
-      let { withdrawals, data: simulationStatePostFriendlyReallocation } =
+      const { withdrawals, data: friendlyReallocationData } =
         data.getMarketPublicReallocations(market.id, publicAllocatorOptions);
 
-      const marketPostFriendlyReallocation =
-        simulationStatePostFriendlyReallocation.getMarket(market.id);
+      const friendlyReallocationMarket = friendlyReallocationData.getMarket(
+        market.id,
+      );
 
       if (
-        marketPostFriendlyReallocation.totalBorrowAssets + borrowedAssets >
-        marketPostFriendlyReallocation.totalSupplyAssets - withdrawnAssets
+        friendlyReallocationMarket.totalBorrowAssets + borrowedAssets >
+        friendlyReallocationMarket.totalSupplyAssets - withdrawnAssets
       ) {
         // If the "friendly" reallocations are not enough, we fully withdraw from every market.
-
         requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
 
-        ({ withdrawals } = data.getMarketPublicReallocations(market.id, {
-          ...publicAllocatorOptions,
-          defaultMaxWithdrawalUtilization: MathLib.WAD,
-          maxWithdrawalUtilization: {},
-        }));
+        withdrawals.push(
+          ...friendlyReallocationData.getMarketPublicReallocations(market.id, {
+            ...publicAllocatorOptions,
+            defaultMaxWithdrawalUtilization: MathLib.WAD,
+            maxWithdrawalUtilization: {},
+          }).withdrawals,
+        );
       }
 
       for (const { vault, ...withdrawal } of withdrawals) {
         const vaultReallocations = (reallocations[vault] ??= []);
+        const vaultMarketReallocation = vaultReallocations.find(
+          (item) => item.id === withdrawal.id,
+        );
 
-        if (withdrawal.assets > requiredAssets) {
+        const reallocatedAssets = MathLib.min(
+          withdrawal.assets,
+          requiredAssets,
+        );
+
+        if (vaultMarketReallocation != null)
+          vaultMarketReallocation.assets += reallocatedAssets;
+        else
           vaultReallocations.push({
             ...withdrawal,
-            assets: requiredAssets,
+            assets: reallocatedAssets,
           });
 
-          break;
-        }
+        requiredAssets -= reallocatedAssets;
 
-        requiredAssets -= withdrawal.assets;
-        vaultReallocations.push(withdrawal);
+        if (requiredAssets === 0n) break;
       }
 
       const fees = keys(reallocations).reduce(
