@@ -349,9 +349,7 @@ export const populateSubBundle = (
 
         requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
 
-        let additionalWithdrawals: PublicReallocation[] = [];
-
-        ({ withdrawals: additionalWithdrawals } =
+        const { withdrawals: additionalWithdrawals } =
           simulationStatePostFriendlyReallocation.getMarketPublicReallocations(
             market.id,
             {
@@ -359,7 +357,7 @@ export const populateSubBundle = (
               defaultMaxWithdrawalUtilization: MathLib.WAD,
               maxWithdrawalUtilization: {},
             },
-          ));
+          );
 
         withdrawals = [...withdrawals, ...additionalWithdrawals];
       }
