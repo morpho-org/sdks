@@ -1,8 +1,9 @@
 import type { Address, ChainId } from "@morpho-org/blue-sdk";
 
-import type { MigrationBundle } from "../../MigrationBundle.js";
+import type { ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import type {
   MigratableProtocol,
+  MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
@@ -75,7 +76,7 @@ export abstract class MigratableSupplyPosition
   protected abstract _getMigrationTx(
     args: MigratableSupplyPosition.Args,
     supportsSignature: boolean,
-  ): MigrationBundle;
+  ): ActionBundle<MigrationTransactionRequirement>;
 
   /**
    * Method to retrieve a migration operation for the supply position.
@@ -88,7 +89,7 @@ export abstract class MigratableSupplyPosition
   getMigrationTx(
     args: MigratableSupplyPosition.Args,
     supportsSignature: boolean,
-  ): MigrationBundle {
+  ) {
     this._validateMigration(args);
 
     return this._getMigrationTx(args, supportsSignature);

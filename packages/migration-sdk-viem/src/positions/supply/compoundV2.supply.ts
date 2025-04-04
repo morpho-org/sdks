@@ -5,11 +5,13 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { encodeFunctionData, maxUint256 } from "viem";
-import { MigrationBundle } from "../../MigrationBundle.js";
+
+import { ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import { cErc20Abi } from "../../abis/compoundV2.js";
 import { migrationAddresses } from "../../config.js";
 import {
   MigratableProtocol,
+  type MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 import {
@@ -46,7 +48,7 @@ export class MigratableSupplyPosition_CompoundV2
     vault,
   }: MigratableSupplyPosition.Args) {
     const chainId = this.chainId;
-    const bundle = new MigrationBundle(chainId);
+    const bundle = new ActionBundle<MigrationTransactionRequirement>(chainId);
 
     const user = this.user;
     const cToken = this.cToken;

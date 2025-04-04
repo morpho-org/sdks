@@ -7,10 +7,11 @@ import { Time } from "@morpho-org/morpho-ts";
 import { migrationAddresses } from "../../config.js";
 import {
   MigratableProtocol,
+  type MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
-import type { Action } from "@morpho-org/bundler-sdk-viem";
+import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import {
   type Account,
   type Client,
@@ -19,7 +20,6 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
-import { MigrationBundle } from "../../MigrationBundle.js";
 import { morphoAaveV3Abi } from "../../abis/aaveV3Optimizer.js";
 import { getMorphoAaveV3ManagerApprovalTypedData } from "../signature/aaveV3Optimizer.js";
 import {
@@ -55,7 +55,7 @@ export class MigratableSupplyPosition_AaveV3Optimizer
     supportsSignature = true,
   ) {
     const chainId = this.chainId;
-    const bundle = new MigrationBundle(chainId);
+    const bundle = new ActionBundle<MigrationTransactionRequirement>(chainId);
 
     const user = this.user;
     const {

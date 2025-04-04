@@ -243,7 +243,7 @@ await migrationBundle.requirements.sign(client);
 await sendTransaction(client, migrationBundle.tx());
 ```
 
-The obtained `MigrationBundle` is made of:
+The obtained `ActionBundle` is made of:
 - `actions`: The list of actions being performed by the bundler contract.
 - `requirements`: The list of requirements that should be fulfilled for the tx to succeed. It is made of:
   - `txs`: The list of transactions that should be executed before the main bundle.

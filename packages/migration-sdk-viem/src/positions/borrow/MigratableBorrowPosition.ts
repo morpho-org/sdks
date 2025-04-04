@@ -5,10 +5,11 @@ import type {
   Token,
 } from "@morpho-org/blue-sdk";
 
-import type { MigrationBundle } from "../../MigrationBundle.js";
+import type { ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import type {
   BorrowMigrationLimiter,
   MigratableProtocol,
+  MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
@@ -117,7 +118,7 @@ export abstract class MigratableBorrowPosition
   protected abstract _getMigrationTx(
     args: MigratableBorrowPosition.Args,
     supportsSignature: boolean,
-  ): MigrationBundle;
+  ): ActionBundle<MigrationTransactionRequirement>;
 
   /**
    * Method to retrieve a migration operation for the borrow position.
@@ -131,7 +132,7 @@ export abstract class MigratableBorrowPosition
   getMigrationTx(
     args: MigratableBorrowPosition.Args,
     supportsSignature: boolean,
-  ): MigrationBundle {
+  ) {
     this._validateMigration(args);
 
     return this._getMigrationTx(args, supportsSignature);

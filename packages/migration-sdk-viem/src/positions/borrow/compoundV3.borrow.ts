@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { blueAbi, getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
-import type { Action } from "@morpho-org/bundler-sdk-viem";
+import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import { Time, format } from "@morpho-org/morpho-ts";
 import {
   type Account,
@@ -17,11 +17,11 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
-import { MigrationBundle } from "../../MigrationBundle.js";
 import { cometExtAbi } from "../../abis/compoundV3.js";
 import {
   BorrowMigrationLimiter,
   MigratableProtocol,
+  type MigrationTransactionRequirement,
 } from "../../types/index.js";
 import { getCompoundV3ManagerApprovalMessage } from "../signature/compoundV3.js";
 import {
@@ -96,7 +96,9 @@ export class MigratableBorrowPosition_CompoundV3
     const user = this.user;
     const chainId = this.chainId;
 
-    const migrationBundle = new MigrationBundle(chainId);
+    const migrationBundle = new ActionBundle<MigrationTransactionRequirement>(
+      chainId,
+    );
 
     const {
       morpho,
