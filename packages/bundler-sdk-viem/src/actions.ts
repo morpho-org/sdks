@@ -197,7 +197,7 @@ export const encodeOperation = (
 
         const action: Action = {
           type: "morphoSetAuthorizationWithSig",
-          args: [authorization, null],
+          args: [authorization, null, operation.skipRevert],
         };
 
         actions.push(action);
@@ -270,11 +270,27 @@ export const encodeOperation = (
           address === dai
             ? {
                 type: "permitDai",
-                args: [sender, nonce, deadline, true, null, spender],
+                args: [
+                  sender,
+                  nonce,
+                  deadline,
+                  true,
+                  null,
+                  spender,
+                  operation.skipRevert,
+                ],
               }
             : {
                 type: "permit",
-                args: [sender, address, amount, deadline, null, spender],
+                args: [
+                  sender,
+                  address,
+                  amount,
+                  deadline,
+                  null,
+                  spender,
+                  operation.skipRevert,
+                ],
               };
 
         actions.push(action);
@@ -369,6 +385,7 @@ export const encodeOperation = (
               sigDeadline: deadline,
             },
             null,
+            operation.skipRevert,
           ],
         };
 
@@ -431,7 +448,7 @@ export const encodeOperation = (
       if (address === NATIVE_ADDRESS) {
         actions.push({
           type: "nativeTransfer",
-          args: [from, to, amount],
+          args: [from, to, amount, operation.skipRevert],
         });
 
         break;
@@ -441,7 +458,7 @@ export const encodeOperation = (
       if (from === generalAdapter1) {
         actions.push({
           type: "erc20Transfer",
-          args: [address, to, amount],
+          args: [address, to, amount, undefined, operation.skipRevert],
         });
 
         break;
@@ -449,7 +466,7 @@ export const encodeOperation = (
 
       actions.push({
         type: "erc20TransferFrom",
-        args: [address, amount, to],
+        args: [address, amount, to, operation.skipRevert],
       });
 
       break;
@@ -460,7 +477,7 @@ export const encodeOperation = (
       if (supportsSignature) {
         actions.push({
           type: "transferFrom2",
-          args: [address, from, amount, to],
+          args: [address, from, amount, to, operation.skipRevert],
         });
 
         break;
@@ -470,7 +487,7 @@ export const encodeOperation = (
 
       actions.push({
         type: "erc20TransferFrom",
-        args: [address, amount, to],
+        args: [address, amount, to, operation.skipRevert],
       });
 
       break;
@@ -482,7 +499,7 @@ export const encodeOperation = (
         case wNative: {
           actions.push({
             type: "wrapNative",
-            args: [amount],
+            args: [amount, undefined, operation.skipRevert],
           });
 
           break;
@@ -490,7 +507,7 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "wrapStEth",
-            args: [amount],
+            args: [amount, undefined, operation.skipRevert],
           });
 
           break;
@@ -498,7 +515,13 @@ export const encodeOperation = (
         case stEth: {
           actions.push({
             type: "stakeEth",
-            args: [amount, MathLib.MAX_UINT_256, zeroAddress],
+            args: [
+              amount,
+              MathLib.MAX_UINT_256,
+              zeroAddress,
+              undefined,
+              operation.skipRevert,
+            ],
           });
 
           break;
@@ -511,7 +534,7 @@ export const encodeOperation = (
 
             actions.push({
               type: "erc20WrapperDepositFor",
-              args: [address, underlying, amount],
+              args: [address, underlying, amount, operation.skipRevert],
             });
 
             break;
@@ -532,7 +555,7 @@ export const encodeOperation = (
         case wNative: {
           actions.push({
             type: "unwrapNative",
-            args: [amount],
+            args: [amount, undefined, operation.skipRevert],
           });
 
           break;
@@ -540,7 +563,7 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "unwrapStEth",
-            args: [amount],
+            args: [amount, undefined, operation.skipRevert],
           });
 
           break;
@@ -551,7 +574,7 @@ export const encodeOperation = (
 
           actions.push({
             type: "erc20WrapperWithdrawTo",
-            args: [address, receiver, amount],
+            args: [address, receiver, amount, operation.skipRevert],
           });
         }
       }
@@ -581,6 +604,7 @@ export const encodeOperation = (
           maxSharePrice,
           onBehalf,
           callbackBundle?.actions ?? [],
+          operation.skipRevert,
         ],
       });
 
@@ -602,7 +626,14 @@ export const encodeOperation = (
 
       actions.push({
         type: "morphoWithdraw",
-        args: [market.params, assets, shares, minSharePrice, receiver],
+        args: [
+          market.params,
+          assets,
+          shares,
+          minSharePrice,
+          receiver,
+          operation.skipRevert,
+        ],
       });
 
       break;
@@ -623,7 +654,14 @@ export const encodeOperation = (
 
       actions.push({
         type: "morphoBorrow",
-        args: [market.params, assets, shares, minSharePrice, receiver],
+        args: [
+          market.params,
+          assets,
+          shares,
+          minSharePrice,
+          receiver,
+          operation.skipRevert,
+        ],
       });
 
       break;
@@ -651,6 +689,7 @@ export const encodeOperation = (
           maxSharePrice,
           onBehalf,
           callbackBundle?.actions ?? [],
+          operation.skipRevert,
         ],
       });
 
@@ -668,7 +707,12 @@ export const encodeOperation = (
 
         actions.push({
           type: "erc20WrapperDepositFor",
-          args: [params.collateralToken, underlying, assets],
+          args: [
+            params.collateralToken,
+            underlying,
+            assets,
+            operation.skipRevert,
+          ],
         });
 
         break;
@@ -676,7 +720,13 @@ export const encodeOperation = (
 
       actions.push({
         type: "morphoSupplyCollateral",
-        args: [params, assets, onBehalf, callbackBundle?.actions ?? []],
+        args: [
+          params,
+          assets,
+          onBehalf,
+          callbackBundle?.actions ?? [],
+          operation.skipRevert,
+        ],
       });
 
       break;
@@ -688,7 +738,7 @@ export const encodeOperation = (
 
       actions.push({
         type: "morphoWithdrawCollateral",
-        args: [params, assets, receiver],
+        args: [params, assets, receiver, operation.skipRevert],
       });
 
       break;
@@ -709,12 +759,12 @@ export const encodeOperation = (
       if (shares === 0n)
         actions.push({
           type: "erc4626Deposit",
-          args: [address, assets, maxSharePrice, owner],
+          args: [address, assets, maxSharePrice, owner, operation.skipRevert],
         });
       else
         actions.push({
           type: "erc4626Mint",
-          args: [address, shares, maxSharePrice, owner],
+          args: [address, shares, maxSharePrice, owner, operation.skipRevert],
         });
 
       break;
@@ -736,12 +786,26 @@ export const encodeOperation = (
       if (assets > 0n)
         actions.push({
           type: "erc4626Withdraw",
-          args: [address, assets, minSharePrice, receiver, owner],
+          args: [
+            address,
+            assets,
+            minSharePrice,
+            receiver,
+            owner,
+            operation.skipRevert,
+          ],
         });
       else
         actions.push({
           type: "erc4626Redeem",
-          args: [address, shares, minSharePrice, receiver, owner],
+          args: [
+            address,
+            shares,
+            minSharePrice,
+            receiver,
+            owner,
+            operation.skipRevert,
+          ],
         });
 
       break;
@@ -763,6 +827,7 @@ export const encodeOperation = (
             amount: assets,
           })),
           dataBefore.getMarket(supplyMarketId).params,
+          operation.skipRevert,
         ],
       });
 

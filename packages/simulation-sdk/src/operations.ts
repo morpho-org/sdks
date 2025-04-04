@@ -7,6 +7,12 @@ export interface OperationMetadata<T extends string> {
   type: T;
   sender: Address;
   address: Address;
+  /**
+   * Whether to allow the transfer to revert without making the whole bundler revert.
+   * Defaults to true upon encoding signature-based operations (ERC20 permits, Morpho authorizations).
+   * Defaults to false otherwise.
+   */
+  skipRevert?: boolean;
 }
 
 export interface WithOperationArgs<

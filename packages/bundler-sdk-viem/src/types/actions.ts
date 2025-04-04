@@ -37,22 +37,39 @@ export interface Permit2PermitSingle {
 
 export interface ActionArgs {
   /* ERC20 */
-  nativeTransfer: [owner: Address, recipient: Address, amount: bigint];
+  nativeTransfer: [
+    owner: Address,
+    recipient: Address,
+    amount: bigint,
+    skipRevert?: boolean,
+  ];
   erc20Transfer: [
     asset: Address,
     recipient: Address,
     amount: bigint,
     adapter?: Address,
+    skipRevert?: boolean,
   ];
-  erc20TransferFrom: [asset: Address, amount: bigint, recipient?: Address];
+  erc20TransferFrom: [
+    asset: Address,
+    amount: bigint,
+    recipient?: Address,
+    skipRevert?: boolean,
+  ];
 
   /* ERC20Wrapper */
   erc20WrapperDepositFor: [
     wrapper: Address,
     underlying: Address,
     amount: bigint,
+    skipRevert?: boolean,
   ];
-  erc20WrapperWithdrawTo: [wrapper: Address, receiver: Address, amount: bigint];
+  erc20WrapperWithdrawTo: [
+    wrapper: Address,
+    receiver: Address,
+    amount: bigint,
+    skipRevert?: boolean,
+  ];
 
   /* Permit */
   permit: [
@@ -86,6 +103,7 @@ export interface ActionArgs {
     owner: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert?: boolean,
   ];
 
   /* ERC4626 */
@@ -94,12 +112,14 @@ export interface ActionArgs {
     shares: bigint,
     maxSharePrice: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
   erc4626Deposit: [
     erc4626: Address,
     assets: bigint,
     maxSharePrice: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
   erc4626Withdraw: [
     erc4626: Address,
@@ -107,6 +127,7 @@ export interface ActionArgs {
     minSharePrice: bigint,
     receiver: Address,
     owner: Address,
+    skipRevert?: boolean,
   ];
   erc4626Redeem: [
     erc4626: Address,
@@ -114,6 +135,7 @@ export interface ActionArgs {
     minSharePrice: bigint,
     receiver: Address,
     owner: Address,
+    skipRevert?: boolean,
   ];
 
   /* Morpho */
@@ -135,12 +157,14 @@ export interface ActionArgs {
     slippageAmount: bigint,
     onBehalf: Address,
     onMorphoSupply: Action[],
+    skipRevert?: boolean,
   ];
   morphoSupplyCollateral: [
     market: InputMarketParams,
     assets: bigint,
     onBehalf: Address,
     onMorphoSupplyCollateral: Action[],
+    skipRevert?: boolean,
   ];
   morphoBorrow: [
     market: InputMarketParams,
@@ -148,6 +172,7 @@ export interface ActionArgs {
     shares: bigint,
     slippageAmount: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
   morphoRepay: [
     market: InputMarketParams,
@@ -156,6 +181,7 @@ export interface ActionArgs {
     slippageAmount: bigint,
     onBehalf: Address,
     onMorphoRepay: Action[],
+    skipRevert?: boolean,
   ];
   morphoWithdraw: [
     market: InputMarketParams,
@@ -163,11 +189,13 @@ export interface ActionArgs {
     shares: bigint,
     slippageAmount: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
   morphoWithdrawCollateral: [
     market: InputMarketParams,
     assets: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
 
   /* MetaMorpho */
@@ -177,6 +205,7 @@ export interface ActionArgs {
     fee: bigint,
     withdrawals: InputReallocation[],
     supplyMarket: InputMarketParams,
+    skipRevert?: boolean,
   ];
 
   /* Universal Rewards Distributor */
@@ -191,8 +220,8 @@ export interface ActionArgs {
   ];
 
   /* Wrapped Native */
-  wrapNative: [amount: bigint, recipient?: Address];
-  unwrapNative: [amount: bigint, recipient?: Address];
+  wrapNative: [amount: bigint, recipient?: Address, skipRevert?: boolean];
+  unwrapNative: [amount: bigint, recipient?: Address, skipRevert?: boolean];
 
   /* stETH */
   stakeEth: [
@@ -200,11 +229,12 @@ export interface ActionArgs {
     minShares: bigint,
     referral: Address,
     recipient?: Address,
+    skipRevert?: boolean,
   ];
 
   /* Wrapped stETH */
-  wrapStEth: [amount: bigint, recipient?: Address];
-  unwrapStEth: [amount: bigint, recipient?: Address];
+  wrapStEth: [amount: bigint, recipient?: Address, skipRevert?: boolean];
+  unwrapStEth: [amount: bigint, recipient?: Address, skipRevert?: boolean];
 
   /* AaveV2 */
   aaveV2Repay: [
@@ -212,8 +242,14 @@ export interface ActionArgs {
     amount: bigint,
     onBehalf: Address,
     rateMode?: bigint,
+    skipRevert?: boolean,
   ];
-  aaveV2Withdraw: [asset: Address, amount: bigint, recipient?: Address];
+  aaveV2Withdraw: [
+    asset: Address,
+    amount: bigint,
+    recipient?: Address,
+    skipRevert?: boolean,
+  ];
 
   /* AaveV3 */
   aaveV3Repay: [
@@ -221,25 +257,34 @@ export interface ActionArgs {
     amount: bigint,
     onBehalf: Address,
     rateMode?: bigint,
+    skipRevert?: boolean,
   ];
-  aaveV3Withdraw: [asset: Address, amount: bigint, recipient?: Address];
+  aaveV3Withdraw: [
+    asset: Address,
+    amount: bigint,
+    recipient?: Address,
+    skipRevert?: boolean,
+  ];
 
   /* AaveV3 Optimizer */
   aaveV3OptimizerRepay: [
     underlying: Address,
     amount: bigint,
     onBehalf: Address,
+    skipRevert?: boolean,
   ];
   aaveV3OptimizerWithdraw: [
     underlying: Address,
     amount: bigint,
     maxIterations: bigint,
     recipient?: Address,
+    skipRevert?: boolean,
   ];
   aaveV3OptimizerWithdrawCollateral: [
     underlying: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert?: boolean,
   ];
   aaveV3OptimizerApproveManagerWithSig: [
     aaveV3Optimizer: Address,
@@ -258,21 +303,29 @@ export interface ActionArgs {
     amount: bigint,
     isEth: boolean,
     onBehalf: Address,
+    skipRevert?: boolean,
   ];
   compoundV2Redeem: [
     cToken: Address,
     amount: bigint,
     isEth: boolean,
     recipient?: Address,
+    skipRevert?: boolean,
   ];
 
   /* CompoundV3 */
-  compoundV3Repay: [instance: Address, amount: bigint, onBehalf: Address];
+  compoundV3Repay: [
+    instance: Address,
+    amount: bigint,
+    onBehalf: Address,
+    skipRevert?: boolean,
+  ];
   compoundV3WithdrawFrom: [
     instance: Address,
     asset: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert?: boolean,
   ];
   compoundV3AllowBySig: [
     instance: Address,

@@ -208,6 +208,7 @@ export namespace BundlerAction {
           slippageAmount,
           onBehalf,
           onMorphoSupply,
+          skipRevert,
         ] = args;
 
         return BundlerAction.morphoSupply(
@@ -218,10 +219,12 @@ export namespace BundlerAction {
           slippageAmount,
           onBehalf,
           onMorphoSupply.flatMap(BundlerAction.encode.bind(null, chainId)),
+          skipRevert,
         );
       }
       case "morphoSupplyCollateral": {
-        const [market, amount, onBehalf, onMorphoSupplyCollateral] = args;
+        const [market, amount, onBehalf, onMorphoSupplyCollateral, skipRevert] =
+          args;
 
         return BundlerAction.morphoSupplyCollateral(
           chainId,
@@ -231,6 +234,7 @@ export namespace BundlerAction {
           onMorphoSupplyCollateral.flatMap(
             BundlerAction.encode.bind(null, chainId),
           ),
+          skipRevert,
         );
       }
       case "morphoBorrow": {
@@ -244,6 +248,7 @@ export namespace BundlerAction {
           slippageAmount,
           onBehalf,
           onMorphoRepay,
+          skipRevert,
         ] = args;
 
         return BundlerAction.morphoRepay(
@@ -254,6 +259,7 @@ export namespace BundlerAction {
           slippageAmount,
           onBehalf,
           onMorphoRepay.flatMap(BundlerAction.encode.bind(null, chainId)),
+          skipRevert,
         );
       }
       case "morphoWithdraw": {
@@ -403,12 +409,14 @@ export namespace BundlerAction {
    * @param owner The owner of native tokens.
    * @param recipient The address to send native tokens to.
    * @param amount The amount of native tokens to send (in wei).
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function nativeTransfer(
     chainId: ChainId,
     owner: Address,
     recipient: Address,
     amount: bigint,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { bundler3, generalAdapter1 },
@@ -436,7 +444,7 @@ export namespace BundlerAction {
         to: recipient,
         data: "0x",
         value: amount,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -448,6 +456,8 @@ export namespace BundlerAction {
    * @param asset The address of the ERC20 token to transfer.
    * @param recipient The address to send tokens to.
    * @param amount The amount of tokens to send.
+   * @param adapter The address of the adapter to use. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc20Transfer(
     chainId: ChainId,
@@ -455,6 +465,7 @@ export namespace BundlerAction {
     recipient: Address,
     amount: bigint,
     adapter?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -471,7 +482,7 @@ export namespace BundlerAction {
           args: [asset, recipient, amount],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -483,12 +494,14 @@ export namespace BundlerAction {
    * @param asset The address of the ERC20 token to transfer.
    * @param amount The amount of tokens to send.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc20TransferFrom(
     chainId: ChainId,
     asset: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -505,7 +518,7 @@ export namespace BundlerAction {
           args: [asset, recipient, amount],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -522,7 +535,7 @@ export namespace BundlerAction {
    * @param deadline The timestamp until which the signature is valid.
    * @param signature The Ethers signature to permit the tokens.
    * @param spender The address allowed to spend the tokens.
-   * @param skipRevert Whether to allow the permit to revert without making the whole multicall revert.
+   * @param skipRevert Whether to allow the permit to revert without making the whole bundle revert. Defaults to true.
    */
   export function permit(
     chainId: ChainId,
@@ -565,7 +578,7 @@ export namespace BundlerAction {
    * @param allowed The amount of DAI to permit.
    * @param signature The Ethers signature to permit the tokens.
    * @param spender The address allowed to spend the tokens.
-   * @param skipRevert Whether to allow the permit to revert without making the whole multicall revert.
+   * @param skipRevert Whether to allow the permit to revert without making the whole bundle revert.
    */
   export function permitDai(
     chainId: ChainId,
@@ -630,7 +643,7 @@ export namespace BundlerAction {
    * @param owner The owner of ERC20 tokens.
    * @param permitSingle The permit details to submit to Permit2.
    * @param signature The Ethers signature to permit the tokens.
-   * @param skipRevert Whether to allow the permit to revert without making the whole multicall revert.
+   * @param skipRevert Whether to allow the permit to revert without making the whole bundle revert. Defaults to true.
    */
   export function approve2(
     chainId: ChainId,
@@ -665,6 +678,7 @@ export namespace BundlerAction {
    * @param owner The owner of ERC20 tokens.
    * @param amount The amount of tokens to send.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function transferFrom2(
     chainId: ChainId,
@@ -672,6 +686,7 @@ export namespace BundlerAction {
     owner: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       permit2,
@@ -692,7 +707,7 @@ export namespace BundlerAction {
           args: [owner, recipient, amount, asset],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -706,12 +721,14 @@ export namespace BundlerAction {
    * @param wrapper The address of the ERC20 wrapper token.
    * @param underlying The address of the underlying ERC20 token.
    * @param amount The amount of tokens to send.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc20WrapperDepositFor(
     chainId: ChainId,
     wrapper: Address,
     underlying: Address,
     amount: bigint,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1, erc20WrapperAdapter },
@@ -732,7 +749,7 @@ export namespace BundlerAction {
           args: [underlying, erc20WrapperAdapter, maxUint256],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
       {
@@ -743,7 +760,7 @@ export namespace BundlerAction {
           args: [wrapper, amount],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
       {
@@ -754,7 +771,7 @@ export namespace BundlerAction {
           args: [underlying, generalAdapter1, maxUint256],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -766,12 +783,14 @@ export namespace BundlerAction {
    * @param wrapper The address of the ERC20 wrapper token.
    * @param account The address to send the underlying ERC20 tokens.
    * @param amount The amount of tokens to send.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc20WrapperWithdrawTo(
     chainId: ChainId,
     wrapper: Address,
     receiver: Address,
     amount: bigint,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1, erc20WrapperAdapter },
@@ -792,7 +811,7 @@ export namespace BundlerAction {
           args: [wrapper, erc20WrapperAdapter, maxUint256],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
       {
@@ -803,7 +822,7 @@ export namespace BundlerAction {
           args: [wrapper, receiver, amount],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
       {
@@ -814,7 +833,7 @@ export namespace BundlerAction {
           args: [wrapper, generalAdapter1, maxUint256],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -829,6 +848,7 @@ export namespace BundlerAction {
    * @param shares The amount of shares to mint.
    * @param maxSharePrice The maximum amount of assets to pay to get 1 share (scaled by RAY).
    * @param receiver The address to send the shares to.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc4626Mint(
     chainId: ChainId,
@@ -836,6 +856,7 @@ export namespace BundlerAction {
     shares: bigint,
     maxSharePrice: bigint,
     receiver: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -850,7 +871,7 @@ export namespace BundlerAction {
           args: [erc4626, shares, maxSharePrice, receiver],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -863,6 +884,7 @@ export namespace BundlerAction {
    * @param assets The amount of assets to deposit.
    * @param maxSharePrice The maximum amount of assets to pay to get 1 share (scaled by RAY).
    * @param receiver The address to send the shares to.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc4626Deposit(
     chainId: ChainId,
@@ -870,6 +892,7 @@ export namespace BundlerAction {
     assets: bigint,
     maxSharePrice: bigint,
     receiver: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -884,7 +907,7 @@ export namespace BundlerAction {
           args: [erc4626, assets, maxSharePrice, receiver],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -898,6 +921,7 @@ export namespace BundlerAction {
    * @param minSharePrice The minimum number of assets to receive per share (scaled by RAY).
    * @param receiver The address to send the assets to.
    * @param owner The address on behalf of which the assets are withdrawn.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc4626Withdraw(
     chainId: ChainId,
@@ -906,6 +930,7 @@ export namespace BundlerAction {
     minSharePrice: bigint,
     receiver: Address,
     owner: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -920,7 +945,7 @@ export namespace BundlerAction {
           args: [erc4626, assets, minSharePrice, receiver, owner],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -934,6 +959,7 @@ export namespace BundlerAction {
    * @param minSharePrice The minimum number of assets to receive per share (scaled by RAY).
    * @param receiver The address to send the assets to.
    * @param owner The address on behalf of which the assets are withdrawn.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc4626Redeem(
     chainId: ChainId,
@@ -942,6 +968,7 @@ export namespace BundlerAction {
     minSharePrice: bigint,
     receiver: Address,
     owner: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -956,7 +983,7 @@ export namespace BundlerAction {
           args: [erc4626, shares, minSharePrice, receiver, owner],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -969,7 +996,7 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param authorization The authorization details to submit to Morpho Blue.
    * @param signature The Ethers signature to authorize the account.
-   * @param skipRevert Whether to allow the authorization call to revert without making the whole multicall revert.
+   * @param skipRevert Whether to allow the authorization call to revert without making the whole bundle revert. Defaults to true.
    */
   export function morphoSetAuthorizationWithSig(
     chainId: ChainId,
@@ -1004,6 +1031,7 @@ export namespace BundlerAction {
    * @param slippageAmount The maximum (resp. minimum) amount of assets (resp. supply shares) to supply (resp. mint) (protects the sender from unexpected slippage).
    * @param onBehalf The address to supply on behalf of.
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoSupply(
     chainId: ChainId,
@@ -1013,6 +1041,7 @@ export namespace BundlerAction {
     slippageAmount: bigint,
     onBehalf: Address,
     callbackCalls: BundlerCall[],
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1032,7 +1061,7 @@ export namespace BundlerAction {
           args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
@@ -1045,6 +1074,7 @@ export namespace BundlerAction {
    * @param assets The amount of assets to supply.
    * @param onBehalf The address to supply on behalf of.
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupplyCollateral` callback.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoSupplyCollateral(
     chainId: ChainId,
@@ -1052,6 +1082,7 @@ export namespace BundlerAction {
     assets: bigint,
     onBehalf: Address,
     callbackCalls: BundlerCall[],
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1071,7 +1102,7 @@ export namespace BundlerAction {
           args: [market, assets, onBehalf, reenterData],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
@@ -1085,6 +1116,7 @@ export namespace BundlerAction {
    * @param shares The amount of borrow shares to mint.
    * @param slippageAmount The minimum (resp. maximum) amount of assets (resp. borrow shares) to borrow (resp. mint) (protects the sender from unexpected slippage).
    * @param receiver The address to send borrowed tokens to.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoBorrow(
     chainId: ChainId,
@@ -1093,6 +1125,7 @@ export namespace BundlerAction {
     shares: bigint,
     slippageAmount: bigint,
     receiver: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1107,7 +1140,7 @@ export namespace BundlerAction {
           args: [market, assets, shares, slippageAmount, receiver],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1122,6 +1155,7 @@ export namespace BundlerAction {
    * @param slippageAmount The maximum (resp. minimum) amount of assets (resp. borrow shares) to repay (resp. redeem) (protects the sender from unexpected slippage).
    * @param onBehalf The address to repay on behalf of.
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoRepay(
     chainId: ChainId,
@@ -1131,6 +1165,7 @@ export namespace BundlerAction {
     slippageAmount: bigint,
     onBehalf: Address,
     callbackCalls: BundlerCall[],
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1150,7 +1185,7 @@ export namespace BundlerAction {
           args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
@@ -1164,6 +1199,7 @@ export namespace BundlerAction {
    * @param shares The amount of supply shares to redeem.
    * @param slippageAmount The minimum (resp. maximum) amount of assets (resp. supply shares) to withdraw (resp. redeem) (protects the sender from unexpected slippage).
    * @param receiver The address to send withdrawn tokens to.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoWithdraw(
     chainId: ChainId,
@@ -1172,6 +1208,7 @@ export namespace BundlerAction {
     shares: bigint,
     slippageAmount: bigint,
     receiver: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1186,7 +1223,7 @@ export namespace BundlerAction {
           args: [market, assets, shares, slippageAmount, receiver],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1198,12 +1235,14 @@ export namespace BundlerAction {
    * @param market The market params to withdraw from.
    * @param assets The amount of assets to withdraw.
    * @param receiver The address to send withdrawn tokens to.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoWithdrawCollateral(
     chainId: ChainId,
     market: InputMarketParams,
     assets: bigint,
     receiver: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1218,7 +1257,7 @@ export namespace BundlerAction {
           args: [market, assets, receiver],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1230,12 +1269,14 @@ export namespace BundlerAction {
    * @param asset The address of the ERC20 token to flash loan.
    * @param amount The amount of tokens to flash loan.
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoFlashLoan` callback.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoFlashLoan(
     chainId: ChainId,
     asset: Address,
     amount: bigint,
     callbackCalls: BundlerCall[],
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1263,7 +1304,7 @@ export namespace BundlerAction {
           ],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: reenter ? keccak256(reenterData) : zeroHash,
       },
     ];
@@ -1276,6 +1317,7 @@ export namespace BundlerAction {
    * @param fee The vault public reallocation fee.
    * @param withdrawals The array of withdrawals to perform, before supplying everything to the supply market.
    * @param supplyMarketParams The market params to reallocate to.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function publicAllocatorReallocateTo(
     chainId: ChainId,
@@ -1283,6 +1325,7 @@ export namespace BundlerAction {
     fee: bigint,
     withdrawals: InputReallocation[],
     supplyMarketParams: InputMarketParams,
+    skipRevert = false,
   ): BundlerCall[] {
     const { publicAllocator } = getChainAddresses(chainId);
     if (publicAllocator == null)
@@ -1297,7 +1340,7 @@ export namespace BundlerAction {
           args: [vault, withdrawals, supplyMarketParams],
         }),
         value: fee,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1313,7 +1356,7 @@ export namespace BundlerAction {
    * @param reward The address of the reward token to claim.
    * @param amount The amount of rewards to claim.
    * @param proof The Merkle proof to claim the rewards.
-   * @param skipRevert Whether to allow the claim to revert without making the whole multicall revert.
+   * @param skipRevert Whether to allow the claim to revert without making the whole bundle revert. Defaults to true.
    */
   export function urdClaim(
     distributor: Address,
@@ -1345,11 +1388,13 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of native tokens to wrap (in wei).
    * @param recipient The address to send tokens to. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function wrapNative(
     chainId: ChainId,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1366,7 +1411,7 @@ export namespace BundlerAction {
           args: [amount, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1377,11 +1422,13 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of native tokens to unwrap (in wei).
    * @param recipient The address to send tokens to. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function unwrapNative(
     chainId: ChainId,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1398,7 +1445,7 @@ export namespace BundlerAction {
           args: [amount, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1413,6 +1460,7 @@ export namespace BundlerAction {
    * @param maxSharePrice The maximum amount of wei to pay for minting 1 share (scaled by RAY).
    * @param referral The referral address to use.
    * @param recipient The address to send stETH to. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function stakeEth(
     chainId: ChainId,
@@ -1420,6 +1468,7 @@ export namespace BundlerAction {
     maxSharePrice: bigint,
     referral: Address,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1436,7 +1485,7 @@ export namespace BundlerAction {
           args: [amount, maxSharePrice, referral, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1449,11 +1498,13 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of stETH to wrap (in wei).
    * @param recipient The address to send wstETH to. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function wrapStEth(
     chainId: ChainId,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1470,7 +1521,7 @@ export namespace BundlerAction {
           args: [amount, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1481,11 +1532,13 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of wstETH to unwrap (in wei).
    * @param recipient The address to send stETH to. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function unwrapStEth(
     chainId: ChainId,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { generalAdapter1 },
@@ -1502,7 +1555,7 @@ export namespace BundlerAction {
           args: [amount, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1517,6 +1570,7 @@ export namespace BundlerAction {
    * @param amount The amount of debt to repay.
    * @param onBehalf The address on behalf of which to repay.
    * @param rateMode The interest rate mode used by the debt to repay.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV2Repay(
     chainId: ChainId,
@@ -1524,6 +1578,7 @@ export namespace BundlerAction {
     amount: bigint,
     onBehalf: Address,
     rateMode = 1n,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { aaveV2MigrationAdapter },
@@ -1540,7 +1595,7 @@ export namespace BundlerAction {
           args: [asset, amount, rateMode, onBehalf],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1552,12 +1607,14 @@ export namespace BundlerAction {
    * @param asset The asset to withdraw.
    * @param amount The amount of asset to withdraw.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV2Withdraw(
     chainId: ChainId,
     asset: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { aaveV2MigrationAdapter },
@@ -1576,7 +1633,7 @@ export namespace BundlerAction {
           args: [asset, amount, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1591,6 +1648,7 @@ export namespace BundlerAction {
    * @param amount The amount of debt to repay.
    * @param onBehalf The address on behalf of which to repay.
    * @param rateMode The interest rate mode used by the debt to repay.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV3Repay(
     chainId: ChainId,
@@ -1598,6 +1656,7 @@ export namespace BundlerAction {
     amount: bigint,
     onBehalf: Address,
     rateMode = 1n,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { aaveV3CoreMigrationAdapter }, // TODO: choose between core & prime
@@ -1614,7 +1673,7 @@ export namespace BundlerAction {
           args: [asset, amount, rateMode, onBehalf],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1626,12 +1685,14 @@ export namespace BundlerAction {
    * @param asset The asset to withdraw.
    * @param amount The amount of asset to withdraw.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV3Withdraw(
     chainId: ChainId,
     asset: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { aaveV3CoreMigrationAdapter }, // TODO: choose between core & prime
@@ -1650,7 +1711,7 @@ export namespace BundlerAction {
           args: [asset, amount, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1664,12 +1725,14 @@ export namespace BundlerAction {
    * @param underlying The underlying debt asset to repay.
    * @param amount The amount of debt to repay.
    * @param onBehalf The address on behalf of which to repay.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV3OptimizerRepay(
     chainId: ChainId,
     underlying: Address,
     amount: bigint,
     onBehalf: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { aaveV3OptimizerMigrationAdapter },
@@ -1686,7 +1749,7 @@ export namespace BundlerAction {
           args: [underlying, amount, onBehalf],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1699,6 +1762,7 @@ export namespace BundlerAction {
    * @param amount The amount to withdraw.
    * @param maxIterations The maximum amount of iterations to use for the withdrawal.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV3OptimizerWithdraw(
     chainId: ChainId,
@@ -1706,6 +1770,7 @@ export namespace BundlerAction {
     amount: bigint,
     maxIterations: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { aaveV3OptimizerMigrationAdapter },
@@ -1727,7 +1792,7 @@ export namespace BundlerAction {
           args: [underlying, amount, maxIterations, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1739,12 +1804,14 @@ export namespace BundlerAction {
    * @param underlying The underlying asset to withdraw.
    * @param amount The amount to withdraw.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV3OptimizerWithdrawCollateral(
     chainId: ChainId,
     underlying: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { aaveV3OptimizerMigrationAdapter },
@@ -1766,7 +1833,7 @@ export namespace BundlerAction {
           args: [underlying, amount, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1781,7 +1848,7 @@ export namespace BundlerAction {
    * @param deadline The timestamp until which the signature is valid.
    * @param signature The Ethers signature to submit.
    * @param manager The address of the manager to approve. Defaults to the chain's bundler3 AaveV3OptimizerMigrationAdapter.
-   * @param skipRevert Whether to allow the signature to revert without making the whole multicall revert.
+   * @param skipRevert Whether to allow the signature to revert without making the whole bundle revert. Defaults to true.
    */
   export function aaveV3OptimizerApproveManagerWithSig(
     chainId: ChainId,
@@ -1861,6 +1928,7 @@ export namespace BundlerAction {
    * @param cToken The cToken on which to repay the debt.
    * @param amount The amount of debt to repay.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function compoundV2Repay(
     chainId: ChainId,
@@ -1868,6 +1936,7 @@ export namespace BundlerAction {
     amount: bigint,
     isEth: boolean,
     onBehalf: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { compoundV2MigrationAdapter },
@@ -1890,7 +1959,7 @@ export namespace BundlerAction {
               args: [cToken, amount, onBehalf],
             }),
         value: isEth ? amount : 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1902,6 +1971,7 @@ export namespace BundlerAction {
    * @param cToken The cToken on which to withdraw.
    * @param amount The amount to withdraw.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function compoundV2Redeem(
     chainId: ChainId,
@@ -1909,6 +1979,7 @@ export namespace BundlerAction {
     amount: bigint,
     isEth: boolean,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { compoundV2MigrationAdapter },
@@ -1933,7 +2004,7 @@ export namespace BundlerAction {
               args: [cToken, amount, recipient],
             }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1947,12 +2018,14 @@ export namespace BundlerAction {
    * @param instance The CompoundV3 instance on which to repay the debt.
    * @param amount The amount of debt to repay.
    * @param onBehalf The address on behalf of which to repay.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function compoundV3Repay(
     chainId: ChainId,
     instance: Address,
     amount: bigint,
     onBehalf: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { compoundV3MigrationAdapter },
@@ -1969,7 +2042,7 @@ export namespace BundlerAction {
           args: [instance, amount, onBehalf],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -1982,6 +2055,7 @@ export namespace BundlerAction {
    * @param asset The asset to withdraw.
    * @param amount The amount to withdraw.
    * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function compoundV3WithdrawFrom(
     chainId: ChainId,
@@ -1989,6 +2063,7 @@ export namespace BundlerAction {
     asset: Address,
     amount: bigint,
     recipient?: Address,
+    skipRevert = false,
   ): BundlerCall[] {
     const {
       bundler3: { compoundV3MigrationAdapter },
@@ -2010,7 +2085,7 @@ export namespace BundlerAction {
           args: [instance, asset, amount, recipient],
         }),
         value: 0n,
-        skipRevert: false,
+        skipRevert,
         callbackHash: zeroHash,
       },
     ];
@@ -2026,7 +2101,7 @@ export namespace BundlerAction {
    * @param expiry The timestamp until which the signature is valid.
    * @param signature The Ethers signature to submit.
    * @param manager The address of the manager to approve. Defaults to the chain's bundler3 CompoundV3MigrationAdapter.
-   * @param skipRevert Whether to allow the signature to revert without making the whole multicall revert.
+   * @param skipRevert Whether to allow the signature to revert without making the whole bundle revert. Defaults to true.
    */
   export function compoundV3AllowBySig(
     chainId: ChainId,
