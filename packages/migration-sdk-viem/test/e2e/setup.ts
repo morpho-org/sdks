@@ -5,10 +5,10 @@ import { base, mainnet } from "viem/chains";
 export const test = {
   [ChainId.EthMainnet]: createViemTest(mainnet, {
     forkUrl: process.env.MAINNET_RPC_URL,
-    forkBlockNumber: 19_750_000,
+    forkBlockNumber: 21_872_137,
   }),
   [ChainId.BaseMainnet]: createViemTest(base, {
     forkUrl: process.env.BASE_RPC_URL,
-    forkBlockNumber: 25_000_000,
+    forkBlockNumber: 26_539_234,
   }),
 } as const;

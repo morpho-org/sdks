@@ -1,15 +1,16 @@
 import {
   type Address,
   ChainId,
-  ChainUtils,
   ExchangeRateWrappedToken,
   NATIVE_ADDRESS,
-  UnknownDataError,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { type Time, isDefined, values } from "@morpho-org/morpho-ts";
 
-import { MIGRATION_ADDRESSES } from "../../config.js";
+import {
+  migrationAddresses,
+  migrationAddressesRegistry,
+} from "../../config.js";
 import type { MigratablePosition } from "../../positions/index.js";
 import { MigratableSupplyPosition_CompoundV2 } from "../../positions/supply/compoundV2.supply.js";
 import {
@@ -24,7 +25,7 @@ import { getChainId, readContract } from "viem/actions";
 import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.js";
 import { fetchAccruedExchangeRate } from "./compoundV2.helpers.js";
 
-const COMPOUNDING_PERIOD: { [chainID in ChainId]: Time.PeriodLike } = {
+export const COMPOUNDING_PERIOD: Record<number, Time.PeriodLike> = {
   [ChainId.BaseMainnet]: "s",
   [ChainId.EthMainnet]: { unit: "s", duration: 12 }, // 1 block
 };
@@ -35,9 +36,7 @@ async function fetchCompoundV2InstancePosition(
   client: Client,
   parameters: FetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const chainId = parameters.chainId;
 
@@ -45,8 +44,9 @@ async function fetchCompoundV2InstancePosition(
     if (chainId === ChainId.EthMainnet) {
       if (
         cTokenAddress ===
-        MIGRATION_ADDRESSES[ChainId.EthMainnet][MigratableProtocol.compoundV2]
-          .cEth.address
+        migrationAddressesRegistry[ChainId.EthMainnet][
+          MigratableProtocol.compoundV2
+        ].cEth.address
       )
         return {
           calls: [
@@ -103,8 +103,16 @@ async function fetchCompoundV2InstancePosition(
     } as const;
   })();
 
-  const { compoundV2Bundler: bundler, wNative } = getChainAddresses(chainId);
-  if (!bundler) throw new UnknownDataError("missing migration addresses");
+  const {
+    wNative,
+    bundler3: { compoundV2MigrationAdapter },
+  } = getChainAddresses(chainId);
+  if (compoundV2MigrationAdapter == null)
+    throw new Error("missing compoundV2MigrationAdapter address");
+
+  const compoundingPeriod = COMPOUNDING_PERIOD[chainId];
+  if (compoundingPeriod == null)
+    throw new Error(`missing compounding period on chain ${chainId}`);
 
   const [
     cTokenBalance,
@@ -129,7 +137,7 @@ async function fetchCompoundV2InstancePosition(
       abi,
       address: cTokenAddress,
       functionName: "allowance",
-      args: [user, bundler],
+      args: [user, compoundV2MigrationAdapter],
     }),
     readContract(client, {
       ...parameters,
@@ -199,7 +207,7 @@ async function fetchCompoundV2InstancePosition(
     cTokenBalance,
     loanToken: baseToken === NATIVE_ADDRESS ? wNative : baseToken,
     max,
-    supplyApy: rateToApy(supplyRatePerUnit, COMPOUNDING_PERIOD[chainId]),
+    supplyApy: rateToApy(supplyRatePerUnit, compoundingPeriod),
     bundlerAllowance,
   };
 }
@@ -209,14 +217,12 @@ export async function fetchCompoundV2Positions(
   client: Client,
   parameters: FetchParameters = {},
 ): Promise<MigratablePosition[]> {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   const chainId = parameters.chainId;
 
   const migrationContracts =
-    MIGRATION_ADDRESSES[chainId][MigratableProtocol.compoundV2];
+    migrationAddresses[chainId]?.[MigratableProtocol.compoundV2];
 
   if (!migrationContracts) return [];
 

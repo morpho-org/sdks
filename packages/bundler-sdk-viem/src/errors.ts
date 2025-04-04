@@ -1,6 +1,6 @@
 import type { SimulationResult } from "@morpho-org/simulation-sdk";
 
-import type { InputBundlerOperation } from "./types/index.js";
+import type { ActionType, InputBundlerOperation } from "./types/index.js";
 
 export namespace BundlerErrors {
   export class Bundle extends Error {
@@ -19,6 +19,12 @@ export namespace BundlerErrors {
   export class MissingSignature extends Error {
     constructor() {
       super(`missing signature`);
+    }
+  }
+
+  export class UnexpectedAction extends Error {
+    constructor(type: ActionType, chainId: number) {
+      super(`unexpected action "${type}" on chain "${chainId}"`);
     }
   }
 }

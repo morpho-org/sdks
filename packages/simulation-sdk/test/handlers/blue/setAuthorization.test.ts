@@ -1,10 +1,15 @@
 import _ from "lodash";
 
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
-import { dataFixture, userA } from "../../fixtures.js";
+import { dataFixture, userA, userB } from "../../fixtures.js";
 
 const type = "Blue_SetAuthorization";
+
+const {
+  bundler3: { generalAdapter1 },
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should set authorization", () => {
@@ -12,7 +17,11 @@ describe(type, () => {
       {
         type,
         sender: userA,
-        args: { owner: userA, isBundlerAuthorized: true },
+        args: {
+          owner: userA,
+          isAuthorized: true,
+          authorized: generalAdapter1,
+        },
       },
       dataFixture,
     );
@@ -21,5 +30,41 @@ describe(type, () => {
     expected.users[userA]!.isBundlerAuthorized = true;
 
     expect(result).toEqual(expected);
+  });
+
+  test("should ignore if address is not bundler", () => {
+    const result = simulateOperation(
+      {
+        type,
+        sender: userA,
+        args: {
+          owner: userA,
+          isAuthorized: true,
+          authorized: userB,
+        },
+      },
+      dataFixture,
+    );
+
+    expect(result).toBe(dataFixture);
+  });
+
+  test("should throw if authorization is already set", () => {
+    expect(() =>
+      simulateOperation(
+        {
+          type,
+          sender: userA,
+          args: {
+            owner: userA,
+            isAuthorized: false,
+            authorized: generalAdapter1,
+          },
+        },
+        dataFixture,
+      ),
+    ).toThrowErrorMatchingInlineSnapshot(
+      "[Error: isBundlerAuthorized is already set to false]",
+    );
   });
 });
