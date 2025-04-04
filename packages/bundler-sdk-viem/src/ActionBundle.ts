@@ -29,14 +29,34 @@ export class ActionBundle<
   TR extends { tx: { to: Address; data: Hex } } = TransactionRequirement,
   SR extends SignatureRequirement = SignatureRequirement,
 > {
+  public readonly steps?: SimulationResult;
+  public readonly chainId: number;
+
   constructor(
-    public readonly steps: SimulationResult,
+    steps: SimulationResult,
+    actions?: Action[],
+    requirements?: ActionBundleRequirements<TR, SR>,
+  );
+  constructor(
+    chainId: number,
+    actions?: Action[],
+    requirements?: ActionBundleRequirements<TR, SR>,
+  );
+  constructor(
+    stepsOrChainId: SimulationResult | number,
     public readonly actions: Action[] = [],
     public readonly requirements = new ActionBundleRequirements<TR, SR>(),
-  ) {}
+  ) {
+    if (typeof stepsOrChainId === "number") {
+      this.chainId = stepsOrChainId;
+    } else {
+      this.steps = stepsOrChainId;
+      this.chainId = stepsOrChainId[0].chainId;
+    }
+  }
 
   tx() {
-    return BundlerAction.encodeBundle(this.steps[0].chainId, this.actions);
+    return BundlerAction.encodeBundle(this.chainId, this.actions);
   }
 
   txs() {

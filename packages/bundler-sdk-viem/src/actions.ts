@@ -787,12 +787,12 @@ export function encodeBundle(
   for (let index = 0; index < operations.length; ++index) {
     const { dataAfter, actions, requirements } = encodeOperation(
       operations[index]!,
-      bundle.steps[index]!,
+      bundle.steps![index]!,
       supportsSignature,
       index,
     );
 
-    bundle.steps.push(dataAfter);
+    bundle.steps!.push(dataAfter);
 
     bundle.actions.push(...actions);
     bundle.requirements.signatures.push(...requirements.signatures);
