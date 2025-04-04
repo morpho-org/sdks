@@ -1,7 +1,7 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 
-import type { Action } from "@morpho-org/bundler-sdk-viem";
+import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import {
   type Account,
   type Client,
@@ -10,10 +10,11 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
-import { MigrationBundle } from "../../MigrationBundle.js";
+
 import { cometExtAbi } from "../../abis/compoundV3.js";
 import {
   MigratableProtocol,
+  type MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 import { getCompoundV3ManagerApprovalMessage } from "../signature/compoundV3.js";
@@ -53,7 +54,7 @@ export class MigratableSupplyPosition_CompoundV3
     supportsSignature = true,
   ) {
     const chainId = this.chainId;
-    const bundle = new MigrationBundle(chainId);
+    const bundle = new ActionBundle<MigrationTransactionRequirement>(chainId);
 
     const user = this.user;
 

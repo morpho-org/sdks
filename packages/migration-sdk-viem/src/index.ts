@@ -2,4 +2,3 @@ export * from "./types/index.js";
 export * from "./positions/index.js";
 export * from "./fetchers/index.js";
 export * from "./config.js";
-export * from "./MigrationBundle.js";

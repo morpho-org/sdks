@@ -3,11 +3,12 @@ import { type Token, getChainAddresses } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import {
   MigratableProtocol,
+  type MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
-import type { Action } from "@morpho-org/bundler-sdk-viem";
+import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import {
   type Account,
   type Client,
@@ -16,7 +17,6 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
-import { MigrationBundle } from "../../MigrationBundle.js";
 import { aTokenV2Abi } from "../../abis/aaveV2.js";
 import {
   type IMigratableSupplyPosition,
@@ -52,7 +52,7 @@ export class MigratableSupplyPosition_AaveV2
   ) {
     const chainId = this.chainId;
 
-    const bundle = new MigrationBundle(chainId);
+    const bundle = new ActionBundle<MigrationTransactionRequirement>(chainId);
 
     const user = this.user;
     const aToken = this.aToken;

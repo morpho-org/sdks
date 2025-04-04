@@ -10,7 +10,7 @@ import {
   getAuthorizationTypedData,
   getPermitTypedData,
 } from "@morpho-org/blue-sdk-viem";
-import type { Action } from "@morpho-org/bundler-sdk-viem";
+import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import {
   type Account,
@@ -21,11 +21,11 @@ import {
   verifyTypedData,
 } from "viem";
 import { signTypedData } from "viem/actions";
-import { MigrationBundle } from "../../MigrationBundle.js";
 import { aTokenV3Abi } from "../../abis/aaveV3.js";
 import {
   BorrowMigrationLimiter,
   MigratableProtocol,
+  type MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 import {
@@ -89,11 +89,13 @@ export class MigratableBorrowPosition_AaveV3
       minSharePrice,
     }: MigratableBorrowPosition.Args,
     supportsSignature = true,
-  ): MigrationBundle {
+  ) {
     const user = this.user;
     const chainId = this.chainId;
 
-    const migrationBundle = new MigrationBundle(chainId);
+    const migrationBundle = new ActionBundle<MigrationTransactionRequirement>(
+      chainId,
+    );
 
     const {
       morpho,
