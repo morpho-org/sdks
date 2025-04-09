@@ -590,7 +590,7 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const market = dataBefore.getMarket(id);
+      const market = dataAfter.getMarket(id);
       const maxSharePrice = market.toSupplyAssets(
         MathLib.wToRay(MathLib.WAD + slippage),
       );
@@ -619,7 +619,7 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const market = dataBefore.getMarket(id);
+      const market = dataAfter.getMarket(id);
       const minSharePrice = market.toSupplyAssets(
         MathLib.wToRay(MathLib.WAD - slippage),
       );
@@ -647,7 +647,7 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const market = dataBefore.getMarket(id);
+      const market = dataAfter.getMarket(id);
       const minSharePrice = market.toBorrowAssets(
         MathLib.wToRay(MathLib.WAD - slippage),
       );
@@ -675,7 +675,7 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const market = dataBefore.getMarket(id);
+      const market = dataAfter.getMarket(id);
       const maxSharePrice = market.toBorrowAssets(
         MathLib.wToRay(MathLib.WAD + slippage),
       );
@@ -751,7 +751,7 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const vault = dataBefore.getVault(address);
+      const vault = dataAfter.getVault(address);
       const maxSharePrice = vault.toAssets(
         MathLib.wToRay(MathLib.WAD + slippage),
       );
@@ -778,7 +778,7 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const vault = dataBefore.getVault(address);
+      const vault = dataAfter.getVault(address);
       const minSharePrice = vault.toAssets(
         MathLib.wToRay(MathLib.WAD - slippage),
       );
