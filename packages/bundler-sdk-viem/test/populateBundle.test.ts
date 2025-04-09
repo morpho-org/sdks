@@ -1155,6 +1155,7 @@ describe("populateBundle", () => {
             erc4626: bbEth.address,
             shares,
           });
+
           await client.deal({
             erc20: wNative,
             amount: assets + parseEther("10"),
@@ -1196,7 +1197,7 @@ describe("populateBundle", () => {
                 onBundleTx: donate(
                   client,
                   wNative,
-                  parseEther("10"),
+                  parseEther("0.4"), // This donation induces a slippage slightly bigger than DEFAULT_SLIPPAGE_TOLERANCE
                   bbEth.address,
                   morpho,
                 ),
@@ -3518,7 +3519,7 @@ describe("populateBundle", () => {
                 onBundleTx: donate(
                   client,
                   wNative,
-                  parseEther("1"),
+                  parseEther("0.4"), // This donation induces a slippage slightly bigger than DEFAULT_SLIPPAGE_TOLERANCE
                   bbEth.address,
                   morpho,
                 ),
