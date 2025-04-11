@@ -1,7 +1,7 @@
 import type { Provider } from "ethers";
 import { MetaMorpho__factory } from "ethers-types";
 
-import { type Address, ChainUtils, VaultConfig } from "@morpho-org/blue-sdk";
+import { type Address, VaultConfig } from "@morpho-org/blue-sdk";
 import type { FetchOptions } from "../types";
 import { fetchToken } from "./Token";
 
@@ -10,9 +10,7 @@ export async function fetchVaultConfig(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const mm = MetaMorpho__factory.connect(address, runner);
 
@@ -24,12 +22,9 @@ export async function fetchVaultConfig(
     mm.DECIMALS_OFFSET(overrides),
   ]);
 
-  return new VaultConfig(
-    {
-      ...token,
-      asset,
-      decimalsOffset,
-    },
-    options.chainId,
-  );
+  return new VaultConfig({
+    ...token,
+    asset,
+    decimalsOffset,
+  });
 }

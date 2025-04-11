@@ -6,7 +6,6 @@ import {
 } from "ethers-types";
 
 import {
-  ChainUtils,
   Market,
   type MarketId,
   type MarketParams,
@@ -20,9 +19,7 @@ export async function fetchMarket(
   runner: { provider: Provider },
   { chainId, overrides = {} }: FetchOptions = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const config = await fetchMarketParams(id, runner, { chainId });
 
@@ -34,9 +31,7 @@ export async function fetchMarketFromConfig(
   runner: { provider: Provider },
   { chainId, overrides = {} }: FetchOptions = {},
 ) {
-  chainId = ChainUtils.parseSupportedChainId(
-    chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const { morpho, adaptiveCurveIrm } = getChainAddresses(chainId);
 

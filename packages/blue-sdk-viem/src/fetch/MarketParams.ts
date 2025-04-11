@@ -1,10 +1,9 @@
 import {
-  ChainUtils,
   type MarketId,
   MarketParams,
   UnknownMarketParamsError,
   _try,
-  addresses,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -19,11 +18,9 @@ export async function fetchMarketParams(
   let config = _try(() => MarketParams.get(id), UnknownMarketParamsError);
 
   if (!config) {
-    chainId = ChainUtils.parseSupportedChainId(
-      chainId ?? (await getChainId(client)),
-    );
+    chainId ??= await getChainId(client);
 
-    const { morpho } = addresses[chainId];
+    const { morpho } = getChainAddresses(chainId);
 
     const [loanToken, collateralToken, oracle, irm, lltv] = await readContract(
       client,

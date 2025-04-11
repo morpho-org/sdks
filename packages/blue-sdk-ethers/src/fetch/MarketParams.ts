@@ -4,7 +4,6 @@ import { MorphoBlue__factory } from "ethers-types";
 import {
   type Address,
   type ChainId,
-  ChainUtils,
   type MarketId,
   MarketParams,
   UnknownMarketParamsError,
@@ -20,9 +19,7 @@ export async function fetchMarketParams(
   let config = _try(() => MarketParams.get(id), UnknownMarketParamsError);
 
   if (!config) {
-    chainId = ChainUtils.parseSupportedChainId(
-      chainId ?? (await runner.provider.getNetwork()).chainId,
-    );
+    chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
     const { morpho } = getChainAddresses(chainId);
 

@@ -8,4 +8,3 @@ export * from "./fetchVaultUser.js";
 export * from "./fetchPosition.js";
 export * from "./fetchHolding.js";
 export * from "./fetchVaultMarketConfig.js";
-export * from "./combineIndexedQueries.js";

@@ -16,7 +16,7 @@
   "files": ["lib"],
   "scripts": {
     "prepublish": "$npm_execpath build",
-    "build": "tsc --build tsconfig.build.json"
+    "build": "tsc --noEmit && tsc --build tsconfig.build.json"
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
@@ -30,6 +30,7 @@
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",

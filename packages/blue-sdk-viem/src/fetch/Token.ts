@@ -8,7 +8,6 @@ import {
 } from "viem";
 
 import {
-  ChainUtils,
   ConstantWrappedToken,
   Eip5267Domain,
   ExchangeRateWrappedToken,
@@ -33,9 +32,7 @@ export async function fetchToken(
   client: Client,
   { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
   if (address === NATIVE_ADDRESS) return Token.native(parameters.chainId);
 

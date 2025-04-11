@@ -860,5 +860,3 @@ export namespace BundlerAction {
     ]);
   }
 }
-
-export default BundlerAction;

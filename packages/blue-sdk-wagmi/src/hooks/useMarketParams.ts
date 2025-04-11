@@ -8,7 +8,7 @@ import {
   fetchMarketParamsQueryOptions,
 } from "../queries/fetchMarketParams.js";
 import type { ConfigParameter, QueryParameter } from "../types/index.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 
 export type UseMarketParamsParameters<
@@ -48,6 +48,6 @@ export function useMarketParams<
     ...query,
     ...options,
     enabled: parameters.marketId != null && query.enabled,
-    structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+    structuralSharing: query.structuralSharing ?? replaceDeepEqual,
   });
 }
