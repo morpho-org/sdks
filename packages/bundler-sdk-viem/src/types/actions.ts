@@ -31,7 +31,6 @@ export interface Permit2PermitSingleDetails {
 
 export interface Permit2PermitSingle {
   details: Permit2PermitSingleDetails;
-  spender: Address;
   sigDeadline: bigint;
 }
 
@@ -100,7 +99,6 @@ export interface ActionArgs {
   ];
   transferFrom2: [
     asset: Address,
-    owner: Address,
     amount: bigint,
     recipient?: Address,
     skipRevert?: boolean,

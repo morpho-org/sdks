@@ -34,7 +34,6 @@ contract GetHolding {
         address account,
         address morpho,
         IPermit2 permit2,
-        address bundler3,
         address generalAdapter1,
         bool isWrappedBackedToken,
         bool isErc20Permissioned
@@ -45,7 +44,7 @@ contract GetHolding {
             permit2: token.allowance(account, address(permit2)),
             generalAdapter1: token.allowance(account, generalAdapter1)
         });
-        res.permit2BundlerAllowance = permit2.allowance(account, address(token), bundler3);
+        res.permit2BundlerAllowance = permit2.allowance(account, address(token), generalAdapter1);
 
         try token.nonces(account) returns (uint256 nonce) {
             res.isErc2612 = true;

@@ -13,7 +13,7 @@ import { test } from "./setup";
 
 const {
   morpho,
-  bundler3: { bundler3, generalAdapter1 },
+  bundler3: { generalAdapter1 },
   permit2,
   wNative,
   wbC3M,
@@ -63,7 +63,7 @@ describe("augment/Holding", () => {
       functionName: "approve",
       args: [
         wNative,
-        bundler3,
+        generalAdapter1,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],
@@ -117,7 +117,7 @@ describe("augment/Holding", () => {
       functionName: "approve",
       args: [
         wNative,
-        bundler3,
+        generalAdapter1,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],
@@ -201,7 +201,7 @@ describe("augment/Holding", () => {
       functionName: "approve",
       args: [
         wbC3M,
-        bundler3,
+        generalAdapter1,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],
@@ -258,7 +258,7 @@ describe("augment/Holding", () => {
       functionName: "approve",
       args: [
         wbC3M,
-        bundler3,
+        generalAdapter1,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],

@@ -322,7 +322,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: stEth,
               args: {
                 amount: balance - bundlerBalance,
@@ -660,7 +660,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: usdt,
               args: {
                 amount,
@@ -792,7 +792,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: usdt,
               args: {
                 amount,
@@ -943,7 +943,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: usdt,
               args: {
                 amount,
@@ -1094,7 +1094,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: expect.any(BigInt),
@@ -1822,7 +1822,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: loanAssets / 2n,
@@ -2289,7 +2289,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: repayAmount,
@@ -2600,7 +2600,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: stEth,
               args: {
                 amount: balance - bundlerBalance,
@@ -2968,7 +2968,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: usdt,
               args: {
                 amount,
@@ -3108,7 +3108,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: usdt,
               args: {
                 amount,
@@ -3264,7 +3264,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: usdt,
               args: {
                 amount,
@@ -3416,7 +3416,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: expect.any(BigInt),
@@ -4184,7 +4184,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: loanAssets / 2n,
@@ -4666,7 +4666,7 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer2",
-              sender: bundler3,
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: repayAmount,

@@ -74,7 +74,7 @@ export const populateInputTransfer = (
   { hasSimplePermit = false }: { hasSimplePermit?: boolean } = {},
 ): Exclude<BundlerOperation, CallbackBundlerOperation>[] => {
   const {
-    bundler3: { bundler3, generalAdapter1 },
+    bundler3: { generalAdapter1 },
     permit2,
   } = getChainAddresses(data.chainId);
 
@@ -187,7 +187,7 @@ export const populateInputTransfer = (
 
     operations.push({
       type: "Erc20_Transfer2",
-      sender: bundler3,
+      sender: generalAdapter1,
       address,
       args: {
         amount,

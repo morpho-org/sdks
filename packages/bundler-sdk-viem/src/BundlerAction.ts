@@ -652,7 +652,10 @@ export namespace BundlerAction {
     signature: Hex,
     skipRevert = true,
   ): BundlerCall[] {
-    const { permit2 } = getChainAddresses(chainId);
+    const {
+      permit2,
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(chainId);
     if (permit2 == null)
       throw new BundlerErrors.UnexpectedAction("approve2", chainId);
 
@@ -662,7 +665,16 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: permit2Abi,
           functionName: "permit",
-          args: [owner, permitSingle, signature],
+          args: [
+            owner,
+            {
+              ...permitSingle,
+              // Never permit any other address than the GeneralAdapter1 otherwise
+              // the signature can be extracted and used independently.
+              spender: generalAdapter1,
+            },
+            signature,
+          ],
         }),
         value: 0n,
         skipRevert,
@@ -683,28 +695,23 @@ export namespace BundlerAction {
   export function transferFrom2(
     chainId: ChainId,
     asset: Address,
-    owner: Address,
     amount: bigint,
     recipient?: Address,
     skipRevert = false,
   ): BundlerCall[] {
     const {
-      permit2,
       bundler3: { generalAdapter1 },
     } = getChainAddresses(chainId);
-    if (permit2 == null)
-      throw new BundlerErrors.UnexpectedAction("transferFrom2", chainId);
 
     recipient ??= generalAdapter1;
 
     return [
       {
-        to: permit2,
+        to: generalAdapter1,
         data: encodeFunctionData({
-          abi: permit2Abi,
-          functionName: "transferFrom",
-          // TODO: batch all permit2 transfers via transferFrom(AllowanceTransferDetails[] calldata)
-          args: [owner, recipient, amount, asset],
+          abi: generalAdapter1Abi,
+          functionName: "permit2TransferFrom",
+          args: [asset, recipient, amount],
         }),
         value: 0n,
         skipRevert,

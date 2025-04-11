@@ -72,7 +72,7 @@ export async function fetchHolding(
       ? Permit2__factory.connect(chainAddresses.permit2, runner).allowance(
           user,
           token,
-          chainAddresses.bundler3.bundler3,
+          chainAddresses.bundler3.generalAdapter1,
           overrides,
         )
       : { amount: 0n, expiration: 0n, nonce: 0n },
