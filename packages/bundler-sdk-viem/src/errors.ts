@@ -1,5 +1,6 @@
 import type { SimulationResult } from "@morpho-org/simulation-sdk";
 
+import type { Address } from "viem";
 import type { ActionType, InputBundlerOperation } from "./types/index.js";
 
 export namespace BundlerErrors {
@@ -25,6 +26,12 @@ export namespace BundlerErrors {
   export class UnexpectedAction extends Error {
     constructor(type: ActionType, chainId: number) {
       super(`unexpected action "${type}" on chain "${chainId}"`);
+    }
+  }
+
+  export class UnexpectedSignature extends Error {
+    constructor(spender: Address) {
+      super(`unexpected signature consumer "${spender}"`);
     }
   }
 }

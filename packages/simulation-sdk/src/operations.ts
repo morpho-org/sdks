@@ -38,6 +38,7 @@ export interface BlueOperationArgs {
   Blue_AccrueInterest: { id: MarketId };
   Blue_SetAuthorization: {
     owner: Address;
+    // Should not be scoped to GeneralAdapter1 because PreLiquidation contracts use authorizations.
     authorized: Address;
     isAuthorized: boolean;
   };
