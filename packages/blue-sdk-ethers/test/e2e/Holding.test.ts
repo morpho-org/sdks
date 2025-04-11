@@ -13,7 +13,7 @@ import { permit2Abi } from "./abis";
 
 const {
   morpho,
-  bundler3: { bundler3, generalAdapter1 },
+  bundler3: { generalAdapter1 },
   permit2,
   wNative,
   wbC3M,
@@ -63,7 +63,7 @@ describe("augment/Holding", async () => {
       functionName: "approve",
       args: [
         wNative,
-        bundler3,
+        generalAdapter1,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],
@@ -143,7 +143,7 @@ describe("augment/Holding", async () => {
       functionName: "approve",
       args: [
         wbC3M,
-        bundler3,
+        generalAdapter1,
         expectedData.permit2BundlerAllowance.amount,
         Number(expectedData.permit2BundlerAllowance.expiration),
       ],
