@@ -37,6 +37,7 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import { signTypedData } from "viem/actions";
 import { ActionBundle, ActionBundleRequirements } from "./ActionBundle.js";
+import { BundlerErrors } from "./errors.js";
 import type {
   Action,
   BundlerOperation,
@@ -137,7 +138,7 @@ export const encodeOperation = (
   const deadline = Time.timestamp() + Time.s.from.h(24n);
   const {
     morpho,
-    bundler3: { generalAdapter1 },
+    bundler3: { bundler3, generalAdapter1 },
     permit2,
     wNative,
     dai,
@@ -183,6 +184,10 @@ export const encodeOperation = (
   switch (operation.type) {
     case "Blue_SetAuthorization": {
       const { owner, isAuthorized, authorized } = operation.args;
+
+      // Never authorize bundler3 otherwise the signature can be used independently.
+      if (authorized === bundler3)
+        throw new BundlerErrors.UnexpectedSignature(authorized);
 
       if (supportsSignature) {
         const ownerData = dataBefore.getUser(owner);
@@ -265,6 +270,11 @@ export const encodeOperation = (
 
       const { amount, spender, nonce } = operation.args;
 
+      // Never permit any other address than the GeneralAdapter1 otherwise
+      // the signature can be used independently.
+      if (spender !== generalAdapter1)
+        throw new BundlerErrors.UnexpectedSignature(spender);
+
       if (supportsSignature) {
         const action: Action =
           address === dai
@@ -276,7 +286,6 @@ export const encodeOperation = (
                   deadline,
                   true,
                   null,
-                  spender,
                   operation.skipRevert,
                 ],
               }
@@ -288,7 +297,6 @@ export const encodeOperation = (
                   amount,
                   deadline,
                   null,
-                  spender,
                   operation.skipRevert,
                 ],
               };

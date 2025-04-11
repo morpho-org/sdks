@@ -77,7 +77,6 @@ export interface ActionArgs {
     amount: bigint,
     deadline: bigint,
     signature: Hex | null,
-    spender?: Address,
     skipRevert?: boolean,
   ];
   permitDai: [
@@ -86,7 +85,6 @@ export interface ActionArgs {
     expiry: bigint,
     allowed: boolean,
     signature: Hex | null,
-    spender?: Address,
     skipRevert?: boolean,
   ];
 
@@ -138,13 +136,7 @@ export interface ActionArgs {
 
   /* Morpho */
   morphoSetAuthorizationWithSig: [
-    authorization: {
-      authorizer: Address;
-      authorized: Address;
-      isAuthorized: boolean;
-      nonce: bigint;
-      deadline: bigint;
-    },
+    authorization: Authorization,
     signature: Hex | null,
     skipRevert?: boolean,
   ];

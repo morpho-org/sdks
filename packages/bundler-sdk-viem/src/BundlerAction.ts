@@ -118,15 +118,7 @@ export namespace BundlerAction {
 
       /* Permit */
       case "permit": {
-        const [
-          sender,
-          asset,
-          amount,
-          deadline,
-          signature,
-          spender,
-          skipRevert,
-        ] = args;
+        const [sender, asset, amount, deadline, signature, skipRevert] = args;
         if (signature == null) throw new BundlerErrors.MissingSignature();
 
         return BundlerAction.permit(
@@ -136,13 +128,11 @@ export namespace BundlerAction {
           amount,
           deadline,
           signature,
-          spender,
           skipRevert,
         );
       }
       case "permitDai": {
-        const [sender, nonce, expiry, allowed, signature, spender, skipRevert] =
-          args;
+        const [sender, nonce, expiry, allowed, signature, skipRevert] = args;
         if (signature == null) throw new BundlerErrors.MissingSignature();
 
         return BundlerAction.permitDai(
@@ -152,7 +142,6 @@ export namespace BundlerAction {
           expiry,
           allowed,
           signature,
-          spender,
           skipRevert,
         );
       }
@@ -544,7 +533,6 @@ export namespace BundlerAction {
     amount: bigint,
     deadline: bigint,
     signature: Hex,
-    spender?: Address,
     skipRevert = true,
   ): BundlerCall[] {
     const {
@@ -552,15 +540,23 @@ export namespace BundlerAction {
     } = getChainAddresses(chainId);
     const { r, s, yParity } = parseSignature(signature);
 
-    spender ??= generalAdapter1;
-
     return [
       {
         to: asset,
         data: encodeFunctionData({
           abi: erc2612Abi,
           functionName: "permit",
-          args: [owner, spender, amount, deadline, yParity + 27, r, s],
+          args: [
+            owner,
+            // Never permit any other address than the GeneralAdapter1 otherwise
+            // the signature can be extracted and used independently.
+            generalAdapter1,
+            amount,
+            deadline,
+            yParity + 27,
+            r,
+            s,
+          ],
         }),
         value: 0n,
         skipRevert,
@@ -587,7 +583,6 @@ export namespace BundlerAction {
     expiry: bigint,
     allowed: boolean,
     signature: Hex,
-    spender?: Address,
     skipRevert = true,
   ): BundlerCall[] {
     const {
@@ -596,8 +591,6 @@ export namespace BundlerAction {
     } = getChainAddresses(chainId);
     if (dai == null)
       throw new BundlerErrors.UnexpectedAction("permitDai", chainId);
-
-    spender ??= generalAdapter1;
 
     const { r, s, yParity } = parseSignature(signature);
 
@@ -626,7 +619,18 @@ export namespace BundlerAction {
             },
           ],
           functionName: "permit",
-          args: [owner, spender, nonce, expiry, allowed, yParity + 27, r, s],
+          args: [
+            owner,
+            // Never permit any other address than the GeneralAdapter1 otherwise
+            // the signature can be extracted and used independently.
+            generalAdapter1,
+            nonce,
+            expiry,
+            allowed,
+            yParity + 27,
+            r,
+            s,
+          ],
         }),
         value: 0n,
         skipRevert,
@@ -1011,8 +1015,14 @@ export namespace BundlerAction {
     signature: Hex,
     skipRevert = true,
   ): BundlerCall[] {
-    const { morpho } = getChainAddresses(chainId);
+    const {
+      morpho,
+      bundler3: { bundler3 },
+    } = getChainAddresses(chainId);
     const { r, s, yParity } = parseSignature(signature);
+
+    if (authorization.authorized === bundler3)
+      throw new BundlerErrors.UnexpectedSignature(authorization.authorized);
 
     return [
       {
