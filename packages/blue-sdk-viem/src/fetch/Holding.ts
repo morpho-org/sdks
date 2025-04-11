@@ -59,7 +59,7 @@ export async function fetchHolding(
     const {
       morpho,
       permit2 = zeroAddress,
-      bundler3: { bundler3, generalAdapter1 },
+      bundler3: { generalAdapter1 },
     } = getChainAddresses(parameters.chainId);
 
     try {
@@ -83,7 +83,6 @@ export async function fetchHolding(
           user,
           morpho,
           permit2,
-          bundler3,
           generalAdapter1,
           !!permissionedBackedTokens[parameters.chainId]?.has(token),
           !!permissionedWrapperTokens[parameters.chainId]?.has(token),
@@ -147,7 +146,7 @@ export async function fetchHolding(
           abi: permit2Abi,
           address: chainAddresses.permit2,
           functionName: "allowance",
-          args: [user, token, chainAddresses.bundler3.bundler3],
+          args: [user, token, chainAddresses.bundler3.generalAdapter1],
         }).then(([amount, expiration, nonce]) => ({
           amount,
           expiration: BigInt(expiration),

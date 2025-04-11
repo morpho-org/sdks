@@ -137,7 +137,7 @@ export const encodeOperation = (
   const deadline = Time.timestamp() + Time.s.from.h(24n);
   const {
     morpho,
-    bundler3: { bundler3, generalAdapter1 },
+    bundler3: { generalAdapter1 },
     permit2,
     wNative,
     dai,
@@ -381,7 +381,6 @@ export const encodeOperation = (
                 nonce: Number(nonce),
                 expiration: Number(expiration),
               },
-              spender: bundler3,
               sigDeadline: deadline,
             },
             null,
@@ -394,14 +393,16 @@ export const encodeOperation = (
         requirements.signatures.push({
           action,
           async sign(client: Client, account: Account = client.account!) {
-            const { details, spender, sigDeadline } = action.args[1];
+            const { details, sigDeadline } = action.args[1];
 
             let signature = action.args[2];
             if (signature != null) return signature; // action is already signed
 
             const typedData = getPermit2PermitTypedData(
               {
-                spender,
+                // Never permit any other address than the GeneralAdapter1 otherwise
+                // the signature can be used independently.
+                spender: generalAdapter1,
                 allowance: details.amount,
                 erc20: details.token,
                 nonce: details.nonce,
@@ -472,12 +473,12 @@ export const encodeOperation = (
       break;
     }
     case "Erc20_Transfer2": {
-      const { amount, from, to } = operation.args;
+      const { amount, to } = operation.args;
 
       if (supportsSignature) {
         actions.push({
           type: "transferFrom2",
-          args: [address, from, amount, to, operation.skipRevert],
+          args: [address, amount, to, operation.skipRevert],
         });
 
         break;
