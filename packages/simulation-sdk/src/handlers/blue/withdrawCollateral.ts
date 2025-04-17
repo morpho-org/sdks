@@ -12,9 +12,12 @@ export const handleBlueWithdrawCollateralOperation: OperationHandler<
 > = ({ args: { id, assets, onBehalf, receiver }, sender }, data) => {
   if (assets === 0n) throw new BlueSimulationErrors.ZeroAssets();
 
-  const { morpho, bundler } = getChainAddresses(data.chainId);
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(data.chainId);
 
-  if (sender === bundler) {
+  if (sender === generalAdapter1) {
     const userData = data.getUser(onBehalf);
 
     if (!userData.isBundlerAuthorized)

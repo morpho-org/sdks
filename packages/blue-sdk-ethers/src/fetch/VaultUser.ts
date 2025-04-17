@@ -3,7 +3,6 @@ import { ERC20__factory, MetaMorpho__factory } from "ethers-types";
 
 import {
   type Address,
-  ChainUtils,
   type VaultConfig,
   VaultUser,
 } from "@morpho-org/blue-sdk";
@@ -16,9 +15,7 @@ export async function fetchVaultUser(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
 
   const config = await fetchVaultConfig(vault, runner, options);
 
@@ -31,9 +28,7 @@ export async function fetchVaultUserFromConfig(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
   options.overrides ??= {};
 
   const mm = MetaMorpho__factory.connect(config.address, runner);

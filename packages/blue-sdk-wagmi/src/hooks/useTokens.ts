@@ -1,59 +1,42 @@
-import type { Token } from "@morpho-org/blue-sdk";
-import { type UseQueryResult, useQueries } from "@tanstack/react-query";
-import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { isDefined } from "@morpho-org/morpho-ts";
+import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
+import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
-
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   type TokenParameters,
   fetchTokenQueryOptions,
 } from "../queries/fetchToken.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import type { UseIndexedQueriesReturnType } from "../types/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
-import type { UseTokenParameters } from "./useToken.js";
+import type { UseTokenParameters, UseTokenReturnType } from "./useToken.js";
 
 export type FetchTokensParameters = {
   tokens: Iterable<Address | undefined>;
 };
 
-export type UseTokensParameters<
-  config extends Config = Config,
-  TCombinedResult = ReturnType<typeof combineTokens>,
-> = FetchTokensParameters &
-  UnionOmit<UseTokenParameters<config>, keyof TokenParameters> & {
-    combine?: (
-      results: UseQueryResult<Token, ReadContractErrorType>[],
-    ) => TCombinedResult;
-  };
+export type UseTokensParameters<config extends Config = Config> =
+  FetchTokensParameters &
+    UnionOmit<UseTokenParameters<config>, keyof TokenParameters>;
 
-export type UseTokensReturnType<
-  TCombinedResult = ReturnType<typeof combineTokens>,
-> = TCombinedResult;
+export type UseTokensReturnType = UseIndexedQueriesReturnType<
+  Address,
+  UseTokenReturnType
+>;
 
-export const combineTokens = combineIndexedQueries<
-  Token,
-  [Address],
-  ReadContractErrorType
->((token) => [token.address]);
-
-export function useTokens<
-  config extends Config = ResolvedRegister["config"],
-  TCombinedResult = ReturnType<typeof combineTokens>,
->({
+export function useTokens<config extends Config = ResolvedRegister["config"]>({
   tokens,
-  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
-  combine = combineTokens as any,
   query = {},
   ...parameters
-}: UseTokensParameters<
-  config,
-  TCombinedResult
->): UseTokensReturnType<TCombinedResult> {
+}: UseTokensParameters<config>): UseTokensReturnType {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  return useQueries({
-    queries: Array.from(new Set(tokens), (token) => ({
+  const uniqueTokens = new Set(tokens);
+
+  const orderedResults = useQueries({
+    queries: Array.from(uniqueTokens, (token) => ({
       ...query,
       ...fetchTokenQueryOptions(config, {
         ...parameters,
@@ -61,11 +44,35 @@ export function useTokens<
         chainId,
       }),
       enabled: token != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      structuralSharing: query.structuralSharing ?? replaceDeepEqual,
       staleTime:
         query.staleTime ??
         (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),
     })),
-    combine,
   });
+
+  const result: UseTokensReturnType = {
+    data: {},
+    error: {},
+    isFetching: {},
+    isFetchingAny: false,
+  };
+
+  uniqueTokens
+    .values()
+    .filter(isDefined)
+    .forEach((token, index) => {
+      const { data, error, isFetching } = orderedResults[index]!;
+
+      result.data[token] = data;
+      result.error[token] = error;
+      result.isFetching[token] = isFetching;
+
+      if (isFetching) result.isFetchingAny = true;
+    });
+
+  const resultRef = useRef(result);
+  resultRef.current = replaceDeepEqual(resultRef.current, result);
+
+  return resultRef.current;
 }

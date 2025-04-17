@@ -1,10 +1,9 @@
 import type { Address, Client } from "viem";
 
 import {
-  ChainUtils,
   type MarketId,
   VaultMarketPublicAllocatorConfig,
-  addresses,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { publicAllocatorAbi } from "../abis";
@@ -16,11 +15,10 @@ export async function fetchVaultMarketPublicAllocatorConfig(
   client: Client,
   parameters: FetchParameters = {},
 ) {
-  parameters.chainId = ChainUtils.parseSupportedChainId(
-    parameters.chainId ?? (await getChainId(client)),
-  );
+  parameters.chainId ??= await getChainId(client);
 
-  const { publicAllocator } = addresses[parameters.chainId];
+  const { publicAllocator } = getChainAddresses(parameters.chainId);
+  if (publicAllocator == null) return;
 
   const [maxIn, maxOut] = await readContract(client, {
     ...parameters,

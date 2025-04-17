@@ -1,58 +1,47 @@
-import type { VaultConfig } from "@morpho-org/blue-sdk";
-import { type UseQueryResult, useQueries } from "@tanstack/react-query";
-import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { isDefined } from "@morpho-org/morpho-ts";
+import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
+import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   type VaultConfigParameters,
   fetchVaultConfigQueryOptions,
 } from "../queries/fetchVaultConfig.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import type { UseIndexedQueriesReturnType } from "../types/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
-import type { UseVaultConfigParameters } from "./useVaultConfig.js";
+import type {
+  UseVaultConfigParameters,
+  UseVaultConfigReturnType,
+} from "./useVaultConfig.js";
 
 export type FetchVaultConfigsParameters = {
   vaults: Iterable<Address | undefined>;
 };
 
-export type UseVaultConfigsParameters<
-  config extends Config = Config,
-  TCombinedResult = ReturnType<typeof combineVaultConfigs>,
-> = FetchVaultConfigsParameters &
-  UnionOmit<UseVaultConfigParameters<config>, keyof VaultConfigParameters> & {
-    combine?: (
-      results: UseQueryResult<VaultConfig, ReadContractErrorType>[],
-    ) => TCombinedResult;
-  };
+export type UseVaultConfigsParameters<config extends Config = Config> =
+  FetchVaultConfigsParameters &
+    UnionOmit<UseVaultConfigParameters<config>, keyof VaultConfigParameters>;
 
-export type UseVaultConfigsReturnType<
-  TCombinedResult = ReturnType<typeof combineVaultConfigs>,
-> = TCombinedResult;
-
-export const combineVaultConfigs = combineIndexedQueries<
-  VaultConfig,
-  [Address],
-  ReadContractErrorType
->((config) => [config.address]);
+export type UseVaultConfigsReturnType = UseIndexedQueriesReturnType<
+  Address,
+  UseVaultConfigReturnType
+>;
 
 export function useVaultConfigs<
   config extends Config = ResolvedRegister["config"],
-  TCombinedResult = ReturnType<typeof combineVaultConfigs>,
 >({
   vaults,
-  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
-  combine = combineVaultConfigs as any,
   query = {},
   ...parameters
-}: UseVaultConfigsParameters<
-  config,
-  TCombinedResult
->): UseVaultConfigsReturnType<TCombinedResult> {
+}: UseVaultConfigsParameters<config>): UseVaultConfigsReturnType {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  return useQueries({
-    queries: Array.from(new Set(vaults), (vault) => ({
+  const uniqueVaults = new Set(vaults);
+
+  const orderedResults = useQueries({
+    queries: Array.from(uniqueVaults, (vault) => ({
       ...query,
       ...fetchVaultConfigQueryOptions(config, {
         ...parameters,
@@ -60,8 +49,32 @@ export function useVaultConfigs<
         chainId,
       }),
       enabled: vault != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      structuralSharing: query.structuralSharing ?? replaceDeepEqual,
     })),
-    combine,
   });
+
+  const result: UseVaultConfigsReturnType = {
+    data: {},
+    error: {},
+    isFetching: {},
+    isFetchingAny: false,
+  };
+
+  uniqueVaults
+    .values()
+    .filter(isDefined)
+    .forEach((vault, index) => {
+      const { data, error, isFetching } = orderedResults[index]!;
+
+      result.data[vault] = data;
+      result.error[vault] = error;
+      result.isFetching[vault] = isFetching;
+
+      if (isFetching) result.isFetchingAny = true;
+    });
+
+  const resultRef = useRef(result);
+  resultRef.current = replaceDeepEqual(resultRef.current, result);
+
+  return resultRef.current;
 }
