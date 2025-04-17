@@ -52,7 +52,7 @@ export interface ActionArgs {
   erc20TransferFrom: [
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -98,7 +98,7 @@ export interface ActionArgs {
   transferFrom2: [
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -210,21 +210,21 @@ export interface ActionArgs {
   ];
 
   /* Wrapped Native */
-  wrapNative: [amount: bigint, recipient?: Address, skipRevert?: boolean];
-  unwrapNative: [amount: bigint, recipient?: Address, skipRevert?: boolean];
+  wrapNative: [amount: bigint, recipient: Address, skipRevert?: boolean];
+  unwrapNative: [amount: bigint, recipient: Address, skipRevert?: boolean];
 
   /* stETH */
   stakeEth: [
     amount: bigint,
     minShares: bigint,
     referral: Address,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
   /* Wrapped stETH */
-  wrapStEth: [amount: bigint, recipient?: Address, skipRevert?: boolean];
-  unwrapStEth: [amount: bigint, recipient?: Address, skipRevert?: boolean];
+  wrapStEth: [amount: bigint, recipient: Address, skipRevert?: boolean];
+  unwrapStEth: [amount: bigint, recipient: Address, skipRevert?: boolean];
 
   /* AaveV2 */
   aaveV2Repay: [
@@ -283,7 +283,6 @@ export interface ActionArgs {
     nonce: bigint,
     deadline: bigint,
     signature: Hex | null,
-    manager?: Address,
     skipRevert?: boolean,
   ];
 
@@ -324,7 +323,6 @@ export interface ActionArgs {
     nonce: bigint,
     expiry: bigint,
     signature: Hex | null,
-    manager?: Address,
     skipRevert?: boolean,
   ];
 }

@@ -284,6 +284,7 @@ export const populateSubBundle = (
       args: {
         owner: sender,
         isAuthorized: true,
+        authorized: generalAdapter1,
       },
     });
 

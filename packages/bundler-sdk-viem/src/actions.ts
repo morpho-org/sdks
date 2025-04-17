@@ -508,7 +508,7 @@ export const encodeOperation = (
         case wNative: {
           actions.push({
             type: "wrapNative",
-            args: [amount, undefined, operation.skipRevert],
+            args: [amount, generalAdapter1, operation.skipRevert],
           });
 
           break;
@@ -516,7 +516,7 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "wrapStEth",
-            args: [amount, undefined, operation.skipRevert],
+            args: [amount, generalAdapter1, operation.skipRevert],
           });
 
           break;
@@ -528,7 +528,7 @@ export const encodeOperation = (
               amount,
               MathLib.MAX_UINT_256,
               zeroAddress,
-              undefined,
+              generalAdapter1,
               operation.skipRevert,
             ],
           });
@@ -564,7 +564,7 @@ export const encodeOperation = (
         case wNative: {
           actions.push({
             type: "unwrapNative",
-            args: [amount, undefined, operation.skipRevert],
+            args: [amount, generalAdapter1, operation.skipRevert],
           });
 
           break;
@@ -572,7 +572,7 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "unwrapStEth",
-            args: [amount, undefined, operation.skipRevert],
+            args: [amount, generalAdapter1, operation.skipRevert],
           });
 
           break;
