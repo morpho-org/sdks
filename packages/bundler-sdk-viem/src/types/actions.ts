@@ -46,13 +46,13 @@ export interface ActionArgs {
     asset: Address,
     recipient: Address,
     amount: bigint,
-    adapter?: Address,
+    adapter: Address,
     skipRevert?: boolean,
   ];
   erc20TransferFrom: [
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -77,7 +77,6 @@ export interface ActionArgs {
     amount: bigint,
     deadline: bigint,
     signature: Hex | null,
-    spender?: Address,
     skipRevert?: boolean,
   ];
   permitDai: [
@@ -86,7 +85,6 @@ export interface ActionArgs {
     expiry: bigint,
     allowed: boolean,
     signature: Hex | null,
-    spender?: Address,
     skipRevert?: boolean,
   ];
 
@@ -100,7 +98,7 @@ export interface ActionArgs {
   transferFrom2: [
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -138,13 +136,7 @@ export interface ActionArgs {
 
   /* Morpho */
   morphoSetAuthorizationWithSig: [
-    authorization: {
-      authorizer: Address;
-      authorized: Address;
-      isAuthorized: boolean;
-      nonce: bigint;
-      deadline: bigint;
-    },
+    authorization: Authorization,
     signature: Hex | null,
     skipRevert?: boolean,
   ];
@@ -218,21 +210,21 @@ export interface ActionArgs {
   ];
 
   /* Wrapped Native */
-  wrapNative: [amount: bigint, recipient?: Address, skipRevert?: boolean];
-  unwrapNative: [amount: bigint, recipient?: Address, skipRevert?: boolean];
+  wrapNative: [amount: bigint, recipient: Address, skipRevert?: boolean];
+  unwrapNative: [amount: bigint, recipient: Address, skipRevert?: boolean];
 
   /* stETH */
   stakeEth: [
     amount: bigint,
     minShares: bigint,
     referral: Address,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
   /* Wrapped stETH */
-  wrapStEth: [amount: bigint, recipient?: Address, skipRevert?: boolean];
-  unwrapStEth: [amount: bigint, recipient?: Address, skipRevert?: boolean];
+  wrapStEth: [amount: bigint, recipient: Address, skipRevert?: boolean];
+  unwrapStEth: [amount: bigint, recipient: Address, skipRevert?: boolean];
 
   /* AaveV2 */
   aaveV2Repay: [
@@ -245,7 +237,7 @@ export interface ActionArgs {
   aaveV2Withdraw: [
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -260,7 +252,7 @@ export interface ActionArgs {
   aaveV3Withdraw: [
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -275,13 +267,13 @@ export interface ActionArgs {
     underlying: Address,
     amount: bigint,
     maxIterations: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
   aaveV3OptimizerWithdrawCollateral: [
     underlying: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
   aaveV3OptimizerApproveManagerWithSig: [
@@ -291,7 +283,6 @@ export interface ActionArgs {
     nonce: bigint,
     deadline: bigint,
     signature: Hex | null,
-    manager?: Address,
     skipRevert?: boolean,
   ];
 
@@ -307,7 +298,7 @@ export interface ActionArgs {
     cToken: Address,
     amount: bigint,
     isEth: boolean,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -322,7 +313,7 @@ export interface ActionArgs {
     instance: Address,
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
   compoundV3AllowBySig: [
@@ -332,7 +323,6 @@ export interface ActionArgs {
     nonce: bigint,
     expiry: bigint,
     signature: Hex | null,
-    manager?: Address,
     skipRevert?: boolean,
   ];
 }

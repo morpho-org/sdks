@@ -59,6 +59,8 @@ export class MigratableSupplyPosition_AaveV3
     const {
       bundler3: { generalAdapter1, aaveV3CoreMigrationAdapter },
     } = getChainAddresses(chainId);
+    if (aaveV3CoreMigrationAdapter == null)
+      throw new Error("missing aaveV3CoreMigrationAdapter address");
 
     const aToken = this.aToken;
 

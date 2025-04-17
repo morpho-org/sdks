@@ -370,7 +370,12 @@ describe("Borrow position on AAVE V3", () => {
           },
           {
             type: "erc20Transfer",
-            args: [aWstEth, client.account.address, maxUint256],
+            args: [
+              aWstEth,
+              client.account.address,
+              maxUint256,
+              generalAdapter1,
+            ],
           },
         ]);
 
@@ -556,7 +561,7 @@ describe("Borrow position on AAVE V3", () => {
           },
           {
             type: "erc20Transfer",
-            args: [wstEth, client.account.address, maxUint256],
+            args: [wstEth, client.account.address, maxUint256, generalAdapter1],
           },
         ]);
 
@@ -728,7 +733,12 @@ describe("Borrow position on AAVE V3", () => {
             },
             {
               type: "erc20Transfer",
-              args: [aWstEth, client.account.address, maxUint256],
+              args: [
+                aWstEth,
+                client.account.address,
+                maxUint256,
+                generalAdapter1,
+              ],
             },
           ]);
 
@@ -929,7 +939,12 @@ describe("Borrow position on AAVE V3", () => {
             },
             {
               type: "erc20Transfer",
-              args: [wstEth, client.account.address, maxUint256],
+              args: [
+                wstEth,
+                client.account.address,
+                maxUint256,
+                generalAdapter1,
+              ],
             },
           ]);
 
@@ -1111,7 +1126,12 @@ describe("Borrow position on AAVE V3", () => {
             },
             {
               type: "erc20Transfer",
-              args: [aWstEth, client.account.address, maxUint256],
+              args: [
+                aWstEth,
+                client.account.address,
+                maxUint256,
+                generalAdapter1,
+              ],
             },
           ]);
 

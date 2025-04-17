@@ -101,7 +101,7 @@ export class MigratableSupplyPosition_CompoundV2
     )
       bundle.actions.push({
         type: "wrapNative",
-        args: [maxUint256],
+        args: [maxUint256, generalAdapter1],
       });
 
     bundle.actions.push({
