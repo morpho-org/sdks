@@ -298,7 +298,7 @@ describe("Supply position on COMPOUND V2", () => {
                   [NATIVE_ADDRESS, wNative].includes(underlying)
                     ? {
                         type: "wrapNative",
-                        args: [maxUint256],
+                        args: [maxUint256, generalAdapter1],
                       }
                     : null,
                   {
@@ -420,7 +420,7 @@ describe("Supply position on COMPOUND V2", () => {
                   [NATIVE_ADDRESS, wNative].includes(underlying)
                     ? {
                         type: "wrapNative",
-                        args: [maxUint256],
+                        args: [maxUint256, generalAdapter1],
                       }
                     : null,
                   {
