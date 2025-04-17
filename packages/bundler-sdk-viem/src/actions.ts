@@ -467,7 +467,7 @@ export const encodeOperation = (
       if (from === generalAdapter1) {
         actions.push({
           type: "erc20Transfer",
-          args: [address, to, amount, undefined, operation.skipRevert],
+          args: [address, to, amount, generalAdapter1, operation.skipRevert],
         });
 
         break;

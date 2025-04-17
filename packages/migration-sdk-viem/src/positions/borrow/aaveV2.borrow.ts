@@ -303,6 +303,7 @@ export class MigratableBorrowPosition_AaveV2
               : this.aToken.address,
             user,
             maxUint256,
+            generalAdapter1,
           ],
         },
       );

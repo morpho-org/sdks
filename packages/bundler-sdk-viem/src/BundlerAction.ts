@@ -102,7 +102,7 @@ export namespace BundlerAction {
         return BundlerAction.nativeTransfer(chainId, ...args);
       }
       case "erc20Transfer": {
-        return BundlerAction.erc20Transfer(chainId, ...args);
+        return BundlerAction.erc20Transfer(...args);
       }
       case "erc20TransferFrom": {
         return BundlerAction.erc20TransferFrom(chainId, ...args);
@@ -436,28 +436,21 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to transfer ERC20 tokens.
+   * Encodes a call to the GeneralAdapter1 to transfer ERC20 tokens.
    * @param chainId The chain id for which to encode the call.
    * @param asset The address of the ERC20 token to transfer.
    * @param recipient The address to send tokens to.
    * @param amount The amount of tokens to send.
-   * @param adapter The address of the adapter to use. Defaults to the chain's bundler3 general adapter.
+   * @param adapter The address of the adapter to use.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc20Transfer(
-    chainId: ChainId,
     asset: Address,
     recipient: Address,
     amount: bigint,
-    adapter?: Address,
+    adapter: Address,
     skipRevert = false,
   ): BundlerCall[] {
-    const {
-      bundler3: { generalAdapter1 },
-    } = getChainAddresses(chainId);
-
-    adapter ??= generalAdapter1;
-
     return [
       {
         to: adapter,
@@ -474,11 +467,11 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to transfer ERC20 tokens with `transferFrom`.
+   * Encodes a call to the GeneralAdapter1 to transfer ERC20 tokens with `transferFrom`.
    * @param chainId The chain id for which to encode the call.
    * @param asset The address of the ERC20 token to transfer.
    * @param amount The amount of tokens to send.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function erc20TransferFrom(
@@ -510,7 +503,7 @@ export namespace BundlerAction {
   /* Permit */
 
   /**
-   * Encodes a call to the Adapter to permit an ERC20 token.
+   * Encodes a call to the GeneralAdapter1 to permit an ERC20 token.
    * @param chainId The chain id for which to encode the call.
    * @param owner The address which owns the tokens.
    * @param asset The address of the ERC20 token to permit.
@@ -541,8 +534,8 @@ export namespace BundlerAction {
           functionName: "permit",
           args: [
             owner,
-            // Only the GeneralAdapter1 is safe enough to be permitted
-            // (the signature can be extracted and front-runned).
+            // Never permit any other address than the GeneralAdapter1 otherwise
+            // there are no guarantees that the signature can't be used independently.
             generalAdapter1,
             amount,
             deadline,
@@ -559,7 +552,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to permit DAI.
+   * Encodes a call to the GeneralAdapter1 to permit DAI.
    * @param chainId The chain id for which to encode the call.
    * @param owner The address which owns the tokens.
    * @param nonce The permit nonce used.
@@ -613,8 +606,8 @@ export namespace BundlerAction {
           functionName: "permit",
           args: [
             owner,
-            // Only the GeneralAdapter1 is safe enough to be permitted
-            // (the signature can be extracted and front-runned).
+            // Never permit any other address than the GeneralAdapter1 otherwise
+            // there are no guarantees that the signature can't be used independently.
             generalAdapter1,
             nonce,
             expiry,
@@ -634,7 +627,7 @@ export namespace BundlerAction {
   /* Permit2 */
 
   /**
-   * Encodes a call to the Adapter to permit ERC20 tokens via Permit2.
+   * Encodes a call to permit the chain's GeneralAdapter1 ERC20 tokens via Permit2.
    * @param chainId The chain id for which to encode the call.
    * @param owner The owner of ERC20 tokens.
    * @param permitSingle The permit details to submit to Permit2.
@@ -666,7 +659,7 @@ export namespace BundlerAction {
             {
               ...permitSingle,
               // Never permit any other address than the GeneralAdapter1 otherwise
-              // the signature can be extracted and used independently.
+              // there are no guarantees that the signature can't be used independently.
               spender: generalAdapter1,
             },
             signature,
@@ -680,12 +673,12 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to transfer ERC20 tokens via Permit2.
+   * Encodes a call to the GeneralAdapter1 to transfer ERC20 tokens via Permit2.
    * @param chainId The chain id for which to encode the call.
    * @param asset The address of the ERC20 token to transfer.
    * @param owner The owner of ERC20 tokens.
    * @param amount The amount of tokens to send.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function transferFrom2(
@@ -717,7 +710,7 @@ export namespace BundlerAction {
   /* ERC20 Wrapper */
 
   /**
-   * Encodes a call to the Adapter to wrap ERC20 tokens via the provided ERC20Wrapper.
+   * Encodes a call to the GeneralAdapter1 to wrap ERC20 tokens via the provided ERC20Wrapper.
    * @param chainId The chain id for which to encode the call.
    * @param wrapper The address of the ERC20 wrapper token.
    * @param underlying The address of the underlying ERC20 token.
@@ -779,7 +772,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to unwrap ERC20 tokens from the provided ERC20Wrapper.
+   * Encodes a call to the GeneralAdapter1 to unwrap ERC20 tokens from the provided ERC20Wrapper.
    * @param chainId The chain id for which to encode the call.
    * @param wrapper The address of the ERC20 wrapper token.
    * @param account The address to send the underlying ERC20 tokens.
@@ -843,7 +836,7 @@ export namespace BundlerAction {
   /* ERC4626 */
 
   /**
-   * Encodes a call to the Adapter to mint shares of the provided ERC4626 vault.
+   * Encodes a call to the GeneralAdapter1 to mint shares of the provided ERC4626 vault.
    * @param chainId The chain id for which to encode the call.
    * @param erc4626 The address of the ERC4626 vault.
    * @param shares The amount of shares to mint.
@@ -879,7 +872,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to deposit assets into the provided ERC4626 vault.
+   * Encodes a call to the GeneralAdapter1 to deposit assets into the provided ERC4626 vault.
    * @param chainId The chain id for which to encode the call.
    * @param erc4626 The address of the ERC4626 vault.
    * @param assets The amount of assets to deposit.
@@ -915,7 +908,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdraw assets from the provided ERC4626 vault.
+   * Encodes a call to the GeneralAdapter1 to withdraw assets from the provided ERC4626 vault.
    * @param chainId The chain id for which to encode the call.
    * @param erc4626 The address of the ERC4626 vault.
    * @param assets The amount of assets to withdraw.
@@ -953,7 +946,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to redeem shares from the provided ERC4626 vault.
+   * Encodes a call to the GeneralAdapter1 to redeem shares from the provided ERC4626 vault.
    * @param chainId The chain id for which to encode the call.
    * @param erc4626 The address of the ERC4626 vault.
    * @param shares The amount of shares to redeem.
@@ -993,7 +986,7 @@ export namespace BundlerAction {
   /* Morpho */
 
   /**
-   * Encodes a call to the Adapter to authorize an account on Morpho Blue.
+   * Encodes a call to authorize an account on Morpho Blue.
    * @param chainId The chain id for which to encode the call.
    * @param authorization The authorization details to submit to Morpho Blue.
    * @param signature The Ethers signature to authorize the account.
@@ -1030,7 +1023,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to supply to a Morpho Blue market.
+   * Encodes a call to the GeneralAdapter1 to supply to a Morpho Blue market.
    * @param chainId The chain id for which to encode the call.
    * @param market The market params to supply to.
    * @param assets The amount of assets to supply.
@@ -1075,7 +1068,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to supply collateral to a Morpho Blue market.
+   * Encodes a call to the GeneralAdapter1 to supply collateral to a Morpho Blue market.
    * @param chainId The chain id for which to encode the call.
    * @param market The market params to supply to.
    * @param assets The amount of assets to supply.
@@ -1116,7 +1109,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to borrow from a Morpho Blue market.
+   * Encodes a call to the GeneralAdapter1 to borrow from a Morpho Blue market.
    * @param chainId The chain id for which to encode the call.
    * @param market The market params to borrow from.
    * @param assets The amount of assets to borrow.
@@ -1154,7 +1147,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to repay to a Morpho Blue market.
+   * Encodes a call to the GeneralAdapter1 to repay to a Morpho Blue market.
    * @param chainId The chain id for which to encode the call.
    * @param market The market params to repay to.
    * @param assets The amount of assets to repay.
@@ -1199,7 +1192,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdraw from a Morpho Blue market.
+   * Encodes a call to the GeneralAdapter1 to withdraw from a Morpho Blue market.
    * @param chainId The chain id for which to encode the call.
    * @param market The market params to withdraw from.
    * @param assets The amount of assets to withdraw.
@@ -1237,7 +1230,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdraw collateral from a Morpho Blue market.
+   * Encodes a call to the GeneralAdapter1 to withdraw collateral from a Morpho Blue market.
    * @param chainId The chain id for which to encode the call.
    * @param market The market params to withdraw from.
    * @param assets The amount of assets to withdraw.
@@ -1271,7 +1264,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to flash loan from Morpho Blue.
+   * Encodes a call to the GeneralAdapter1 to flash loan from Morpho Blue.
    * @param chainId The chain id for which to encode the call.
    * @param asset The address of the ERC20 token to flash loan.
    * @param amount The amount of tokens to flash loan.
@@ -1318,7 +1311,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to trigger a public reallocation on the PublicAllocator.
+   * Encodes a call to trigger a public reallocation on the PublicAllocator.
    * @param chainId The chain id for which to encode the call.
    * @param vault The vault to reallocate.
    * @param fee The vault public reallocation fee.
@@ -1394,7 +1387,7 @@ export namespace BundlerAction {
    * Encodes a call to the Adapter to wrap native tokens (ETH to WETH on ethereum, MATIC to WMATIC on polygon, etc).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of native tokens to wrap (in wei).
-   * @param recipient The address to send tokens to. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The address to send tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function wrapNative(
@@ -1426,7 +1419,7 @@ export namespace BundlerAction {
    * Encodes a call to the Adapter to unwrap native tokens (WETH to ETH on ethereum, WMATIC to MATIC on polygon, etc).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of native tokens to unwrap (in wei).
-   * @param recipient The address to send tokens to. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The address to send tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function unwrapNative(
@@ -1462,7 +1455,7 @@ export namespace BundlerAction {
    * @param amount The amount of native tokens to stake (in wei).
    * @param maxSharePrice The maximum amount of wei to pay for minting 1 share (scaled by RAY).
    * @param referral The referral address to use.
-   * @param recipient The address to send stETH to. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The address to send stETH to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function stakeEth(
@@ -1498,7 +1491,7 @@ export namespace BundlerAction {
    * Encodes a call to the Adapter to wrap stETH (stETH to wstETH on ethereum).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of stETH to wrap (in wei).
-   * @param recipient The address to send wstETH to. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The address to send wstETH to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function wrapStEth(
@@ -1530,7 +1523,7 @@ export namespace BundlerAction {
    * Encodes a call to the Adapter to unwrap wstETH (wstETH to stETH on ethereum).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of wstETH to unwrap (in wei).
-   * @param recipient The address to send stETH to. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The address to send stETH to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function unwrapStEth(
@@ -1603,14 +1596,14 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param asset The asset to withdraw.
    * @param amount The amount of asset to withdraw.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV2Withdraw(
     chainId: ChainId,
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert = false,
   ): BundlerCall[] {
     const {
@@ -1677,18 +1670,18 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdrawn from AaveV3.
+   * Encodes a call to the AaveV3CoreMigrationAdapter to withdrawn from AaveV3.
    * @param chainId The chain id for which to encode the call.
    * @param asset The asset to withdraw.
    * @param amount The amount of asset to withdraw.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV3Withdraw(
     chainId: ChainId,
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert = false,
   ): BundlerCall[] {
     const {
@@ -1717,7 +1710,7 @@ export namespace BundlerAction {
   /* AaveV3 Optimizer */
 
   /**
-   * Encodes a call to the Adapter to repay a debt on Morpho's AaveV3Optimizer.
+   * Encodes a call to the AaveV3OptimizerMigrationAdapter to repay a debt on Morpho's AaveV3Optimizer.
    * @param chainId The chain id for which to encode the call.
    * @param underlying The underlying debt asset to repay.
    * @param amount The amount of debt to repay.
@@ -1753,12 +1746,12 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdraw from Morpho's AaveV3Optimizer.
+   * Encodes a call to the AaveV3OptimizerMigrationAdapter to withdraw from Morpho's AaveV3Optimizer.
    * @param chainId The chain id for which to encode the call.
    * @param underlying The underlying asset to withdraw.
    * @param amount The amount to withdraw.
    * @param maxIterations The maximum amount of iterations to use for the withdrawal.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV3OptimizerWithdraw(
@@ -1766,7 +1759,7 @@ export namespace BundlerAction {
     underlying: Address,
     amount: bigint,
     maxIterations: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert = false,
   ): BundlerCall[] {
     const {
@@ -1796,18 +1789,18 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdraw collateral from Morpho's AaveV3Optimizer.
+   * Encodes a call to the AaveV3OptimizerMigrationAdapter to withdraw collateral from Morpho's AaveV3Optimizer.
    * @param chainId The chain id for which to encode the call.
    * @param underlying The underlying asset to withdraw.
    * @param amount The amount to withdraw.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function aaveV3OptimizerWithdrawCollateral(
     chainId: ChainId,
     underlying: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert = false,
   ): BundlerCall[] {
     const {
@@ -1921,7 +1914,7 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param cToken The cToken on which to repay the debt.
    * @param amount The amount of debt to repay.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param onBehalf The account on behalf of which to repay.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function compoundV2Repay(
@@ -1964,7 +1957,7 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param cToken The cToken on which to withdraw.
    * @param amount The amount to withdraw.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function compoundV2Redeem(
@@ -1972,7 +1965,7 @@ export namespace BundlerAction {
     cToken: Address,
     amount: bigint,
     isEth: boolean,
-    recipient?: Address,
+    recipient: Address,
     skipRevert = false,
   ): BundlerCall[] {
     const {
@@ -2048,7 +2041,7 @@ export namespace BundlerAction {
    * @param instance The CompoundV3 instance on which to withdraw.
    * @param asset The asset to withdraw.
    * @param amount The amount to withdraw.
-   * @param recipient The recipient of ERC20 tokens. Defaults to the chain's bundler3 general adapter.
+   * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function compoundV3WithdrawFrom(
@@ -2056,7 +2049,7 @@ export namespace BundlerAction {
     instance: Address,
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert = false,
   ): BundlerCall[] {
     const {

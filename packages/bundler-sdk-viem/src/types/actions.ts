@@ -46,7 +46,7 @@ export interface ActionArgs {
     asset: Address,
     recipient: Address,
     amount: bigint,
-    adapter?: Address,
+    adapter: Address,
     skipRevert?: boolean,
   ];
   erc20TransferFrom: [
@@ -237,7 +237,7 @@ export interface ActionArgs {
   aaveV2Withdraw: [
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -252,7 +252,7 @@ export interface ActionArgs {
   aaveV3Withdraw: [
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -267,13 +267,13 @@ export interface ActionArgs {
     underlying: Address,
     amount: bigint,
     maxIterations: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
   aaveV3OptimizerWithdrawCollateral: [
     underlying: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
   aaveV3OptimizerApproveManagerWithSig: [
@@ -298,7 +298,7 @@ export interface ActionArgs {
     cToken: Address,
     amount: bigint,
     isEth: boolean,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
 
@@ -313,7 +313,7 @@ export interface ActionArgs {
     instance: Address,
     asset: Address,
     amount: bigint,
-    recipient?: Address,
+    recipient: Address,
     skipRevert?: boolean,
   ];
   compoundV3AllowBySig: [
