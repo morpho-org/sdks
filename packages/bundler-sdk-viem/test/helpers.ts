@@ -129,20 +129,20 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
 
   const { morpho, permit2, bundler3 } = getChainAddresses(startData.chainId);
 
-  const adapters = values(bundler3).filter(isDefined);
+  const bundler3Adapters = values(bundler3).filter(isDefined);
 
   await Promise.all(
     [...tokens].map(async (token) => {
       const [balances, allowances, authorizations] = await Promise.all([
         Promise.all(
-          adapters.map(async (adapter) => ({
+          bundler3Adapters.map(async (adapter) => ({
             adapter,
             balance: await client.balanceOf({ erc20: token, owner: adapter }),
           })),
         ),
         Promise.all(
           [...users].flatMap((user) =>
-            adapters.flatMap(async (adapter) => ({
+            bundler3Adapters.flatMap(async (adapter) => ({
               user,
               adapter,
               erc20Allowance: await client.allowance({
@@ -166,7 +166,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
         ),
         Promise.all(
           [...users].flatMap((user) =>
-            adapters.map(async (adapter) => ({
+            bundler3Adapters.map(async (adapter) => ({
               user,
               adapter,
               isAuthorized: await client.readContract({
