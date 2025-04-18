@@ -591,7 +591,10 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const market = dataAfter.getMarket(id);
+      // Accrue interest to calculate the expected share price.
+      const market = dataBefore
+        .getMarket(id)
+        .accrueInterest(dataBefore.block.timestamp);
       const maxSharePrice = market.toSupplyAssets(
         MathLib.wToRay(MathLib.WAD + slippage),
       );
@@ -620,7 +623,10 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const market = dataAfter.getMarket(id);
+      // Accrue interest to calculate the expected share price.
+      const market = dataBefore
+        .getMarket(id)
+        .accrueInterest(dataBefore.block.timestamp);
       const minSharePrice = market.toSupplyAssets(
         MathLib.wToRay(MathLib.WAD - slippage),
       );
@@ -648,7 +654,10 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const market = dataAfter.getMarket(id);
+      // Accrue interest to calculate the expected share price.
+      const market = dataBefore
+        .getMarket(id)
+        .accrueInterest(dataBefore.block.timestamp);
       const minSharePrice = market.toBorrowAssets(
         MathLib.wToRay(MathLib.WAD - slippage),
       );
@@ -676,7 +685,10 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const market = dataAfter.getMarket(id);
+      // Accrue interest to calculate the expected share price.
+      const market = dataBefore
+        .getMarket(id)
+        .accrueInterest(dataBefore.block.timestamp);
       const maxSharePrice = market.toBorrowAssets(
         MathLib.wToRay(MathLib.WAD + slippage),
       );
@@ -752,7 +764,10 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const vault = dataAfter.getVault(address);
+      // Accrue interest to calculate the expected share price.
+      const vault = dataBefore
+        .getAccrualVault(address)
+        .accrueInterest(dataBefore.block.timestamp);
       const maxSharePrice = vault.toAssets(
         MathLib.wToRay(MathLib.WAD + slippage),
       );
@@ -779,7 +794,10 @@ export const encodeOperation = (
         slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const vault = dataAfter.getVault(address);
+      // Accrue interest to calculate the expected share price.
+      const vault = dataBefore
+        .getAccrualVault(address)
+        .accrueInterest(dataBefore.block.timestamp);
       const minSharePrice = vault.toAssets(
         MathLib.wToRay(MathLib.WAD - slippage),
       );
