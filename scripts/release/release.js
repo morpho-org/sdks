@@ -1,3 +1,4 @@
+import { writeFileSync } from "node:fs";
 import { setOutput } from "@actions/core";
 import { writeChangelogString } from "conventional-changelog-writer";
 import {
@@ -18,8 +19,9 @@ if (releaseType) {
   setOutput("version", version);
   setOutput("branch", branch);
   setOutput("channel", channel);
-  setOutput(
-    "changelog",
+
+  writeFileSync(
+    "CHANGELOG.md",
     await writeChangelogString(
       commits,
       {
