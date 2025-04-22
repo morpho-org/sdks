@@ -382,12 +382,11 @@ describe("Borrow position on blue", () => {
           collateralAmount - collateralToMigrate,
         );
         expect(finalPositionTo.collateral).toEqual(collateralToMigrate);
-        expect(finalPositionFrom.borrowShares).approximately(
+        expect(finalPositionFrom.borrowShares).toEqual(
           initialPositionFrom.borrowShares -
             finalPositionFrom.market.toBorrowShares(borrowToMigrate),
-          2n,
         );
-        expect(finalPositionTo.borrowAssets).approximately(borrowToMigrate, 2n);
+        expect(finalPositionTo.borrowAssets).toEqual(borrowToMigrate + 1n);
       });
 
       testFn(
@@ -584,9 +583,8 @@ describe("Borrow position on blue", () => {
             borrowToMigrate,
             MathLib.WAD + slippageFrom,
           );
-          expect(finalPositionTo.borrowAssets).approximately(
-            expectedBorrowAssets,
-            2n,
+          expect(finalPositionTo.borrowAssets).toEqual(
+            expectedBorrowAssets + 1n,
           );
         },
       );
@@ -771,10 +769,7 @@ describe("Borrow position on blue", () => {
           initialPositionFrom.borrowAssets,
           MathLib.WAD + slippageFrom,
         );
-        expect(finalPositionTo.borrowAssets).approximately(
-          expectedBorrowAssets,
-          2n,
-        );
+        expect(finalPositionTo.borrowAssets).toEqual(expectedBorrowAssets + 1n);
         const [loanTokenBundlerBalance, collateralTokenBundlerBalance] =
           await Promise.all([
             client.balanceOf({

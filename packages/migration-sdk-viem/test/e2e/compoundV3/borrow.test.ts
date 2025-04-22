@@ -398,10 +398,7 @@ describe("Borrow position on COMPOUND V3", () => {
               ]);
 
               expect(finalPositionTo.collateral).toEqual(migratedCollateral);
-              expect(finalPositionTo.borrowAssets).approximately(
-                migratedBorrow,
-                2n,
-              );
+              expect(finalPositionTo.borrowAssets).toEqual(migratedBorrow + 1n);
 
               expect(finalCollateralFrom).toEqual(
                 collateralAmount - migratedCollateral,
@@ -738,10 +735,7 @@ describe("Borrow position on COMPOUND V3", () => {
               ]);
 
               expect(finalPositionTo.collateral).toEqual(migratedCollateral);
-              expect(finalPositionTo.borrowAssets).approximately(
-                migratedBorrow,
-                2n,
-              );
+              expect(finalPositionTo.borrowAssets).toEqual(migratedBorrow + 1n);
 
               expect(finalCollateralFrom).toEqual(
                 collateralAmount - migratedCollateral,

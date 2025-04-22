@@ -415,7 +415,7 @@ describe("Borrow position on AAVE V2", () => {
     ]);
 
     expect(finalPositionTo.collateral).toEqual(migratedCollateral);
-    expect(finalPositionTo.borrowAssets).approximately(migratedBorrow, 2n);
+    expect(finalPositionTo.borrowAssets).toEqual(migratedBorrow);
 
     expect(finalCollateralFrom).toBeGreaterThan(
       collateralAmount - migratedCollateral,
@@ -774,7 +774,7 @@ describe("Borrow position on AAVE V2", () => {
       ]);
 
       expect(finalPositionTo.collateral).toEqual(migratedCollateral);
-      expect(finalPositionTo.borrowAssets).approximately(migratedBorrow, 2n);
+      expect(finalPositionTo.borrowAssets).toEqual(migratedBorrow);
 
       expect(finalCollateralFrom).toBeGreaterThan(
         collateralAmount - migratedCollateral,
@@ -1146,7 +1146,7 @@ describe("Borrow position on AAVE V2", () => {
       ]);
 
       expect(finalPositionTo.collateral).toEqual(liquidity);
-      expect(finalPositionTo.borrowAssets).approximately(migratedBorrow, 2n);
+      expect(finalPositionTo.borrowAssets).toEqual(migratedBorrow);
 
       expect(finalCollateralFrom).toBeGreaterThan(collateralAmount - liquidity);
       expect(finalCollateralFrom).toBeLessThan(
