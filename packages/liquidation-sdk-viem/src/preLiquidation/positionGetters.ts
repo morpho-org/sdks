@@ -17,7 +17,7 @@ export async function getPreLiquidablePositions(
     (preLiquidation) => whitelistedMarkets.includes(preLiquidation.marketId),
   );
 
-  const preLiquidationPositions = await Promise.all(
+  const preLiquidationInstances = await Promise.all(
     preLiquidations.map(async (preLiquidation) => {
       const {
         markets: { items: market },
@@ -26,10 +26,9 @@ export async function getPreLiquidablePositions(
         marketId: preLiquidation.marketId,
       });
 
-      const loanAsset =
-        market !== null ? market[0]?.market.loanAsset : undefined;
+      const loanAsset = market !== null ? market[0]?.loanAsset : undefined;
       const collateralAsset =
-        market !== null ? market[0]?.market.collateralAsset : undefined;
+        market !== null ? market[0]?.collateralAsset : undefined;
 
       if (
         loanAsset === undefined ||
@@ -48,7 +47,7 @@ export async function getPreLiquidablePositions(
   );
 
   const preLiquidablePositions = await Promise.all(
-    preLiquidationPositions
+    preLiquidationInstances
       .filter((position) => position !== undefined)
       .map(async (preLiquidationPosition) => {
         return await Promise.all(

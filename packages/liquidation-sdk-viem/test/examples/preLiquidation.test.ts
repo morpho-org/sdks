@@ -400,19 +400,17 @@ describe("pre liquidation", () => {
             markets: {
               items: [
                 {
-                  market: {
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
+                  collateralAsset: {
+                    address: market.params.collateralToken,
+                    decimals: collateralToken.decimals,
+                    priceUsd: collateralPriceUsd,
+                    spotPriceEth: collateralPriceUsd / ethPriceUsd,
+                  },
+                  loanAsset: {
+                    address: market.params.loanToken,
+                    decimals: loanToken.decimals,
+                    priceUsd: null,
+                    spotPriceEth: 1 / ethPriceUsd,
                   },
                 },
               ],

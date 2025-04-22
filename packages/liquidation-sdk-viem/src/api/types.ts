@@ -69,24 +69,21 @@ export type GetMarketAssetsQuery = {
   markets: {
     __typename?: "PaginatedMarkets";
     items: Array<{
-      market: {
-        __typename?: "Market";
-        collateralAsset: {
-          __typename?: "Asset";
-          address: Types.Scalars["Address"]["output"];
-          decimals: number;
-          symbol: string;
-          priceUsd: number | null;
-          spotPriceEth: number | null;
-        } | null;
-        loanAsset: {
-          __typename?: "Asset";
-          address: Types.Scalars["Address"]["output"];
-          decimals: number;
-          symbol: string;
-          priceUsd: number | null;
-          spotPriceEth: number | null;
-        };
+      collateralAsset: {
+        __typename?: "Asset";
+        address: Types.Scalars["Address"]["output"];
+        decimals: number;
+        symbol: string;
+        priceUsd: number | null;
+        spotPriceEth: number | null;
+      } | null;
+      loanAsset: {
+        __typename?: "Asset";
+        address: Types.Scalars["Address"]["output"];
+        decimals: number;
+        symbol: string;
+        priceUsd: number | null;
+        spotPriceEth: number | null;
       };
     }> | null;
   };
