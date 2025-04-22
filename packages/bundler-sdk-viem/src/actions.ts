@@ -2,7 +2,6 @@ import {
   type Account,
   type Address,
   type Client,
-  type Hex,
   encodeFunctionData,
   erc20Abi,
   maxUint256,
@@ -12,17 +11,18 @@ import {
 
 import {
   ChainId,
+  DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
   NATIVE_ADDRESS,
   convexWrapperTokens,
   erc20WrapperTokens,
   getChainAddresses,
+  getUnwrappedToken,
 } from "@morpho-org/blue-sdk";
 import { Time, getValue } from "@morpho-org/morpho-ts";
 import {
   type MaybeDraft,
   type Operation,
-  type SimulationResult,
   type SimulationState,
   getCurrent,
   simulateOperation,
@@ -36,23 +36,24 @@ import {
   getPermitTypedData,
 } from "@morpho-org/blue-sdk-viem";
 import { signTypedData } from "viem/actions";
-import BundlerAction from "./BundlerAction.js";
-import { baseBundlerAbi } from "./abis.js";
+import { ActionBundle, ActionBundleRequirements } from "./ActionBundle.js";
+import { BundlerErrors } from "./errors.js";
 import type {
   Action,
-  ActionBundle,
   BundlerOperation,
   TransactionRequirement,
 } from "./types/index.js";
 
-export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<ChainId, Address[]>> = {
+export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<number, Address[]>> = {
   [ChainId.EthMainnet]: [
     "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
     "0xD533a949740bb3306d119CC777fa900bA034cd52", // CRV
   ],
 };
 
-const MAX_TOKEN_APPROVALS: Partial<Record<ChainId, Record<Address, bigint>>> = {
+export const MAX_TOKEN_APPROVALS: Partial<
+  Record<number, Record<Address, bigint>>
+> = {
   [ChainId.EthMainnet]: {
     "0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984": MathLib.maxUint(96), // UNI --> see https://github.com/Uniswap/governance/blob/eabd8c71ad01f61fb54ed6945162021ee419998e/contracts/Uni.sol#L154
   },
@@ -66,7 +67,11 @@ const encodeErc20Approval = (
   data: MaybeDraft<SimulationState>,
 ) => {
   const { chainId } = data;
-  const { morpho, bundler, permit2 } = getChainAddresses(chainId);
+  const {
+    morpho,
+    bundler3: { generalAdapter1 },
+    permit2,
+  } = getChainAddresses(chainId);
 
   amount = MathLib.min(
     amount,
@@ -79,8 +84,8 @@ const encodeErc20Approval = (
     const contract =
       spender === morpho
         ? "morpho"
-        : spender === bundler
-          ? "bundler"
+        : spender === generalAdapter1
+          ? "bundler3.generalAdapter1"
           : spender === permit2
             ? "permit2"
             : undefined;
@@ -133,8 +138,7 @@ export const encodeOperation = (
   const deadline = Time.timestamp() + Time.s.from.h(24n);
   const {
     morpho,
-    bundler,
-    publicAllocator,
+    bundler3: { bundler3, generalAdapter1 },
     permit2,
     wNative,
     dai,
@@ -142,12 +146,8 @@ export const encodeOperation = (
     stEth,
   } = getChainAddresses(chainId);
 
-  let value = 0n;
   const actions: Action[] = [];
-  const requirements: ActionBundle["requirements"] = {
-    signatures: [],
-    txs: [],
-  };
+  const requirements = new ActionBundleRequirements();
 
   let callbackBundle: ActionBundle | undefined;
 
@@ -183,22 +183,26 @@ export const encodeOperation = (
 
   switch (operation.type) {
     case "Blue_SetAuthorization": {
-      const { owner } = operation.args;
+      const { owner, isAuthorized, authorized } = operation.args;
+
+      // Never authorize bundler3 otherwise the signature can be used independently.
+      if (authorized === bundler3)
+        throw new BundlerErrors.UnexpectedSignature(authorized);
 
       if (supportsSignature) {
         const ownerData = dataBefore.getUser(owner);
 
         const authorization = {
           authorizer: owner,
-          authorized: bundler,
-          isAuthorized: true,
+          authorized,
+          isAuthorized,
           deadline,
           nonce: ownerData.morphoNonce,
         };
 
         const action: Action = {
           type: "morphoSetAuthorizationWithSig",
-          args: [authorization, null],
+          args: [authorization, null, operation.skipRevert],
         };
 
         actions.push(action);
@@ -206,10 +210,11 @@ export const encodeOperation = (
         requirements.signatures.push({
           action,
           async sign(client: Client, account: Account = client.account!) {
-            if (action.args[1] != null) return action.args[1];
+            let signature = action.args[1];
+            if (signature != null) return signature;
 
             const typedData = getAuthorizationTypedData(authorization, chainId);
-            const signature = await signTypedData(client, {
+            signature = await signTypedData(client, {
               ...typedData,
               account,
             });
@@ -231,13 +236,13 @@ export const encodeOperation = (
 
       requirements.txs.push({
         type: "morphoSetAuthorization",
-        args: [bundler, true],
+        args: [authorized, isAuthorized],
         tx: {
           to: morpho,
           data: encodeFunctionData({
             abi: blueAbi,
             functionName: "setAuthorization",
-            args: [bundler, true],
+            args: [authorized, isAuthorized],
           }),
         },
       });
@@ -265,16 +270,35 @@ export const encodeOperation = (
 
       const { amount, spender, nonce } = operation.args;
 
+      // Never permit any other address than the GeneralAdapter1 otherwise
+      // the signature can be used independently.
+      if (spender !== generalAdapter1)
+        throw new BundlerErrors.UnexpectedSignature(spender);
+
       if (supportsSignature) {
         const action: Action =
           address === dai
             ? {
                 type: "permitDai",
-                args: [nonce, deadline, true, null],
+                args: [
+                  sender,
+                  nonce,
+                  deadline,
+                  true,
+                  null,
+                  operation.skipRevert,
+                ],
               }
             : {
                 type: "permit",
-                args: [address, amount, deadline, null],
+                args: [
+                  sender,
+                  address,
+                  amount,
+                  deadline,
+                  null,
+                  operation.skipRevert,
+                ],
               };
 
         actions.push(action);
@@ -284,9 +308,9 @@ export const encodeOperation = (
         requirements.signatures.push({
           action,
           async sign(client: Client, account: Account = client.account!) {
-            if (action.args[3] != null) return action.args[3]; // action is already signed
+            let signature = action.args[4];
+            if (signature != null) return signature; // action is already signed
 
-            let signature: Hex;
             if (address === dai) {
               const typedData = getDaiPermitTypedData(
                 {
@@ -332,7 +356,7 @@ export const encodeOperation = (
               });
             }
 
-            return (action.args[3] = signature);
+            return (action.args[4] = signature);
           },
         });
 
@@ -351,12 +375,13 @@ export const encodeOperation = (
       // Native token cannot be permitted.
       if (address === NATIVE_ADDRESS) break;
 
-      const { amount, spender, expiration, nonce } = operation.args;
+      const { amount, expiration, nonce } = operation.args;
 
       if (supportsSignature) {
         const action: Action = {
           type: "approve2",
           args: [
+            sender,
             {
               details: {
                 token: address,
@@ -364,10 +389,10 @@ export const encodeOperation = (
                 nonce: Number(nonce),
                 expiration: Number(expiration),
               },
-              spender,
               sigDeadline: deadline,
             },
             null,
+            operation.skipRevert,
           ],
         };
 
@@ -376,12 +401,16 @@ export const encodeOperation = (
         requirements.signatures.push({
           action,
           async sign(client: Client, account: Account = client.account!) {
-            const { details, spender, sigDeadline } = action.args[0];
+            const { details, sigDeadline } = action.args[1];
 
-            if (action.args[1] != null) return action.args[1]; // action is already signed
+            let signature = action.args[2];
+            if (signature != null) return signature; // action is already signed
+
             const typedData = getPermit2PermitTypedData(
               {
-                spender,
+                // Never permit any other address than the GeneralAdapter1 otherwise
+                // the signature can be used independently.
+                spender: generalAdapter1,
                 allowance: details.amount,
                 erc20: details.token,
                 nonce: details.nonce,
@@ -390,7 +419,7 @@ export const encodeOperation = (
               },
               chainId,
             );
-            const signature = await signTypedData(client, {
+            signature = await signTypedData(client, {
               ...typedData,
               account,
             });
@@ -401,7 +430,7 @@ export const encodeOperation = (
               signature,
             });
 
-            return (action.args[1] = signature);
+            return (action.args[2] = signature);
           },
         });
 
@@ -411,7 +440,13 @@ export const encodeOperation = (
       // Signatures are not supported, fallback to standard approval.
 
       requirements.txs.push(
-        ...encodeErc20Approval(address, sender, spender, amount, dataBefore),
+        ...encodeErc20Approval(
+          address,
+          sender,
+          generalAdapter1,
+          amount,
+          dataBefore,
+        ),
       );
 
       break;
@@ -419,97 +454,50 @@ export const encodeOperation = (
     case "Erc20_Transfer": {
       const { amount, from, to } = operation.args;
 
+      if (address === NATIVE_ADDRESS) {
+        actions.push({
+          type: "nativeTransfer",
+          args: [from, to, amount, operation.skipRevert],
+        });
+
+        break;
+      }
+
       // Output transfer from the bundler.
-      if (from === bundler) {
-        if (address === NATIVE_ADDRESS) {
-          actions.push({
-            type: "nativeTransfer",
-            args: [to, amount],
-          });
-
-          break;
-        }
-
+      if (from === generalAdapter1) {
         actions.push({
           type: "erc20Transfer",
-          args: [address, to, amount],
+          args: [address, to, amount, generalAdapter1, operation.skipRevert],
         });
 
         break;
       }
 
-      // Input transfer to the bundler.
-      if (to === bundler) {
-        // Native token transfer is added to the call value (thus batched at the start of the bundle).
-        if (address === NATIVE_ADDRESS) {
-          value += amount;
-
-          break;
-        }
-
-        actions.push({
-          type: "erc20TransferFrom",
-          args: [address, amount],
-        });
-
-        break;
-      }
-
-      // Any other transfer is ignored.
+      actions.push({
+        type: "erc20TransferFrom",
+        args: [address, amount, to, operation.skipRevert],
+      });
 
       break;
     }
     case "Erc20_Transfer2": {
-      const { amount, from, to } = operation.args;
+      const { amount, to } = operation.args;
 
-      // Output transfer2 from the bundler is treated like a standard output transfer.
-      if (from === bundler) {
-        if (address === NATIVE_ADDRESS) {
-          actions.push({
-            type: "nativeTransfer",
-            args: [to, amount],
-          });
-
-          break;
-        }
-
+      if (supportsSignature) {
         actions.push({
-          type: "erc20Transfer",
-          args: [address, to, amount],
+          type: "transferFrom2",
+          args: [address, amount, to, operation.skipRevert],
         });
 
         break;
       }
 
-      // Input transfer2 to the bundler.
-      if (to === bundler) {
-        // Native token transfer is added to the call value (thus batched at the start of the bundle).
-        if (address === NATIVE_ADDRESS) {
-          value += amount;
+      // Signatures are not supported, fallback to standard transfer.
 
-          break;
-        }
-
-        if (supportsSignature) {
-          actions.push({
-            type: "transferFrom2",
-            args: [address, amount],
-          });
-
-          break;
-        }
-
-        // Signatures are not supported, fallback to standard transfer.
-
-        actions.push({
-          type: "erc20TransferFrom",
-          args: [address, amount],
-        });
-
-        break;
-      }
-
-      // Any other transfer is ignored.
+      actions.push({
+        type: "erc20TransferFrom",
+        args: [address, amount, to, operation.skipRevert],
+      });
 
       break;
     }
@@ -520,7 +508,7 @@ export const encodeOperation = (
         case wNative: {
           actions.push({
             type: "wrapNative",
-            args: [amount],
+            args: [amount, generalAdapter1, operation.skipRevert],
           });
 
           break;
@@ -528,7 +516,7 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "wrapStEth",
-            args: [amount],
+            args: [amount, generalAdapter1, operation.skipRevert],
           });
 
           break;
@@ -536,23 +524,33 @@ export const encodeOperation = (
         case stEth: {
           actions.push({
             type: "stakeEth",
-            args: [amount, 0n, zeroAddress],
+            args: [
+              amount,
+              MathLib.MAX_UINT_256,
+              zeroAddress,
+              generalAdapter1,
+              operation.skipRevert,
+            ],
           });
 
           break;
         }
         default: {
-          if (erc20WrapperTokens[chainId].has(address)) {
+          if (erc20WrapperTokens[chainId]?.has(address)) {
+            const underlying = getUnwrappedToken(address, chainId);
+            if (underlying == null)
+              throw Error(`unknown wrapped token: ${address}`);
+
             actions.push({
               type: "erc20WrapperDepositFor",
-              args: [address, amount],
+              args: [address, underlying, amount, operation.skipRevert],
             });
 
             break;
           }
 
           // Convex token wrapping is executed onchain along with supplyCollateral, via depositFor.
-          if (!convexWrapperTokens[chainId].has(address))
+          if (!convexWrapperTokens[chainId]?.has(address))
             throw Error(`unexpected token wrap: ${address}`);
         }
       }
@@ -566,7 +564,7 @@ export const encodeOperation = (
         case wNative: {
           actions.push({
             type: "unwrapNative",
-            args: [amount],
+            args: [amount, generalAdapter1, operation.skipRevert],
           });
 
           break;
@@ -574,18 +572,18 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "unwrapStEth",
-            args: [amount],
+            args: [amount, generalAdapter1, operation.skipRevert],
           });
 
           break;
         }
         default: {
-          if (!erc20WrapperTokens[chainId].has(address))
+          if (!erc20WrapperTokens[chainId]?.has(address))
             throw Error(`unexpected token unwrap: ${address}`);
 
           actions.push({
             type: "erc20WrapperWithdrawTo",
-            args: [address, receiver, amount],
+            args: [address, receiver, amount, operation.skipRevert],
           });
         }
       }
@@ -593,27 +591,32 @@ export const encodeOperation = (
       break;
     }
     case "Blue_Supply": {
-      const { id, assets = 0n, shares = 0n, onBehalf } = operation.args;
+      const {
+        id,
+        assets = 0n,
+        shares = 0n,
+        onBehalf,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
+      } = operation.args;
 
-      const { params } = dataBefore.getMarket(id);
-
-      // Already takes slippage into account.
-      const slippageAmount =
-        shares === 0n
-          ? dataAfter.getPosition(onBehalf, id).supplyShares -
-            dataBefore.getPosition(onBehalf, id).supplyShares
-          : dataAfter.getHolding(sender, params.loanToken).balance -
-            dataBefore.getHolding(sender, params.loanToken).balance;
+      // Accrue interest to calculate the expected share price.
+      const market = dataBefore
+        .getMarket(id)
+        .accrueInterest(dataBefore.block.timestamp);
+      const maxSharePrice = market.toSupplyAssets(
+        MathLib.wToRay(MathLib.WAD + slippage),
+      );
 
       actions.push({
         type: "morphoSupply",
         args: [
-          params,
+          market.params,
           assets,
           shares,
-          slippageAmount,
+          maxSharePrice,
           onBehalf,
           callbackBundle?.actions ?? [],
+          operation.skipRevert,
         ],
       });
 
@@ -624,23 +627,28 @@ export const encodeOperation = (
         id,
         assets = 0n,
         shares = 0n,
-        onBehalf,
         receiver,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const { params } = dataBefore.getMarket(id);
-
-      // Already takes slippage into account.
-      const slippageAmount =
-        shares === 0n
-          ? dataBefore.getPosition(onBehalf, id).supplyShares -
-            dataAfter.getPosition(onBehalf, id).supplyShares
-          : dataBefore.getHolding(sender, params.loanToken).balance -
-            dataAfter.getHolding(sender, params.loanToken).balance;
+      // Accrue interest to calculate the expected share price.
+      const market = dataBefore
+        .getMarket(id)
+        .accrueInterest(dataBefore.block.timestamp);
+      const minSharePrice = market.toSupplyAssets(
+        MathLib.wToRay(MathLib.WAD - slippage),
+      );
 
       actions.push({
         type: "morphoWithdraw",
-        args: [params, assets, shares, slippageAmount, receiver],
+        args: [
+          market.params,
+          assets,
+          shares,
+          minSharePrice,
+          receiver,
+          operation.skipRevert,
+        ],
       });
 
       break;
@@ -650,49 +658,59 @@ export const encodeOperation = (
         id,
         assets = 0n,
         shares = 0n,
-        onBehalf,
         receiver,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
       } = operation.args;
 
-      const { params } = dataBefore.getMarket(id);
-
-      // Already takes slippage into account.
-      const slippageAmount =
-        shares === 0n
-          ? dataAfter.getPosition(onBehalf, id).borrowShares -
-            dataBefore.getPosition(onBehalf, id).borrowShares
-          : dataAfter.getHolding(sender, params.loanToken).balance -
-            dataBefore.getHolding(sender, params.loanToken).balance;
+      // Accrue interest to calculate the expected share price.
+      const market = dataBefore
+        .getMarket(id)
+        .accrueInterest(dataBefore.block.timestamp);
+      const minSharePrice = market.toBorrowAssets(
+        MathLib.wToRay(MathLib.WAD - slippage),
+      );
 
       actions.push({
         type: "morphoBorrow",
-        args: [params, assets, shares, slippageAmount, receiver],
+        args: [
+          market.params,
+          assets,
+          shares,
+          minSharePrice,
+          receiver,
+          operation.skipRevert,
+        ],
       });
 
       break;
     }
     case "Blue_Repay": {
-      const { id, assets = 0n, shares = 0n, onBehalf } = operation.args;
+      const {
+        id,
+        assets = 0n,
+        shares = 0n,
+        onBehalf,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
+      } = operation.args;
 
-      const { params } = dataBefore.getMarket(id);
-
-      // Already takes slippage into account.
-      const slippageAmount =
-        shares === 0n
-          ? dataBefore.getPosition(onBehalf, id).borrowShares -
-            dataAfter.getPosition(onBehalf, id).borrowShares
-          : dataBefore.getHolding(sender, params.loanToken).balance -
-            dataAfter.getHolding(sender, params.loanToken).balance;
+      // Accrue interest to calculate the expected share price.
+      const market = dataBefore
+        .getMarket(id)
+        .accrueInterest(dataBefore.block.timestamp);
+      const maxSharePrice = market.toBorrowAssets(
+        MathLib.wToRay(MathLib.WAD + slippage),
+      );
 
       actions.push({
         type: "morphoRepay",
         args: [
-          params,
+          market.params,
           assets,
           shares,
-          slippageAmount,
+          maxSharePrice,
           onBehalf,
           callbackBundle?.actions ?? [],
+          operation.skipRevert,
         ],
       });
 
@@ -703,10 +721,19 @@ export const encodeOperation = (
 
       const { params } = dataBefore.getMarket(id);
 
-      if (convexWrapperTokens[chainId].has(params.collateralToken)) {
+      if (convexWrapperTokens[chainId]?.has(params.collateralToken)) {
+        const underlying = getUnwrappedToken(address, chainId);
+        if (underlying == null)
+          throw Error(`unknown wrapped token: ${address}`);
+
         actions.push({
           type: "erc20WrapperDepositFor",
-          args: [params.collateralToken, assets],
+          args: [
+            params.collateralToken,
+            underlying,
+            assets,
+            operation.skipRevert,
+          ],
         });
 
         break;
@@ -714,7 +741,13 @@ export const encodeOperation = (
 
       actions.push({
         type: "morphoSupplyCollateral",
-        args: [params, assets, onBehalf, callbackBundle?.actions ?? []],
+        args: [
+          params,
+          assets,
+          onBehalf,
+          callbackBundle?.actions ?? [],
+          operation.skipRevert,
+        ],
       });
 
       break;
@@ -726,74 +759,86 @@ export const encodeOperation = (
 
       actions.push({
         type: "morphoWithdrawCollateral",
-        args: [params, assets, receiver],
+        args: [params, assets, receiver, operation.skipRevert],
       });
 
       break;
     }
     case "MetaMorpho_Deposit": {
-      const { assets = 0n, shares = 0n, owner } = operation.args;
+      const {
+        assets = 0n,
+        shares = 0n,
+        owner,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
+      } = operation.args;
 
-      if (shares === 0n) {
-        // Already takes slippage into account.
-        const expectedShares =
-          dataAfter.getHolding(owner, address).balance -
-          dataBefore.getHolding(owner, address).balance;
+      // Accrue interest to calculate the expected share price.
+      const vault = dataBefore
+        .getAccrualVault(address)
+        .accrueInterest(dataBefore.block.timestamp);
+      const maxSharePrice = vault.toAssets(
+        MathLib.wToRay(MathLib.WAD + slippage),
+      );
 
+      if (shares === 0n)
         actions.push({
           type: "erc4626Deposit",
-          args: [address, assets, expectedShares, owner],
+          args: [address, assets, maxSharePrice, owner, operation.skipRevert],
         });
-      } else {
-        const vaultConfig = dataBefore.getVault(address);
-
-        // Already takes slippage into account.
-        const expectedAssets =
-          dataBefore.getHolding(sender, vaultConfig.asset).balance -
-          dataAfter.getHolding(sender, vaultConfig.asset).balance;
-
+      else
         actions.push({
           type: "erc4626Mint",
-          args: [address, shares, expectedAssets, owner],
+          args: [address, shares, maxSharePrice, owner, operation.skipRevert],
         });
-      }
 
       break;
     }
     case "MetaMorpho_Withdraw": {
-      const { assets = 0n, shares = 0n, owner, receiver } = operation.args;
+      const {
+        assets = 0n,
+        shares = 0n,
+        owner,
+        receiver,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
+      } = operation.args;
 
-      if (assets > 0n) {
-        // Already takes slippage into account.
-        const expectedShares =
-          dataBefore.getHolding(owner, address).balance -
-          dataAfter.getHolding(owner, address).balance;
+      // Accrue interest to calculate the expected share price.
+      const vault = dataBefore
+        .getAccrualVault(address)
+        .accrueInterest(dataBefore.block.timestamp);
+      const minSharePrice = vault.toAssets(
+        MathLib.wToRay(MathLib.WAD - slippage),
+      );
 
+      if (assets > 0n)
         actions.push({
           type: "erc4626Withdraw",
-          args: [address, assets, expectedShares, receiver, owner],
+          args: [
+            address,
+            assets,
+            minSharePrice,
+            receiver,
+            owner,
+            operation.skipRevert,
+          ],
         });
-      } else {
-        const vaultConfig = dataBefore.getVault(address);
-
-        // Already takes slippage into account.
-        const expectedAssets =
-          dataAfter.getHolding(receiver, vaultConfig.asset).balance -
-          dataBefore.getHolding(receiver, vaultConfig.asset).balance;
-
+      else
         actions.push({
           type: "erc4626Redeem",
-          args: [address, shares, expectedAssets, receiver, owner],
+          args: [
+            address,
+            shares,
+            minSharePrice,
+            receiver,
+            owner,
+            operation.skipRevert,
+          ],
         });
-      }
 
       break;
     }
     case "MetaMorpho_PublicReallocate": {
       const { withdrawals, supplyMarketId } = operation.args;
-
-      if (publicAllocator == null)
-        throw Error(`unknown public allocator on chain ${chainId}`);
 
       const { fee } = dataBefore.getVault(address).publicAllocatorConfig!;
 
@@ -802,7 +847,6 @@ export const encodeOperation = (
       actions.push({
         type: "reallocateTo",
         args: [
-          publicAllocator,
           address,
           fee,
           withdrawals.map(({ id, assets }) => ({
@@ -810,6 +854,7 @@ export const encodeOperation = (
             amount: assets,
           })),
           dataBefore.getMarket(supplyMarketId).params,
+          operation.skipRevert,
         ],
       });
 
@@ -819,7 +864,6 @@ export const encodeOperation = (
 
   return {
     dataAfter,
-    value,
     actions,
     requirements,
   };
@@ -829,47 +873,23 @@ export function encodeBundle(
   operations: BundlerOperation[],
   startData: MaybeDraft<SimulationState>,
   supportsSignature = true,
-): ActionBundle {
-  const { chainId } = startData;
-  const { bundler } = getChainAddresses(chainId);
-
-  let value = 0n;
-  const actions: Action[] = [];
-  const requirements: ActionBundle["requirements"] = {
-    signatures: [],
-    txs: [],
-  };
-
-  const steps: SimulationResult = [startData];
+) {
+  const bundle = new ActionBundle([startData]);
 
   for (let index = 0; index < operations.length; ++index) {
-    const bundle = encodeOperation(
+    const { dataAfter, actions, requirements } = encodeOperation(
       operations[index]!,
-      steps[index]!,
+      bundle.steps![index]!,
       supportsSignature,
       index,
     );
 
-    steps.push(bundle.dataAfter);
+    bundle.steps!.push(dataAfter);
 
-    value += bundle.value;
-    actions.push(...bundle.actions);
-    requirements.signatures.push(...bundle.requirements.signatures);
-    requirements.txs.push(...bundle.requirements.txs);
+    bundle.actions.push(...actions);
+    bundle.requirements.signatures.push(...requirements.signatures);
+    bundle.requirements.txs.push(...requirements.txs);
   }
 
-  return {
-    steps,
-    actions,
-    requirements,
-    tx: () => ({
-      to: bundler,
-      value,
-      data: encodeFunctionData({
-        abi: baseBundlerAbi,
-        functionName: "multicall",
-        args: [actions.map(BundlerAction.encode)],
-      }),
-    }),
-  };
+  return bundle;
 }

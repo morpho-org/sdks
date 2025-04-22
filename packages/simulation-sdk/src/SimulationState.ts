@@ -84,59 +84,71 @@ export interface MinimalBlock {
 }
 
 export interface InputSimulationState {
-  chainId: ChainId;
+  chainId: number;
   block: MinimalBlock;
   global?: { feeRecipient?: Address };
-  markets?: Record<MarketId, Market>;
-  users?: Record<Address, User>;
-  tokens?: Record<Address, Token>;
-  vaults?: Record<Address, Vault>;
+  markets?: Record<MarketId, Market | undefined>;
+  users?: Record<Address, User | undefined>;
+  tokens?: Record<Address, Token | undefined>;
+  vaults?: Record<Address, Vault | undefined>;
   /**
    * Positions indexed by user then by market.
    */
-  positions?: Record<Address, Record<MarketId, Position>>;
+  positions?: Record<Address, Record<MarketId, Position | undefined>>;
   /**
    * Holdings indexed by user then by token.
    */
-  holdings?: Record<Address, Record<Address, Holding>>;
+  holdings?: Record<Address, Record<Address, Holding | undefined>>;
   /**
    * VaultMarketConfigs indexed by vault then by market.
    */
-  vaultMarketConfigs?: Record<Address, Record<MarketId, VaultMarketConfig>>;
+  vaultMarketConfigs?: Record<
+    Address,
+    Record<MarketId, VaultMarketConfig | undefined>
+  >;
   /**
    * VaultUsers indexed by vault then by user.
    */
-  vaultUsers?: Record<Address, Record<Address, VaultUser>>;
+  vaultUsers?: Record<Address, Record<Address, VaultUser | undefined>>;
 }
 
 export class SimulationState implements InputSimulationState {
-  public readonly chainId: ChainId;
+  public readonly chainId: number;
   public block: MinimalBlock;
 
   public readonly global: { feeRecipient?: Address };
-  public readonly markets: Record<MarketId, Market>;
-  public readonly users: Record<Address, User>;
-  public readonly tokens: Record<Address, Token>;
-  public readonly vaults: Record<Address, Vault>;
+  public readonly markets: Record<MarketId, Market | undefined>;
+  public readonly users: Record<Address, User | undefined>;
+  public readonly tokens: Record<Address, Token | undefined>;
+  public readonly vaults: Record<Address, Vault | undefined>;
   /**
    * Positions indexed by user then by market.
    */
-  public readonly positions: Record<Address, Record<MarketId, Position>>;
+  public readonly positions: Record<
+    Address,
+    Record<MarketId, Position | undefined>
+  >;
   /**
    * Holdings indexed by user then by token.
    */
-  public readonly holdings: Record<Address, Record<Address, Holding>>;
+  public readonly holdings: Record<
+    Address,
+    Record<Address, Holding | undefined>
+  >;
   /**
    * VaultMarketConfigs indexed by vault then by market.
    */
   public readonly vaultMarketConfigs: Record<
     Address,
-    Record<MarketId, VaultMarketConfig>
+    Record<MarketId, VaultMarketConfig | undefined>
   >;
   /**
    * VaultUsers indexed by vault then by user.
    */
-  public readonly vaultUsers: Record<Address, Record<Address, VaultUser>>;
+  public readonly vaultUsers: Record<
+    Address,
+    Record<Address, VaultUser | undefined>
+  >;
 
   constructor({
     chainId,
@@ -329,9 +341,11 @@ export class SimulationState implements InputSimulationState {
 
       if (!accountBundlerBalance) return balance;
 
-      const { bundler } = getChainAddresses(this.chainId);
+      const {
+        bundler3: { generalAdapter1 },
+      } = getChainAddresses(this.chainId);
       _try(() => {
-        balance += this.getHolding(bundler, token).balance;
+        balance += this.getHolding(generalAdapter1, token).balance;
       }, UnknownDataError);
 
       return balance;
@@ -438,7 +452,12 @@ export class SimulationState implements InputSimulationState {
       const { wstEth, stEth, wNative } = getChainAddresses(this.chainId);
 
       // staking is only available on mainnet for now
-      if (this.chainId === ChainId.EthMainnet && token === wstEth && stEth) {
+      if (
+        this.chainId === ChainId.EthMainnet &&
+        token === wstEth &&
+        wNative != null &&
+        stEth != null
+      ) {
         _try(() => {
           const wEthBalance = this.getBundleBalance(user, wNative);
 
@@ -597,8 +616,10 @@ export class SimulationState implements InputSimulationState {
                         defaultMaxWithdrawalUtilization,
                     );
 
-                  const maxOut = data.getVaultMarketConfig(vault, srcMarketId)
-                    .publicAllocatorConfig.maxOut;
+                  const srcPublicAllocatorConfig = data.getVaultMarketConfig(
+                    vault,
+                    srcMarketId,
+                  ).publicAllocatorConfig;
 
                   return {
                     id: srcMarketId,
@@ -606,8 +627,8 @@ export class SimulationState implements InputSimulationState {
                       srcPosition.supplyAssets, // Cannot reallocate more than what the vault supplied on the source market.
                       targetUtilizationLiquidity, // Cannot reallocate more than the liquidity directly available on the source market under target utilization.
                       suppliable, // Cannot supply over the destination market's configured cap.
-                      publicAllocatorConfig.maxIn, // Cannot supply over the destination market's configured maxIn.
-                      maxOut, // Cannot reallocate more than the source market's configured maxOut.
+                      publicAllocatorConfig?.maxIn ?? 0n, // Cannot supply over the destination market's configured maxIn.
+                      srcPublicAllocatorConfig?.maxOut ?? 0n, // Cannot reallocate more than the source market's configured maxOut.
                     ),
                   };
                 } catch {

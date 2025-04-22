@@ -1,5 +1,5 @@
 import type { PartialApiToken } from "@morpho-org/blue-api-sdk";
-import { ChainUtils, type MarketId } from "@morpho-org/blue-sdk";
+import type { MarketId } from "@morpho-org/blue-sdk";
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
@@ -11,7 +11,7 @@ export async function getPreLiquidablePositions(
   client: Client<Transport, Chain, Account>,
   whitelistedMarkets: MarketId[],
 ) {
-  const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
+  const chainId = client.chain.id;
 
   const preLiquidations = (await preLiquidationLogs(client)).filter(
     (preLiquidation) => whitelistedMarkets.includes(preLiquidation.marketId),
@@ -76,7 +76,7 @@ async function getPreLiquidablePosition(
   collateralAsset: PartialApiToken,
   loanAsset: PartialApiToken,
 ) {
-  const chainId = ChainUtils.parseSupportedChainId(client.chain.id);
+  const chainId = client.chain.id;
   const accrualPosition = await fetchAccrualPosition(
     borrower as `0x${string}`,
     String(preLiquidation.marketId) as MarketId,

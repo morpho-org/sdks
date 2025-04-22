@@ -1,3 +1,4 @@
+import { formatUnits } from "viem";
 import type { Address, MarketId } from "./types.js";
 
 export class UnknownDataError extends Error {}
@@ -32,7 +33,24 @@ export class UnsupportedChainIdError extends Error {
   }
 }
 
+export class UnsupportedPreLiquidationParamsError extends Error {
+  constructor(public readonly lltv: bigint) {
+    super(
+      `unsupported pre liquidation params for lltv ${formatUnits(lltv, 16)}%`,
+    );
+  }
+}
+
 export namespace BlueErrors {
+  export class AlreadySet extends Error {
+    constructor(
+      public readonly name: string,
+      public readonly value: string,
+    ) {
+      super(`${name} is already set to ${value}`);
+    }
+  }
+
   export class InvalidInterestAccrual extends Error {
     constructor(
       public readonly marketId: MarketId,

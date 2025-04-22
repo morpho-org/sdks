@@ -2,7 +2,7 @@ import {
   ChainId,
   type InputMarketParams,
   NATIVE_ADDRESS,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi, publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
@@ -17,7 +17,7 @@ import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
 
-const { publicAllocator } = addresses[ChainId.EthMainnet];
+const { publicAllocator } = addressesRegistry[ChainId.EthMainnet];
 const { usdc_wstEth, usdc_idle, usdc_wbtc, usdc_wbIB01 } =
   markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];

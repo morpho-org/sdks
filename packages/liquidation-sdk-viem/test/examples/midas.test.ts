@@ -6,7 +6,7 @@ import {
   ChainId,
   type InputMarketParams,
   type MarketId,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { BLUE_API_BASE_URL, Time, format } from "@morpho-org/morpho-ts";
 
@@ -26,7 +26,7 @@ fetchMock.config.warnOnFallback = false;
 const healthyDiffSlot =
   "0x0000000000000000000000000000000000000000000000000000000000000034";
 
-const { morpho } = addresses[ChainId.EthMainnet];
+const { morpho } = addressesRegistry[ChainId.EthMainnet];
 
 const borrower = testAccount(1);
 

@@ -10,13 +10,7 @@ export class VaultConfig extends Token implements IVaultConfig {
   public readonly decimalsOffset;
   public readonly asset;
 
-  constructor(
-    { decimalsOffset, asset, ...config }: IVaultConfig,
-    /**
-     * @deprecated Kept for backward compatibility.
-     */
-    public readonly chainId?: number,
-  ) {
+  constructor({ decimalsOffset, asset, ...config }: IVaultConfig) {
     super({ ...config, decimals: 18 });
 
     this.decimalsOffset = BigInt(decimalsOffset);

@@ -6,7 +6,7 @@ import {
   type Address,
   ChainId,
   type MarketId,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { BLUE_API_BASE_URL, format } from "@morpho-org/morpho-ts";
 import type { BuildTxInput } from "@paraswap/sdk";
@@ -45,7 +45,7 @@ const oneInchSwapApiMatcher = new RegExp(`${OneInch.getSwapApiUrl(1)}.*`);
 const paraSwapPriceApiMatcher = new RegExp(`${Paraswap.API_URL}/prices.*`);
 const paraSwapTxApiMatcher = new RegExp(`${Paraswap.API_URL}/transactions.*`);
 
-const { morpho } = addresses[ChainId.EthMainnet];
+const { morpho } = addressesRegistry[ChainId.EthMainnet];
 
 const borrower = testAccount(1);
 

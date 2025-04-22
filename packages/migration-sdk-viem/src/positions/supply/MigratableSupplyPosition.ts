@@ -1,8 +1,9 @@
 import type { Address, ChainId } from "@morpho-org/blue-sdk";
 
-import type { MigrationBundle } from "../../types/actions.js";
+import type { ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import type {
   MigratableProtocol,
+  MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
@@ -16,8 +17,8 @@ export namespace MigratableSupplyPosition {
   export interface Args {
     /** The amount to migrate. */
     amount: bigint;
-    /** The minimum vault shares expected after migration. */
-    minShares: bigint;
+    /** The maximum vault share price expected (scaled by RAY). */
+    maxSharePrice: bigint;
     /** The address of the vault to migrate to. */
     vault: Address;
   }
@@ -72,18 +73,32 @@ export abstract class MigratableSupplyPosition
     this.chainId = config.chainId;
   }
 
+  protected abstract _getMigrationTx(
+    args: MigratableSupplyPosition.Args,
+    supportsSignature: boolean,
+  ): ActionBundle<MigrationTransactionRequirement>;
+
   /**
    * Method to retrieve a migration operation for the supply position.
    *
    * @param args - The arguments required to execute the migration.
-   * @param chainId - The chain ID of the migration.
    * @param supportsSignature - Whether the migration supports signature-based execution.
    *
    * @returns A migration bundle containing the migration details.
    */
-  abstract getMigrationTx(
+  getMigrationTx(
     args: MigratableSupplyPosition.Args,
-    chainId: ChainId,
     supportsSignature: boolean,
-  ): MigrationBundle;
+  ) {
+    this._validateMigration(args);
+
+    return this._getMigrationTx(args, supportsSignature);
+  }
+
+  private _validateMigration({
+    amount,
+  }: Pick<MigratableSupplyPosition.Args, "amount">) {
+    if (amount > this.max.value)
+      throw new Error(`Max migration limited by: ${this.max.limiter}`);
+  }
 }

@@ -525,68 +525,6 @@ export const permit2Abi = [
                 type: "uint48",
               },
             ],
-            internalType: "struct IAllowanceTransfer.PermitDetails[]",
-            name: "details",
-            type: "tuple[]",
-          },
-          {
-            internalType: "address",
-            name: "spender",
-            type: "address",
-          },
-          {
-            internalType: "uint256",
-            name: "sigDeadline",
-            type: "uint256",
-          },
-        ],
-        internalType: "struct IAllowanceTransfer.PermitBatch",
-        name: "permitBatch",
-        type: "tuple",
-      },
-      {
-        internalType: "bytes",
-        name: "signature",
-        type: "bytes",
-      },
-    ],
-    name: "permit",
-    outputs: [],
-    stateMutability: "nonpayable",
-    type: "function",
-  },
-  {
-    inputs: [
-      {
-        internalType: "address",
-        name: "owner",
-        type: "address",
-      },
-      {
-        components: [
-          {
-            components: [
-              {
-                internalType: "address",
-                name: "token",
-                type: "address",
-              },
-              {
-                internalType: "uint160",
-                name: "amount",
-                type: "uint160",
-              },
-              {
-                internalType: "uint48",
-                name: "expiration",
-                type: "uint48",
-              },
-              {
-                internalType: "uint48",
-                name: "nonce",
-                type: "uint48",
-              },
-            ],
             internalType: "struct IAllowanceTransfer.PermitDetails",
             name: "details",
             type: "tuple",
@@ -7948,4 +7886,298 @@ export const erc5267Abi = [
     stateMutability: "view",
     type: "function",
   },
+] as const;
+
+export const preLiquidationFactoryAbi = [
+  {
+    type: "constructor",
+    inputs: [{ name: "morpho", type: "address", internalType: "address" }],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "MORPHO",
+    inputs: [],
+    outputs: [{ name: "", type: "address", internalType: "contract IMorpho" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "createPreLiquidation",
+    inputs: [
+      { name: "id", type: "bytes32", internalType: "Id" },
+      {
+        name: "preLiquidationParams",
+        type: "tuple",
+        internalType: "struct PreLiquidationParams",
+        components: [
+          { name: "preLltv", type: "uint256", internalType: "uint256" },
+          { name: "preLCF1", type: "uint256", internalType: "uint256" },
+          { name: "preLCF2", type: "uint256", internalType: "uint256" },
+          { name: "preLIF1", type: "uint256", internalType: "uint256" },
+          { name: "preLIF2", type: "uint256", internalType: "uint256" },
+          {
+            name: "preLiquidationOracle",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "contract IPreLiquidation",
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "isPreLiquidation",
+    inputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "CreatePreLiquidation",
+    inputs: [
+      {
+        name: "preLiquidation",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "id",
+        type: "bytes32",
+        indexed: false,
+        internalType: "Id",
+      },
+      {
+        name: "preLiquidationParams",
+        type: "tuple",
+        indexed: false,
+        internalType: "struct PreLiquidationParams",
+        components: [
+          { name: "preLltv", type: "uint256", internalType: "uint256" },
+          { name: "preLCF1", type: "uint256", internalType: "uint256" },
+          { name: "preLCF2", type: "uint256", internalType: "uint256" },
+          { name: "preLIF1", type: "uint256", internalType: "uint256" },
+          { name: "preLIF2", type: "uint256", internalType: "uint256" },
+          {
+            name: "preLiquidationOracle",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+    ],
+    anonymous: false,
+  },
+  { type: "error", name: "ZeroAddress", inputs: [] },
+] as const;
+
+export const preLiquidationAbi = [
+  {
+    type: "constructor",
+    inputs: [
+      { name: "morpho", type: "address", internalType: "address" },
+      { name: "id", type: "bytes32", internalType: "Id" },
+      {
+        name: "_preLiquidationParams",
+        type: "tuple",
+        internalType: "struct PreLiquidationParams",
+        components: [
+          { name: "preLltv", type: "uint256", internalType: "uint256" },
+          { name: "preLCF1", type: "uint256", internalType: "uint256" },
+          { name: "preLCF2", type: "uint256", internalType: "uint256" },
+          { name: "preLIF1", type: "uint256", internalType: "uint256" },
+          { name: "preLIF2", type: "uint256", internalType: "uint256" },
+          {
+            name: "preLiquidationOracle",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "ID",
+    inputs: [],
+    outputs: [{ name: "", type: "bytes32", internalType: "Id" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "MORPHO",
+    inputs: [],
+    outputs: [{ name: "", type: "address", internalType: "contract IMorpho" }],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "marketParams",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct MarketParams",
+        components: [
+          {
+            name: "loanToken",
+            type: "address",
+            internalType: "address",
+          },
+          {
+            name: "collateralToken",
+            type: "address",
+            internalType: "address",
+          },
+          { name: "oracle", type: "address", internalType: "address" },
+          { name: "irm", type: "address", internalType: "address" },
+          { name: "lltv", type: "uint256", internalType: "uint256" },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "onMorphoRepay",
+    inputs: [
+      {
+        name: "repaidAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      { name: "callbackData", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "preLiquidate",
+    inputs: [
+      { name: "borrower", type: "address", internalType: "address" },
+      {
+        name: "seizedAssets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "repaidShares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      { name: "data", type: "bytes", internalType: "bytes" },
+    ],
+    outputs: [
+      { name: "", type: "uint256", internalType: "uint256" },
+      { name: "", type: "uint256", internalType: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "preLiquidationParams",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "tuple",
+        internalType: "struct PreLiquidationParams",
+        components: [
+          { name: "preLltv", type: "uint256", internalType: "uint256" },
+          { name: "preLCF1", type: "uint256", internalType: "uint256" },
+          { name: "preLCF2", type: "uint256", internalType: "uint256" },
+          { name: "preLIF1", type: "uint256", internalType: "uint256" },
+          { name: "preLIF2", type: "uint256", internalType: "uint256" },
+          {
+            name: "preLiquidationOracle",
+            type: "address",
+            internalType: "address",
+          },
+        ],
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "event",
+    name: "PreLiquidate",
+    inputs: [
+      {
+        name: "id",
+        type: "bytes32",
+        indexed: true,
+        internalType: "Id",
+      },
+      {
+        name: "liquidator",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "borrower",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "repaidAssets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "repaidShares",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+      {
+        name: "seizedAssets",
+        type: "uint256",
+        indexed: false,
+        internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  { type: "error", name: "InconsistentInput", inputs: [] },
+  { type: "error", name: "LiquidatablePosition", inputs: [] },
+  { type: "error", name: "NonexistentMarket", inputs: [] },
+  { type: "error", name: "NotMorpho", inputs: [] },
+  { type: "error", name: "NotPreLiquidatablePosition", inputs: [] },
+  { type: "error", name: "PreLCFDecreasing", inputs: [] },
+  { type: "error", name: "PreLCFTooHigh", inputs: [] },
+  { type: "error", name: "PreLIFDecreasing", inputs: [] },
+  { type: "error", name: "PreLIFTooHigh", inputs: [] },
+  { type: "error", name: "PreLIFTooLow", inputs: [] },
+  {
+    type: "error",
+    name: "PreLiquidationTooLarge",
+    inputs: [
+      {
+        name: "repaidShares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "repayableShares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+  },
+  { type: "error", name: "PreLltvTooHigh", inputs: [] },
 ] as const;

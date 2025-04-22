@@ -7,7 +7,7 @@ import {
   ChainId,
   type InputMarketParams,
   type MarketId,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import {
   BLUE_API_BASE_URL,
@@ -63,7 +63,7 @@ const paraSwapTxApiMatcher = new RegExp(`${Paraswap.API_URL}/transactions.*`);
 const pendleSwapApiMatcher = new RegExp(`${Pendle.getSwapApiUrl(1)}.*`);
 const pendleRedeemApiMatcher = new RegExp(`${Pendle.getRedeemApiUrl(1)}.*`);
 
-const { morpho } = addresses[ChainId.EthMainnet];
+const { morpho } = addressesRegistry[ChainId.EthMainnet];
 
 const borrower = testAccount(1);
 const liquidator = testAccount(2);

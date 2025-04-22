@@ -503,8 +503,8 @@ export namespace MarketUtils {
 
   /**
    * Returns the health factor of a given borrow position (scaled by WAD).
+   * If the debt is 0, health factor is `MaxUint256`.
    * Returns `undefined` iff the market's price is undefined.
-   * Returns null if the position is not a borrow.
    */
   export function getHealthFactor(
     {
@@ -518,10 +518,6 @@ export namespace MarketUtils {
     },
     marketParams: { lltv: BigIntish },
   ) {
-    borrowShares = BigInt(borrowShares);
-    market.totalBorrowShares = BigInt(market.totalBorrowShares);
-    if (borrowShares === 0n || market.totalBorrowShares === 0n) return null;
-
     const borrowAssets = toBorrowAssets(borrowShares, market);
     if (borrowAssets === 0n) return MathLib.MAX_UINT_256;
 

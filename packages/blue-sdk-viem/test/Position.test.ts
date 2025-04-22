@@ -1,6 +1,6 @@
 import { maxUint256, parseUnits } from "viem";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 import { markets } from "@morpho-org/morpho-test";
 import { testAccount } from "@morpho-org/test";
 import { describe, expect } from "vitest";
@@ -8,7 +8,7 @@ import { blueAbi } from "../src";
 import { Position } from "../src/augment/Position";
 import { test } from "./setup";
 
-const { morpho } = addresses[ChainId.EthMainnet];
+const { morpho } = addressesRegistry[ChainId.EthMainnet];
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 const supplyAssets = parseUnits("10", 6);

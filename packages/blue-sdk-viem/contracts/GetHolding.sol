@@ -10,12 +10,7 @@ import {IERC20Permissioned} from "./interfaces/IERC20Permissioned.sol";
 struct ERC20Allowances {
     uint256 morpho;
     uint256 permit2;
-    uint256 bundler;
-}
-
-struct Permit2Allowances {
-    Permit2Allowance morpho;
-    Permit2Allowance bundler;
+    uint256 generalAdapter1;
 }
 
 enum OptionalBoolean {
@@ -27,7 +22,7 @@ enum OptionalBoolean {
 struct HoldingResponse {
     uint256 balance;
     ERC20Allowances erc20Allowances;
-    Permit2Allowances permit2Allowances;
+    Permit2Allowance permit2BundlerAllowance;
     bool isErc2612;
     uint256 erc2612Nonce;
     OptionalBoolean canTransfer;
@@ -39,7 +34,7 @@ contract GetHolding {
         address account,
         address morpho,
         IPermit2 permit2,
-        address bundler,
+        address generalAdapter1,
         bool isWrappedBackedToken,
         bool isErc20Permissioned
     ) external view returns (HoldingResponse memory res) {
@@ -47,12 +42,9 @@ contract GetHolding {
         res.erc20Allowances = ERC20Allowances({
             morpho: token.allowance(account, morpho),
             permit2: token.allowance(account, address(permit2)),
-            bundler: token.allowance(account, bundler)
+            generalAdapter1: token.allowance(account, generalAdapter1)
         });
-        res.permit2Allowances = Permit2Allowances({
-            morpho: permit2.allowance(account, address(token), morpho),
-            bundler: permit2.allowance(account, address(token), bundler)
-        });
+        res.permit2BundlerAllowance = permit2.allowance(account, address(token), generalAdapter1);
 
         try token.nonces(account) returns (uint256 nonce) {
             res.isErc2612 = true;

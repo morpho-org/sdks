@@ -1,7 +1,7 @@
 import {
   ChainId,
   type InputMarketParams,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
@@ -16,7 +16,7 @@ import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
 
-const { morpho } = addresses[ChainId.EthMainnet];
+const { morpho } = addressesRegistry[ChainId.EthMainnet];
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 describe("Blue_AccrueInterest", () => {

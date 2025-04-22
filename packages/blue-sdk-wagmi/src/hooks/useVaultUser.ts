@@ -2,7 +2,7 @@ import type { VaultUser } from "@morpho-org/blue-sdk";
 import type { ReadContractErrorType } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 import { type UseQueryReturnType, useQuery } from "wagmi/query";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 
 import {
   type FetchVaultUserParameters,
@@ -52,7 +52,7 @@ export function useVaultUser<
     ...options,
     enabled:
       parameters.vault != null && parameters.user != null && query.enabled,
-    structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+    structuralSharing: query.structuralSharing ?? replaceDeepEqual,
     staleTime:
       query.staleTime ??
       (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),

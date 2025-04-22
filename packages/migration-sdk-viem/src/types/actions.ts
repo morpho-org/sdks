@@ -1,7 +1,4 @@
-import type {
-  Action,
-  SignatureRequirement,
-} from "@morpho-org/bundler-sdk-viem";
+import type {} from "@morpho-org/bundler-sdk-viem";
 import type { Address, Hex, TransactionRequest } from "viem";
 
 export interface MigrationTransactionRequirementArgs {
@@ -13,6 +10,9 @@ export interface MigrationTransactionRequirementArgs {
 
   /* ERC20 */
   erc20Approve: [asset: Address, recipient: Address, amount: bigint];
+
+  /* Morpho */
+  morphoSetAuthorization: [authorized: Address, isAuthorized: boolean];
 }
 
 export type MigrationTransactionRequirementType =
@@ -28,12 +28,3 @@ export type Requirements = {
 
 export type MigrationTransactionRequirement =
   Requirements[MigrationTransactionRequirementType];
-
-export interface MigrationBundle {
-  actions: Action[];
-  requirements: {
-    signatures: SignatureRequirement[];
-    txs: MigrationTransactionRequirement[];
-  };
-  tx: () => TransactionRequest & { to: Address; data: Hex };
-}

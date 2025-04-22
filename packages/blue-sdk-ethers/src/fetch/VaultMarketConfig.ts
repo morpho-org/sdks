@@ -3,7 +3,6 @@ import { MetaMorpho__factory } from "ethers-types";
 
 import {
   type Address,
-  ChainUtils,
   type MarketId,
   VaultMarketConfig,
 } from "@morpho-org/blue-sdk";
@@ -16,9 +15,7 @@ export async function fetchVaultMarketConfig(
   runner: { provider: Provider },
   options: FetchOptions = {},
 ) {
-  options.chainId = ChainUtils.parseSupportedChainId(
-    options.chainId ?? (await runner.provider.getNetwork()).chainId,
-  );
+  options.chainId ??= Number((await runner.provider.getNetwork()).chainId);
   options.overrides ??= {};
 
   const mm = MetaMorpho__factory.connect(vault, runner);

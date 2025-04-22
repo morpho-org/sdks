@@ -7,6 +7,12 @@ export interface OperationMetadata<T extends string> {
   type: T;
   sender: Address;
   address: Address;
+  /**
+   * Whether to allow the transfer to revert without making the whole bundler revert.
+   * Defaults to true upon encoding signature-based operations (ERC20 permits, Morpho authorizations).
+   * Defaults to false otherwise.
+   */
+  skipRevert?: boolean;
 }
 
 export interface WithOperationArgs<
@@ -32,7 +38,9 @@ export interface BlueOperationArgs {
   Blue_AccrueInterest: { id: MarketId };
   Blue_SetAuthorization: {
     owner: Address;
-    isBundlerAuthorized: boolean;
+    // Should not be scoped to GeneralAdapter1 because PreLiquidation contracts use authorizations.
+    authorized: Address;
+    isAuthorized: boolean;
   };
 
   Blue_SupplyCollateral: {
@@ -208,7 +216,6 @@ export interface Erc20OperationArgs {
     nonce: bigint;
   };
   Erc20_Permit2: {
-    spender: Address;
     amount: bigint;
     expiration: bigint;
     nonce: bigint;

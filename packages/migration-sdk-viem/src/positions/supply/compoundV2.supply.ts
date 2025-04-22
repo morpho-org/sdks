@@ -1,29 +1,19 @@
 import {
-  type ChainId,
   type ExchangeRateWrappedToken,
-  MathLib,
   NATIVE_ADDRESS,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import MIGRATION_ADDRESSES from "../../config.js";
-import type {
-  MigrationBundle,
-  MigrationTransactionRequirement,
-} from "../../types/actions.js";
+import { encodeFunctionData, maxUint256 } from "viem";
+
+import { ActionBundle } from "@morpho-org/bundler-sdk-viem";
+import { cErc20Abi } from "../../abis/compoundV2.js";
+import { migrationAddresses } from "../../config.js";
 import {
   MigratableProtocol,
+  type MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
-
-import {
-  type Action,
-  BundlerAction,
-  baseBundlerAbi,
-} from "@morpho-org/bundler-sdk-viem";
-
-import { encodeFunctionData, maxUint256 } from "viem";
-import { cErc20Abi } from "../../abis/compoundV2.js";
 import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
@@ -52,18 +42,22 @@ export class MigratableSupplyPosition_CompoundV2
     this.cTokenBalance = config.cTokenBalance;
   }
 
-  getMigrationTx(
-    { amount, minShares, vault }: MigratableSupplyPosition.Args,
-    chainId: ChainId,
-  ): MigrationBundle {
-    const txRequirements: MigrationTransactionRequirement[] = [];
-    const actions: Action[] = [];
+  _getMigrationTx({
+    amount,
+    maxSharePrice,
+    vault,
+  }: MigratableSupplyPosition.Args) {
+    const chainId = this.chainId;
+    const bundle = new ActionBundle<MigrationTransactionRequirement>(chainId);
 
     const user = this.user;
     const cToken = this.cToken;
 
-    const bundler = getChainAddresses(chainId).compoundV2Bundler;
-    if (!bundler) throw new Error("missing compoundV2Bundler address");
+    const {
+      bundler3: { generalAdapter1, compoundV2MigrationAdapter },
+    } = getChainAddresses(chainId);
+    if (compoundV2MigrationAdapter == null)
+      throw new Error("missing compoundV2MigrationAdapter address");
 
     const migrateMax =
       this.max.limiter === SupplyMigrationLimiter.position &&
@@ -74,60 +68,47 @@ export class MigratableSupplyPosition_CompoundV2
       : this.cToken.toUnwrappedExactAmountOut(amount);
 
     // TODO use allowance + test
-    txRequirements.push({
+    bundle.requirements.txs.push({
       type: "erc20Approve",
-      args: [cToken.address, bundler, transferredAmount],
+      args: [cToken.address, generalAdapter1, transferredAmount],
       tx: {
         to: cToken.address,
         data: encodeFunctionData({
           abi: cErc20Abi,
           functionName: "approve",
-          args: [bundler, transferredAmount],
+          args: [generalAdapter1, transferredAmount],
         }),
       },
     });
 
-    actions.push({
+    bundle.actions.push({
       type: "erc20TransferFrom",
-      args: [cToken.address, transferredAmount],
+      args: [cToken.address, transferredAmount, compoundV2MigrationAdapter],
     });
 
-    actions.push({
+    const isEth = this.cToken.underlying === NATIVE_ADDRESS;
+
+    bundle.actions.push({
       type: "compoundV2Redeem",
-      args: [cToken.address, maxUint256],
+      args: [cToken.address, maxUint256, isEth, generalAdapter1],
     });
 
     if (
-      this.cToken.underlying === NATIVE_ADDRESS ||
+      isEth ||
       this.cToken.address ===
-        MIGRATION_ADDRESSES[this.chainId][MigratableProtocol.compoundV2]?.mWeth
+        migrationAddresses[this.chainId]?.[MigratableProtocol.compoundV2]?.mWeth
           ?.address // Moonwell mWeth automatically unwraps weth on redeem
     )
-      actions.push({
+      bundle.actions.push({
         type: "wrapNative",
-        args: [maxUint256],
+        args: [maxUint256, generalAdapter1],
       });
 
-    actions.push({
+    bundle.actions.push({
       type: "erc4626Deposit",
-      args: [vault, MathLib.MAX_UINT_128, minShares, user],
+      args: [vault, maxUint256, maxSharePrice, user],
     });
 
-    return {
-      actions,
-      requirements: {
-        signatures: [],
-        txs: txRequirements,
-      },
-      tx: () => ({
-        to: bundler,
-        value: 0n,
-        data: encodeFunctionData({
-          abi: baseBundlerAbi,
-          functionName: "multicall",
-          args: [actions.map(BundlerAction.encode)],
-        }),
-      }),
-    };
+    return bundle;
   }
 }

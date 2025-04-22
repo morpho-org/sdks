@@ -72,6 +72,7 @@ export const BLUE_INPUT_OPERATIONS = [
   "Blue_SupplyCollateral",
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
+  "Blue_SetAuthorization",
 ] as const satisfies readonly BlueOperationType[];
 
 export type BlueInputBundlerOperationType =

@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { parseUnits } from "viem";
 
-import { ChainId, addresses } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
@@ -10,7 +10,11 @@ import { dataFixture, tokenA, userA, userB, vaultA } from "../../fixtures.js";
 const type = "Erc20_Transfer";
 
 const amount = parseUnits("1", 6);
-const { morpho, bundler, permit2 } = addresses[ChainId.EthMainnet];
+const {
+  morpho,
+  bundler3: { generalAdapter1 },
+  permit2,
+} = addressesRegistry[ChainId.EthMainnet];
 
 describe(type, () => {
   test("should transfer", () => {
@@ -85,7 +89,7 @@ describe(type, () => {
     const result = simulateOperation(
       {
         type,
-        sender: bundler,
+        sender: generalAdapter1,
         address: tokenA,
         args: {
           amount,
@@ -99,7 +103,9 @@ describe(type, () => {
     const expected = _.cloneDeep(dataFixture);
     expected.holdings[userA]![tokenA]!.balance += amount;
     expected.holdings[userB]![tokenA]!.balance -= amount;
-    expected.holdings[userB]![tokenA]!.erc20Allowances.bundler -= amount;
+    expected.holdings[userB]![tokenA]!.erc20Allowances[
+      "bundler3.generalAdapter1"
+    ] -= amount;
 
     expect(result).toEqual(expected);
   });

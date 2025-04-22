@@ -3,7 +3,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MarketParams,
   MathLib,
-  addresses,
+  addressesRegistry,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
@@ -31,15 +31,15 @@ import {
 } from "@morpho-org/bundler-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";
 import { fromEntries } from "@morpho-org/morpho-ts";
+import { SimulationState } from "@morpho-org/simulation-sdk";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
-import { SimulationState } from "../../../../simulation-sdk/src/SimulationState.js";
 import { MigratableBorrowPosition_Blue } from "../../../src/index.js";
 import { test } from "../setup.js";
 
 const TEST_CONFIGS: {
-  chainId: ChainId;
+  chainId: ChainId.EthMainnet | ChainId.BaseMainnet;
   testFn: TestAPI<ViemTestContext>;
   marketFrom: MarketParams;
   marketTo: MarketParams;
@@ -80,7 +80,9 @@ const fetchSimulationState = async (
 ) => {
   const chainId = client.chain.id;
 
-  const { bundler } = getChainAddresses(chainId);
+  const {
+    bundler3: { generalAdapter1 },
+  } = getChainAddresses(chainId);
 
   const marketIds = [...new Set(marketParams.map(({ id }) => id))];
   const tokenAddresses = [
@@ -121,7 +123,10 @@ const fetchSimulationState = async (
     Promise.all(
       tokenAddresses.map(
         async (address) =>
-          [address, await fetchHolding(bundler, address, client)] as const,
+          [
+            address,
+            await fetchHolding(generalAdapter1, address, client),
+          ] as const,
       ),
     ),
     Promise.all(
@@ -139,7 +144,7 @@ const fetchSimulationState = async (
     tokens: fromEntries(tokens),
     holdings: {
       [user]: fromEntries(holdings),
-      [bundler]: fromEntries(bundlerHoldings),
+      [generalAdapter1]: fromEntries(bundlerHoldings),
     },
     positions: { [user]: fromEntries(positions) },
     users: { [user]: userData },
@@ -148,7 +153,10 @@ const fetchSimulationState = async (
 
 describe("Borrow position on blue", () => {
   for (const { chainId, testFn, marketFrom, marketTo } of TEST_CONFIGS) {
-    const { bundler, morpho } = addresses[chainId];
+    const {
+      bundler3: { bundler3, generalAdapter1 },
+      morpho,
+    } = addressesRegistry[chainId];
 
     const writeSupply = async (
       client: ViemTestContext["client"],
@@ -265,7 +273,7 @@ describe("Borrow position on blue", () => {
                 args: {
                   id: marketTo.id,
                   assets: borrowToMigrate,
-                  receiver: bundler,
+                  receiver: generalAdapter1,
                   onBehalf: client.account.address,
                   slippage: slippageTo,
                 },
@@ -289,7 +297,7 @@ describe("Borrow position on blue", () => {
                   id: marketFrom.id,
                   assets: collateralToMigrate,
                   onBehalf: client.account.address,
-                  receiver: bundler,
+                  receiver: generalAdapter1,
                 },
               },
             ],
@@ -305,7 +313,7 @@ describe("Borrow position on blue", () => {
           {
             type: "Blue_SupplyCollateral",
             address: "0x",
-            sender: bundler,
+            sender: generalAdapter1,
             args: {
               id: marketTo.id,
               assets: collateralToMigrate,
@@ -313,21 +321,22 @@ describe("Borrow position on blue", () => {
               callback: [
                 {
                   type: "Blue_SetAuthorization",
-                  sender: bundler,
+                  sender: bundler3,
                   address: morpho,
                   args: {
                     owner: client.account.address,
-                    isBundlerAuthorized: true,
+                    isAuthorized: true,
+                    authorized: generalAdapter1,
                   },
                 },
                 {
                   type: "Blue_Borrow",
                   address: "0x",
-                  sender: bundler,
+                  sender: generalAdapter1,
                   args: {
                     id: marketTo.id,
                     assets: borrowToMigrate,
-                    receiver: bundler,
+                    receiver: generalAdapter1,
                     onBehalf: client.account.address,
                     slippage: slippageTo,
                   },
@@ -335,7 +344,7 @@ describe("Borrow position on blue", () => {
                 {
                   type: "Blue_Repay",
                   address: "0x",
-                  sender: bundler,
+                  sender: generalAdapter1,
                   args: {
                     id: marketFrom.id,
                     assets: borrowToMigrate,
@@ -346,12 +355,12 @@ describe("Borrow position on blue", () => {
                 {
                   type: "Blue_WithdrawCollateral",
                   address: "0x",
-                  sender: bundler,
+                  sender: generalAdapter1,
                   args: {
                     id: marketFrom.id,
                     assets: collateralToMigrate,
                     onBehalf: client.account.address,
-                    receiver: bundler,
+                    receiver: generalAdapter1,
                   },
                 },
               ],
@@ -373,12 +382,11 @@ describe("Borrow position on blue", () => {
           collateralAmount - collateralToMigrate,
         );
         expect(finalPositionTo.collateral).toEqual(collateralToMigrate);
-        expect(finalPositionFrom.borrowShares).approximately(
+        expect(finalPositionFrom.borrowShares).toEqual(
           initialPositionFrom.borrowShares -
             finalPositionFrom.market.toBorrowShares(borrowToMigrate),
-          2n,
         );
-        expect(finalPositionTo.borrowAssets).approximately(borrowToMigrate, 2n);
+        expect(finalPositionTo.borrowAssets).toEqual(borrowToMigrate + 1n);
       });
 
       testFn(
@@ -446,7 +454,7 @@ describe("Borrow position on blue", () => {
                       borrowToMigrate,
                       MathLib.WAD + slippageFrom,
                     ),
-                    receiver: bundler,
+                    receiver: generalAdapter1,
                     onBehalf: client.account.address,
                     slippage: slippageTo,
                   },
@@ -470,7 +478,7 @@ describe("Borrow position on blue", () => {
                     id: marketFrom.id,
                     assets: collateralToMigrate,
                     onBehalf: client.account.address,
-                    receiver: bundler,
+                    receiver: generalAdapter1,
                   },
                 },
               ],
@@ -486,7 +494,7 @@ describe("Borrow position on blue", () => {
             {
               type: "Blue_SupplyCollateral",
               address: "0x",
-              sender: bundler,
+              sender: generalAdapter1,
               args: {
                 id: marketTo.id,
                 assets: collateralToMigrate,
@@ -494,24 +502,25 @@ describe("Borrow position on blue", () => {
                 callback: [
                   {
                     type: "Blue_SetAuthorization",
-                    sender: bundler,
+                    sender: bundler3,
                     address: morpho,
                     args: {
                       owner: client.account.address,
-                      isBundlerAuthorized: true,
+                      isAuthorized: true,
+                      authorized: generalAdapter1,
                     },
                   },
                   {
                     type: "Blue_Borrow",
                     address: "0x",
-                    sender: bundler,
+                    sender: generalAdapter1,
                     args: {
                       id: marketTo.id,
                       assets: MathLib.wMulUp(
                         borrowToMigrate,
                         MathLib.WAD + slippageFrom,
                       ),
-                      receiver: bundler,
+                      receiver: generalAdapter1,
                       onBehalf: client.account.address,
                       slippage: slippageTo,
                     },
@@ -519,7 +528,7 @@ describe("Borrow position on blue", () => {
                   {
                     type: "Blue_Repay",
                     address: "0x",
-                    sender: bundler,
+                    sender: generalAdapter1,
                     args: {
                       id: marketFrom.id,
                       shares: sharesToMigrate,
@@ -530,12 +539,12 @@ describe("Borrow position on blue", () => {
                   {
                     type: "Blue_WithdrawCollateral",
                     address: "0x",
-                    sender: bundler,
+                    sender: generalAdapter1,
                     args: {
                       id: marketFrom.id,
                       assets: collateralToMigrate,
                       onBehalf: client.account.address,
-                      receiver: bundler,
+                      receiver: generalAdapter1,
                     },
                   },
                 ],
@@ -545,10 +554,10 @@ describe("Borrow position on blue", () => {
               address: marketFrom.loanToken,
               args: {
                 amount: maxUint256,
-                from: bundler,
+                from: generalAdapter1,
                 to: client.account.address,
               },
-              sender: bundler,
+              sender: generalAdapter1,
               type: "Erc20_Transfer",
             },
           ]);
@@ -574,9 +583,8 @@ describe("Borrow position on blue", () => {
             borrowToMigrate,
             MathLib.WAD + slippageFrom,
           );
-          expect(finalPositionTo.borrowAssets).approximately(
-            expectedBorrowAssets,
-            2n,
+          expect(finalPositionTo.borrowAssets).toEqual(
+            expectedBorrowAssets + 1n,
           );
         },
       );
@@ -636,7 +644,7 @@ describe("Borrow position on blue", () => {
                     initialPositionFrom.borrowAssets,
                     MathLib.WAD + slippageFrom,
                   ),
-                  receiver: bundler,
+                  receiver: generalAdapter1,
                   onBehalf: client.account.address,
                   slippage: slippageTo,
                 },
@@ -660,7 +668,7 @@ describe("Borrow position on blue", () => {
                   id: marketFrom.id,
                   assets: collateralAmount,
                   onBehalf: client.account.address,
-                  receiver: bundler,
+                  receiver: generalAdapter1,
                 },
               },
             ],
@@ -676,7 +684,7 @@ describe("Borrow position on blue", () => {
           {
             type: "Blue_SupplyCollateral",
             address: "0x",
-            sender: bundler,
+            sender: generalAdapter1,
             args: {
               id: marketTo.id,
               assets: collateralAmount,
@@ -684,24 +692,25 @@ describe("Borrow position on blue", () => {
               callback: [
                 {
                   type: "Blue_SetAuthorization",
-                  sender: bundler,
+                  sender: bundler3,
                   address: morpho,
                   args: {
                     owner: client.account.address,
-                    isBundlerAuthorized: true,
+                    isAuthorized: true,
+                    authorized: generalAdapter1,
                   },
                 },
                 {
                   type: "Blue_Borrow",
                   address: "0x",
-                  sender: bundler,
+                  sender: generalAdapter1,
                   args: {
                     id: marketTo.id,
                     assets: MathLib.wMulUp(
                       initialPositionFrom.borrowAssets,
                       MathLib.WAD + slippageFrom,
                     ),
-                    receiver: bundler,
+                    receiver: generalAdapter1,
                     onBehalf: client.account.address,
                     slippage: slippageTo,
                   },
@@ -709,7 +718,7 @@ describe("Borrow position on blue", () => {
                 {
                   type: "Blue_Repay",
                   address: "0x",
-                  sender: bundler,
+                  sender: generalAdapter1,
                   args: {
                     id: marketFrom.id,
                     shares: initialPositionFrom.borrowShares,
@@ -720,26 +729,26 @@ describe("Borrow position on blue", () => {
                 {
                   type: "Blue_WithdrawCollateral",
                   address: "0x",
-                  sender: bundler,
+                  sender: generalAdapter1,
                   args: {
                     id: marketFrom.id,
                     assets: collateralAmount,
                     onBehalf: client.account.address,
-                    receiver: bundler,
+                    receiver: generalAdapter1,
                   },
                 },
               ],
             },
           },
           {
+            type: "Erc20_Transfer",
             address: marketFrom.loanToken,
+            sender: generalAdapter1,
             args: {
               amount: maxUint256,
-              from: bundler,
+              from: generalAdapter1,
               to: client.account.address,
             },
-            sender: bundler,
-            type: "Erc20_Transfer",
           },
         ]);
         const bundle = encodeBundle(finalizedBundle, dataBefore, false);
@@ -760,16 +769,16 @@ describe("Borrow position on blue", () => {
           initialPositionFrom.borrowAssets,
           MathLib.WAD + slippageFrom,
         );
-        expect(finalPositionTo.borrowAssets).approximately(
-          expectedBorrowAssets,
-          2n,
-        );
+        expect(finalPositionTo.borrowAssets).toEqual(expectedBorrowAssets + 1n);
         const [loanTokenBundlerBalance, collateralTokenBundlerBalance] =
           await Promise.all([
-            client.balanceOf({ erc20: marketFrom.loanToken, owner: bundler }),
+            client.balanceOf({
+              erc20: marketFrom.loanToken,
+              owner: generalAdapter1,
+            }),
             client.balanceOf({
               erc20: marketFrom.collateralToken,
-              owner: bundler,
+              owner: generalAdapter1,
             }),
           ]);
         expect(loanTokenBundlerBalance).toEqual(0n);

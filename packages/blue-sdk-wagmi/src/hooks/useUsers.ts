@@ -1,59 +1,42 @@
-import type { User } from "@morpho-org/blue-sdk";
-import { type UseQueryResult, useQueries } from "@tanstack/react-query";
-import type { Address, ReadContractErrorType, UnionOmit } from "viem";
+import { isDefined } from "@morpho-org/morpho-ts";
+import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
+import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
-
-import { combineIndexedQueries } from "../queries/combineIndexedQueries.js";
 import {
   type UserParameters,
   fetchUserQueryOptions,
 } from "../queries/fetchUser.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import type { UseIndexedQueriesReturnType } from "../types/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
-import type { UseUserParameters } from "./useUser.js";
+import type { UseUserParameters, UseUserReturnType } from "./useUser.js";
 
 export type FetchUsersParameters = {
   users: Iterable<Address | undefined>;
 };
 
-export type UseUsersParameters<
-  config extends Config = Config,
-  TCombinedResult = ReturnType<typeof combineUsers>,
-> = FetchUsersParameters &
-  UnionOmit<UseUserParameters<config>, keyof UserParameters> & {
-    combine?: (
-      results: UseQueryResult<User, ReadContractErrorType>[],
-    ) => TCombinedResult;
-  };
+export type UseUsersParameters<config extends Config = Config> =
+  FetchUsersParameters &
+    UnionOmit<UseUserParameters<config>, keyof UserParameters>;
 
-export type UseUsersReturnType<
-  TCombinedResult = ReturnType<typeof combineUsers>,
-> = TCombinedResult;
+export type UseUsersReturnType = UseIndexedQueriesReturnType<
+  Address,
+  UseUserReturnType
+>;
 
-export const combineUsers = combineIndexedQueries<
-  User,
-  [Address],
-  ReadContractErrorType
->((user) => [user.address]);
-
-export function useUsers<
-  config extends Config = ResolvedRegister["config"],
-  TCombinedResult = ReturnType<typeof combineUsers>,
->({
+export function useUsers<config extends Config = ResolvedRegister["config"]>({
   users,
-  // biome-ignore lint/suspicious/noExplicitAny: compatible default type
-  combine = combineUsers as any,
   query = {},
   ...parameters
-}: UseUsersParameters<
-  config,
-  TCombinedResult
->): UseUsersReturnType<TCombinedResult> {
+}: UseUsersParameters<config>): UseUsersReturnType {
   const config = useConfig(parameters);
   const chainId = useChainId(parameters);
 
-  return useQueries({
-    queries: Array.from(new Set(users), (user) => ({
+  const uniqueUsers = new Set(users);
+
+  const orderedResults = useQueries({
+    queries: Array.from(uniqueUsers, (user) => ({
       ...query,
       ...fetchUserQueryOptions(config, {
         ...parameters,
@@ -61,11 +44,35 @@ export function useUsers<
         chainId,
       }),
       enabled: user != null && query.enabled,
-      structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+      structuralSharing: query.structuralSharing ?? replaceDeepEqual,
       staleTime:
         query.staleTime ??
         (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),
     })),
-    combine,
   });
+
+  const result: UseUsersReturnType = {
+    data: {},
+    error: {},
+    isFetching: {},
+    isFetchingAny: false,
+  };
+
+  uniqueUsers
+    .values()
+    .filter(isDefined)
+    .forEach((user, index) => {
+      const { data, error, isFetching } = orderedResults[index]!;
+
+      result.data[user] = data;
+      result.error[user] = error;
+      result.isFetching[user] = isFetching;
+
+      if (isFetching) result.isFetchingAny = true;
+    });
+
+  const resultRef = useRef(result);
+  resultRef.current = replaceDeepEqual(resultRef.current, result);
+
+  return resultRef.current;
 }

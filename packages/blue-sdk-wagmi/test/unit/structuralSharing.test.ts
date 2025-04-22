@@ -1,7 +1,7 @@
 import { Market, MarketParams } from "@morpho-org/blue-sdk";
 import { replaceEqualDeep } from "@tanstack/query-core";
 import { describe, expect } from "vitest";
-import { mergeDeepEqual } from "../../src/index.js";
+import { replaceDeepEqual } from "../../src/index.js";
 import { test } from "../e2e/setup.js";
 
 const prevMarket = new Market({
@@ -46,7 +46,7 @@ describe("structuralSharing", () => {
   });
 
   test("mergeDeepEqual should be optimal with classes", () => {
-    const merged = mergeDeepEqual(prevMarket, newMarket);
+    const merged = replaceDeepEqual(prevMarket, newMarket);
 
     expect(merged).toBe(prevMarket);
     expect(Object.getPrototypeOf(merged)).toBe(
@@ -68,7 +68,7 @@ describe("structuralSharing", () => {
   test("mergeDeepEqual should update reference if at least one reference changed", () => {
     newMarket.fee = 1n;
 
-    const merged = mergeDeepEqual(prevMarket, newMarket);
+    const merged = replaceDeepEqual(prevMarket, newMarket);
 
     expect(merged).not.toBe(prevMarket);
     expect(merged.params).toBe(prevMarket.params);
@@ -88,7 +88,7 @@ describe("structuralSharing", () => {
   test("mergeDeepEqual should work with arrays", () => {
     newMarket.fee = 1n;
 
-    const merged = mergeDeepEqual([prevMarket], [newMarket])[0]!;
+    const merged = replaceDeepEqual([prevMarket], [newMarket])[0]!;
 
     expect(merged).not.toBe(prevMarket);
     expect(merged.params).toBe(prevMarket.params);
@@ -103,5 +103,19 @@ describe("structuralSharing", () => {
     );
     // biome-ignore lint/suspicious/noPrototypeBuiltins: inside test
     expect(merged.constructor.prototype.isPrototypeOf(prevMarket)).toBe(true);
+  });
+
+  test("mergeDeepEqual should update reference if b is a subset of a", () => {
+    const b = {
+      property1: "property1",
+      property2: "property2",
+    };
+    const a = { ...b, property3: "property3" };
+
+    const merged = replaceDeepEqual(a, b);
+
+    expect(merged).not.toBe(a);
+    expect(merged).not.toBe(b);
+    expect(merged).toEqual(b);
   });
 });

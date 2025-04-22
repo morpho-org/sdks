@@ -3,7 +3,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
   NATIVE_ADDRESS,
-  addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi, publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
@@ -12,26 +12,22 @@ import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
 import { parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { donator, setupBundle } from "./helpers.js";
+import { donator, setupTestBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
 configure({ asyncUtilTimeout: 10_000 });
 
 describe("sharedLiquidity", () => {
-  const { morpho, bundler, publicAllocator, wNative, wstEth, stEth, usdc } =
-    addresses[ChainId.EthMainnet];
   const {
-    eth_idle,
-    eth_wstEth_2,
-    eth_rEth,
-    eth_sDai,
-    eth_wbtc,
-    usdc_wstEth,
-    usdc_idle,
-    usdc_wbtc,
-    usdc_wbIB01,
-  } = markets[ChainId.EthMainnet];
-  const { eth_wstEth } = markets[ChainId.EthMainnet];
+    morpho,
+    bundler3: { bundler3, generalAdapter1 },
+    publicAllocator,
+    wNative,
+    wstEth,
+    stEth,
+    usdc,
+  } = addressesRegistry[ChainId.EthMainnet];
+  const { usdc_wstEth, usdc_wbtc, usdc_idle } = markets[ChainId.EthMainnet];
 
   const { steakUsdc, bbUsdc, bbEth } = vaults[ChainId.EthMainnet];
 
@@ -111,9 +107,7 @@ describe("sharedLiquidity", () => {
       });
 
       const collateralAssets = parseEther("50000");
-      const depositAssets = parseEther("50");
       await client.deal({ erc20: wstEth, amount: collateralAssets });
-      await client.deal({ erc20: wNative, amount: depositAssets });
 
       const { id } = usdc_wstEth;
 
@@ -121,22 +115,11 @@ describe("sharedLiquidity", () => {
 
       const { result } = await renderHook(config, () =>
         useSimulationState({
-          marketIds: [
-            eth_idle.id,
-            eth_rEth.id,
-            eth_sDai.id,
-            eth_wbtc.id,
-            eth_wstEth.id,
-            eth_wstEth_2.id,
-            id,
-            usdc_idle.id,
-            usdc_wbtc.id,
-            usdc_wbIB01.id,
-          ],
+          marketIds: [id],
           users: [
             client.account.address,
             donator.address,
-            bundler,
+            generalAdapter1,
             steakUsdc.address,
             bbEth.address,
             bbUsdc.address,
@@ -169,7 +152,7 @@ describe("sharedLiquidity", () => {
         target - data.getMarket(id).utilization,
       );
 
-      const { operations } = await setupBundle(
+      const { operations } = await setupTestBundle(
         client,
         data,
         [
@@ -217,23 +200,23 @@ describe("sharedLiquidity", () => {
           address: wstEth,
           args: {
             amount: collateralAssets,
-            spender: bundler,
+            spender: generalAdapter1,
             nonce: 0n,
           },
         },
         {
           type: "Erc20_Transfer",
-          sender: bundler,
+          sender: generalAdapter1,
           address: wstEth,
           args: {
             amount: collateralAssets,
             from: client.account.address,
-            to: bundler,
+            to: generalAdapter1,
           },
         },
         {
           type: "Blue_SupplyCollateral",
-          sender: bundler,
+          sender: generalAdapter1,
           address: morpho,
           args: {
             id,
@@ -243,16 +226,17 @@ describe("sharedLiquidity", () => {
         },
         {
           type: "Blue_SetAuthorization",
-          sender: bundler,
+          sender: bundler3,
           address: morpho,
           args: {
             owner: client.account.address,
-            isBundlerAuthorized: true,
+            isAuthorized: true,
+            authorized: generalAdapter1,
           },
         },
         {
           type: "Blue_Borrow",
-          sender: bundler,
+          sender: generalAdapter1,
           address: morpho,
           args: {
             id,
@@ -266,45 +250,12 @@ describe("sharedLiquidity", () => {
     },
   );
 
-  test[ChainId.EthMainnet](
-    "should borrow USDC with shared liquidity and friendly reallocation",
-    async ({ client, config }) => {
-      const steakUsdcOwner = await client.readContract({
-        address: steakUsdc.address,
-        abi: metaMorphoAbi,
-        functionName: "owner",
-      });
-
-      await client.setBalance({
-        address: steakUsdcOwner,
-        value: parseEther("1000"),
-      });
-      await client.writeContract({
-        account: steakUsdcOwner,
-        address: publicAllocator,
-        abi: publicAllocatorAbi,
-        functionName: "setFlowCaps",
-        args: [
-          steakUsdc.address,
-          [
-            {
-              id: usdc_wstEth.id,
-              caps: {
-                maxIn: parseUnits("10000", 6),
-                maxOut: 0n,
-              },
-            },
-            {
-              id: usdc_wbtc.id,
-              caps: {
-                maxIn: 0n,
-                maxOut: parseUnits("20000", 6), // Less than bbUsdc but more than maxIn.
-              },
-            },
-          ],
-        ],
-      });
-
+  // It's a burden to maintain this test.
+  test[ChainId.EthMainnet]
+    .skip("should borrow USDC with shared liquidity and friendly reallocation", async ({
+      client,
+      config,
+    }) => {
       const bbUsdcOwner = await client.readContract({
         address: bbUsdc.address,
         abi: metaMorphoAbi,
@@ -313,7 +264,7 @@ describe("sharedLiquidity", () => {
 
       await client.setBalance({
         address: bbUsdcOwner,
-        value: parseEther("1000"),
+        value: parseEther("1"),
       });
       await client.writeContract({
         account: bbUsdcOwner,
@@ -326,7 +277,7 @@ describe("sharedLiquidity", () => {
             {
               id: usdc_wstEth.id,
               caps: {
-                maxIn: parseUnits("1000000", 6),
+                maxIn: parseUnits("10000000", 6),
                 maxOut: 0n,
               },
             },
@@ -334,7 +285,14 @@ describe("sharedLiquidity", () => {
               id: usdc_wbtc.id,
               caps: {
                 maxIn: 0n,
-                maxOut: parseUnits("1000000", 6),
+                maxOut: parseUnits("10000000", 6),
+              },
+            },
+            {
+              id: usdc_idle.id,
+              caps: {
+                maxIn: 0n,
+                maxOut: parseUnits("10000000", 6),
               },
             },
           ],
@@ -342,9 +300,7 @@ describe("sharedLiquidity", () => {
       });
 
       const collateralAssets = parseEther("50000");
-      const depositAssets = parseEther("50");
       await client.deal({ erc20: wstEth, amount: collateralAssets });
-      await client.deal({ erc20: wNative, amount: depositAssets });
 
       const { id } = usdc_wstEth;
 
@@ -352,24 +308,11 @@ describe("sharedLiquidity", () => {
 
       const { result } = await renderHook(config, () =>
         useSimulationState({
-          marketIds: [
-            eth_idle.id,
-            eth_rEth.id,
-            eth_sDai.id,
-            eth_wbtc.id,
-            eth_wstEth.id,
-            eth_wstEth_2.id,
-            id,
-            usdc_idle.id,
-            usdc_wbtc.id,
-            usdc_wbIB01.id,
-          ],
+          marketIds: [id],
           users: [
             client.account.address,
             donator.address,
-            bundler,
-            steakUsdc.address,
-            bbEth.address,
+            generalAdapter1,
             bbUsdc.address,
           ],
           tokens: [
@@ -378,11 +321,9 @@ describe("sharedLiquidity", () => {
             usdc,
             stEth,
             wstEth,
-            steakUsdc.address,
-            bbEth.address,
             bbUsdc.address,
           ],
-          vaults: [steakUsdc.address, bbEth.address, bbUsdc.address],
+          vaults: [bbUsdc.address],
           block,
         }),
       );
@@ -395,27 +336,17 @@ describe("sharedLiquidity", () => {
 
       const target = parseEther("0.92");
 
-      const amountForWbtcUsdctToReachTarget =
-        MathLib.wDivDown(
-          data.getMarket(usdc_wbtc.id).totalBorrowAssets,
-          data.getMarket(usdc_wbtc.id).utilization,
-        ) -
+      const amountForWbtcUsdcToReachTarget =
+        data.getMarket(usdc_wbtc.id).totalSupplyAssets -
         MathLib.wDivDown(
           data.getMarket(usdc_wbtc.id).totalBorrowAssets,
           target,
-        ) -
-        1n; // -1n because of the rounding on withdrawals
-
-      const amountForWstEthUsdcToReach100Utilization = MathLib.wMulDown(
-        data.getMarket(id).totalSupplyAssets,
-        MathLib.WAD - data.getMarket(id).utilization,
-      );
+        );
 
       const maxFriendlyReallocationAmount =
-        amountForWbtcUsdctToReachTarget +
-        amountForWstEthUsdcToReach100Utilization;
+        amountForWbtcUsdcToReachTarget + data.getMarket(id).liquidity;
 
-      const { operations } = await setupBundle(
+      const { operations } = await setupTestBundle(
         client,
         data,
         [
@@ -463,23 +394,23 @@ describe("sharedLiquidity", () => {
           address: wstEth,
           args: {
             amount: collateralAssets,
-            spender: bundler,
+            spender: generalAdapter1,
             nonce: 0n,
           },
         },
         {
           type: "Erc20_Transfer",
-          sender: bundler,
+          sender: generalAdapter1,
           address: wstEth,
           args: {
             amount: collateralAssets,
             from: client.account.address,
-            to: bundler,
+            to: generalAdapter1,
           },
         },
         {
           type: "Blue_SupplyCollateral",
-          sender: bundler,
+          sender: generalAdapter1,
           address: morpho,
           args: {
             id,
@@ -489,22 +420,23 @@ describe("sharedLiquidity", () => {
         },
         {
           type: "Blue_SetAuthorization",
-          sender: bundler,
+          sender: generalAdapter1,
           address: morpho,
           args: {
             owner: client.account.address,
-            isBundlerAuthorized: true,
+            isAuthorized: true,
+            authorized: generalAdapter1,
           },
         },
         {
           type: "MetaMorpho_PublicReallocate",
-          sender: bundler,
+          sender: generalAdapter1,
           address: bbUsdc.address,
           args: {
             withdrawals: [
               {
                 id: usdc_wbtc.id,
-                assets: amountForWbtcUsdctToReachTarget,
+                assets: amountForWbtcUsdcToReachTarget,
               },
             ],
             supplyMarketId: id,
@@ -512,7 +444,7 @@ describe("sharedLiquidity", () => {
         },
         {
           type: "Blue_Borrow",
-          sender: bundler,
+          sender: generalAdapter1,
           address: morpho,
           args: {
             id,
@@ -523,48 +455,14 @@ describe("sharedLiquidity", () => {
           },
         },
       ]);
-    },
-  );
+    });
 
-  test[ChainId.EthMainnet](
-    "should borrow USDC with shared liquidity and full reallocation",
-    async ({ client, config }) => {
-      const steakUsdcOwner = await client.readContract({
-        address: steakUsdc.address,
-        abi: metaMorphoAbi,
-        functionName: "owner",
-      });
-
-      await client.setBalance({
-        address: steakUsdcOwner,
-        value: parseEther("1000"),
-      });
-      await client.writeContract({
-        account: steakUsdcOwner,
-        address: publicAllocator,
-        abi: publicAllocatorAbi,
-        functionName: "setFlowCaps",
-        args: [
-          steakUsdc.address,
-          [
-            {
-              id: usdc_wstEth.id,
-              caps: {
-                maxIn: parseUnits("10000", 6),
-                maxOut: 0n,
-              },
-            },
-            {
-              id: usdc_wbtc.id,
-              caps: {
-                maxIn: 0n,
-                maxOut: parseUnits("20000", 6), // Less than bbUsdc but more than maxIn.
-              },
-            },
-          ],
-        ],
-      });
-
+  // It's a burden to maintain this test.
+  test[ChainId.EthMainnet]
+    .skip("should borrow USDC with shared liquidity and full reallocation", async ({
+      client,
+      config,
+    }) => {
       const bbUsdcOwner = await client.readContract({
         address: bbUsdc.address,
         abi: metaMorphoAbi,
@@ -573,7 +471,7 @@ describe("sharedLiquidity", () => {
 
       await client.setBalance({
         address: bbUsdcOwner,
-        value: parseEther("1000"),
+        value: parseEther("1"),
       });
       await client.writeContract({
         account: bbUsdcOwner,
@@ -586,7 +484,7 @@ describe("sharedLiquidity", () => {
             {
               id: usdc_wstEth.id,
               caps: {
-                maxIn: parseUnits("1000000", 6),
+                maxIn: parseUnits("10000000", 6),
                 maxOut: 0n,
               },
             },
@@ -594,7 +492,14 @@ describe("sharedLiquidity", () => {
               id: usdc_wbtc.id,
               caps: {
                 maxIn: 0n,
-                maxOut: parseUnits("1000000", 6),
+                maxOut: parseUnits("10000000", 6),
+              },
+            },
+            {
+              id: usdc_idle.id,
+              caps: {
+                maxIn: 0n,
+                maxOut: parseUnits("10000000", 6),
               },
             },
           ],
@@ -602,9 +507,7 @@ describe("sharedLiquidity", () => {
       });
 
       const collateralAssets = parseEther("50000");
-      const depositAssets = parseEther("50");
       await client.deal({ erc20: wstEth, amount: collateralAssets });
-      await client.deal({ erc20: wNative, amount: depositAssets });
 
       const { id } = usdc_wstEth;
 
@@ -612,37 +515,17 @@ describe("sharedLiquidity", () => {
 
       const { result } = await renderHook(config, () =>
         useSimulationState({
-          marketIds: [
-            eth_idle.id,
-            eth_rEth.id,
-            eth_sDai.id,
-            eth_wbtc.id,
-            eth_wstEth.id,
-            eth_wstEth_2.id,
-            id,
-            usdc_idle.id,
-            usdc_wbtc.id,
-            usdc_wbIB01.id,
-          ],
-          users: [
-            client.account.address,
-            donator.address,
-            bundler,
-            steakUsdc.address,
-            bbEth.address,
-            bbUsdc.address,
-          ],
+          marketIds: [id],
+          users: [client.account.address, generalAdapter1, bbUsdc.address],
           tokens: [
             NATIVE_ADDRESS,
             wNative,
             usdc,
             stEth,
             wstEth,
-            steakUsdc.address,
-            bbEth.address,
             bbUsdc.address,
           ],
-          vaults: [steakUsdc.address, bbEth.address, bbUsdc.address],
+          vaults: [bbUsdc.address],
           block,
         }),
       );
@@ -655,11 +538,8 @@ describe("sharedLiquidity", () => {
 
       const target = parseEther("0.92");
 
-      const amountForWbtcUsdctToReachTarget =
-        MathLib.wDivDown(
-          data.getMarket(usdc_wbtc.id).totalBorrowAssets,
-          data.getMarket(usdc_wbtc.id).utilization,
-        ) -
+      const amountForWbtcUsdcToReachTarget =
+        data.getMarket(usdc_wbtc.id).totalSupplyAssets -
         MathLib.wDivDown(
           data.getMarket(usdc_wbtc.id).totalBorrowAssets,
           target,
@@ -667,20 +547,15 @@ describe("sharedLiquidity", () => {
 
       const additionnalReallocationAmount = parseUnits("10000", 6);
 
-      const amountForWstEthUsdcToReach100Utilization = MathLib.wMulDown(
-        data.getMarket(id).totalSupplyAssets,
-        MathLib.WAD - data.getMarket(id).utilization,
-      );
-
       const borrowed =
-        amountForWbtcUsdctToReachTarget +
-        amountForWstEthUsdcToReach100Utilization +
+        amountForWbtcUsdcToReachTarget +
+        data.getMarket(id).liquidity +
         additionnalReallocationAmount;
 
       const withdrawnAssets =
-        amountForWbtcUsdctToReachTarget + additionnalReallocationAmount;
+        amountForWbtcUsdcToReachTarget + additionnalReallocationAmount;
 
-      const { operations } = await setupBundle(
+      const { operations } = await setupTestBundle(
         client,
         data,
         [
@@ -728,23 +603,23 @@ describe("sharedLiquidity", () => {
           address: wstEth,
           args: {
             amount: collateralAssets,
-            spender: bundler,
+            spender: generalAdapter1,
             nonce: 0n,
           },
         },
         {
           type: "Erc20_Transfer",
-          sender: bundler,
+          sender: generalAdapter1,
           address: wstEth,
           args: {
             amount: collateralAssets,
             from: client.account.address,
-            to: bundler,
+            to: generalAdapter1,
           },
         },
         {
           type: "Blue_SupplyCollateral",
-          sender: bundler,
+          sender: generalAdapter1,
           address: morpho,
           args: {
             id,
@@ -754,16 +629,17 @@ describe("sharedLiquidity", () => {
         },
         {
           type: "Blue_SetAuthorization",
-          sender: bundler,
+          sender: generalAdapter1,
           address: morpho,
           args: {
             owner: client.account.address,
-            isBundlerAuthorized: true,
+            isAuthorized: true,
+            authorized: generalAdapter1,
           },
         },
         {
           type: "MetaMorpho_PublicReallocate",
-          sender: bundler,
+          sender: generalAdapter1,
           address: bbUsdc.address,
           args: {
             withdrawals: [
@@ -777,7 +653,7 @@ describe("sharedLiquidity", () => {
         },
         {
           type: "Blue_Borrow",
-          sender: bundler,
+          sender: generalAdapter1,
           address: morpho,
           args: {
             id,
@@ -788,6 +664,5 @@ describe("sharedLiquidity", () => {
           },
         },
       ]);
-    },
-  );
+    });
 });

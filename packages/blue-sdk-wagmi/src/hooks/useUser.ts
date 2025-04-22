@@ -8,7 +8,7 @@ import {
   fetchUserQueryOptions,
 } from "../queries/fetchUser.js";
 import type { ConfigParameter, QueryParameter } from "../types/index.js";
-import { mergeDeepEqual } from "../utils/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 
 export type UseUserParameters<
@@ -42,7 +42,7 @@ export function useUser<
     ...query,
     ...options,
     enabled: parameters.user != null && query.enabled,
-    structuralSharing: query.structuralSharing ?? mergeDeepEqual,
+    structuralSharing: query.structuralSharing ?? replaceDeepEqual,
     staleTime:
       query.staleTime ??
       (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),

@@ -1,4 +1,4 @@
-import { addresses } from "@morpho-org/blue-sdk";
+import { type MarketId, addresses } from "@morpho-org/blue-sdk";
 import {
   type DeploylessFetchParameters,
   blueAbi,
@@ -19,15 +19,18 @@ import {
   useVaultUsers,
   useVaults,
 } from "@morpho-org/blue-sdk-wagmi";
+import { values } from "@morpho-org/morpho-ts";
 import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
 import { useMemo } from "react";
-import type { ReadContractErrorType, UnionOmit } from "viem";
+import type { Address, ReadContractErrorType, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useReadContract } from "wagmi";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
   FetchUsersParameters &
   FetchTokensParameters &
-  FetchVaultsParameters;
+  FetchVaultsParameters & {
+    includeVaultQueues?: boolean;
+  };
 
 export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
@@ -49,14 +52,14 @@ export type UseSimulationStateParameters<config extends Config = Config> =
 
 export interface SimulationStateLike<T> {
   global?: { feeRecipient?: T };
-  markets?: T;
-  users?: T;
-  tokens?: T;
-  vaults?: T;
-  positions?: T;
-  holdings?: T;
-  vaultMarketConfigs?: T;
-  vaultUsers?: T;
+  markets?: Record<MarketId, T>;
+  users?: Record<Address, T>;
+  tokens?: Record<Address, T>;
+  vaults?: Record<Address, T>;
+  positions?: Record<Address, Record<MarketId, T>>;
+  holdings?: Record<Address, Record<Address, T>>;
+  vaultMarketConfigs?: Record<Address, Record<MarketId, T>>;
+  vaultUsers?: Record<Address, Record<Address, T>>;
 }
 
 export type UseSimulationReturnType<T> =
@@ -113,6 +116,7 @@ export function useSimulationState<
 >({
   block,
   accrueInterest = true,
+  includeVaultQueues = true,
   ...parameters
 }: UseSimulationStateParameters<config>): UseSimulationStateReturnType {
   const staleTime =
@@ -137,8 +141,25 @@ export function useSimulationState<
     },
   });
 
+  const vaults = useVaults({
+    ...parameters,
+    blockNumber: block?.number,
+    query: {
+      ...parameters.query,
+      enabled: block != null && parameters.query?.enabled,
+    },
+  });
+
+  const marketIds = includeVaultQueues
+    ? Array.from(parameters.marketIds).concat(
+        values(vaults.data).flatMap(
+          (vault) => vault?.supplyQueue.concat(vault.withdrawQueue) ?? [],
+        ),
+      )
+    : parameters.marketIds;
   const markets = useMarkets({
     ...parameters,
+    marketIds,
     blockNumber: block?.number,
     query: {
       ...parameters.query,
@@ -148,6 +169,7 @@ export function useSimulationState<
         : undefined,
     },
   });
+
   const users = useUsers({
     ...parameters,
     blockNumber: block?.number,
@@ -156,15 +178,8 @@ export function useSimulationState<
       enabled: block != null && parameters.query?.enabled,
     },
   });
+
   const tokens = useTokens({
-    ...parameters,
-    blockNumber: block?.number,
-    query: {
-      ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
-    },
-  });
-  const vaults = useVaults({
     ...parameters,
     blockNumber: block?.number,
     query: {
@@ -179,9 +194,9 @@ export function useSimulationState<
     positions: useMemo(
       () =>
         Array.from(parameters.users).flatMap((user) =>
-          Array.from(parameters.marketIds, (marketId) => ({ user, marketId })),
+          Array.from(marketIds, (marketId) => ({ user, marketId })),
         ),
-      [parameters.users, parameters.marketIds],
+      [parameters.users, marketIds],
     ),
     query: {
       ...parameters.query,
@@ -209,9 +224,9 @@ export function useSimulationState<
     configs: useMemo(
       () =>
         Array.from(parameters.vaults).flatMap((vault) =>
-          Array.from(parameters.marketIds, (marketId) => ({ vault, marketId })),
+          Array.from(marketIds, (marketId) => ({ vault, marketId })),
         ),
-      [parameters.vaults, parameters.marketIds],
+      [parameters.vaults, marketIds],
     ),
     query: {
       ...parameters.query,
@@ -302,14 +317,14 @@ export function useSimulationState<
     error,
     isFetchingAny:
       feeRecipient.isFetching ||
-      markets.isFetching ||
-      users.isFetching ||
-      tokens.isFetching ||
-      vaults.isFetching ||
-      positions.isFetching ||
-      holdings.isFetching ||
-      vaultMarketConfigs.isFetching ||
-      vaultUsers.isFetching,
+      markets.isFetchingAny ||
+      users.isFetchingAny ||
+      tokens.isFetchingAny ||
+      vaults.isFetchingAny ||
+      positions.isFetchingAny ||
+      holdings.isFetchingAny ||
+      vaultMarketConfigs.isFetchingAny ||
+      vaultUsers.isFetchingAny,
     isFetching: {
       global: { feeRecipient: feeRecipient.isFetching },
       markets: markets.isFetching,

@@ -80,13 +80,12 @@ const customPosition = new MigratableSupplyPosition_AaveV2(positionConfig);
 ```typescript
 const migrationArgs = {
   amount: BigInt(500),
-  minShares: BigInt(50),
+  maxSharePrice: BigInt(50),
   vault: "0xvault...address",
 };
 
 const migrationBundle = customPosition.getMigrationTx(
   migrationArgs,
-  positionConfig.chainId,
   true,
 );
 
@@ -123,7 +122,7 @@ The obtained bundle is made of:
 #### `MigratableSupplyPosition.Args`
 Arguments required for executing a migration transaction:
 - `amount`: The amount to migrate.
-- `minShares`: The minimum vault shares expected after migration.
+- `maxSharePrice`: The maximum vault share price expected (scaled by RAY).
 - `vault`: The address of the vault to migrate to.
 
 #### `IMigratableSupplyPosition`
@@ -163,6 +162,151 @@ The `IMigratableSupplyPosition_CompoundV3` interface extends the base `IMigratab
 - `cometAddress`: `Address` - The address of the comet instance associated with the user's supply position in the Compound V3 protocol.
 - `cometName`: `string` - The name of the comet instance associated with the user's supply position in the Compound V3 protocol.
 
+## `MigratableBorrowPosition`
+
+An abstraction representing a borrow position that can be migrated between protocols. Each supported protocol has its own specific implementation, derived from this base class:
+
+- `MigratableBorrowPosition_AaveV2`
+- `MigratableBorrowPosition_AaveV3`
+- `MigratableBorrowPosition_CompoundV3`
+
+### Features
+
+- Encapsulates the details of a borrow position.
+- Abstracts the logic to generate migration transactions.
+- Supports specifying protocol, user, and migration constraints.
+
+### Creating an Instance
+
+```typescript
+import { ChainId, Address } from "@morpho-org/blue-sdk";
+import { 
+    MigratableBorrowPosition_AaveV2,
+    IMigratableBorrowPosition_AaveV2
+    } from "@morpho-org/migration-sdk-viem";
+
+const positionConfig: IMigratableBorrowPosition_AaveV2 = {
+  chainId: 1,
+  user: "0x123...abc",
+  loanToken: "0xabc...123loan",
+  collateralToken: "0xabc...123collateral",
+  collateral: BigInt(1000),
+  borrow: BigInt(600),
+  collateralApy: 0.012,
+  borrowApy: 0.008,
+  maxWithdraw: {
+    value: BigInt(1000),
+    limiter: "position",
+  },
+  maxRepay: {
+    value: BigInt(600),
+    limiter: "position",
+  },
+  lltv: parseUnits("95", 16), 
+  isBundlerManaging: false,
+  morphoNonce: 1
+
+  // aave-v2 specific data
+  nonce: 0,
+  aToken: "0x1234...5435",
+  collateralPriceEth: parseUnits("1", 8),
+  loanPriceEth: parseUnits("0.002345", 8)
+};
+
+const customPosition = new MigratableBorrowPosition_AaveV2(positionConfig);
+```
+
+### Building a migration bundle
+
+```typescript
+const migrationArgs = {
+  collateralAmount: BigInt(500),
+  borrowAmount: BigInt(300),
+  marketTo: new MarketParams({...}),
+  slippageFrom: parseUnits("0.00003", 18),
+  minSharePrice: parseUnits("5", 18),
+};
+
+const migrationBundle = customPosition.getMigrationTx(
+  migrationArgs,
+  true,
+);
+
+console.log("Migration Transaction:", migrationBundle);
+
+for(const txRequirement of migrationBundle.requirements.txs) {
+  await sendTransaction(client, txRequirement.tx);
+}
+
+await migrationBundle.requirements.sign(client);
+
+await sendTransaction(client, migrationBundle.tx());
+```
+
+The obtained `ActionBundle` is made of:
+- `actions`: The list of actions being performed by the bundler contract.
+- `requirements`: The list of requirements that should be fulfilled for the tx to succeed. It is made of:
+  - `txs`: The list of transactions that should be executed before the main bundle.
+    - `type`: action performed (approval, ...)
+    - `args`: arguments used in the transaction
+    - `tx`: encoded transaction
+  - `signatures`: The list of signatures that have to be signed before the execution of the bundle.
+    - `action.type`: action performed (approval, ...)
+    - `action.args`: arguments used in the signature
+    - `sign(client)`: function to encode, request the signature and save the result
+- `tx()`: This function returns the final encoded transaction, ready to be executed.
+
+---
+
+### API Reference
+
+#### `MigratableBorrowPosition.Args`
+Arguments required for executing a migration transaction:
+- `collateralAmount`: The collateral amount to migrate.
+- `borrowAmount`: The borrow amount to migrate.
+- `marketTo`: The market to migrate to.
+- `slippageFrom`?: Slippage tolerance for the current position (optional).
+- `minSharePrice`: The maximum amount of borrow shares mint (protects the sender from unexpected slippage).
+
+#### `IMigratableBorrowPosition`
+- `chainId`: The chain ID where the position resides.
+- `protocol`: The protocol associated with the borrow position.
+- `user`: The user's address.
+- `collateralToken`: The token being used as collateral.
+- `loanToken`: The loan token being borrowed.
+- `collateral`: The total collateral balance of the position.
+- `borrow`: The total borrow balance of the position.
+- `collateralApy`: The annual percentage yield (APY) of the collateral position.
+- `borrowApy`: The annual percentage yield (APY) of the borrow position.
+- `maxWithdraw`: The maximum collateral migration limit and its corresponding limiter.
+- `maxRepay`: The maximum borrow migration limit and its corresponding limiter.
+- `lltv`: The liquidation loan to value (LLTV) of the market
+- `isBundlerManaging`: Whether the migration adapter is authorized to manage user's position on blue
+- `morphoNonce`: User nonce on morpho contract
+
+#### `IMigratableBorrowPosition_AaveV2`
+The `IMigratableBorrowPosition_AaveV2` interface extends the base `IMigratableBorrowPosition` interface, adding properties specific to the Aave V2 protocol:
+- `aToken`: `Address` - The address of the aToken associated with the user's supply position in the Aave V2 protocol.
+- `nonce`: `bigint` - The EIP-2612 nonce of the user for the specified aToken.
+- `collateralPriceEth`: `bigint` - The aave oracle price of the loan token in Eth (8 decimals).
+- `loanPriceEth`: `bigint` - The aave oracle price of the loan token in Eth (8 decimals).
+
+#### `IMigratableBorrowPosition_AaveV3`
+The `IMigratableBorrowPosition_AaveV3` interface extends the base `IMigratableBorrowPosition` interface, adding properties specific to the Aave V3 protocol:
+- `aToken`: `Address` - The address of the aToken associated with the user's supply position in the Aave V3 protocol.
+- `nonce`: `bigint` - The EIP-2612 nonce of the user for the specified aToken.
+- `collateralPriceEth`: `bigint` - The aave oracle price of the collateral token in Eth (8 decimals).
+- `loanPriceEth`: `bigint` - The aave oracle price of the loan token in Eth (8 decimals).
+
+#### `IMigratableBorrowPosition_CompoundV3`
+The `IMigratableBorrowPosition_CompoundV3` interface extends the base `IMigratableBorrowPosition` interface, adding properties specific to the Compound V3 protocol:
+- `nonce`: `bigint` - The user's nonce on the protocol (used for manager authorization with signatures).
+- `collateralPriceUsd`: `bigint` - The compound oracle price of the collateal token in Usd (8 decimals).
+- `loanPriceUsd`: `bigint` - The compound oracle price of the loan token in Usd (8 decimals).
+- `cometAddress`: `Address` - The address of the comet instance associated with the user's borrow position in the Compound V3 protocol.
+- `cometName`: `string` - The name of the comet instance associated with the user's borrow position in the Compound V3 protocol.
+- `baseBorrowMin`: `bigint` - The minimum borrow position that should remain after a partial repay on compound V3
+
 
 ## `fetchMigratablePositions`
 A utility function to fetch migratable positions for a user across various DeFi protocols.
@@ -170,11 +314,11 @@ A utility function to fetch migratable positions for a user across various DeFi 
 ### Features
 
 - Supports multiple DeFi protocols:
-  - Aave V2
-  - Aave V3
-  - Aave V3 Optimizer
-  - Compound V2
-  - Compound V3
+  - Aave V2 (Supply & Borrow)
+  - Aave V3 (Supply & Borrow)
+  - Aave V3 Optimizer (Supply Only)
+  - Compound V2 (Supply Only)
+  - Compound V3 (Supply & Borrow)
 - Allows filtering by protocol.
 - Fetches data using a configurable blockchain client.
 
@@ -238,15 +382,15 @@ A class representing a migratable borrow position on Morpho Blue, enabling the m
 > [!Note]
 > Borrow positions on Morpho Blue are not fetched when calling `fetchMigratablePositions` since they're internal to the protocol and can easily be built from an `AccrualPosition`.
 
-## Features
+### Features
 
 - Supports migration of collateral and borrow amounts between markets.
 - Handles slippage tolerance for both source and destination markets.
 - Compatible with bundler operations for batched transaction execution.
 
-## Usage
+### Usage
 
-### Creating an Instance
+#### Creating an Instance
 
 ```ts
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem"
@@ -262,15 +406,16 @@ const borrowPosition = new MigratableBorrowPosition_Blue({
 
 ---
 
-### Generating Migration Operations
+#### Generating Migration Operations
 
 ```ts
 import { ChainId } from "@morpho-org/blue-sdk";
 
 const migrationArgs = {
   marketTo: "0x...newMarketId",
-  collateralAmount: position.collateral / 2n,
-  borrowAmount: position.borrowAssets / 2n,
+  collateralAssets: position.collateral / 2n,
+  borrowAssets: position.borrowAssets / 2n,
+  borrowShares: 0n,
 };
 
 const operations = borrowPosition.getMigrationOperations(migrationArgs, ChainId.EthMainnet);
@@ -286,10 +431,14 @@ The obtained operation is a `Blue_SupplyCollateral` operation with callbacks and
 
 #### `MigratableBorrowPosition_Blue.Args`
 - `marketTo`: The target market ID for migration.
-- `collateralAmount`: The amount of collateral to supply during migration.
-- `borrowAmount`: The amount of debt to migrate.
+- `collateralAssets`: The amount of collateral to supply during migration.
+- `borrowAssets`: The amount of debt to migrate.
+- `borrowShares`: The amount of debt shares to migrate (must be used to fully migrate a position).
 - `slippageFrom`: Slippage tolerance for the source market (optional).
 - `slippageTo`: Slippage tolerance for the destination market (optional).
+
+> [!Note]
+> `borrowAssets` will be overridden by the conversion of `borrowShares` if both are non-zero.
 
 #### `IMigratableBorrowPosition_Blue`
 - `market`: The current market associated with the borrow position.
@@ -297,4 +446,4 @@ The obtained operation is a `Blue_SupplyCollateral` operation with callbacks and
     - `borrowShares`: The borrow shares of the user.
     - `user`: The user's address.
     - `collateral`: The user's collateral balance.
-    
+

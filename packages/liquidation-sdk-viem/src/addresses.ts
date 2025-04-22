@@ -1,8 +1,8 @@
 import {
   type Address,
-  type ChainAddresses,
   ChainId,
   addresses,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import type { MidasConfig } from "./tokens/midas";
 
@@ -11,6 +11,7 @@ declare module "@morpho-org/blue-sdk" {
     timeBoundedUrd?: Address;
     marketRewardsProgramRegistry?: Address;
 
+    mkr?: Address;
     weEth?: Address;
     ezEth?: Address;
     rsEth?: Address;
@@ -41,8 +42,8 @@ type PreLiquidationFactoryConfig = {
   startBlock: bigint;
 };
 
-export const mainnetAddresses = addresses[ChainId.EthMainnet] as ChainAddresses;
-export const baseAddresses = addresses[ChainId.BaseMainnet] as ChainAddresses;
+export const mainnetAddresses = addresses[ChainId.EthMainnet]!;
+export const baseAddresses = addresses[ChainId.BaseMainnet]!;
 
 mainnetAddresses.usd0 = "0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5";
 mainnetAddresses["usd0++"] = "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0";
@@ -99,18 +100,78 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
       redemptionAsset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913", // USDC
     },
   },
+  [ChainId.PolygonMainnet]: {},
+  [ChainId.ArbitrumMainnet]: {},
+  [ChainId.OptimismMainnet]: {},
+  [ChainId.WorldChainMainnet]: {},
+  [ChainId.FraxtalMainnet]: {},
+  [ChainId.ScrollMainnet]: {},
+  [ChainId.InkMainnet]: {},
+  [ChainId.Unichain]: {},
+  [ChainId.SonicMainnet]: {},
+  [ChainId.HemiMainnet]: {},
+  [ChainId.ModeMainnet]: {},
+  [ChainId.CornMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
-  ChainId,
+  number,
   PreLiquidationFactoryConfig
 > = {
   [ChainId.EthMainnet]: {
-    address: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
+    address: addressesRegistry[ChainId.EthMainnet].preLiquidationFactory,
     startBlock: 21429900n,
   },
   [ChainId.BaseMainnet]: {
-    address: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
+    address: addressesRegistry[ChainId.BaseMainnet].preLiquidationFactory,
     startBlock: 23779056n,
+  },
+  [ChainId.PolygonMainnet]: {
+    address: addressesRegistry[ChainId.PolygonMainnet].preLiquidationFactory,
+    startBlock: 68074185n,
+  },
+  [ChainId.ArbitrumMainnet]: {
+    address: addressesRegistry[ChainId.ArbitrumMainnet].preLiquidationFactory,
+    startBlock: 307326238n,
+  },
+  [ChainId.OptimismMainnet]: {
+    address: addressesRegistry[ChainId.OptimismMainnet].preLiquidationFactory,
+    startBlock: 132139369n,
+  },
+  [ChainId.WorldChainMainnet]: {
+    address: addressesRegistry[ChainId.WorldChainMainnet].preLiquidationFactory,
+    startBlock: 10273494n,
+  },
+  [ChainId.FraxtalMainnet]: {
+    address: addressesRegistry[ChainId.FraxtalMainnet].preLiquidationFactory,
+    startBlock: 16536231n,
+  },
+  [ChainId.ScrollMainnet]: {
+    address: addressesRegistry[ChainId.ScrollMainnet].preLiquidationFactory,
+    startBlock: 13504587n,
+  },
+  [ChainId.InkMainnet]: {
+    address: addressesRegistry[ChainId.InkMainnet].preLiquidationFactory,
+    startBlock: 6385077n,
+  },
+  [ChainId.Unichain]: {
+    address: addressesRegistry[ChainId.Unichain].preLiquidationFactory,
+    startBlock: 9381237n,
+  },
+  [ChainId.SonicMainnet]: {
+    address: addressesRegistry[ChainId.SonicMainnet].preLiquidationFactory,
+    startBlock: 9102286n,
+  },
+  [ChainId.HemiMainnet]: {
+    address: addressesRegistry[ChainId.HemiMainnet].preLiquidationFactory,
+    startBlock: 1188907n,
+  },
+  [ChainId.ModeMainnet]: {
+    address: addressesRegistry[ChainId.ModeMainnet].preLiquidationFactory,
+    startBlock: 19983599n,
+  },
+  [ChainId.CornMainnet]: {
+    address: addressesRegistry[ChainId.CornMainnet].preLiquidationFactory,
+    startBlock: 253107n,
   },
 };

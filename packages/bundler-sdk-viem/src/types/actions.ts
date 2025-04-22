@@ -8,7 +8,6 @@ import type {
 } from "viem";
 
 import type { Address, InputMarketParams } from "@morpho-org/blue-sdk";
-import type { SimulationResult } from "@morpho-org/simulation-sdk";
 
 export interface Authorization {
   authorizer: Address;
@@ -32,22 +31,48 @@ export interface Permit2PermitSingleDetails {
 
 export interface Permit2PermitSingle {
   details: Permit2PermitSingleDetails;
-  spender: Address;
   sigDeadline: bigint;
 }
 
 export interface ActionArgs {
   /* ERC20 */
-  nativeTransfer: [recipient: Address, amount: bigint];
-  erc20Transfer: [asset: Address, recipient: Address, amount: bigint];
-  erc20TransferFrom: [asset: Address, amount: bigint];
+  nativeTransfer: [
+    owner: Address,
+    recipient: Address,
+    amount: bigint,
+    skipRevert?: boolean,
+  ];
+  erc20Transfer: [
+    asset: Address,
+    recipient: Address,
+    amount: bigint,
+    adapter: Address,
+    skipRevert?: boolean,
+  ];
+  erc20TransferFrom: [
+    asset: Address,
+    amount: bigint,
+    recipient: Address,
+    skipRevert?: boolean,
+  ];
 
   /* ERC20Wrapper */
-  erc20WrapperDepositFor: [wrapper: Address, amount: bigint];
-  erc20WrapperWithdrawTo: [wrapper: Address, account: Address, amount: bigint];
+  erc20WrapperDepositFor: [
+    wrapper: Address,
+    underlying: Address,
+    amount: bigint,
+    skipRevert?: boolean,
+  ];
+  erc20WrapperWithdrawTo: [
+    wrapper: Address,
+    receiver: Address,
+    amount: bigint,
+    skipRevert?: boolean,
+  ];
 
   /* Permit */
   permit: [
+    owner: Address,
     asset: Address,
     amount: bigint,
     deadline: bigint,
@@ -55,6 +80,7 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
   permitDai: [
+    owner: Address,
     nonce: bigint,
     expiry: bigint,
     allowed: boolean,
@@ -64,49 +90,53 @@ export interface ActionArgs {
 
   /* Permit2 */
   approve2: [
+    owner: Address,
     permitSingle: Permit2PermitSingle,
     signature: Hex | null,
     skipRevert?: boolean,
   ];
-  transferFrom2: [asset: Address, amount: bigint];
+  transferFrom2: [
+    asset: Address,
+    amount: bigint,
+    recipient: Address,
+    skipRevert?: boolean,
+  ];
 
   /* ERC4626 */
   erc4626Mint: [
     erc4626: Address,
     shares: bigint,
-    maxAssets: bigint,
+    maxSharePrice: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
   erc4626Deposit: [
     erc4626: Address,
     assets: bigint,
-    minShares: bigint,
+    maxSharePrice: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
   erc4626Withdraw: [
     erc4626: Address,
     assets: bigint,
-    maxShares: bigint,
+    minSharePrice: bigint,
     receiver: Address,
     owner: Address,
+    skipRevert?: boolean,
   ];
   erc4626Redeem: [
     erc4626: Address,
     shares: bigint,
-    minAssets: bigint,
+    minSharePrice: bigint,
     receiver: Address,
     owner: Address,
+    skipRevert?: boolean,
   ];
 
   /* Morpho */
   morphoSetAuthorizationWithSig: [
-    authorization: {
-      authorizer: Address;
-      authorized: Address;
-      isAuthorized: boolean;
-      nonce: bigint;
-      deadline: bigint;
-    },
+    authorization: Authorization,
     signature: Hex | null,
     skipRevert?: boolean,
   ];
@@ -117,12 +147,14 @@ export interface ActionArgs {
     slippageAmount: bigint,
     onBehalf: Address,
     onMorphoSupply: Action[],
+    skipRevert?: boolean,
   ];
   morphoSupplyCollateral: [
     market: InputMarketParams,
     assets: bigint,
     onBehalf: Address,
     onMorphoSupplyCollateral: Action[],
+    skipRevert?: boolean,
   ];
   morphoBorrow: [
     market: InputMarketParams,
@@ -130,6 +162,7 @@ export interface ActionArgs {
     shares: bigint,
     slippageAmount: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
   morphoRepay: [
     market: InputMarketParams,
@@ -138,6 +171,7 @@ export interface ActionArgs {
     slippageAmount: bigint,
     onBehalf: Address,
     onMorphoRepay: Action[],
+    skipRevert?: boolean,
   ];
   morphoWithdraw: [
     market: InputMarketParams,
@@ -145,21 +179,23 @@ export interface ActionArgs {
     shares: bigint,
     slippageAmount: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
   morphoWithdrawCollateral: [
     market: InputMarketParams,
     assets: bigint,
     receiver: Address,
+    skipRevert?: boolean,
   ];
 
   /* MetaMorpho */
 
   reallocateTo: [
-    publicAllocator: Address,
     vault: Address,
-    value: bigint,
+    fee: bigint,
     withdrawals: InputReallocation[],
     supplyMarket: InputMarketParams,
+    skipRevert?: boolean,
   ];
 
   /* Universal Rewards Distributor */
@@ -174,33 +210,75 @@ export interface ActionArgs {
   ];
 
   /* Wrapped Native */
-  wrapNative: [amount: bigint];
-  unwrapNative: [amount: bigint];
+  wrapNative: [amount: bigint, recipient: Address, skipRevert?: boolean];
+  unwrapNative: [amount: bigint, recipient: Address, skipRevert?: boolean];
 
   /* stETH */
-  stakeEth: [amount: bigint, minShares: bigint, referral: Address];
+  stakeEth: [
+    amount: bigint,
+    minShares: bigint,
+    referral: Address,
+    recipient: Address,
+    skipRevert?: boolean,
+  ];
 
   /* Wrapped stETH */
-  wrapStEth: [amount: bigint];
-  unwrapStEth: [amount: bigint];
+  wrapStEth: [amount: bigint, recipient: Address, skipRevert?: boolean];
+  unwrapStEth: [amount: bigint, recipient: Address, skipRevert?: boolean];
 
   /* AaveV2 */
-  aaveV2Repay: [asset: Address, amount: bigint, rateMode?: bigint];
-  aaveV2Withdraw: [asset: Address, amount: bigint];
+  aaveV2Repay: [
+    asset: Address,
+    amount: bigint,
+    onBehalf: Address,
+    rateMode?: bigint,
+    skipRevert?: boolean,
+  ];
+  aaveV2Withdraw: [
+    asset: Address,
+    amount: bigint,
+    recipient: Address,
+    skipRevert?: boolean,
+  ];
 
   /* AaveV3 */
-  aaveV3Repay: [asset: Address, amount: bigint, rateMode?: bigint];
-  aaveV3Withdraw: [asset: Address, amount: bigint];
+  aaveV3Repay: [
+    asset: Address,
+    amount: bigint,
+    onBehalf: Address,
+    rateMode?: bigint,
+    skipRevert?: boolean,
+  ];
+  aaveV3Withdraw: [
+    asset: Address,
+    amount: bigint,
+    recipient: Address,
+    skipRevert?: boolean,
+  ];
 
   /* AaveV3 Optimizer */
-  aaveV3OptimizerRepay: [underlying: Address, amount: bigint];
+  aaveV3OptimizerRepay: [
+    underlying: Address,
+    amount: bigint,
+    onBehalf: Address,
+    skipRevert?: boolean,
+  ];
   aaveV3OptimizerWithdraw: [
     underlying: Address,
     amount: bigint,
     maxIterations: bigint,
+    recipient: Address,
+    skipRevert?: boolean,
   ];
-  aaveV3OptimizerWithdrawCollateral: [underlying: Address, amount: bigint];
+  aaveV3OptimizerWithdrawCollateral: [
+    underlying: Address,
+    amount: bigint,
+    recipient: Address,
+    skipRevert?: boolean,
+  ];
   aaveV3OptimizerApproveManagerWithSig: [
+    aaveV3Optimizer: Address,
+    owner: Address,
     isApproved: boolean,
     nonce: bigint,
     deadline: bigint,
@@ -209,14 +287,38 @@ export interface ActionArgs {
   ];
 
   /* CompoundV2 */
-  compoundV2Repay: [cToken: Address, amount: bigint];
-  compoundV2Redeem: [cToken: Address, amount: bigint];
+  compoundV2Repay: [
+    cToken: Address,
+    amount: bigint,
+    isEth: boolean,
+    onBehalf: Address,
+    skipRevert?: boolean,
+  ];
+  compoundV2Redeem: [
+    cToken: Address,
+    amount: bigint,
+    isEth: boolean,
+    recipient: Address,
+    skipRevert?: boolean,
+  ];
 
   /* CompoundV3 */
-  compoundV3Repay: [instance: Address, amount: bigint];
-  compoundV3WithdrawFrom: [instance: Address, asset: Address, amount: bigint];
+  compoundV3Repay: [
+    instance: Address,
+    amount: bigint,
+    onBehalf: Address,
+    skipRevert?: boolean,
+  ];
+  compoundV3WithdrawFrom: [
+    instance: Address,
+    asset: Address,
+    amount: bigint,
+    recipient: Address,
+    skipRevert?: boolean,
+  ];
   compoundV3AllowBySig: [
     instance: Address,
+    owner: Address,
     isAllowed: boolean,
     nonce: bigint,
     expiry: bigint,
@@ -264,14 +366,4 @@ export interface SignatureRequirementFunction {
 export interface SignatureRequirement {
   action: Action;
   sign: SignatureRequirementFunction;
-}
-
-export interface ActionBundle {
-  steps: SimulationResult;
-  actions: Action[];
-  requirements: {
-    signatures: SignatureRequirement[];
-    txs: TransactionRequirement[];
-  };
-  tx: () => TransactionRequest & { to: Address; data: Hex };
 }
