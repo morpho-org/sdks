@@ -389,7 +389,7 @@ export namespace BundlerAction {
   /* ERC20 */
 
   /**
-   * Encodes a call to the Adapter to transfer native tokens (ETH on ethereum, MATIC on polygon, etc).
+   * Encodes a call to the GeneralAdapter1 to transfer native tokens (ETH on ethereum, MATIC on polygon, etc).
    * @param chainId The chain id for which to encode the call.
    * @param owner The owner of native tokens.
    * @param recipient The address to send native tokens to.
@@ -436,7 +436,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the GeneralAdapter1 to transfer ERC20 tokens.
+   * Encodes a call to the requested adapter to transfer ERC20 tokens.
    * @param chainId The chain id for which to encode the call.
    * @param asset The address of the ERC20 token to transfer.
    * @param recipient The address to send tokens to.
@@ -1349,7 +1349,7 @@ export namespace BundlerAction {
   /* Universal Rewards Distributor */
 
   /**
-   * Encodes a call to the Adapter to claim rewards from the Universal Rewards Distributor.
+   * Encodes a call to the Universal Rewards Distributor to claim rewards.
    * @param chainId The chain id for which to encode the call.
    * @param distributor The address of the distributor to claim rewards from.
    * @param account The address to claim rewards for.
@@ -1384,7 +1384,7 @@ export namespace BundlerAction {
   /* Wrapped Native */
 
   /**
-   * Encodes a call to the Adapter to wrap native tokens (ETH to WETH on ethereum, MATIC to WMATIC on polygon, etc).
+   * Encodes a call to the GeneralAdapter1 to wrap native tokens (ETH to WETH on ethereum, MATIC to WMATIC on polygon, etc).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of native tokens to wrap (in wei).
    * @param recipient The address to send tokens to.
@@ -1416,7 +1416,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to unwrap native tokens (WETH to ETH on ethereum, WMATIC to MATIC on polygon, etc).
+   * Encodes a call to the GeneralAdapter1 to unwrap native tokens (WETH to ETH on ethereum, WMATIC to MATIC on polygon, etc).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of native tokens to unwrap (in wei).
    * @param recipient The address to send tokens to.
@@ -1450,7 +1450,7 @@ export namespace BundlerAction {
   /* stETH */
 
   /**
-   * Encodes a call to the Adapter to stake native tokens using Lido (ETH to stETH on ethereum).
+   * Encodes a call to the GeneralAdapter1 to stake native tokens using Lido (ETH to stETH on ethereum).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of native tokens to stake (in wei).
    * @param maxSharePrice The maximum amount of wei to pay for minting 1 share (scaled by RAY).
@@ -1488,7 +1488,7 @@ export namespace BundlerAction {
   /* Wrapped stETH */
 
   /**
-   * Encodes a call to the Adapter to wrap stETH (stETH to wstETH on ethereum).
+   * Encodes a call to the GeneralAdapter1 to wrap stETH (stETH to wstETH on ethereum).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of stETH to wrap (in wei).
    * @param recipient The address to send wstETH to.
@@ -1520,7 +1520,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to unwrap wstETH (wstETH to stETH on ethereum).
+   * Encodes a call to the GeneralAdapter1 to unwrap wstETH (wstETH to stETH on ethereum).
    * @param chainId The chain id for which to encode the call.
    * @param amount The amount of wstETH to unwrap (in wei).
    * @param recipient The address to send stETH to.
@@ -1554,7 +1554,7 @@ export namespace BundlerAction {
   /* AaveV2 */
 
   /**
-   * Encodes a call to the Adapter to repay a debt on AaveV2.
+   * Encodes a call to the AaveV2MigrationAdapter to repay a debt on AaveV2.
    * @param chainId The chain id for which to encode the call.
    * @param asset The debt asset to repay.
    * @param amount The amount of debt to repay.
@@ -1592,7 +1592,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdrawn from AaveV2.
+   * Encodes a call to the AaveV2MigrationAdapter to withdraw from AaveV2.
    * @param chainId The chain id for which to encode the call.
    * @param asset The asset to withdraw.
    * @param amount The amount of asset to withdraw.
@@ -1612,8 +1612,6 @@ export namespace BundlerAction {
     if (aaveV2MigrationAdapter == null)
       throw new BundlerErrors.UnexpectedAction("aaveV2Withdraw", chainId);
 
-    recipient ??= aaveV2MigrationAdapter;
-
     return [
       {
         to: aaveV2MigrationAdapter,
@@ -1632,7 +1630,7 @@ export namespace BundlerAction {
   /* AaveV3 */
 
   /**
-   * Encodes a call to the Adapter to repay a debt on AaveV3.
+   * Encodes a call to the AaveV3CoreMigrationAdapter to repay a debt on AaveV3.
    * @param chainId The chain id for which to encode the call.
    * @param asset The debt asset to repay.
    * @param amount The amount of debt to repay.
@@ -1689,8 +1687,6 @@ export namespace BundlerAction {
     } = getChainAddresses(chainId);
     if (aaveV3CoreMigrationAdapter == null)
       throw new BundlerErrors.UnexpectedAction("aaveV3Withdraw", chainId);
-
-    recipient ??= aaveV3CoreMigrationAdapter;
 
     return [
       {
@@ -1771,8 +1767,6 @@ export namespace BundlerAction {
         chainId,
       );
 
-    recipient ??= aaveV3OptimizerMigrationAdapter;
-
     return [
       {
         to: aaveV3OptimizerMigrationAdapter,
@@ -1812,8 +1806,6 @@ export namespace BundlerAction {
         chainId,
       );
 
-    recipient ??= aaveV3OptimizerMigrationAdapter;
-
     return [
       {
         to: aaveV3OptimizerMigrationAdapter,
@@ -1830,7 +1822,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to approve the chain's AaveV3OptimizerMigrationAdapter
+   * Encodes a call to the AaveV3 optimizer to approve the chain's AaveV3OptimizerMigrationAdapter.
    * as the sender's manager on Morpho's AaveV3Optimizer.
    * @param chainId The chain id for which to encode the call.
    * @param owner The owner of the AaveV3Optimizer position.
@@ -1910,7 +1902,7 @@ export namespace BundlerAction {
   /* CompoundV2 */
 
   /**
-   * Encodes a call to the Adapter to repay a debt on CompoundV2.
+   * Encodes a call to the CompoundV2MigrationAdapter to repay a debt on CompoundV2.
    * @param chainId The chain id for which to encode the call.
    * @param cToken The cToken on which to repay the debt.
    * @param amount The amount of debt to repay.
@@ -1953,7 +1945,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdraw collateral from CompoundV2.
+   * Encodes a call to the CompoundV2MigrationAdapter to withdraw collateral from CompoundV2.
    * @param chainId The chain id for which to encode the call.
    * @param cToken The cToken on which to withdraw.
    * @param amount The amount to withdraw.
@@ -1973,8 +1965,6 @@ export namespace BundlerAction {
     } = getChainAddresses(chainId);
     if (compoundV2MigrationAdapter == null)
       throw new BundlerErrors.UnexpectedAction("compoundV2Repay", chainId);
-
-    recipient ??= compoundV2MigrationAdapter;
 
     return [
       {
@@ -2000,7 +1990,7 @@ export namespace BundlerAction {
   /* CompoundV3 */
 
   /**
-   * Encodes a call to the Adapter to repay a debt on CompoundV3.
+   * Encodes a call to the CompoundV3MigrationAdapter to repay a debt on CompoundV3.
    * @param chainId The chain id for which to encode the call.
    * @param instance The CompoundV3 instance on which to repay the debt.
    * @param amount The amount of debt to repay.
@@ -2036,7 +2026,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to withdraw collateral from CompoundV3.
+   * Encodes a call to the CompoundV3MigrationAdapter to withdraw collateral from CompoundV3.
    * @param chainId The chain id for which to encode the call.
    * @param instance The CompoundV3 instance on which to withdraw.
    * @param asset The asset to withdraw.
@@ -2061,8 +2051,6 @@ export namespace BundlerAction {
         chainId,
       );
 
-    recipient ??= compoundV3MigrationAdapter;
-
     return [
       {
         to: compoundV3MigrationAdapter,
@@ -2079,7 +2067,7 @@ export namespace BundlerAction {
   }
 
   /**
-   * Encodes a call to the Adapter to allow the chain's CompoundV3MigrationAdapter
+   * Encodes a call to the CompoundV3 instance to allow the chain's CompoundV3MigrationAdapter.
    * to act on the sender's position on CompoundV3.
    * @param chainId The chain id for which to encode the call.
    * @param instance The CompoundV3 instance on which to submit the signature.
