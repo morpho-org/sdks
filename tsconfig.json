@@ -17,7 +17,6 @@
     "noUncheckedIndexedAccess": true,
     "esModuleInterop": true,
     "resolveJsonModule": true,
-    "incremental": true,
     "experimentalDecorators": true,
     "jsx": "preserve"
   }

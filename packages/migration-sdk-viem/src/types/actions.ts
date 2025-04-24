@@ -1,4 +1,3 @@
-import type {} from "@morpho-org/bundler-sdk-viem";
 import type { Address, Hex, TransactionRequest } from "viem";
 
 export interface MigrationTransactionRequirementArgs {
