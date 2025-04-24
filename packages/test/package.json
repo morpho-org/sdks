@@ -11,7 +11,6 @@
     "email": "contact@morpho.org"
   },
   "license": "MIT",
-  "main": "src/index.ts",
   "files": ["lib"],
   "exports": {
     ".": "./src/index.ts",
@@ -23,7 +22,9 @@
   },
   "scripts": {
     "prepublish": "$npm_execpath build",
-    "build": "tsc"
+    "build": "$npm_execpath build:cjs && $npm_execpath build:esm",
+    "build:cjs": "tsc --build tsconfig.build.cjs.json",
+    "build:esm": "tsc --build tsconfig.build.esm.json"
   },
   "dependencies": {
     "lodash.kebabcase": "^4.1.1",
@@ -58,32 +59,36 @@
     "wagmi": "^2.14.10"
   },
   "publishConfig": {
-    "main": "lib/index.js",
-    "types": "lib/index.d.ts",
     "exports": {
       ".": {
-        "types": "./lib/index.d.ts",
-        "default": "./lib/index.js"
+        "types": "./lib/esm/index.d.ts",
+        "import": "./lib/esm/index.js",
+        "require": "./lib/cjs/index.js"
       },
       "./vitest": {
-        "types": "./lib/vitest/index.d.ts",
-        "default": "./lib/vitest/index.js"
+        "types": "./lib/esm/vitest/index.d.ts",
+        "import": "./lib/esm/vitest/index.js",
+        "require": "./lib/cjs/vitest/index.js"
       },
       "./vitest/ethers": {
-        "types": "./lib/vitest/ethers.d.ts",
-        "default": "./lib/vitest/ethers.js"
+        "types": "./lib/esm/vitest/ethers.d.ts",
+        "import": "./lib/esm/vitest/ethers.js",
+        "require": "./lib/cjs/vitest/ethers.js"
       },
       "./fixtures": {
-        "types": "./lib/fixtures/index.d.ts",
-        "default": "./lib/fixtures/index.js"
+        "types": "./lib/esm/fixtures/index.d.ts",
+        "import": "./lib/esm/fixtures/index.js",
+        "require": "./lib/cjs/fixtures/index.js"
       },
       "./fixtures/ethers": {
-        "types": "./lib/fixtures/ethers.d.ts",
-        "default": "./lib/fixtures/ethers.js"
+        "types": "./lib/esm/fixtures/ethers.d.ts",
+        "import": "./lib/esm/fixtures/ethers.js",
+        "require": "./lib/cjs/fixtures/ethers.js"
       },
       "./playwright": {
-        "types": "./lib/playwright.d.ts",
-        "default": "./lib/playwright.js"
+        "types": "./lib/esm/playwright.d.ts",
+        "import": "./lib/esm/playwright.js",
+        "require": "./lib/cjs/playwright.js"
       }
     }
   }
