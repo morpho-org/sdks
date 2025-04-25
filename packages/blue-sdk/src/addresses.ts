@@ -347,6 +347,20 @@ export const addressesRegistry = {
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xDF0B24095e15044538866576754F3C964e902Ee6",
   },
+  [ChainId.PlumeMainnet]: {
+    morpho: "0x42b18785CE0Aed7BF7Ca43a39471ED4C0A3e0bB5",
+    bundler3: {
+      bundler3: "0x5437C8788f4CFbaA55be6FBf30379bc7dd7f69C3",
+      generalAdapter1: "0x65ff368930Cb7eB4CA5C5eBC58bb69E6Ed198BA5",
+    },
+    adaptiveCurveIrm: "0x7420302Ddd469031Cd2282cd64225cCd46F581eA",
+    publicAllocator: "0x58485338D93F4e3b4Bf2Af1C9f9C0aDF087AEf1C",
+    metaMorphoFactory: "0x2525D453D9BA13921D5aB5D8c12F9202b0e19456",
+    chainlinkOracleFactory: "0x133F742c0D36864F37e15C33a18bA6fdc950ED0f",
+    preLiquidationFactory: "0xF184156Cf6Ad4D3dA7F6449D40755A0f9de97ef3",
+
+    wNative: "0xEa237441c92CAe6FC17Caaf9a7acB3f953be4bd1",
+  },
 } as const;
 
 export const addresses = addressesRegistry as Record<number, ChainAddresses>;
@@ -409,6 +423,7 @@ export const unwrappedTokensMapping: Record<
   [ChainId.HemiMainnet]: {},
   [ChainId.ModeMainnet]: {},
   [ChainId.CornMainnet]: {},
+  [ChainId.PlumeMainnet]: {},
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {

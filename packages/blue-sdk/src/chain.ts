@@ -13,6 +13,7 @@ export enum ChainId {
   HemiMainnet = 43111,
   ModeMainnet = 34443,
   CornMainnet = 21000000,
+  PlumeMainnet = 98866,
 }
 
 export interface ChainMetadata {
@@ -142,6 +143,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Bitcoin", symbol: "BTCN", decimals: 18 },
       explorerUrl: "https://cornscan.io",
       identifier: "corn",
+    },
+    [ChainId.PlumeMainnet]: {
+      name: "Plume",
+      id: ChainId.PlumeMainnet,
+      nativeCurrency: { name: "Plume", symbol: "PLUME", decimals: 18 },
+      explorerUrl: "https://phoenix-explorer.plumenetwork.xyz",
+      identifier: "plume",
     },
   };
 }
