@@ -4,5 +4,6 @@
     "outDir": "lib",
     "rootDir": ".",
     "baseUrl": "."
-  }
+  },
+  "include": ["src", "test"]
 }
