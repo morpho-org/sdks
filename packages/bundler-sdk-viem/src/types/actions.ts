@@ -325,6 +325,13 @@ export interface ActionArgs {
     signature: Hex | null,
     skipRevert?: boolean,
   ];
+
+  /* MORPHO Token */
+  morphoWrapperDepositFor: [
+    recipient: Address,
+    amount: bigint,
+    skipRevert?: boolean,
+  ];
 }
 
 export type ActionType = keyof ActionArgs;
