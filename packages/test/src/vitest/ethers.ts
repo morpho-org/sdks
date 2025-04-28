@@ -1,6 +1,6 @@
-import type { AnvilArgs } from "@morpho-org/test";
 import { type HDNodeWallet, JsonRpcProvider } from "ethers";
 import type { Chain } from "viem";
+import type { AnvilArgs } from "../anvil";
 import { testWallet } from "../fixtures/ethers";
 import { type ViemTestContext, createViemTest } from "./index";
 
