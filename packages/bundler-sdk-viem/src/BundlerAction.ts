@@ -13,7 +13,7 @@ import {
 } from "./abis.js";
 
 import {
-  type ChainId,
+  ChainId,
   type InputMarketParams,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -381,6 +381,11 @@ export namespace BundlerAction {
           skipRevert,
         );
       }
+
+      /* MORPHO token */
+      case "morphoWrapperDepositFor": {
+        return BundlerAction.morphoWrapperDepositFor(chainId, ...args);
+      }
     }
 
     throw Error(`unhandled action encoding: ${type}`);
@@ -699,6 +704,40 @@ export namespace BundlerAction {
           abi: generalAdapter1Abi,
           functionName: "permit2TransferFrom",
           args: [asset, recipient, amount],
+        }),
+        value: 0n,
+        skipRevert,
+        callbackHash: zeroHash,
+      },
+    ];
+  }
+
+  /**
+   * Encodes a call to the GeneralAdapter1 to wrap legacy MORPHO tokens.
+   * @param chainId The chain id for which to encode the call.
+   * @param recipient The recipient of MORPHO tokens.
+   * @param amount The amount of tokens to wrap.
+   * @param skipRevert Whether to allow the wrapp to revert without making the whole bundler revert. Defaults to false.
+   */
+  export function morphoWrapperDepositFor(
+    chainId: ChainId,
+    recipient: Address,
+    amount: bigint,
+    skipRevert = false,
+  ): BundlerCall[] {
+    if (chainId !== ChainId.EthMainnet)
+      throw new Error("MORPHO wrapping is only available on ethereum mainnet");
+    const {
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(chainId);
+
+    return [
+      {
+        to: generalAdapter1,
+        data: encodeFunctionData({
+          abi: ethereumGeneralAdapter1Abi,
+          functionName: "morphoWrapperDepositFor",
+          args: [recipient, amount],
         }),
         value: 0n,
         skipRevert,
