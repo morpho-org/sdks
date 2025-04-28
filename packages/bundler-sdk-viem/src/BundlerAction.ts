@@ -717,7 +717,7 @@ export namespace BundlerAction {
    * @param chainId The chain id for which to encode the call.
    * @param recipient The recipient of MORPHO tokens.
    * @param amount The amount of tokens to wrap.
-   * @param skipRevert Whether to allow the wrapp to revert without making the whole bundler revert. Defaults to false.
+   * @param skipRevert Whether to allow the wrap to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoWrapperDepositFor(
     chainId: ChainId,
