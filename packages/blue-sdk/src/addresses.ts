@@ -3,8 +3,8 @@ import {
   type DottedKeys,
   entries,
 } from "@morpho-org/morpho-ts";
-import isPlainObject from "lodash/isPlainObject";
-import mergeWith from "lodash/mergeWith";
+import isPlainObject from "lodash.isplainobject";
+import mergeWith from "lodash.mergewith";
 import { ChainId } from "./chain.js";
 import { UnsupportedChainIdError } from "./errors.js";
 import type { Address } from "./types.js";
@@ -368,8 +368,6 @@ const _addressesRegistry = {
   },
 } as const;
 
-export const addresses = _addressesRegistry as Record<number, ChainAddresses>;
-
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
 
 export const getChainAddresses = (chainId: number): ChainAddresses => {
@@ -508,6 +506,7 @@ export const convexWrapperTokens: Record<number, Set<Address>> = {
 };
 
 export let addressesRegistry = Object.freeze(_addressesRegistry);
+export let addresses = addressesRegistry as Record<number, ChainAddresses>;
 
 export function registerCustomAddresses(
   customAddresses:
@@ -520,7 +519,7 @@ export function registerCustomAddresses(
       throw new Error(`Cannot override existing address: ${key}`);
   };
 
-  addressesRegistry = Object.freeze(
+  addresses = addressesRegistry = Object.freeze(
     mergeWith({}, _addressesRegistry, customAddresses, customizer),
   );
 }
