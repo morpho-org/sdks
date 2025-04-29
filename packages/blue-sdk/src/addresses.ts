@@ -381,10 +381,7 @@ export const getChainAddresses = (chainId: number): ChainAddresses => {
  * Assumptions:
  * - unwrapped token has same number of decimals than wrapped tokens.
  */
-export const unwrappedTokensMapping: Record<
-  ChainId,
-  Record<Address, Address>
-> = {
+const _unwrappedTokensMapping: Record<ChainId, Record<Address, Address>> = {
   [ChainId.EthMainnet]: {
     [_addressesRegistry[ChainId.EthMainnet].wbIB01]:
       _addressesRegistry[ChainId.EthMainnet].bIB01,
@@ -507,11 +504,15 @@ export const convexWrapperTokens: Record<number, Set<Address>> = {
 
 export let addressesRegistry = Object.freeze(_addressesRegistry);
 export let addresses = addressesRegistry as Record<number, ChainAddresses>;
+export let unwrappedTokensMapping = Object.freeze(_unwrappedTokensMapping);
 
 export function registerCustomAddresses(
   customAddresses:
     | Record<keyof typeof _addressesRegistry, DeepPartial<ChainAddresses>>
-    | Record<number, ChainAddresses>,
+    | Record<number, ChainAddresses> = {},
+  {
+    unwrappedTokens,
+  }: { unwrappedTokens?: Record<number, Record<Address, Address>> } = {},
 ) {
   // biome-ignore lint/suspicious/noExplicitAny: type is not trivial and not important here
   const customizer = (objValue: any, _srcValue: any, key: string) => {
@@ -522,4 +523,9 @@ export function registerCustomAddresses(
   addresses = addressesRegistry = Object.freeze(
     mergeWith({}, _addressesRegistry, customAddresses, customizer),
   );
+
+  if (unwrappedTokens)
+    unwrappedTokensMapping = Object.freeze(
+      mergeWith({}, _unwrappedTokensMapping, unwrappedTokens, customizer),
+    );
 }
