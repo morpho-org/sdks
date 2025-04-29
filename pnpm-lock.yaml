@@ -89,6 +89,12 @@ importers:
       '@noble/hashes':
         specifier: ^1.6.1
         version: 1.6.1
+      '@types/lodash':
+        specifier: ^4.17.12
+        version: 4.17.12
+      lodash:
+        specifier: ^4.17.21
+        version: 4.17.21
     devDependencies:
       '@morpho-org/morpho-ts':
         specifier: workspace:^

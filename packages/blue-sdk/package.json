@@ -19,7 +19,9 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@noble/hashes": "^1.6.1"
+    "@noble/hashes": "^1.6.1",
+    "@types/lodash": "^4.17.12",
+    "lodash": "^4.17.21"
   },
   "peerDependencies": {
     "@morpho-org/morpho-ts": "workspace:^"
