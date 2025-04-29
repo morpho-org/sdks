@@ -1,7 +1,6 @@
 import { SimulationErrors } from "../../errors.js";
 import type { Erc20Operation } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
-
 import { handleErc20ApproveOperation } from "./approve.js";
 import { handleErc20PermitOperation } from "./permit.js";
 import { handleErc20Permit2Operation } from "./permit2.js";

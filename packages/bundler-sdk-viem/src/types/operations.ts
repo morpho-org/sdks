@@ -1,14 +1,18 @@
-import type {
-  BlueOperationArgs,
-  BlueOperationType,
-  CALLBACK_OPERATIONS,
-  Erc20OperationArgs,
-  Erc20OperationType,
-  MetaMorphoOperationArgs,
-  MetaMorphoOperationType,
-  OperationArgs,
-  OperationType,
-  WithOperationArgs,
+import {
+  type BlueOperationArgs,
+  type BlueOperationType,
+  type CALLBACK_OPERATIONS,
+  ERC20_OPERATIONS,
+  type Erc20OperationArgs,
+  type Erc20OperationType,
+  type MetaMorphoOperationArgs,
+  type MetaMorphoOperationType,
+  type OperationArgs,
+  type OperationType,
+  PARASWAP_OPERATIONS,
+  type ParaswapOperationArgs,
+  type ParaswapOperationType,
+  type WithOperationArgs,
 } from "@morpho-org/simulation-sdk";
 
 export const BUNDLER_OPERATIONS = [
@@ -19,16 +23,12 @@ export const BUNDLER_OPERATIONS = [
   "Blue_SupplyCollateral",
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
+  "Blue_Paraswap_BuyDebt",
   "MetaMorpho_Deposit",
   "MetaMorpho_Withdraw",
   "MetaMorpho_PublicReallocate",
-  "Erc20_Approve",
-  "Erc20_Permit",
-  "Erc20_Permit2",
-  "Erc20_Transfer",
-  "Erc20_Transfer2",
-  "Erc20_Wrap",
-  "Erc20_Unwrap",
+  ...ERC20_OPERATIONS,
+  ...PARASWAP_OPERATIONS,
 ] as const satisfies readonly OperationType[];
 
 export type BundlerOperationType = (typeof BUNDLER_OPERATIONS)[number];
@@ -73,6 +73,7 @@ export const BLUE_INPUT_OPERATIONS = [
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
   "Blue_SetAuthorization",
+  "Blue_Paraswap_BuyDebt",
 ] as const satisfies readonly BlueOperationType[];
 
 export type BlueInputBundlerOperationType =
@@ -111,6 +112,16 @@ export type MetaMorphoInputBundlerOperationType =
 export type MetaMorphoInputBundlerOperation =
   BundlerOperations[MetaMorphoInputBundlerOperationType];
 
+export const PARASWAP_INPUT_OPERATIONS = [
+  "Paraswap_Buy",
+  "Paraswap_Sell",
+] as const satisfies readonly ParaswapOperationType[];
+
+export type ParaswapInputBundlerOperationType =
+  (typeof PARASWAP_INPUT_OPERATIONS)[number];
+export type ParaswapInputBundlerOperation =
+  BundlerOperations[ParaswapInputBundlerOperationType];
+
 export const ERC20_INPUT_OPERATIONS = [
   "Erc20_Wrap",
   "Erc20_Unwrap",
@@ -124,16 +135,19 @@ export type Erc20InputBundlerOperation =
 export interface InputBundlerOperationArgs
   extends BlueOperationArgs,
     MetaMorphoOperationArgs,
+    ParaswapOperationArgs,
     Erc20OperationArgs {}
 
 export type InputBundlerOperationType =
   | BlueInputBundlerOperationType
   | MetaMorphoInputBundlerOperationType
+  | ParaswapInputBundlerOperationType
   | Erc20InputBundlerOperationType;
 
 export type InputBundlerOperation =
   | BlueInputBundlerOperation
   | MetaMorphoInputBundlerOperation
+  | ParaswapInputBundlerOperation
   | Erc20InputBundlerOperation;
 
 // export const isBundlerOperation = (
@@ -164,6 +178,14 @@ export const isErc20InputBundlerOperation = (operation: {
   type: OperationType;
 }): operation is Erc20InputBundlerOperation => {
   return (ERC20_INPUT_OPERATIONS as readonly OperationType[]).includes(
+    operation.type,
+  );
+};
+
+export const isParaswapInputBundlerOperation = (operation: {
+  type: OperationType;
+}): operation is ParaswapInputBundlerOperation => {
+  return (PARASWAP_INPUT_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };
