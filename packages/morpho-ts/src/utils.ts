@@ -150,3 +150,18 @@ export function getLastDefined<T>(
 export function getLastDefined<T>(array: T[]) {
   return getLast(filterDefined(array));
 }
+
+export function deepFreeze<T>(obj: T): T {
+  const propNames = Object.getOwnPropertyNames(obj);
+
+  for (const name of propNames) {
+    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    const value = (obj as any)[name];
+
+    if (value && typeof value === "object") {
+      deepFreeze(value);
+    }
+  }
+
+  return Object.freeze(obj);
+}
