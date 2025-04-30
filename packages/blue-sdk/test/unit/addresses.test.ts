@@ -148,4 +148,30 @@ describe("addresses", () => {
       }),
     ).toThrow();
   });
+
+  test("should prevent manual overrides", () => {
+    const chainAddresses = {
+      morpho: randomAddress(),
+      bundler3: {
+        bundler3: randomAddress(),
+        generalAdapter1: randomAddress(),
+      },
+      adaptiveCurveIrm: randomAddress(),
+      wstEth: randomAddress(),
+      stEth: randomAddress(),
+    } satisfies ChainAddresses;
+
+    expect(() => {
+      addresses[ChainId.EthMainnet] = chainAddresses;
+    }).toThrow();
+
+    expect(() => {
+      addresses[ChainId.EthMainnet]!.morpho = chainAddresses.morpho;
+    }).toThrow();
+
+    expect(() => {
+      addresses[ChainId.EthMainnet]!.bundler3.bundler3 =
+        chainAddresses.bundler3.bundler3;
+    }).toThrow();
+  });
 });

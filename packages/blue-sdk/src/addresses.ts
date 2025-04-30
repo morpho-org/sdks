@@ -1,6 +1,7 @@
 import {
   type DeepPartial,
   type DottedKeys,
+  deepFreeze,
   entries,
 } from "@morpho-org/morpho-ts";
 import isPlainObject from "lodash.isplainobject";
@@ -489,9 +490,9 @@ export const convexWrapperTokens: Record<number, Set<Address>> = {
   ]),
 };
 
-export let addressesRegistry = Object.freeze(_addressesRegistry);
+export let addressesRegistry = deepFreeze(_addressesRegistry);
 export let addresses = addressesRegistry as Record<number, ChainAddresses>;
-export let unwrappedTokensMapping = Object.freeze(_unwrappedTokensMapping);
+export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
 
 /**
  * Registers custom addresses and unwrapped token mappings to extend
@@ -538,12 +539,12 @@ export function registerCustomAddresses({
   };
 
   if (customAddresses)
-    addresses = addressesRegistry = Object.freeze(
+    addresses = addressesRegistry = deepFreeze(
       mergeWith({}, addressesRegistry, customAddresses, customizer),
     );
 
   if (unwrappedTokens)
-    unwrappedTokensMapping = Object.freeze(
+    unwrappedTokensMapping = deepFreeze(
       mergeWith({}, unwrappedTokensMapping, unwrappedTokens, customizer),
     );
 }
