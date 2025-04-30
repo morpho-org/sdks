@@ -506,23 +506,25 @@ export let addressesRegistry = Object.freeze(_addressesRegistry);
 export let addresses = addressesRegistry as Record<number, ChainAddresses>;
 export let unwrappedTokensMapping = Object.freeze(_unwrappedTokensMapping);
 
-export function registerCustomAddresses(
-  customAddresses:
+export function registerCustomAddresses({
+  unwrappedTokens,
+  customAddresses,
+}: {
+  unwrappedTokens?: Record<number, Record<Address, Address>>;
+  customAddresses?:
     | Record<keyof typeof _addressesRegistry, DeepPartial<ChainAddresses>>
-    | Record<number, ChainAddresses> = {},
-  {
-    unwrappedTokens,
-  }: { unwrappedTokens?: Record<number, Record<Address, Address>> } = {},
-) {
+    | Record<number, ChainAddresses>;
+} = {}) {
   // biome-ignore lint/suspicious/noExplicitAny: type is not trivial and not important here
   const customizer = (objValue: any, _srcValue: any, key: string) => {
     if (objValue !== undefined && !isPlainObject(objValue))
       throw new Error(`Cannot override existing address: ${key}`);
   };
 
-  addresses = addressesRegistry = Object.freeze(
-    mergeWith({}, _addressesRegistry, customAddresses, customizer),
-  );
+  if (customAddresses)
+    addresses = addressesRegistry = Object.freeze(
+      mergeWith({}, _addressesRegistry, customAddresses, customizer),
+    );
 
   if (unwrappedTokens)
     unwrappedTokensMapping = Object.freeze(
