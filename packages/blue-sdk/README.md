@@ -124,3 +124,77 @@ const accruedPosition = position.accrueInterest(Time.timestamp()); // Accrue int
 
 position.borrowAssets; // e.g. 20_400000000000000000n (in loan assets).
 ```
+
+### Addresses customization
+#### `registerCustomAddresses`
+
+Extends the default address registry and unwrapped token mapping for known or custom chains. Useful for testing or adding support for new networks.
+
+> [!Note]  
+> - Custom addresses should be registered statically, at the root level.  
+> - Custom addresses can't be removed nor changed.
+
+##### ✅ Use Cases
+
+- Injecting additional or missing contract addresses on known chains.
+- Providing a full set of addresses for an unknown (custom) chain.
+- Registering mappings of wrapped → unwrapped tokens per chain (e.g., WETH → ETH).
+
+---
+
+##### **Function Signature**
+
+```ts
+registerCustomAddresses(options?: {
+  customAddresses?: Record<number, ChainAddresses>; // Can be a subset of ChainAddresses if chain is known
+  unwrappedTokens?: Record<number, Record<Address, Address>>;
+}): void
+```
+
+---
+
+##### **Parameters**
+
+- `customAddresses` *(optional)*  
+  A map of `chainId → ChainAddresses`.  
+  - For **known chains**, partial overrides are allowed (e.g., add a missing adapter).
+  - For **unknown chains**, a complete `ChainAddresses` object with required addresses must be provided.
+  - Throws an error if you attempt to override an existing address.
+
+- `unwrappedTokens` *(optional)*  
+  A map of `chainId → { wrapped → unwrapped }`.
+  - Throws an error if you attempt to override an existing mapping.
+
+---
+
+##### **Behavior**
+
+- Merges user-provided addresses and unwrapped tokens into the internal registries.
+- Uses a deep merge with custom logic to **prevent overwriting existing values**.
+- Updates internal constants: `addressesRegistry`, `addresses`, and `unwrappedTokensMapping`.
+- Applies `Object.freeze()` to ensure immutability.
+
+---
+
+##### **Example**
+
+```ts
+registerCustomAddresses({
+  customAddresses: {
+    8453: { stEth: "0xabc..." }, // provide stEth address on base
+    31337: {
+      morpho: "0x123...",
+      bundler3: {
+        bundler3: "0x456...",
+        ...
+      },
+      ...
+    }, // registers a new local test chain
+  },
+  unwrappedTokens: {
+    31337: {
+      "0xWrapped": "0xUnwrapped" // e.g., WETH → ETH
+    }
+  }
+});
+```
