@@ -3,6 +3,7 @@ import {
   ChainId,
   addresses,
   addressesRegistry,
+  registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
 import type { MidasConfig } from "./tokens/midas";
 
@@ -42,18 +43,22 @@ type PreLiquidationFactoryConfig = {
   startBlock: bigint;
 };
 
-export const mainnetAddresses = addresses[ChainId.EthMainnet]!;
-export const baseAddresses = addresses[ChainId.BaseMainnet]!;
+registerCustomAddresses({
+  customAddresses: {
+    [ChainId.EthMainnet]: {
+      usd0: "0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5",
+      "usd0++": "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0",
+      "usd0usd0++": "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52",
+      sUsds: "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD",
+      usds: "0xdC035D45d973E3EC169d2276DDab16f1e407384F",
+      sky: "0x56072C95FAA701256059aa122697B133aDEd9279",
+      mkrSkyConverter: "0xBDcFCA946b6CDd965f99a839e4435Bcdc1bc470B",
+      daiUsdsConverter: "0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A",
+    },
+  },
+});
 
-mainnetAddresses.usd0 = "0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5";
-mainnetAddresses["usd0++"] = "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0";
-mainnetAddresses["usd0usd0++"] = "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52";
-mainnetAddresses.sUsds = "0xa3931d71877C0E7a3148CB7Eb4463524FEc27fbD";
-mainnetAddresses.usds = "0xdC035D45d973E3EC169d2276DDab16f1e407384F";
-mainnetAddresses.sky = "0x56072C95FAA701256059aa122697B133aDEd9279";
-mainnetAddresses.mkrSkyConverter = "0xBDcFCA946b6CDd965f99a839e4435Bcdc1bc470B";
-mainnetAddresses.daiUsdsConverter =
-  "0x3225737a9Bbb6473CB4a45b7244ACa2BeFdB276A";
+export const mainnetAddresses = addresses[ChainId.EthMainnet]!;
 
 export const curvePools = {
   "usd0usd0++": "0x1d08E7adC263CfC70b1BaBe6dC5Bb339c16Eec52",
