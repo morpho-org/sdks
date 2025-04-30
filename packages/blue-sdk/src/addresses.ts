@@ -381,7 +381,7 @@ export const getChainAddresses = (chainId: number): ChainAddresses => {
  * Assumptions:
  * - unwrapped token has same number of decimals than wrapped tokens.
  */
-const _unwrappedTokensMapping: Record<ChainId, Record<Address, Address>> = {
+const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.EthMainnet]: {
     [_addressesRegistry[ChainId.EthMainnet].wbIB01]:
       _addressesRegistry[ChainId.EthMainnet].bIB01,
@@ -412,23 +412,10 @@ const _unwrappedTokensMapping: Record<ChainId, Record<Address, Address>> = {
     [_addressesRegistry[ChainId.BaseMainnet].testUsdc]:
       _addressesRegistry[ChainId.BaseMainnet].usdc,
   },
-  [ChainId.PolygonMainnet]: {},
-  [ChainId.ArbitrumMainnet]: {},
-  [ChainId.OptimismMainnet]: {},
-  [ChainId.WorldChainMainnet]: {},
-  [ChainId.FraxtalMainnet]: {},
-  [ChainId.ScrollMainnet]: {},
-  [ChainId.InkMainnet]: {},
-  [ChainId.Unichain]: {},
-  [ChainId.SonicMainnet]: {},
-  [ChainId.HemiMainnet]: {},
-  [ChainId.ModeMainnet]: {},
-  [ChainId.CornMainnet]: {},
-  [ChainId.PlumeMainnet]: {},
 };
 
-export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {
-  return unwrappedTokensMapping[chainId][wrappedToken];
+export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
+  return unwrappedTokensMapping[chainId]?.[wrappedToken];
 }
 
 /**
@@ -506,28 +493,57 @@ export let addressesRegistry = Object.freeze(_addressesRegistry);
 export let addresses = addressesRegistry as Record<number, ChainAddresses>;
 export let unwrappedTokensMapping = Object.freeze(_unwrappedTokensMapping);
 
+/**
+ * Registers custom addresses and unwrapped token mappings to extend
+ * the default address registry (on ewisting or unknown chains).
+ *
+ * @param options - Optional configuration object
+ * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
+ *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
+ * @param options.customAddresses - Custom address entries to merge into the default registry.
+ *                                  Can be a subset of `ChainAddresses` if chain is already known.
+ *                                  Must provide all required addresses if chain is unknown.
+ *
+ * @throws {Error} If attempting to override an existing address.
+ *
+ * @example
+ * ```ts
+ * registerCustomAddresses({
+ *   customAddresses: {
+ *     1: { contract: "0xabc..." }
+ *   },
+ *   unwrappedTokens: {
+ *     1: { "0xWrapped": "0xUnwrapped" }
+ *   }
+ * });
+ * ```
+ */
 export function registerCustomAddresses({
   unwrappedTokens,
   customAddresses,
 }: {
   unwrappedTokens?: Record<number, Record<Address, Address>>;
   customAddresses?:
-    | Record<keyof typeof _addressesRegistry, DeepPartial<ChainAddresses>>
+    | DeepPartial<Record<keyof typeof _addressesRegistry, ChainAddresses>>
     | Record<number, ChainAddresses>;
 } = {}) {
   // biome-ignore lint/suspicious/noExplicitAny: type is not trivial and not important here
-  const customizer = (objValue: any, _srcValue: any, key: string) => {
-    if (objValue !== undefined && !isPlainObject(objValue))
+  const customizer = (objValue: any, srcValue: any, key: string) => {
+    if (
+      objValue !== undefined &&
+      !isPlainObject(objValue) &&
+      objValue !== srcValue
+    )
       throw new Error(`Cannot override existing address: ${key}`);
   };
 
   if (customAddresses)
     addresses = addressesRegistry = Object.freeze(
-      mergeWith({}, _addressesRegistry, customAddresses, customizer),
+      mergeWith({}, addressesRegistry, customAddresses, customizer),
     );
 
   if (unwrappedTokens)
     unwrappedTokensMapping = Object.freeze(
-      mergeWith({}, _unwrappedTokensMapping, unwrappedTokens, customizer),
+      mergeWith({}, unwrappedTokensMapping, unwrappedTokens, customizer),
     );
 }
