@@ -162,6 +162,7 @@ export class Market implements IMarket {
   /**
    * Returns the rate at which interest accrued for suppliers of this market,
    * since the last time the market was updated (scaled by WAD).
+   * @deprecated There's no such thing as a supply rate in Morpho. Only the supply APY is meaningful.
    */
   get supplyRate() {
     return MarketUtils.getSupplyRate(this.borrowRate, this);
@@ -170,6 +171,7 @@ export class Market implements IMarket {
   /**
    * Returns the rate at which interest accrued for borrowers of this market,
    * since the last time the market was updated (scaled by WAD).
+   * If interested in the rate at a specific timestamp, use `getBorrowRate(timestamp)` instead.
    */
   get borrowRate() {
     if (this.rateAtTarget == null) return 0n;
@@ -182,17 +184,68 @@ export class Market implements IMarket {
   }
 
   /**
-   * The market's supply-side Annual Percentage Yield (APY) (scaled by WAD).
+   * The market's supply-side Annual Percentage Yield (APY) at the time of the last update (scaled by WAD).
+   * If interested in the APY at a different timestamp, use `getSupplyApy(timestamp)` instead.
    */
   get supplyApy() {
-    return MarketUtils.compoundRate(this.supplyRate);
+    return this.getSupplyApy();
   }
 
   /**
-   * The market's borrow-side Annual Percentage Yield (APY) (scaled by WAD).
+   * The market's borrow-side Annual Percentage Yield (APY) at the time of the last update (scaled by WAD).
+   * If interested in the APY at a different timestamp, use `getBorrowApy(timestamp)` instead.
    */
   get borrowApy() {
-    return MarketUtils.compoundRate(this.borrowRate);
+    return this.getBorrowApy();
+  }
+
+  /**
+   * Returns the rate at which interest accrues for borrowers of this market,
+   * at the given timestamp, if the state remains unchanged (not accrued) (scaled by WAD).
+   */
+  public getBorrowRate(timestamp: BigIntish) {
+    if (this.rateAtTarget == null) return 0n;
+
+    timestamp = BigInt(timestamp);
+
+    const elapsed = timestamp - this.lastUpdate;
+    if (elapsed < 0n)
+      throw new BlueErrors.InvalidInterestAccrual(
+        this.id,
+        timestamp,
+        this.lastUpdate,
+      );
+
+    const { endBorrowRate } = AdaptiveCurveIrmLib.getBorrowRate(
+      this.utilization,
+      this.rateAtTarget,
+      elapsed,
+    );
+
+    return endBorrowRate;
+  }
+
+  /**
+   * The market's borrow-side Annual Percentage Yield (APY) at the given timestamp,
+   * if the state remains unchanged (not accrued) (scaled by WAD).
+   */
+  public getBorrowApy(timestamp: BigIntish = this.lastUpdate) {
+    const borrowRate = this.getBorrowRate(timestamp);
+
+    return MarketUtils.compoundRate(borrowRate);
+  }
+
+  /**
+   * The market's supply-side Annual Percentage Yield (APY) at the given timestamp,
+   * if the state remains unchanged (not accrued) (scaled by WAD).
+   */
+  public getSupplyApy(timestamp: BigIntish = this.lastUpdate) {
+    const borrowApy = this.getBorrowApy(timestamp);
+
+    return MathLib.wMulUp(
+      MathLib.wMulDown(borrowApy, this.utilization),
+      MathLib.WAD - this.fee,
+    );
   }
 
   /**
