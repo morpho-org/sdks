@@ -26,7 +26,7 @@ describe("addresses", () => {
     ).toBeUndefined();
 
     registerCustomAddresses({
-      customAddresses: {
+      addresses: {
         [ChainId.BaseMainnet]: {
           bundler3: {
             aaveV2MigrationAdapter: randomAddress1,
@@ -66,7 +66,7 @@ describe("addresses", () => {
     } satisfies ChainAddresses;
 
     registerCustomAddresses({
-      customAddresses: {
+      addresses: {
         [chainId]: chainAddresses,
       },
       unwrappedTokens: {
@@ -91,7 +91,7 @@ describe("addresses", () => {
 
     expect(() =>
       registerCustomAddresses({
-        customAddresses: {
+        addresses: {
           [ChainId.EthMainnet]: {
             bundler3: {
               bundler3: randomAddress1,
@@ -116,7 +116,7 @@ describe("addresses", () => {
     const randomAddress1 = randomAddress();
 
     registerCustomAddresses({
-      customAddresses: {
+      addresses: {
         [ChainId.BaseMainnet]: {
           wstEth: randomAddress1,
         },
@@ -129,7 +129,7 @@ describe("addresses", () => {
     /* Shouldn't throw since address is the same */
     expect(() =>
       registerCustomAddresses({
-        customAddresses: {
+        addresses: {
           [ChainId.BaseMainnet]: {
             wstEth: randomAddress1,
           },
@@ -140,7 +140,7 @@ describe("addresses", () => {
     /* Should throw since address is different */
     expect(() =>
       registerCustomAddresses({
-        customAddresses: {
+        addresses: {
           [ChainId.BaseMainnet]: {
             wstEth: randomAddress(),
           },

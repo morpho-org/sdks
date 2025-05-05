@@ -155,7 +155,7 @@ export function deepFreeze<T>(obj: T): T {
   const propNames = Object.getOwnPropertyNames(obj);
 
   for (const name of propNames) {
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: name is a property of obj
     const value = (obj as any)[name];
 
     if (value && typeof value === "object") {

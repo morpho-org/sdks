@@ -44,7 +44,7 @@ type PreLiquidationFactoryConfig = {
 };
 
 registerCustomAddresses({
-  customAddresses: {
+  addresses: {
     [ChainId.EthMainnet]: {
       usd0: "0x73A15FeD60Bf67631dC6cd7Bc5B6e8da8190aCF5",
       "usd0++": "0x35D8949372D46B7a3D5A56006AE77B215fc69bC0",

@@ -501,7 +501,7 @@ export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
  * @param options - Optional configuration object
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
- * @param options.customAddresses - Custom address entries to merge into the default registry.
+ * @param options.addresses - Custom address entries to merge into the default registry.
  *                                  Can be a subset of `ChainAddresses` if chain is already known.
  *                                  Must provide all required addresses if chain is unknown.
  *
@@ -510,7 +510,7 @@ export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
  * @example
  * ```ts
  * registerCustomAddresses({
- *   customAddresses: {
+ *   addresses: {
  *     1: { contract: "0xabc..." }
  *   },
  *   unwrappedTokens: {
@@ -521,10 +521,10 @@ export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
  */
 export function registerCustomAddresses({
   unwrappedTokens,
-  customAddresses,
+  addresses: customAddresses,
 }: {
   unwrappedTokens?: Record<number, Record<Address, Address>>;
-  customAddresses?:
+  addresses?:
     | DeepPartial<Record<keyof typeof _addressesRegistry, ChainAddresses>>
     | Record<number, ChainAddresses>;
 } = {}) {

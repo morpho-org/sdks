@@ -146,7 +146,7 @@ Extends the default address registry and unwrapped token mapping for known or cu
 
 ```ts
 registerCustomAddresses(options?: {
-  customAddresses?: Record<number, ChainAddresses>; // Can be a subset of ChainAddresses if chain is known
+  addresses?: Record<number, ChainAddresses>; // Can be a subset of ChainAddresses if chain is known
   unwrappedTokens?: Record<number, Record<Address, Address>>;
 }): void
 ```
@@ -155,7 +155,7 @@ registerCustomAddresses(options?: {
 
 ##### **Parameters**
 
-- `customAddresses` *(optional)*  
+- `addresses` *(optional)*  
   A map of `chainId → ChainAddresses`.  
   - For **known chains**, partial overrides are allowed (e.g., add a missing adapter).
   - For **unknown chains**, a complete `ChainAddresses` object with required addresses must be provided.
@@ -180,7 +180,7 @@ registerCustomAddresses(options?: {
 
 ```ts
 registerCustomAddresses({
-  customAddresses: {
+  addresses: {
     8453: { stEth: "0xabc..." }, // provide stEth address on base
     31337: {
       morpho: "0x123...",
