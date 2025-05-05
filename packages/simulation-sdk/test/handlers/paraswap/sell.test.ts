@@ -1,6 +1,7 @@
 import _ from "lodash";
-import { parseEther, parseUnits } from "viem";
+import { concat, padHex, parseEther, parseUnits, zeroAddress } from "viem";
 
+import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, tokenA, tokenB, userA, userB } from "../../fixtures.js";
@@ -30,6 +31,44 @@ describe(type, () => {
     const expected = _.cloneDeep(dataFixture);
     expected.holdings[userB]![tokenA]!.balance -= amount;
     expected.holdings[userA]![tokenB]!.balance += quotedAmount;
+
+    expect(result).toEqual(expected);
+  });
+
+  test("should buy with calldata", () => {
+    const result = simulateOperation(
+      {
+        type,
+        sender: userB,
+        address: tokenA,
+        args: {
+          dstToken: tokenB,
+          amount,
+          swap: {
+            to: zeroAddress,
+            data: concat([
+              padHex(`0x${quotedAmount.toString(16)}`, { size: 32 }),
+              padHex(`0x${amount.toString(16)}`, { size: 32 }),
+            ]),
+            offsets: {
+              exactAmount: 32n,
+              limitAmount: 0n,
+              quotedAmount: 0n,
+            },
+          },
+          receiver: userA,
+          slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+        },
+      },
+      dataFixture,
+    );
+
+    const expected = _.cloneDeep(dataFixture);
+    expected.holdings[userB]![tokenA]!.balance -= amount;
+    expected.holdings[userA]![tokenB]!.balance += MathLib.wMulDown(
+      quotedAmount,
+      MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+    );
 
     expect(result).toEqual(expected);
   });

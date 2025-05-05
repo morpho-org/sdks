@@ -1,5 +1,6 @@
 import { MathLib } from "@morpho-org/blue-sdk";
-import { hexToBigInt, slice } from "viem";
+import { hexToBigInt, size, slice } from "viem";
+import { ParaswapErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";
 import { handleParaswapOperation } from "../paraswap/index.js";
 import type { OperationHandler } from "../types.js";
@@ -16,20 +17,29 @@ export const handleBlueParaswapBuyDebtOperation: OperationHandler<
     .getAccrualPosition(onBehalf, id)
     .accrueInterest(data.block.timestamp).borrowAssets;
 
-  const amount =
-    "priceE27" in args
-      ? debtAmount
-      : hexToBigInt(
-          slice(args.swap.data, Number(args.swap.offsets.exactAmount)),
-          { size: 32 },
-        );
-  const quotedAmount =
-    "priceE27" in args
-      ? (debtAmount * args.priceE27) / MathLib.RAY
-      : hexToBigInt(
-          slice(args.swap.data, Number(args.swap.offsets.quotedAmount)),
-          { size: 32 },
-        );
+  let amount: bigint;
+  let quotedAmount: bigint;
+
+  if ("swap" in args) {
+    const exactAmountOffset = Number(args.swap.offsets.exactAmount);
+    const quotedAmountOffset = Number(args.swap.offsets.quotedAmount);
+
+    const dataSize = size(args.swap.data);
+    if (exactAmountOffset > dataSize - 32)
+      throw new ParaswapErrors.InvalidOffset(exactAmountOffset, args.swap.data);
+    if (quotedAmountOffset > dataSize - 32)
+      throw new ParaswapErrors.InvalidOffset(exactAmountOffset, args.swap.data);
+
+    amount = hexToBigInt(
+      slice(args.swap.data, exactAmountOffset, exactAmountOffset + 32),
+    );
+    quotedAmount = hexToBigInt(
+      slice(args.swap.data, quotedAmountOffset, quotedAmountOffset + 32),
+    );
+  } else {
+    amount = debtAmount;
+    quotedAmount = MathLib.mulDivDown(debtAmount, args.priceE27, MathLib.RAY);
+  }
 
   handleParaswapOperation(
     {

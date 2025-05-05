@@ -1,10 +1,11 @@
-import { hexToBigInt, slice } from "viem";
+import { hexToBigInt, size, slice } from "viem";
 import type { ParaswapOperations } from "../../operations.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
 
 import { MathLib } from "@morpho-org/blue-sdk";
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { ParaswapErrors } from "../../errors.js";
 
 export const handleParaswapSellOperation: OperationHandler<
   ParaswapOperations["Paraswap_Sell"]
@@ -22,20 +23,26 @@ export const handleParaswapSellOperation: OperationHandler<
   },
   data,
 ) => {
-  let amount =
-    "amount" in args
-      ? args.amount
-      : hexToBigInt(
-          slice(args.swap.data, Number(args.swap.offsets.exactAmount)),
-          { size: 32 },
-        );
-  let quotedAmount =
-    "quotedAmount" in args
-      ? args.quotedAmount
-      : hexToBigInt(
-          slice(args.swap.data, Number(args.swap.offsets.quotedAmount)),
-          { size: 32 },
-        );
+  let amount: bigint;
+  let quotedAmount: bigint;
+
+  if ("swap" in args) {
+    const exactAmountOffset = Number(args.swap.offsets.exactAmount);
+    const quotedAmountOffset = Number(args.swap.offsets.quotedAmount);
+
+    const dataSize = size(args.swap.data);
+    if (exactAmountOffset > dataSize - 32)
+      throw new ParaswapErrors.InvalidOffset(exactAmountOffset, args.swap.data);
+    if (quotedAmountOffset > dataSize - 32)
+      throw new ParaswapErrors.InvalidOffset(exactAmountOffset, args.swap.data);
+
+    amount = hexToBigInt(
+      slice(args.swap.data, exactAmountOffset, exactAmountOffset + 32),
+    );
+    quotedAmount = hexToBigInt(
+      slice(args.swap.data, quotedAmountOffset, quotedAmountOffset + 32),
+    );
+  } else ({ amount, quotedAmount } = args);
 
   if (sellEntireBalance) {
     const oldAmount = amount;

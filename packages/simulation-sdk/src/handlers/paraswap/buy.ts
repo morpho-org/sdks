@@ -3,7 +3,8 @@ import type { OperationHandler } from "../types.js";
 
 import { MathLib } from "@morpho-org/blue-sdk";
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
-import { hexToBigInt, slice } from "viem";
+import { hexToBigInt, size, slice } from "viem";
+import { ParaswapErrors } from "../../errors.js";
 import { handleErc20Operation } from "../erc20/index.js";
 
 export const handleParaswapBuyOperation: OperationHandler<
@@ -12,20 +13,26 @@ export const handleParaswapBuyOperation: OperationHandler<
   { address, args: { srcToken, receiver, slippage = 0n, ...args }, sender },
   data,
 ) => {
-  const amount =
-    "amount" in args
-      ? args.amount
-      : hexToBigInt(
-          slice(args.swap.data, Number(args.swap.offsets.exactAmount)),
-          { size: 32 },
-        );
-  const quotedAmount =
-    "quotedAmount" in args
-      ? args.quotedAmount
-      : hexToBigInt(
-          slice(args.swap.data, Number(args.swap.offsets.quotedAmount)),
-          { size: 32 },
-        );
+  let amount: bigint;
+  let quotedAmount: bigint;
+
+  if ("swap" in args) {
+    const exactAmountOffset = Number(args.swap.offsets.exactAmount);
+    const quotedAmountOffset = Number(args.swap.offsets.quotedAmount);
+
+    const dataSize = size(args.swap.data);
+    if (exactAmountOffset > dataSize - 32)
+      throw new ParaswapErrors.InvalidOffset(exactAmountOffset, args.swap.data);
+    if (quotedAmountOffset > dataSize - 32)
+      throw new ParaswapErrors.InvalidOffset(exactAmountOffset, args.swap.data);
+
+    amount = hexToBigInt(
+      slice(args.swap.data, exactAmountOffset, exactAmountOffset + 32),
+    );
+    quotedAmount = hexToBigInt(
+      slice(args.swap.data, quotedAmountOffset, quotedAmountOffset + 32),
+    );
+  } else ({ amount, quotedAmount } = args);
 
   // Burn sold tokens.
   handleErc20Operation(
