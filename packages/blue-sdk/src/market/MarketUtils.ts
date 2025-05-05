@@ -80,6 +80,7 @@ export namespace MarketUtils {
    * since the last time the market was updated (scaled by WAD).
    * @param borrowRate The average borrow rate since the last market update (scaled by WAD).
    * @param market The market state.
+   * @deprecated There's no such thing as a supply rate in Morpho. Only the supply APY is meaningful.
    */
   export function getSupplyRate(
     borrowRate: BigIntish,
