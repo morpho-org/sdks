@@ -2,6 +2,7 @@ import type { MigratableBorrowPosition } from "./borrow/MigratableBorrowPosition
 import type { MigratableSupplyPosition } from "./supply/index.js";
 
 export { MigratableSupplyPosition } from "./supply/index.js";
+export { MigratableBorrowPosition } from "./borrow/index.js";
 
 export type MigratablePosition =
   | MigratableSupplyPosition
