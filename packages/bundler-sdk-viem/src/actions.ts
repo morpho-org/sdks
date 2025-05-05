@@ -4,7 +4,9 @@ import {
   type Client,
   encodeFunctionData,
   erc20Abi,
+  hexToBigInt,
   maxUint256,
+  slice,
   verifyTypedData,
   zeroAddress,
 } from "viem";
@@ -138,7 +140,7 @@ export const encodeOperation = (
   const deadline = Time.timestamp() + Time.s.from.h(24n);
   const {
     morpho,
-    bundler3: { bundler3, generalAdapter1 },
+    bundler3: { bundler3, generalAdapter1, paraswapAdapter },
     permit2,
     wNative,
     dai,
@@ -854,6 +856,108 @@ export const encodeOperation = (
             amount: assets,
           })),
           dataBefore.getMarket(supplyMarketId).params,
+          operation.skipRevert,
+        ],
+      });
+
+      break;
+    }
+    case "Paraswap_Buy": {
+      if (!("swap" in operation.args))
+        throw new BundlerErrors.MissingSwapData();
+
+      if (paraswapAdapter == null)
+        throw new BundlerErrors.UnexpectedAction("paraswapBuy", chainId);
+
+      const { srcToken, swap, receiver } = operation.args;
+
+      const limitAmountOffset = Number(swap.offsets.limitAmount);
+      const limitAmount = hexToBigInt(
+        slice(swap.data, limitAmountOffset, limitAmountOffset + 32),
+      );
+
+      actions.push(
+        {
+          type: "erc20Transfer",
+          args: [
+            srcToken,
+            paraswapAdapter,
+            limitAmount,
+            generalAdapter1,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "paraswapBuy",
+          args: [
+            swap.to,
+            swap.data,
+            srcToken,
+            address,
+            swap.offsets,
+            receiver,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "erc20Transfer",
+          args: [
+            srcToken,
+            generalAdapter1,
+            maxUint256,
+            paraswapAdapter,
+            operation.skipRevert,
+          ],
+        },
+      );
+
+      break;
+    }
+    case "Paraswap_Sell": {
+      if (!("swap" in operation.args))
+        throw new BundlerErrors.MissingSwapData();
+
+      const {
+        dstToken,
+        swap,
+        sellEntireBalance = false,
+        receiver,
+      } = operation.args;
+
+      actions.push({
+        type: "paraswapSell",
+        args: [
+          swap.to,
+          swap.data,
+          address,
+          dstToken,
+          sellEntireBalance,
+          swap.offsets,
+          receiver,
+          operation.skipRevert,
+        ],
+      });
+
+      break;
+    }
+    case "Blue_Paraswap_BuyDebt": {
+      if (!("swap" in operation.args))
+        throw new BundlerErrors.MissingSwapData();
+
+      const { srcToken, id, swap, onBehalf, receiver } = operation.args;
+
+      const { params } = dataBefore.getMarket(id);
+
+      actions.push({
+        type: "paraswapBuyMorphoDebt",
+        args: [
+          swap.to,
+          swap.data,
+          srcToken,
+          params,
+          swap.offsets,
+          onBehalf,
+          receiver,
           operation.skipRevert,
         ],
       });

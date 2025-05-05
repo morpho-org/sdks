@@ -264,8 +264,11 @@ export const populateSubBundle = (
       case "Blue_Borrow":
       case "Blue_Withdraw":
       case "Blue_WithdrawCollateral":
+      case "Blue_Paraswap_BuyDebt":
         draft.args.onBehalf = sender;
       case "MetaMorpho_Withdraw":
+      case "Paraswap_Buy":
+      case "Paraswap_Sell":
         // Only if sender is receiver otherwise the receiver would be lost.
         if (draft.args.receiver === sender)
           draft.args.receiver = generalAdapter1;

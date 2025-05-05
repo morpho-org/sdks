@@ -23,6 +23,12 @@ export namespace BundlerErrors {
     }
   }
 
+  export class MissingSwapData extends Error {
+    constructor() {
+      super(`missing swap data`);
+    }
+  }
+
   export class UnexpectedAction extends Error {
     constructor(type: ActionType, chainId: number) {
       super(`unexpected action "${type}" on chain "${chainId}"`);
