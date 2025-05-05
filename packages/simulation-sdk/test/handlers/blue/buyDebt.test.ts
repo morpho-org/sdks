@@ -15,7 +15,7 @@ describe(type, () => {
         type,
         sender: userB,
         args: {
-          marketId: marketA1.id,
+          id: marketA1.id,
           srcToken: tokenB,
           priceE27,
           onBehalf: userB,
@@ -45,7 +45,7 @@ describe(type, () => {
           type,
           sender: userB,
           args: {
-            marketId: marketA1.id,
+            id: marketA1.id,
             srcToken: tokenB,
             priceE27,
             onBehalf: userB,

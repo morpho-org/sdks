@@ -129,7 +129,7 @@ export interface BlueOperationArgs {
 
   Blue_Paraswap_BuyDebt:
     | {
-        marketId: MarketId;
+        id: MarketId;
         srcToken: Address;
         priceE27: bigint;
         onBehalf: Address;
@@ -137,7 +137,7 @@ export interface BlueOperationArgs {
         slippage?: bigint;
       }
     | {
-        marketId: MarketId;
+        id: MarketId;
         srcToken: Address;
         swap: {
           to: Address;

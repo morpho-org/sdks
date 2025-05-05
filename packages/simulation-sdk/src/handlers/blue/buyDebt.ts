@@ -7,16 +7,13 @@ import type { OperationHandler } from "../types.js";
 export const handleBlueParaswapBuyDebtOperation: OperationHandler<
   BlueOperations["Blue_Paraswap_BuyDebt"]
 > = (
-  {
-    args: { marketId, srcToken, onBehalf, receiver, slippage, ...args },
-    sender,
-  },
+  { args: { id, srcToken, onBehalf, receiver, slippage, ...args }, sender },
   data,
 ) => {
-  const market = data.getMarket(marketId);
+  const market = data.getMarket(id);
 
   const debtAmount = data
-    .getAccrualPosition(onBehalf, marketId)
+    .getAccrualPosition(onBehalf, id)
     .accrueInterest(data.block.timestamp).borrowAssets;
 
   const amount =
