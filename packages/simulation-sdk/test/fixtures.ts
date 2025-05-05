@@ -12,7 +12,7 @@ import {
   Token,
   User,
   Vault,
-  unwrappedTokensMapping,
+  registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
 import { randomMarket, randomVault } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
@@ -28,7 +28,13 @@ export const userC = "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC";
 export const tokenA = "0x1111111111111111111111111111111111111111";
 export const tokenB = "0x2222222222222222222222222222222222222222";
 
-unwrappedTokensMapping[ChainId.EthMainnet][tokenB] = tokenA;
+registerCustomAddresses({
+  unwrappedTokens: {
+    [ChainId.EthMainnet]: {
+      [tokenB]: tokenA,
+    },
+  },
+});
 
 export const marketA1 = new Market({
   params: randomMarket({ loanToken: tokenA }),
