@@ -367,6 +367,20 @@ const _addressesRegistry = {
 
     wNative: "0xEa237441c92CAe6FC17Caaf9a7acB3f953be4bd1",
   },
+  [ChainId.CampMainnet]: {
+    morpho: "0xc7CAd9B1377Eb8103397Cb07Cb5c4f03eb2eBEa8",
+    bundler3: {
+      bundler3: "0xc1A86b3a552C5a34e1ecc910341A64Cc89b2CB01",
+      generalAdapter1: "0x86eaf48Fd73c1Aa30E801D01d0efFd731c3E5E85",
+    },
+    adaptiveCurveIrm: "0xeEccdD33c0C06d7DDa31E3C4a1Cdb35a2A756246",
+    publicAllocator: "0x1e145648DA9aC9d831B4F7931C06e9828083BD40",
+    metaMorphoFactory: "0xa8CD521d42b716821D7ddD2Ca6a237087aA5b487",
+    chainlinkOracleFactory: "0x24Bc64f44B429EEA86c8B1f9C03F54Ab0C6c0C15",
+    preLiquidationFactory: "0x6C0155CC30f760DC49138B389F5B69F56eD08841",
+
+    wNative: "0x1aE9c40eCd2DD6ad5858E5430A556d7aff28A44b",
+  },
 } as const;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;

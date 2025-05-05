@@ -54,6 +54,16 @@ export const defaultPreLiquidationParamsRegistry = new Map([
     },
   ],
   [
+    parseEther("0.945"),
+    {
+      preLltv: 93_3746617913300027n,
+      preLCF1: 709220796660800n,
+      preLCF2: 23_6098907251355946n,
+      preLIF1: 1_016776817488561260n,
+      preLIF2: 1_016776817488561260n,
+    },
+  ],
+  [
     parseEther("0.965"),
     {
       preLltv: 95_7768981497388846n,
@@ -64,7 +74,7 @@ export const defaultPreLiquidationParamsRegistry = new Map([
     },
   ],
   [
-    parseEther("0.985"),
+    parseEther("0.98"),
     {
       preLltv: 97_5838577830248552n,
       preLCF1: 247773050273784n,
