@@ -397,6 +397,12 @@ export namespace ParaswapErrors {
       );
     }
   }
+
+  export class ZeroAmount extends Error {
+    constructor() {
+      super(`zero amount`);
+    }
+  }
 }
 
 export function getWrappedInstanceOf<E extends Error>(

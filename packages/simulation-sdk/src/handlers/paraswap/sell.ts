@@ -45,6 +45,8 @@ export const handleParaswapSellOperation: OperationHandler<
   } else ({ amount, quotedAmount } = args);
 
   if (sellEntireBalance) {
+    if (amount === 0n) throw new ParaswapErrors.ZeroAmount();
+
     const oldAmount = amount;
 
     amount = data.getHolding(sender, address).balance;
