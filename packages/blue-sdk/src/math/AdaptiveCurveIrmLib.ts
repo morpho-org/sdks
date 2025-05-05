@@ -136,12 +136,16 @@ export namespace AdaptiveCurveIrmLib {
         ? MathLib.WAD - MathLib.wDivDown(MathLib.WAD, CURVE_STEEPNESS)
         : CURVE_STEEPNESS - MathLib.WAD;
 
+    const _curve = (rateAtTarget: BigIntish) =>
+      MathLib.wMulDown(
+        MathLib.wMulDown(coeff, err) + MathLib.WAD,
+        rateAtTarget,
+      );
+
     // Non negative if avgRateAtTarget >= 0 because if err < 0, coeff <= 1.
     return {
-      avgBorrowRate: MathLib.wMulDown(
-        MathLib.wMulDown(coeff, err) + MathLib.WAD,
-        avgRateAtTarget,
-      ),
+      avgBorrowRate: _curve(avgRateAtTarget),
+      endBorrowRate: _curve(endRateAtTarget),
       endRateAtTarget,
     };
   }
