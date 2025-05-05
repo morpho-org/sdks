@@ -14,6 +14,7 @@ export enum ChainId {
   ModeMainnet = 34443,
   CornMainnet = 21000000,
   PlumeMainnet = 98866,
+  CampMainnet = 123420001114,
 }
 
 export interface ChainMetadata {
@@ -150,6 +151,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Plume", symbol: "PLUME", decimals: 18 },
       explorerUrl: "https://phoenix-explorer.plumenetwork.xyz",
       identifier: "plume",
+    },
+    [ChainId.CampMainnet]: {
+      name: "Camp",
+      id: ChainId.CampMainnet,
+      nativeCurrency: { name: "Camp", symbol: "CAMP", decimals: 18 },
+      explorerUrl: "https://basecamp.cloud.blockscout.com/",
+      identifier: "camp",
     },
   };
 }
