@@ -169,12 +169,19 @@ export class Market implements IMarket {
   }
 
   /**
-   * Returns the rate at which interest accrues for borrowers of this market,
-   * since the last time the market was updated (scaled by WAD).
-   * If interested in the rate at a specific timestamp, use `getAccrualBorrowRate(timestamp)` instead.
+   * Returns the average rate at which interest _would_ accrue from `lastUpdate`
+   * till now, if `accrueInterest` was called immediately onchain (scaled by WAD).
+   * If `accrueInterest` was just called, the average rate equals the instantaneous rate,
+   * so it is equivalent to `getBorrowRate(lastUpdate)`.
+   *
+   * In most cases, `accrueInterest` will not be called immediately onchain, so the
+   * average rate doesn't correspond to anything "real".
+   *
+   * If interested in the instantaneous rate experienced by existing market actors at a specific timestamp,
+   * use `getBorrowRate(timestamp)`, `getBorrowApy(timestamp)`, or `getSupplyApy(timestamp)` instead.
    */
   get borrowRate() {
-    return this.getAccrualBorrowRate();
+    return this.getAccrualBorrowRate().avgBorrowRate;
   }
 
   /**
@@ -227,9 +234,12 @@ export class Market implements IMarket {
    * at the given timestamp, if the state remains unchanged (not accrued) (scaled by WAD).
    * @param timestamp The timestamp at which to calculate the accrual borrow rate. Must be greater than or equal to `lastUpdate`. Defaults to `Time.timestamp()` (returns the current borrow rate).
    */
-  public getAccrualBorrowRate(timestamp: BigIntish = Time.timestamp()) {
-    if (this.rateAtTarget == null) return 0n;
-
+  protected getAccrualBorrowRate(timestamp: BigIntish = Time.timestamp()): {
+    elapsed: bigint;
+    avgBorrowRate: bigint;
+    endBorrowRate: bigint;
+    endRateAtTarget?: bigint;
+  } {
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;
@@ -240,13 +250,21 @@ export class Market implements IMarket {
         this.lastUpdate,
       );
 
-    const { avgBorrowRate } = AdaptiveCurveIrmLib.getBorrowRate(
-      this.utilization,
-      this.rateAtTarget,
-      elapsed,
-    );
+    if (this.rateAtTarget == null)
+      return {
+        elapsed,
+        avgBorrowRate: 0n,
+        endBorrowRate: 0n,
+      };
 
-    return avgBorrowRate;
+    return {
+      elapsed,
+      ...AdaptiveCurveIrmLib.getBorrowRate(
+        this.utilization,
+        this.rateAtTarget,
+        elapsed,
+      ),
+    };
   }
 
   /**
@@ -281,32 +299,11 @@ export class Market implements IMarket {
   public accrueInterest(timestamp: BigIntish = this.lastUpdate) {
     timestamp = BigInt(timestamp);
 
-    const elapsed = timestamp - this.lastUpdate;
-    if (elapsed < 0n)
-      throw new BlueErrors.InvalidInterestAccrual(
-        this.id,
-        timestamp,
-        this.lastUpdate,
-      );
-
-    if (elapsed === 0n) return new Market(this);
-
-    let borrowRate = 0n;
-    let { rateAtTarget } = this;
-    if (rateAtTarget != null) {
-      const { avgBorrowRate, endRateAtTarget } =
-        AdaptiveCurveIrmLib.getBorrowRate(
-          this.utilization,
-          rateAtTarget,
-          elapsed,
-        );
-
-      borrowRate = avgBorrowRate;
-      rateAtTarget = endRateAtTarget;
-    }
+    const { elapsed, avgBorrowRate, endRateAtTarget } =
+      this.getAccrualBorrowRate(timestamp);
 
     const { interest, feeShares } = MarketUtils.getAccruedInterest(
-      borrowRate,
+      avgBorrowRate,
       this,
       elapsed,
     );
@@ -317,7 +314,7 @@ export class Market implements IMarket {
       totalBorrowAssets: this.totalBorrowAssets + interest,
       totalSupplyShares: this.totalSupplyShares + feeShares,
       lastUpdate: timestamp,
-      rateAtTarget,
+      rateAtTarget: endRateAtTarget,
     });
   }
 
