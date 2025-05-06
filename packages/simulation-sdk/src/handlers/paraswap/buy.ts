@@ -17,14 +17,18 @@ export const handleParaswapBuyOperation: OperationHandler<
   let quotedAmount: bigint;
 
   if ("swap" in args) {
-    const exactAmountOffset = Number(args.swap.offsets.exactAmount);
-    const quotedAmountOffset = Number(args.swap.offsets.quotedAmount);
+    const { offsets } = args.swap;
+    const exactAmountOffset = Number(offsets.exactAmount);
+    const quotedAmountOffset = Number(offsets.quotedAmount);
 
     const dataSize = size(args.swap.data);
     if (exactAmountOffset > dataSize - 32)
       throw new ParaswapErrors.InvalidOffset(exactAmountOffset, args.swap.data);
     if (quotedAmountOffset > dataSize - 32)
-      throw new ParaswapErrors.InvalidOffset(exactAmountOffset, args.swap.data);
+      throw new ParaswapErrors.InvalidOffset(
+        quotedAmountOffset,
+        args.swap.data,
+      );
 
     amount = hexToBigInt(
       slice(args.swap.data, exactAmountOffset, exactAmountOffset + 32),
