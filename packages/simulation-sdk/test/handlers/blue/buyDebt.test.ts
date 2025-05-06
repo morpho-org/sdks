@@ -50,9 +50,9 @@ describe(type, () => {
               padHex(`0x${quotedAmount.toString(16)}`, { size: 32 }),
             ]),
             offsets: {
-              exactAmount: 0,
-              limitAmount: 0,
-              quotedAmount: 32,
+              exactAmount: 0n,
+              limitAmount: 0n,
+              quotedAmount: 32n,
             },
           },
           onBehalf: userB,

@@ -259,6 +259,17 @@ export namespace BundlerAction {
       case "morphoWithdrawCollateral": {
         return BundlerAction.morphoWithdrawCollateral(chainId, ...args);
       }
+      case "morphoFlashLoan": {
+        const [token, assets, onMorphoFlashLoan, skipRevert] = args;
+
+        return BundlerAction.morphoFlashLoan(
+          chainId,
+          token,
+          assets,
+          onMorphoFlashLoan.flatMap(BundlerAction.encode.bind(null, chainId)),
+          skipRevert,
+        );
+      }
 
       /* PublicAllocator */
       case "reallocateTo": {
@@ -1318,15 +1329,15 @@ export namespace BundlerAction {
   /**
    * Encodes a call to the GeneralAdapter1 to flash loan from Morpho Blue.
    * @param chainId The chain id for which to encode the call.
-   * @param asset The address of the ERC20 token to flash loan.
-   * @param amount The amount of tokens to flash loan.
+   * @param token The address of the ERC20 token to flash loan.
+   * @param assets The amount of tokens to flash loan.
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoFlashLoan` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoFlashLoan(
     chainId: ChainId,
-    asset: Address,
-    amount: bigint,
+    token: Address,
+    assets: bigint,
     callbackCalls: BundlerCall[],
     skipRevert = false,
   ): BundlerCall[] {
@@ -1345,15 +1356,7 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoFlashLoan",
-          args: [
-            asset,
-            amount,
-            encodeFunctionData({
-              abi: bundler3Abi,
-              functionName: "reenter",
-              args: [callbackCalls],
-            }),
-          ],
+          args: [token, assets, reenterData],
         }),
         value: 0n,
         skipRevert,

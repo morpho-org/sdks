@@ -862,6 +862,21 @@ export const encodeOperation = (
 
       break;
     }
+    case "Blue_FlashLoan": {
+      const { token, assets } = operation.args;
+
+      actions.push({
+        type: "morphoFlashLoan",
+        args: [
+          token,
+          assets,
+          callbackBundle?.actions ?? [],
+          operation.skipRevert,
+        ],
+      });
+
+      break;
+    }
     case "Paraswap_Buy": {
       if (!("swap" in operation.args))
         throw new BundlerErrors.MissingSwapData();
@@ -917,6 +932,9 @@ export const encodeOperation = (
       if (!("swap" in operation.args))
         throw new BundlerErrors.MissingSwapData();
 
+      if (paraswapAdapter == null)
+        throw new BundlerErrors.UnexpectedAction("paraswapBuy", chainId);
+
       const {
         dstToken,
         swap,
@@ -924,19 +942,46 @@ export const encodeOperation = (
         receiver,
       } = operation.args;
 
-      actions.push({
-        type: "paraswapSell",
-        args: [
-          swap.to,
-          swap.data,
-          address,
-          dstToken,
-          sellEntireBalance,
-          swap.offsets,
-          receiver,
-          operation.skipRevert,
-        ],
-      });
+      const exactAmountOffset = Number(swap.offsets.exactAmount);
+      const exactAmount = hexToBigInt(
+        slice(swap.data, exactAmountOffset, exactAmountOffset + 32),
+      );
+
+      actions.push(
+        {
+          type: "erc20Transfer",
+          args: [
+            address,
+            paraswapAdapter,
+            sellEntireBalance ? maxUint256 : exactAmount,
+            generalAdapter1,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "paraswapSell",
+          args: [
+            swap.to,
+            swap.data,
+            address,
+            dstToken,
+            sellEntireBalance,
+            swap.offsets,
+            receiver,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "erc20Transfer",
+          args: [
+            dstToken,
+            generalAdapter1,
+            maxUint256,
+            paraswapAdapter,
+            operation.skipRevert,
+          ],
+        },
+      );
 
       break;
     }
@@ -944,23 +989,48 @@ export const encodeOperation = (
       if (!("swap" in operation.args))
         throw new BundlerErrors.MissingSwapData();
 
+      if (paraswapAdapter == null)
+        throw new BundlerErrors.UnexpectedAction("paraswapBuy", chainId);
+
       const { srcToken, id, swap, onBehalf, receiver } = operation.args;
 
       const { params } = dataBefore.getMarket(id);
 
-      actions.push({
-        type: "paraswapBuyMorphoDebt",
-        args: [
-          swap.to,
-          swap.data,
-          srcToken,
-          params,
-          swap.offsets,
-          onBehalf,
-          receiver,
-          operation.skipRevert,
-        ],
-      });
+      actions.push(
+        {
+          type: "erc20Transfer",
+          args: [
+            srcToken,
+            paraswapAdapter,
+            maxUint256, // TODO: replace with expected debt including slippage?
+            generalAdapter1,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "paraswapBuyMorphoDebt",
+          args: [
+            swap.to,
+            swap.data,
+            srcToken,
+            params,
+            swap.offsets,
+            onBehalf,
+            receiver,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "erc20Transfer",
+          args: [
+            srcToken,
+            generalAdapter1,
+            maxUint256,
+            paraswapAdapter,
+            operation.skipRevert,
+          ],
+        },
+      );
 
       break;
     }

@@ -188,6 +188,12 @@ export interface ActionArgs {
     receiver: Address,
     skipRevert?: boolean,
   ];
+  morphoFlashLoan: [
+    token: Address,
+    assets: bigint,
+    onMorphoFlashLoan: Action[],
+    skipRevert?: boolean,
+  ];
 
   /* PublicAllocator */
 

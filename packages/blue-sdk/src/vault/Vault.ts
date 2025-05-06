@@ -270,7 +270,9 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's APY on its assets averaged over its market deposits, before deducting the performance fee.
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits,
+   * before deducting the performance fee, at the time of each market's last update (scaled by WAD).
+   * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
    */
   get apy() {
     if (this.totalAssets === 0n) return 0n;
@@ -287,10 +289,41 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's APY on its assets averaged over its market deposits, after deducting the performance fee.
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits,
+   * after deducting the performance fee, at the time of each market's last update (scaled by WAD).
+   * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
    */
   get netApy() {
     return MathLib.wMulDown(this.apy, MathLib.WAD - this.fee);
+  }
+
+  /**
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits,
+   * before deducting the performance fee, at the given timestamp,
+   * if the state of all the markets remains unchanged (not accrued) (scaled by WAD).
+   */
+  public getApy(timestamp: BigIntish) {
+    if (this.totalAssets === 0n) return 0n;
+
+    return (
+      this.allocations
+        .values()
+        .reduce(
+          (total, { position }) =>
+            total +
+            position.market.getSupplyApy(timestamp) * position.supplyAssets,
+          0n,
+        ) / this.totalAssets
+    );
+  }
+
+  /**
+   * The MetaMorpho vault's APY on its assets averaged over its market deposits,
+   * after deducting the performance fee, at the given timestamp,
+   * if the state of all the markets remains unchanged (not accrued) (scaled by WAD).
+   */
+  public getNetApy(timestamp: BigIntish) {
+    return MathLib.wMulDown(this.getApy(timestamp), MathLib.WAD - this.fee);
   }
 
   public getAllocationProportion(marketId: MarketId) {

@@ -51,9 +51,9 @@ describe(type, () => {
               padHex(`0x${amount.toString(16)}`, { size: 32 }),
             ]),
             offsets: {
-              exactAmount: 32,
-              limitAmount: 0,
-              quotedAmount: 0,
+              exactAmount: 32n,
+              limitAmount: 0n,
+              quotedAmount: 0n,
             },
           },
           receiver: userA,

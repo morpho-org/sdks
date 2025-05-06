@@ -23,6 +23,7 @@ export const BUNDLER_OPERATIONS = [
   "Blue_SupplyCollateral",
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
+  "Blue_FlashLoan",
   "Blue_Paraswap_BuyDebt",
   "MetaMorpho_Deposit",
   "MetaMorpho_Withdraw",
@@ -44,6 +45,9 @@ export interface BundlerOperationArgs
     callback?: BundlerOperation[];
   };
   Blue_Repay: Omit<BlueOperationArgs["Blue_Repay"], "callback"> & {
+    callback?: BundlerOperation[];
+  };
+  Blue_FlashLoan: Omit<BlueOperationArgs["Blue_FlashLoan"], "callback"> & {
     callback?: BundlerOperation[];
   };
 }
@@ -73,6 +77,7 @@ export const BLUE_INPUT_OPERATIONS = [
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
   "Blue_SetAuthorization",
+  "Blue_FlashLoan",
   "Blue_Paraswap_BuyDebt",
 ] as const satisfies readonly BlueOperationType[];
 
@@ -90,6 +95,9 @@ export interface BlueInputBundlerOperationArgs
     callback?: InputBundlerOperation[];
   };
   Blue_Repay: Omit<BlueOperationArgs["Blue_Repay"], "callback"> & {
+    callback?: InputBundlerOperation[];
+  };
+  Blue_FlashLoan: Omit<BlueOperationArgs["Blue_FlashLoan"], "callback"> & {
     callback?: InputBundlerOperation[];
   };
 }
