@@ -37,8 +37,8 @@ interface IMigratableBorrowPosition_AaveV3
   extends Omit<IMigratableBorrowPosition, "protocol"> {
   nonce: bigint;
   aToken: Token;
-  collateralPriceEth: bigint;
-  loanPriceEth: bigint;
+  collateralPrice: bigint;
+  loanPrice: bigint;
 }
 
 export class MigratableBorrowPosition_AaveV3
@@ -47,15 +47,15 @@ export class MigratableBorrowPosition_AaveV3
 {
   private _nonce;
   public readonly aToken;
-  public readonly collateralPriceEth;
-  public readonly loanPriceEth;
+  public readonly collateralPrice;
+  public readonly loanPrice;
 
   constructor(config: IMigratableBorrowPosition_AaveV3) {
     super({ ...config, protocol: MigratableProtocol.aaveV3 });
     this.aToken = config.aToken;
     this._nonce = config.nonce;
-    this.collateralPriceEth = config.collateralPriceEth;
-    this.loanPriceEth = config.loanPriceEth;
+    this.collateralPrice = config.collateralPrice;
+    this.loanPrice = config.loanPrice;
   }
 
   getLtv({
@@ -63,11 +63,11 @@ export class MigratableBorrowPosition_AaveV3
     repaid = 0n,
   }: { withdrawn?: bigint; repaid?: bigint } = {}): bigint | null {
     const totalCollateralEth =
-      ((this.collateral - withdrawn) * this.collateralPriceEth) /
+      ((this.collateral - withdrawn) * this.collateralPrice) /
       parseUnits("1", this.collateralToken.decimals);
 
     const totalBorrowEth =
-      ((this.borrow - repaid) * this.loanPriceEth) /
+      ((this.borrow - repaid) * this.loanPrice) /
       parseUnits("1", this.loanToken.decimals);
 
     if (totalBorrowEth <= 0n) return null;
