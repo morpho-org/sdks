@@ -7,11 +7,13 @@ import {
   isBlueOperation,
   isErc20Operation,
   isMetaMorphoOperation,
+  isParaswapOperation,
 } from "../operations.js";
 
 import { handleBlueOperation } from "./blue/index.js";
 import { handleErc20Operation } from "./erc20/index.js";
 import { handleMetaMorphoOperation } from "./metamorpho/index.js";
+import { handleParaswapOperation } from "./paraswap/index.js";
 import type { MaybeDraft } from "./types.js";
 
 export type SimulationResult = [
@@ -34,6 +36,8 @@ export const handleOperation = (
     else if (isMetaMorphoOperation(operation))
       handleMetaMorphoOperation(operation, data);
     else if (isErc20Operation(operation)) handleErc20Operation(operation, data);
+    else if (isParaswapOperation(operation))
+      handleParaswapOperation(operation, data);
 
     return data;
   } catch (error) {
