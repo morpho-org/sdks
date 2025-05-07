@@ -6,7 +6,7 @@ import { paraswapContractMethodOffsets } from "@morpho-org/simulation-sdk";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { createWagmiTest, renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
-import { maxUint160, parseUnits, zeroAddress } from "viem";
+import { maxUint160, maxUint256, parseUnits, zeroAddress } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { donator, setupTestBundle } from "./helpers.js";
@@ -18,9 +18,14 @@ const testLeverage = createWagmiTest(mainnet, {
   forkBlockNumber: 22_418_491,
 });
 
-const testRepayCollateral = createWagmiTest(mainnet, {
+const testCloseCollateral = createWagmiTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 22_425_541,
+});
+
+const testDeleverageCollateral = createWagmiTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  forkBlockNumber: 22_430_367,
 });
 
 describe("paraswap", () => {
@@ -175,7 +180,7 @@ describe("paraswap", () => {
       ).toBe(0n);
     });
 
-    testRepayCollateral(
+    testCloseCollateral(
       "should close position with collateral",
       async ({ client, config }) => {
         const id = usdc_wbtc.id;
@@ -312,6 +317,150 @@ describe("paraswap", () => {
           await client.balanceOf({ erc20: usdc_wbtc.collateralToken }),
         ).toBe(98469334n);
         expect(position.collateral).toBe(0n);
+        expect(position.supplyShares).toBe(0n);
+        expect(position.borrowShares).toBe(0n);
+
+        expect(
+          await client.allowance({
+            erc20: usdc_wbtc.collateralToken,
+            spender: permit2,
+          }),
+        ).toBe(0n);
+        expect(
+          await client.allowance({
+            erc20: usdc_wbtc.collateralToken,
+            spender: morpho,
+          }),
+        ).toBe(0n);
+      },
+    );
+
+    testDeleverageCollateral.only(
+      "should deleverage with collateral",
+      async ({ client, config }) => {
+        const id = usdc_wbtc.id;
+
+        const collateral = parseUnits("3", 8);
+        const debt = parseUnits("190000", 6);
+        await client.deal({
+          erc20: usdc_wbtc.collateralToken,
+          amount: collateral,
+        });
+        await client.approve({
+          address: usdc_wbtc.collateralToken,
+          args: [morpho, collateral],
+        });
+        await client.writeContract({
+          abi: blueAbi,
+          address: morpho,
+          functionName: "supplyCollateral",
+          args: [usdc_wbtc, collateral, client.account.address, "0x"],
+        });
+        await client.writeContract({
+          abi: blueAbi,
+          address: morpho,
+          functionName: "borrow",
+          args: [
+            { ...usdc_wbtc },
+            debt,
+            0n,
+            client.account.address,
+            donator.address,
+          ],
+        });
+
+        const block = await client.getBlock();
+
+        const { result } = await renderHook(config, () =>
+          useSimulationState({
+            marketIds: [id],
+            users: [client.account.address, generalAdapter1],
+            tokens: [usdc_wbtc.collateralToken, usdc],
+            vaults: [],
+            block,
+          }),
+        );
+
+        await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+        const data = result.current.data!;
+
+        const { bundle } = await setupTestBundle(client, data, [
+          {
+            type: "Blue_FlashLoan",
+            sender: client.account.address,
+            args: {
+              token: usdc_wbtc.collateralToken,
+              assets: collateral / 2n,
+              callback: [
+                {
+                  type: "Paraswap_Sell",
+                  address: usdc_wbtc.collateralToken,
+                  args: {
+                    dstToken: usdc,
+                    // https://api.paraswap.io/swap?network=1&slippage=100&side=SELL&srcToken=0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48&destToken=0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599&amount=150000000&userAddress=0x03b5259Bd204BfD4A616E5B79b0B786d90c6C38f&version=6.2
+                    swap: {
+                      to: "0x6a000f20005980200259b80c5102003040001068",
+                      data: "0xe3ead59e000000000000000000000000000010036c0190e009a000d0fc3541100a07380a000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c5990000000000000000000000000000000000000000000000000000000008f0d180000000000000000000000000000000000000000000000000000000000002578b0000000000000000000000000000000000000000000000000000000000025d9a5acf5217ffeb4fedba125108e3d72ec60000000000000000000000000156429f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000180000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000004e0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000004e066a9893cc07d91d95644aedd05d03f95e1dba8af0000048002e40000ff0000030000000000000000000000000000000000000000000000000000000024856bc30000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000008000000000000000000000000000000000000000000000000000000000000000011000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000380000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000000800000000000000000000000000000000000000000000000000000000000000003060b0e00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000006000000000000000000000000000000000000000000000000000000000000001e00000000000000000000000000000000000000000000000000000000000000260000000000000000000000000000000000000000000000000000000000000016000000000000000000000000000000000000000000000000000000000000000200000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c599000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb4800000000000000000000000000000000000000000000000000000000000001f4000000000000000000000000000000000000000000000000000000000000000a000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008f0d1800000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000060000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb480000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000100000000000000000000000000000000000000000000000000000000000000600000000000000000000000002260fac5e5542a773aa44fbcfedf7c193bc2c5990000000000000000000000006a000f20005980200259b80c51020030400010680000000000000000000000000000000000000000000000000000000000000000",
+                      offsets: paraswapContractMethodOffsets.swapExactAmountOut,
+                    },
+                    sellEntireBalance: true,
+                    receiver: client.account.address,
+                  },
+                },
+                {
+                  type: "Blue_Repay",
+                  args: {
+                    id,
+                    assets: maxUint256,
+                    onBehalf: client.account.address,
+                  },
+                },
+                {
+                  type: "Blue_WithdrawCollateral",
+                  args: {
+                    id,
+                    assets: collateral / 2n,
+                    onBehalf: client.account.address,
+                    receiver: client.account.address,
+                  },
+                },
+              ],
+            },
+          },
+        ]);
+
+        expect(bundle.requirements.signatures).toStrictEqual([
+          {
+            action: {
+              type: "morphoSetAuthorizationWithSig",
+              args: [
+                {
+                  authorized: generalAdapter1,
+                  authorizer: client.account.address,
+                  deadline: expect.any(BigInt),
+                  isAuthorized: true,
+                  nonce: 0n,
+                },
+                expect.any(String),
+                undefined,
+              ],
+            },
+            sign: expect.any(Function),
+          },
+        ]);
+        expect(bundle.requirements.txs).toStrictEqual([]);
+
+        const position = await fetchPosition(
+          client.account.address,
+          id,
+          client,
+        );
+
+        expect(
+          await client.balanceOf({ erc20: usdc_wbtc.collateralToken }),
+        ).toBe(98469334n);
+        expect(position.collateral).toBe(collateral / 2n);
         expect(position.supplyShares).toBe(0n);
         expect(position.borrowShares).toBe(0n);
 

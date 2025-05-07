@@ -64,9 +64,9 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    expected.holdings[userB]![tokenB]!.balance -= MathLib.wMulDown(
+    expected.holdings[userB]![tokenB]!.balance -= MathLib.wMulUp(
       quotedAmount,
-      MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
+      MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
     );
     expected.holdings[userA]![marketA1.params.loanToken]!.balance += debtAmount;
 
