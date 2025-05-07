@@ -7,7 +7,7 @@ import {
   fetchToken,
 } from "@morpho-org/blue-sdk-viem";
 
-import { type Client, erc20Abi, parseUnits } from "viem";
+import { type Client, erc20Abi, parseUnits, zeroAddress } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {
   aTokenV3Abi,
@@ -217,13 +217,15 @@ export async function fetchAaveV3Positions(
             }),
           ]);
 
-        const ethPrice = await readContract(client, {
+        const usdPrice = await readContract(client, {
           ...parameters,
           abi: aaveV3OracleAbi,
           address: oracleAddress,
           functionName: "getAssetPrice",
           args: [
-            eModeId === 0n ? underlyingAddress : eModeCategoryData.priceSource,
+            eModeId === 0n || eModeCategoryData.priceSource === zeroAddress
+              ? underlyingAddress
+              : eModeCategoryData.priceSource,
           ],
         });
 
@@ -242,7 +244,7 @@ export async function fetchAaveV3Positions(
             currentLiquidityRate,
             aTokenData,
             nonce,
-            ethPrice,
+            usdPrice,
           },
           borrow: {
             liquidationThreshold:
@@ -252,7 +254,7 @@ export async function fetchAaveV3Positions(
             currentVariableBorrowRate,
             totalBorrow,
             isActive,
-            ethPrice,
+            usdPrice,
             morphoNonce,
             isBundlerManaging,
           },
@@ -403,8 +405,8 @@ export async function fetchAaveV3Positions(
         user,
         maxRepay: maxBorrow,
         maxWithdraw: maxCollateral,
-        collateralPriceEth: collateralData.ethPrice,
-        loanPriceEth: loanData.ethPrice,
+        collateralPrice: collateralData.usdPrice,
+        loanPrice: loanData.usdPrice,
         morphoNonce: loanData.morphoNonce,
         isBundlerManaging: loanData.isBundlerManaging,
       }),
