@@ -93,7 +93,22 @@ describe(type, () => {
         _dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB" for token "0x2222222222222222222222222222222222222222"]`,
+      `
+      [Error: insufficient balance of user "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB" for token "0x2222222222222222222222222222222222222222"
+
+      when simulating operation:
+      {
+        "type": "Blue_Paraswap_BuyDebt",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "srcToken": "0x2222222222222222222222222222222222222222",
+          "priceE27": "4000000000000000000000000000000000000000n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 });
