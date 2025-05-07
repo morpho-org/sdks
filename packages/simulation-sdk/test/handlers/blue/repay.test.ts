@@ -89,7 +89,20 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: assets=-1]`);
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: invalid input: assets=-1
+
+      when simulating operation:
+      {
+        "type": "Blue_Repay",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "-1n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `);
   });
 
   test("should throw if shares is negative", () => {
@@ -106,7 +119,20 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: shares=-1]`);
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: invalid input: shares=-1
+
+      when simulating operation:
+      {
+        "type": "Blue_Repay",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "shares": "-1n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `);
   });
 
   test("should throw if insufficient debt", () => {
@@ -124,7 +150,20 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient position for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+      `
+      [Error: insufficient position for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd
+
+      when simulating operation:
+      {
+        "type": "Blue_Repay",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "shares": "10000000000001n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `,
     );
   });
 
@@ -143,7 +182,20 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"]`,
+      `
+      [Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"
+
+      when simulating operation:
+      {
+        "type": "Blue_Repay",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "10000000n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `,
     );
   });
 
@@ -216,7 +268,33 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: unauthorized bundler for user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"]`,
+      `
+      [Error: unauthorized bundler for user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+
+      when simulating operation:
+      {
+        "type": "Blue_Borrow",
+        "sender": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0",
+        "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "10000000n",
+          "onBehalf": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "receiver": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }
+
+      in the callback of:
+      {
+        "type": "Blue_Repay",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "10000000n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `,
     );
   });
 });

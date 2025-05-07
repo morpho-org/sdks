@@ -92,7 +92,21 @@ describe("populateBundle", () => {
               },
             ]),
           ).rejects.toThrowErrorMatchingInlineSnapshot(
-            `[Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]`,
+            `
+            [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+
+            when simulating operation:
+            {
+              "type": "Erc20_Transfer2",
+              "sender": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0",
+              "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+              "args": {
+                "amount": "15000000000000000000001",
+                "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "to": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0"
+              }
+            }]
+          `,
           );
         },
       );
@@ -2427,7 +2441,21 @@ describe("populateBundle", () => {
               { supportsSignature: false },
             ),
           ).rejects.toThrowErrorMatchingInlineSnapshot(
-            `[Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]`,
+            `
+            [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+
+            when simulating operation:
+            {
+              "type": "Erc20_Transfer2",
+              "sender": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0",
+              "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+              "args": {
+                "amount": "15000000000000000000001",
+                "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "to": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0"
+              }
+            }]
+          `,
           );
         },
       );
