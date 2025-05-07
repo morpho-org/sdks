@@ -162,7 +162,11 @@ export const encodeOperation = (
       ...(callback && {
         callback: (dataBefore) => {
           callbackBundle = encodeBundle(
-            callback,
+            callback.map((callbackOperation) => ({
+              ...callbackOperation,
+              // Inside a callback, the sender is forced to be the generalAdapter1.
+              sender: generalAdapter1,
+            })),
             getCurrent(dataBefore),
             supportsSignature,
           );
@@ -181,7 +185,7 @@ export const encodeOperation = (
     requirements.signatures.push(...callbackBundle.requirements.signatures);
   }
 
-  const { sender, address } = operation;
+  const { sender } = operation;
 
   switch (operation.type) {
     case "Blue_SetAuthorization": {
@@ -223,7 +227,7 @@ export const encodeOperation = (
 
             await verifyTypedData({
               ...typedData,
-              address: sender, // Verify against the authorization's owner.
+              address: owner, // Verify against the authorization's owner.
               signature,
             });
 
@@ -253,7 +257,7 @@ export const encodeOperation = (
     }
     case "Erc20_Approve": {
       // Native token cannot be approved.
-      if (address === NATIVE_ADDRESS) break;
+      if (operation.address === NATIVE_ADDRESS) break;
 
       const { amount, spender } = operation.args;
 
@@ -261,14 +265,20 @@ export const encodeOperation = (
       if (!supportsSignature && spender === permit2) break;
 
       requirements.txs.push(
-        ...encodeErc20Approval(address, sender, spender, amount, dataBefore),
+        ...encodeErc20Approval(
+          operation.address,
+          sender,
+          spender,
+          amount,
+          dataBefore,
+        ),
       );
 
       break;
     }
     case "Erc20_Permit": {
       // Native token cannot be permitted.
-      if (address === NATIVE_ADDRESS) break;
+      if (operation.address === NATIVE_ADDRESS) break;
 
       const { amount, spender, nonce } = operation.args;
 
@@ -278,34 +288,28 @@ export const encodeOperation = (
         throw new BundlerErrors.UnexpectedSignature(spender);
 
       if (supportsSignature) {
-        const action: Action =
-          address === dai
-            ? {
-                type: "permitDai",
-                args: [
-                  sender,
-                  nonce,
-                  deadline,
-                  true,
-                  null,
-                  operation.skipRevert,
-                ],
-              }
-            : {
-                type: "permit",
-                args: [
-                  sender,
-                  address,
-                  amount,
-                  deadline,
-                  null,
-                  operation.skipRevert,
-                ],
-              };
+        const isDai = dai != null && operation.address === dai;
+
+        const action: Action = isDai
+          ? {
+              type: "permitDai",
+              args: [sender, nonce, deadline, true, null, operation.skipRevert],
+            }
+          : {
+              type: "permit",
+              args: [
+                sender,
+                operation.address,
+                amount,
+                deadline,
+                null,
+                operation.skipRevert,
+              ],
+            };
 
         actions.push(action);
 
-        const tokenData = dataBefore.getToken(address);
+        const tokenData = dataBefore.getToken(operation.address);
 
         requirements.signatures.push({
           action,
@@ -313,7 +317,7 @@ export const encodeOperation = (
             let signature = action.args[4];
             if (signature != null) return signature; // action is already signed
 
-            if (address === dai) {
+            if (isDai) {
               const typedData = getDaiPermitTypedData(
                 {
                   owner: sender,
@@ -368,14 +372,20 @@ export const encodeOperation = (
       // Simple permit is not supported, fallback to standard approval.
 
       requirements.txs.push(
-        ...encodeErc20Approval(address, sender, spender, amount, dataBefore),
+        ...encodeErc20Approval(
+          operation.address,
+          sender,
+          spender,
+          amount,
+          dataBefore,
+        ),
       );
 
       break;
     }
     case "Erc20_Permit2": {
       // Native token cannot be permitted.
-      if (address === NATIVE_ADDRESS) break;
+      if (operation.address === NATIVE_ADDRESS) break;
 
       const { amount, expiration, nonce } = operation.args;
 
@@ -386,7 +396,7 @@ export const encodeOperation = (
             sender,
             {
               details: {
-                token: address,
+                token: operation.address,
                 amount,
                 nonce: Number(nonce),
                 expiration: Number(expiration),
@@ -443,7 +453,7 @@ export const encodeOperation = (
 
       requirements.txs.push(
         ...encodeErc20Approval(
-          address,
+          operation.address,
           sender,
           generalAdapter1,
           amount,
@@ -456,7 +466,7 @@ export const encodeOperation = (
     case "Erc20_Transfer": {
       const { amount, from, to } = operation.args;
 
-      if (address === NATIVE_ADDRESS) {
+      if (operation.address === NATIVE_ADDRESS) {
         actions.push({
           type: "nativeTransfer",
           args: [from, to, amount, operation.skipRevert],
@@ -469,7 +479,13 @@ export const encodeOperation = (
       if (from === generalAdapter1) {
         actions.push({
           type: "erc20Transfer",
-          args: [address, to, amount, generalAdapter1, operation.skipRevert],
+          args: [
+            operation.address,
+            to,
+            amount,
+            generalAdapter1,
+            operation.skipRevert,
+          ],
         });
 
         break;
@@ -477,7 +493,7 @@ export const encodeOperation = (
 
       actions.push({
         type: "erc20TransferFrom",
-        args: [address, amount, to, operation.skipRevert],
+        args: [operation.address, amount, to, operation.skipRevert],
       });
 
       break;
@@ -488,7 +504,7 @@ export const encodeOperation = (
       if (supportsSignature) {
         actions.push({
           type: "transferFrom2",
-          args: [address, amount, to, operation.skipRevert],
+          args: [operation.address, amount, to, operation.skipRevert],
         });
 
         break;
@@ -498,19 +514,19 @@ export const encodeOperation = (
 
       actions.push({
         type: "erc20TransferFrom",
-        args: [address, amount, to, operation.skipRevert],
+        args: [operation.address, amount, to, operation.skipRevert],
       });
 
       break;
     }
     case "Erc20_Wrap": {
-      const { amount } = operation.args;
+      const { amount, owner } = operation.args;
 
-      switch (address) {
+      switch (operation.address) {
         case wNative: {
           actions.push({
             type: "wrapNative",
-            args: [amount, generalAdapter1, operation.skipRevert],
+            args: [amount, owner, operation.skipRevert],
           });
 
           break;
@@ -518,7 +534,7 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "wrapStEth",
-            args: [amount, generalAdapter1, operation.skipRevert],
+            args: [amount, owner, operation.skipRevert],
           });
 
           break;
@@ -530,7 +546,7 @@ export const encodeOperation = (
               amount,
               MathLib.MAX_UINT_256,
               zeroAddress,
-              generalAdapter1,
+              owner,
               operation.skipRevert,
             ],
           });
@@ -538,22 +554,27 @@ export const encodeOperation = (
           break;
         }
         default: {
-          if (erc20WrapperTokens[chainId]?.has(address)) {
-            const underlying = getUnwrappedToken(address, chainId);
+          if (erc20WrapperTokens[chainId]?.has(operation.address)) {
+            const underlying = getUnwrappedToken(operation.address, chainId);
             if (underlying == null)
-              throw Error(`unknown wrapped token: ${address}`);
+              throw Error(`unknown wrapped token: ${operation.address}`);
 
             actions.push({
               type: "erc20WrapperDepositFor",
-              args: [address, underlying, amount, operation.skipRevert],
+              args: [
+                operation.address,
+                underlying,
+                amount,
+                operation.skipRevert,
+              ],
             });
 
             break;
           }
 
           // Convex token wrapping is executed onchain along with supplyCollateral, via depositFor.
-          if (!convexWrapperTokens[chainId]?.has(address))
-            throw Error(`unexpected token wrap: ${address}`);
+          if (!convexWrapperTokens[chainId]?.has(operation.address))
+            throw Error(`unexpected token wrap: ${operation.address}`);
         }
       }
 
@@ -562,11 +583,11 @@ export const encodeOperation = (
     case "Erc20_Unwrap": {
       const { amount, receiver } = operation.args;
 
-      switch (address) {
+      switch (operation.address) {
         case wNative: {
           actions.push({
             type: "unwrapNative",
-            args: [amount, generalAdapter1, operation.skipRevert],
+            args: [amount, receiver, operation.skipRevert],
           });
 
           break;
@@ -574,18 +595,18 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "unwrapStEth",
-            args: [amount, generalAdapter1, operation.skipRevert],
+            args: [amount, receiver, operation.skipRevert],
           });
 
           break;
         }
         default: {
-          if (!erc20WrapperTokens[chainId]?.has(address))
-            throw Error(`unexpected token unwrap: ${address}`);
+          if (!erc20WrapperTokens[chainId]?.has(operation.address))
+            throw Error(`unexpected token unwrap: ${operation.address}`);
 
           actions.push({
             type: "erc20WrapperWithdrawTo",
-            args: [address, receiver, amount, operation.skipRevert],
+            args: [operation.address, receiver, amount, operation.skipRevert],
           });
         }
       }
@@ -724,9 +745,9 @@ export const encodeOperation = (
       const { params } = dataBefore.getMarket(id);
 
       if (convexWrapperTokens[chainId]?.has(params.collateralToken)) {
-        const underlying = getUnwrappedToken(address, chainId);
+        const underlying = getUnwrappedToken(params.collateralToken, chainId);
         if (underlying == null)
-          throw Error(`unknown wrapped token: ${address}`);
+          throw Error(`unknown wrapped token: ${params.collateralToken}`);
 
         actions.push({
           type: "erc20WrapperDepositFor",
@@ -776,7 +797,7 @@ export const encodeOperation = (
 
       // Accrue interest to calculate the expected share price.
       const vault = dataBefore
-        .getAccrualVault(address)
+        .getAccrualVault(operation.address)
         .accrueInterest(dataBefore.block.timestamp);
       const maxSharePrice = vault.toAssets(
         MathLib.wToRay(MathLib.WAD + slippage),
@@ -785,12 +806,24 @@ export const encodeOperation = (
       if (shares === 0n)
         actions.push({
           type: "erc4626Deposit",
-          args: [address, assets, maxSharePrice, owner, operation.skipRevert],
+          args: [
+            operation.address,
+            assets,
+            maxSharePrice,
+            owner,
+            operation.skipRevert,
+          ],
         });
       else
         actions.push({
           type: "erc4626Mint",
-          args: [address, shares, maxSharePrice, owner, operation.skipRevert],
+          args: [
+            operation.address,
+            shares,
+            maxSharePrice,
+            owner,
+            operation.skipRevert,
+          ],
         });
 
       break;
@@ -806,7 +839,7 @@ export const encodeOperation = (
 
       // Accrue interest to calculate the expected share price.
       const vault = dataBefore
-        .getAccrualVault(address)
+        .getAccrualVault(operation.address)
         .accrueInterest(dataBefore.block.timestamp);
       const minSharePrice = vault.toAssets(
         MathLib.wToRay(MathLib.WAD - slippage),
@@ -816,7 +849,7 @@ export const encodeOperation = (
         actions.push({
           type: "erc4626Withdraw",
           args: [
-            address,
+            operation.address,
             assets,
             minSharePrice,
             receiver,
@@ -828,7 +861,7 @@ export const encodeOperation = (
         actions.push({
           type: "erc4626Redeem",
           args: [
-            address,
+            operation.address,
             shares,
             minSharePrice,
             receiver,
@@ -842,14 +875,15 @@ export const encodeOperation = (
     case "MetaMorpho_PublicReallocate": {
       const { withdrawals, supplyMarketId } = operation.args;
 
-      const { fee } = dataBefore.getVault(address).publicAllocatorConfig!;
+      const { fee } = dataBefore.getVault(operation.address)
+        .publicAllocatorConfig!;
 
       // Value is already accrued via another native input transfer.
 
       actions.push({
         type: "reallocateTo",
         args: [
-          address,
+          operation.address,
           fee,
           withdrawals.map(({ id, assets }) => ({
             marketParams: dataBefore.getMarket(id).params,
@@ -908,7 +942,7 @@ export const encodeOperation = (
             swap.to,
             swap.data,
             srcToken,
-            address,
+            operation.address,
             swap.offsets,
             receiver,
             operation.skipRevert,
@@ -951,7 +985,7 @@ export const encodeOperation = (
         {
           type: "erc20Transfer",
           args: [
-            address,
+            operation.address,
             paraswapAdapter,
             sellEntireBalance ? maxUint256 : exactAmount,
             generalAdapter1,
@@ -963,7 +997,7 @@ export const encodeOperation = (
           args: [
             swap.to,
             swap.data,
-            address,
+            operation.address,
             dstToken,
             sellEntireBalance,
             swap.offsets,

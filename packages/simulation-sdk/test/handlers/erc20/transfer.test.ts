@@ -126,7 +126,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient allowance for token "0x000000000000000000000000000000000000000A" from owner "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" to spender "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"]`,
+      `
+      [Error: insufficient allowance for token "0x000000000000000000000000000000000000000A" from owner "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" to spender "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Transfer",
+        "sender": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        "address": "0x000000000000000000000000000000000000000A",
+        "args": {
+          "amount": "1000000000000000000n",
+          "from": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "to": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 
@@ -146,7 +160,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"]`,
+      `
+      [Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Transfer",
+        "sender": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        "address": "0x1111111111111111111111111111111111111111",
+        "args": {
+          "amount": "1000000n",
+          "from": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "to": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 });

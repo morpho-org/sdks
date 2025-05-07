@@ -55,7 +55,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient permit2 allowance for token "0x2222222222222222222222222222222222222222" from owner "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"]`,
+      `
+      [Error: insufficient permit2 allowance for token "0x2222222222222222222222222222222222222222" from owner "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Transfer2",
+        "sender": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0",
+        "address": "0x2222222222222222222222222222222222222222",
+        "args": {
+          "amount": "1000000n",
+          "from": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "to": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `,
     );
   });
 
@@ -75,7 +89,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"]`,
+      `
+      [Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Transfer2",
+        "sender": "0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245",
+        "address": "0x1111111111111111111111111111111111111111",
+        "args": {
+          "amount": "1000000n",
+          "from": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "to": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 });

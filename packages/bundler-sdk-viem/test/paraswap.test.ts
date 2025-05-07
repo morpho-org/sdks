@@ -68,7 +68,6 @@ describe("paraswap", () => {
         {
           type: "Blue_SupplyCollateral",
           sender: client.account.address,
-          address: morpho,
           args: {
             id,
             assets: balance * 3n,
@@ -76,8 +75,6 @@ describe("paraswap", () => {
             callback: [
               {
                 type: "Blue_Borrow",
-                sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: debt,
@@ -87,7 +84,6 @@ describe("paraswap", () => {
               },
               {
                 type: "Paraswap_Buy",
-                sender: client.account.address,
                 address: usdc_wbtc.collateralToken,
                 args: {
                   srcToken: usdc,
@@ -238,15 +234,12 @@ describe("paraswap", () => {
           {
             type: "Blue_FlashLoan",
             sender: client.account.address,
-            address: morpho,
             args: {
               token: usdc_wbtc.collateralToken,
               assets: collateral,
               callback: [
                 {
                   type: "Blue_Paraswap_BuyDebt",
-                  sender: client.account.address,
-                  address: morpho,
                   args: {
                     id,
                     srcToken: usdc_wbtc.collateralToken,
@@ -262,8 +255,6 @@ describe("paraswap", () => {
                 },
                 {
                   type: "Blue_Repay",
-                  sender: client.account.address,
-                  address: morpho,
                   args: {
                     id,
                     shares,
@@ -272,8 +263,6 @@ describe("paraswap", () => {
                 },
                 {
                   type: "Blue_WithdrawCollateral",
-                  sender: client.account.address,
-                  address: morpho,
                   args: {
                     id,
                     assets: collateral,
