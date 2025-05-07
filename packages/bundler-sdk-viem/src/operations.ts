@@ -963,13 +963,13 @@ export const simulateRequiredTokenAmounts = (
   // Simulate the operations to calculate the required token amounts.
   const steps = simulateOperations(operations, virtualBundlerData);
 
-  return entries(getLast(steps).holdings[generalAdapter1] ?? {}).map(
-    ([token, holding]) => ({
+  return entries(getLast(steps).holdings[generalAdapter1] ?? {})
+    .map(([token, holding]) => ({
       token,
       // Safe cast because the holding was transformed to a VirtualHolding.
       required: -(holding as VirtualHolding).required,
-    }),
-  );
+    }))
+    .filter(({ required }) => required > 0n);
 };
 
 export const getSimulatedBundlerOperation = (
