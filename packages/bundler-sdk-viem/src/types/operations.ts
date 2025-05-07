@@ -2,6 +2,7 @@ import {
   type BlueOperationArgs,
   type BlueOperationType,
   CALLBACK_OPERATIONS,
+  type CallbackOperationType,
   ERC20_OPERATIONS,
   type Erc20OperationArgs,
   type Erc20OperationType,
@@ -24,14 +25,18 @@ export const BLUE_BUNDLER_OPERATIONS = [
   "Blue_SupplyCollateral",
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
+  "Blue_FlashLoan",
+  "Blue_Paraswap_BuyDebt",
 ] as const satisfies readonly BlueOperationType[];
 
 export type BlueBundlerOperationType = (typeof BLUE_BUNDLER_OPERATIONS)[number];
 
-export interface BlueBundlerOperationArgs
-  extends Omit<BlueOperationArgs, (typeof CALLBACK_OPERATIONS)[number]> {
-  Blue_SupplyCollateral: Omit<
-    BlueOperationArgs["Blue_SupplyCollateral"],
+export type BlueBundlerOperationArgs = Omit<
+  BlueOperationArgs,
+  (typeof CALLBACK_OPERATIONS)[number]
+> & {
+  [OperationType in CallbackOperationType]: Omit<
+    BlueOperationArgs[OperationType],
     "callback"
   > & {
     /**
@@ -39,20 +44,7 @@ export interface BlueBundlerOperationArgs
      */
     callback?: UnionOmit<BundlerOperation, "sender">[];
   };
-
-  Blue_Supply: Omit<BlueOperationArgs["Blue_Supply"], "callback"> & {
-    /**
-     * Inside a callback, the sender is forced to be the generalAdapter1.
-     */
-    callback?: UnionOmit<BundlerOperation, "sender">[];
-  };
-  Blue_Repay: Omit<BlueOperationArgs["Blue_Repay"], "callback"> & {
-    /**
-     * Inside a callback, the sender is forced to be the generalAdapter1.
-     */
-    callback?: UnionOmit<BundlerOperation, "sender">[];
-  };
-}
+};
 export type BlueBundlerOperations = {
   [OperationType in BlueBundlerOperationType]: Omit<
     WithOperationArgs<OperationType, BlueBundlerOperationArgs>,
@@ -110,6 +102,7 @@ export type Erc20BundlerOperation =
 export interface BundlerOperationArgs
   extends BlueOperationArgs,
     MetaMorphoOperationArgs,
+    ParaswapOperationArgs,
     Erc20OperationArgs {}
 
 export type BundlerOperations = BlueBundlerOperations &
@@ -120,11 +113,13 @@ export type BundlerOperations = BlueBundlerOperations &
 export type BundlerOperationType =
   | BlueBundlerOperationType
   | MetaMorphoBundlerOperationType
+  | ParaswapBundlerOperationType
   | Erc20BundlerOperationType;
 
 export type BundlerOperation =
   | BlueBundlerOperation
   | MetaMorphoBundlerOperation
+  | ParaswapBundlerOperation
   | Erc20BundlerOperation;
 
 export const BUNDLER_OPERATIONS = [
@@ -179,10 +174,12 @@ export const BLUE_INPUT_OPERATIONS =
 export type BlueInputBundlerOperationType =
   (typeof BLUE_INPUT_OPERATIONS)[number];
 
-export interface BlueInputBundlerOperationArgs
-  extends Omit<OperationArgs, (typeof CALLBACK_OPERATIONS)[number]> {
-  Blue_SupplyCollateral: Omit<
-    BlueOperationArgs["Blue_SupplyCollateral"],
+export type BlueInputBundlerOperationArgs = Omit<
+  OperationArgs,
+  (typeof CALLBACK_OPERATIONS)[number]
+> & {
+  [OperationType in CallbackOperationType]: Omit<
+    OperationArgs[OperationType],
     "callback"
   > & {
     /**
@@ -190,20 +187,7 @@ export interface BlueInputBundlerOperationArgs
      */
     callback?: UnionOmit<InputBundlerOperation, "sender">[];
   };
-
-  Blue_Supply: Omit<BlueOperationArgs["Blue_Supply"], "callback"> & {
-    /**
-     * Inside a callback, the sender is forced to be the generalAdapter1.
-     */
-    callback?: UnionOmit<InputBundlerOperation, "sender">[];
-  };
-  Blue_Repay: Omit<BlueOperationArgs["Blue_Repay"], "callback"> & {
-    /**
-     * Inside a callback, the sender is forced to be the generalAdapter1.
-     */
-    callback?: UnionOmit<InputBundlerOperation, "sender">[];
-  };
-}
+};
 export type BlueInputBundlerOperations = {
   [OperationType in BlueInputBundlerOperationType]: Omit<
     WithOperationArgs<OperationType, BlueInputBundlerOperationArgs>,

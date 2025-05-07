@@ -31,6 +31,7 @@ export const BLUE_OPERATIONS = [
   "Blue_SupplyCollateral",
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
+  "Blue_FlashLoan",
   "Blue_Paraswap_BuyDebt",
 ] as const;
 
@@ -126,6 +127,12 @@ export interface BlueOperationArgs {
         callback?: (data: MaybeDraft<SimulationState>) => Operation[];
         slippage?: bigint;
       };
+
+  Blue_FlashLoan: {
+    token: Address;
+    assets: bigint;
+    callback?: (data: MaybeDraft<SimulationState>) => Operation[];
+  };
 
   Blue_Paraswap_BuyDebt:
     | {
@@ -361,6 +368,7 @@ export const CALLBACK_OPERATIONS = [
   "Blue_Repay",
   "Blue_Supply",
   "Blue_SupplyCollateral",
+  "Blue_FlashLoan",
 ] as const satisfies readonly OperationType[];
 
 export type CallbackOperationType = (typeof CALLBACK_OPERATIONS)[number];
