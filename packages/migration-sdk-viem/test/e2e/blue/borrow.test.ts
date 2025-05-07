@@ -102,7 +102,9 @@ const fetchSimulationState = async (
     holdings,
     bundlerHoldings,
     positions,
+    bundlerPositions,
     userData,
+    bundlerData,
   ] = await Promise.all([
     client.getBlock({ blockTag: "latest" }),
     Promise.all(
@@ -134,7 +136,14 @@ const fetchSimulationState = async (
         async (id) => [id, await fetchPosition(user, id, client)] as const,
       ),
     ),
+    Promise.all(
+      marketIds.map(
+        async (id) =>
+          [id, await fetchPosition(generalAdapter1, id, client)] as const,
+      ),
+    ),
     fetchUser(user, client),
+    fetchUser(generalAdapter1, client),
   ]);
   return new SimulationState({
     chainId,
@@ -146,8 +155,11 @@ const fetchSimulationState = async (
       [user]: fromEntries(holdings),
       [generalAdapter1]: fromEntries(bundlerHoldings),
     },
-    positions: { [user]: fromEntries(positions) },
-    users: { [user]: userData },
+    positions: {
+      [user]: fromEntries(positions),
+      [generalAdapter1]: fromEntries(bundlerPositions),
+    },
+    users: { [user]: userData, [generalAdapter1]: bundlerData },
   });
 };
 
@@ -259,7 +271,6 @@ describe("Borrow position on blue", () => {
 
         expect(operation).toEqual({
           type: "Blue_SupplyCollateral",
-          address: "0x",
           sender: client.account.address,
           args: {
             id: marketTo.id,
@@ -268,8 +279,6 @@ describe("Borrow position on blue", () => {
             callback: [
               {
                 type: "Blue_Borrow",
-                address: "0x",
-                sender: client.account.address,
                 args: {
                   id: marketTo.id,
                   assets: borrowToMigrate,
@@ -280,8 +289,6 @@ describe("Borrow position on blue", () => {
               },
               {
                 type: "Blue_Repay",
-                address: "0x",
-                sender: client.account.address,
                 args: {
                   id: marketFrom.id,
                   assets: borrowToMigrate,
@@ -291,8 +298,6 @@ describe("Borrow position on blue", () => {
               },
               {
                 type: "Blue_WithdrawCollateral",
-                address: "0x",
-                sender: client.account.address,
                 args: {
                   id: marketFrom.id,
                   assets: collateralToMigrate,
@@ -312,7 +317,6 @@ describe("Borrow position on blue", () => {
         expect(finalizedBundle).toEqual([
           {
             type: "Blue_SupplyCollateral",
-            address: "0x",
             sender: generalAdapter1,
             args: {
               id: marketTo.id,
@@ -322,7 +326,6 @@ describe("Borrow position on blue", () => {
                 {
                   type: "Blue_SetAuthorization",
                   sender: bundler3,
-                  address: morpho,
                   args: {
                     owner: client.account.address,
                     isAuthorized: true,
@@ -331,7 +334,6 @@ describe("Borrow position on blue", () => {
                 },
                 {
                   type: "Blue_Borrow",
-                  address: "0x",
                   sender: generalAdapter1,
                   args: {
                     id: marketTo.id,
@@ -343,7 +345,6 @@ describe("Borrow position on blue", () => {
                 },
                 {
                   type: "Blue_Repay",
-                  address: "0x",
                   sender: generalAdapter1,
                   args: {
                     id: marketFrom.id,
@@ -354,7 +355,6 @@ describe("Borrow position on blue", () => {
                 },
                 {
                   type: "Blue_WithdrawCollateral",
-                  address: "0x",
                   sender: generalAdapter1,
                   args: {
                     id: marketFrom.id,
@@ -437,7 +437,6 @@ describe("Borrow position on blue", () => {
 
           expect(operation).toEqual({
             type: "Blue_SupplyCollateral",
-            address: "0x",
             sender: client.account.address,
             args: {
               id: marketTo.id,
@@ -446,8 +445,6 @@ describe("Borrow position on blue", () => {
               callback: [
                 {
                   type: "Blue_Borrow",
-                  address: "0x",
-                  sender: client.account.address,
                   args: {
                     id: marketTo.id,
                     assets: MathLib.wMulUp(
@@ -461,8 +458,6 @@ describe("Borrow position on blue", () => {
                 },
                 {
                   type: "Blue_Repay",
-                  address: "0x",
-                  sender: client.account.address,
                   args: {
                     id: marketFrom.id,
                     shares: sharesToMigrate,
@@ -472,8 +467,6 @@ describe("Borrow position on blue", () => {
                 },
                 {
                   type: "Blue_WithdrawCollateral",
-                  address: "0x",
-                  sender: client.account.address,
                   args: {
                     id: marketFrom.id,
                     assets: collateralToMigrate,
@@ -493,7 +486,6 @@ describe("Borrow position on blue", () => {
           expect(finalizedBundle).toEqual([
             {
               type: "Blue_SupplyCollateral",
-              address: "0x",
               sender: generalAdapter1,
               args: {
                 id: marketTo.id,
@@ -503,7 +495,6 @@ describe("Borrow position on blue", () => {
                   {
                     type: "Blue_SetAuthorization",
                     sender: bundler3,
-                    address: morpho,
                     args: {
                       owner: client.account.address,
                       isAuthorized: true,
@@ -512,7 +503,6 @@ describe("Borrow position on blue", () => {
                   },
                   {
                     type: "Blue_Borrow",
-                    address: "0x",
                     sender: generalAdapter1,
                     args: {
                       id: marketTo.id,
@@ -527,7 +517,6 @@ describe("Borrow position on blue", () => {
                   },
                   {
                     type: "Blue_Repay",
-                    address: "0x",
                     sender: generalAdapter1,
                     args: {
                       id: marketFrom.id,
@@ -538,7 +527,6 @@ describe("Borrow position on blue", () => {
                   },
                   {
                     type: "Blue_WithdrawCollateral",
-                    address: "0x",
                     sender: generalAdapter1,
                     args: {
                       id: marketFrom.id,
@@ -627,7 +615,6 @@ describe("Borrow position on blue", () => {
         );
         expect(operation).toEqual({
           type: "Blue_SupplyCollateral",
-          address: "0x",
           sender: client.account.address,
           args: {
             id: marketTo.id,
@@ -636,8 +623,6 @@ describe("Borrow position on blue", () => {
             callback: [
               {
                 type: "Blue_Borrow",
-                address: "0x",
-                sender: client.account.address,
                 args: {
                   id: marketTo.id,
                   assets: MathLib.wMulUp(
@@ -651,8 +636,6 @@ describe("Borrow position on blue", () => {
               },
               {
                 type: "Blue_Repay",
-                address: "0x",
-                sender: client.account.address,
                 args: {
                   id: marketFrom.id,
                   shares: initialPositionFrom.borrowShares,
@@ -662,8 +645,6 @@ describe("Borrow position on blue", () => {
               },
               {
                 type: "Blue_WithdrawCollateral",
-                address: "0x",
-                sender: client.account.address,
                 args: {
                   id: marketFrom.id,
                   assets: collateralAmount,
@@ -683,7 +664,6 @@ describe("Borrow position on blue", () => {
         expect(finalizedBundle).toEqual([
           {
             type: "Blue_SupplyCollateral",
-            address: "0x",
             sender: generalAdapter1,
             args: {
               id: marketTo.id,
@@ -693,7 +673,6 @@ describe("Borrow position on blue", () => {
                 {
                   type: "Blue_SetAuthorization",
                   sender: bundler3,
-                  address: morpho,
                   args: {
                     owner: client.account.address,
                     isAuthorized: true,
@@ -702,7 +681,6 @@ describe("Borrow position on blue", () => {
                 },
                 {
                   type: "Blue_Borrow",
-                  address: "0x",
                   sender: generalAdapter1,
                   args: {
                     id: marketTo.id,
@@ -717,7 +695,6 @@ describe("Borrow position on blue", () => {
                 },
                 {
                   type: "Blue_Repay",
-                  address: "0x",
                   sender: generalAdapter1,
                   args: {
                     id: marketFrom.id,
@@ -728,7 +705,6 @@ describe("Borrow position on blue", () => {
                 },
                 {
                   type: "Blue_WithdrawCollateral",
-                  address: "0x",
                   sender: generalAdapter1,
                   args: {
                     id: marketFrom.id,

@@ -102,7 +102,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: unknown EIP-2612 data for token "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" of owner "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"]`,
+      `
+      [Error: unknown EIP-2612 data for token "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" of owner "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Permit",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "address": "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
+        "args": {
+          "spender": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+          "amount": "1n",
+          "nonce": "0n"
+        }
+      }]
+    `,
     );
   });
 });

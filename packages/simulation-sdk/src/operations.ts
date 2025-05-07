@@ -285,24 +285,32 @@ export type CallbackOperations = {
 };
 export type CallbackOperation = CallbackOperations[CallbackOperationType];
 
-export const isBlueOperation = (operation: {
-  type: OperationType;
-}): operation is BlueOperation => {
+export const isBlueOperation = (
+  operation: Operation,
+): operation is BlueOperation => {
   return (BLUE_OPERATIONS as readonly OperationType[]).includes(operation.type);
 };
 
-export const isMetaMorphoOperation = (operation: {
-  type: OperationType;
-}): operation is MetaMorphoOperation => {
+export const isMetaMorphoOperation = (
+  operation: Operation,
+): operation is MetaMorphoOperation => {
   return (METAMORPHO_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };
 
-export const isErc20Operation = (operation: {
-  type: OperationType;
-}): operation is Erc20Operation => {
+export const isErc20Operation = (
+  operation: Operation,
+): operation is Erc20Operation => {
   return (ERC20_OPERATIONS as readonly OperationType[]).includes(
+    operation.type,
+  );
+};
+
+export const isCallbackOperation = (
+  operation: Operation,
+): operation is CallbackOperation => {
+  return (CALLBACK_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };

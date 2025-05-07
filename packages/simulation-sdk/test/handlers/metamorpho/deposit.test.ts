@@ -201,7 +201,20 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"]`,
+      `
+      [Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x1111111111111111111111111111111111111111"
+
+      when simulating operation:
+      {
+        "type": "MetaMorpho_Deposit",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "address": "0x000000000000000000000000000000000000000A",
+        "args": {
+          "assets": "115792089237316195423570985008687907853269984665640564039457584007913129639935n",
+          "owner": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 
@@ -220,7 +233,20 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: all caps reached on vault "0x000000000000000000000000000000000000000A" (remaining requested: 890000000)]`,
+      `
+      [Error: all caps reached on vault "0x000000000000000000000000000000000000000A" (remaining requested: 890000000)
+
+      when simulating operation:
+      {
+        "type": "MetaMorpho_Deposit",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "address": "0x000000000000000000000000000000000000000A",
+        "args": {
+          "assets": "1000000000n",
+          "owner": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 });

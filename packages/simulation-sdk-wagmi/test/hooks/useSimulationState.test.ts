@@ -320,7 +320,21 @@ describe("useSimulationState", () => {
         result.current.data!,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"]`,
+      `
+      [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Transfer",
+        "sender": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "args": {
+          "amount": "1000000",
+          "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "to": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+        }
+      }]
+    `,
     );
   });
 
@@ -367,7 +381,21 @@ describe("useSimulationState", () => {
         result.current.data!,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient allowance for token "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" from owner "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" to spender "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"]`,
+      `
+      [Error: insufficient allowance for token "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" from owner "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" to spender "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Transfer",
+        "sender": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        "address": "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+        "args": {
+          "amount": "1000000",
+          "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+          "to": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb"
+        }
+      }]
+    `,
     );
   });
 
