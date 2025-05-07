@@ -46,7 +46,20 @@ describe(type, () => {
         wrapFixtures,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: unknown wrapped token "0x1111111111111111111111111111111111111111"]`,
+      `
+      [Error: unknown wrapped token "0x1111111111111111111111111111111111111111"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Unwrap",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "address": "0x1111111111111111111111111111111111111111",
+        "args": {
+          "amount": "1000000000000000000n",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 
@@ -65,7 +78,20 @@ describe(type, () => {
         wrapFixtures,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x2222222222222222222222222222222222222222"]`,
+      `
+      [Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x2222222222222222222222222222222222222222"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Unwrap",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "address": "0x2222222222222222222222222222222222222222",
+        "args": {
+          "amount": "1000000000000000000n",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 });

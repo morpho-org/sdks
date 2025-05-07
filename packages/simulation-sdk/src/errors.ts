@@ -193,7 +193,12 @@ export namespace SimulationErrors {
       public readonly index: number,
       public readonly operation: T,
     ) {
-      super(error.message);
+      super(
+        `${error.message}
+
+${error instanceof Simulation ? "in the callback of" : "when simulating operation"}:
+${JSON.stringify(operation, (_, value) => (typeof value === "bigint" ? `${value.toString()}n` : value), 2)}`,
+      );
 
       this.stack = error.stack;
     }
