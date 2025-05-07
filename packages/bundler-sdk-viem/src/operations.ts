@@ -1,6 +1,7 @@
 import {
   type Address,
   DEFAULT_SLIPPAGE_TOLERANCE,
+  Holding,
   type MarketId,
   MarketUtils,
   MathLib,
@@ -11,13 +12,7 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import {
-  bigIntComparator,
-  entries,
-  getLast,
-  getValue,
-  keys,
-} from "@morpho-org/morpho-ts";
+import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
 import {
   type Erc20Operations,
   type MaybeDraft,
@@ -931,6 +926,21 @@ export const populateBundle = (
   return { operations, steps };
 };
 
+class VirtualHolding extends Holding {
+  public required = 0n;
+
+  get balance() {
+    return this._balance;
+  }
+  set balance(value: bigint) {
+    if (value < 0n) {
+      this.required = (this.required ?? 0n) + value;
+
+      this._balance = 0n;
+    } else this._balance = value;
+  }
+}
+
 export const simulateRequiredTokenAmounts = (
   operations: Operation[],
   data: MaybeDraft<SimulationState>,
@@ -940,43 +950,26 @@ export const simulateRequiredTokenAmounts = (
   } = getChainAddresses(data.chainId);
 
   const virtualBundlerData = produceImmutable(data, (draft) => {
-    Object.values(draft.holdings[generalAdapter1] ?? {}).forEach(
-      (bundlerTokenData) => {
-        if (bundlerTokenData == null) return;
+    const bundlerHoldings = draft.holdings[generalAdapter1];
+    if (bundlerHoldings == null) return;
 
-        // Virtual balance to calculate the amount required.
-        bundlerTokenData.balance += MathLib.MAX_UINT_160;
-      },
-    );
+    entries(bundlerHoldings).map(([token, holding]) => {
+      if (holding == null) return;
+
+      bundlerHoldings[token] = new VirtualHolding(holding);
+    });
   });
 
+  // Simulate the operations to calculate the required token amounts.
   const steps = simulateOperations(operations, virtualBundlerData);
 
-  const bundlerTokenDiffs = keys(
-    virtualBundlerData.holdings[generalAdapter1],
-  ).map((token) => ({
-    token,
-    required: steps
-      .map(
-        (step) =>
-          // When recursively simulated, this will cause tokens to be required at the highest recursion level.
-          // For example: supplyCollateral(x, supplyCollateral(y, borrow(z)))   [provided x, y, z < MAX_UINT_160]
-          //              |                   |                   |=> MAX_UINT_160 - (3 * MAX_UINT_160 + z) < 0
-          //              |                   |=> MAX_UINT_160 - (2 * MAX_UINT_160 - y) < 0
-          //              |=> MAX_UINT_160 - (MAX_UINT_160 - y - x) > 0
-          MathLib.MAX_UINT_160 -
-          (step.holdings[generalAdapter1]?.[token]?.balance ?? 0n),
-      )
-      .sort(
-        bigIntComparator(
-          (required) => required,
-          // Take the highest required amount among all operations.
-          "desc",
-        ),
-      )[0]!,
-  }));
-
-  return bundlerTokenDiffs.filter(({ required }) => required > 0n);
+  return entries(getLast(steps).holdings[generalAdapter1] ?? {}).map(
+    ([token, holding]) => ({
+      token,
+      // Safe cast because the holding was transformed to a VirtualHolding.
+      required: -(holding as VirtualHolding).required,
+    }),
+  );
 };
 
 export const getSimulatedBundlerOperation = (

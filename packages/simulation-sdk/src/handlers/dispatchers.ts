@@ -93,9 +93,4 @@ export const simulateOperation = (
 export const simulateOperations = (
   operations: Operation[],
   startData: MaybeDraft<SimulationState>,
-) =>
-  handleOperations(
-    operations,
-    produceImmutable(startData, () => {}),
-    simulateOperation,
-  );
+) => handleOperations(operations, startData, simulateOperation);

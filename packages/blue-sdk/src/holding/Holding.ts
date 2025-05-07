@@ -48,11 +48,6 @@ export class Holding implements IHolding {
   public readonly token: Address;
 
   /**
-   * The balance of the user for this token.
-   */
-  public balance: bigint;
-
-  /**
    * Whether the user is allowed to transfer this holding's balance.
    */
   public canTransfer?: boolean;
@@ -75,6 +70,11 @@ export class Holding implements IHolding {
    */
   public erc2612Nonce?: bigint;
 
+  /**
+   * Allows to customize the setter behavior in child classes.
+   */
+  protected _balance: bigint;
+
   constructor({
     user,
     token,
@@ -86,7 +86,7 @@ export class Holding implements IHolding {
   }: IHolding) {
     this.user = user;
     this.token = token;
-    this.balance = balance;
+    this._balance = balance;
     this.canTransfer = canTransfer;
     this.erc20Allowances = fromEntries(
       entries(erc20Allowances).map(([address, allowance]) => [
@@ -101,5 +101,15 @@ export class Holding implements IHolding {
     };
 
     if (erc2612Nonce != null) this.erc2612Nonce = erc2612Nonce;
+  }
+
+  /**
+   * The balance of the user for this token.
+   */
+  get balance() {
+    return this._balance;
+  }
+  set balance(value: bigint) {
+    this._balance = value;
   }
 }
