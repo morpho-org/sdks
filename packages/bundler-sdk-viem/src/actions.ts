@@ -518,13 +518,13 @@ export const encodeOperation = (
       break;
     }
     case "Erc20_Wrap": {
-      const { amount } = operation.args;
+      const { amount, owner } = operation.args;
 
       switch (operation.address) {
         case wNative: {
           actions.push({
             type: "wrapNative",
-            args: [amount, generalAdapter1, operation.skipRevert],
+            args: [amount, owner, operation.skipRevert],
           });
 
           break;
@@ -532,7 +532,7 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "wrapStEth",
-            args: [amount, generalAdapter1, operation.skipRevert],
+            args: [amount, owner, operation.skipRevert],
           });
 
           break;
@@ -544,7 +544,7 @@ export const encodeOperation = (
               amount,
               MathLib.MAX_UINT_256,
               zeroAddress,
-              generalAdapter1,
+              owner,
               operation.skipRevert,
             ],
           });
@@ -585,7 +585,7 @@ export const encodeOperation = (
         case wNative: {
           actions.push({
             type: "unwrapNative",
-            args: [amount, generalAdapter1, operation.skipRevert],
+            args: [amount, receiver, operation.skipRevert],
           });
 
           break;
@@ -593,7 +593,7 @@ export const encodeOperation = (
         case wstEth: {
           actions.push({
             type: "unwrapStEth",
-            args: [amount, generalAdapter1, operation.skipRevert],
+            args: [amount, receiver, operation.skipRevert],
           });
 
           break;

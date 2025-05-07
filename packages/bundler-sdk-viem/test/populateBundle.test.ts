@@ -2360,13 +2360,13 @@ describe("populateBundle", () => {
           ).toBe(0n);
           expect(
             await client.balanceOf({ erc20: stEth, owner: generalAdapter1 }),
-          ).toBe(1n); // 1 stETH is always remaining in the bundler
+          ).toBe(0n);
           expect(
             await client.balanceOf({ erc20: wNative, owner: generalAdapter1 }),
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 3n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 1n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
@@ -4716,13 +4716,13 @@ describe("populateBundle", () => {
           ).toBe(0n);
           expect(
             await client.balanceOf({ erc20: stEth, owner: generalAdapter1 }),
-          ).toBe(1n); // 1 stETH is always remaining in the bundler
+          ).toBe(0n);
           expect(
             await client.balanceOf({ erc20: wNative, owner: generalAdapter1 }),
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 3n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 1n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
@@ -4797,18 +4797,8 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: assets,
-                owner: generalAdapter1,
+                owner: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-            {
-              type: "Erc20_Transfer",
-              address: wNative,
-              sender: generalAdapter1,
-              args: {
-                amount: maxUint256,
-                from: generalAdapter1,
-                to: client.account.address,
               },
             },
           ]);
