@@ -329,7 +329,7 @@ describe("paraswap", () => {
       async ({ client, config }) => {
         const id = usdc_wbtc.id;
 
-        const collateral = parseUnits("3", 8);
+        const collateral = parseUnits("4", 8);
         const debt = parseUnits("190000", 6);
         await client.deal({
           erc20: usdc_wbtc.collateralToken,
@@ -374,13 +374,15 @@ describe("paraswap", () => {
 
         const data = result.current.data!;
 
+        const withdrawn = parseUnits("1.5", 8);
+
         const { bundle } = await setupTestBundle(client, data, [
           {
             type: "Blue_FlashLoan",
             sender: client.account.address,
             args: {
               token: usdc_wbtc.collateralToken,
-              assets: collateral / 2n,
+              assets: withdrawn,
               callback: [
                 {
                   type: "Paraswap_Sell",
@@ -409,7 +411,7 @@ describe("paraswap", () => {
                   type: "Blue_WithdrawCollateral",
                   args: {
                     id,
-                    assets: collateral / 2n,
+                    assets: withdrawn,
                     onBehalf: client.account.address,
                     receiver: generalAdapter1,
                   },
