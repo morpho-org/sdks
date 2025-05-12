@@ -1332,15 +1332,7 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoFlashLoan",
-          args: [
-            asset,
-            amount,
-            encodeFunctionData({
-              abi: bundler3Abi,
-              functionName: "reenter",
-              args: [callbackCalls],
-            }),
-          ],
+          args: [asset, amount, reenterData],
         }),
         value: 0n,
         skipRevert,
