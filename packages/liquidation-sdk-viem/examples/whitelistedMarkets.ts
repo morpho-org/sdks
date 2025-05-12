@@ -17,6 +17,7 @@ import {
   Pendle,
   Spectra,
   apiSdk,
+  collateralUsdThreshold,
   getPositions,
   getRepayDataPreLiquidation,
   mainnetAddresses,
@@ -138,7 +139,8 @@ export const check = async <
             .map((_v, i) => seizableCollateral.value! / 2n ** BigInt(i))
             .filter(
               (seizedAssets) =>
-                collateralToken.toUsd(seizedAssets)! > parseEther("1000") ||
+                collateralToken.toUsd(seizedAssets)! >
+                  (collateralUsdThreshold[chainId] ?? parseEther("1000")) ||
                 position.collateral === seizedAssets,
             ) // Do not try seizing less than $1000 collateral, except if we can realize debt.
             .map(async (seizedAssets) => {

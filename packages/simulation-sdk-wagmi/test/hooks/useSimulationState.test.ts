@@ -289,6 +289,13 @@ describe("useSimulationState", () => {
     client,
     expect,
   }) => {
+    const amount = 1_000000n;
+
+    await client.approve({
+      address: usdc,
+      args: [morpho, amount],
+    });
+
     const block = await client.getBlock();
 
     const { result } = await renderHook(config, () =>
@@ -311,7 +318,7 @@ describe("useSimulationState", () => {
             sender: morpho,
             address: usdc,
             args: {
-              amount: 1_000000n,
+              amount,
               from: client.account.address,
               to: morpho,
             },

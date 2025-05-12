@@ -28,9 +28,6 @@ export const handleErc20TransferOperation: OperationHandler<
     )
       amount = MathLib.min(amount, fromHolding.balance);
 
-    if (fromHolding.balance < amount)
-      throw new Erc20Errors.InsufficientBalance(address, from);
-
     if (sender !== from && from !== generalAdapter1) {
       // Check allowance for approval recipients (except for the bundler which doesn't need it).
       const contract =
@@ -62,6 +59,9 @@ export const handleErc20TransferOperation: OperationHandler<
     }
 
     fromHolding.balance -= amount;
+
+    if (fromHolding.balance < 0n)
+      throw new Erc20Errors.InsufficientBalance(address, from);
   }
 
   const toHolding = data.tryGetHolding(to, address);
