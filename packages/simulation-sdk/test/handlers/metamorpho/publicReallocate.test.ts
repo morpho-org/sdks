@@ -95,7 +95,25 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: max outflow exceeded for vault "0x000000000000000000000000000000000000000A" on market "0x82b7572458381128c105a67bc944e36b6318aa3c8095074efe9da6274b8e236a"]`,
+      `
+      [Error: max outflow exceeded for vault "0x000000000000000000000000000000000000000A" on market "0x82b7572458381128c105a67bc944e36b6318aa3c8095074efe9da6274b8e236a"
+
+      when simulating operation:
+      {
+        "type": "MetaMorpho_PublicReallocate",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "address": "0x000000000000000000000000000000000000000A",
+        "args": {
+          "withdrawals": [
+            {
+              "id": "0x82b7572458381128c105a67bc944e36b6318aa3c8095074efe9da6274b8e236a",
+              "assets": "10000000n"
+            }
+          ],
+          "supplyMarketId": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd"
+        }
+      }]
+    `,
     );
   });
 
@@ -119,7 +137,25 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: max inflow exceeded for vault "0x000000000000000000000000000000000000000A" on market "0x82b7572458381128c105a67bc944e36b6318aa3c8095074efe9da6274b8e236a"]`,
+      `
+      [Error: max inflow exceeded for vault "0x000000000000000000000000000000000000000A" on market "0x82b7572458381128c105a67bc944e36b6318aa3c8095074efe9da6274b8e236a"
+
+      when simulating operation:
+      {
+        "type": "MetaMorpho_PublicReallocate",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "address": "0x000000000000000000000000000000000000000A",
+        "args": {
+          "withdrawals": [
+            {
+              "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+              "assets": "50000000n"
+            }
+          ],
+          "supplyMarketId": "0x82b7572458381128c105a67bc944e36b6318aa3c8095074efe9da6274b8e236a"
+        }
+      }]
+    `,
     );
   });
 });

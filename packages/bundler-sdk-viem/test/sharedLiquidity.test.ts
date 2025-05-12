@@ -19,7 +19,6 @@ configure({ asyncUtilTimeout: 10_000 });
 
 describe("sharedLiquidity", () => {
   const {
-    morpho,
     bundler3: { bundler3, generalAdapter1 },
     publicAllocator,
     wNative,
@@ -159,7 +158,6 @@ describe("sharedLiquidity", () => {
           {
             type: "Blue_SupplyCollateral",
             sender: client.account.address,
-            address: morpho,
             args: {
               id,
               assets: collateralAssets,
@@ -169,7 +167,6 @@ describe("sharedLiquidity", () => {
           {
             type: "Blue_Borrow",
             sender: client.account.address,
-            address: morpho,
             args: {
               id,
               assets: borrowed,
@@ -217,7 +214,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_SupplyCollateral",
           sender: generalAdapter1,
-          address: morpho,
           args: {
             id,
             assets: collateralAssets,
@@ -227,7 +223,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_SetAuthorization",
           sender: bundler3,
-          address: morpho,
           args: {
             owner: client.account.address,
             isAuthorized: true,
@@ -237,7 +232,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_Borrow",
           sender: generalAdapter1,
-          address: morpho,
           args: {
             id,
             assets: borrowed,
@@ -353,7 +347,6 @@ describe("sharedLiquidity", () => {
           {
             type: "Blue_SupplyCollateral",
             sender: client.account.address,
-            address: morpho,
             args: {
               id,
               assets: collateralAssets,
@@ -363,7 +356,6 @@ describe("sharedLiquidity", () => {
           {
             type: "Blue_Borrow",
             sender: client.account.address,
-            address: morpho,
             args: {
               id,
               assets: maxFriendlyReallocationAmount,
@@ -411,7 +403,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_SupplyCollateral",
           sender: generalAdapter1,
-          address: morpho,
           args: {
             id,
             assets: collateralAssets,
@@ -421,7 +412,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_SetAuthorization",
           sender: generalAdapter1,
-          address: morpho,
           args: {
             owner: client.account.address,
             isAuthorized: true,
@@ -445,7 +435,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_Borrow",
           sender: generalAdapter1,
-          address: morpho,
           args: {
             id,
             assets: maxFriendlyReallocationAmount,
@@ -562,7 +551,6 @@ describe("sharedLiquidity", () => {
           {
             type: "Blue_SupplyCollateral",
             sender: client.account.address,
-            address: morpho,
             args: {
               id,
               assets: collateralAssets,
@@ -572,7 +560,6 @@ describe("sharedLiquidity", () => {
           {
             type: "Blue_Borrow",
             sender: client.account.address,
-            address: morpho,
             args: {
               id,
               assets: borrowed,
@@ -620,7 +607,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_SupplyCollateral",
           sender: generalAdapter1,
-          address: morpho,
           args: {
             id,
             assets: collateralAssets,
@@ -630,7 +616,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_SetAuthorization",
           sender: generalAdapter1,
-          address: morpho,
           args: {
             owner: client.account.address,
             isAuthorized: true,
@@ -654,7 +639,6 @@ describe("sharedLiquidity", () => {
         {
           type: "Blue_Borrow",
           sender: generalAdapter1,
-          address: morpho,
           args: {
             id,
             assets: borrowed,
