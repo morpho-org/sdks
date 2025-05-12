@@ -944,7 +944,7 @@ export const encodeOperation = (
             srcToken,
             operation.address,
             swap.offsets,
-            receiver,
+            receiver === paraswapAdapter ? generalAdapter1 : receiver,
             operation.skipRevert,
           ],
         },
@@ -1001,21 +1001,23 @@ export const encodeOperation = (
             dstToken,
             sellEntireBalance,
             swap.offsets,
-            receiver,
+            receiver === paraswapAdapter ? generalAdapter1 : receiver,
             operation.skipRevert,
           ],
         },
-        {
+      );
+
+      if (!sellEntireBalance)
+        actions.push({
           type: "erc20Transfer",
           args: [
-            dstToken,
+            operation.address,
             generalAdapter1,
             maxUint256,
             paraswapAdapter,
             operation.skipRevert,
           ],
-        },
-      );
+        });
 
       break;
     }
@@ -1050,7 +1052,7 @@ export const encodeOperation = (
             params,
             swap.offsets,
             onBehalf,
-            receiver,
+            receiver === paraswapAdapter ? generalAdapter1 : receiver,
             operation.skipRevert,
           ],
         },
