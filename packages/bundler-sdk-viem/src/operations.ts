@@ -934,7 +934,7 @@ class VirtualHolding extends Holding {
   }
   set balance(value: bigint) {
     if (value < 0n) {
-      this.required = (this.required ?? 0n) + value;
+      this.required += -value;
 
       this._balance = 0n;
     } else this._balance = value;
@@ -967,7 +967,7 @@ export const simulateRequiredTokenAmounts = (
     .map(([token, holding]) => ({
       token,
       // Safe cast because the holding was transformed to a VirtualHolding.
-      required: -(holding as VirtualHolding).required,
+      required: (holding as VirtualHolding).required,
     }))
     .filter(({ required }) => required > 0n);
 };
