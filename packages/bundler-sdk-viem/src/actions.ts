@@ -1038,7 +1038,7 @@ export const encodeOperation = (
           args: [
             srcToken,
             paraswapAdapter,
-            maxUint256, // TODO: replace with expected debt including slippage?
+            maxUint256,
             generalAdapter1,
             operation.skipRevert,
           ],

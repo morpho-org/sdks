@@ -45,7 +45,7 @@ export const handleParaswapBuyOperation: OperationHandler<
       sender: srcToken,
       address: srcToken,
       args: {
-        amount: MathLib.wMulUp(quotedAmount, MathLib.WAD + slippage),
+        amount: MathLib.wDivUp(quotedAmount, MathLib.WAD - slippage),
         from: sender,
         to: ZERO_ADDRESS,
       },
