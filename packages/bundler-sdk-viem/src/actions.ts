@@ -4,7 +4,9 @@ import {
   type Client,
   encodeFunctionData,
   erc20Abi,
+  hexToBigInt,
   maxUint256,
+  slice,
   verifyTypedData,
   zeroAddress,
 } from "viem";
@@ -138,7 +140,7 @@ export const encodeOperation = (
   const deadline = Time.timestamp() + Time.s.from.h(24n);
   const {
     morpho,
-    bundler3: { bundler3, generalAdapter1 },
+    bundler3: { bundler3, generalAdapter1, paraswapAdapter },
     permit2,
     wNative,
     dai,
@@ -891,6 +893,180 @@ export const encodeOperation = (
           operation.skipRevert,
         ],
       });
+
+      break;
+    }
+    case "Blue_FlashLoan": {
+      const { token, assets } = operation.args;
+
+      actions.push({
+        type: "morphoFlashLoan",
+        args: [
+          token,
+          assets,
+          callbackBundle?.actions ?? [],
+          operation.skipRevert,
+        ],
+      });
+
+      break;
+    }
+    case "Paraswap_Buy": {
+      if (!("swap" in operation.args))
+        throw new BundlerErrors.MissingSwapData();
+
+      if (paraswapAdapter == null)
+        throw new BundlerErrors.UnexpectedAction("paraswapBuy", chainId);
+
+      const { srcToken, swap, receiver } = operation.args;
+
+      const limitAmountOffset = Number(swap.offsets.limitAmount);
+      const limitAmount = hexToBigInt(
+        slice(swap.data, limitAmountOffset, limitAmountOffset + 32),
+      );
+
+      actions.push(
+        {
+          type: "erc20Transfer",
+          args: [
+            srcToken,
+            paraswapAdapter,
+            limitAmount,
+            generalAdapter1,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "paraswapBuy",
+          args: [
+            swap.to,
+            swap.data,
+            srcToken,
+            operation.address,
+            swap.offsets,
+            receiver === paraswapAdapter ? generalAdapter1 : receiver,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "erc20Transfer",
+          args: [
+            srcToken,
+            generalAdapter1,
+            maxUint256,
+            paraswapAdapter,
+            operation.skipRevert,
+          ],
+        },
+      );
+
+      break;
+    }
+    case "Paraswap_Sell": {
+      if (!("swap" in operation.args))
+        throw new BundlerErrors.MissingSwapData();
+
+      if (paraswapAdapter == null)
+        throw new BundlerErrors.UnexpectedAction("paraswapBuy", chainId);
+
+      const {
+        dstToken,
+        swap,
+        sellEntireBalance = false,
+        receiver,
+      } = operation.args;
+
+      const exactAmountOffset = Number(swap.offsets.exactAmount);
+      const exactAmount = hexToBigInt(
+        slice(swap.data, exactAmountOffset, exactAmountOffset + 32),
+      );
+
+      actions.push(
+        {
+          type: "erc20Transfer",
+          args: [
+            operation.address,
+            paraswapAdapter,
+            sellEntireBalance ? maxUint256 : exactAmount,
+            generalAdapter1,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "paraswapSell",
+          args: [
+            swap.to,
+            swap.data,
+            operation.address,
+            dstToken,
+            sellEntireBalance,
+            swap.offsets,
+            receiver === paraswapAdapter ? generalAdapter1 : receiver,
+            operation.skipRevert,
+          ],
+        },
+      );
+
+      if (!sellEntireBalance)
+        actions.push({
+          type: "erc20Transfer",
+          args: [
+            operation.address,
+            generalAdapter1,
+            maxUint256,
+            paraswapAdapter,
+            operation.skipRevert,
+          ],
+        });
+
+      break;
+    }
+    case "Blue_Paraswap_BuyDebt": {
+      if (!("swap" in operation.args))
+        throw new BundlerErrors.MissingSwapData();
+
+      if (paraswapAdapter == null)
+        throw new BundlerErrors.UnexpectedAction("paraswapBuy", chainId);
+
+      const { srcToken, id, swap, onBehalf, receiver } = operation.args;
+
+      const { params } = dataBefore.getMarket(id);
+
+      actions.push(
+        {
+          type: "erc20Transfer",
+          args: [
+            srcToken,
+            paraswapAdapter,
+            maxUint256,
+            generalAdapter1,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "paraswapBuyMorphoDebt",
+          args: [
+            swap.to,
+            swap.data,
+            srcToken,
+            params,
+            swap.offsets,
+            onBehalf,
+            receiver === paraswapAdapter ? generalAdapter1 : receiver,
+            operation.skipRevert,
+          ],
+        },
+        {
+          type: "erc20Transfer",
+          args: [
+            srcToken,
+            generalAdapter1,
+            maxUint256,
+            paraswapAdapter,
+            operation.skipRevert,
+          ],
+        },
+      );
 
       break;
     }

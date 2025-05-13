@@ -64,7 +64,7 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    expected.holdings[userB]![tokenB]!.balance -= MathLib.wMulDown(
+    expected.holdings[userB]![tokenB]!.balance -= MathLib.wDivUp(
       quotedAmount,
       MathLib.WAD - DEFAULT_SLIPPAGE_TOLERANCE,
     );

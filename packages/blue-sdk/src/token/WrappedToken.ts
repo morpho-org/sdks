@@ -19,7 +19,7 @@ export abstract class WrappedToken extends Token {
   ) {
     const wrappedAmount = this._wrap(unwrappedAmount, rounding);
 
-    return MathLib.wMul(wrappedAmount, MathLib.WAD - slippage, "Down");
+    return MathLib.wMulDown(wrappedAmount, MathLib.WAD - slippage);
   }
 
   /** The amount of unwrappedTokens that should be wrapped to receive `wrappedAmount` */
@@ -45,7 +45,7 @@ export abstract class WrappedToken extends Token {
   ) {
     const unwrappedAmount = this._unwrap(wrappedAmount, rounding);
 
-    return MathLib.wMul(unwrappedAmount, MathLib.WAD - slippage, "Up");
+    return MathLib.wMulUp(unwrappedAmount, MathLib.WAD - slippage);
   }
 
   /** The amount of wrappedTokens that should be unwrapped to receive `unwrappedAmount` */

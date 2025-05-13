@@ -52,7 +52,7 @@ export const handleBlueParaswapBuyDebtOperation: OperationHandler<
       type: "Paraswap_Buy",
       args: {
         srcToken,
-        amount,
+        amount: debtAmount,
         quotedAmount: MathLib.mulDivDown(quotedAmount, debtAmount, amount),
         receiver,
         slippage,

@@ -8,6 +8,7 @@ import type {
 } from "viem";
 
 import type { Address, InputMarketParams } from "@morpho-org/blue-sdk";
+import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
 
 export interface Authorization {
   authorizer: Address;
@@ -187,14 +188,52 @@ export interface ActionArgs {
     receiver: Address,
     skipRevert?: boolean,
   ];
+  morphoFlashLoan: [
+    token: Address,
+    assets: bigint,
+    onMorphoFlashLoan: Action[],
+    skipRevert?: boolean,
+  ];
 
-  /* MetaMorpho */
+  /* PublicAllocator */
 
   reallocateTo: [
     vault: Address,
     fee: bigint,
     withdrawals: InputReallocation[],
     supplyMarket: InputMarketParams,
+    skipRevert?: boolean,
+  ];
+
+  /* Paraswap */
+
+  paraswapBuy: [
+    augustus: Address,
+    callData: Hex,
+    srcToken: Address,
+    dstToken: Address,
+    offsets: ParaswapOffsets,
+    receiver: Address,
+    skipRevert?: boolean,
+  ];
+  paraswapSell: [
+    augustus: Address,
+    callData: Hex,
+    srcToken: Address,
+    dstToken: Address,
+    sellEntireBalance: boolean,
+    offsets: ParaswapOffsets,
+    receiver: Address,
+    skipRevert?: boolean,
+  ];
+  paraswapBuyMorphoDebt: [
+    augustus: Address,
+    callData: Hex,
+    srcToken: Address,
+    marketParams: InputMarketParams,
+    offsets: ParaswapOffsets,
+    onBehalf: Address,
+    receiver: Address,
     skipRevert?: boolean,
   ];
 
