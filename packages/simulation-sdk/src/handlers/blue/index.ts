@@ -4,6 +4,7 @@ import type { OperationHandler } from "../types.js";
 
 import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 import { handleBlueBorrowOperation } from "./borrow.js";
+import { handleBlueParaswapBuyDebtOperation } from "./buyDebt.js";
 import { handleBlueRepayOperation } from "./repay.js";
 import { handleBlueSetAuthorizationOperation } from "./setAuthorization.js";
 import { handleBlueSupplyOperation } from "./supply.js";
@@ -44,5 +45,7 @@ export const handleBlueOperation: OperationHandler<BlueOperation> = (
       return handleBlueWithdrawOperation(operation, data);
     case "Blue_WithdrawCollateral":
       return handleBlueWithdrawCollateralOperation(operation, data);
+    case "Blue_Paraswap_BuyDebt":
+      return handleBlueParaswapBuyDebtOperation(operation, data);
   }
 };

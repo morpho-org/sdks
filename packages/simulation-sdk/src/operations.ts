@@ -1,5 +1,5 @@
 import type { Address, MarketId } from "@morpho-org/blue-sdk";
-
+import type { Hex } from "viem";
 import type { SimulationState } from "./SimulationState.js";
 import type { MaybeDraft } from "./handlers/types.js";
 
@@ -31,6 +31,7 @@ export const BLUE_OPERATIONS = [
   "Blue_SupplyCollateral",
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
+  "Blue_Paraswap_BuyDebt",
 ] as const;
 
 export type BlueOperationType = (typeof BLUE_OPERATIONS)[number];
@@ -125,6 +126,28 @@ export interface BlueOperationArgs {
         callback?: (data: MaybeDraft<SimulationState>) => Operation[];
         slippage?: bigint;
       };
+
+  Blue_Paraswap_BuyDebt:
+    | {
+        id: MarketId;
+        srcToken: Address;
+        priceE27: bigint;
+        onBehalf: Address;
+        receiver: Address;
+        slippage?: bigint;
+      }
+    | {
+        id: MarketId;
+        srcToken: Address;
+        swap: {
+          to: Address;
+          data: Hex;
+          offsets: ParaswapOffsets;
+        };
+        onBehalf: Address;
+        receiver: Address;
+        slippage?: bigint;
+      };
 }
 export type BlueOperations = {
   [OperationType in BlueOperationType]: Omit<
@@ -194,6 +217,63 @@ export type MetaMorphoOperations = {
 };
 export type MetaMorphoOperation = MetaMorphoOperations[MetaMorphoOperationType];
 
+export interface ParaswapOffsets {
+  exactAmount: bigint;
+  limitAmount: bigint;
+  quotedAmount: bigint;
+}
+
+export const PARASWAP_OPERATIONS = ["Paraswap_Buy", "Paraswap_Sell"] as const;
+
+export type ParaswapOperationType = (typeof PARASWAP_OPERATIONS)[number];
+export interface ParaswapOperationArgs {
+  Paraswap_Buy:
+    | {
+        srcToken: Address;
+        amount: bigint;
+        quotedAmount: bigint;
+        receiver: Address;
+        slippage?: bigint;
+      }
+    | {
+        srcToken: Address;
+        swap: {
+          to: Address;
+          data: Hex;
+          offsets: ParaswapOffsets;
+        };
+        receiver: Address;
+        slippage?: bigint;
+      };
+  Paraswap_Sell:
+    | {
+        dstToken: Address;
+        amount: bigint;
+        quotedAmount: bigint;
+        receiver: Address;
+        sellEntireBalance?: boolean;
+        slippage?: bigint;
+      }
+    | {
+        dstToken: Address;
+        swap: {
+          to: Address;
+          data: Hex;
+          offsets: ParaswapOffsets;
+        };
+        receiver: Address;
+        sellEntireBalance?: boolean;
+        slippage?: bigint;
+      };
+}
+export type ParaswapOperations = {
+  [OperationType in ParaswapOperationType]: WithOperationArgs<
+    OperationType,
+    ParaswapOperationArgs
+  >;
+};
+export type ParaswapOperation = ParaswapOperations[ParaswapOperationType];
+
 export const ERC20_OPERATIONS = [
   "Erc20_Approve",
   "Erc20_Permit",
@@ -255,20 +335,27 @@ export type Erc20Operation = Erc20Operations[Erc20OperationType];
 
 export interface Operations
   extends BlueOperations,
-    Erc20Operations,
-    MetaMorphoOperations {}
+    MetaMorphoOperations,
+    ParaswapOperations,
+    Erc20Operations {}
 
 export interface OperationArgs
   extends BlueOperationArgs,
-    Erc20OperationArgs,
-    MetaMorphoOperationArgs {}
+    MetaMorphoOperationArgs,
+    ParaswapOperationArgs,
+    Erc20OperationArgs {}
 
 export type OperationType =
   | BlueOperationType
-  | Erc20OperationType
-  | MetaMorphoOperationType;
+  | MetaMorphoOperationType
+  | ParaswapOperationType
+  | Erc20OperationType;
 
-export type Operation = BlueOperation | Erc20Operation | MetaMorphoOperation;
+export type Operation =
+  | BlueOperation
+  | MetaMorphoOperation
+  | ParaswapOperation
+  | Erc20Operation;
 
 export const CALLBACK_OPERATIONS = [
   "Blue_Repay",
@@ -295,6 +382,14 @@ export const isMetaMorphoOperation = (
   operation: Operation,
 ): operation is MetaMorphoOperation => {
   return (METAMORPHO_OPERATIONS as readonly OperationType[]).includes(
+    operation.type,
+  );
+};
+
+export const isParaswapOperation = (
+  operation: Operation,
+): operation is ParaswapOperation => {
+  return (PARASWAP_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };
