@@ -427,6 +427,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
     [_addressesRegistry[ChainId.BaseMainnet].testUsdc]:
       _addressesRegistry[ChainId.BaseMainnet].usdc,
   },
+  [ChainId.PolygonMainnet]: {
+    [_addressesRegistry[ChainId.PolygonMainnet].wNative]: NATIVE_ADDRESS,
+  },
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
