@@ -15,6 +15,7 @@ export enum ChainId {
   CornMainnet = 21000000,
   PlumeMainnet = 98866,
   CampMainnet = 123420001114,
+  HyperliquidMainnet = 999,
 }
 
 export interface ChainMetadata {
@@ -158,6 +159,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Camp", symbol: "CAMP", decimals: 18 },
       explorerUrl: "https://basecamp.cloud.blockscout.com/",
       identifier: "camp",
+    },
+    [ChainId.HyperliquidMainnet]: {
+      name: "Hyperliquid",
+      id: ChainId.HyperliquidMainnet,
+      nativeCurrency: { name: "Hype", symbol: "HYPE", decimals: 18 },
+      explorerUrl: "https://purrsec.com",
+      identifier: "hyperliquid",
     },
   };
 }
