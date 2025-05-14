@@ -430,9 +430,6 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.PolygonMainnet]: {
     [_addressesRegistry[ChainId.PolygonMainnet].wNative]: NATIVE_ADDRESS,
   },
-  [ChainId.ArbitrumMainnet]: {
-    [_addressesRegistry[ChainId.ArbitrumMainnet].wNative]: NATIVE_ADDRESS,
-  },
   [ChainId.OptimismMainnet]: {
     [_addressesRegistry[ChainId.OptimismMainnet].wNative]: NATIVE_ADDRESS,
   },
