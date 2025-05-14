@@ -427,6 +427,42 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
     [_addressesRegistry[ChainId.BaseMainnet].testUsdc]:
       _addressesRegistry[ChainId.BaseMainnet].usdc,
   },
+  [ChainId.PolygonMainnet]: {
+    [_addressesRegistry[ChainId.PolygonMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.OptimismMainnet]: {
+    [_addressesRegistry[ChainId.OptimismMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.WorldChainMainnet]: {
+    [_addressesRegistry[ChainId.WorldChainMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.ScrollMainnet]: {
+    [_addressesRegistry[ChainId.ScrollMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.InkMainnet]: {
+    [_addressesRegistry[ChainId.InkMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.Unichain]: {
+    [_addressesRegistry[ChainId.Unichain].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.SonicMainnet]: {
+    [_addressesRegistry[ChainId.SonicMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.HemiMainnet]: {
+    [_addressesRegistry[ChainId.HemiMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.ModeMainnet]: {
+    [_addressesRegistry[ChainId.ModeMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.CornMainnet]: {
+    [_addressesRegistry[ChainId.CornMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.PlumeMainnet]: {
+    [_addressesRegistry[ChainId.PlumeMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.CampMainnet]: {
+    [_addressesRegistry[ChainId.CampMainnet].wNative]: NATIVE_ADDRESS,
+  },
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
