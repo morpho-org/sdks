@@ -7,6 +7,7 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
+import { restructure } from "src/utils";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi, blueOracleAbi, preLiquidationAbi } from "../abis";
@@ -22,20 +23,21 @@ export async function fetchPosition(
   parameters.chainId ??= await getChainId(client);
 
   const { morpho } = getChainAddresses(parameters.chainId);
-  const [supplyShares, borrowShares, collateral] = await readContract(client, {
-    ...parameters,
-    address: morpho,
-    abi: blueAbi,
-    functionName: "position",
-    args: [marketId, user],
-  });
+  const position = restructure(
+    await readContract(client, {
+      ...parameters,
+      address: morpho,
+      abi: blueAbi,
+      functionName: "position",
+      args: [marketId, user],
+    }),
+    { abi: blueAbi, name: "position", args: ["0x", "0x"] },
+  );
 
   return new Position({
     user,
     marketId,
-    supplyShares,
-    borrowShares,
-    collateral,
+    ...position,
   });
 }
 
