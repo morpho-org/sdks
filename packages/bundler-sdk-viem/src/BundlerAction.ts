@@ -1410,7 +1410,7 @@ export namespace BundlerAction {
    * @param dstToken The address of the destination token.
    * @param offsets The offsets in callData of the exact buy amount (`exactAmount`), maximum sell amount (`limitAmount`) and quoted sell amount (`quotedAmount`).
    * @param receiver The address to send the tokens to.
-   * @param skipRevert Whether to allow the buy to revert without making the whole bundle revert. Defaults to false.
+   * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
    */
   export function paraswapBuy(
     chainId: ChainId,
@@ -1454,7 +1454,7 @@ export namespace BundlerAction {
    * @param sellEntireBalance Whether to sell the entire balance of the source token.
    * @param offsets The offsets in callData of the exact sell amount (`exactAmount`), minimum buy amount (`limitAmount`) and quoted buy amount (`quotedAmount`).
    * @param receiver The address to send the tokens to.
-   * @param skipRevert Whether to allow the buy to revert without making the whole bundle revert. Defaults to false.
+   * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
    */
   export function paraswapSell(
     chainId: ChainId,
@@ -1507,7 +1507,7 @@ export namespace BundlerAction {
    * @param offsets The offsets in callData of the exact buy amount (`exactAmount`), maximum sell amount (`limitAmount`) and quoted sell amount (`quotedAmount`).
    * @param onBehalf The address to buy the debt on behalf of.
    * @param receiver The address to send the tokens to.
-   * @param skipRevert Whether to allow the buy to revert without making the whole bundle revert. Defaults to false.
+   * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
    */
   export function paraswapBuyMorphoDebt(
     chainId: ChainId,
