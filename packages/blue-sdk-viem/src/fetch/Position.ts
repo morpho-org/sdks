@@ -7,11 +7,11 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
-import { restructure } from "src/utils";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi, blueOracleAbi, preLiquidationAbi } from "../abis";
 import type { DeploylessFetchParameters, FetchParameters } from "../types";
+import { restructure } from "../utils";
 import { fetchMarket } from "./Market";
 
 export async function fetchPosition(
