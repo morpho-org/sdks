@@ -20,12 +20,12 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Restore Foundry cache
-        uses: actions/cache/restore@v3
-        with:
-          path: ~/.foundry/cache/rpc
-          key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-
+      # - name: Restore Foundry cache
+      #   uses: actions/cache/restore@v3
+      #   with:
+      #     path: ~/.foundry/cache/rpc
+      #     key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
+      #     restore-keys: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
