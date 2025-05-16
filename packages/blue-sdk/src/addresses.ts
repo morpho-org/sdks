@@ -375,6 +375,20 @@ export const addressesRegistry = {
 
     wNative: "0x1aE9c40eCd2DD6ad5858E5430A556d7aff28A44b",
   },
+  [ChainId.HyperliquidMainnet]: {
+    morpho: "0x68e37dE8d93d3496ae143F2E900490f6280C57cD",
+    bundler3: {
+      bundler3: "0xa3F50477AfA601C771874260A3B34B40e244Fa0e",
+      generalAdapter1: "0xD7F48aDE56613E8605863832B7B8A1985B934aE4",
+    },
+    adaptiveCurveIrm: "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483",
+    publicAllocator: "0x517505be22D9068687334e69ae7a02fC77edf4Fc",
+    metaMorphoFactory: "0xec051b19d654C48c357dC974376DeB6272f24e53",
+    chainlinkOracleFactory: "0xeb476f124FaD625178759d13557A72394A6f9aF5",
+    preLiquidationFactory: "0x1b6782Ac7A859503cE953FBf4736311CC335B8f0",
+
+    wNative: "0x5555555555555555555555555555555555555555",
+  },
 } as const;
 
 export const addresses = addressesRegistry as Record<number, ChainAddresses>;
@@ -439,6 +453,7 @@ export const unwrappedTokensMapping: Record<
   [ChainId.CornMainnet]: {},
   [ChainId.PlumeMainnet]: {},
   [ChainId.CampMainnet]: {},
+  [ChainId.HyperliquidMainnet]: {},
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {
