@@ -46,8 +46,26 @@ export type AddressMetadata = {
 };
 
 export enum AddressMetadataType {
+  Aragon = "aragon",
+  Risk = "risk",
   Safe = "safe",
 }
+
+/** Risk address metadata */
+export type AddressRiskMetadata = {
+  __typename?: "AddressRiskMetadata";
+  isAuthorized: Scalars["Boolean"]["output"];
+  risk: Scalars["String"]["output"];
+  riskReason: Maybe<Scalars["String"]["output"]>;
+};
+
+/** Aragon address metadata */
+export type AragonAddressMetadata = {
+  __typename?: "AragonAddressMetadata";
+  description: Maybe<Scalars["String"]["output"]>;
+  ensDomain: Maybe<Scalars["String"]["output"]>;
+  name: Maybe<Scalars["String"]["output"]>;
+};
 
 /** Asset */
 export type Asset = {
@@ -195,6 +213,15 @@ export type CollateralAtRiskDataPoint = {
   collateralAssets: Scalars["BigInt"]["output"];
   collateralPriceRatio: Scalars["Float"]["output"];
   collateralUsd: Scalars["Float"]["output"];
+};
+
+/** Credora risk analysis */
+export type CredoraRiskAnalysis = {
+  __typename?: "CredoraRiskAnalysis";
+  isUnderReview: Scalars["Boolean"]["output"];
+  rating: Maybe<Scalars["String"]["output"]>;
+  score: Scalars["Float"]["output"];
+  timestamp: Scalars["Float"]["output"];
 };
 
 /** Vault curator */
@@ -876,6 +903,7 @@ export enum MarketOrderBy {
   NetBorrowApy = "NetBorrowApy",
   NetSupplyApy = "NetSupplyApy",
   RateAtUTarget = "RateAtUTarget",
+  SizeUsd = "SizeUsd",
   SupplyApy = "SupplyApy",
   SupplyAssets = "SupplyAssets",
   SupplyAssetsUsd = "SupplyAssetsUsd",
@@ -1266,7 +1294,9 @@ export type MarketState = {
   allTimeSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Apy at target utilization */
   apyAtTarget: Scalars["Float"]["output"];
-  /** Borrow APY */
+  /** Block number of the state */
+  blockNumber: Maybe<Scalars["BigInt"]["output"]>;
+  /** Instantaneous Borrow APY */
   borrowApy: Scalars["Float"]["output"];
   /** Amount borrowed on the market, in underlying units. Amount increases as interests accrue. */
   borrowAssets: Scalars["BigInt"]["output"];
@@ -1303,9 +1333,9 @@ export type MarketState = {
   monthlyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Monthly Supply APY excluding rewards */
   monthlySupplyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Borrow APY including rewards */
+  /** Instantaneous Borrow APY including rewards */
   netBorrowApy: Maybe<Scalars["Float"]["output"]>;
-  /** Supply APY including rewards */
+  /** Instantaneous Supply APY including rewards */
   netSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Collateral price */
   price: Maybe<Scalars["BigInt"]["output"]>;
@@ -1326,7 +1356,11 @@ export type MarketState = {
   rateAtUTarget: Scalars["Float"]["output"];
   /** Market state rewards */
   rewards: Maybe<Array<MarketStateReward>>;
-  /** Supply APY */
+  /** Total size of the market. This is the sum of all assets that are allocated or can be reallocated to this market. */
+  size: Scalars["BigInt"]["output"];
+  /** Total size of the market. This is the sum of all assets that are allocated or can be reallocated to this market, in USD for display purpose. */
+  sizeUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Instantaneous Supply APY */
   supplyApy: Scalars["Float"]["output"];
   /** Amount supplied on the market, in underlying units. Amount increases as interests accrue. */
   supplyAssets: Scalars["BigInt"]["output"];
@@ -1336,6 +1370,10 @@ export type MarketState = {
   supplyShares: Scalars["BigInt"]["output"];
   /** Last update timestamp. */
   timestamp: Scalars["BigInt"]["output"];
+  /** Amount available to borrow on the market, including shared liquidity. */
+  totalLiquidity: Scalars["BigInt"]["output"];
+  /** Amount available to borrow on the market, including shared liquidity, in USD for display purpose. */
+  totalLiquidityUsd: Maybe<Scalars["Float"]["output"]>;
   /** Utilization rate */
   utilization: Scalars["Float"]["output"];
   /** Weekly Borrow APY excluding rewards */
@@ -1403,7 +1441,10 @@ export type MarketWarning = {
 
 export type MarketWarningMetadata = CustomMetadata | HardcodedPriceMetadata;
 
-export type Metadata = SafeAddressMetadata;
+export type Metadata =
+  | AddressRiskMetadata
+  | AragonAddressMetadata
+  | SafeAddressMetadata;
 
 /** Morpho Blue deployment */
 export type MorphoBlue = {
@@ -2193,14 +2234,22 @@ export type RevokePendingMarketRemovalEventData = {
 /** Risk analysis */
 export type RiskAnalysis = {
   __typename?: "RiskAnalysis";
+  analysis: RiskAnalysisData;
+  /** @deprecated Use `analysis.isUnderReview` instead */
   isUnderReview: Scalars["Boolean"]["output"];
   provider: RiskProvider;
+  /** @deprecated Use `analysis.rating` instead */
   rating: Maybe<Scalars["String"]["output"]>;
+  /** @deprecated Use `analysis.score` instead */
   score: Scalars["Float"]["output"];
+  /** @deprecated Use `analysis.timestamp` instead */
   timestamp: Scalars["Float"]["output"];
 };
 
+export type RiskAnalysisData = CredoraRiskAnalysis;
+
 export enum RiskProvider {
+  Blockaid = "BLOCKAID",
   Credora = "CREDORA",
 }
 
@@ -2455,62 +2504,18 @@ export type UserHistory = {
   __typename?: "UserHistory";
   /** Total borrow assets of all the user's market positions, in USD. */
   marketsBorrowAssetsUsd: Maybe<Array<FloatDataPoint>>;
-  /** Profit & Loss (from the loan asset's price variation and interest) of the borrow side of the position since its inception, in USD for display purpose. */
-  marketsBorrowPnlUsd: Maybe<Array<FloatDataPoint>>;
-  /** Return Over Equity of the borrow side of all the user's market positions, taking into account prices variation. */
-  marketsBorrowRoeUsd: Maybe<Array<FloatDataPoint>>;
-  /** Profit & Loss (from the collateral asset's price variation) of the collateral of the position since its inception, in USD for display purpose. */
-  marketsCollateralPnlUsd: Maybe<Array<FloatDataPoint>>;
-  /** Return Over Equity of the collateral of all the user's market positions, taking into account prices variation. */
-  marketsCollateralRoeUsd: Maybe<Array<FloatDataPoint>>;
   /** Total collateral of all the user's market positions, in USD. */
   marketsCollateralUsd: Maybe<Array<FloatDataPoint>>;
-  /** Profit & Loss (from the collateral asset's price variation and loan interest) of the margin of the position since its inception, in USD for display purpose. */
-  marketsMarginPnlUsd: Maybe<Array<FloatDataPoint>>;
-  /** Return Over Equity of the margin of all the user's market positions, taking into account prices variation. */
-  marketsMarginRoeUsd: Maybe<Array<FloatDataPoint>>;
   /** Total margin of all the user's market positions, in USD. */
   marketsMarginUsd: Maybe<Array<FloatDataPoint>>;
-  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's market positions, in USD. */
-  marketsPnlUsd: Maybe<Array<FloatDataPoint>>;
-  /** Return Over Equity of all the user's market positions, taking into account prices variation. */
-  marketsRoeUsd: Maybe<Array<FloatDataPoint>>;
   /** Total supply assets of all the user's market positions, in USD. */
   marketsSupplyAssetsUsd: Maybe<Array<FloatDataPoint>>;
-  /** Profit & Loss (from the loan asset's price variation and interest) of the supply side of the position since its inception, in USD for display purpose. */
-  marketsSupplyPnlUsd: Maybe<Array<FloatDataPoint>>;
-  /** Return Over Equity of the supply side of all the user's market positions, taking into account prices variation. */
-  marketsSupplyRoeUsd: Maybe<Array<FloatDataPoint>>;
   /** Total value of all the user's vault positions, in USD. */
   vaultsAssetsUsd: Maybe<Array<FloatDataPoint>>;
-  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's vault positions, in USD. */
-  vaultsPnlUsd: Maybe<Array<FloatDataPoint>>;
-  /** Return Over Equity of all the user's vault positions, taking into account prices variation. */
-  vaultsRoeUsd: Maybe<Array<FloatDataPoint>>;
 };
 
 /** User state history */
 export type UserHistoryMarketsBorrowAssetsUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryMarketsBorrowPnlUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryMarketsBorrowRoeUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryMarketsCollateralPnlUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryMarketsCollateralRoeUsdArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2520,27 +2525,7 @@ export type UserHistoryMarketsCollateralUsdArgs = {
 };
 
 /** User state history */
-export type UserHistoryMarketsMarginPnlUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryMarketsMarginRoeUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
 export type UserHistoryMarketsMarginUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryMarketsPnlUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryMarketsRoeUsdArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2550,27 +2535,7 @@ export type UserHistoryMarketsSupplyAssetsUsdArgs = {
 };
 
 /** User state history */
-export type UserHistoryMarketsSupplyPnlUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryMarketsSupplyRoeUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
 export type UserHistoryVaultsAssetsUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryVaultsPnlUsdArgs = {
-  options?: InputMaybe<TimeseriesOptions>;
-};
-
-/** User state history */
-export type UserHistoryVaultsRoeUsdArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2739,6 +2704,8 @@ export type VaultAdminEventsFilters = {
 /** MetaMorpho vault allocation */
 export type VaultAllocation = {
   __typename?: "VaultAllocation";
+  /** Block number in which the allocation was computed */
+  blockNumber: Maybe<Scalars["BigInt"]["output"]>;
   enabled: Scalars["Boolean"]["output"];
   id: Scalars["ID"]["output"];
   market: Market;
@@ -2772,11 +2739,11 @@ export type VaultAllocationHistory = {
   /** Amount of asset supplied on market, in market underlying token units */
   supplyAssets: Array<BigIntDataPoint>;
   /** Amount of asset supplied on market, in USD for display purpose. */
-  supplyAssetsUsd: Maybe<Array<FloatDataPoint>>;
+  supplyAssetsUsd: Array<FloatDataPoint>;
   /** Maximum amount of asset that can be supplied on market by the vault, in market underlying token units */
   supplyCap: Array<BigIntDataPoint>;
   /** Maximum amount of asset that can be supplied on market by the vault, in USD for display purpose. */
-  supplyCapUsd: Maybe<Array<FloatDataPoint>>;
+  supplyCapUsd: Array<FloatDataPoint>;
 };
 
 /** MetaMorpho vault allocation history */
@@ -2876,7 +2843,7 @@ export type VaultFilters = {
   ownerAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by lower than or equal to given public allocator fee in dollar. */
   publicAllocatorFeeUsd_lte?: InputMaybe<Scalars["Float"]["input"]>;
-  /** Filter by lower than or equal to given public allocator fee. */
+  /** Filter by lower than or equal to given public allocator fee in ETH (wad) */
   publicAllocatorFee_lte?: InputMaybe<Scalars["Float"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by MetaMorpho vault symbol */
@@ -3329,6 +3296,8 @@ export type VaultState = {
   allocation: Maybe<Array<VaultAllocation>>;
   /** Vault APY excluding rewards, before deducting the performance fee. */
   apy: Scalars["Float"]["output"];
+  /** Block number of the state */
+  blockNumber: Maybe<Scalars["BigInt"]["output"]>;
   /** Vault curator address. */
   curator: Scalars["Address"]["output"];
   /** Additional information about the curator address. */
