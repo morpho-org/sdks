@@ -12,7 +12,7 @@ import type { DeploylessFetchParameters } from "../types";
 
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
 import { abi, code } from "../queries/GetMarket";
-import { restructure } from "../utils";
+import { readContractRestructured } from "../utils";
 
 export async function fetchMarket(
   id: MarketId,
@@ -64,28 +64,23 @@ export async function fetchMarket(
   }
 
   const params = new MarketParams(
-    restructure(
-      await readContract(client, {
-        ...parameters,
-        address: morpho,
-        abi: blueAbi,
-        functionName: "idToMarketParams",
-        args: [id],
-      }),
-      { abi: blueAbi, name: "idToMarketParams", args: ["0x"] },
-    ),
+    await readContractRestructured(client, {
+      ...parameters,
+      address: morpho,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      args: [id],
+    }),
   );
 
   const [market, price, rateAtTarget] = await Promise.all([
-    readContract(client, {
+    readContractRestructured(client, {
       ...parameters,
       address: morpho,
       abi: blueAbi,
       functionName: "market",
       args: [params.id],
-    }).then((result) =>
-      restructure(result, { abi: blueAbi, name: "market", args: ["0x"] }),
-    ),
+    }),
     params.oracle !== zeroAddress
       ? readContract(client, {
           ...parameters,

@@ -1,14 +1,20 @@
 import {
   type Abi,
+  type AbiItemArgs,
   type AbiItemName,
+  type Chain,
+  type Client,
   type ContractFunctionArgs,
   type ContractFunctionName,
   type ExtractAbiFunctionForArgs,
   type GetAbiItemParameters,
+  type ReadContractParameters,
+  type Transport,
   getAbiItem,
   getAddress,
   parseUnits,
 } from "viem";
+import { readContract } from "viem/actions";
 
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.
 const toFixed = (x: number, decimals: number) =>
@@ -126,18 +132,11 @@ function zipParams<
  * ```
  */
 export function restructure<
-  abi extends Abi,
-  name extends ContractFunctionName<abi, "view" | "pure">,
-  args extends ContractFunctionArgs<abi, "view" | "pure", name>,
+  const abi extends Abi,
+  name extends AbiItemName<abi> & ContractFunctionName<abi, "view" | "pure">,
+  const args extends AbiItemArgs<abi, name>,
   outputs extends readonly unknown[],
->(
-  outputs: outputs,
-  parameters: GetAbiItemParameters<
-    abi,
-    name extends AbiItemName<abi> ? name : never,
-    args
-  >,
-) {
+>(outputs: outputs, parameters: GetAbiItemParameters<abi, name, args>) {
   const x = getAbiItem(parameters);
   switch (x?.type) {
     case "function": {
@@ -161,4 +160,40 @@ export function restructure<
         `Attempted to restructure return values for non-function type ${x}`,
       );
   }
+}
+
+function isTuple<T>(x: T): x is T extends readonly unknown[] ? T : never {
+  return Array.isArray(x);
+}
+
+/**
+ * When reading contracts, viem converts onchain tuples into arrays -- even when tuple values are named in the ABI.
+ * [They argue](https://viem.sh/docs/faq#why-is-a-contract-function-return-type-returning-an-array-instead-of-an-object)
+ * this information loss is justified, as it eliminates the ambiguity between tuple return types and struct return
+ * types. This wrapper converts viem's arrays back to objects, _as if_ the onchain method returned a struct.
+ *
+ * @see {@link restructure}
+ */
+export async function readContractRestructured<
+  chain extends Chain | undefined,
+  const abi extends Abi,
+  name extends AbiItemName<abi> & ContractFunctionName<abi, "view" | "pure">,
+  const args extends ContractFunctionArgs<abi, "view" | "pure", name>,
+>(
+  client: Client<Transport, chain>,
+  parameters: ReadContractParameters<abi, name, args>,
+) {
+  const outputs = await readContract(client, parameters);
+
+  if (!isTuple(outputs)) {
+    throw new Error(
+      `Attempted to restructure non-tuple return values ${parameters.functionName} -> ${outputs}`,
+    );
+  }
+
+  return restructure(outputs, {
+    abi: parameters.abi,
+    name: parameters.functionName,
+    args: parameters.args,
+  } as unknown as GetAbiItemParameters<abi, name, args>);
 }
