@@ -626,8 +626,15 @@ export const encodeOperation = (
       const market = dataBefore
         .getMarket(id)
         .accrueInterest(dataBefore.block.timestamp);
-      const maxSharePrice = market.toSupplyAssets(
+
+      const { assets: suppliedAssets, shares: suppliedShares } = market.supply(
+        assets,
+        shares,
+      );
+      const maxSharePrice = MathLib.mulDivUp(
+        suppliedAssets,
         MathLib.wToRay(MathLib.WAD + slippage),
+        suppliedShares,
       );
 
       actions.push({
@@ -658,8 +665,13 @@ export const encodeOperation = (
       const market = dataBefore
         .getMarket(id)
         .accrueInterest(dataBefore.block.timestamp);
-      const minSharePrice = market.toSupplyAssets(
+
+      const { assets: withdrawnAssets, shares: withdrawnShares } =
+        market.withdraw(assets, shares);
+      const minSharePrice = MathLib.mulDivUp(
+        withdrawnAssets,
         MathLib.wToRay(MathLib.WAD - slippage),
+        withdrawnShares,
       );
 
       actions.push({
@@ -689,8 +701,15 @@ export const encodeOperation = (
       const market = dataBefore
         .getMarket(id)
         .accrueInterest(dataBefore.block.timestamp);
-      const minSharePrice = market.toBorrowAssets(
+
+      const { assets: borrowedAssets, shares: borrowedShares } = market.borrow(
+        assets,
+        shares,
+      );
+      const minSharePrice = MathLib.mulDivUp(
+        borrowedAssets,
         MathLib.wToRay(MathLib.WAD - slippage),
+        borrowedShares,
       );
 
       actions.push({
@@ -720,8 +739,15 @@ export const encodeOperation = (
       const market = dataBefore
         .getMarket(id)
         .accrueInterest(dataBefore.block.timestamp);
-      const maxSharePrice = market.toBorrowAssets(
+
+      const { assets: repaidAssets, shares: repaidShares } = market.repay(
+        assets,
+        shares,
+      );
+      const maxSharePrice = MathLib.mulDivUp(
+        repaidAssets,
         MathLib.wToRay(MathLib.WAD + slippage),
+        repaidShares,
       );
 
       actions.push({
@@ -799,11 +825,13 @@ export const encodeOperation = (
       const vault = dataBefore
         .getAccrualVault(operation.address)
         .accrueInterest(dataBefore.block.timestamp);
-      const maxSharePrice = vault.toAssets(
-        MathLib.wToRay(MathLib.WAD + slippage),
-      );
 
-      if (shares === 0n)
+      if (shares === 0n) {
+        const maxSharePrice = MathLib.mulDivUp(
+          assets,
+          MathLib.wToRay(MathLib.WAD + slippage),
+          vault.toShares(assets),
+        );
         actions.push({
           type: "erc4626Deposit",
           args: [
@@ -814,7 +842,12 @@ export const encodeOperation = (
             operation.skipRevert,
           ],
         });
-      else
+      } else {
+        const maxSharePrice = MathLib.mulDivUp(
+          vault.toAssets(shares),
+          MathLib.wToRay(MathLib.WAD + slippage),
+          shares,
+        );
         actions.push({
           type: "erc4626Mint",
           args: [
@@ -825,6 +858,7 @@ export const encodeOperation = (
             operation.skipRevert,
           ],
         });
+      }
 
       break;
     }
@@ -841,11 +875,13 @@ export const encodeOperation = (
       const vault = dataBefore
         .getAccrualVault(operation.address)
         .accrueInterest(dataBefore.block.timestamp);
-      const minSharePrice = vault.toAssets(
-        MathLib.wToRay(MathLib.WAD - slippage),
-      );
 
-      if (assets > 0n)
+      if (shares === 0n) {
+        const minSharePrice = MathLib.mulDivUp(
+          assets,
+          MathLib.wToRay(MathLib.WAD - slippage),
+          vault.toShares(assets),
+        );
         actions.push({
           type: "erc4626Withdraw",
           args: [
@@ -857,7 +893,12 @@ export const encodeOperation = (
             operation.skipRevert,
           ],
         });
-      else
+      } else {
+        const minSharePrice = MathLib.mulDivUp(
+          vault.toAssets(shares),
+          MathLib.wToRay(MathLib.WAD - slippage),
+          shares,
+        );
         actions.push({
           type: "erc4626Redeem",
           args: [
@@ -869,6 +910,7 @@ export const encodeOperation = (
             operation.skipRevert,
           ],
         });
+      }
 
       break;
     }
