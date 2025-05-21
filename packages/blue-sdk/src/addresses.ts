@@ -174,6 +174,8 @@ export const addressesRegistry = {
     preLiquidationFactory: "0xeDadDe37D76c72b98725614d0b41C20Fe612d304",
 
     wNative: "0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359",
   },
   [ChainId.ArbitrumMainnet]: {
     morpho: "0x6c247b1F6182318877311737BaC0844bAa518F5e",
