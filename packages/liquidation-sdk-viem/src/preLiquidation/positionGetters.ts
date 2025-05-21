@@ -4,8 +4,11 @@ import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
 import { apiSdk } from "../api";
-import { authorizationLogs, preLiquidationLogs } from "./logGetters";
-import { type PreLiquidation, PreLiquidationPosition } from "./types";
+import {
+  type PreLiquidation,
+  type PreLiquidationData,
+  PreLiquidationPosition,
+} from "./types";
 
 export async function getPreLiquidablePositions(
   client: Client<Transport, Chain, Account>,
@@ -13,12 +16,19 @@ export async function getPreLiquidablePositions(
 ) {
   const chainId = client.chain.id;
 
-  const preLiquidations = (await preLiquidationLogs(client)).filter(
-    (preLiquidation) => whitelistedMarkets.includes(preLiquidation.marketId),
-  );
+  const url = `http://localhost:42069/chain/${chainId}/liquidatable-positions`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    body: JSON.stringify({ marketIds: whitelistedMarkets }),
+  });
+
+  const data = (await response.json()) as {
+    preLiquidationData: PreLiquidationData[];
+  };
 
   const preLiquidationInstances = await Promise.all(
-    preLiquidations.map(async (preLiquidation) => {
+    data.preLiquidationData.map(async (preLiquidation) => {
       const {
         markets: { items: market },
       } = await apiSdk.getMarketAssets({
@@ -38,8 +48,7 @@ export async function getPreLiquidablePositions(
         return;
 
       return {
-        preLiquidation,
-        borrowers: await authorizationLogs(client, preLiquidation),
+        ...preLiquidation,
         loanAsset,
         collateralAsset,
       };
@@ -51,10 +60,10 @@ export async function getPreLiquidablePositions(
       .filter((position) => position !== undefined)
       .map(async (preLiquidationPosition) => {
         return await Promise.all(
-          preLiquidationPosition.borrowers.map(async (borrower) => {
+          preLiquidationPosition.enabledPositions.map(async (borrower) => {
             return await getPreLiquidablePosition(
               client,
-              preLiquidationPosition.preLiquidation,
+              preLiquidationPosition,
               borrower,
               preLiquidationPosition.collateralAsset,
               preLiquidationPosition.loanAsset,
