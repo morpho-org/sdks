@@ -6,9 +6,10 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { Client } from "viem";
-import { getChainId, readContract } from "viem/actions";
+import { getChainId } from "viem/actions";
 import { blueAbi } from "../abis";
 import type { FetchParameters } from "../types";
+import { readContractRestructured } from "../utils";
 
 export async function fetchMarketParams(
   id: MarketId,
@@ -22,25 +23,16 @@ export async function fetchMarketParams(
 
     const { morpho } = getChainAddresses(chainId);
 
-    const [loanToken, collateralToken, oracle, irm, lltv] = await readContract(
-      client,
-      {
+    config = new MarketParams(
+      await readContractRestructured(client, {
         address: morpho,
         abi: blueAbi,
         functionName: "idToMarketParams",
         args: [id],
         // Always fetch at latest block because config is immutable.
         blockTag: "latest",
-      },
+      }),
     );
-
-    config = new MarketParams({
-      loanToken,
-      collateralToken,
-      oracle,
-      irm,
-      lltv,
-    });
   }
 
   return config;

@@ -12,6 +12,7 @@ import type { DeploylessFetchParameters } from "../types";
 
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
 import { abi, code } from "../queries/GetMarket";
+import { readContractRestructured } from "../utils";
 
 export async function fetchMarket(
   id: MarketId,
@@ -62,38 +63,18 @@ export async function fetchMarket(
     }
   }
 
-  const [loanToken, collateralToken, oracle, irm, lltv] = await readContract(
-    client,
-    {
+  const params = new MarketParams(
+    await readContractRestructured(client, {
       ...parameters,
       address: morpho,
       abi: blueAbi,
       functionName: "idToMarketParams",
       args: [id],
-    },
+    }),
   );
 
-  const params = new MarketParams({
-    loanToken,
-    collateralToken,
-    oracle,
-    irm,
-    lltv,
-  });
-
-  const [
-    [
-      totalSupplyAssets,
-      totalSupplyShares,
-      totalBorrowAssets,
-      totalBorrowShares,
-      lastUpdate,
-      fee,
-    ],
-    price,
-    rateAtTarget,
-  ] = await Promise.all([
-    readContract(client, {
+  const [market, price, rateAtTarget] = await Promise.all([
+    readContractRestructured(client, {
       ...parameters,
       address: morpho,
       abi: blueAbi,
@@ -121,12 +102,7 @@ export async function fetchMarket(
 
   return new Market({
     params,
-    totalSupplyAssets,
-    totalBorrowAssets,
-    totalSupplyShares,
-    totalBorrowShares,
-    lastUpdate,
-    fee,
+    ...market,
     price,
     rateAtTarget,
   });

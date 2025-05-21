@@ -11,6 +11,7 @@ import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi, blueOracleAbi, preLiquidationAbi } from "../abis";
 import type { DeploylessFetchParameters, FetchParameters } from "../types";
+import { readContractRestructured } from "../utils";
 import { fetchMarket } from "./Market";
 
 export async function fetchPosition(
@@ -22,7 +23,7 @@ export async function fetchPosition(
   parameters.chainId ??= await getChainId(client);
 
   const { morpho } = getChainAddresses(parameters.chainId);
-  const [supplyShares, borrowShares, collateral] = await readContract(client, {
+  const position = await readContractRestructured(client, {
     ...parameters,
     address: morpho,
     abi: blueAbi,
@@ -33,9 +34,7 @@ export async function fetchPosition(
   return new Position({
     user,
     marketId,
-    supplyShares,
-    borrowShares,
-    collateral,
+    ...position,
   });
 }
 
