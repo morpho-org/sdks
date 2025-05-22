@@ -64,7 +64,20 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      "[Error: isBundlerAuthorized is already set to false]",
+      `
+      [Error: isBundlerAuthorized is already set to false
+
+      when simulating operation:
+      {
+        "type": "Blue_SetAuthorization",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "args": {
+          "owner": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "isAuthorized": false,
+          "authorized": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0"
+        }
+      }]
+    `,
     );
   });
 });
