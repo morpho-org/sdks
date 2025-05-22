@@ -146,6 +146,8 @@ export type AssetsFilters = {
   credoraRiskScore_gte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by credora risk score lower than or equal to given value */
   credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter assets that are listed by specific curators */
+  curator_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by asset id */
   id_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter assets that are listed as collateral on at least one market */
@@ -227,14 +229,19 @@ export type CredoraRiskAnalysis = {
 /** Vault curator */
 export type Curator = {
   __typename?: "Curator";
-  addresses: Maybe<Array<CuratorAddress>>;
+  addresses: Array<CuratorAddress>;
+  description: Maybe<Scalars["String"]["output"]>;
   id: Scalars["ID"]["output"];
   /** Curator logo URI, for display purpose */
   image: Maybe<Scalars["String"]["output"]>;
   name: Scalars["String"]["output"];
+  socials: Array<CuratorSocial>;
   /** Current state */
   state: Maybe<CuratorState>;
-  /** Link to curator website */
+  /**
+   * Link to curator website
+   * @deprecated Use `socials` instead
+   */
   url: Maybe<Scalars["String"]["output"]>;
   verified: Scalars["Boolean"]["output"];
 };
@@ -254,6 +261,12 @@ export type CuratorFilters = {
   chainId?: InputMaybe<Scalars["Int"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   verified?: InputMaybe<Scalars["Boolean"]["input"]>;
+};
+
+export type CuratorSocial = {
+  __typename?: "CuratorSocial";
+  type: Scalars["String"]["output"];
+  url: Scalars["String"]["output"];
 };
 
 /** Vault curator state */
@@ -1922,6 +1935,7 @@ export type Query = {
   chainSynchronizationState: ChainSynchronizationState;
   chainSynchronizationStates: Array<ChainSynchronizationState>;
   chains: Array<Chain>;
+  curator: Curator;
   curators: PaginatedCurators;
   market: Market;
   marketAverageApys: Maybe<MarketApyAggregates>;
@@ -1986,6 +2000,10 @@ export type QueryChainArgs = {
 export type QueryChainSynchronizationStateArgs = {
   chainId: Scalars["Int"]["input"];
   key: Scalars["String"]["input"];
+};
+
+export type QueryCuratorArgs = {
+  id: Scalars["String"]["input"];
 };
 
 export type QueryCuratorsArgs = {
@@ -2825,6 +2843,8 @@ export type VaultFilters = {
   credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by MetaMorpho current curator address */
   curatorAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by MetaMorpho curators ids */
+  curator_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by MetaMorphoFactory address */
   factoryAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by greater than or equal to given fee rate. */
