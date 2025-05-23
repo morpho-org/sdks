@@ -88,3 +88,11 @@ export type PreLiquidation = {
   address: Address;
   preLiquidationParams: PreLiquidationParams;
 };
+
+export type PreLiquidationData = {
+  marketId: MarketId;
+  address: Address;
+  preLiquidationParams: PreLiquidationParams;
+  enabledPositions: Address[];
+  price: bigint;
+};

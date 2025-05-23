@@ -53,6 +53,8 @@ describe("pre liquidation", () => {
   let swapMockAddress: Address;
 
   beforeEach<LiquidationTestContext<typeof mainnet>>(async ({ client }) => {
+    process.env.INDEXER_API_URL = "http://localhost:42069";
+
     swapMockAddress = (await client.deployContractWait(swapMock))
       .contractAddress;
 
@@ -357,6 +359,34 @@ describe("pre liquidation", () => {
         spotPriceEth: collateralPriceUsd / ethPriceUsd,
         symbol: collateralToken.symbol!,
       };
+
+      const price = await client.readContract({
+        address: market.params.oracle,
+        abi: [
+          {
+            type: "function",
+            name: "price",
+            inputs: [],
+            outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+            stateMutability: "view",
+          },
+        ] as const,
+        functionName: "price",
+      });
+
+      nock(process.env.INDEXER_API_URL!)
+        .post("/chain/1/preliquidations")
+        .reply(200, {
+          preLiquidationData: [
+            {
+              marketId,
+              address: preLiquidationAddress,
+              preLiquidationParams: preLiquidationParams,
+              enabledPositions: [borrower.address],
+              price,
+            },
+          ],
+        });
 
       nock(BLUE_API_BASE_URL)
         .post("/graphql")
