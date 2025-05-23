@@ -29,31 +29,46 @@ export async function getPreLiquidablePositions(
     };
 
     const preLiquidationInstances = await Promise.all(
-      data.preLiquidationData.map(async (preLiquidation) => {
-        const {
-          markets: { items: market },
-        } = await apiSdk.getMarketAssets({
-          chainId,
-          marketId: preLiquidation.marketId,
-        });
+      data.preLiquidationData
+        .map((preLiquidation) => {
+          return {
+            ...preLiquidation,
+            price: BigInt(preLiquidation.price),
+            preLiquidationParams: {
+              ...preLiquidation.preLiquidationParams,
+              preLCF1: BigInt(preLiquidation.preLiquidationParams.preLCF1),
+              preLCF2: BigInt(preLiquidation.preLiquidationParams.preLCF2),
+              preLIF1: BigInt(preLiquidation.preLiquidationParams.preLIF1),
+              preLIF2: BigInt(preLiquidation.preLiquidationParams.preLIF2),
+              preLltv: BigInt(preLiquidation.preLiquidationParams.preLltv),
+            },
+          };
+        })
+        .map(async (preLiquidation) => {
+          const {
+            markets: { items: market },
+          } = await apiSdk.getMarketAssets({
+            chainId,
+            marketId: preLiquidation.marketId,
+          });
 
-        const loanAsset = market !== null ? market[0]?.loanAsset : undefined;
-        const collateralAsset =
-          market !== null ? market[0]?.collateralAsset : undefined;
+          const loanAsset = market !== null ? market[0]?.loanAsset : undefined;
+          const collateralAsset =
+            market !== null ? market[0]?.collateralAsset : undefined;
 
-        if (
-          loanAsset === undefined ||
-          collateralAsset === undefined ||
-          collateralAsset === null
-        )
-          return;
+          if (
+            loanAsset === undefined ||
+            collateralAsset === undefined ||
+            collateralAsset === null
+          )
+            return;
 
-        return {
-          ...preLiquidation,
-          loanAsset,
-          collateralAsset,
-        };
-      }),
+          return {
+            ...preLiquidation,
+            loanAsset,
+            collateralAsset,
+          };
+        }),
     );
 
     const preLiquidablePositions = await Promise.all(
