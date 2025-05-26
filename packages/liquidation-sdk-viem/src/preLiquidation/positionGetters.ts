@@ -25,15 +25,16 @@ export async function getPreLiquidablePositions(
     });
 
     const data = (await response.json()) as {
-      preLiquidationData: PreLiquidationData[];
+      results: PreLiquidationData[];
     };
 
     const preLiquidationInstances = await Promise.all(
-      data.preLiquidationData
+      data.results
+        .filter((preLiquidation) => preLiquidation.price !== null)
         .map((preLiquidation) => {
           return {
             ...preLiquidation,
-            price: BigInt(preLiquidation.price),
+            price: BigInt(preLiquidation.price!),
             preLiquidationParams: {
               ...preLiquidation.preLiquidationParams,
               preLCF1: BigInt(preLiquidation.preLiquidationParams.preLCF1),

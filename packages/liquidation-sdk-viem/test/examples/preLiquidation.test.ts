@@ -377,7 +377,7 @@ describe("pre liquidation", () => {
       nock(process.env.INDEXER_API_URL!)
         .post("/chain/1/preliquidations")
         .reply(200, {
-          preLiquidationData: [
+          results: [
             {
               marketId,
               address: preLiquidationAddress,

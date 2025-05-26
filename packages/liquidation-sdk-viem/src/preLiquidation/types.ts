@@ -94,5 +94,5 @@ export type PreLiquidationData = {
   address: Address;
   preLiquidationParams: PreLiquidationParams;
   enabledPositions: Address[];
-  price: bigint;
+  price: bigint | null;
 };
