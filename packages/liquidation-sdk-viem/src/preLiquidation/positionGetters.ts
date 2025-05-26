@@ -4,69 +4,89 @@ import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
 import { apiSdk } from "../api";
-import { authorizationLogs, preLiquidationLogs } from "./logGetters";
-import { type PreLiquidation, PreLiquidationPosition } from "./types";
+import {
+  type PreLiquidation,
+  type PreLiquidationData,
+  PreLiquidationPosition,
+} from "./types";
 
 export async function getPreLiquidablePositions(
   client: Client<Transport, Chain, Account>,
   whitelistedMarkets: MarketId[],
+  indexerApiBaseUrl = process.env.INDEXER_API_URL,
 ) {
   const chainId = client.chain.id;
 
-  const preLiquidations = (await preLiquidationLogs(client)).filter(
-    (preLiquidation) => whitelistedMarkets.includes(preLiquidation.marketId),
+  const url = new URL(`/chain/${chainId}/preliquidations`, indexerApiBaseUrl);
+
+  const response = await fetch(url, {
+    method: "POST",
+    body: JSON.stringify({ marketIds: whitelistedMarkets }),
+  });
+
+  const data = (await response.json()) as {
+    results: PreLiquidationData[];
+  };
+
+  const marketsAssets = await apiSdk.getMarketsAssets({
+    chainId,
+    marketIds: data.results.map((preLiquidation) => preLiquidation.marketId),
+  });
+
+  const marketAssetsMap = new Map(
+    marketsAssets.markets.items?.map((market) => [market.uniqueKey, market]),
   );
 
   const preLiquidationInstances = await Promise.all(
-    preLiquidations.map(async (preLiquidation) => {
-      const {
-        markets: { items: market },
-      } = await apiSdk.getMarketAssets({
-        chainId,
-        marketId: preLiquidation.marketId,
-      });
+    data.results
+      .filter((preLiquidation) => preLiquidation.price !== null)
+      .map((preLiquidation) => {
+        return {
+          ...preLiquidation,
+          price: BigInt(preLiquidation.price!),
+          preLiquidationParams: {
+            ...preLiquidation.preLiquidationParams,
+            preLCF1: BigInt(preLiquidation.preLiquidationParams.preLCF1),
+            preLCF2: BigInt(preLiquidation.preLiquidationParams.preLCF2),
+            preLIF1: BigInt(preLiquidation.preLiquidationParams.preLIF1),
+            preLIF2: BigInt(preLiquidation.preLiquidationParams.preLIF2),
+            preLltv: BigInt(preLiquidation.preLiquidationParams.preLltv),
+          },
+        };
+      })
+      .map(async (preLiquidation) => {
+        const { loanAsset, collateralAsset } =
+          marketAssetsMap.get(preLiquidation.marketId) ?? {};
 
-      const loanAsset = market !== null ? market[0]?.loanAsset : undefined;
-      const collateralAsset =
-        market !== null ? market[0]?.collateralAsset : undefined;
+        if (loanAsset == null || collateralAsset == null) return;
 
-      if (
-        loanAsset === undefined ||
-        collateralAsset === undefined ||
-        collateralAsset === null
-      )
-        return;
-
-      return {
-        preLiquidation,
-        borrowers: await authorizationLogs(client, preLiquidation),
-        loanAsset,
-        collateralAsset,
-      };
-    }),
+        return {
+          ...preLiquidation,
+          loanAsset,
+          collateralAsset,
+        };
+      }),
   );
 
   const preLiquidablePositions = await Promise.all(
     preLiquidationInstances
       .filter((position) => position !== undefined)
-      .map(async (preLiquidationPosition) => {
-        return await Promise.all(
-          preLiquidationPosition.borrowers.map(async (borrower) => {
-            return await getPreLiquidablePosition(
-              client,
-              preLiquidationPosition.preLiquidation,
-              borrower,
-              preLiquidationPosition.collateralAsset,
-              preLiquidationPosition.loanAsset,
-            );
-          }),
-        );
+      .flatMap((preLiquidationPosition) => {
+        return preLiquidationPosition.enabledPositions.map((borrower) => {
+          return getPreLiquidablePosition(
+            client,
+            preLiquidationPosition,
+            borrower,
+            preLiquidationPosition.collateralAsset,
+            preLiquidationPosition.loanAsset,
+          );
+        });
       }),
   );
 
-  return preLiquidablePositions
-    .flat()
-    .filter((position) => position.preSeizableCollateral !== undefined);
+  return preLiquidablePositions.filter(
+    (position) => position.preSeizableCollateral !== undefined,
+  );
 }
 
 async function getPreLiquidablePosition(
