@@ -430,6 +430,7 @@ describe("pre liquidation", () => {
             markets: {
               items: [
                 {
+                  uniqueKey: marketId,
                   collateralAsset: {
                     address: market.params.collateralToken,
                     decimals: collateralToken.decimals,
