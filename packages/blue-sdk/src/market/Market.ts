@@ -7,7 +7,7 @@ import {
 } from "../math/index.js";
 import type { BigIntish } from "../types.js";
 
-import type { MarketParams } from "./MarketParams.js";
+import { type IMarketParams, MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
 
 export enum CapacityLimitReason {
@@ -40,7 +40,7 @@ export interface MaxPositionCapacities {
 }
 
 export interface IMarket {
-  params: MarketParams;
+  params: IMarketParams;
   totalSupplyAssets: bigint;
   totalBorrowAssets: bigint;
   totalSupplyShares: bigint;
@@ -109,7 +109,7 @@ export class Market implements IMarket {
     price,
     rateAtTarget,
   }: IMarket) {
-    this.params = params;
+    this.params = new MarketParams(params);
     this.totalSupplyAssets = totalSupplyAssets;
     this.totalBorrowAssets = totalBorrowAssets;
     this.totalSupplyShares = totalSupplyShares;
