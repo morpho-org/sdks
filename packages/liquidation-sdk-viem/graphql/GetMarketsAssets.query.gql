@@ -1,0 +1,21 @@
+query getMarketsAssets($chainId: Int!, $marketIds: [String!]!) {
+  markets(where: { chainId_in: [$chainId], uniqueKey_in: $marketIds }) {
+    items {
+      uniqueKey
+      collateralAsset {
+        address
+        decimals
+        symbol
+        priceUsd
+        spotPriceEth
+      }
+      loanAsset {
+        address
+        decimals
+        symbol
+        priceUsd
+        spotPriceEth
+      }
+    }
+  }
+}

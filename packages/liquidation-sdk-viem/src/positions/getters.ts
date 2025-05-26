@@ -20,7 +20,10 @@ export async function getPositions(
   const [{ liquidablePositions, wethPriceUsd }, preLiquidablePositions] =
     await Promise.all([
       getLiquidatablePositions(client, chainId, wNative, marketIds),
-      getPreLiquidablePositions(client, marketIds),
+      getPreLiquidablePositions(client, marketIds).catch((error) => {
+        console.error(error);
+        return [];
+      }),
     ]);
 
   if (wethPriceUsd == null) return { positions: [], wethPriceUsd };

@@ -13,90 +13,80 @@ import {
 export async function getPreLiquidablePositions(
   client: Client<Transport, Chain, Account>,
   whitelistedMarkets: MarketId[],
+  indexerApiBaseUrl = process.env.INDEXER_API_URL,
 ) {
   const chainId = client.chain.id;
 
-  const url = `${process.env.INDEXER_API_URL}/chain/${chainId}/preliquidations`;
+  const url = new URL(`/chain/${chainId}/preliquidations`, indexerApiBaseUrl);
 
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      body: JSON.stringify({ marketIds: whitelistedMarkets }),
-    });
+  const response = await fetch(url, {
+    method: "POST",
+    body: JSON.stringify({ marketIds: whitelistedMarkets }),
+  });
 
-    const data = (await response.json()) as {
-      results: PreLiquidationData[];
-    };
+  const data = (await response.json()) as {
+    results: PreLiquidationData[];
+  };
 
-    const preLiquidationInstances = await Promise.all(
-      data.results
-        .filter((preLiquidation) => preLiquidation.price !== null)
-        .map((preLiquidation) => {
-          return {
-            ...preLiquidation,
-            price: BigInt(preLiquidation.price!),
-            preLiquidationParams: {
-              ...preLiquidation.preLiquidationParams,
-              preLCF1: BigInt(preLiquidation.preLiquidationParams.preLCF1),
-              preLCF2: BigInt(preLiquidation.preLiquidationParams.preLCF2),
-              preLIF1: BigInt(preLiquidation.preLiquidationParams.preLIF1),
-              preLIF2: BigInt(preLiquidation.preLiquidationParams.preLIF2),
-              preLltv: BigInt(preLiquidation.preLiquidationParams.preLltv),
-            },
-          };
-        })
-        .map(async (preLiquidation) => {
-          const {
-            markets: { items: market },
-          } = await apiSdk.getMarketAssets({
-            chainId,
-            marketId: preLiquidation.marketId,
-          });
+  const marketsAssets = await apiSdk.getMarketsAssets({
+    chainId,
+    marketIds: data.results.map((preLiquidation) => preLiquidation.marketId),
+  });
 
-          const loanAsset = market !== null ? market[0]?.loanAsset : undefined;
-          const collateralAsset =
-            market !== null ? market[0]?.collateralAsset : undefined;
+  const marketAssetsMap = new Map(
+    marketsAssets.markets.items?.map((market) => [market.uniqueKey, market]),
+  );
 
-          if (
-            loanAsset === undefined ||
-            collateralAsset === undefined ||
-            collateralAsset === null
-          )
-            return;
+  const preLiquidationInstances = await Promise.all(
+    data.results
+      .filter((preLiquidation) => preLiquidation.price !== null)
+      .map((preLiquidation) => {
+        return {
+          ...preLiquidation,
+          price: BigInt(preLiquidation.price!),
+          preLiquidationParams: {
+            ...preLiquidation.preLiquidationParams,
+            preLCF1: BigInt(preLiquidation.preLiquidationParams.preLCF1),
+            preLCF2: BigInt(preLiquidation.preLiquidationParams.preLCF2),
+            preLIF1: BigInt(preLiquidation.preLiquidationParams.preLIF1),
+            preLIF2: BigInt(preLiquidation.preLiquidationParams.preLIF2),
+            preLltv: BigInt(preLiquidation.preLiquidationParams.preLltv),
+          },
+        };
+      })
+      .map(async (preLiquidation) => {
+        const { loanAsset, collateralAsset } =
+          marketAssetsMap.get(preLiquidation.marketId) ?? {};
 
-          return {
-            ...preLiquidation,
-            loanAsset,
-            collateralAsset,
-          };
-        }),
-    );
+        if (loanAsset == null || collateralAsset == null) return;
 
-    const preLiquidablePositions = await Promise.all(
-      preLiquidationInstances
-        .filter((position) => position !== undefined)
-        .map(async (preLiquidationPosition) => {
-          return await Promise.all(
-            preLiquidationPosition.enabledPositions.map(async (borrower) => {
-              return await getPreLiquidablePosition(
-                client,
-                preLiquidationPosition,
-                borrower,
-                preLiquidationPosition.collateralAsset,
-                preLiquidationPosition.loanAsset,
-              );
-            }),
+        return {
+          ...preLiquidation,
+          loanAsset,
+          collateralAsset,
+        };
+      }),
+  );
+
+  const preLiquidablePositions = await Promise.all(
+    preLiquidationInstances
+      .filter((position) => position !== undefined)
+      .flatMap((preLiquidationPosition) => {
+        return preLiquidationPosition.enabledPositions.map((borrower) => {
+          return getPreLiquidablePosition(
+            client,
+            preLiquidationPosition,
+            borrower,
+            preLiquidationPosition.collateralAsset,
+            preLiquidationPosition.loanAsset,
           );
-        }),
-    );
+        });
+      }),
+  );
 
-    return preLiquidablePositions
-      .flat()
-      .filter((position) => position.preSeizableCollateral !== undefined);
-  } catch (error) {
-    console.error(error);
-    return [];
-  }
+  return preLiquidablePositions.filter(
+    (position) => position.preSeizableCollateral !== undefined,
+  );
 }
 
 async function getPreLiquidablePosition(
