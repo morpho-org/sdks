@@ -9,6 +9,7 @@ import {
   erc20WrapperAdapterAbi,
   ethereumGeneralAdapter1Abi,
   generalAdapter1Abi,
+  paraswapAdapterAbi,
   universalRewardsDistributorAbi,
 } from "./abis.js";
 
@@ -23,6 +24,7 @@ import {
   permit2Abi,
   publicAllocatorAbi,
 } from "@morpho-org/blue-sdk-viem";
+import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
 import {
   type Address,
   type Hex,
@@ -257,10 +259,32 @@ export namespace BundlerAction {
       case "morphoWithdrawCollateral": {
         return BundlerAction.morphoWithdrawCollateral(chainId, ...args);
       }
+      case "morphoFlashLoan": {
+        const [token, assets, onMorphoFlashLoan, skipRevert] = args;
+
+        return BundlerAction.morphoFlashLoan(
+          chainId,
+          token,
+          assets,
+          onMorphoFlashLoan.flatMap(BundlerAction.encode.bind(null, chainId)),
+          skipRevert,
+        );
+      }
 
       /* PublicAllocator */
       case "reallocateTo": {
         return BundlerAction.publicAllocatorReallocateTo(chainId, ...args);
+      }
+
+      /* Paraswap */
+      case "paraswapBuy": {
+        return BundlerAction.paraswapBuy(chainId, ...args);
+      }
+      case "paraswapSell": {
+        return BundlerAction.paraswapSell(chainId, ...args);
+      }
+      case "paraswapBuyMorphoDebt": {
+        return BundlerAction.paraswapBuyMorphoDebt(chainId, ...args);
       }
 
       /* Universal Rewards Distributor */
@@ -1305,15 +1329,15 @@ export namespace BundlerAction {
   /**
    * Encodes a call to the GeneralAdapter1 to flash loan from Morpho Blue.
    * @param chainId The chain id for which to encode the call.
-   * @param asset The address of the ERC20 token to flash loan.
-   * @param amount The amount of tokens to flash loan.
+   * @param token The address of the ERC20 token to flash loan.
+   * @param assets The amount of tokens to flash loan.
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoFlashLoan` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoFlashLoan(
     chainId: ChainId,
-    asset: Address,
-    amount: bigint,
+    token: Address,
+    assets: bigint,
     callbackCalls: BundlerCall[],
     skipRevert = false,
   ): BundlerCall[] {
@@ -1332,7 +1356,7 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoFlashLoan",
-          args: [asset, amount, reenterData],
+          args: [token, assets, reenterData],
         }),
         value: 0n,
         skipRevert,
@@ -1371,6 +1395,158 @@ export namespace BundlerAction {
           args: [vault, withdrawals, supplyMarketParams],
         }),
         value: fee,
+        skipRevert,
+        callbackHash: zeroHash,
+      },
+    ];
+  }
+
+  /**
+   * Encodes a call to the ParaswapAdapter to buy an exact amount of tokens via Paraswap.
+   * @param chainId The chain id for which to encode the call.
+   * @param augustus The address of the Augustus router to use.
+   * @param callData The encoded call data to execute.
+   * @param srcToken The address of the source token.
+   * @param dstToken The address of the destination token.
+   * @param offsets The offsets in callData of the exact buy amount (`exactAmount`), maximum sell amount (`limitAmount`) and quoted sell amount (`quotedAmount`).
+   * @param receiver The address to send the tokens to.
+   * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
+   */
+  export function paraswapBuy(
+    chainId: ChainId,
+    augustus: Address,
+    callData: Hex,
+    srcToken: Address,
+    dstToken: Address,
+    offsets: ParaswapOffsets,
+    receiver: Address,
+    skipRevert = false,
+  ): BundlerCall[] {
+    const {
+      bundler3: { paraswapAdapter },
+    } = getChainAddresses(chainId);
+
+    if (paraswapAdapter == null)
+      throw new BundlerErrors.UnexpectedAction("paraswapBuy", chainId);
+
+    return [
+      {
+        to: paraswapAdapter,
+        data: encodeFunctionData({
+          abi: paraswapAdapterAbi,
+          functionName: "buy",
+          args: [augustus, callData, srcToken, dstToken, 0n, offsets, receiver],
+        }),
+        value: 0n,
+        skipRevert,
+        callbackHash: zeroHash,
+      },
+    ];
+  }
+
+  /**
+   * Encodes a call to the ParaswapAdapter to sell an exact amount of tokens via Paraswap.
+   * @param chainId The chain id for which to encode the call.
+   * @param augustus The address of the Augustus router to use.
+   * @param callData The encoded call data to execute.
+   * @param srcToken The address of the source token.
+   * @param dstToken The address of the destination token.
+   * @param sellEntireBalance Whether to sell the entire balance of the source token.
+   * @param offsets The offsets in callData of the exact sell amount (`exactAmount`), minimum buy amount (`limitAmount`) and quoted buy amount (`quotedAmount`).
+   * @param receiver The address to send the tokens to.
+   * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
+   */
+  export function paraswapSell(
+    chainId: ChainId,
+    augustus: Address,
+    callData: Hex,
+    srcToken: Address,
+    dstToken: Address,
+    sellEntireBalance: boolean,
+    offsets: ParaswapOffsets,
+    receiver: Address,
+    skipRevert = false,
+  ): BundlerCall[] {
+    const {
+      bundler3: { paraswapAdapter },
+    } = getChainAddresses(chainId);
+
+    if (paraswapAdapter == null)
+      throw new BundlerErrors.UnexpectedAction("paraswapSell", chainId);
+
+    return [
+      {
+        to: paraswapAdapter,
+        data: encodeFunctionData({
+          abi: paraswapAdapterAbi,
+          functionName: "sell",
+          args: [
+            augustus,
+            callData,
+            srcToken,
+            dstToken,
+            sellEntireBalance,
+            offsets,
+            receiver,
+          ],
+        }),
+        value: 0n,
+        skipRevert,
+        callbackHash: zeroHash,
+      },
+    ];
+  }
+
+  /**
+   * Encodes a call to the ParaswapAdapter to buy the exact debt of a position via Paraswap.
+   * @param chainId The chain id for which to encode the call.
+   * @param augustus The address of the Augustus router to use.
+   * @param callData The encoded call data to execute.
+   * @param srcToken The address of the source token.
+   * @param marketParams The market params of the market with the debt assets to buy.
+   * @param offsets The offsets in callData of the exact buy amount (`exactAmount`), maximum sell amount (`limitAmount`) and quoted sell amount (`quotedAmount`).
+   * @param onBehalf The address to buy the debt on behalf of.
+   * @param receiver The address to send the tokens to.
+   * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
+   */
+  export function paraswapBuyMorphoDebt(
+    chainId: ChainId,
+    augustus: Address,
+    callData: Hex,
+    srcToken: Address,
+    marketParams: InputMarketParams,
+    offsets: ParaswapOffsets,
+    onBehalf: Address,
+    receiver: Address,
+    skipRevert = false,
+  ): BundlerCall[] {
+    const {
+      bundler3: { paraswapAdapter },
+    } = getChainAddresses(chainId);
+
+    if (paraswapAdapter == null)
+      throw new BundlerErrors.UnexpectedAction(
+        "paraswapBuyMorphoDebt",
+        chainId,
+      );
+
+    return [
+      {
+        to: paraswapAdapter,
+        data: encodeFunctionData({
+          abi: paraswapAdapterAbi,
+          functionName: "buyMorphoDebt",
+          args: [
+            augustus,
+            callData,
+            srcToken,
+            marketParams,
+            offsets,
+            onBehalf,
+            receiver,
+          ],
+        }),
+        value: 0n,
         skipRevert,
         callbackHash: zeroHash,
       },

@@ -49,7 +49,21 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: assets=-1]`);
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: invalid input: assets=-1
+
+      when simulating operation:
+      {
+        "type": "Blue_WithdrawCollateral",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "-1n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `);
   });
 
   test("should throw if insufficient balance", () => {
@@ -68,7 +82,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient position for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+      `
+      [Error: insufficient position for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd
+
+      when simulating operation:
+      {
+        "type": "Blue_WithdrawCollateral",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "50000000000000000000001n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 
@@ -88,7 +116,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient collateral for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+      `
+      [Error: insufficient collateral for user 0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd
+
+      when simulating operation:
+      {
+        "type": "Blue_WithdrawCollateral",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "50000000000000000000000n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 });

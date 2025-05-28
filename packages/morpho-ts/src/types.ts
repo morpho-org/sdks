@@ -1,6 +1,10 @@
 export type WithId<T> = T & { id: string };
 export type WithIndex<T> = T & { index: number };
 
+export type DeepPartial<T> = {
+  [P in keyof T]?: T[P] extends object ? DeepPartial<T[P]> : T[P];
+};
+
 export type ArrayElementType<T> = T extends (infer U)[] ? U : never;
 
 type Digit = 1 | 2 | 3 | 4 | 5 | 6 | 7;

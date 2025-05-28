@@ -107,7 +107,6 @@ export class MigratableBorrowPosition_Blue
 
     return {
       type: "Blue_SupplyCollateral",
-      address: "0x",
       sender: this.position.user,
       args: {
         id: marketTo,
@@ -118,8 +117,6 @@ export class MigratableBorrowPosition_Blue
             ? ([
                 {
                   type: "Blue_Borrow",
-                  address: "0x",
-                  sender: this.position.user,
                   args: {
                     id: marketTo,
                     assets:
@@ -136,8 +133,6 @@ export class MigratableBorrowPosition_Blue
                 },
                 {
                   type: "Blue_Repay",
-                  address: "0x",
-                  sender: this.position.user,
                   args: {
                     id: this.market.id,
                     slippage: slippageFrom,
@@ -153,8 +148,6 @@ export class MigratableBorrowPosition_Blue
             : []),
           {
             type: "Blue_WithdrawCollateral",
-            address: "0x",
-            sender: this.position.user,
             args: {
               id: this.market.id,
               assets: collateralAssets,
