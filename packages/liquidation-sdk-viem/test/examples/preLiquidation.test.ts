@@ -366,9 +366,16 @@ describe("pre liquidation", () => {
             {
               marketId,
               address: preLiquidationAddress,
-              preLiquidationParams: preLiquidationParams,
+              preLiquidationParams: {
+                ...preLiquidationParams,
+                preLltv: preLiquidationParams.preLltv.toString(),
+                preLCF1: preLiquidationParams.preLCF1.toString(),
+                preLCF2: preLiquidationParams.preLCF2.toString(),
+                preLIF1: preLiquidationParams.preLIF1.toString(),
+                preLIF2: preLiquidationParams.preLIF2.toString(),
+              },
               enabledPositions: [borrower.address],
-              price,
+              price: price.toString(),
             },
           ],
         });

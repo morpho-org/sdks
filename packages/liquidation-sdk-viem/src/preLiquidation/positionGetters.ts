@@ -20,7 +20,10 @@ export async function getPreLiquidablePositions(
     method: "POST",
     body: JSON.stringify({ marketIds: whitelistedMarkets }),
   });
-  const data = parseWithBigInt<PreLiquidationResponse>(await response.json());
+
+  const data: PreLiquidationResponse = parseWithBigInt<PreLiquidationResponse>(
+    JSON.stringify(await response.json()),
+  );
 
   const marketsAssets = await apiSdk.getMarketsAssets({
     chainId,
