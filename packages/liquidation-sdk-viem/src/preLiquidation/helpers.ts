@@ -1,43 +1,37 @@
 import {
-  type AccrualPosition,
   MathLib,
   ORACLE_PRICE_SCALE,
-  SharesMath,
+  type PreLiquidationPosition,
 } from "@morpho-org/blue-sdk";
 
-import type { PreLiquidation } from "./types";
+export function parseWithBigInt<T = unknown>(jsonText: string): T {
+  return JSON.parse(jsonText, (_key, value) => {
+    if (typeof value === "string" && /^-?\d+n$/.test(value)) {
+      return BigInt(value.slice(0, -1));
+    }
+    return value;
+  }) as T;
+}
 
 export function getRepayDataPreLiquidation(
-  position: AccrualPosition,
-  preLiquidation: PreLiquidation,
-  preSeizableCollateral: bigint,
+  preLiquidation: PreLiquidationPosition,
 ) {
-  const lltv = position.market.params.lltv;
+  const lltv = preLiquidation.market.params.lltv;
   const preLltv = preLiquidation.preLiquidationParams.preLltv;
-  const ltv = MathLib.wDivUp(position.borrowAssets, position.collateralValue!);
+  const ltv = preLiquidation.ltv ?? 0n;
   const quotient = MathLib.wDivDown(ltv - preLltv, lltv - preLltv);
 
   const preLIF =
-    preLiquidation.preLiquidationParams.preLIF1 +
-    MathLib.wMulDown(
-      quotient,
-      preLiquidation.preLiquidationParams.preLIF2 -
-        preLiquidation.preLiquidationParams.preLIF1,
-    );
+    preLiquidation.preLiquidationParams.getIncentiveFactor(quotient);
 
   const preSeizedAssetsQuoted = MathLib.mulDivUp(
-    preSeizableCollateral,
-    position.market.price!,
+    preLiquidation.seizableCollateral ?? 0n,
+    preLiquidation.market.price!,
     ORACLE_PRICE_SCALE,
   );
 
   const repaidAssets = MathLib.wDivUp(preSeizedAssetsQuoted, preLIF);
-  const repaidShares = SharesMath.toShares(
-    repaidAssets,
-    position.market.totalBorrowAssets,
-    position.market.totalBorrowShares,
-    "Up",
-  );
+  const repaidShares = preLiquidation.market.toBorrowShares(repaidAssets, "Up");
 
   return { repaidAssets, repaidShares };
 }

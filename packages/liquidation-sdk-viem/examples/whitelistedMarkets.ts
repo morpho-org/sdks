@@ -82,33 +82,35 @@ export const check = async <
   const ethPriceUsd = safeParseNumber(wethPriceUsd, 18);
 
   return Promise.all(
-    (positions ?? []).map(async (position) => {
+    (positions ?? []).map(async ({ instance: position, type: ptype, ...d }) => {
       const user = position.user;
       const market = position.market;
-      const seizableCollateral =
-        position.seizableCollateral !== undefined &&
-        position.seizableCollateral !== 0n
-          ? { value: position.seizableCollateral, preLiquidation: false }
-          : { value: position.preSeizableCollateral, preLiquidation: true };
 
-      if (seizableCollateral.value === undefined)
+      const isPreLiquidation = ptype === "PreLiquidationPosition";
+      const seizableCollateral = position.seizableCollateral;
+
+      if (seizableCollateral === undefined) {
         return console.warn(`Unknown oracle price for market "${market.id}"`);
+      }
+      if (seizableCollateral === 0n) {
+        console.warn(
+          `Nothing seizable for ${position.marketId}:${position.user}. This should've been filtered out sooner.`,
+        );
+        return;
+      }
 
-      if (
-        seizableCollateral.preLiquidation &&
-        position.preLiquidation === undefined
-      )
+      if (isPreLiquidation && position.preLiquidation === undefined)
         return console.warn(`Unknown pre liquidation address`);
 
       try {
         const collateralToken = converter.getToken(
-          position.collateralAsset,
+          d.collateralAsset,
           wethPriceUsd,
         );
         if (collateralToken.price == null)
           throw new UnknownTokenPriceError(collateralToken.address);
 
-        const loanToken = converter.getToken(position.loanAsset, wethPriceUsd);
+        const loanToken = converter.getToken(d.loanAsset, wethPriceUsd);
         if (loanToken.price == null)
           throw new UnknownTokenPriceError(loanToken.address);
 
@@ -129,14 +131,12 @@ export const check = async <
             functionName: "allowance",
             args: [
               executorAddress,
-              seizableCollateral.preLiquidation
-                ? position.preLiquidation!.address
-                : morpho,
+              isPreLiquidation ? position.preLiquidation : morpho,
             ],
           }),
           ...new Array(10)
             .fill(undefined)
-            .map((_v, i) => seizableCollateral.value! / 2n ** BigInt(i))
+            .map((_v, i) => seizableCollateral / 2n ** BigInt(i))
             .filter(
               (seizedAssets) =>
                 collateralToken.toUsd(seizedAssets)! >
@@ -144,12 +144,8 @@ export const check = async <
                 position.collateral === seizedAssets,
             ) // Do not try seizing less than $1000 collateral, except if we can realize debt.
             .map(async (seizedAssets) => {
-              const repayData = seizableCollateral.preLiquidation
-                ? getRepayDataPreLiquidation(
-                    position,
-                    position.preLiquidation!,
-                    seizedAssets,
-                  )
+              const repayData = isPreLiquidation
+                ? getRepayDataPreLiquidation(position)
                 : {
                     repaidShares:
                       market.getLiquidationRepaidShares(seizedAssets)!,
@@ -328,15 +324,13 @@ export const check = async <
                   // Allows to handle changes in repaidAssets due to price changes and saves gas.
                   encoder.erc20Approve(
                     market.params.loanToken,
-                    seizableCollateral.preLiquidation
-                      ? position.preLiquidation!.address
-                      : morpho,
+                    isPreLiquidation ? position.preLiquidation : morpho,
                     maxUint256,
                   );
 
-                seizableCollateral.preLiquidation
+                isPreLiquidation
                   ? encoder.preLiquidationPreLiquidate(
-                      position.preLiquidation!.address,
+                      position.preLiquidation,
                       user,
                       seizedAssets,
                       0n,

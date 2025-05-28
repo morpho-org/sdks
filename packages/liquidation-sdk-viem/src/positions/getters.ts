@@ -1,9 +1,12 @@
-import type { ChainId, MarketId } from "@morpho-org/blue-sdk";
-import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
-import {
+import type { PartialApiToken } from "@morpho-org/blue-api-sdk";
+import type {
+  AccrualPosition,
+  ChainId,
+  MarketId,
   PreLiquidationPosition,
-  getPreLiquidablePositions,
-} from "@morpho-org/liquidation-sdk-viem";
+} from "@morpho-org/blue-sdk";
+import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+import { getPreLiquidablePositions } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
 import { apiSdk } from "../api";
@@ -14,7 +17,13 @@ export async function getPositions(
   wNative: string,
   marketIds: MarketId[],
 ): Promise<{
-  positions: PreLiquidationPosition[];
+  positions: ({
+    loanAsset: PartialApiToken;
+    collateralAsset: PartialApiToken;
+  } & (
+    | { instance: AccrualPosition; type: "AccrualPosition" }
+    | { instance: PreLiquidationPosition; type: "PreLiquidationPosition" }
+  ))[];
   wethPriceUsd: number | null;
 }> {
   const [{ liquidablePositions, wethPriceUsd }, preLiquidablePositions] =
@@ -29,7 +38,7 @@ export async function getPositions(
   if (wethPriceUsd == null) return { positions: [], wethPriceUsd };
 
   return {
-    positions: liquidablePositions.concat(preLiquidablePositions),
+    positions: [...liquidablePositions, ...preLiquidablePositions],
     wethPriceUsd,
   };
 }
@@ -40,7 +49,12 @@ async function getLiquidatablePositions(
   wNative: string,
   marketIds: MarketId[],
 ): Promise<{
-  liquidablePositions: PreLiquidationPosition[];
+  liquidablePositions: {
+    instance: AccrualPosition;
+    type: "AccrualPosition";
+    loanAsset: PartialApiToken;
+    collateralAsset: PartialApiToken;
+  }[];
   wethPriceUsd: number | null;
 }> {
   const {
@@ -63,21 +77,23 @@ async function getLiquidatablePositions(
           position.user.address,
           position.market.uniqueKey,
           client,
-          { chainId },
+          // Disable `deployless` so that viem multicall aggregates fetches
+          { chainId, deployless: false },
         );
 
-        return new PreLiquidationPosition(
-          accrualPosition.accrueInterest(Time.timestamp()),
-          position.market.collateralAsset,
-          position.market.loanAsset,
-        );
+        return {
+          instance: accrualPosition.accrueInterest(Time.timestamp()),
+          type: "AccrualPosition" as const,
+          loanAsset: position.market.loanAsset,
+          collateralAsset: position.market.collateralAsset,
+        };
       }),
     )
   ).filter((position) => position !== undefined);
 
   return {
     liquidablePositions: accruedPositions.filter(
-      (position) => position.seizableCollateral !== undefined,
+      (position) => position.instance.seizableCollateral !== undefined,
     ),
     wethPriceUsd,
   };
