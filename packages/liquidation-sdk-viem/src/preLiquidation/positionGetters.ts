@@ -1,14 +1,11 @@
 import type { PartialApiToken } from "@morpho-org/blue-api-sdk";
-import type { MarketId } from "@morpho-org/blue-sdk";
+import { type MarketId, PreLiquidationPosition } from "@morpho-org/blue-sdk";
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
 import { apiSdk } from "../api";
-import {
-  type PreLiquidation,
-  type PreLiquidationData,
-  PreLiquidationPosition,
-} from "./types";
+import { parseWithBigInt } from "./helpers";
+import type { PreLiquidationResponse } from "./types";
 
 export async function getPreLiquidablePositions(
   client: Client<Transport, Chain, Account>,
@@ -23,10 +20,7 @@ export async function getPreLiquidablePositions(
     method: "POST",
     body: JSON.stringify({ marketIds: whitelistedMarkets }),
   });
-
-  const data = (await response.json()) as {
-    results: PreLiquidationData[];
-  };
+  const data = parseWithBigInt<PreLiquidationResponse>(await response.json());
 
   const marketsAssets = await apiSdk.getMarketsAssets({
     chainId,
@@ -37,79 +31,59 @@ export async function getPreLiquidablePositions(
     marketsAssets.markets.items?.map((market) => [market.uniqueKey, market]),
   );
 
-  const preLiquidationInstances = await Promise.all(
-    data.results
-      .filter((preLiquidation) => preLiquidation.price !== null)
-      .map((preLiquidation) => {
-        return {
-          ...preLiquidation,
-          price: BigInt(preLiquidation.price!),
-          preLiquidationParams: {
-            ...preLiquidation.preLiquidationParams,
-            preLCF1: BigInt(preLiquidation.preLiquidationParams.preLCF1),
-            preLCF2: BigInt(preLiquidation.preLiquidationParams.preLCF2),
-            preLIF1: BigInt(preLiquidation.preLiquidationParams.preLIF1),
-            preLIF2: BigInt(preLiquidation.preLiquidationParams.preLIF2),
-            preLltv: BigInt(preLiquidation.preLiquidationParams.preLltv),
-          },
-        };
-      })
-      .map(async (preLiquidation) => {
-        const { loanAsset, collateralAsset } =
-          marketAssetsMap.get(preLiquidation.marketId) ?? {};
+  // Extending each result with its corresponding `loanAsset` and `collateralAsset`, if available.
+  const dataWithMarketAssetInfo: (PreLiquidationResponse["results"][number] & {
+    loanAsset: PartialApiToken;
+    collateralAsset: PartialApiToken;
+  })[] = [];
 
-        if (loanAsset == null || collateralAsset == null) return;
+  // Populate array -- skipping entries with missing assets, as mentioned
+  for (const result of data.results) {
+    const { loanAsset, collateralAsset } =
+      marketAssetsMap.get(result.marketId) ?? {};
 
-        return {
-          ...preLiquidation,
-          loanAsset,
-          collateralAsset,
-        };
-      }),
-  );
+    if (!loanAsset || !collateralAsset) continue;
 
+    dataWithMarketAssetInfo.push({
+      ...result,
+      loanAsset,
+      collateralAsset,
+    });
+  }
+
+  // Convert to Blue SDK type, `PreLiquidationPosition`
   const preLiquidablePositions = await Promise.all(
-    preLiquidationInstances
-      .filter((position) => position !== undefined)
-      .flatMap((preLiquidationPosition) => {
-        return preLiquidationPosition.enabledPositions.map((borrower) => {
-          return getPreLiquidablePosition(
+    dataWithMarketAssetInfo.flatMap((entry) => {
+      return entry.enabledPositions.map(async (user) => {
+        const accrualPosition = (
+          await fetchAccrualPosition(
+            user,
+            entry.marketId,
             client,
-            preLiquidationPosition,
-            borrower,
-            preLiquidationPosition.collateralAsset,
-            preLiquidationPosition.loanAsset,
-          );
-        });
-      }),
+            // Disable `deployless` so that viem multicall aggregates fetches
+            { chainId: client.chain.id, deployless: false },
+          )
+        ).accrueInterest(Time.timestamp());
+
+        return {
+          loanAsset: entry.loanAsset,
+          collateralAsset: entry.collateralAsset,
+          instance: new PreLiquidationPosition(
+            {
+              ...accrualPosition,
+              preLiquidation: entry.address,
+              preLiquidationParams: entry.preLiquidationParams,
+              preLiquidationOraclePrice: entry.price,
+            },
+            accrualPosition.market,
+          ),
+          type: "PreLiquidationPosition" as const,
+        };
+      });
+    }),
   );
 
   return preLiquidablePositions.filter(
-    (position) => position.preSeizableCollateral !== undefined,
-  );
-}
-
-async function getPreLiquidablePosition(
-  client: Client<Transport, Chain>,
-  preLiquidation: PreLiquidation,
-  borrower: string,
-  collateralAsset: PartialApiToken,
-  loanAsset: PartialApiToken,
-) {
-  const chainId = client.chain.id;
-  const accrualPosition = await fetchAccrualPosition(
-    borrower as `0x${string}`,
-    String(preLiquidation.marketId) as MarketId,
-    client,
-    { chainId },
-  );
-
-  const accruedPosition = accrualPosition.accrueInterest(Time.timestamp());
-
-  return new PreLiquidationPosition(
-    accruedPosition,
-    collateralAsset,
-    loanAsset,
-    preLiquidation,
+    (position) => position.instance.seizableCollateral !== undefined,
   );
 }
