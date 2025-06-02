@@ -99,9 +99,6 @@ export const check = async <
         return;
       }
 
-      if (isPreLiquidation && position.preLiquidation === undefined)
-        return console.warn(`Unknown pre liquidation address`);
-
       try {
         const collateralToken = converter.getToken(
           d.collateralAsset,
