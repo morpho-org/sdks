@@ -76,7 +76,21 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: assets=-1]`);
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: invalid input: assets=-1
+
+      when simulating operation:
+      {
+        "type": "Blue_Borrow",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "-1n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `);
   });
 
   test("should throw if shares is negative", () => {
@@ -94,7 +108,21 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: shares=-1]`);
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: invalid input: shares=-1
+
+      when simulating operation:
+      {
+        "type": "Blue_Borrow",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "shares": "-1n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `);
   });
 
   test("should throw if insufficient liquidity", () => {
@@ -113,7 +141,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient liquidity on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+      `
+      [Error: insufficient liquidity on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd
+
+      when simulating operation:
+      {
+        "type": "Blue_Borrow",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "10750000000n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 
@@ -133,7 +175,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient collateral for user 0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+      `
+      [Error: insufficient collateral for user 0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd
+
+      when simulating operation:
+      {
+        "type": "Blue_Borrow",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "10000000n",
+          "onBehalf": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 });

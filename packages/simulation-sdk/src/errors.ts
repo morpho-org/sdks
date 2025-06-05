@@ -6,6 +6,7 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { entries } from "@morpho-org/morpho-ts";
+import type { Hex } from "viem";
 import type { Operation, OperationType } from "./operations.js";
 
 export class UnexpectedOperation extends Error {
@@ -192,7 +193,12 @@ export namespace SimulationErrors {
       public readonly index: number,
       public readonly operation: T,
     ) {
-      super(error.message);
+      super(
+        `${error.message}
+
+${error instanceof Simulation ? "in the callback of" : "when simulating operation"}:
+${JSON.stringify(operation, (_, value) => (typeof value === "bigint" ? `${value.toString()}n` : value), 2)}`,
+      );
 
       this.stack = error.stack;
     }
@@ -381,6 +387,25 @@ export namespace PublicAllocatorErrors {
       public readonly marketId: MarketId,
     ) {
       super(`not enough supply of vault "${vault}" on market "${marketId}"`);
+    }
+  }
+}
+
+export namespace ParaswapErrors {
+  export class InvalidOffset extends Error {
+    constructor(
+      public readonly offset: number,
+      public readonly data: Hex,
+    ) {
+      super(
+        `invalid offset "${offset}" does not leave 32 bytes of data "${data}"`,
+      );
+    }
+  }
+
+  export class ZeroAmount extends Error {
+    constructor() {
+      super(`zero amount`);
     }
   }
 }
