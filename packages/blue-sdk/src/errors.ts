@@ -64,8 +64,11 @@ export namespace BlueErrors {
   }
 
   export class InconsistentInput extends Error {
-    constructor() {
-      super(`inconsistent input: assets & shares cannot both be zero`);
+    constructor(
+      public readonly assets: bigint,
+      public readonly shares: bigint,
+    ) {
+      super(`inconsistent input assets "${assets}" and shares "${shares}"`);
     }
   }
 

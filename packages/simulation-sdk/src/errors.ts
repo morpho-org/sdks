@@ -241,6 +241,12 @@ export namespace BlueSimulationErrors {
     }
   }
 
+  export class ZeroShares extends Error {
+    constructor() {
+      super(`zero shares`);
+    }
+  }
+
   export class UnauthorizedBundler extends Error {
     constructor(public readonly user: Address) {
       super(`unauthorized bundler for user "${user}"`);

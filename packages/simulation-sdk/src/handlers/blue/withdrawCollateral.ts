@@ -5,13 +5,12 @@ import type { BlueOperations } from "../../operations.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
 
+import { maxUint256 } from "viem";
 import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleBlueWithdrawCollateralOperation: OperationHandler<
   BlueOperations["Blue_WithdrawCollateral"]
 > = ({ args: { id, assets, onBehalf, receiver }, sender }, data) => {
-  if (assets === 0n) throw new BlueSimulationErrors.ZeroAssets();
-
   const {
     morpho,
     bundler3: { generalAdapter1 },
@@ -22,7 +21,12 @@ export const handleBlueWithdrawCollateralOperation: OperationHandler<
 
     if (!userData.isBundlerAuthorized)
       throw new BlueSimulationErrors.UnauthorizedBundler(onBehalf);
+
+    if (assets === maxUint256)
+      assets = data.getPosition(onBehalf, id).collateral;
   }
+
+  if (assets === 0n) throw new BlueSimulationErrors.ZeroAssets();
 
   handleBlueAccrueInterestOperation(
     {
