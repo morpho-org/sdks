@@ -123,7 +123,6 @@ export const encodeOperation = (
   index = 0,
 ) => {
   const { chainId } = dataBefore;
-  const deadline = Time.timestamp() + Time.s.from.h(24n);
   const {
     morpho,
     bundler3: { bundler3, generalAdapter1, paraswapAdapter },
@@ -175,7 +174,12 @@ export const encodeOperation = (
 
   switch (operation.type) {
     case "Blue_SetAuthorization": {
-      const { owner, isAuthorized, authorized } = operation.args;
+      const {
+        owner,
+        isAuthorized,
+        authorized,
+        deadline = dataBefore.block.timestamp + Time.s.from.h(2n),
+      } = operation.args;
 
       // Never authorize bundler3 otherwise the signature can be used independently.
       if (authorized === bundler3)
@@ -266,7 +270,12 @@ export const encodeOperation = (
       // Native token cannot be permitted.
       if (operation.address === NATIVE_ADDRESS) break;
 
-      const { amount, spender, nonce } = operation.args;
+      const {
+        amount,
+        spender,
+        nonce,
+        deadline = dataBefore.block.timestamp + Time.s.from.h(2n),
+      } = operation.args;
 
       // Never permit any other address than the GeneralAdapter1 otherwise
       // the signature can be used independently.
@@ -373,7 +382,12 @@ export const encodeOperation = (
       // Native token cannot be permitted.
       if (operation.address === NATIVE_ADDRESS) break;
 
-      const { amount, expiration, nonce } = operation.args;
+      const {
+        amount,
+        expiration,
+        nonce,
+        deadline = dataBefore.block.timestamp + Time.s.from.h(2n),
+      } = operation.args;
 
       if (supportsSignature) {
         const action: Action = {

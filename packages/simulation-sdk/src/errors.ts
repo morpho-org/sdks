@@ -166,6 +166,18 @@ export namespace Erc20Errors {
     }
   }
 
+  export class ExpiredEIP2612Signature extends Error {
+    constructor(
+      public readonly token: Address,
+      public readonly owner: Address,
+      public readonly deadline: bigint,
+    ) {
+      super(
+        `expired EIP-2612 signature deadline "${deadline}" for token "${token}" from owner "${owner}"`,
+      );
+    }
+  }
+
   export class InvalidPermit2Nonce extends Error {
     constructor(
       public readonly token: Address,
@@ -174,6 +186,18 @@ export namespace Erc20Errors {
     ) {
       super(
         `invalid permit2 nonce "${nonce}" for token "${token}" from owner "${owner}"`,
+      );
+    }
+  }
+
+  export class ExpiredPermit2Signature extends Error {
+    constructor(
+      public readonly token: Address,
+      public readonly owner: Address,
+      public readonly deadline: bigint,
+    ) {
+      super(
+        `expired permit2 signature deadline "${deadline}" for token "${token}" from owner "${owner}"`,
       );
     }
   }

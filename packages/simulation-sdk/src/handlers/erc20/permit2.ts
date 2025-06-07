@@ -4,7 +4,13 @@ import type { OperationHandler } from "../types.js";
 
 export const handleErc20Permit2Operation: OperationHandler<
   Erc20Operations["Erc20_Permit2"]
-> = ({ args: { amount, expiration, nonce }, sender, address }, data) => {
+> = (
+  { args: { amount, expiration, nonce, deadline }, sender, address },
+  data,
+) => {
+  if (deadline != null && deadline < data.block.timestamp)
+    throw new Erc20Errors.ExpiredPermit2Signature(address, sender, deadline);
+
   const { permit2BundlerAllowance } = data.getHolding(sender, address);
 
   if (permit2BundlerAllowance.nonce !== nonce)

@@ -101,6 +101,12 @@ export namespace BlueErrors {
       super(`insufficient collateral for user ${user} on market ${marketId}`);
     }
   }
+
+  export class ExpiredSignature extends Error {
+    constructor(public readonly deadline: bigint) {
+      super(`expired signature deadline "${deadline}"`);
+    }
+  }
 }
 
 export interface ErrorClass<E extends Error> {

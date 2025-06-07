@@ -6,7 +6,10 @@ import { handleErc20ApproveOperation } from "./approve.js";
 
 export const handleErc20PermitOperation: OperationHandler<
   Erc20Operations["Erc20_Permit"]
-> = ({ args: { spender, amount, nonce }, sender, address }, data) => {
+> = ({ args: { spender, amount, nonce, deadline }, sender, address }, data) => {
+  if (deadline != null && deadline < data.block.timestamp)
+    throw new Erc20Errors.ExpiredEIP2612Signature(address, sender, deadline);
+
   const senderTokenData = data.getHolding(sender, address);
 
   if (senderTokenData.erc2612Nonce == null)

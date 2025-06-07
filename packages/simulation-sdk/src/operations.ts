@@ -43,6 +43,11 @@ export interface BlueOperationArgs {
     // Should not be scoped to GeneralAdapter1 because PreLiquidation contracts use authorizations.
     authorized: Address;
     isAuthorized: boolean;
+    /**
+     * The maximum block timestamp (included) for which the authorization will be signed and valid.
+     * Defaults to the simulation state's timestamp + 2h.
+     */
+    deadline?: bigint;
   };
 
   Blue_SupplyCollateral: {
@@ -301,11 +306,21 @@ export interface Erc20OperationArgs {
     spender: Address;
     amount: bigint;
     nonce: bigint;
+    /**
+     * The maximum block timestamp (included) for which the permit will be signed and valid.
+     * Defaults to the simulation state's timestamp + 2h.
+     */
+    deadline?: bigint;
   };
   Erc20_Permit2: {
     amount: bigint;
     expiration: bigint;
     nonce: bigint;
+    /**
+     * The maximum block timestamp (included) for which the permit will be signed and valid.
+     * Defaults to the simulation state's timestamp + 2h.
+     */
+    deadline?: bigint;
   };
 
   Erc20_Transfer: {
