@@ -4,8 +4,8 @@ import { handleOperations } from "../dispatchers.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
 
-import { BlueSimulationErrors } from "src/errors.js";
 import { maxUint256 } from "viem";
+import { BlueSimulationErrors } from "../../errors.js";
 import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleBlueRepayOperation: OperationHandler<
