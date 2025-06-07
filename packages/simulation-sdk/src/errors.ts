@@ -93,6 +93,19 @@ export class UnknownAllowanceError extends UnknownDataError {
   }
 }
 
+export class NonZeroAllowanceError extends UnknownDataError {
+  constructor(
+    public readonly token: Address,
+    public readonly owner: Address,
+    public readonly contract: string,
+    public readonly allowance: bigint,
+  ) {
+    super(
+      `unexpected non-zero allowance "${allowance}" for token "${token}" from owner "${owner}" to contract "${contract}"`,
+    );
+  }
+}
+
 export class UnknownEIP2612DataError extends UnknownDataError {
   constructor(
     public readonly token: Address,

@@ -1,6 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { UnknownAllowanceError } from "../../errors.js";
+import { APPROVE_ONLY_ONCE_TOKENS } from "../../constants.js";
+import { NonZeroAllowanceError, UnknownAllowanceError } from "../../errors.js";
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
@@ -24,8 +25,15 @@ export const handleErc20ApproveOperation: OperationHandler<
           ? "permit2"
           : undefined;
 
-  if (contract != null) senderTokenData.erc20Allowances[contract] = amount;
-  else {
+  if (contract != null) {
+    if (
+      APPROVE_ONLY_ONCE_TOKENS[data.chainId]?.includes(address) &&
+      senderTokenData.erc20Allowances[contract] > 0n
+    )
+      throw new NonZeroAllowanceError(address, sender, contract, amount);
+
+    senderTokenData.erc20Allowances[contract] = amount;
+  } else {
     const vault = data.tryGetVault(spender);
 
     if (vault != null && vault.asset === address) {
