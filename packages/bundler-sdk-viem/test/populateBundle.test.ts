@@ -151,7 +151,7 @@ describe("populateBundle", () => {
             },
           ]);
 
-          expect(bundle.requirements.signatures.length).toBe(1);
+          expect(bundle.requirements.signatures.length).toBe(2);
 
           expect(bundle.requirements.txs).toStrictEqual([]);
 
@@ -186,6 +186,16 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: 0n,
+                spender: generalAdapter1,
+                nonce: 4n,
+              },
+            },
           ]);
 
           const position = await fetchPosition(
@@ -206,7 +216,7 @@ describe("populateBundle", () => {
           );
           expect(
             await client.allowance({ erc20: dai, spender: generalAdapter1 }),
-          ).toBe(MathLib.MAX_UINT_256);
+          ).toBe(0n);
           expect(await client.allowance({ erc20: dai, spender: morpho })).toBe(
             0n,
           );

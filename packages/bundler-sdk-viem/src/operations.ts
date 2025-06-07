@@ -32,6 +32,7 @@ import { isAddressEqual, maxUint256 } from "viem";
 import { BundlerErrors } from "./errors.js";
 import type {
   BundlerOperation,
+  BundlerOperations,
   CallbackBundlerOperation,
   InputBundlerOperation,
 } from "./types/index.js";
@@ -547,6 +548,7 @@ export const finalizeBundle = (
 
   const {
     bundler3: { bundler3, generalAdapter1 },
+    dai,
   } = getChainAddresses(startData.chainId);
 
   if (
@@ -833,10 +835,31 @@ export const finalizeBundle = (
   // Simulate without slippage to skim the bundler of all possible surplus of shares & assets.
   steps = simulateBundlerOperations(operations, startData, { slippage: 0n });
 
+  const lastStep = getLast(steps);
+  const daiPermit =
+    dai != null
+      ? operations.find(
+          // There should exist only one dai permit operation in the bundle thanks to the first optimization step.
+          (operation): operation is BundlerOperations["Erc20_Permit"] =>
+            operation.type === "Erc20_Permit" && operation.address === dai,
+        )
+      : undefined;
+
+  // If the bundle approves dai, reset the dai allowance at the end of the bundle.
+  if (daiPermit != null)
+    operations.push({
+      ...daiPermit,
+      args: {
+        amount: 0n,
+        spender: daiPermit.args.spender,
+        nonce: daiPermit.args.nonce + 1n,
+      },
+    });
+
   // Unwrap requested remaining wrapped tokens.
   const unwraps = [] as Erc20Operations["Erc20_Unwrap"][];
 
-  const endBundlerTokenData = getLast(steps).holdings[generalAdapter1] ?? {};
+  const endBundlerTokenData = lastStep.holdings[generalAdapter1] ?? {};
 
   unwrapTokens.forEach((wrappedToken) => {
     const remaining = endBundlerTokenData[wrappedToken]?.balance ?? 0n;
