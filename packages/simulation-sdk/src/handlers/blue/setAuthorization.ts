@@ -4,7 +4,10 @@ import type { OperationHandler } from "../types.js";
 
 export const handleBlueSetAuthorizationOperation: OperationHandler<
   BlueOperations["Blue_SetAuthorization"]
-> = ({ args: { owner, authorized, isAuthorized } }, data) => {
+> = ({ args: { owner, authorized, isAuthorized, deadline } }, data) => {
+  if (deadline != null && deadline < data.block.timestamp)
+    throw new BlueErrors.ExpiredSignature(deadline);
+
   const ownerData = data.getUser(owner);
 
   const {

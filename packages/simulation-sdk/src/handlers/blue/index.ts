@@ -1,3 +1,4 @@
+import { MathLib } from "@morpho-org/blue-sdk";
 import { SimulationErrors } from "../../errors.js";
 import type { BlueOperation } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
@@ -27,6 +28,13 @@ export const handleBlueOperation: OperationHandler<BlueOperation> = (
     const { shares = 0n } = operation.args;
 
     if (shares < 0n) throw new SimulationErrors.InvalidInput({ shares });
+  }
+
+  if ("slippage" in operation.args) {
+    const { slippage = 0n } = operation.args;
+
+    if (slippage < 0n || slippage > MathLib.WAD)
+      throw new SimulationErrors.InvalidInput({ slippage });
   }
 
   switch (operation.type) {
