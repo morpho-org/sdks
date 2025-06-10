@@ -383,6 +383,20 @@ const _addressesRegistry = {
 
     wNative: "0x1aE9c40eCd2DD6ad5858E5430A556d7aff28A44b",
   },
+  [ChainId.KatanaMainnet]: {
+    morpho: "0xD50F2DffFd62f94Ee4AEd9ca05C61d0753268aBc",
+    bundler3: {
+      bundler3: "0xA8C5e23C9C0DF2b6fF716486c6bBEBB6661548C8",
+      generalAdapter1: "0x916Aa175C36E845db45fF6DDB886AE437d403B61",
+    },
+    adaptiveCurveIrm: "0x4F708C0ae7deD3d74736594C2109C2E3c065B428",
+    publicAllocator: "0x39EB6Da5e88194C82B13491Df2e8B3E213eD2412",
+    metaMorphoFactory: "0x1c8De6889acee12257899BFeAa2b7e534de32E16",
+    chainlinkOracleFactory: "0x7D047fB910Bc187C18C81a69E30Fa164f8c536eC",
+    preLiquidationFactory: "0x678EB53A3bB79111263f47B84989d16D81c36D85",
+
+    wNative: "0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62",
+  },
 } as const;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
