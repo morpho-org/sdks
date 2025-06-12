@@ -63,24 +63,24 @@ export async function fetchMarket(
     }
   }
 
-  const params = new MarketParams(
-    await readContractRestructured(client, {
+  const [params, market] = await Promise.all([
+    readContractRestructured(client, {
       ...parameters,
       address: morpho,
       abi: blueAbi,
       functionName: "idToMarketParams",
       args: [id],
     }),
-  );
-
-  const [market, price, rateAtTarget] = await Promise.all([
     readContractRestructured(client, {
       ...parameters,
       address: morpho,
       abi: blueAbi,
       functionName: "market",
-      args: [params.id],
+      args: [id],
     }),
+  ]);
+
+  const [price, rateAtTarget] = await Promise.all([
     params.oracle !== zeroAddress
       ? readContract(client, {
           ...parameters,
@@ -95,7 +95,7 @@ export async function fetchMarket(
           address: adaptiveCurveIrm,
           abi: adaptiveCurveIrmAbi,
           functionName: "rateAtTarget",
-          args: [params.id],
+          args: [id],
         })
       : undefined,
   ]);

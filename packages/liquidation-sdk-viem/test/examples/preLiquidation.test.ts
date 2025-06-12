@@ -6,6 +6,7 @@ import {
   type Address,
   ChainId,
   type MarketId,
+  PreLiquidationPosition,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { BLUE_API_BASE_URL, format } from "@morpho-org/morpho-ts";
@@ -28,7 +29,6 @@ import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelistedMarkets.js";
 import { OneInch, Paraswap } from "../../src/index.js";
-import { PreLiquidationPosition } from "../../src/preLiquidation/types.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import { type LiquidationTestContext, preLiquidationTest } from "../setup.js";
 
@@ -53,6 +53,8 @@ describe("pre liquidation", () => {
   let swapMockAddress: Address;
 
   beforeEach<LiquidationTestContext<typeof mainnet>>(async ({ client }) => {
+    process.env.INDEXER_API_URL = "http://localhost:42069";
+
     swapMockAddress = (await client.deployContractWait(swapMock))
       .contractAddress;
 
@@ -343,20 +345,40 @@ describe("pre liquidation", () => {
 
       const timestamp = await syncTimestamp(client);
 
-      const loanAssetApiData = {
-        address: market.params.loanToken,
-        decimals: loanToken.decimals,
-        priceUsd: null,
-        spotPriceEth: 1 / ethPriceUsd,
-        symbol: loanToken.symbol!,
-      };
-      const collateralAssetApiData = {
-        address: market.params.collateralToken,
-        decimals: collateralToken.decimals,
-        priceUsd: collateralPriceUsd,
-        spotPriceEth: collateralPriceUsd / ethPriceUsd,
-        symbol: collateralToken.symbol!,
-      };
+      const price = await client.readContract({
+        address: market.params.oracle,
+        abi: [
+          {
+            type: "function",
+            name: "price",
+            inputs: [],
+            outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+            stateMutability: "view",
+          },
+        ] as const,
+        functionName: "price",
+      });
+
+      nock(process.env.INDEXER_API_URL!)
+        .post("/chain/1/preliquidations")
+        .reply(200, {
+          results: [
+            {
+              marketId,
+              address: preLiquidationAddress,
+              preLiquidationParams: {
+                ...preLiquidationParams,
+                preLltv: preLiquidationParams.preLltv.toString(),
+                preLCF1: preLiquidationParams.preLCF1.toString(),
+                preLCF2: preLiquidationParams.preLCF2.toString(),
+                preLIF1: preLiquidationParams.preLIF1.toString(),
+                preLIF2: preLiquidationParams.preLIF2.toString(),
+              },
+              enabledPositions: [borrower.address],
+              price: price.toString(),
+            },
+          ],
+        });
 
       nock(BLUE_API_BASE_URL)
         .post("/graphql")
@@ -400,6 +422,7 @@ describe("pre liquidation", () => {
             markets: {
               items: [
                 {
+                  uniqueKey: marketId,
                   collateralAsset: {
                     address: market.params.collateralToken,
                     decimals: collateralToken.decimals,
@@ -427,18 +450,16 @@ describe("pre liquidation", () => {
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
 
       const preLiquidablePosition = new PreLiquidationPosition(
-        accruedPosition,
-        collateralAssetApiData,
-        loanAssetApiData,
         {
-          marketId,
-          address: preLiquidationAddress,
           preLiquidationParams,
+          preLiquidation: preLiquidationAddress,
+          preLiquidationOraclePrice: price,
+          ...accruedPosition,
         },
+        accruedPosition.market,
       );
 
-      const preSeizableCollateral =
-        preLiquidablePosition.preSeizableCollateral!;
+      const preSeizableCollateral = preLiquidablePosition.seizableCollateral!;
 
       mockOneInch(encoder, [
         { srcAmount: preSeizableCollateral, dstAmount: "73000000000" },

@@ -44,31 +44,20 @@ export type GetLiquidatablePositionsQuery = {
   };
 };
 
-export type GetWhitelistedMarketIdsQueryVariables = Types.Exact<{
+export type GetMarketsAssetsQueryVariables = Types.Exact<{
   chainId: Types.Scalars["Int"]["input"];
+  marketIds:
+    | Array<Types.Scalars["String"]["input"]>
+    | Types.Scalars["String"]["input"];
 }>;
 
-export type GetWhitelistedMarketIdsQuery = {
+export type GetMarketsAssetsQuery = {
   __typename?: "Query";
   markets: {
     __typename?: "PaginatedMarkets";
     items: Array<{
       __typename?: "Market";
       uniqueKey: Types.Scalars["MarketId"]["output"];
-    }> | null;
-  };
-};
-
-export type GetMarketAssetsQueryVariables = Types.Exact<{
-  chainId: Types.Scalars["Int"]["input"];
-  marketId: Types.Scalars["String"]["input"];
-}>;
-
-export type GetMarketAssetsQuery = {
-  __typename?: "Query";
-  markets: {
-    __typename?: "PaginatedMarkets";
-    items: Array<{
       collateralAsset: {
         __typename?: "Asset";
         address: Types.Scalars["Address"]["output"];
@@ -85,6 +74,21 @@ export type GetMarketAssetsQuery = {
         priceUsd: number | null;
         spotPriceEth: number | null;
       };
+    }> | null;
+  };
+};
+
+export type GetWhitelistedMarketIdsQueryVariables = Types.Exact<{
+  chainId: Types.Scalars["Int"]["input"];
+}>;
+
+export type GetWhitelistedMarketIdsQuery = {
+  __typename?: "Query";
+  markets: {
+    __typename?: "PaginatedMarkets";
+    items: Array<{
+      __typename?: "Market";
+      uniqueKey: Types.Scalars["MarketId"]["output"];
     }> | null;
   };
 };

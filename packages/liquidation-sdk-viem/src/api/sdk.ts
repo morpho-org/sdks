@@ -42,20 +42,11 @@ export const GetLiquidatablePositionsDocument = gql`
   }
 }
     ${MarketPositionFragmentDoc}`;
-export const GetWhitelistedMarketIdsDocument = gql`
-    query getWhitelistedMarketIds($chainId: Int!) {
-  markets(where: {chainId_in: [$chainId], whitelisted: true}) {
+export const GetMarketsAssetsDocument = gql`
+    query getMarketsAssets($chainId: Int!, $marketIds: [String!]!) {
+  markets(where: {chainId_in: [$chainId], uniqueKey_in: $marketIds}) {
     items {
       uniqueKey
-    }
-  }
-}
-    `;
-
-export const GetMarketAssetsDocument = gql `
-    query getMarketAsset($chainId: Int!, $marketId: String!) {
-  markets(where: {chainId_in: [$chainId], uniqueKey_in: [$marketId]}) {
-    items {
       collateralAsset {
         address
         decimals
@@ -71,9 +62,18 @@ export const GetMarketAssetsDocument = gql `
         spotPriceEth
       }
     }
-  } 
+  }
 }
-`;
+    `;
+export const GetWhitelistedMarketIdsDocument = gql`
+    query getWhitelistedMarketIds($chainId: Int!) {
+  markets(where: {chainId_in: [$chainId], whitelisted: true}) {
+    items {
+      uniqueKey
+    }
+  }
+}
+    `;
 
 export type SdkFunctionWrapper = <T>(action: (requestHeaders?:Record<string, string>) => Promise<T>, operationName: string, operationType?: string, variables?: any) => Promise<T>;
 
@@ -85,11 +85,11 @@ export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = 
     getLiquidatablePositions(variables: Types.GetLiquidatablePositionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetLiquidatablePositionsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<Types.GetLiquidatablePositionsQuery>(GetLiquidatablePositionsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getLiquidatablePositions', 'query', variables);
     },
+    getMarketsAssets(variables: Types.GetMarketsAssetsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetMarketsAssetsQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<Types.GetMarketsAssetsQuery>(GetMarketsAssetsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getMarketsAssets', 'query', variables);
+    },
     getWhitelistedMarketIds(variables: Types.GetWhitelistedMarketIdsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetWhitelistedMarketIdsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<Types.GetWhitelistedMarketIdsQuery>(GetWhitelistedMarketIdsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getWhitelistedMarketIds', 'query', variables);
-    },
-    getMarketAssets(variables: Types.GetMarketAssetsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetMarketAssetsQuery> {
-      return withWrapper((wrappedRequestHeaders) => client.request<Types.GetMarketAssetsQuery>(GetMarketAssetsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getMarketAssets', 'query', variables);
     }
   };
 }
