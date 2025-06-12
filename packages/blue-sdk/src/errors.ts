@@ -64,8 +64,11 @@ export namespace BlueErrors {
   }
 
   export class InconsistentInput extends Error {
-    constructor() {
-      super(`inconsistent input: assets & shares cannot both be zero`);
+    constructor(
+      public readonly assets: bigint,
+      public readonly shares: bigint,
+    ) {
+      super(`inconsistent input assets "${assets}" and shares "${shares}"`);
     }
   }
 
@@ -96,6 +99,12 @@ export namespace BlueErrors {
       public readonly marketId: MarketId,
     ) {
       super(`insufficient collateral for user ${user} on market ${marketId}`);
+    }
+  }
+
+  export class ExpiredSignature extends Error {
+    constructor(public readonly deadline: bigint) {
+      super(`expired signature deadline "${deadline}"`);
     }
   }
 }

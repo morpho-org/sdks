@@ -5,6 +5,7 @@ import type { BlueOperations } from "../../operations.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
 
+import { maxUint256 } from "viem";
 import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleBlueWithdrawOperation: OperationHandler<
@@ -26,7 +27,16 @@ export const handleBlueWithdrawOperation: OperationHandler<
 
     if (!userData.isBundlerAuthorized)
       throw new BlueSimulationErrors.UnauthorizedBundler(onBehalf);
+
+    if (shares === maxUint256) {
+      shares = data.getPosition(onBehalf, id).supplyShares;
+
+      if (shares === 0n) throw new BlueSimulationErrors.ZeroShares();
+    }
   }
+
+  if ((assets === 0n) === (shares === 0n))
+    throw new BlueErrors.InconsistentInput(assets, shares);
 
   handleBlueAccrueInterestOperation(
     {

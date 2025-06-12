@@ -582,16 +582,22 @@ export class SimulationState implements InputSimulationState {
       const vaultWithdrawals = reallocatableVaults
         .map((vault) =>
           _try(() => {
-            const { cap, publicAllocatorConfig } = data.getVaultMarketConfig(
-              vault,
-              marketId,
-            );
+            const { cap, pendingCap, publicAllocatorConfig } =
+              data.getVaultMarketConfig(vault, marketId);
 
-            const suppliable =
-              cap -
+            // If a pending cap is known to be valid, consider worst-case scenario
+            // where it is accepted before the reallocation is committed.
+            const validCap =
+              pendingCap.validAt >= data.block.timestamp
+                ? MathLib.min(pendingCap.value, cap)
+                : cap;
+
+            const suppliable = MathLib.zeroFloorSub(
+              validCap,
               data
                 .getAccrualPosition(vault, marketId)
-                .accrueInterest(this.block.timestamp + delay).supplyAssets;
+                .accrueInterest(this.block.timestamp + delay).supplyAssets,
+            );
 
             const marketWithdrawals = data
               .getVault(vault)
