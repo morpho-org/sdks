@@ -589,7 +589,7 @@ export class SimulationState implements InputSimulationState {
             // where it is accepted before the reallocation is committed.
             const validCap =
               pendingCap.validAt >= data.block.timestamp
-                ? pendingCap.value
+                ? MathLib.min(pendingCap.value, cap)
                 : cap;
 
             const suppliable = MathLib.zeroFloorSub(

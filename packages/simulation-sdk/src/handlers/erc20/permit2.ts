@@ -1,4 +1,4 @@
-import { Erc20Errors } from "../../errors.js";
+import { Erc20Errors, SimulationErrors } from "../../errors.js";
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
@@ -8,8 +8,11 @@ export const handleErc20Permit2Operation: OperationHandler<
   { args: { amount, expiration, nonce, deadline }, sender, address },
   data,
 ) => {
-  if (deadline != null && deadline < data.block.timestamp)
-    throw new Erc20Errors.ExpiredPermit2Signature(address, sender, deadline);
+  if (deadline != null) {
+    if (deadline < 0n) throw new SimulationErrors.InvalidInput({ deadline });
+    if (deadline < data.block.timestamp)
+      throw new Erc20Errors.ExpiredPermit2Signature(address, sender, deadline);
+  }
 
   const { permit2BundlerAllowance } = data.getHolding(sender, address);
 

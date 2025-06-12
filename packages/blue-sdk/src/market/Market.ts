@@ -319,7 +319,7 @@ export class Market implements IMarket {
   }
 
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
-    if ((assets === 0n && shares === 0n) || (assets !== 0n && shares !== 0n))
+    if ((assets === 0n) === (shares === 0n))
       throw new BlueErrors.InconsistentInput(assets, shares);
 
     const market = this.accrueInterest(timestamp);
@@ -334,7 +334,7 @@ export class Market implements IMarket {
   }
 
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
-    if ((assets === 0n && shares === 0n) || (assets !== 0n && shares !== 0n))
+    if ((assets === 0n) === (shares === 0n))
       throw new BlueErrors.InconsistentInput(assets, shares);
 
     const market = this.accrueInterest(timestamp);
@@ -352,7 +352,7 @@ export class Market implements IMarket {
   }
 
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
-    if ((assets === 0n && shares === 0n) || (assets !== 0n && shares !== 0n))
+    if ((assets === 0n) === (shares === 0n))
       throw new BlueErrors.InconsistentInput(assets, shares);
 
     const market = this.accrueInterest(timestamp);
@@ -370,7 +370,7 @@ export class Market implements IMarket {
   }
 
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
-    if ((assets === 0n && shares === 0n) || (assets !== 0n && shares !== 0n))
+    if ((assets === 0n) === (shares === 0n))
       throw new BlueErrors.InconsistentInput(assets, shares);
 
     const market = this.accrueInterest(timestamp);

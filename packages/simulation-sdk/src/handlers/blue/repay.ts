@@ -51,7 +51,7 @@ export const handleBlueRepayOperation: OperationHandler<
     }
   }
 
-  if ((assets === 0n && shares === 0n) || (assets !== 0n && shares !== 0n))
+  if ((assets === 0n) === (shares === 0n))
     throw new BlueErrors.InconsistentInput(assets, shares);
 
   if (shares === 0n) {

@@ -1,4 +1,8 @@
-import { Erc20Errors, UnknownEIP2612DataError } from "../../errors.js";
+import {
+  Erc20Errors,
+  SimulationErrors,
+  UnknownEIP2612DataError,
+} from "../../errors.js";
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
@@ -7,8 +11,11 @@ import { handleErc20ApproveOperation } from "./approve.js";
 export const handleErc20PermitOperation: OperationHandler<
   Erc20Operations["Erc20_Permit"]
 > = ({ args: { spender, amount, nonce, deadline }, sender, address }, data) => {
-  if (deadline != null && deadline < data.block.timestamp)
-    throw new Erc20Errors.ExpiredEIP2612Signature(address, sender, deadline);
+  if (deadline != null) {
+    if (deadline < 0n) throw new SimulationErrors.InvalidInput({ deadline });
+    if (deadline < data.block.timestamp)
+      throw new Erc20Errors.ExpiredEIP2612Signature(address, sender, deadline);
+  }
 
   const senderTokenData = data.getHolding(sender, address);
 

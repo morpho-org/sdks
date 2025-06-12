@@ -37,7 +37,7 @@ export const handleBlueSupplyOperation: OperationHandler<
   if (sender === generalAdapter1 && assets === maxUint256)
     assets = data.getHolding(generalAdapter1, market.params.loanToken).balance;
 
-  if ((assets === 0n && shares === 0n) || (assets !== 0n && shares !== 0n))
+  if ((assets === 0n) === (shares === 0n))
     throw new BlueErrors.InconsistentInput(assets, shares);
 
   if (shares === 0n) {
