@@ -288,7 +288,14 @@ export const encodeOperation = (
         const action: Action = isDai
           ? {
               type: "permitDai",
-              args: [sender, nonce, deadline, true, null, operation.skipRevert],
+              args: [
+                sender,
+                nonce,
+                deadline,
+                amount > 0n,
+                null,
+                operation.skipRevert,
+              ],
             }
           : {
               type: "permit",

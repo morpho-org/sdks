@@ -1,3 +1,4 @@
+import { maxUint256 } from "viem";
 import {
   Erc20Errors,
   SimulationErrors,
@@ -6,6 +7,7 @@ import {
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
+import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { handleErc20ApproveOperation } from "./approve.js";
 
 export const handleErc20PermitOperation: OperationHandler<
@@ -27,13 +29,15 @@ export const handleErc20PermitOperation: OperationHandler<
 
   senderTokenData.erc2612Nonce += 1n;
 
+  const { dai } = getChainAddresses(data.chainId);
+
   handleErc20ApproveOperation(
     {
       type: "Erc20_Approve",
       sender,
       address,
       args: {
-        amount,
+        amount: address === dai && amount > 0n ? maxUint256 : amount,
         spender,
       },
     },
