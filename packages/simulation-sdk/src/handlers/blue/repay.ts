@@ -4,6 +4,8 @@ import { handleOperations } from "../dispatchers.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
 
+import { maxUint256 } from "viem";
+import { BlueSimulationErrors } from "../../errors.js";
 import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleBlueRepayOperation: OperationHandler<
@@ -32,10 +34,25 @@ export const handleBlueRepayOperation: OperationHandler<
   const market = data.getMarket(id);
 
   // Simulate the bundler's behavior on supply.
-  if (sender === generalAdapter1 && assets === MathLib.MAX_UINT_256)
-    assets = data.getHolding(sender, market.params.loanToken).balance;
+  if (sender === generalAdapter1) {
+    if (assets === maxUint256) {
+      assets = data.getHolding(
+        generalAdapter1,
+        market.params.loanToken,
+      ).balance;
 
-  if (assets === 0n && shares === 0n) throw new BlueErrors.InconsistentInput();
+      if (assets === 0n) throw new BlueSimulationErrors.ZeroAssets();
+    }
+
+    if (shares === maxUint256) {
+      shares = data.getPosition(onBehalf, id).borrowShares;
+
+      if (shares === 0n) throw new BlueSimulationErrors.ZeroShares();
+    }
+  }
+
+  if ((assets === 0n) === (shares === 0n))
+    throw new BlueErrors.InconsistentInput(assets, shares);
 
   if (shares === 0n) {
     shares = market.toBorrowShares(

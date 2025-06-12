@@ -32,6 +32,7 @@ import { isAddressEqual, maxUint256 } from "viem";
 import { BundlerErrors } from "./errors.js";
 import type {
   BundlerOperation,
+  BundlerOperations,
   CallbackBundlerOperation,
   InputBundlerOperation,
 } from "./types/index.js";
@@ -215,7 +216,6 @@ export const populateSubBundle = (
 ) => {
   const { sender } = inputOperation;
   const {
-    morpho,
     bundler3: { bundler3, generalAdapter1 },
   } = getChainAddresses(data.chainId);
   const {
@@ -235,53 +235,59 @@ export const populateSubBundle = (
     !!wrappedToken &&
     !!erc20WrapperTokens[data.chainId]?.has(wrappedToken.address);
 
-  // Transform input operation to act on behalf of the sender, via the bundler.
   const mainOperation = produceImmutable(inputOperation, (draft) => {
-    draft.sender = generalAdapter1;
+    if (draft.type === "Erc20_Wrap" && isErc20Wrapper)
+      // ERC20Wrapper wrapped tokens are sent to the caller, not the bundler.
+      draft.args.owner = sender;
 
-    // Redirect MetaMorpho operation owner.
-    switch (draft.type) {
-      case "Erc20_Wrap": {
-        // ERC20Wrapper are skipped because tokens are sent to the caller, not the bundler.
-        if (isErc20Wrapper) {
-          draft.args.owner = sender;
-          break;
-        }
+    // Transform input operation to act on behalf of the sender, when sender is not the bundler.
+    if (sender !== generalAdapter1) {
+      draft.sender = generalAdapter1;
+
+      // Redirect MetaMorpho operation owner.
+      switch (draft.type) {
+        case "MetaMorpho_Deposit":
+        case "MetaMorpho_Withdraw":
+          // Only if sender is owner otherwise the owner would be lost.
+          if (draft.args.owner === sender) draft.args.owner = generalAdapter1;
       }
-      case "MetaMorpho_Deposit":
-      case "MetaMorpho_Withdraw":
-        // Only if sender is owner otherwise the owner would be lost.
-        if (draft.args.owner === sender) draft.args.owner = generalAdapter1;
-    }
 
-    // Redirect operation targets.
-    switch (draft.type) {
-      case "Blue_Borrow":
-      case "Blue_Withdraw":
-      case "Blue_WithdrawCollateral":
-        draft.args.onBehalf = sender;
-      case "MetaMorpho_Withdraw":
-        // Only if sender is receiver otherwise the receiver would be lost.
-        if (draft.args.receiver === sender)
-          draft.args.receiver = generalAdapter1;
+      // Redirect operation targets.
+      switch (draft.type) {
+        case "Blue_Borrow":
+        case "Blue_Withdraw":
+        case "Blue_WithdrawCollateral":
+          draft.args.onBehalf = sender;
+        case "MetaMorpho_Withdraw":
+        case "Paraswap_Buy":
+        case "Paraswap_Sell":
+        case "Blue_Paraswap_BuyDebt":
+          // Only if sender is receiver otherwise the receiver would be lost.
+          if (draft.args.receiver === sender)
+            draft.args.receiver = generalAdapter1;
+      }
     }
   });
 
-  const needsBundlerAuthorization =
+  if (
     mainOperation.type === "Blue_Borrow" ||
     mainOperation.type === "Blue_Withdraw" ||
-    mainOperation.type === "Blue_WithdrawCollateral";
-  if (needsBundlerAuthorization && !data.getUser(sender).isBundlerAuthorized)
-    operations.push({
-      type: "Blue_SetAuthorization",
-      sender: bundler3,
-      address: morpho,
-      args: {
-        owner: sender,
-        isAuthorized: true,
-        authorized: generalAdapter1,
-      },
-    });
+    mainOperation.type === "Blue_WithdrawCollateral"
+  ) {
+    // Either sender === generalAdapter1 or sender === onBehalf.
+    const { onBehalf } = mainOperation.args;
+
+    if (!data.getUser(onBehalf).isBundlerAuthorized)
+      operations.push({
+        type: "Blue_SetAuthorization",
+        sender: bundler3,
+        args: {
+          owner: onBehalf,
+          isAuthorized: true,
+          authorized: generalAdapter1,
+        },
+      });
+  }
 
   // Reallocate liquidity if necessary.
   if (
@@ -435,7 +441,11 @@ export const populateSubBundle = (
         callback: (data) => {
           const operations = callback.flatMap((inputOperation) => {
             const subBundleOperations = populateSubBundle(
-              inputOperation,
+              {
+                ...inputOperation,
+                // Inside a callback, the sender is forced to be the generalAdapter1.
+                sender: generalAdapter1,
+              },
               data,
               options,
             );
@@ -455,14 +465,17 @@ export const populateSubBundle = (
     },
   } as Operation;
 
-  // Operations with callbacks are populated recursively as a side-effect of the simulation, within the callback itself.
   let requiredTokenAmounts = simulateRequiredTokenAmounts(
+    // Safe cast because operations do not contain callbacks.
     (operations as Operation[]).concat([simulatedOperation]),
     data,
   );
 
+  // Safe cast because operations do not contain callbacks.
   const allOperations = (operations as BundlerOperation[]).concat([
-    mainOperation,
+    // Safe cast because mainOperation, if including a callback, was transformed to a BundlerOperation
+    // within the callback executed through the simulation `simulateRequiredTokenAmounts`.
+    mainOperation as BundlerOperation,
   ]);
 
   // Skip approvals/transfers if operation only uses available balances (via maxUint256).
@@ -535,6 +548,7 @@ export const finalizeBundle = (
 
   const {
     bundler3: { bundler3, generalAdapter1 },
+    dai,
   } = getChainAddresses(startData.chainId);
 
   if (
@@ -821,10 +835,31 @@ export const finalizeBundle = (
   // Simulate without slippage to skim the bundler of all possible surplus of shares & assets.
   steps = simulateBundlerOperations(operations, startData, { slippage: 0n });
 
+  const lastStep = getLast(steps);
+  const daiPermit =
+    dai != null
+      ? operations.find(
+          // There should exist only one dai permit operation in the bundle thanks to the first optimization step.
+          (operation): operation is BundlerOperations["Erc20_Permit"] =>
+            operation.type === "Erc20_Permit" && operation.address === dai,
+        )
+      : undefined;
+
+  // If the bundle approves dai, reset the dai allowance at the end of the bundle.
+  if (daiPermit != null)
+    operations.push({
+      ...daiPermit,
+      args: {
+        amount: 0n,
+        spender: daiPermit.args.spender,
+        nonce: daiPermit.args.nonce + 1n,
+      },
+    });
+
   // Unwrap requested remaining wrapped tokens.
   const unwraps = [] as Erc20Operations["Erc20_Unwrap"][];
 
-  const endBundlerTokenData = getLast(steps).holdings[generalAdapter1] ?? {};
+  const endBundlerTokenData = lastStep.holdings[generalAdapter1] ?? {};
 
   unwrapTokens.forEach((wrappedToken) => {
     const remaining = endBundlerTokenData[wrappedToken]?.balance ?? 0n;
@@ -961,7 +996,7 @@ export const simulateRequiredTokenAmounts = (
 };
 
 export const getSimulatedBundlerOperation = (
-  operation: BundlerOperation,
+  operation: Omit<BundlerOperation, "sender">,
   { slippage }: { slippage?: bigint } = {},
 ) => {
   const callback = getValue(operation.args, "callback");
@@ -989,6 +1024,9 @@ export const getSimulatedBundlerOperation = (
       case "Blue_Repay":
       case "MetaMorpho_Deposit":
       case "MetaMorpho_Withdraw":
+      case "Paraswap_Buy":
+      case "Paraswap_Sell":
+      case "Blue_Paraswap_BuyDebt":
         simulatedOperation.args.slippage = slippage;
         break;
     }

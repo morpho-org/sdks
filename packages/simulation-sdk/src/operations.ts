@@ -1,5 +1,5 @@
 import type { Address, MarketId } from "@morpho-org/blue-sdk";
-
+import type { Hex } from "viem";
 import type { SimulationState } from "./SimulationState.js";
 import type { MaybeDraft } from "./handlers/types.js";
 
@@ -31,6 +31,8 @@ export const BLUE_OPERATIONS = [
   "Blue_SupplyCollateral",
   "Blue_Withdraw",
   "Blue_WithdrawCollateral",
+  "Blue_FlashLoan",
+  "Blue_Paraswap_BuyDebt",
 ] as const;
 
 export type BlueOperationType = (typeof BLUE_OPERATIONS)[number];
@@ -41,6 +43,11 @@ export interface BlueOperationArgs {
     // Should not be scoped to GeneralAdapter1 because PreLiquidation contracts use authorizations.
     authorized: Address;
     isAuthorized: boolean;
+    /**
+     * The maximum block timestamp (included) for which the authorization will be signed and valid.
+     * Defaults to the simulation state's timestamp + 2h.
+     */
+    deadline?: bigint;
   };
 
   Blue_SupplyCollateral: {
@@ -125,6 +132,34 @@ export interface BlueOperationArgs {
         callback?: (data: MaybeDraft<SimulationState>) => Operation[];
         slippage?: bigint;
       };
+
+  Blue_FlashLoan: {
+    token: Address;
+    assets: bigint;
+    callback?: (data: MaybeDraft<SimulationState>) => Operation[];
+  };
+
+  Blue_Paraswap_BuyDebt:
+    | {
+        id: MarketId;
+        srcToken: Address;
+        priceE27: bigint;
+        onBehalf: Address;
+        receiver: Address;
+        slippage?: bigint;
+      }
+    | {
+        id: MarketId;
+        srcToken: Address;
+        swap: {
+          to: Address;
+          data: Hex;
+          offsets: ParaswapOffsets;
+        };
+        onBehalf: Address;
+        receiver: Address;
+        slippage?: bigint;
+      };
 }
 export type BlueOperations = {
   [OperationType in BlueOperationType]: Omit<
@@ -194,6 +229,63 @@ export type MetaMorphoOperations = {
 };
 export type MetaMorphoOperation = MetaMorphoOperations[MetaMorphoOperationType];
 
+export interface ParaswapOffsets {
+  exactAmount: bigint;
+  limitAmount: bigint;
+  quotedAmount: bigint;
+}
+
+export const PARASWAP_OPERATIONS = ["Paraswap_Buy", "Paraswap_Sell"] as const;
+
+export type ParaswapOperationType = (typeof PARASWAP_OPERATIONS)[number];
+export interface ParaswapOperationArgs {
+  Paraswap_Buy:
+    | {
+        srcToken: Address;
+        amount: bigint;
+        quotedAmount: bigint;
+        receiver: Address;
+        slippage?: bigint;
+      }
+    | {
+        srcToken: Address;
+        swap: {
+          to: Address;
+          data: Hex;
+          offsets: ParaswapOffsets;
+        };
+        receiver: Address;
+        slippage?: bigint;
+      };
+  Paraswap_Sell:
+    | {
+        dstToken: Address;
+        amount: bigint;
+        quotedAmount: bigint;
+        receiver: Address;
+        sellEntireBalance?: boolean;
+        slippage?: bigint;
+      }
+    | {
+        dstToken: Address;
+        swap: {
+          to: Address;
+          data: Hex;
+          offsets: ParaswapOffsets;
+        };
+        receiver: Address;
+        sellEntireBalance?: boolean;
+        slippage?: bigint;
+      };
+}
+export type ParaswapOperations = {
+  [OperationType in ParaswapOperationType]: WithOperationArgs<
+    OperationType,
+    ParaswapOperationArgs
+  >;
+};
+export type ParaswapOperation = ParaswapOperations[ParaswapOperationType];
+
 export const ERC20_OPERATIONS = [
   "Erc20_Approve",
   "Erc20_Permit",
@@ -214,11 +306,21 @@ export interface Erc20OperationArgs {
     spender: Address;
     amount: bigint;
     nonce: bigint;
+    /**
+     * The maximum block timestamp (included) for which the permit will be signed and valid.
+     * Defaults to the simulation state's timestamp + 2h.
+     */
+    deadline?: bigint;
   };
   Erc20_Permit2: {
     amount: bigint;
     expiration: bigint;
     nonce: bigint;
+    /**
+     * The maximum block timestamp (included) for which the permit will be signed and valid.
+     * Defaults to the simulation state's timestamp + 2h.
+     */
+    deadline?: bigint;
   };
 
   Erc20_Transfer: {
@@ -255,25 +357,33 @@ export type Erc20Operation = Erc20Operations[Erc20OperationType];
 
 export interface Operations
   extends BlueOperations,
-    Erc20Operations,
-    MetaMorphoOperations {}
+    MetaMorphoOperations,
+    ParaswapOperations,
+    Erc20Operations {}
 
 export interface OperationArgs
   extends BlueOperationArgs,
-    Erc20OperationArgs,
-    MetaMorphoOperationArgs {}
+    MetaMorphoOperationArgs,
+    ParaswapOperationArgs,
+    Erc20OperationArgs {}
 
 export type OperationType =
   | BlueOperationType
-  | Erc20OperationType
-  | MetaMorphoOperationType;
+  | MetaMorphoOperationType
+  | ParaswapOperationType
+  | Erc20OperationType;
 
-export type Operation = BlueOperation | Erc20Operation | MetaMorphoOperation;
+export type Operation =
+  | BlueOperation
+  | MetaMorphoOperation
+  | ParaswapOperation
+  | Erc20Operation;
 
 export const CALLBACK_OPERATIONS = [
   "Blue_Repay",
   "Blue_Supply",
   "Blue_SupplyCollateral",
+  "Blue_FlashLoan",
 ] as const satisfies readonly OperationType[];
 
 export type CallbackOperationType = (typeof CALLBACK_OPERATIONS)[number];
@@ -285,24 +395,40 @@ export type CallbackOperations = {
 };
 export type CallbackOperation = CallbackOperations[CallbackOperationType];
 
-export const isBlueOperation = (operation: {
-  type: OperationType;
-}): operation is BlueOperation => {
+export const isBlueOperation = (
+  operation: Operation,
+): operation is BlueOperation => {
   return (BLUE_OPERATIONS as readonly OperationType[]).includes(operation.type);
 };
 
-export const isMetaMorphoOperation = (operation: {
-  type: OperationType;
-}): operation is MetaMorphoOperation => {
+export const isMetaMorphoOperation = (
+  operation: Operation,
+): operation is MetaMorphoOperation => {
   return (METAMORPHO_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };
 
-export const isErc20Operation = (operation: {
-  type: OperationType;
-}): operation is Erc20Operation => {
+export const isParaswapOperation = (
+  operation: Operation,
+): operation is ParaswapOperation => {
+  return (PARASWAP_OPERATIONS as readonly OperationType[]).includes(
+    operation.type,
+  );
+};
+
+export const isErc20Operation = (
+  operation: Operation,
+): operation is Erc20Operation => {
   return (ERC20_OPERATIONS as readonly OperationType[]).includes(
+    operation.type,
+  );
+};
+
+export const isCallbackOperation = (
+  operation: Operation,
+): operation is CallbackOperation => {
+  return (CALLBACK_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };

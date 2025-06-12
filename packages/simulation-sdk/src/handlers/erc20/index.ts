@@ -1,7 +1,7 @@
+import { MathLib } from "@morpho-org/blue-sdk";
 import { SimulationErrors } from "../../errors.js";
 import type { Erc20Operation } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
-
 import { handleErc20ApproveOperation } from "./approve.js";
 import { handleErc20PermitOperation } from "./permit.js";
 import { handleErc20Permit2Operation } from "./permit2.js";
@@ -18,6 +18,13 @@ export const handleErc20Operation: OperationHandler<Erc20Operation> = (
     const { amount } = operation.args;
 
     if (amount < 0n) throw new SimulationErrors.InvalidInput({ amount });
+  }
+
+  if ("slippage" in operation.args) {
+    const { slippage = 0n } = operation.args;
+
+    if (slippage < 0n || slippage > MathLib.WAD)
+      throw new SimulationErrors.InvalidInput({ slippage });
   }
 
   switch (operation.type) {

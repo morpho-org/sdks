@@ -119,7 +119,20 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: unknown allowance for token "0x1111111111111111111111111111111111111111" from owner "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB" to spender "0x1111111111111111111111111111111111111111"]`,
+      `
+      [Error: unknown allowance for token "0x1111111111111111111111111111111111111111" from owner "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB" to spender "0x1111111111111111111111111111111111111111"
+
+      when simulating operation:
+      {
+        "type": "Erc20_Approve",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "address": "0x1111111111111111111111111111111111111111",
+        "args": {
+          "spender": "0x1111111111111111111111111111111111111111",
+          "amount": "1n"
+        }
+      }]
+    `,
     );
   });
 });

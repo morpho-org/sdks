@@ -196,7 +196,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x000000000000000000000000000000000000000A"]`,
+      `
+      [Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0x000000000000000000000000000000000000000A"
+
+      when simulating operation:
+      {
+        "type": "MetaMorpho_Withdraw",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "address": "0x000000000000000000000000000000000000000A",
+        "args": {
+          "assets": "115792089237316195423570985008687907853269984665640564039457584007913129639935n",
+          "owner": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "receiver": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `,
     );
   });
 
@@ -216,7 +230,21 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: not enough liquidity on vault "0x000000000000000000000000000000000000000C" (remaining requested: 14000000000)]`,
+      `
+      [Error: not enough liquidity on vault "0x000000000000000000000000000000000000000C" (remaining requested: 14000000000)
+
+      when simulating operation:
+      {
+        "type": "MetaMorpho_Withdraw",
+        "sender": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
+        "address": "0x000000000000000000000000000000000000000C",
+        "args": {
+          "assets": "15000000000n",
+          "owner": "0xCcCCccccCCCCcCCCCCCcCcCccCcCCCcCcccccccC",
+          "receiver": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `,
     );
   });
 });

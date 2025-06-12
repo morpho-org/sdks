@@ -15,6 +15,7 @@ export enum ChainId {
   CornMainnet = 21000000,
   PlumeMainnet = 98866,
   CampMainnet = 123420001114,
+  KatanaMainnet = 747474,
 }
 
 export interface ChainMetadata {
@@ -156,8 +157,15 @@ export namespace ChainUtils {
       name: "Camp",
       id: ChainId.CampMainnet,
       nativeCurrency: { name: "Camp", symbol: "CAMP", decimals: 18 },
-      explorerUrl: "https://basecamp.cloud.blockscout.com/",
+      explorerUrl: "https://basecamp.cloud.blockscout.com",
       identifier: "camp",
+    },
+    [ChainId.KatanaMainnet]: {
+      name: "Katana",
+      id: ChainId.KatanaMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://explorer.katana.network",
+      identifier: "katana",
     },
   };
 }

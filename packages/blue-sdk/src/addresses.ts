@@ -1,5 +1,11 @@
-import { type DottedKeys, entries } from "@morpho-org/morpho-ts";
-
+import {
+  type DeepPartial,
+  type DottedKeys,
+  deepFreeze,
+  entries,
+} from "@morpho-org/morpho-ts";
+import isPlainObject from "lodash.isplainobject";
+import mergeWith from "lodash.mergewith";
 import { ChainId } from "./chain.js";
 import { UnsupportedChainIdError } from "./errors.js";
 import type { Address } from "./types.js";
@@ -54,7 +60,7 @@ export interface ChainAddresses {
   wstEth?: Address;
 }
 
-export const addressesRegistry = {
+const _addressesRegistry = {
   [ChainId.EthMainnet]: {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
@@ -377,11 +383,23 @@ export const addressesRegistry = {
 
     wNative: "0x1aE9c40eCd2DD6ad5858E5430A556d7aff28A44b",
   },
+  [ChainId.KatanaMainnet]: {
+    morpho: "0xD50F2DffFd62f94Ee4AEd9ca05C61d0753268aBc",
+    bundler3: {
+      bundler3: "0xA8C5e23C9C0DF2b6fF716486c6bBEBB6661548C8",
+      generalAdapter1: "0x916Aa175C36E845db45fF6DDB886AE437d403B61",
+    },
+    adaptiveCurveIrm: "0x4F708C0ae7deD3d74736594C2109C2E3c065B428",
+    publicAllocator: "0x39EB6Da5e88194C82B13491Df2e8B3E213eD2412",
+    metaMorphoFactory: "0x1c8De6889acee12257899BFeAa2b7e534de32E16",
+    chainlinkOracleFactory: "0x7D047fB910Bc187C18C81a69E30Fa164f8c536eC",
+    preLiquidationFactory: "0x678EB53A3bB79111263f47B84989d16D81c36D85",
+
+    wNative: "0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62",
+  },
 } as const;
 
-export const addresses = addressesRegistry as Record<number, ChainAddresses>;
-
-export type AddressLabel = DottedKeys<(typeof addressesRegistry)[ChainId]>;
+export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
 
 export const getChainAddresses = (chainId: number): ChainAddresses => {
   const chainAddresses = addresses[chainId];
@@ -394,81 +412,80 @@ export const getChainAddresses = (chainId: number): ChainAddresses => {
  * Assumptions:
  * - unwrapped token has same number of decimals than wrapped tokens.
  */
-export const unwrappedTokensMapping: Record<
-  ChainId,
-  Record<Address, Address>
-> = {
+const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.EthMainnet]: {
-    [addressesRegistry[ChainId.EthMainnet].wbIB01]:
-      addressesRegistry[ChainId.EthMainnet].bIB01,
-    [addressesRegistry[ChainId.EthMainnet].wbC3M]:
-      addressesRegistry[ChainId.EthMainnet].bC3M,
-    [addressesRegistry[ChainId.EthMainnet].wNative]: NATIVE_ADDRESS,
-    [addressesRegistry[ChainId.EthMainnet].stEth]: NATIVE_ADDRESS,
-    [addressesRegistry[ChainId.EthMainnet].wstEth]:
-      addressesRegistry[ChainId.EthMainnet].stEth,
-    [addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"]]:
-      addressesRegistry[ChainId.EthMainnet].crvUSDTWBTCWETH,
-    [addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"]]:
-      addressesRegistry[ChainId.EthMainnet].crvUSDCWBTCWETH,
-    [addressesRegistry[ChainId.EthMainnet]["stkcvxcrvCRVUSDTBTCWSTETH-morpho"]]:
-      addressesRegistry[ChainId.EthMainnet].crvCRVUSDTBTCWSTETH,
-    [addressesRegistry[ChainId.EthMainnet]["stkcvxTryLSD-morpho"]]:
-      addressesRegistry[ChainId.EthMainnet].tryLSD,
-    [addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"]]:
-      addressesRegistry[ChainId.EthMainnet].crvUSDETHCRV,
-    [addressesRegistry[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"]]:
-      addressesRegistry[ChainId.EthMainnet]["2BTC-f"],
+    [_addressesRegistry[ChainId.EthMainnet].wbIB01]:
+      _addressesRegistry[ChainId.EthMainnet].bIB01,
+    [_addressesRegistry[ChainId.EthMainnet].wbC3M]:
+      _addressesRegistry[ChainId.EthMainnet].bC3M,
+    [_addressesRegistry[ChainId.EthMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.EthMainnet].stEth]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.EthMainnet].wstEth]:
+      _addressesRegistry[ChainId.EthMainnet].stEth,
+    [_addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"]]:
+      _addressesRegistry[ChainId.EthMainnet].crvUSDTWBTCWETH,
+    [_addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"]]:
+      _addressesRegistry[ChainId.EthMainnet].crvUSDCWBTCWETH,
+    [_addressesRegistry[ChainId.EthMainnet][
+      "stkcvxcrvCRVUSDTBTCWSTETH-morpho"
+    ]]: _addressesRegistry[ChainId.EthMainnet].crvCRVUSDTBTCWSTETH,
+    [_addressesRegistry[ChainId.EthMainnet]["stkcvxTryLSD-morpho"]]:
+      _addressesRegistry[ChainId.EthMainnet].tryLSD,
+    [_addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"]]:
+      _addressesRegistry[ChainId.EthMainnet].crvUSDETHCRV,
+    [_addressesRegistry[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"]]:
+      _addressesRegistry[ChainId.EthMainnet]["2BTC-f"],
   },
   [ChainId.BaseMainnet]: {
-    [addressesRegistry[ChainId.BaseMainnet].wNative]: NATIVE_ADDRESS,
-    [addressesRegistry[ChainId.BaseMainnet].verUsdc]:
-      addressesRegistry[ChainId.BaseMainnet].usdc,
-    [addressesRegistry[ChainId.BaseMainnet].testUsdc]:
-      addressesRegistry[ChainId.BaseMainnet].usdc,
+    [_addressesRegistry[ChainId.BaseMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.BaseMainnet].verUsdc]:
+      _addressesRegistry[ChainId.BaseMainnet].usdc,
+    [_addressesRegistry[ChainId.BaseMainnet].testUsdc]:
+      _addressesRegistry[ChainId.BaseMainnet].usdc,
   },
   [ChainId.PolygonMainnet]: {
-    [addressesRegistry[ChainId.PolygonMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.PolygonMainnet].wNative]: NATIVE_ADDRESS,
   },
-  [ChainId.ArbitrumMainnet]: {},
   [ChainId.OptimismMainnet]: {
-    [addressesRegistry[ChainId.OptimismMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.OptimismMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.WorldChainMainnet]: {
-    [addressesRegistry[ChainId.WorldChainMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.WorldChainMainnet].wNative]: NATIVE_ADDRESS,
   },
-  [ChainId.FraxtalMainnet]: {},
   [ChainId.ScrollMainnet]: {
-    [addressesRegistry[ChainId.ScrollMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.ScrollMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.InkMainnet]: {
-    [addressesRegistry[ChainId.InkMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.InkMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.Unichain]: {
-    [addressesRegistry[ChainId.Unichain].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.Unichain].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.SonicMainnet]: {
-    [addressesRegistry[ChainId.SonicMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.SonicMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.HemiMainnet]: {
-    [addressesRegistry[ChainId.HemiMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.HemiMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.ModeMainnet]: {
-    [addressesRegistry[ChainId.ModeMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.ModeMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.CornMainnet]: {
-    [addressesRegistry[ChainId.CornMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.CornMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.PlumeMainnet]: {
-    [addressesRegistry[ChainId.PlumeMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.PlumeMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.CampMainnet]: {
-    [addressesRegistry[ChainId.CampMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.CampMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.KatanaMainnet]: {
+    [_addressesRegistry[ChainId.KatanaMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
-export function getUnwrappedToken(wrappedToken: Address, chainId: ChainId) {
-  return unwrappedTokensMapping[chainId][wrappedToken];
+export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
+  return unwrappedTokensMapping[chainId]?.[wrappedToken];
 }
 
 /**
@@ -482,7 +499,7 @@ export const erc20WrapperTokens: Record<number, Set<Address>> = {};
  */
 export const permissionedWrapperTokens: Record<number, Set<Address>> = {
   [ChainId.BaseMainnet]: new Set([
-    addressesRegistry[ChainId.BaseMainnet].testUsdc,
+    _addressesRegistry[ChainId.BaseMainnet].testUsdc,
   ]),
 };
 
@@ -492,8 +509,8 @@ export const permissionedWrapperTokens: Record<number, Set<Address>> = {
  */
 export const permissionedBackedTokens: Record<number, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
-    addressesRegistry[ChainId.EthMainnet].wbIB01,
-    addressesRegistry[ChainId.EthMainnet].wbC3M,
+    _addressesRegistry[ChainId.EthMainnet].wbIB01,
+    _addressesRegistry[ChainId.EthMainnet].wbC3M,
   ]),
 };
 
@@ -503,7 +520,7 @@ export const permissionedBackedTokens: Record<number, Set<Address>> = {
  */
 export const permissionedCoinbaseTokens: Record<number, Set<Address>> = {
   [ChainId.BaseMainnet]: new Set([
-    addressesRegistry[ChainId.BaseMainnet].verUsdc,
+    _addressesRegistry[ChainId.BaseMainnet].verUsdc,
   ]),
 };
 
@@ -533,11 +550,70 @@ entries(permissionedWrapperTokens).forEach(([chainId, tokens]) => {
  */
 export const convexWrapperTokens: Record<number, Set<Address>> = {
   [ChainId.EthMainnet]: new Set([
-    addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"],
-    addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"],
-    addressesRegistry[ChainId.EthMainnet]["stkcvxcrvCRVUSDTBTCWSTETH-morpho"],
-    addressesRegistry[ChainId.EthMainnet]["stkcvxTryLSD-morpho"],
-    addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"],
-    addressesRegistry[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"],
+    _addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDTWBTCWETH-morpho"],
+    _addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDCWBTCWETH-morpho"],
+    _addressesRegistry[ChainId.EthMainnet]["stkcvxcrvCRVUSDTBTCWSTETH-morpho"],
+    _addressesRegistry[ChainId.EthMainnet]["stkcvxTryLSD-morpho"],
+    _addressesRegistry[ChainId.EthMainnet]["stkcvxcrvUSDETHCRV-morpho"],
+    _addressesRegistry[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"],
   ]),
 };
+
+export let addressesRegistry = deepFreeze(_addressesRegistry);
+export let addresses = addressesRegistry as Record<number, ChainAddresses>;
+export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
+
+/**
+ * Registers custom addresses and unwrapped token mappings to extend
+ * the default address registry (on ewisting or unknown chains).
+ *
+ * @param options - Optional configuration object
+ * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
+ *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
+ * @param options.addresses - Custom address entries to merge into the default registry.
+ *                                  Can be a subset of `ChainAddresses` if chain is already known.
+ *                                  Must provide all required addresses if chain is unknown.
+ *
+ * @throws {Error} If attempting to override an existing address.
+ *
+ * @example
+ * ```ts
+ * registerCustomAddresses({
+ *   addresses: {
+ *     1: { contract: "0xabc..." }
+ *   },
+ *   unwrappedTokens: {
+ *     1: { "0xWrapped": "0xUnwrapped" }
+ *   }
+ * });
+ * ```
+ */
+export function registerCustomAddresses({
+  unwrappedTokens,
+  addresses: customAddresses,
+}: {
+  unwrappedTokens?: Record<number, Record<Address, Address>>;
+  addresses?:
+    | DeepPartial<Record<keyof typeof _addressesRegistry, ChainAddresses>>
+    | Record<number, ChainAddresses>;
+} = {}) {
+  // biome-ignore lint/suspicious/noExplicitAny: type is not trivial and not important here
+  const customizer = (objValue: any, srcValue: any, key: string) => {
+    if (
+      objValue !== undefined &&
+      !isPlainObject(objValue) &&
+      objValue !== srcValue
+    )
+      throw new Error(`Cannot override existing address: ${key}`);
+  };
+
+  if (customAddresses)
+    addresses = addressesRegistry = deepFreeze(
+      mergeWith({}, addressesRegistry, customAddresses, customizer),
+    );
+
+  if (unwrappedTokens)
+    unwrappedTokensMapping = deepFreeze(
+      mergeWith({}, unwrappedTokensMapping, unwrappedTokens, customizer),
+    );
+}

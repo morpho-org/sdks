@@ -57,7 +57,20 @@ describe(type, () => {
         },
         dataFixture,
       ),
-    ).toThrowErrorMatchingInlineSnapshot(`[Error: invalid input: assets=-1]`);
+    ).toThrowErrorMatchingInlineSnapshot(`
+      [Error: invalid input: assets=-1
+
+      when simulating operation:
+      {
+        "type": "Blue_SupplyCollateral",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "-1n",
+          "onBehalf": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+        }
+      }]
+    `);
   });
 
   test("should throw if insufficient wallet balance", () => {
@@ -75,7 +88,20 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0xBF3FCDD92C14a1EF02C787C379c0aA941d239Af2"]`,
+      `
+      [Error: insufficient balance of user "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa" for token "0xBF3FCDD92C14a1EF02C787C379c0aA941d239Af2"
+
+      when simulating operation:
+      {
+        "type": "Blue_SupplyCollateral",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "1000000000000000000000n",
+          "onBehalf": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 
@@ -151,7 +177,33 @@ describe(type, () => {
         dataFixture,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: insufficient liquidity on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd]`,
+      `
+      [Error: insufficient liquidity on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd
+
+      when simulating operation:
+      {
+        "type": "Blue_Borrow",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "address": "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "1000000000000000000000n",
+          "onBehalf": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+          "receiver": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }
+
+      in the callback of:
+      {
+        "type": "Blue_SupplyCollateral",
+        "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd",
+          "assets": "1000000000000000000000n",
+          "onBehalf": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        }
+      }]
+    `,
     );
   });
 });

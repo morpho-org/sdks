@@ -84,7 +84,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Supply",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets,
@@ -93,7 +92,21 @@ describe("populateBundle", () => {
               },
             ]),
           ).rejects.toThrowErrorMatchingInlineSnapshot(
-            `[Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]`,
+            `
+            [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+
+            when simulating operation:
+            {
+              "type": "Erc20_Transfer2",
+              "sender": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0",
+              "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+              "args": {
+                "amount": "15000000000000000000001",
+                "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "to": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0"
+              }
+            }]
+          `,
           );
         },
       );
@@ -129,7 +142,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Supply",
               sender: client.account.address,
-              address: morpho,
               args: {
                 id,
                 assets,
@@ -139,7 +151,7 @@ describe("populateBundle", () => {
             },
           ]);
 
-          expect(bundle.requirements.signatures.length).toBe(1);
+          expect(bundle.requirements.signatures.length).toBe(2);
 
           expect(bundle.requirements.txs).toStrictEqual([]);
 
@@ -167,12 +179,21 @@ describe("populateBundle", () => {
             {
               type: "Blue_Supply",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets,
                 onBehalf: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: 0n,
+                spender: generalAdapter1,
+                nonce: 4n,
               },
             },
           ]);
@@ -195,7 +216,7 @@ describe("populateBundle", () => {
           );
           expect(
             await client.allowance({ erc20: dai, spender: generalAdapter1 }),
-          ).toBe(MathLib.MAX_UINT_256);
+          ).toBe(0n);
           expect(await client.allowance({ erc20: dai, spender: morpho })).toBe(
             0n,
           );
@@ -261,7 +282,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: client.account.address,
-              address: morpho,
               args: {
                 id,
                 assets,
@@ -343,7 +363,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets,
@@ -429,7 +448,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: client.account.address,
-              address: morpho,
               args: {
                 id,
                 assets,
@@ -448,7 +466,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -458,7 +475,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets,
@@ -751,7 +767,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: client.account.address,
-              address: morpho,
               args: {
                 id: marketParams.id,
                 assets: maxUint256,
@@ -813,7 +828,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: marketParams.id,
                 assets: maxUint256,
@@ -902,7 +916,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: client.account.address,
-              address: morpho,
               args: {
                 id: marketParams.id,
                 assets: shares,
@@ -964,7 +977,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: marketParams.id,
                 assets: shares,
@@ -1246,7 +1258,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_SupplyCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: collateralAssets,
@@ -1256,7 +1267,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Borrow",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   shares: loanShares,
@@ -1316,7 +1326,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: collateralAssets,
@@ -1326,7 +1335,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -1336,7 +1344,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 shares: loanShares,
@@ -1463,7 +1470,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_SupplyCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: collateralAssets,
@@ -1473,7 +1479,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Borrow",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: loanAssets,
@@ -1554,7 +1559,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: collateralAssets,
@@ -1564,7 +1568,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -1574,7 +1577,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: loanAssets,
@@ -1707,7 +1709,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Repay",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: loanAssets / 2n,
@@ -1718,7 +1719,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_WithdrawCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: collateralAssets / 2n,
@@ -1740,7 +1740,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Repay",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: loanAssets / 4n,
@@ -1833,7 +1832,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Repay",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: loanAssets / 2n,
@@ -1844,7 +1842,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -1854,7 +1851,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_WithdrawCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: collateralAssets / 2n,
@@ -1876,7 +1872,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Repay",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: loanAssets / 4n,
@@ -2044,7 +2039,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Borrow",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: loanAssets,
@@ -2067,7 +2061,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -2119,7 +2112,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: loanAssets,
@@ -2229,7 +2221,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Repay",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id: eth_wstEth.id,
                   shares: position.borrowShares,
@@ -2240,7 +2231,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_WithdrawCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id: eth_wstEth.id,
                   assets: position.collateral,
@@ -2300,7 +2290,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Repay",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: eth_wstEth.id,
                 shares: position.borrowShares,
@@ -2311,7 +2300,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -2321,7 +2309,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_WithdrawCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: eth_wstEth.id,
                 assets: position.collateral,
@@ -2383,13 +2370,13 @@ describe("populateBundle", () => {
           ).toBe(0n);
           expect(
             await client.balanceOf({ erc20: stEth, owner: generalAdapter1 }),
-          ).toBe(1n); // 1 stETH is always remaining in the bundler
+          ).toBe(0n);
           expect(
             await client.balanceOf({ erc20: wNative, owner: generalAdapter1 }),
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 3n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 1n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
@@ -2454,7 +2441,6 @@ describe("populateBundle", () => {
                 {
                   type: "Blue_Supply",
                   sender: client.account.address,
-                  address: morpho,
                   args: {
                     id,
                     assets,
@@ -2465,7 +2451,21 @@ describe("populateBundle", () => {
               { supportsSignature: false },
             ),
           ).rejects.toThrowErrorMatchingInlineSnapshot(
-            `[Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"]`,
+            `
+            [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
+
+            when simulating operation:
+            {
+              "type": "Erc20_Transfer2",
+              "sender": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0",
+              "address": "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+              "args": {
+                "amount": "15000000000000000000001",
+                "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+                "to": "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0"
+              }
+            }]
+          `,
           );
         },
       );
@@ -2532,7 +2532,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_SupplyCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets,
@@ -2621,7 +2620,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets,
@@ -2710,7 +2708,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Borrow",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets,
@@ -2740,7 +2737,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -2750,7 +2746,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets,
@@ -3062,7 +3057,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_SupplyCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id: marketParams.id,
                   assets: maxUint256,
@@ -3129,7 +3123,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: marketParams.id,
                 assets: maxUint256,
@@ -3221,7 +3214,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_SupplyCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id: marketParams.id,
                   assets: shares,
@@ -3285,7 +3277,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: marketParams.id,
                 assets: shares,
@@ -3568,7 +3559,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_SupplyCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: collateralAssets,
@@ -3578,7 +3568,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Borrow",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   shares: loanShares,
@@ -3650,7 +3639,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: collateralAssets,
@@ -3660,7 +3648,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -3670,7 +3657,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 shares: loanShares,
@@ -3797,7 +3783,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_SupplyCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: collateralAssets,
@@ -3807,7 +3792,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Borrow",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: loanAssets,
@@ -3905,7 +3889,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SupplyCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: collateralAssets,
@@ -3915,7 +3898,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -3925,7 +3907,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: loanAssets,
@@ -4058,7 +4039,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Repay",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: loanAssets / 2n,
@@ -4069,7 +4049,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_WithdrawCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: collateralAssets / 2n,
@@ -4091,7 +4070,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Repay",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: loanAssets / 4n,
@@ -4195,7 +4173,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Repay",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: loanAssets / 2n,
@@ -4206,7 +4183,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -4216,7 +4192,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_WithdrawCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: collateralAssets / 2n,
@@ -4238,7 +4213,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Repay",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: loanAssets / 4n,
@@ -4406,7 +4380,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Borrow",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id,
                   assets: loanAssets,
@@ -4439,7 +4412,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -4491,7 +4463,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Borrow",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id,
                 assets: loanAssets,
@@ -4601,7 +4572,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Repay",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id: eth_wstEth.id,
                   shares: position.borrowShares,
@@ -4612,7 +4582,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_WithdrawCollateral",
                 sender: client.account.address,
-                address: morpho,
                 args: {
                   id: eth_wstEth.id,
                   assets: position.collateral,
@@ -4677,7 +4646,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Repay",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: eth_wstEth.id,
                 shares: position.borrowShares,
@@ -4688,7 +4656,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_SetAuthorization",
               sender: bundler3,
-              address: morpho,
               args: {
                 owner: client.account.address,
                 isAuthorized: true,
@@ -4698,7 +4665,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_WithdrawCollateral",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: eth_wstEth.id,
                 assets: position.collateral,
@@ -4760,13 +4726,13 @@ describe("populateBundle", () => {
           ).toBe(0n);
           expect(
             await client.balanceOf({ erc20: stEth, owner: generalAdapter1 }),
-          ).toBe(1n); // 1 stETH is always remaining in the bundler
+          ).toBe(0n);
           expect(
             await client.balanceOf({ erc20: wNative, owner: generalAdapter1 }),
           ).toBe(0n);
 
           expect(await client.balanceOf({ erc20: stEth })).toBe(
-            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 3n,
+            wstEthToken.toUnwrappedExactAmountIn(collateralAmount, 0n) - 1n,
           );
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
           expect(await client.balanceOf({ erc20: wNative })).toBe(
@@ -4841,18 +4807,8 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: assets,
-                owner: generalAdapter1,
+                owner: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-            {
-              type: "Erc20_Transfer",
-              address: wNative,
-              sender: generalAdapter1,
-              args: {
-                amount: maxUint256,
-                from: generalAdapter1,
-                to: client.account.address,
               },
             },
           ]);
@@ -4930,7 +4886,6 @@ describe("populateBundle", () => {
               {
                 type: "Blue_Supply",
                 sender: whitelisted,
-                address: morpho,
                 args: {
                   id: marketParams.id,
                   assets,
@@ -4998,7 +4953,6 @@ describe("populateBundle", () => {
             {
               type: "Blue_Supply",
               sender: generalAdapter1,
-              address: morpho,
               args: {
                 id: marketParams.id,
                 assets,

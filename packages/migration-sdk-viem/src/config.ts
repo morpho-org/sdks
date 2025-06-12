@@ -1,5 +1,10 @@
-import { type Address, ChainId, addresses } from "@morpho-org/blue-sdk";
+import {
+  type Address,
+  ChainId,
+  registerCustomAddresses,
+} from "@morpho-org/blue-sdk";
 
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Abi } from "viem";
 import {
   addressesProviderAbi as addressesProviderAbi_v2,
@@ -29,9 +34,14 @@ declare module "@morpho-org/blue-sdk" {
   }
 }
 
-const mainnetAddresses = addresses[ChainId.EthMainnet]!;
-mainnetAddresses.aaveV3Optimizer = "0x33333aea097c193e66081E930c33020272b33333";
-mainnetAddresses.cEth = "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5";
+registerCustomAddresses({
+  addresses: {
+    [ChainId.EthMainnet]: {
+      aaveV3Optimizer: "0x33333aea097c193e66081E930c33020272b33333",
+      cEth: "0x4Ddc2D193948926D02f9B1fE9e1daa0718270ED5",
+    },
+  },
+});
 
 interface Contract<abi extends Abi> {
   abi: abi;
@@ -178,3 +188,6 @@ export const migrationAddresses =
     number,
     ProtocolMigrationContracts
   >;
+
+// prevent manual update of addresses
+deepFreeze(migrationAddresses);

@@ -61,7 +61,18 @@ describe(type, () => {
         dataFixtureCopy,
       ),
     ).toThrowErrorMatchingInlineSnapshot(
-      `[Error: invalid interest accrual on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd: accrual timestamp 12344 can't be prior to last update 12345]`,
+      `
+      [Error: invalid interest accrual on market 0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd: accrual timestamp 12344 can't be prior to last update 12345
+
+      when simulating operation:
+      {
+        "type": "Blue_AccrueInterest",
+        "sender": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa",
+        "args": {
+          "id": "0x042487b563685b432d4d2341934985eca3993647799cb5468fb366fad26b4fdd"
+        }
+      }]
+    `,
     );
   });
 });

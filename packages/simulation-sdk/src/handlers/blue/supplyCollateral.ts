@@ -1,5 +1,6 @@
-import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses } from "@morpho-org/blue-sdk";
 
+import { maxUint256 } from "viem";
 import { BlueSimulationErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";
 import { handleOperations } from "../dispatchers.js";
@@ -18,8 +19,8 @@ export const handleBlueSupplyCollateralOperation: OperationHandler<
   } = getChainAddresses(data.chainId);
 
   // Simulate the bundler's behavior on supply.
-  if (sender === generalAdapter1 && assets === MathLib.MAX_UINT_256)
-    assets = data.getHolding(sender, collateralToken).balance;
+  if (sender === generalAdapter1 && assets === maxUint256)
+    assets = data.getHolding(generalAdapter1, collateralToken).balance;
 
   if (assets === 0n) throw new BlueSimulationErrors.ZeroAssets();
 
