@@ -4,7 +4,7 @@ import type { OperationHandler } from "../types.js";
 export const handleBlueAccrueInterestOperation: OperationHandler<
   BlueOperations["Blue_AccrueInterest"]
 > = ({ args: { id } }, data) => {
-  const marketData = data.getMarket(id);
+  const marketData = data.getMarket(id, false);
   const newMarketData = marketData.accrueInterest(data.block.timestamp);
 
   data.markets[id] = newMarketData;

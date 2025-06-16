@@ -7,7 +7,7 @@ import { dataFixture, marketA1, tokenA, userA, userB } from "../../fixtures.js";
 
 const type = "Blue_Borrow";
 
-const marketData = dataFixture.getMarket(marketA1.id);
+const marketData = dataFixture.getMarket(marketA1.id, false);
 
 describe(type, () => {
   const assets = parseUnits("10", 6);
@@ -29,8 +29,8 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    expected.getMarket(marketA1.id).totalBorrowAssets += assets;
-    expected.getMarket(marketA1.id).totalBorrowShares += shares;
+    expected.getMarket(marketA1.id, false).totalBorrowAssets += assets;
+    expected.getMarket(marketA1.id, false).totalBorrowShares += shares;
     expected.getPosition(userB, marketA1.id).borrowShares += shares;
     expected.getHolding(userA, tokenA).balance += assets;
 
@@ -53,8 +53,8 @@ describe(type, () => {
     );
 
     const expected = _.cloneDeep(dataFixture);
-    expected.getMarket(marketA1.id).totalBorrowAssets += assets;
-    expected.getMarket(marketA1.id).totalBorrowShares += shares;
+    expected.getMarket(marketA1.id, false).totalBorrowAssets += assets;
+    expected.getMarket(marketA1.id, false).totalBorrowShares += shares;
     expected.getPosition(userB, marketA1.id).borrowShares += shares;
     expected.getHolding(userA, tokenA).balance += assets;
 

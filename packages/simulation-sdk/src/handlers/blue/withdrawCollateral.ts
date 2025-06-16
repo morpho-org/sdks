@@ -37,7 +37,7 @@ export const handleBlueWithdrawCollateralOperation: OperationHandler<
     data,
   );
 
-  const market = data.getMarket(id);
+  const market = data.getMarket(id, false);
   if (market.price == null) throw new BlueErrors.UnknownOraclePrice(id);
 
   const position = data.getPosition(onBehalf, id);

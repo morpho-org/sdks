@@ -50,9 +50,13 @@ describe("SimulationState", () => {
         }, // Limited by liquidity on A2.
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(1100_000000n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10150_000000n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(0n);
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(
+        1100_000000n,
+      );
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        10150_000000n,
+      );
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(0n);
     });
 
     test("should calculate reallocatable liquidity on market A2", () => {
@@ -74,9 +78,11 @@ describe("SimulationState", () => {
         }, // Higher maxOut than vault C.
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(710_000000n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10439_999627n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(100_000373n);
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(710_000000n);
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        10439_999627n,
+      );
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(100_000373n);
     });
 
     test("should calculate reallocatable liquidity on market A3", () => {
@@ -98,9 +104,11 @@ describe("SimulationState", () => {
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(749_998346n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10100_009928n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(399_991726n);
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(749_998346n);
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        10100_009928n,
+      );
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(399_991726n);
     });
 
     test("should calculate reallocatable liquidity on market B1", () => {
@@ -111,7 +119,7 @@ describe("SimulationState", () => {
 
       expect(withdrawals).toEqual([]);
 
-      expect(data.getMarket(marketB1.id).liquidity).toEqual(
+      expect(data.getMarket(marketB1.id, false).liquidity).toEqual(
         10000_000000000000000000n,
       );
     });
@@ -124,7 +132,7 @@ describe("SimulationState", () => {
 
       expect(withdrawals).toEqual([]);
 
-      expect(data.getMarket(marketB2.id).liquidity).toEqual(
+      expect(data.getMarket(marketB2.id, false).liquidity).toEqual(
         10000_000000000000000000n,
       );
     });
@@ -263,12 +271,13 @@ describe("SimulationState", () => {
         },
       ]);
 
-      expect(data.getMarket(idleMarketA.id).liquidity).toEqual(
+      expect(data.getMarket(idleMarketA.id, false).liquidity).toEqual(
         customFixture.markets[idleMarketA.id]!.totalSupplyAssets -
           parseUnits("10000", 6),
       );
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(
-        customFixture.getMarket(marketA1.id).liquidity + parseUnits("10000", 6),
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(
+        customFixture.getMarket(marketA1.id, false).liquidity +
+          parseUnits("10000", 6),
       );
     });
 
@@ -286,10 +295,12 @@ describe("SimulationState", () => {
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(950_000000n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10000_000000n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA3.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(950_000000n);
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        10000_000000n,
+      );
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA3.id, false).liquidity,
       );
     });
 
@@ -309,10 +320,12 @@ describe("SimulationState", () => {
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(950_000000n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10000_000000n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA3.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(950_000000n);
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        10000_000000n,
+      );
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA3.id, false).liquidity,
       );
     });
 
@@ -333,10 +346,12 @@ describe("SimulationState", () => {
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_678714n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_321286n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA3.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(869_678714n);
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        10080_321286n,
+      );
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA3.id, false).liquidity,
       );
     });
 
@@ -357,10 +372,12 @@ describe("SimulationState", () => {
         },
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(869_678714n);
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10080_321286n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA3.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(869_678714n);
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        10080_321286n,
+      );
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA3.id, false).liquidity,
       );
     });
 
@@ -372,14 +389,14 @@ describe("SimulationState", () => {
 
       expect(withdrawals).toEqual([]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA1.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA1.id, false).liquidity,
       );
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA2.id).liquidity,
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA2.id, false).liquidity,
       );
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA3.id).liquidity,
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA3.id, false).liquidity,
       );
     });
 
@@ -397,11 +414,13 @@ describe("SimulationState", () => {
         }, // Only vault on market A3.
       ]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA1.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA1.id, false).liquidity,
       );
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(10100_009928n);
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(399_990072n);
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        10100_009928n,
+      );
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(399_990072n);
     });
   });
 
@@ -416,14 +435,14 @@ describe("SimulationState", () => {
 
       expect(withdrawals).toEqual([]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA1.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA1.id, false).liquidity,
       );
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA2.id).liquidity,
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA2.id, false).liquidity,
       );
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA3.id).liquidity,
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA3.id, false).liquidity,
       );
     });
 
@@ -435,14 +454,14 @@ describe("SimulationState", () => {
 
       expect(withdrawals).toEqual([]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA1.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA1.id, false).liquidity,
       );
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA2.id).liquidity,
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA2.id, false).liquidity,
       );
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA3.id).liquidity,
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA3.id, false).liquidity,
       );
     });
 
@@ -454,14 +473,14 @@ describe("SimulationState", () => {
 
       expect(withdrawals).toEqual([]);
 
-      expect(data.getMarket(marketA1.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA1.id).liquidity,
+      expect(data.getMarket(marketA1.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA1.id, false).liquidity,
       );
-      expect(data.getMarket(marketA2.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA2.id).liquidity,
+      expect(data.getMarket(marketA2.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA2.id, false).liquidity,
       );
-      expect(data.getMarket(marketA3.id).liquidity).toEqual(
-        dataFixture.getMarket(marketA3.id).liquidity,
+      expect(data.getMarket(marketA3.id, false).liquidity).toEqual(
+        dataFixture.getMarket(marketA3.id, false).liquidity,
       );
     });
   });

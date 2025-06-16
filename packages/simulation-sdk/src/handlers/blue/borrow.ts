@@ -40,7 +40,7 @@ export const handleBlueBorrowOperation: OperationHandler<
     data,
   );
 
-  const market = data.getMarket(id);
+  const market = data.getMarket(id, false);
   if (market.price == null) throw new BlueErrors.UnknownOraclePrice(id);
 
   if (shares === 0n)

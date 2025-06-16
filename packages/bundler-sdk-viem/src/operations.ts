@@ -295,9 +295,7 @@ export const populateSubBundle = (
     (mainOperation.type === "Blue_Borrow" ||
       mainOperation.type === "Blue_Withdraw")
   ) {
-    const market = data
-      .getMarket(mainOperation.args.id)
-      .accrueInterest(data.block.timestamp);
+    const market = data.getMarket(mainOperation.args.id);
 
     const borrowedAssets =
       mainOperation.type === "Blue_Borrow"
@@ -742,10 +740,11 @@ export const finalizeBundle = (
     switch (operation.type) {
       case "Blue_Borrow":
       case "Blue_Withdraw":
-        token = startData.getMarket(operation.args.id).params.loanToken;
+        token = startData.getMarket(operation.args.id, false).params.loanToken;
         break;
       case "Blue_WithdrawCollateral":
-        token = startData.getMarket(operation.args.id).params.collateralToken;
+        token = startData.getMarket(operation.args.id, false).params
+          .collateralToken;
         break;
       case "MetaMorpho_Withdraw":
         token = startData.getVault(operation.address).asset;

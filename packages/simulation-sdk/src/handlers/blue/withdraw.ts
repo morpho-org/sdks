@@ -47,7 +47,7 @@ export const handleBlueWithdrawOperation: OperationHandler<
     data,
   );
 
-  const market = data.getMarket(id);
+  const market = data.getMarket(id, false);
 
   if (shares === 0n)
     shares = MathLib.wMulUp(

@@ -13,9 +13,7 @@ export const handleBlueParaswapBuyDebtOperation: OperationHandler<
 ) => {
   const market = data.getMarket(id);
 
-  const debtAmount = data
-    .getAccrualPosition(onBehalf, id)
-    .accrueInterest(data.block.timestamp).borrowAssets;
+  const debtAmount = data.getAccrualPosition(onBehalf, id).borrowAssets;
 
   let amount: bigint;
   let quotedAmount: bigint;

@@ -90,9 +90,7 @@ export const handleMetaMorphoReallocateOperation: OperationHandler<
 
   // Update totalAssets as soon as the vault is interacted with (onchain, it's a dynamic view function).
   // But do not accrue vault fee!
-  const accruedVault = data
-    .tryGetAccrualVault(address)
-    ?.accrueInterest(data.block.timestamp);
+  const accruedVault = data.tryGetAccrualVault(address);
   if (accruedVault != null)
     data.getVault(address).totalAssets = accruedVault.totalAssets;
 };

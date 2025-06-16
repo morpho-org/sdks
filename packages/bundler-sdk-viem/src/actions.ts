@@ -630,9 +630,7 @@ export const encodeOperation = (
       } = operation.args;
 
       // Accrue interest to calculate the expected share price.
-      const market = dataBefore
-        .getMarket(id)
-        .accrueInterest(dataBefore.block.timestamp);
+      const market = dataBefore.getMarket(id);
 
       const { assets: suppliedAssets, shares: suppliedShares } = market.supply(
         assets,
@@ -669,9 +667,7 @@ export const encodeOperation = (
       } = operation.args;
 
       // Accrue interest to calculate the expected share price.
-      const market = dataBefore
-        .getMarket(id)
-        .accrueInterest(dataBefore.block.timestamp);
+      const market = dataBefore.getMarket(id);
 
       const { assets: withdrawnAssets, shares: withdrawnShares } =
         market.withdraw(assets, shares);
@@ -705,9 +701,7 @@ export const encodeOperation = (
       } = operation.args;
 
       // Accrue interest to calculate the expected share price.
-      const market = dataBefore
-        .getMarket(id)
-        .accrueInterest(dataBefore.block.timestamp);
+      const market = dataBefore.getMarket(id);
 
       const { assets: borrowedAssets, shares: borrowedShares } = market.borrow(
         assets,
@@ -743,9 +737,7 @@ export const encodeOperation = (
       } = operation.args;
 
       // Accrue interest to calculate the expected share price.
-      const market = dataBefore
-        .getMarket(id)
-        .accrueInterest(dataBefore.block.timestamp);
+      const market = dataBefore.getMarket(id);
 
       const { assets: repaidAssets, shares: repaidShares } = market.repay(
         assets,
@@ -775,7 +767,7 @@ export const encodeOperation = (
     case "Blue_SupplyCollateral": {
       const { id, assets, onBehalf } = operation.args;
 
-      const { params } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id, false);
 
       if (convexWrapperTokens[chainId]?.has(params.collateralToken)) {
         const underlying = getUnwrappedToken(params.collateralToken, chainId);
@@ -811,7 +803,7 @@ export const encodeOperation = (
     case "Blue_WithdrawCollateral": {
       const { id, assets, receiver } = operation.args;
 
-      const { params } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id, false);
 
       actions.push({
         type: "morphoWithdrawCollateral",
@@ -935,10 +927,10 @@ export const encodeOperation = (
           operation.address,
           fee,
           withdrawals.map(({ id, assets }) => ({
-            marketParams: dataBefore.getMarket(id).params,
+            marketParams: dataBefore.getMarket(id, false).params,
             amount: assets,
           })),
-          dataBefore.getMarket(supplyMarketId).params,
+          dataBefore.getMarket(supplyMarketId, false).params,
           operation.skipRevert,
         ],
       });
@@ -1079,7 +1071,7 @@ export const encodeOperation = (
 
       const { srcToken, id, swap, onBehalf, receiver } = operation.args;
 
-      const { params } = dataBefore.getMarket(id);
+      const { params } = dataBefore.getMarket(id, false);
 
       actions.push(
         {

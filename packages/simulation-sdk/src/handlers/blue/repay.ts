@@ -31,7 +31,7 @@ export const handleBlueRepayOperation: OperationHandler<
     data,
   );
 
-  const market = data.getMarket(id);
+  const market = data.getMarket(id, false);
 
   // Simulate the bundler's behavior on supply.
   if (sender === generalAdapter1) {

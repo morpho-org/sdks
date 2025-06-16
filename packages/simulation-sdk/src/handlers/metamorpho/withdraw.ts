@@ -71,7 +71,7 @@ export const handleMetaMorphoWithdrawOperation: OperationHandler<
   for (const id of vault.withdrawQueue) {
     const {
       withdrawCapacityLimit: { value: withdrawable },
-    } = data.getAccrualPosition(address, id);
+    } = data.getAccrualPosition(address, id, false);
 
     handleBlueOperation(
       {

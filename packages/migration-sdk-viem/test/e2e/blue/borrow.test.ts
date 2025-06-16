@@ -245,9 +245,10 @@ describe("Borrow position on blue", () => {
           marketTo,
         ]);
 
-        const initialPositionFrom = dataBefore
-          .getAccrualPosition(client.account.address, marketFrom.id)
-          .accrueInterest(dataBefore.block.timestamp);
+        const initialPositionFrom = dataBefore.getAccrualPosition(
+          client.account.address,
+          marketFrom.id,
+        );
 
         const migratablePosition = new MigratableBorrowPosition_Blue({
           market: initialPositionFrom.market,
@@ -407,9 +408,10 @@ describe("Borrow position on blue", () => {
             marketTo,
           ]);
 
-          const initialPositionFrom = dataBefore
-            .getAccrualPosition(client.account.address, marketFrom.id)
-            .accrueInterest(dataBefore.block.timestamp);
+          const initialPositionFrom = dataBefore.getAccrualPosition(
+            client.account.address,
+            marketFrom.id,
+          );
 
           const migratablePosition = new MigratableBorrowPosition_Blue({
             market: initialPositionFrom.market,
@@ -593,9 +595,10 @@ describe("Borrow position on blue", () => {
           marketTo,
         ]);
 
-        const initialPositionFrom = dataBefore
-          .getAccrualPosition(client.account.address, marketFrom.id)
-          .accrueInterest(dataBefore.block.timestamp);
+        const initialPositionFrom = dataBefore.getAccrualPosition(
+          client.account.address,
+          marketFrom.id,
+        );
 
         const migratablePosition = new MigratableBorrowPosition_Blue({
           market: initialPositionFrom.market,

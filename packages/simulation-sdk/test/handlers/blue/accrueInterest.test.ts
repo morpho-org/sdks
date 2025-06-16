@@ -6,7 +6,7 @@ import { dataFixture, marketA1, userA } from "../../fixtures.js";
 
 const type = "Blue_AccrueInterest";
 
-const marketData = dataFixture.getMarket(marketA1.id);
+const marketData = dataFixture.getMarket(marketA1.id, false);
 
 describe(type, () => {
   test("should accrue interest", () => {

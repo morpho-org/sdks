@@ -177,16 +177,21 @@ export class SimulationState implements InputSimulationState {
     this.vaultUsers = vaultUsers;
   }
 
-  public getMarket(marketId: MarketId) {
+  public getMarket(marketId: MarketId, accrueInterest = true) {
     const market = this.markets[marketId];
 
     if (market == null) throw new UnknownMarketError(marketId);
 
+    if (accrueInterest) return market.accrueInterest(this.block.timestamp);
+
     return market;
   }
 
-  public tryGetMarket(marketId: MarketId) {
-    return _try(this.getMarket.bind(this, marketId), UnknownMarketError);
+  public tryGetMarket(marketId: MarketId, accrueInterest = true) {
+    return _try(
+      this.getMarket.bind(this, marketId, accrueInterest),
+      UnknownMarketError,
+    );
   }
 
   public getUser(address: Address) {
@@ -225,20 +230,28 @@ export class SimulationState implements InputSimulationState {
     return _try(this.getVault.bind(this, address), UnknownVaultError);
   }
 
-  public getAccrualVault(address: Address) {
+  public getAccrualVault(address: Address, accrueInterest = true) {
     const vault = this.getVault(address);
 
-    return new AccrualVault(
+    const accrualVault = new AccrualVault(
       vault,
       vault.withdrawQueue.map((id) => ({
         config: this.getVaultMarketConfig(address, id),
-        position: this.getAccrualPosition(address, id),
+        position: this.getAccrualPosition(address, id, false),
       })),
     );
+
+    if (accrueInterest)
+      return accrualVault.accrueInterest(this.block.timestamp);
+
+    return accrualVault;
   }
 
-  public tryGetAccrualVault(address: Address) {
-    return _try(this.getAccrualVault.bind(this, address), UnknownDataError);
+  public tryGetAccrualVault(address: Address, accrueInterest = true) {
+    return _try(
+      this.getAccrualVault.bind(this, address, accrueInterest),
+      UnknownDataError,
+    );
   }
 
   public getPosition(user: Address, market: MarketId) {
@@ -256,16 +269,28 @@ export class SimulationState implements InputSimulationState {
     );
   }
 
-  public getAccrualPosition(user: Address, marketId: MarketId) {
-    return new AccrualPosition(
+  public getAccrualPosition(
+    user: Address,
+    marketId: MarketId,
+    accrueInterest = true,
+  ) {
+    const position = new AccrualPosition(
       this.getPosition(user, marketId),
-      this.getMarket(marketId),
+      this.getMarket(marketId, false),
     );
+
+    if (accrueInterest) return position.accrueInterest(this.block.timestamp);
+
+    return position;
   }
 
-  public tryGetAccrualPosition(user: Address, marketId: MarketId) {
+  public tryGetAccrualPosition(
+    user: Address,
+    marketId: MarketId,
+    accrueInterest = true,
+  ) {
     return _try(
-      this.getAccrualPosition.bind(this, user, marketId),
+      this.getAccrualPosition.bind(this, user, marketId, accrueInterest),
       UnknownDataError,
     );
   }
@@ -380,7 +405,10 @@ export class SimulationState implements InputSimulationState {
     },
   ) {
     return _try(() => {
-      const { loanToken, collateralToken } = this.getMarket(marketId).params;
+      const { loanToken, collateralToken } = this.getMarket(
+        marketId,
+        false,
+      ).params;
 
       const loanBalance = this.getBundleMaxBalance(
         user,
