@@ -28,7 +28,8 @@ export const handleErc20ApproveOperation: OperationHandler<
   if (contract != null) {
     if (
       APPROVE_ONLY_ONCE_TOKENS[data.chainId]?.includes(address) &&
-      senderTokenData.erc20Allowances[contract] > 0n
+      senderTokenData.erc20Allowances[contract] > 0n &&
+      amount > 0n
     )
       throw new NonZeroAllowanceError(address, sender, contract, amount);
 
