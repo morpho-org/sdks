@@ -49,7 +49,7 @@ export function nockBlueApi(
     },
   };
 
-  const basicMocks = nock(BLUE_API_BASE_URL)
+  nock(BLUE_API_BASE_URL)
     // request for whitelisted marketIds
     .post("/graphql")
     .reply(200, {
@@ -79,25 +79,26 @@ export function nockBlueApi(
             limit: 100,
             skip: 0,
           },
-          items: forPreLiquidations
-            ? []
-            : [
-                {
-                  user: { address: position.user },
-                  market: {
-                    uniqueKey: position.marketId,
-                  },
-                  state: {
-                    supplyShares: position.supplyShares,
-                    borrowShares: position.borrowShares,
-                    collateral: position.collateral,
-                  },
-                },
-              ],
+          items: [
+            {
+              user: { address: position.user },
+              market: {
+                uniqueKey: position.marketId,
+              },
+              state: {
+                supplyShares: position.supplyShares,
+                borrowShares: position.borrowShares,
+                collateral: position.collateral,
+              },
+            },
+          ],
         },
       },
     });
 
-  // extra request for market assets (for preliquidations)
-  return basicMocks.post("/graphql").reply(200, { data: marketAssetsData });
+  if (forPreLiquidations) {
+    nock(BLUE_API_BASE_URL)
+      .post("/graphql")
+      .reply(200, { data: marketAssetsData });
+  }
 }
