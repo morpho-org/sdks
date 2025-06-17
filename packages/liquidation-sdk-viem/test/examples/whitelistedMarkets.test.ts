@@ -1,4 +1,3 @@
-import nock from "nock";
 import "evm-maths";
 import fetchMock from "fetch-mock";
 
@@ -9,12 +8,7 @@ import {
   type MarketId,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import {
-  BLUE_API_BASE_URL,
-  Time,
-  ZERO_ADDRESS,
-  format,
-} from "@morpho-org/morpho-ts";
+import { Time, ZERO_ADDRESS, format } from "@morpho-org/morpho-ts";
 import type { BuildTxInput } from "@paraswap/sdk";
 
 import {
@@ -46,6 +40,7 @@ import * as swapMock from "../contracts/SwapMock.js";
 import pendleMarketData from "../mockData/pendleMarketData.json";
 import pendleTokens from "../mockData/pendleTokens.json";
 import { type LiquidationTestContext, test } from "../setup.js";
+import { nockBlueApi } from "./helpers.js";
 
 interface SwapAmountConfig {
   srcAmount: bigint;
@@ -508,43 +503,6 @@ describe("whitelisted markets", () => {
 
       const timestamp = await syncTimestamp(client);
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const accrualPosition = await fetchAccrualPosition(
         borrower.address,
         marketId,
@@ -553,6 +511,14 @@ describe("whitelisted markets", () => {
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
       const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accruedPosition,
+      });
       mockOneInch(encoder, [
         { srcAmount: seizedCollateral, dstAmount: "60475733900" },
       ]);
@@ -654,42 +620,6 @@ describe("whitelisted markets", () => {
 
       const timestamp = await syncTimestamp(client);
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const accrualPosition = await fetchAccrualPosition(
         borrower.address as Address,
         marketId,
@@ -698,6 +628,14 @@ describe("whitelisted markets", () => {
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
       const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
 
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accruedPosition,
+      });
       mockOneInch(encoder, [
         {
           srcAmount: seizedCollateral,
@@ -804,42 +742,6 @@ describe("whitelisted markets", () => {
         timestamp: (await client.timestamp()) + Time.s.from.y(1n),
       });
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: ethPriceUsd,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       await client.deal({
         erc20: loanToken.address,
         account: liquidator.address,
@@ -866,23 +768,29 @@ describe("whitelisted markets", () => {
 
       await syncTimestamp(client, await client.timestamp());
 
-      const postLiquidationAccrualPosition = await fetchAccrualPosition(
+      const accrualPosition = await fetchAccrualPosition(
         borrower.address as Address,
         marketId,
         client,
       );
-
       const collateralValue =
-        (collateralPriceUsd *
-          Number(postLiquidationAccrualPosition.collateral)) /
+        (collateralPriceUsd * Number(accrualPosition.collateral)) /
         10 ** collateralToken.decimals;
       const loanValue =
-        (ethPriceUsd * Number(postLiquidationAccrualPosition.borrowAssets)) /
+        (ethPriceUsd * Number(accrualPosition.borrowAssets)) /
         10 ** loanToken.decimals;
 
       expect(loanValue).toBeGreaterThan(1000);
       expect(collateralValue).toBeLessThan(1000);
 
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd,
+        loanPriceUsd: ethPriceUsd,
+        ethPriceUsd,
+        position: accrualPosition,
+      });
       mockOneInch(encoder, [
         {
           srcAmount: parseEther("0.01"),
@@ -984,42 +892,6 @@ describe("whitelisted markets", () => {
         timestamp: (await client.timestamp()) + Time.s.from.y(1n),
       });
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: ethPriceUsd,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       await client.deal({
         erc20: loanToken.address,
         account: liquidator.address,
@@ -1040,8 +912,20 @@ describe("whitelisted markets", () => {
 
       await syncTimestamp(client, await client.timestamp());
 
-      await fetchAccrualPosition(borrower.address as Address, marketId, client);
+      const accrualPosition = await fetchAccrualPosition(
+        borrower.address as Address,
+        marketId,
+        client,
+      );
 
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd,
+        loanPriceUsd: ethPriceUsd,
+        ethPriceUsd,
+        position: accrualPosition,
+      });
       mockOneInch(encoder, [
         {
           srcAmount: 1n,
@@ -1116,43 +1000,6 @@ describe("whitelisted markets", () => {
 
       const newCollateralPriceUsd = collateralPriceUsd * 0.5; // 50% price drop
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: newCollateralPriceUsd,
-                      spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const accrualPosition = await fetchAccrualPosition(
         borrower.address as Address,
         marketId,
@@ -1167,7 +1014,14 @@ describe("whitelisted markets", () => {
         "60475733901",
         market.params.collateralToken,
       );
-
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd: newCollateralPriceUsd,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accruedPosition,
+      });
       mockOneInch(encoder, [
         {
           srcAmount: seizedCollateral,
@@ -1252,45 +1106,6 @@ describe("whitelisted markets", () => {
 
       const newCollateralPriceUsd = collateralPriceUsd * 0.5; // 50% price drop
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, {
-          data: { markets: { items: [{ uniqueKey: marketId }] } },
-        })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: newCollateralPriceUsd,
-                      spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const accrualPosition = await fetchAccrualPosition(
         borrower.address as Address,
         marketId,
@@ -1305,7 +1120,14 @@ describe("whitelisted markets", () => {
         "11669266773005108147657",
         market.params.collateralToken,
       );
-
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd: newCollateralPriceUsd,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accruedPosition,
+      });
       mockOneInch(encoder, [
         {
           srcAmount: seizedCollateral,
@@ -1413,47 +1235,6 @@ describe("whitelisted markets", () => {
 
       const timestamp = await syncTimestamp(client);
 
-      const newCollateralPriceUsd = collateralPriceUsd * 0.9; // 20% price drop
-
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, {
-          data: { markets: { items: [{ uniqueKey: marketId }] } },
-        })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: newCollateralPriceUsd,
-                      spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const accrualPosition = await fetchAccrualPosition(
         borrower.address as Address,
         marketId,
@@ -1461,6 +1242,15 @@ describe("whitelisted markets", () => {
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
       const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
+
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd: collateralPriceUsd * 0.9, // 20% price drop,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accruedPosition,
+      });
 
       const { morphoBlueLiquidate } = LiquidationEncoder.prototype;
       vi.spyOn(
@@ -1550,47 +1340,6 @@ describe("whitelisted markets", () => {
 
       const timestamp = await syncTimestamp(client);
 
-      const newCollateralPriceUsd = collateralPriceUsd * 0.9; // 20% price drop
-
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, {
-          data: { markets: { items: [{ uniqueKey: marketId }] } },
-        })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: newCollateralPriceUsd,
-                      spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const accrualPosition = await fetchAccrualPosition(
         borrower.address as Address,
         marketId,
@@ -1598,6 +1347,15 @@ describe("whitelisted markets", () => {
       );
       const accruedPosition = accrualPosition.accrueInterest(timestamp);
       const seizedCollateral = accruedPosition.seizableCollateral! / 2n;
+
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd: collateralPriceUsd * 0.9, // 20% price drop
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accruedPosition,
+      });
 
       const { morphoBlueLiquidate } = LiquidationEncoder.prototype;
       vi.spyOn(
@@ -1698,47 +1456,6 @@ describe("whitelisted markets", () => {
         ],
       });
 
-      const newCollateralPriceUsd = collateralPriceUsd * 0.9; // 20% price drop
-
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, {
-          data: { markets: { items: [{ uniqueKey: marketId }] } },
-        })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: newCollateralPriceUsd,
-                      spotPriceEth: newCollateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const timestamp = await syncTimestamp(client);
 
       const accrualPosition = await fetchAccrualPosition(
@@ -1752,6 +1469,14 @@ describe("whitelisted markets", () => {
         accruedPosition.seizableCollateral! / 2n,
       );
 
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd: collateralPriceUsd * 0.9, // 20% price drop,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accruedPosition,
+      });
       mockOneInch(encoder, [
         {
           srcAmount: usdsWithdrawalAmount,
@@ -1851,48 +1576,6 @@ describe("whitelisted markets", () => {
         ],
       });
 
-      const newUsdsPriceUsd = usdsPriceUsd * 0.5; // 50% price drop
-
-      // Mock API responses
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, {
-          data: { markets: { items: [{ uniqueKey: marketId }] } },
-        })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: newUsdsPriceUsd,
-                      spotPriceEth: newUsdsPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const timestamp = await syncTimestamp(client);
 
       const accrualPosition = await fetchAccrualPosition(
@@ -1906,6 +1589,14 @@ describe("whitelisted markets", () => {
         accruedPosition.seizableCollateral! / 2n,
       );
 
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd: usdsPriceUsd * 0.5, // 50% price drop,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accruedPosition,
+      });
       // Mock 1inch and ParaSwap responses
       // First, mock insufficient liquidity for USDS
       mockOneInch(encoder, [

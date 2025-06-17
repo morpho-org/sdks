@@ -1,15 +1,15 @@
-import type { PartialApiToken } from "@morpho-org/blue-api-sdk";
-import type {
+import { OrderDirection, type PartialApiToken } from "@morpho-org/blue-api-sdk";
+import {
   AccrualPosition,
-  ChainId,
-  MarketId,
-  PreLiquidationPosition,
+  type ChainId,
+  type MarketId,
+  type PreLiquidationPosition,
 } from "@morpho-org/blue-sdk";
-import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import { getPreLiquidablePositions } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
-import { apiSdk } from "../api";
+import { apiSdk, paginatedQueryWithChunkedMarketIds } from "../api";
 
 export async function getPositions(
   client: Client<Transport, Chain, Account>,
@@ -57,39 +57,85 @@ async function getLiquidatablePositions(
   }[];
   wethPriceUsd: number | null;
 }> {
-  const {
-    assetByAddress: { priceUsd: wethPriceUsd },
-    marketPositions: { items: positions },
-  } = await apiSdk.getLiquidatablePositions({
-    chainId,
-    wNative,
-    marketIds,
-  });
+  const queryOptions = {
+    maxMarketIds: 20,
+    pageSize: 100,
+    orderBy: "BorrowShares" as const,
+    orderDirection: OrderDirection.Desc,
+  };
+  const [
+    {
+      assetByAddress: { priceUsd: wethPriceUsd },
+    },
+    marketsAssets,
+    positions,
+  ] = await Promise.all([
+    apiSdk.getAssetByAddress({ chainId, address: wNative }),
+    paginatedQueryWithChunkedMarketIds(
+      (vars) => apiSdk.getMarketsAssets(vars).then((result) => result.markets),
+      {
+        ...queryOptions,
+        args: { chainId, marketIds },
+      },
+    ),
+    paginatedQueryWithChunkedMarketIds(
+      (vars) =>
+        apiSdk
+          .getLiquidatablePositions(vars)
+          .then((result) => result.marketPositions),
+      {
+        ...queryOptions,
+        args: { chainId, wNative, marketIds },
+      },
+    ),
+  ]);
 
   if (wethPriceUsd == null) return { liquidablePositions: [], wethPriceUsd };
 
-  const accruedPositions = (
+  const marketAssetsMap = new Map(
+    marketsAssets?.map((market) => [market.uniqueKey, market]),
+  );
+
+  const marketsMap = new Map(
     await Promise.all(
-      (positions ?? []).map(async (position) => {
-        if (position.market.collateralAsset == null) return;
-
-        const accrualPosition = await fetchAccrualPosition(
-          position.user.address,
-          position.market.uniqueKey,
-          client,
+      [...marketIds].map(async (marketId) => {
+        const market = await fetchMarket(marketId, client, {
+          chainId,
           // Disable `deployless` so that viem multicall aggregates fetches
-          { chainId, deployless: false },
-        );
-
-        return {
-          instance: accrualPosition.accrueInterest(Time.timestamp()),
-          type: "AccrualPosition" as const,
-          loanAsset: position.market.loanAsset,
-          collateralAsset: position.market.collateralAsset,
-        };
+          deployless: false,
+        });
+        return [marketId, market.accrueInterest(Time.timestamp())] as const;
       }),
-    )
-  ).filter((position) => position !== undefined);
+    ),
+  );
+
+  const accruedPositions = (positions ?? [])
+    .map((position) => {
+      const market = marketsMap.get(position.market.uniqueKey);
+      if (!market) return;
+
+      const assets = marketAssetsMap.get(position.market.uniqueKey);
+      if (!assets?.collateralAsset || !assets?.loanAsset) return;
+
+      const accrualPosition = new AccrualPosition(
+        {
+          user: position.user.address,
+          // NOTE: These come as strings when mocking GraphQL response in tests, so we cast manually
+          supplyShares: BigInt(position.state?.supplyShares ?? "0"),
+          borrowShares: BigInt(position.state?.borrowShares ?? "0"),
+          collateral: BigInt(position.state?.collateral ?? "0"),
+        },
+        market,
+      );
+
+      return {
+        instance: accrualPosition,
+        type: "AccrualPosition" as const,
+        loanAsset: assets.loanAsset,
+        collateralAsset: assets.collateralAsset,
+      };
+    })
+    .filter((position) => position !== undefined);
 
   return {
     liquidablePositions: accruedPositions.filter(
