@@ -27,24 +27,60 @@ export const MarketPositionFragmentDoc = gql`
   }
 }
     `;
-export const GetLiquidatablePositionsDocument = gql`
-    query getLiquidatablePositions($chainId: Int!, $wNative: String!, $marketIds: [String!], $first: Int = 1000) {
-  assetByAddress(chainId: $chainId, address: $wNative) {
+export const GetAssetByAddressDocument = gql`
+    query getAssetByAddress($chainId: Int!, $address: String!) {
+  assetByAddress(chainId: $chainId, address: $address) {
     priceUsd
   }
+}
+    `;
+export const GetLiquidatablePositionsDocument = gql`
+    query getLiquidatablePositions($chainId: Int!, $marketIds: [String!], $skip: Int, $first: Int = 100, $orderBy: MarketPositionOrderBy, $orderDirection: OrderDirection) {
   marketPositions(
+    skip: $skip
     first: $first
     where: {chainId_in: [$chainId], marketUniqueKey_in: $marketIds, healthFactor_lte: 1}
+    orderBy: $orderBy
+    orderDirection: $orderDirection
   ) {
+    pageInfo {
+      count
+      countTotal
+      limit
+      skip
+    }
     items {
-      ...MarketPosition
+      healthFactor
+      user {
+        address
+      }
+      market {
+        uniqueKey
+      }
+      state {
+        borrowShares
+        collateral
+        supplyShares
+      }
     }
   }
 }
-    ${MarketPositionFragmentDoc}`;
+    `;
 export const GetMarketsAssetsDocument = gql`
-    query getMarketsAssets($chainId: Int!, $marketIds: [String!]!) {
-  markets(where: {chainId_in: [$chainId], uniqueKey_in: $marketIds}) {
+    query getMarketsAssets($chainId: Int!, $marketIds: [String!]!, $skip: Int, $first: Int = 100, $orderBy: MarketOrderBy, $orderDirection: OrderDirection) {
+  markets(
+    skip: $skip
+    first: $first
+    where: {chainId_in: [$chainId], uniqueKey_in: $marketIds}
+    orderBy: $orderBy
+    orderDirection: $orderDirection
+  ) {
+    pageInfo {
+      count
+      countTotal
+      limit
+      skip
+    }
     items {
       uniqueKey
       collateralAsset {
@@ -82,6 +118,9 @@ const defaultWrapper: SdkFunctionWrapper = (action, _operationName, _operationTy
 
 export function getSdk(client: GraphQLClient, withWrapper: SdkFunctionWrapper = defaultWrapper) {
   return {
+    getAssetByAddress(variables: Types.GetAssetByAddressQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetAssetByAddressQuery> {
+      return withWrapper((wrappedRequestHeaders) => client.request<Types.GetAssetByAddressQuery>(GetAssetByAddressDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getAssetByAddress', 'query', variables);
+    },
     getLiquidatablePositions(variables: Types.GetLiquidatablePositionsQueryVariables, requestHeaders?: GraphQLClientRequestHeaders): Promise<Types.GetLiquidatablePositionsQuery> {
       return withWrapper((wrappedRequestHeaders) => client.request<Types.GetLiquidatablePositionsQuery>(GetLiquidatablePositionsDocument, variables, {...requestHeaders, ...wrappedRequestHeaders}), 'getLiquidatablePositions', 'query', variables);
     },

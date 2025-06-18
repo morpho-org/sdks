@@ -1,4 +1,3 @@
-import nock from "nock";
 import "evm-maths";
 import fetchMock from "fetch-mock";
 
@@ -9,7 +8,7 @@ import {
   type MarketId,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import { BLUE_API_BASE_URL, format } from "@morpho-org/morpho-ts";
+import { format } from "@morpho-org/morpho-ts";
 import type { BuildTxInput } from "@paraswap/sdk";
 
 import { blueAbi, fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
@@ -26,6 +25,7 @@ import { OneInch, Paraswap, Spectra } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import spectraTokens from "../mockData/spectraTokens.json";
 import { type LiquidationTestContext, spectraTest } from "../setup.js";
+import { nockBlueApi } from "./helpers.js";
 
 interface SwapAmountConfig {
   srcAmount: bigint;
@@ -348,42 +348,20 @@ describe("should liquidate Spectra Tokens", () => {
 
       const timestamp = await syncTimestamp(client);
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: marketParams.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: marketParams.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: 1,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: {
+          marketId,
+          user: borrower.address,
+          supplyShares: 0n,
+          borrowShares: borrowed * 10n ** 6n,
+          collateral,
+        },
+      });
 
       await client.writeContract({
         account: borrower,
@@ -526,43 +504,6 @@ describe("should liquidate Spectra Tokens", () => {
       const maturity = 1740182579n;
       const timestamp = await syncTimestamp(client, maturity + 10n);
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: marketParams.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: marketParams.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: 1,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       await client.writeContract({
         account: borrower,
         address: morpho,
@@ -584,6 +525,14 @@ describe("should liquidate Spectra Tokens", () => {
         amount: 8977038222000000000000n,
       });
 
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: accrualPosition,
+      });
       mockOneInch(encoder, [
         {
           srcAmount: 10000000000000000000794n,

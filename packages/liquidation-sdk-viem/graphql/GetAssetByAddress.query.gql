@@ -1,0 +1,5 @@
+query getAssetByAddress($chainId: Int!, $address: String!) {
+  assetByAddress(chainId: $chainId, address: $address) {
+    priceUsd
+  }
+}

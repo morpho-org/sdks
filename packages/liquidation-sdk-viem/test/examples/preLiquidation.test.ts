@@ -9,7 +9,7 @@ import {
   PreLiquidationPosition,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import { BLUE_API_BASE_URL, format } from "@morpho-org/morpho-ts";
+import { format } from "@morpho-org/morpho-ts";
 import type { BuildTxInput } from "@paraswap/sdk";
 
 import {
@@ -31,6 +31,7 @@ import { check } from "../../examples/whitelistedMarkets.js";
 import { OneInch, Paraswap } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
 import { type LiquidationTestContext, preLiquidationTest } from "../setup.js";
+import { nockBlueApi } from "./helpers.js";
 
 interface SwapAmountConfig {
   srcAmount: bigint;
@@ -326,6 +327,7 @@ describe("pre liquidation", () => {
         args: [preLiquidationAddress, true],
       });
 
+      const borrowed = market.getMaxBorrowAssets(collateral)! - 10000000n;
       await client.writeContract({
         account: borrower,
         address: morpho,
@@ -336,7 +338,7 @@ describe("pre liquidation", () => {
             typeof market.params,
             "collateralToken" | "loanToken" | "oracle" | "irm" | "lltv"
           >,
-          market.getMaxBorrowAssets(collateral)! - 10000000n,
+          borrowed,
           0n,
           borrower.address,
           borrower.address,
@@ -380,67 +382,6 @@ describe("pre liquidation", () => {
           ],
         });
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, { data: { markets: { items: [{ uniqueKey: marketId }] } } })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: null,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            markets: {
-              items: [
-                {
-                  uniqueKey: marketId,
-                  collateralAsset: {
-                    address: market.params.collateralToken,
-                    decimals: collateralToken.decimals,
-                    priceUsd: collateralPriceUsd,
-                    spotPriceEth: collateralPriceUsd / ethPriceUsd,
-                  },
-                  loanAsset: {
-                    address: market.params.loanToken,
-                    decimals: loanToken.decimals,
-                    priceUsd: null,
-                    spotPriceEth: 1 / ethPriceUsd,
-                  },
-                },
-              ],
-            },
-          },
-        });
-
       const accrualPosition = await fetchAccrualPosition(
         borrower.address,
         marketId,
@@ -461,6 +402,17 @@ describe("pre liquidation", () => {
 
       const preSeizableCollateral = preLiquidablePosition.seizableCollateral!;
 
+      nockBlueApi(
+        {
+          collateralToken,
+          loanToken,
+          collateralPriceUsd,
+          loanPriceUsd: 1.0,
+          ethPriceUsd,
+          position: accrualPosition,
+        },
+        true,
+      );
       mockOneInch(encoder, [
         { srcAmount: preSeizableCollateral, dstAmount: "73000000000" },
       ]);

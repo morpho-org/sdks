@@ -1,4 +1,3 @@
-import nock from "nock";
 import "evm-maths";
 import fetchMock from "fetch-mock";
 
@@ -8,7 +7,7 @@ import {
   type MarketId,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import { BLUE_API_BASE_URL, Time, format } from "@morpho-org/morpho-ts";
+import { Time, format } from "@morpho-org/morpho-ts";
 
 import { blueAbi, fetchMarket, fetchToken } from "@morpho-org/blue-sdk-viem";
 import { Flashbots } from "@morpho-org/liquidation-sdk-viem";
@@ -18,6 +17,7 @@ import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelistedMarkets.js";
 import { type LiquidationTestContext, midasTest } from "../setup.js";
+import { nockBlueApi } from "./helpers.js";
 
 fetchMock.config.fallbackToNetwork = true;
 fetchMock.config.overwriteRoutes = false;
@@ -157,44 +157,20 @@ describe("midas liquidation", () => {
         (await client.timestamp()) + Time.s.from.w(5n),
       );
 
-      nock(BLUE_API_BASE_URL)
-        .post("/graphql")
-        .reply(200, {
-          data: { markets: { items: [{ uniqueKey: marketId }] } },
-        })
-        .post("/graphql")
-        .reply(200, {
-          data: {
-            assetByAddress: {
-              priceUsd: ethPriceUsd,
-              spotPriceEth: 1,
-            },
-            marketPositions: {
-              items: [
-                {
-                  user: {
-                    address: borrower.address,
-                  },
-                  market: {
-                    uniqueKey: marketId,
-                    collateralAsset: {
-                      address: market.params.collateralToken,
-                      decimals: collateralToken.decimals,
-                      priceUsd: collateralPriceUsd,
-                      spotPriceEth: collateralPriceUsd / ethPriceUsd,
-                    },
-                    loanAsset: {
-                      address: market.params.loanToken,
-                      decimals: loanToken.decimals,
-                      priceUsd: 1,
-                      spotPriceEth: 1 / ethPriceUsd,
-                    },
-                  },
-                },
-              ],
-            },
-          },
-        });
+      nockBlueApi({
+        collateralToken,
+        loanToken,
+        collateralPriceUsd,
+        loanPriceUsd: 1.0,
+        ethPriceUsd,
+        position: {
+          marketId,
+          user: borrower.address,
+          supplyShares: 0n,
+          borrowShares: market.toBorrowShares(borrowed, "Up"),
+          collateral,
+        },
+      });
 
       await client.writeContract({
         account: borrower,
