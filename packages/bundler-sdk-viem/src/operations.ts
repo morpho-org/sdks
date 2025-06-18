@@ -246,6 +246,8 @@ export const populateSubBundle = (
 
       // Redirect MetaMorpho operation owner.
       switch (draft.type) {
+        case "Erc20_Wrap":
+          if (isErc20Wrapper) break;
         case "MetaMorpho_Deposit":
         case "MetaMorpho_Withdraw":
           // Only if sender is owner otherwise the owner would be lost.

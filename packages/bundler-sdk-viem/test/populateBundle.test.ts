@@ -4807,9 +4807,19 @@ describe("populateBundle", () => {
               address: wNative,
               args: {
                 amount: assets,
-                owner: client.account.address,
+                owner: generalAdapter1,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
+            },
+            {
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+              sender: generalAdapter1,
+              type: "Erc20_Transfer",
             },
           ]);
 
