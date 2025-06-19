@@ -604,7 +604,11 @@ export const finalizeBundle = (
           (approval) =>
             approval.address === operation.address &&
             approval.sender === operation.sender &&
-            approval.args.spender === operation.args.spender,
+            approval.args.spender === operation.args.spender &&
+            (!APPROVE_ONLY_ONCE_TOKENS[startData.chainId]?.includes(
+              approval.address,
+            ) ||
+              (approval.args.amount === 0n) === (operation.args.amount === 0n)),
         );
 
         if (duplicateApproval == null) return approvals.push(operation);
