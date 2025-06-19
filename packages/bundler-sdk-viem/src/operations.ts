@@ -14,6 +14,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
 import {
+  APPROVE_ONLY_ONCE_TOKENS,
   type Erc20Operations,
   type MaybeDraft,
   type Operation,
@@ -131,7 +132,20 @@ export const populateInputTransfer = (
         nonce: erc2612Nonce,
       },
     });
-  else if (useSimpleTransfer)
+  else if (useSimpleTransfer) {
+    if (
+      APPROVE_ONLY_ONCE_TOKENS[data.chainId]?.includes(address) &&
+      erc20Allowances["bundler3.generalAdapter1"] > 0n
+    )
+      operations.push({
+        type: "Erc20_Approve",
+        sender: from,
+        address,
+        args: {
+          amount: 0n,
+          spender: generalAdapter1,
+        },
+      });
     operations.push({
       type: "Erc20_Approve",
       sender: from,
@@ -141,6 +155,7 @@ export const populateInputTransfer = (
         spender: generalAdapter1,
       },
     });
+  }
 
   if (useSimplePermit || useSimpleTransfer)
     operations.push({
@@ -155,7 +170,20 @@ export const populateInputTransfer = (
     });
   // Simple permit is not supported: fallback to Permit2.
   else {
-    if (erc20Allowances.permit2 < amount)
+    if (erc20Allowances.permit2 < amount) {
+      if (
+        APPROVE_ONLY_ONCE_TOKENS[data.chainId]?.includes(address) &&
+        erc20Allowances.permit2 > 0n
+      )
+        operations.push({
+          type: "Erc20_Approve",
+          sender: from,
+          address,
+          args: {
+            amount: 0n,
+            spender: permit2,
+          },
+        });
       operations.push({
         type: "Erc20_Approve",
         sender: from,
@@ -165,6 +193,7 @@ export const populateInputTransfer = (
           spender: permit2,
         },
       });
+    }
 
     if (
       permit2BundlerAllowance.amount < amount ||
