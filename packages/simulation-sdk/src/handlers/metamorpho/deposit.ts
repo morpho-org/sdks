@@ -83,7 +83,7 @@ export const handleMetaMorphoDepositOperation: OperationHandler<
       data,
     );
 
-    const { supplyAssets } = data.getAccrualPosition(address, id);
+    const { supplyAssets } = data.getAccrualPosition(address, id, false);
 
     const suppliable = MathLib.zeroFloorSub(cap, supplyAssets);
     if (suppliable === 0n) continue;
