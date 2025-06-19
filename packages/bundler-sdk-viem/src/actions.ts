@@ -22,7 +22,6 @@ import {
 } from "@morpho-org/blue-sdk";
 import { Time, getValue } from "@morpho-org/morpho-ts";
 import {
-  APPROVE_ONLY_ONCE_TOKENS,
   MAX_TOKEN_APPROVALS,
   type MaybeDraft,
   type Operation,
@@ -49,17 +48,11 @@ import type {
 
 const encodeErc20Approval = (
   token: Address,
-  sender: Address,
   spender: Address,
   amount: bigint,
   data: MaybeDraft<SimulationState>,
 ) => {
   const { chainId } = data;
-  const {
-    morpho,
-    bundler3: { generalAdapter1 },
-    permit2,
-  } = getChainAddresses(chainId);
 
   amount = MathLib.min(
     amount,
@@ -67,38 +60,6 @@ const encodeErc20Approval = (
   );
 
   const txRequirements: TransactionRequirement[] = [];
-
-  if (APPROVE_ONLY_ONCE_TOKENS[chainId]?.includes(token)) {
-    const contract =
-      spender === morpho
-        ? "morpho"
-        : spender === generalAdapter1
-          ? "bundler3.generalAdapter1"
-          : spender === permit2
-            ? "permit2"
-            : undefined;
-
-    const currentAllowance =
-      contract != null
-        ? data.getHolding(sender, token).erc20Allowances[contract]
-        : data.vaults[spender]?.asset === token
-          ? data.getVaultUser(spender, sender).allowance
-          : 0n;
-
-    if (currentAllowance !== 0n)
-      txRequirements.push({
-        type: "erc20Approve",
-        args: [token, spender, 0n],
-        tx: {
-          to: token,
-          data: encodeFunctionData({
-            abi: erc20Abi,
-            functionName: "approve",
-            args: [spender, 0n],
-          }),
-        },
-      });
-  }
 
   txRequirements.push({
     type: "erc20Approve",
@@ -255,13 +216,7 @@ export const encodeOperation = (
       if (!supportsSignature && spender === permit2) break;
 
       requirements.txs.push(
-        ...encodeErc20Approval(
-          operation.address,
-          sender,
-          spender,
-          amount,
-          dataBefore,
-        ),
+        ...encodeErc20Approval(operation.address, spender, amount, dataBefore),
       );
 
       break;
@@ -374,13 +329,7 @@ export const encodeOperation = (
       // Simple permit is not supported, fallback to standard approval.
 
       requirements.txs.push(
-        ...encodeErc20Approval(
-          operation.address,
-          sender,
-          spender,
-          amount,
-          dataBefore,
-        ),
+        ...encodeErc20Approval(operation.address, spender, amount, dataBefore),
       );
 
       break;
@@ -461,7 +410,6 @@ export const encodeOperation = (
       requirements.txs.push(
         ...encodeErc20Approval(
           operation.address,
-          sender,
           generalAdapter1,
           amount,
           dataBefore,
