@@ -58,7 +58,7 @@ export namespace AdaptiveCurveIrmLib {
     const expR = MathLib.WAD + r + (r * r) / MathLib.WAD / 2n;
 
     // Return e^x = 2^q * e^r.
-    if (q === 0n) return expR << q;
+    if (q >= 0n) return expR << q;
     return expR >> -q;
   }
 
