@@ -469,5 +469,158 @@ describe("paraswap", () => {
         ).toBe(0n);
       },
     );
+
+    testCloseCollateral(
+      "should partial repay with collateral",
+      async ({ client, config }) => {
+        const id = usdc_wbtc.id;
+
+        const collateral = parseUnits("2", 8);
+        const debt = parseUnits("90000", 6);
+        await client.deal({
+          erc20: usdc_wbtc.collateralToken,
+          amount: collateral,
+        });
+        await client.approve({
+          address: usdc_wbtc.collateralToken,
+          args: [morpho, collateral],
+        });
+        await client.writeContract({
+          abi: blueAbi,
+          address: morpho,
+          functionName: "supplyCollateral",
+          args: [usdc_wbtc, collateral, client.account.address, "0x"],
+        });
+        await client.writeContract({
+          abi: blueAbi,
+          address: morpho,
+          functionName: "borrow",
+          args: [
+            { ...usdc_wbtc },
+            debt,
+            0n,
+            client.account.address,
+            donator.address,
+          ],
+        });
+
+        const block = await client.getBlock();
+
+        const { result } = await renderHook(config, () =>
+          useSimulationState({
+            marketIds: [id],
+            users: [client.account.address, generalAdapter1],
+            tokens: [usdc_wbtc.collateralToken, usdc],
+            vaults: [],
+            block,
+          }),
+        );
+
+        await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+        const data = result.current.data!;
+        // const position = data.getPosition(client.account.address, id);
+        const collateralToWithdraw = parseUnits("0.9", 8); // Withdraw 0.09 wBTC of collateral
+        const repayAmount = parseUnits("10000", 6);
+
+        // const { bundle } =
+        await setupTestBundle(client, data, [
+          {
+            type: "Blue_Repay",
+            sender: client.account.address,
+            args: {
+              assets: 1000000000n,
+              id,
+              onBehalf: client.account.address,
+              callback: [
+                {
+                  type: "Blue_WithdrawCollateral",
+                  args: {
+                    assets: collateralToWithdraw,
+                    id,
+                    receiver: generalAdapter1,
+                    onBehalf: client.account.address,
+                  },
+                },
+                {
+                  type: "Paraswap_Buy",
+                  address: usdc,
+                  args: {
+                    srcToken: usdc_wbtc.collateralToken,
+                    amount: repayAmount,
+                    receiver: generalAdapter1,
+                    slippage: 1000000000000000n, // 1% slippage
+                    swap: {
+                      to: "0x6a000f20005980200259b80c5102003040001068",
+                      data: "0x7f457675000000000000000000000000a0f408a000017007015e0f00320e470d00090a5b000000000000000000000000cbb7c0000ab88b473b1f5afd9ef808440eed33bf000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb4800000000000000000000000000000000000000000000000000000000000003a100000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000003a02957cecc3ad841988436d3178dca6cd7000000000000000000000000015b995c0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000180000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001c0000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000001e00000016000000000000000000000012000000000000001370000000000002710e592427a0aece92de3edee1f18e0157c058615640140008400a400000000000300000000000000000000000000000000000000000000000000000000f28c0498000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000006a000f20005980200259b80c5102003040001068000000000000000000000000000000000000000000000000000000006864ed5000000000000000000000000000000000000000000000000000000000000f424000000000000000000000000000000000000000000000000000000000000003a0000000000000000000000000000000000000000000000000000000000000002ba0b86991c6218b36c1d19d4a2e9eb0ce3606eb480001f4cbb7c0000ab88b473b1f5afd9ef808440eed33bf000000000000000000000000000000000000000000",
+                      offsets: paraswapContractMethodOffsets.swapExactAmountOut,
+                    },
+                  },
+                },
+              ],
+            },
+          },
+        ]);
+
+        /* expect(bundle.requirements.signatures).toStrictEqual([
+          {
+            action: {
+              type: "morphoSetAuthorizationWithSig",
+              args: [
+                {
+                  authorized: generalAdapter1,
+                  authorizer: client.account.address,
+                  deadline: expect.any(BigInt),
+                  isAuthorized: true,
+                  nonce: 0n,
+                },
+                expect.any(String),
+                undefined,
+              ],
+            },
+            sign: expect.any(Function),
+          },
+        ]);
+        expect(bundle.requirements.txs).toStrictEqual([]);
+
+        const finalPosition = await fetchPosition(
+          client.account.address,
+          id,
+          client,
+        );
+
+        // Verify the position has been partially repaid
+        expect(finalPosition.borrowShares).toBeLessThan(position.borrowShares);
+        expect(finalPosition.collateral).toBe(collateral - collateralToWithdraw);
+
+        // Verify no tokens left in the general adapter
+        expect(
+          await client.balanceOf({ 
+            erc20: usdc_wbtc.collateralToken,
+            owner: generalAdapter1 
+          }),
+        ).toBeLessThanOrEqual(5n);
+        expect(
+          await client.balanceOf({ 
+            erc20: usdc,
+            owner: generalAdapter1 
+          }),
+        ).toBeLessThanOrEqual(5n);
+
+        // Verify allowances are cleaned up
+        expect(
+          await client.allowance({
+            erc20: usdc_wbtc.collateralToken,
+            spender: permit2,
+          }),
+        ).toBe(0n);
+        expect(
+          await client.allowance({
+            erc20: usdc_wbtc.collateralToken,
+            spender: morpho,
+          }),
+        ).toBe(0n); */
+      },
+    );
   });
 });
