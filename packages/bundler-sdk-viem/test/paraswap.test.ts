@@ -529,7 +529,7 @@ describe("paraswap", () => {
             type: "Blue_Repay",
             sender: client.account.address,
             args: {
-              assets: 1000000000n,
+              assets: repayAmount,
               id,
               onBehalf: client.account.address,
               callback: [
