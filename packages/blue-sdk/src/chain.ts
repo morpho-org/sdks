@@ -164,7 +164,7 @@ export namespace ChainUtils {
       name: "Katana",
       id: ChainId.KatanaMainnet,
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      explorerUrl: "https://explorer.katana.network",
+      explorerUrl: "https://explorer.katanarpc.com",
       identifier: "katana",
     },
   };
