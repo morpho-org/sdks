@@ -191,15 +191,6 @@ export type Chain = {
   network: Scalars["String"]["output"];
 };
 
-/** Chain synchronization state */
-export type ChainSynchronizationState = {
-  __typename?: "ChainSynchronizationState";
-  blockNumber: Scalars["BigInt"]["output"];
-  chain: Chain;
-  id: Scalars["ID"]["output"];
-  key: Scalars["String"]["output"];
-};
-
 /** Oracle creation tx */
 export type ChainlinkOracleV2Event = {
   __typename?: "ChainlinkOracleV2Event";
@@ -259,6 +250,7 @@ export type CuratorAddress = {
 export type CuratorFilters = {
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   chainId?: InputMaybe<Scalars["Int"]["input"]>;
+  chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   verified?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
@@ -272,10 +264,7 @@ export type CuratorSocial = {
 /** Vault curator state */
 export type CuratorState = {
   __typename?: "CuratorState";
-  /**
-   * Assets Under Management. Total assets managed by the curator, in USD for display purpose.
-   * @deprecated Work in progress
-   */
+  /** Assets Under Management. Total assets managed by the curator, in USD for display purpose. */
   aum: Scalars["Float"]["output"];
   curatorId: Scalars["ID"]["output"];
 };
@@ -316,10 +305,21 @@ export type IntDataPoint = {
   y: Maybe<Scalars["Int"]["output"]>;
 };
 
+export type ManualVicFactory = {
+  __typename?: "ManualVicFactory";
+  address: Scalars["Address"]["output"];
+  chain: Chain;
+  creationBlockNumber: Scalars["BigInt"]["output"];
+  id: Scalars["ID"]["output"];
+};
+
 /** Morpho Blue market */
 export type Market = {
   __typename?: "Market";
-  /** All time market APYs */
+  /**
+   * All time market APYs
+   * @deprecated Use `market.state` all time average APYs instead.
+   */
   allTimeApys: Maybe<MarketApyAggregates>;
   /** Market bad debt values */
   badDebt: Maybe<MarketBadDebt>;
@@ -329,14 +329,20 @@ export type Market = {
    * @deprecated Use `state.price` instead.
    */
   collateralPrice: Maybe<Scalars["BigInt"]["output"]>;
-  /** Market concentrations */
+  /**
+   * Market concentrations
+   * @deprecated Not maintained.
+   */
   concentration: Maybe<MarketConcentration>;
   creationBlockNumber: Scalars["Int"]["output"];
   creationTimestamp: Scalars["BigInt"]["output"];
   creatorAddress: Maybe<Scalars["Address"]["output"]>;
   /** Current IRM curve at different utilization thresholds for display purpose */
   currentIrmCurve: Maybe<Array<IrmCurveDataPoint>>;
-  /** Daily market APYs */
+  /**
+   * Daily market APYs
+   * @deprecated Use `market.state` daily average APYs instead.
+   */
   dailyApys: Maybe<MarketApyAggregates>;
   /** State history */
   historicalState: Maybe<MarketHistory>;
@@ -344,7 +350,10 @@ export type Market = {
   irmAddress: Scalars["Address"]["output"];
   lltv: Scalars["BigInt"]["output"];
   loanAsset: Asset;
-  /** Monthly market APYs */
+  /**
+   * Monthly market APYs
+   * @deprecated Use `market.state` monthly average APYs instead.
+   */
   monthlyApys: Maybe<MarketApyAggregates>;
   morphoBlue: MorphoBlue;
   oracle: Maybe<Oracle>;
@@ -355,7 +364,10 @@ export type Market = {
   oracleInfo: Maybe<MarketOracleInfo>;
   /** Public allocator shared liquidity available reallocations */
   publicAllocatorSharedLiquidity: Maybe<Array<PublicAllocatorSharedLiquidity>>;
-  /** Quarterly market APYs */
+  /**
+   * Quarterly market APYs
+   * @deprecated Use `market.state` quarterly average APYs instead.
+   */
   quarterlyApys: Maybe<MarketApyAggregates>;
   /** Market realized bad debt values */
   realizedBadDebt: Maybe<MarketBadDebt>;
@@ -372,10 +384,16 @@ export type Market = {
   uniqueKey: Scalars["MarketId"]["output"];
   /** Market warnings */
   warnings: Maybe<Array<MarketWarning>>;
-  /** Weekly market APYs */
+  /**
+   * Weekly market APYs
+   * @deprecated Use `market.state` weekly average APYs instead.
+   */
   weeklyApys: Maybe<MarketApyAggregates>;
   whitelisted: Scalars["Boolean"]["output"];
-  /** Yearly market APYs */
+  /**
+   * Yearly market APYs
+   * @deprecated Use `market.state` yearly average APYs instead.
+   */
   yearlyApys: Maybe<MarketApyAggregates>;
 };
 
@@ -425,9 +443,15 @@ export type MarketCollateralTransferTransactionData = {
 /** Morpho Blue supply and borrow side concentrations */
 export type MarketConcentration = {
   __typename?: "MarketConcentration";
-  /** Borrowers Herfindahl-Hirschman Index */
+  /**
+   * Borrowers Herfindahl-Hirschman Index
+   * @deprecated Not maintained.
+   */
   borrowHhi: Maybe<Scalars["Float"]["output"]>;
-  /** Borrowers Herfindahl-Hirschman Index */
+  /**
+   * Borrowers Herfindahl-Hirschman Index
+   * @deprecated Not maintained.
+   */
   supplyHhi: Maybe<Scalars["Float"]["output"]>;
 };
 
@@ -852,6 +876,98 @@ export type MarketLiquidationTransactionData = {
   seizedAssetsUsd: Maybe<Scalars["Float"]["output"]>;
 };
 
+/** Morpho Blue market (limited inside list resolvers) */
+export type MarketListItem = {
+  __typename?: "MarketListItem";
+  /**
+   * All time market APYs
+   * @deprecated Use `market.state` all time average APYs instead.
+   */
+  allTimeApys: Maybe<MarketApyAggregates>;
+  /** Market bad debt values */
+  badDebt: Maybe<MarketBadDebt>;
+  collateralAsset: Maybe<Asset>;
+  /**
+   * Amount of collateral to borrow 1 loan asset scaled to both asset decimals
+   * @deprecated Use `state.price` instead.
+   */
+  collateralPrice: Maybe<Scalars["BigInt"]["output"]>;
+  /**
+   * Market concentrations
+   * @deprecated Not maintained.
+   */
+  concentration: Maybe<MarketConcentration>;
+  creationBlockNumber: Scalars["Int"]["output"];
+  creationTimestamp: Scalars["BigInt"]["output"];
+  creatorAddress: Maybe<Scalars["Address"]["output"]>;
+  /** Current IRM curve at different utilization thresholds for display purpose */
+  currentIrmCurve: Maybe<Array<IrmCurveDataPoint>>;
+  /**
+   * Daily market APYs
+   * @deprecated Use `market.state` daily average APYs instead.
+   */
+  dailyApys: Maybe<MarketApyAggregates>;
+  /**
+   * State history
+   * @deprecated Will be available inside `market` and `marketByUniqueKey` resolvers only.
+   */
+  historicalState: Maybe<MarketHistory>;
+  id: Scalars["ID"]["output"];
+  irmAddress: Scalars["Address"]["output"];
+  lltv: Scalars["BigInt"]["output"];
+  loanAsset: Asset;
+  /**
+   * Monthly market APYs
+   * @deprecated Use `market.state` monthly average APYs instead.
+   */
+  monthlyApys: Maybe<MarketApyAggregates>;
+  morphoBlue: MorphoBlue;
+  oracle: Maybe<Oracle>;
+  oracleAddress: Scalars["Address"]["output"];
+  /** Feeds used by the oracle if provided by the contract */
+  oracleFeed: Maybe<MarketOracleFeed>;
+  /** Market oracle information */
+  oracleInfo: Maybe<MarketOracleInfo>;
+  /** Public allocator shared liquidity available reallocations */
+  publicAllocatorSharedLiquidity: Maybe<Array<PublicAllocatorSharedLiquidity>>;
+  /**
+   * Quarterly market APYs
+   * @deprecated Use `market.state` quarterly average APYs instead.
+   */
+  quarterlyApys: Maybe<MarketApyAggregates>;
+  /** Market realized bad debt values */
+  realizedBadDebt: Maybe<MarketBadDebt>;
+  /** Underlying amount of assets that can be reallocated to this market */
+  reallocatableLiquidityAssets: Maybe<Scalars["BigInt"]["output"]>;
+  /** Risk related data on the market */
+  riskAnalysis: Maybe<Array<RiskAnalysis>>;
+  /** Current state */
+  state: Maybe<MarketState>;
+  /** Vaults with the market in supply queue */
+  supplyingVaults: Maybe<Array<Vault>>;
+  targetBorrowUtilization: Scalars["BigInt"]["output"];
+  targetWithdrawUtilization: Scalars["BigInt"]["output"];
+  uniqueKey: Scalars["MarketId"]["output"];
+  /** Market warnings */
+  warnings: Maybe<Array<MarketWarning>>;
+  /**
+   * Weekly market APYs
+   * @deprecated Use `market.state` weekly average APYs instead.
+   */
+  weeklyApys: Maybe<MarketApyAggregates>;
+  whitelisted: Scalars["Boolean"]["output"];
+  /**
+   * Yearly market APYs
+   * @deprecated Use `market.state` yearly average APYs instead.
+   */
+  yearlyApys: Maybe<MarketApyAggregates>;
+};
+
+/** Morpho Blue market (limited inside list resolvers) */
+export type MarketListItemCurrentIrmCurveArgs = {
+  numberOfPoints?: InputMaybe<Scalars["Float"]["input"]>;
+};
+
 /** Market oracle accuracy versus spot price */
 export type MarketOracleAccuracy = {
   __typename?: "MarketOracleAccuracy";
@@ -902,6 +1018,8 @@ export type MarketOracleInfo = {
 
 export enum MarketOrderBy {
   ApyAtTarget = "ApyAtTarget",
+  AvgBorrowApy = "AvgBorrowApy",
+  AvgNetBorrowApy = "AvgNetBorrowApy",
   BorrowApy = "BorrowApy",
   BorrowAssets = "BorrowAssets",
   BorrowAssetsUsd = "BorrowAssetsUsd",
@@ -1307,6 +1425,14 @@ export type MarketState = {
   allTimeSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Apy at target utilization */
   apyAtTarget: Scalars["Float"]["output"];
+  /** 6h average borrow APY excluding rewards (6h timeframe is subject to change). */
+  avgBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** 6h average borrow APY including rewards (6h timeframe is subject to change). */
+  avgNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** 6h average supply APY including rewards (6h timeframe is subject to change). */
+  avgNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** 6h average supply APY excluding rewards (6h timeframe is subject to change). */
+  avgSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Block number of the state */
   blockNumber: Maybe<Scalars["BigInt"]["output"]>;
   /** Instantaneous Borrow APY */
@@ -1453,6 +1579,32 @@ export type MarketWarning = {
 };
 
 export type MarketWarningMetadata = CustomMetadata | HardcodedPriceMetadata;
+
+export type MetaMorphoAdapter = VaultV2Adapter & {
+  __typename?: "MetaMorphoAdapter";
+  address: Scalars["Address"]["output"];
+  /** @deprecated currently always position.assets or 0 */
+  assets: Scalars["BigInt"]["output"];
+  /** @deprecated currently always position.assetsUsd or 0 */
+  assetsUsd: Maybe<Scalars["Float"]["output"]>;
+  chain: Chain;
+  creationBlockNumber: Scalars["BigInt"]["output"];
+  creationTimestamp: Scalars["BigInt"]["output"];
+  factory: VaultV2AdapterFactory;
+  id: Scalars["ID"]["output"];
+  metaMorpho: Vault;
+  position: Maybe<VaultPosition>;
+  type: VaultV2AdapterType;
+  vault: VaultV2;
+};
+
+export type MetaMorphoAdapterFactory = VaultV2AdapterFactory & {
+  __typename?: "MetaMorphoAdapterFactory";
+  address: Scalars["Address"]["output"];
+  chain: Chain;
+  creationBlockNumber: Scalars["BigInt"]["output"];
+  id: Scalars["ID"]["output"];
+};
 
 export type Metadata =
   | AddressRiskMetadata
@@ -1733,6 +1885,12 @@ export type PaginatedCurators = {
   pageInfo: Maybe<PageInfo>;
 };
 
+export type PaginatedManualVicFactories = {
+  __typename?: "PaginatedManualVicFactories";
+  items: Maybe<Array<ManualVicFactory>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
 export type PaginatedMarketPositions = {
   __typename?: "PaginatedMarketPositions";
   items: Maybe<Array<MarketPosition>>;
@@ -1741,7 +1899,13 @@ export type PaginatedMarketPositions = {
 
 export type PaginatedMarkets = {
   __typename?: "PaginatedMarkets";
-  items: Maybe<Array<Market>>;
+  items: Maybe<Array<MarketListItem>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
+export type PaginatedMetaMorphoAdapterFactories = {
+  __typename?: "PaginatedMetaMorphoAdapterFactories";
+  items: Maybe<Array<MetaMorphoAdapterFactory>>;
   pageInfo: Maybe<PageInfo>;
 };
 
@@ -1759,7 +1923,7 @@ export type PaginatedMetaMorphoPositions = {
 
 export type PaginatedMetaMorphos = {
   __typename?: "PaginatedMetaMorphos";
-  items: Maybe<Array<Vault>>;
+  items: Maybe<Array<VaultListItem>>;
   pageInfo: Maybe<PageInfo>;
 };
 
@@ -1820,6 +1984,24 @@ export type PaginatedVaultAdminEvent = {
 export type PaginatedVaultReallocates = {
   __typename?: "PaginatedVaultReallocates";
   items: Maybe<Array<VaultReallocate>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
+export type PaginatedVaultV2Adapters = {
+  __typename?: "PaginatedVaultV2Adapters";
+  items: Maybe<Array<VaultV2Adapter>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
+export type PaginatedVaultV2Factories = {
+  __typename?: "PaginatedVaultV2Factories";
+  items: Maybe<Array<VaultV2Factory>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
+export type PaginatedVaultV2s = {
+  __typename?: "PaginatedVaultV2s";
+  items: Maybe<Array<VaultV2>>;
   pageInfo: Maybe<PageInfo>;
 };
 
@@ -1932,12 +2114,11 @@ export type Query = {
   assetByAddress: Asset;
   assets: PaginatedAssets;
   chain: Chain;
-  chainSynchronizationState: ChainSynchronizationState;
-  chainSynchronizationStates: Array<ChainSynchronizationState>;
   chains: Array<Chain>;
   curator: Curator;
   curators: PaginatedCurators;
   market: Market;
+  /** @deprecated Use `market.state` average APYs instead. */
   marketAverageApys: Maybe<MarketApyAggregates>;
   marketByUniqueKey: Market;
   marketCollateralAtRisk: MarketCollateralAtRisk;
@@ -1973,6 +2154,16 @@ export type Query = {
   vaultPosition: VaultPosition;
   vaultPositions: PaginatedMetaMorphoPositions;
   vaultReallocates: PaginatedVaultReallocates;
+  /** @deprecated WIP */
+  vaultV2Adapters: PaginatedVaultV2Adapters;
+  /** @deprecated WIP */
+  vaultV2Factories: PaginatedVaultV2Factories;
+  /** @deprecated WIP */
+  vaultV2ManualVicFactories: PaginatedManualVicFactories;
+  /** @deprecated WIP */
+  vaultV2MetaMorphoAdapterFactories: PaginatedMetaMorphoAdapterFactories;
+  /** @deprecated WIP */
+  vaultV2s: PaginatedVaultV2s;
   vaults: PaginatedMetaMorphos;
 };
 
@@ -1995,11 +2186,6 @@ export type QueryAssetsArgs = {
 
 export type QueryChainArgs = {
   id: Scalars["Int"]["input"];
-};
-
-export type QueryChainSynchronizationStateArgs = {
-  chainId: Scalars["Int"]["input"];
-  key: Scalars["String"]["input"];
 };
 
 export type QueryCuratorArgs = {
@@ -2211,6 +2397,22 @@ export type QueryVaultReallocatesArgs = {
   orderDirection?: InputMaybe<OrderDirection>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
   where?: InputMaybe<VaultReallocateFilters>;
+};
+
+export type QueryVaultV2AdaptersArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  orderBy?: InputMaybe<VaultV2AdapterOrderBy>;
+  orderDirection?: InputMaybe<OrderDirection>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+  where?: InputMaybe<VaultV2AdaptersFilters>;
+};
+
+export type QueryVaultV2sArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  orderBy?: InputMaybe<VaultV2OrderBy>;
+  orderDirection?: InputMaybe<OrderDirection>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+  where?: InputMaybe<VaultV2sFilters>;
 };
 
 export type QueryVaultsArgs = {
@@ -2625,7 +2827,7 @@ export enum UsersOrderBy {
   Address = "Address",
 }
 
-/** MetaMorpho Vaults */
+/** MetaMorpho vault */
 export type Vault = {
   __typename?: "Vault";
   address: Scalars["Address"]["output"];
@@ -2640,23 +2842,30 @@ export type Vault = {
   creatorAddress: Maybe<Scalars["Address"]["output"]>;
   /**
    * Daily vault APY
-   * @deprecated Use dailyApys instead.
+   * @deprecated Use `dailyApys` instead.
    */
   dailyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Daily vault APYs */
+  /**
+   * Daily vault APYs
+   * @deprecated Use `vault.state` daily average APYs instead.
+   */
   dailyApys: Maybe<VaultApyAggregates>;
   factory: VaultFactory;
-  historicalState: VaultHistory;
+  /** State history */
+  historicalState: Maybe<VaultHistory>;
   id: Scalars["ID"]["output"];
   /** Vault liquidity */
   liquidity: Maybe<VaultLiquidity>;
   metadata: Maybe<VaultMetadata>;
   /**
    * Monthly vault APY
-   * @deprecated Use monthlyApys instead.
+   * @deprecated Use `monthlyApys` instead.
    */
   monthlyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Monthly vault APYs */
+  /**
+   * Monthly vault APYs
+   * @deprecated Use `vault.state` monthly average APYs instead.
+   */
   monthlyApys: Maybe<VaultApyAggregates>;
   name: Scalars["String"]["output"];
   /** Vault pending caps */
@@ -2671,15 +2880,18 @@ export type Vault = {
   warnings: Maybe<Array<VaultWarning>>;
   /**
    * Weekly vault APY
-   * @deprecated Use weeklyApys instead.
+   * @deprecated Use `weeklyApys` instead.
    */
   weeklyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Weekly vault APYs */
+  /**
+   * Weekly vault APYs
+   * @deprecated Use `vault.state` weekly average APYs instead.
+   */
   weeklyApys: Maybe<VaultApyAggregates>;
   whitelisted: Scalars["Boolean"]["output"];
 };
 
-/** MetaMorpho Vaults */
+/** MetaMorpho vault */
 export type VaultAdminEventsArgs = {
   first?: InputMaybe<Scalars["Int"]["input"]>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
@@ -3081,9 +3293,84 @@ export type VaultLiquidity = {
   usd: Scalars["Float"]["output"];
 };
 
+/** MetaMorpho Vaults  (limited inside list resolvers) */
+export type VaultListItem = {
+  __typename?: "VaultListItem";
+  address: Scalars["Address"]["output"];
+  /** Vault admin events on the vault */
+  adminEvents: Maybe<PaginatedVaultAdminEvent>;
+  /** Vault allocators */
+  allocators: Maybe<Array<VaultAllocator>>;
+  asset: Asset;
+  chain: Chain;
+  creationBlockNumber: Scalars["Int"]["output"];
+  creationTimestamp: Scalars["BigInt"]["output"];
+  creatorAddress: Maybe<Scalars["Address"]["output"]>;
+  /**
+   * Daily vault APY
+   * @deprecated Use `dailyApys` instead.
+   */
+  dailyApy: Maybe<Scalars["Float"]["output"]>;
+  /**
+   * Daily vault APYs
+   * @deprecated Use `vault.state` daily average APYs instead.
+   */
+  dailyApys: Maybe<VaultApyAggregates>;
+  factory: VaultFactory;
+  /**
+   * State history
+   * @deprecated Will be available inside `vault` and `vaultByAddress` resolvers only.
+   */
+  historicalState: Maybe<VaultHistory>;
+  id: Scalars["ID"]["output"];
+  /** Vault liquidity */
+  liquidity: Maybe<VaultLiquidity>;
+  metadata: Maybe<VaultMetadata>;
+  /**
+   * Monthly vault APY
+   * @deprecated Use `monthlyApys` instead.
+   */
+  monthlyApy: Maybe<Scalars["Float"]["output"]>;
+  /**
+   * Monthly vault APYs
+   * @deprecated Use `vault.state` monthly average APYs instead.
+   */
+  monthlyApys: Maybe<VaultApyAggregates>;
+  name: Scalars["String"]["output"];
+  /** Vault pending caps */
+  pendingCaps: Maybe<Array<VaultPendingCap>>;
+  /** Public allocator configuration */
+  publicAllocatorConfig: Maybe<PublicAllocatorConfig>;
+  /** Risk related data on the vault */
+  riskAnalysis: Maybe<Array<RiskAnalysis>>;
+  state: Maybe<VaultState>;
+  symbol: Scalars["String"]["output"];
+  /** Vault warnings */
+  warnings: Maybe<Array<VaultWarning>>;
+  /**
+   * Weekly vault APY
+   * @deprecated Use `weeklyApys` instead.
+   */
+  weeklyApy: Maybe<Scalars["Float"]["output"]>;
+  /**
+   * Weekly vault APYs
+   * @deprecated Use `vault.state` weekly average APYs instead.
+   */
+  weeklyApys: Maybe<VaultApyAggregates>;
+  whitelisted: Scalars["Boolean"]["output"];
+};
+
+/** MetaMorpho Vaults  (limited inside list resolvers) */
+export type VaultListItemAdminEventsArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+  where?: InputMaybe<VaultAdminEventsFilters>;
+};
+
 /** Vault metadata */
 export type VaultMetadata = {
   __typename?: "VaultMetadata";
+  /** @deprecated Use `state.curators` instead */
   curators: Array<VaultMetadataCurator>;
   description: Scalars["String"]["output"];
   forumLink: Maybe<Scalars["String"]["output"]>;
@@ -3102,6 +3389,8 @@ export type VaultMetadataCurator = {
 export enum VaultOrderBy {
   Address = "Address",
   Apy = "Apy",
+  AvgApy = "AvgApy",
+  AvgNetApy = "AvgNetApy",
   CredoraRiskScore = "CredoraRiskScore",
   Curator = "Curator",
   DailyApy = "DailyApy",
@@ -3316,16 +3605,17 @@ export type VaultState = {
   allocation: Maybe<Array<VaultAllocation>>;
   /** Vault APY excluding rewards, before deducting the performance fee. */
   apy: Scalars["Float"]["output"];
+  /** 6h average vault APY excluding rewards, before deducting the performance fee (6h timeframe is subject to change). */
+  avgApy: Maybe<Scalars["Float"]["output"]>;
+  /** 6h average vault APY including rewards, after deducting the performance fee (6h timeframe is subject to change). */
+  avgNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Block number of the state */
   blockNumber: Maybe<Scalars["BigInt"]["output"]>;
   /** Vault curator address. */
   curator: Scalars["Address"]["output"];
   /** Additional information about the curator address. */
   curatorMetadata: Maybe<PaginatedAddressMetadata>;
-  /**
-   * Curators operating on this vault
-   * @deprecated Work in progress
-   */
+  /** Curators operating on this vault */
   curators: Maybe<Array<Curator>>;
   /** Daily Vault APY excluding rewards, before deducting the performance fee. */
   dailyApy: Maybe<Scalars["Float"]["output"]>;
@@ -3415,6 +3705,98 @@ export type VaultTransactionData = {
   assetsUsd: Maybe<Scalars["Float"]["output"]>;
   shares: Scalars["BigInt"]["output"];
   vault: Vault;
+};
+
+export type VaultV2 = {
+  __typename?: "VaultV2";
+  adapters: PaginatedVaultV2Adapters;
+  address: Scalars["Address"]["output"];
+  asset: Asset;
+  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgApy */
+  avgApy: Maybe<Scalars["Float"]["output"]>;
+  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgNetApy */
+  avgNetApy: Maybe<Scalars["Float"]["output"]>;
+  chain: Chain;
+  creationBlockNumber: Scalars["BigInt"]["output"];
+  creationTimestamp: Scalars["BigInt"]["output"];
+  factory: Asset;
+  id: Scalars["ID"]["output"];
+  /** @deprecated currently always 0 */
+  idleAssets: Scalars["BigInt"]["output"];
+  /** @deprecated currently always 0 */
+  idleAssetsUsd: Maybe<Scalars["Float"]["output"]>;
+  /** @deprecated currently always metaMorphoAdapter */
+  liquidityAdapter: Maybe<VaultV2Adapter>;
+  /** @deprecated currently always 0 */
+  managementFee: Scalars["Float"]["output"];
+  /** @deprecated currently always 0x0000... */
+  managementFeeRecipient: Scalars["Address"]["output"];
+  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.fee */
+  performanceFee: Scalars["Float"]["output"];
+  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.feeRecipient */
+  performanceFeeRecipient: Scalars["Address"]["output"];
+  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.rewards */
+  rewards: Array<VaultStateReward>;
+  /** @deprecated currently always metaMorphoAdapter.position.assets */
+  totalAssets: Maybe<Scalars["BigInt"]["output"]>;
+  /** @deprecated currently always metaMorphoAdapter.position.assetsUsd */
+  totalAssetsUsd: Maybe<Scalars["Float"]["output"]>;
+};
+
+export type VaultV2Adapter = {
+  address: Scalars["Address"]["output"];
+  /** @deprecated currently always position.assets or 0 */
+  assets: Scalars["BigInt"]["output"];
+  /** @deprecated currently always position.assetsUsd or 0 */
+  assetsUsd: Maybe<Scalars["Float"]["output"]>;
+  chain: Chain;
+  creationBlockNumber: Scalars["BigInt"]["output"];
+  creationTimestamp: Scalars["BigInt"]["output"];
+  factory: VaultV2AdapterFactory;
+  id: Scalars["ID"]["output"];
+  type: VaultV2AdapterType;
+  vault: VaultV2;
+};
+
+export type VaultV2AdapterFactory = {
+  address: Scalars["Address"]["output"];
+  chain: Chain;
+  creationBlockNumber: Scalars["BigInt"]["output"];
+  id: Scalars["ID"]["output"];
+};
+
+export enum VaultV2AdapterOrderBy {
+  Address = "Address",
+}
+
+export enum VaultV2AdapterType {
+  MetaMorpho = "MetaMorpho",
+}
+
+export type VaultV2AdaptersFilters = {
+  /** Filter by vault v2 adapter address */
+  address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by chain id */
+  chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+};
+
+export type VaultV2Factory = {
+  __typename?: "VaultV2Factory";
+  address: Scalars["Address"]["output"];
+  chain: Chain;
+  creationBlockNumber: Scalars["BigInt"]["output"];
+  id: Scalars["ID"]["output"];
+};
+
+export enum VaultV2OrderBy {
+  Address = "Address",
+}
+
+export type VaultV2sFilters = {
+  /** Filter by vault v2 address */
+  address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by chain id */
+  chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
 };
 
 /** Vault warning */
