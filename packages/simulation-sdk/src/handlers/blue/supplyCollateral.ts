@@ -12,7 +12,7 @@ export const handleBlueSupplyCollateralOperation: OperationHandler<
 > = ({ args: { id, assets, onBehalf, callback }, sender }, data) => {
   const {
     params: { collateralToken },
-  } = data.getMarket(id);
+  } = data.getMarket(id, false);
   const {
     morpho,
     bundler3: { generalAdapter1 },
