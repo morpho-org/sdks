@@ -16,6 +16,7 @@ export enum ChainId {
   PlumeMainnet = 98866,
   CampMainnet = 123420001114,
   KatanaMainnet = 747474,
+  TacMainnet = 239,
 }
 
 export interface ChainMetadata {
@@ -166,6 +167,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://explorer.katanarpc.com",
       identifier: "katana",
+    },
+    [ChainId.TacMainnet]: {
+      name: "TAC",
+      id: ChainId.TacMainnet,
+      nativeCurrency: { name: "TAC", symbol: "TAC", decimals: 18 },
+      explorerUrl: "https://explorer.tac.build/",
+      identifier: "tac",
     },
   };
 }
