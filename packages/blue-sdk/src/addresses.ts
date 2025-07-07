@@ -483,6 +483,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.KatanaMainnet]: {
     [_addressesRegistry[ChainId.KatanaMainnet].wNative]: NATIVE_ADDRESS,
   },
+  [ChainId.ArbitrumMainnet]: {
+    [_addressesRegistry[ChainId.ArbitrumMainnet].wNative]: NATIVE_ADDRESS,
+  },
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
