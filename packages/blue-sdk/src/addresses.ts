@@ -284,6 +284,7 @@ const _addressesRegistry = {
     bundler3: {
       bundler3: "0x7DD85759182495AF7F6757DA75036d24A9B58bc3",
       generalAdapter1: "0xC11329d19C2275c9E759867e879ECFcEeD7e30A0",
+      paraswapAdapter: "0xAa870Da2a9F611A3A53d0D2AEe5664B3700a59c9",
     },
     adaptiveCurveIrm: "0x9a6061d51743B31D2c3Be75D83781Fa423f53F0E",
     publicAllocator: "0xB0c9a107fA17c779B3378210A7a593e88938C7C9",
