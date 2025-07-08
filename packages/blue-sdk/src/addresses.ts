@@ -398,6 +398,22 @@ const _addressesRegistry = {
 
     wNative: "0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62",
   },
+  [ChainId.LiskMainnet]: {
+    morpho: "0x00cD58DEEbd7A2F1C55dAec715faF8aed5b27BF8",
+    bundler3: {
+      bundler3: "0xD96E5e02580C4EAfE15B5537b25eE3dEe5861e00",
+      generalAdapter1: "0x76cFE4BF840C7b461772fE7CDE399f58c4173584",
+    },
+    adaptiveCurveIrm: "0x5576629f21D528A8c3e06C338dDa907B94563902",
+    publicAllocator: "0xb1E5B1De2a54ab55C412B5ee1E38e46799588103",
+    metaMorphoFactory: "0x01dD876130690469F685a65C2B295A90a81BaD91",
+    chainlinkOracleFactory: "0x2eb4D17C2AAf1EA62Bf83Fb49Dd1128b14AF4D93",
+    preLiquidationFactory: "0xF2c325F26691b6556e6f66451bb38bDa37FEbaa7",
+
+    wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
+  },
 } as const;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -485,6 +501,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.ArbitrumMainnet]: {
     [_addressesRegistry[ChainId.ArbitrumMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.LiskMainnet]: {
+    [_addressesRegistry[ChainId.LiskMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 

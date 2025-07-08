@@ -16,6 +16,7 @@ export enum ChainId {
   PlumeMainnet = 98866,
   CampMainnet = 123420001114,
   KatanaMainnet = 747474,
+  LiskMainnet = 1135,
 }
 
 export interface ChainMetadata {
@@ -166,6 +167,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://explorer.katanarpc.com",
       identifier: "katana",
+    },
+    [ChainId.LiskMainnet]: {
+      name: "Lisk",
+      id: ChainId.LiskMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://blockscout.lisk.com",
+      identifier: "lisk",
     },
   };
 }
