@@ -500,6 +500,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.ArbitrumMainnet]: {
     [_addressesRegistry[ChainId.ArbitrumMainnet].wNative]: NATIVE_ADDRESS,
   },
+  [ChainId.EtherlinkMainnet]: {
+    [_addressesRegistry[ChainId.EtherlinkMainnet].wNative]: NATIVE_ADDRESS,
+  },
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
