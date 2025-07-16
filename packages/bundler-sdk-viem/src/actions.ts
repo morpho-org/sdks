@@ -832,7 +832,7 @@ export const encodeOperation = (
         .accrueInterest(dataBefore.block.timestamp);
 
       if (shares === 0n) {
-        const minSharePrice = MathLib.mulDivUp(
+        const minSharePrice = MathLib.mulDivDown(
           assets,
           MathLib.wToRay(MathLib.WAD - slippage),
           vault.toShares(assets),
@@ -849,7 +849,7 @@ export const encodeOperation = (
           ],
         });
       } else {
-        const minSharePrice = MathLib.mulDivUp(
+        const minSharePrice = MathLib.mulDivDown(
           vault.toAssets(shares),
           MathLib.wToRay(MathLib.WAD - slippage),
           shares,
