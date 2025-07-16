@@ -121,6 +121,8 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
   [ChainId.CampMainnet]: {},
   [ChainId.KatanaMainnet]: {},
   [ChainId.EtherlinkMainnet]: {},
+  [ChainId.TacMainnet]: {},
+  [ChainId.LiskMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
@@ -198,5 +200,13 @@ export const preLiquidationFactoryConfigs: Record<
   [ChainId.EtherlinkMainnet]: {
     address: addressesRegistry[ChainId.EtherlinkMainnet].preLiquidationFactory,
     startBlock: 21047448n,
+  },
+  [ChainId.TacMainnet]: {
+    address: addressesRegistry[ChainId.TacMainnet].preLiquidationFactory,
+    startBlock: 978967n,
+  },
+  [ChainId.LiskMainnet]: {
+    address: addressesRegistry[ChainId.LiskMainnet].preLiquidationFactory,
+    startBlock: 15731595n,
   },
 };

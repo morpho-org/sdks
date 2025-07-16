@@ -20,16 +20,16 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      # - name: Restore Foundry cache
-      #   uses: actions/cache/restore@v3
-      #   with:
-      #     path: ~/.foundry/cache/rpc
-      #     key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
-      #     restore-keys: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-
+      - name: Restore Foundry cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.foundry/cache/rpc
+          key: foundry-${{ github.job }}-${{ github.sha }}
+          restore-keys: foundry-${{ github.job }}-
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          cache: false
+          cache: false # Disable built-in cache to always save it.
 
       - run: pnpm install --frozen-lockfile
 
@@ -40,7 +40,7 @@ jobs:
 
       - name: Save Foundry cache
         if: always()
-        uses: actions/cache/save@v3
+        uses: actions/cache/save@v4
         with:
           path: ~/.foundry/cache/rpc
-          key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
+          key: foundry-${{ github.job }}-${{ github.sha }}
