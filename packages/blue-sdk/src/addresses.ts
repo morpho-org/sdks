@@ -411,6 +411,21 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x5851C1e423A2F93aFb821834a63cA052D19ae4Ef",
 
     wNative: "0xB63B9f0eb4A6E6f191529D71d4D88cc8900Df2C9",
+  [ChainId.LiskMainnet]: {
+    morpho: "0x00cD58DEEbd7A2F1C55dAec715faF8aed5b27BF8",
+    bundler3: {
+      bundler3: "0xD96E5e02580C4EAfE15B5537b25eE3dEe5861e00",
+      generalAdapter1: "0x76cFE4BF840C7b461772fE7CDE399f58c4173584",
+    },
+    adaptiveCurveIrm: "0x5576629f21D528A8c3e06C338dDa907B94563902",
+    publicAllocator: "0xb1E5B1De2a54ab55C412B5ee1E38e46799588103",
+    metaMorphoFactory: "0x01dD876130690469F685a65C2B295A90a81BaD91",
+    chainlinkOracleFactory: "0x2eb4D17C2AAf1EA62Bf83Fb49Dd1128b14AF4D93",
+    preLiquidationFactory: "0xF2c325F26691b6556e6f66451bb38bDa37FEbaa7",
+
+    wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
   },
 } as const;
 
@@ -502,6 +517,8 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.TacMainnet]: {
     [_addressesRegistry[ChainId.TacMainnet].wNative]: NATIVE_ADDRESS,
+  [ChainId.LiskMainnet]: {
+    [_addressesRegistry[ChainId.LiskMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 

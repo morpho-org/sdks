@@ -17,6 +17,7 @@ export enum ChainId {
   CampMainnet = 123420001114,
   KatanaMainnet = 747474,
   TacMainnet = 239,
+  LiskMainnet = 1135,
 }
 
 export interface ChainMetadata {
@@ -174,6 +175,12 @@ export namespace ChainUtils {
       nativeCurrency: { name: "TAC", symbol: "TAC", decimals: 18 },
       explorerUrl: "https://explorer.tac.build/",
       identifier: "tac",
+    [ChainId.LiskMainnet]: {
+      name: "Lisk",
+      id: ChainId.LiskMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://blockscout.lisk.com",
+      identifier: "lisk",
     },
   };
 }
