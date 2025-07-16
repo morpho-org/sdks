@@ -398,6 +398,20 @@ const _addressesRegistry = {
 
     wNative: "0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62",
   },
+  [ChainId.TacMainnet]: {
+    morpho: "0x918B9F2E4B44E20c6423105BB6cCEB71473aD35c",
+    bundler3: {
+      bundler3: "0x84b189823D0f84c36728Bb3335dD8C833564e72f",
+      generalAdapter1: "0x6D94E7dCA6d8FAE2CF954633C2Cf9c286258E0af",
+    },
+    adaptiveCurveIrm: "0x7E82b16496fA8CC04935528dA7F5A2C684A3C7A3",
+    publicAllocator: "0x414247afcf1fE3b94C617e7E3A7adB81D8D3208F",
+    metaMorphoFactory: "0xcDA78f4979d17Ec93052A84A12001fe0088AD734",
+    chainlinkOracleFactory: "0xbf10eD52dD60C60E901BF022c3675303ad4a56b1",
+    preLiquidationFactory: "0x5851C1e423A2F93aFb821834a63cA052D19ae4Ef",
+
+    wNative: "0xB63B9f0eb4A6E6f191529D71d4D88cc8900Df2C9",
+  },
   [ChainId.LiskMainnet]: {
     morpho: "0x00cD58DEEbd7A2F1C55dAec715faF8aed5b27BF8",
     bundler3: {
@@ -501,6 +515,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.ArbitrumMainnet]: {
     [_addressesRegistry[ChainId.ArbitrumMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.TacMainnet]: {
+    [_addressesRegistry[ChainId.TacMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.LiskMainnet]: {
     [_addressesRegistry[ChainId.LiskMainnet].wNative]: NATIVE_ADDRESS,
