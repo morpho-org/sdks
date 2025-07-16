@@ -22,8 +22,9 @@ jobs:
 
       - uses: foundry-rs/foundry-toolchain@v1
         with:
-          cache-key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
-          cache-restore-keys: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-
+          cache: true
+          cache-key: foundry-${{ github.job }}-${{ github.sha }}
+          cache-restore-keys: foundry-${{ github.job }}-
 
       - run: pnpm install --frozen-lockfile
 
@@ -37,4 +38,4 @@ jobs:
         uses: actions/cache/save@v3
         with:
           path: ~/.foundry/cache/rpc
-          key: ${{ runner.os }}-foundry-chain-fork-${{ github.job }}-${{ github.sha }}
+          key: foundry-${{ github.job }}-${{ github.sha }}
