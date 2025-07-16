@@ -411,6 +411,7 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x5851C1e423A2F93aFb821834a63cA052D19ae4Ef",
 
     wNative: "0xB63B9f0eb4A6E6f191529D71d4D88cc8900Df2C9",
+  },
   [ChainId.LiskMainnet]: {
     morpho: "0x00cD58DEEbd7A2F1C55dAec715faF8aed5b27BF8",
     bundler3: {
@@ -517,6 +518,7 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.TacMainnet]: {
     [_addressesRegistry[ChainId.TacMainnet].wNative]: NATIVE_ADDRESS,
+  },
   [ChainId.LiskMainnet]: {
     [_addressesRegistry[ChainId.LiskMainnet].wNative]: NATIVE_ADDRESS,
   },

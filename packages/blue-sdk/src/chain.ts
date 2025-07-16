@@ -175,6 +175,7 @@ export namespace ChainUtils {
       nativeCurrency: { name: "TAC", symbol: "TAC", decimals: 18 },
       explorerUrl: "https://explorer.tac.build/",
       identifier: "tac",
+    },
     [ChainId.LiskMainnet]: {
       name: "Lisk",
       id: ChainId.LiskMainnet,
