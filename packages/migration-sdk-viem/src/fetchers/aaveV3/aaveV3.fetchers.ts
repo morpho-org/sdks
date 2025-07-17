@@ -182,7 +182,7 @@ export async function fetchAaveV3Positions(
             ...migrationContracts.protocolDataProvider,
             functionName: "getReserveEModeCategory",
             args: [underlyingAddress],
-          }),
+          }).catch(() => null),
           fetchToken(underlyingAddress, client, parameters),
         ]);
 
@@ -195,12 +195,14 @@ export async function fetchAaveV3Positions(
               functionName: "balanceOf",
               args: [user],
             }),
-            readContract(client, {
-              ...parameters,
-              ...migrationContracts.pool,
-              functionName: "getEModeCategoryData",
-              args: [Number(eModeId)],
-            }),
+            eModeId !== null
+              ? readContract(client, {
+                  ...parameters,
+                  ...migrationContracts.pool,
+                  functionName: "getEModeCategoryData",
+                  args: [Number(eModeId)],
+                })
+              : null,
             readContract(client, {
               ...parameters,
               abi: blueAbi,
@@ -223,7 +225,9 @@ export async function fetchAaveV3Positions(
           address: oracleAddress,
           functionName: "getAssetPrice",
           args: [
-            eModeId === 0n || eModeCategoryData.priceSource === zeroAddress
+            eModeId === 0n ||
+            !eModeCategoryData ||
+            eModeCategoryData.priceSource === zeroAddress
               ? underlyingAddress
               : eModeCategoryData.priceSource,
           ],
@@ -248,7 +252,7 @@ export async function fetchAaveV3Positions(
           },
           borrow: {
             liquidationThreshold:
-              eModeId === 0n
+              eModeId === 0n || !eModeCategoryData
                 ? liquidationThreshold
                 : BigInt(eModeCategoryData.liquidationThreshold),
             currentVariableBorrowRate,
