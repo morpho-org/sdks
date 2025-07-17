@@ -16,6 +16,7 @@ export enum ChainId {
   PlumeMainnet = 98866,
   CampMainnet = 123420001114,
   KatanaMainnet = 747474,
+  EtherlinkMainnet = 42793,
   TacMainnet = 239,
   LiskMainnet = 1135,
 }
@@ -168,6 +169,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://explorer.katanarpc.com",
       identifier: "katana",
+    },
+    [ChainId.EtherlinkMainnet]: {
+      name: "Etherlink",
+      id: ChainId.EtherlinkMainnet,
+      nativeCurrency: { name: "Tezos", symbol: "XTZ", decimals: 18 },
+      explorerUrl: "https://explorer.etherlink.com",
+      identifier: "etherlink",
     },
     [ChainId.TacMainnet]: {
       name: "TAC",
