@@ -6,6 +6,7 @@ import {
 } from "@morpho-org/morpho-ts";
 import isPlainObject from "lodash.isplainobject";
 import mergeWith from "lodash.mergewith";
+import { zeroAddress } from "viem";
 import { ChainId } from "./chain.js";
 import { UnsupportedChainIdError } from "./errors.js";
 import type { Address } from "./types.js";
@@ -189,6 +190,7 @@ const _addressesRegistry = {
       bundler3: "0x1FA4431bC113D308beE1d46B0e98Cb805FB48C13",
       generalAdapter1: "0x9954aFB60BB5A222714c478ac86990F221788B88",
       paraswapAdapter: "0xAA5c30C1482c189cA0d56057D3ac4dD7Af1e4726",
+      aaveV3CoreMigrationAdapter: zeroAddress, //TODO
     },
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     adaptiveCurveIrm: "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA",

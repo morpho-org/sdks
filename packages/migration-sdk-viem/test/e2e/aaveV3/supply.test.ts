@@ -31,6 +31,12 @@ const TEST_CONFIGS = [
     testFn: test[ChainId.BaseMainnet] as TestAPI<ViemTestContext>,
     mmWeth: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1",
   },
+  {
+    chainId: ChainId.ArbitrumMainnet,
+    aWeth: "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
+    testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
+    mmWeth: "0x4dB0B0a83de352817d0C30a88a36667b75D48b6E",
+  },
 ] as const;
 
 describe("Supply position on AAVE V3", () => {
