@@ -19,6 +19,9 @@ const {
 const { adaptiveCurveIrm: adaptiveCurveIrm_arb, wNative: wNative_arb } =
   addressesRegistry[ChainId.ArbitrumMainnet];
 
+const { adaptiveCurveIrm: adaptiveCurveIrm_polygon, wNative: wNative_polygon } =
+  addressesRegistry[ChainId.PolygonMainnet];
+
 export const markets = {
   [ChainId.EthMainnet]: {
     eth_idle: MarketParams.idle(wNative),
@@ -239,6 +242,15 @@ export const markets = {
       oracle: "0x70dCd188B6444fefFb772b1d3273D8f2767556FE",
       irm: adaptiveCurveIrm_arb,
       lltv: parseUnits("94.5", 16),
+    }),
+  },
+  [ChainId.PolygonMainnet]: {
+    eth_wstEth: new MarketParams({
+      loanToken: wNative_polygon,
+      collateralToken: "0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD",
+      oracle: "0x1Dc2444b54945064c131145cD6b8701e3454C63a",
+      irm: adaptiveCurveIrm_polygon,
+      lltv: parseUnits("91.5", 16),
     }),
   },
 } as const;

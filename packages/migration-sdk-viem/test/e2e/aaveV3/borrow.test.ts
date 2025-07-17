@@ -56,6 +56,13 @@ const TEST_CONFIGS = [
     testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
     marketTo: markets[ChainId.ArbitrumMainnet].eth_wstEth,
   },
+  {
+    chainId: ChainId.PolygonMainnet,
+    aWstEth: "0xf59036CAEBeA7dC4b86638DFA2E3C97dA9FcCd40",
+    variableDebtToken: "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351",
+    testFn: test[ChainId.PolygonMainnet] as TestAPI<ViemTestContext>,
+    marketTo: markets[ChainId.PolygonMainnet].eth_wstEth,
+  },
 ] as const;
 
 describe("Borrow position on AAVE V3", () => {
