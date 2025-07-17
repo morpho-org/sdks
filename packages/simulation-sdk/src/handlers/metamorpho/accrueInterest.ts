@@ -8,7 +8,7 @@ import type { OperationHandler } from "../types.js";
 export const handleMetaMorphoAccrueInterestOperation: OperationHandler<
   MetaMorphoOperations["MetaMorpho_AccrueInterest"]
 > = ({ address }, data) => {
-  const vault = data.getAccrualVault(address);
+  const vault = data.getAccrualVault(address, false);
   const newVault = vault.accrueInterest(data.block.timestamp);
 
   data.vaults[address] = new Vault(newVault);

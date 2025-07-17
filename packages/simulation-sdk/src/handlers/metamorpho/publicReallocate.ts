@@ -96,7 +96,7 @@ export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
       data,
     );
 
-    const { supplyAssets } = data.getAccrualPosition(address, id);
+    const { supplyAssets } = data.getAccrualPosition(address, id, false);
 
     if (supplyAssets < assets)
       throw new PublicAllocatorErrors.NotEnoughSupply(address, id);
