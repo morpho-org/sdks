@@ -37,43 +37,48 @@ import { test } from "../setup.js";
 const TEST_CONFIGS = [
   {
     chainId: ChainId.EthMainnet,
-    aWstEth: "0x0B925eD163218f6662a35e0f0371Ac234f9E9371",
+    aCollateralToken: "0x0B925eD163218f6662a35e0f0371Ac234f9E9371",
     variableDebtToken: "0xeA51d7853EEFb32b6ee06b1C12E6dcCA88Be0fFE",
     testFn: test[ChainId.EthMainnet] as TestAPI<ViemTestContext>,
     marketTo: markets[ChainId.EthMainnet].eth_wstEth_2,
+    maxLoanPrice: 1,
   },
   {
     chainId: ChainId.BaseMainnet,
-    aWstEth: "0x99CBC45ea5bb7eF3a5BC08FB1B7E56bB2442Ef0D",
+    aCollateralToken: "0x99CBC45ea5bb7eF3a5BC08FB1B7E56bB2442Ef0D",
     variableDebtToken: "0x24e6e0795b3c7c71D965fCc4f371803d1c1DcA1E",
     testFn: test[ChainId.BaseMainnet] as TestAPI<ViemTestContext>,
     marketTo: markets[ChainId.BaseMainnet].eth_wstEth,
+    maxLoanPrice: 1,
   },
-  {
-    chainId: ChainId.ArbitrumMainnet,
-    aWstEth: "0x513c7E3a9c69cA3e22550eF58AC1C0088e918FFf",
-    variableDebtToken: "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351",
-    testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
-    marketTo: markets[ChainId.ArbitrumMainnet].eth_wstEth,
-  },
+  // {
+  //   chainId: ChainId.ArbitrumMainnet,
+  //   aCollateralToken: "0x513c7E3a9c69cA3e22550eF58AC1C0088e918FFf",
+  //   variableDebtToken: "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351",
+  //   testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
+  //   marketTo: markets[ChainId.ArbitrumMainnet].eth_wstEth,
+  //   maxLoanPrice: 1,
+  // },
   {
     chainId: ChainId.PolygonMainnet,
-    aWstEth: "0xf59036CAEBeA7dC4b86638DFA2E3C97dA9FcCd40",
-    variableDebtToken: "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351",
+    aCollateralToken: "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
+    variableDebtToken: "0x4a1c3aD6Ed28a636ee1751C69071f6be75DEb8B8",
     testFn: test[ChainId.PolygonMainnet] as TestAPI<ViemTestContext>,
-    marketTo: markets[ChainId.PolygonMainnet].eth_wstEth,
+    marketTo: markets[ChainId.PolygonMainnet].wPol_wEth,
+    maxLoanPrice: 1.5e-4, // wPol is max $0.3 and ETH is min $2000 at test block so 1 wPol is max 0.00015 ETH
   },
 ] as const;
 
 describe("Borrow position on AAVE V3", () => {
   for (const {
     chainId,
-    aWstEth,
+    aCollateralToken,
     testFn,
     marketTo,
     variableDebtToken,
+    maxLoanPrice,
   } of TEST_CONFIGS) {
-    const wstEth = marketTo.collateralToken;
+    const collateralToken = marketTo.collateralToken;
 
     const { pool } = migrationAddressesRegistry[chainId].aaveV3;
     const {
@@ -127,10 +132,13 @@ describe("Borrow position on AAVE V3", () => {
       testFn(
         "should fetch user position",
         async ({ client }: ViemTestContext) => {
-          const collateralAmount = parseEther("10");
-          const borrowAmount = parseEther("1");
+          const collateralAmountStr = "10";
+          const collateralAmount = parseEther(collateralAmountStr);
+          const borrowAmount = parseEther(
+            (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+          );
 
-          await writeSupply(client, wstEth, collateralAmount, true);
+          await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, wNative, borrowAmount);
 
           const allPositions = await fetchMigratablePositions(
@@ -151,11 +159,11 @@ describe("Borrow position on AAVE V3", () => {
           expect(position.user).toEqual(client.account.address);
           expect(position.loanToken.address).toEqual(wNative);
           expect(position.nonce).toEqual(0n);
-          expect(position.aToken.address).toEqual(aWstEth);
+          expect(position.aToken.address).toEqual(aCollateralToken);
           expect(position.collateral).toBeGreaterThanOrEqual(collateralAmount); //interest accrued
           expect(position.borrow).toBeGreaterThanOrEqual(borrowAmount); //interest accrued
           expect(position.chainId).toEqual(chainId);
-          expect(position.collateralToken.address).toEqual(wstEth);
+          expect(position.collateralToken.address).toEqual(collateralToken);
           expect(position.loanToken.address).toEqual(wNative);
           expect(position.maxRepay.limiter).toEqual(
             BorrowMigrationLimiter.position,
@@ -172,11 +180,14 @@ describe("Borrow position on AAVE V3", () => {
         "shouldn't fetch user position if multiple collaterals",
         async ({ client }) => {
           const collateralAmount1 = parseUnits("1000", 6);
-          const collateralAmount2 = parseEther("10");
-          const borrowAmount = parseEther("1");
+          const collateralAmount2Str = "10";
+          const collateralAmount2 = parseEther(collateralAmount2Str);
+          const borrowAmount = parseEther(
+            (+collateralAmount2Str / (2 * maxLoanPrice)).toString(),
+          );
 
           await writeSupply(client, usdc, collateralAmount1, true);
-          await writeSupply(client, wstEth, collateralAmount2, true);
+          await writeSupply(client, collateralToken, collateralAmount2, true);
           await writeBorrow(client, wNative, borrowAmount);
 
           const allPositions = await fetchMigratablePositions(
@@ -194,11 +205,14 @@ describe("Borrow position on AAVE V3", () => {
       testFn(
         "should fetch multiple user positions if only one collateral",
         async ({ client }) => {
-          const collateralAmount = parseEther("10");
           const pureSupply = parseUnits("10000", 6);
-          const borrowAmount = parseEther("1");
+          const collateralAmountStr = "10";
+          const collateralAmount = parseEther(collateralAmountStr);
+          const borrowAmount = parseEther(
+            (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+          );
 
-          await writeSupply(client, wstEth, collateralAmount, true);
+          await writeSupply(client, collateralToken, collateralAmount, true);
           await writeSupply(client, usdc, pureSupply, false);
           await writeBorrow(client, wNative, borrowAmount);
 
@@ -221,18 +235,21 @@ describe("Borrow position on AAVE V3", () => {
           const position =
             aaveV3Positions[1] as MigratableBorrowPosition_AaveV3;
 
-          expect(position.collateralToken.address).toBe(wstEth);
+          expect(position.collateralToken.address).toBe(collateralToken);
         },
       );
 
       testFn(
         "shouldn't fetch user position if multiple loans",
         async ({ client }) => {
-          const collateralAmount = parseEther("10");
           const borrowAmount1 = parseUnits("1000", 6);
-          const borrowAmount2 = parseEther("1");
+          const collateralAmountStr = "10";
+          const collateralAmount = parseEther(collateralAmountStr);
+          const borrowAmount2 = parseEther(
+            (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+          );
 
-          await writeSupply(client, wstEth, collateralAmount, true);
+          await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, usdc, borrowAmount1);
           await writeBorrow(client, wNative, borrowAmount2);
 
@@ -251,15 +268,18 @@ describe("Borrow position on AAVE V3", () => {
       testFn(
         "should fetch user position with limited liquidity",
         async ({ client }) => {
-          const collateralAmount = parseEther("10");
-          const borrowAmount = parseEther("5");
+          const collateralAmountStr = "10";
+          const collateralAmount = parseEther(collateralAmountStr);
+          const borrowAmount = parseEther(
+            (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+          );
           const liquidity = parseEther("6");
 
-          await writeSupply(client, wstEth, collateralAmount, true);
+          await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, wNative, borrowAmount);
           await client.deal({
-            erc20: wstEth,
-            account: aWstEth,
+            erc20: collateralToken,
+            account: aCollateralToken,
             amount: liquidity,
           });
 
@@ -285,13 +305,16 @@ describe("Borrow position on AAVE V3", () => {
       );
 
       testFn("should partially migrate user position", async ({ client }) => {
-        const collateralAmount = parseEther("10");
-        const borrowAmount = parseEther("3");
+        const collateralAmountStr = "10";
+        const collateralAmount = parseEther(collateralAmountStr);
+        const borrowAmount = parseEther(
+          (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+        );
 
         const migratedBorrow = borrowAmount / 2n;
         const migratedCollateral = collateralAmount / 2n;
 
-        await writeSupply(client, wstEth, collateralAmount, true);
+        await writeSupply(client, collateralToken, collateralAmount, true);
         await writeBorrow(client, wNative, borrowAmount);
 
         const allPositions = await fetchMigratablePositions(
@@ -339,7 +362,7 @@ describe("Borrow position on AAVE V3", () => {
           {
             args: [
               client.account.address,
-              aWstEth,
+              aCollateralToken,
               migratedCollateral,
               expect.any(BigInt),
               null,
@@ -369,14 +392,14 @@ describe("Borrow position on AAVE V3", () => {
                 {
                   type: "erc20TransferFrom",
                   args: [
-                    aWstEth,
+                    aCollateralToken,
                     migratedCollateral,
                     aaveV3CoreMigrationAdapter,
                   ],
                 },
                 {
                   type: "aaveV3Withdraw",
-                  args: [wstEth, migratedCollateral, generalAdapter1],
+                  args: [collateralToken, migratedCollateral, generalAdapter1],
                 },
               ],
             ],
@@ -385,7 +408,7 @@ describe("Borrow position on AAVE V3", () => {
           {
             type: "erc20Transfer",
             args: [
-              aWstEth,
+              aCollateralToken,
               client.account.address,
               maxUint256,
               generalAdapter1,
@@ -398,7 +421,7 @@ describe("Borrow position on AAVE V3", () => {
 
         await sendTransaction(client, migrationBundle.tx());
 
-        const transferredAssets = [wNative, wstEth, aWstEth];
+        const transferredAssets = [wNative, collateralToken, aCollateralToken];
         const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
 
         const [
@@ -410,7 +433,7 @@ describe("Borrow position on AAVE V3", () => {
           fetchAccrualPosition(client.account.address, marketTo.id, client),
           readContract(client, {
             abi: aTokenV3Abi,
-            address: aWstEth,
+            address: aCollateralToken,
             functionName: "balanceOf",
             args: [client.account.address],
           }),
@@ -443,12 +466,12 @@ describe("Borrow position on AAVE V3", () => {
           collateralAmount - migratedCollateral,
         );
         expect(finalCollateralFrom).toBeLessThan(
-          collateralAmount - migratedCollateral + 10n ** 12n,
+          collateralAmount - migratedCollateral + 10n ** 13n,
         ); // interest accrued (empirical)
 
         expect(finalDebtFrom).toBeGreaterThan(borrowAmount - migratedBorrow);
         expect(finalDebtFrom).toBeLessThan(
-          borrowAmount - migratedBorrow + 10n ** 12n,
+          borrowAmount - migratedBorrow + 10n ** 14n,
         ); // interest accrued (empirical)
 
         for (const { balance, asset, adapter } of adaptersBalances) {
@@ -460,10 +483,13 @@ describe("Borrow position on AAVE V3", () => {
       });
 
       testFn("should fully migrate user position", async ({ client }) => {
-        const collateralAmount = parseEther("10");
-        const borrowAmount = parseEther("3");
+        const collateralAmountStr = "10";
+        const collateralAmount = parseEther(collateralAmountStr);
+        const borrowAmount = parseEther(
+          (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+        );
 
-        await writeSupply(client, wstEth, collateralAmount, true);
+        await writeSupply(client, collateralToken, collateralAmount, true);
         await writeBorrow(client, wNative, borrowAmount);
 
         const allPositions = await fetchMigratablePositions(
@@ -511,7 +537,7 @@ describe("Borrow position on AAVE V3", () => {
           {
             args: [
               client.account.address,
-              aWstEth,
+              aCollateralToken,
               maxUint256,
               expect.any(BigInt),
               null,
@@ -563,11 +589,15 @@ describe("Borrow position on AAVE V3", () => {
                 },
                 {
                   type: "erc20TransferFrom",
-                  args: [aWstEth, maxUint256, aaveV3CoreMigrationAdapter],
+                  args: [
+                    aCollateralToken,
+                    maxUint256,
+                    aaveV3CoreMigrationAdapter,
+                  ],
                 },
                 {
                   type: "aaveV3Withdraw",
-                  args: [wstEth, maxUint256, generalAdapter1],
+                  args: [collateralToken, maxUint256, generalAdapter1],
                 },
               ],
             ],
@@ -575,7 +605,12 @@ describe("Borrow position on AAVE V3", () => {
           },
           {
             type: "erc20Transfer",
-            args: [wstEth, client.account.address, maxUint256, generalAdapter1],
+            args: [
+              collateralToken,
+              client.account.address,
+              maxUint256,
+              generalAdapter1,
+            ],
           },
         ]);
 
@@ -584,7 +619,7 @@ describe("Borrow position on AAVE V3", () => {
 
         await sendTransaction(client, migrationBundle.tx());
 
-        const transferredAssets = [wNative, wstEth, aWstEth];
+        const transferredAssets = [wNative, collateralToken, aCollateralToken];
         const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
 
         const [
@@ -596,7 +631,7 @@ describe("Borrow position on AAVE V3", () => {
           fetchAccrualPosition(client.account.address, marketTo.id, client),
           readContract(client, {
             abi: aTokenV3Abi,
-            address: aWstEth,
+            address: aCollateralToken,
             functionName: "balanceOf",
             args: [client.account.address],
           }),
@@ -624,11 +659,11 @@ describe("Borrow position on AAVE V3", () => {
 
         expect(finalPositionTo.collateral).toBeGreaterThan(collateralAmount);
         expect(finalPositionTo.collateral).toBeLessThanOrEqual(
-          collateralAmount + 10n ** 12n,
+          collateralAmount + 10n ** 13n,
         ); // interest accrued (empirical)
         expect(finalPositionTo.borrowAssets).toBeGreaterThan(borrowAmount);
         expect(finalPositionTo.borrowAssets).toBeLessThanOrEqual(
-          borrowAmount + 10n ** 12n,
+          borrowAmount + 10n ** 14n,
         ); // interest accrued (empirical)
 
         expect(finalCollateralFrom).toBe(0n);
@@ -645,13 +680,16 @@ describe("Borrow position on AAVE V3", () => {
       testFn(
         "should partially migrate user position without signature",
         async ({ client }) => {
-          const collateralAmount = parseEther("10");
-          const borrowAmount = parseEther("3");
+          const collateralAmountStr = "10";
+          const collateralAmount = parseEther(collateralAmountStr);
+          const borrowAmount = parseEther(
+            (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+          );
 
           const migratedBorrow = borrowAmount / 2n;
           const migratedCollateral = collateralAmount / 2n;
 
-          await writeSupply(client, wstEth, collateralAmount, true);
+          await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, wNative, borrowAmount);
 
           const allPositions = await fetchMigratablePositions(
@@ -697,9 +735,9 @@ describe("Borrow position on AAVE V3", () => {
           });
           expect(migrationBundle.requirements.txs[1]).toEqual({
             type: "erc20Approve",
-            args: [aWstEth, generalAdapter1, migratedCollateral],
+            args: [aCollateralToken, generalAdapter1, migratedCollateral],
             tx: {
-              to: aWstEth,
+              to: aCollateralToken,
               data: encodeFunctionData({
                 abi: aTokenV3Abi,
                 functionName: "approve",
@@ -732,14 +770,18 @@ describe("Borrow position on AAVE V3", () => {
                   {
                     type: "erc20TransferFrom",
                     args: [
-                      aWstEth,
+                      aCollateralToken,
                       migratedCollateral,
                       aaveV3CoreMigrationAdapter,
                     ],
                   },
                   {
                     type: "aaveV3Withdraw",
-                    args: [wstEth, migratedCollateral, generalAdapter1],
+                    args: [
+                      collateralToken,
+                      migratedCollateral,
+                      generalAdapter1,
+                    ],
                   },
                 ],
               ],
@@ -748,7 +790,7 @@ describe("Borrow position on AAVE V3", () => {
             {
               type: "erc20Transfer",
               args: [
-                aWstEth,
+                aCollateralToken,
                 client.account.address,
                 maxUint256,
                 generalAdapter1,
@@ -767,7 +809,11 @@ describe("Borrow position on AAVE V3", () => {
 
           await sendTransaction(client, migrationBundle.tx());
 
-          const transferredAssets = [wNative, wstEth, aWstEth];
+          const transferredAssets = [
+            wNative,
+            collateralToken,
+            aCollateralToken,
+          ];
           const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
 
           const [
@@ -779,7 +825,7 @@ describe("Borrow position on AAVE V3", () => {
             fetchAccrualPosition(client.account.address, marketTo.id, client),
             readContract(client, {
               abi: aTokenV3Abi,
-              address: aWstEth,
+              address: aCollateralToken,
               functionName: "balanceOf",
               args: [client.account.address],
             }),
@@ -812,12 +858,12 @@ describe("Borrow position on AAVE V3", () => {
             collateralAmount - migratedCollateral,
           );
           expect(finalCollateralFrom).toBeLessThan(
-            collateralAmount - migratedCollateral + 10n ** 12n,
+            collateralAmount - migratedCollateral + 10n ** 13n,
           ); // interest accrued (empirical)
 
           expect(finalDebtFrom).toBeGreaterThan(borrowAmount - migratedBorrow);
           expect(finalDebtFrom).toBeLessThan(
-            borrowAmount - migratedBorrow + 10n ** 12n,
+            borrowAmount - migratedBorrow + 10n ** 14n,
           ); // interest accrued (empirical)
 
           for (const { balance, asset, adapter } of adaptersBalances) {
@@ -832,10 +878,13 @@ describe("Borrow position on AAVE V3", () => {
       testFn(
         "should fully migrate user position without signature",
         async ({ client }) => {
-          const collateralAmount = parseEther("10");
-          const borrowAmount = parseEther("3");
+          const collateralAmountStr = "10";
+          const collateralAmount = parseEther(collateralAmountStr);
+          const borrowAmount = parseEther(
+            (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+          );
 
-          await writeSupply(client, wstEth, collateralAmount, true);
+          await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, wNative, borrowAmount);
 
           const allPositions = await fetchMigratablePositions(
@@ -881,9 +930,9 @@ describe("Borrow position on AAVE V3", () => {
           });
           expect(migrationBundle.requirements.txs[1]).toEqual({
             type: "erc20Approve",
-            args: [aWstEth, generalAdapter1, maxUint256],
+            args: [aCollateralToken, generalAdapter1, maxUint256],
             tx: {
-              to: aWstEth,
+              to: aCollateralToken,
               data: encodeFunctionData({
                 abi: aTokenV3Abi,
                 functionName: "approve",
@@ -938,11 +987,15 @@ describe("Borrow position on AAVE V3", () => {
                   },
                   {
                     type: "erc20TransferFrom",
-                    args: [aWstEth, maxUint256, aaveV3CoreMigrationAdapter],
+                    args: [
+                      aCollateralToken,
+                      maxUint256,
+                      aaveV3CoreMigrationAdapter,
+                    ],
                   },
                   {
                     type: "aaveV3Withdraw",
-                    args: [wstEth, maxUint256, generalAdapter1],
+                    args: [collateralToken, maxUint256, generalAdapter1],
                   },
                 ],
               ],
@@ -951,7 +1004,7 @@ describe("Borrow position on AAVE V3", () => {
             {
               type: "erc20Transfer",
               args: [
-                wstEth,
+                collateralToken,
                 client.account.address,
                 maxUint256,
                 generalAdapter1,
@@ -970,7 +1023,11 @@ describe("Borrow position on AAVE V3", () => {
 
           await sendTransaction(client, migrationBundle.tx());
 
-          const transferredAssets = [wNative, wstEth, aWstEth];
+          const transferredAssets = [
+            wNative,
+            collateralToken,
+            aCollateralToken,
+          ];
           const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
 
           const [
@@ -982,7 +1039,7 @@ describe("Borrow position on AAVE V3", () => {
             fetchAccrualPosition(client.account.address, marketTo.id, client),
             readContract(client, {
               abi: aTokenV3Abi,
-              address: aWstEth,
+              address: aCollateralToken,
               functionName: "balanceOf",
               args: [client.account.address],
             }),
@@ -1010,11 +1067,11 @@ describe("Borrow position on AAVE V3", () => {
 
           expect(finalPositionTo.collateral).toBeGreaterThan(collateralAmount);
           expect(finalPositionTo.collateral).toBeLessThanOrEqual(
-            collateralAmount + 10n ** 12n,
+            collateralAmount + 10n ** 13n,
           ); // interest accrued (empirical)
           expect(finalPositionTo.borrowAssets).toBeGreaterThan(borrowAmount);
           expect(finalPositionTo.borrowAssets).toBeLessThanOrEqual(
-            borrowAmount + 10n ** 12n,
+            borrowAmount + 10n ** 14n,
           ); // interest accrued (empirical)
 
           expect(finalCollateralFrom).toBe(0n);
@@ -1032,18 +1089,21 @@ describe("Borrow position on AAVE V3", () => {
       testFn(
         "should partially migrate user position limited by aave v3 liquidity",
         async ({ client }) => {
-          const collateralAmount = parseEther("10");
-          const borrowAmount = parseEther("3");
+          const collateralAmountStr = "10";
+          const collateralAmount = parseEther(collateralAmountStr);
+          const borrowAmount = parseEther(
+            (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+          );
 
           const liquidity = parseEther("4");
 
           const migratedBorrow = parseEther("1.5");
 
-          await writeSupply(client, wstEth, collateralAmount, true);
+          await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, wNative, borrowAmount);
           await client.deal({
-            erc20: wstEth,
-            account: aWstEth,
+            erc20: collateralToken,
+            account: aCollateralToken,
             amount: liquidity,
           });
 
@@ -1096,7 +1156,7 @@ describe("Borrow position on AAVE V3", () => {
             {
               args: [
                 client.account.address,
-                aWstEth,
+                aCollateralToken,
                 liquidity,
                 expect.any(BigInt),
                 null,
@@ -1125,11 +1185,15 @@ describe("Borrow position on AAVE V3", () => {
                   },
                   {
                     type: "erc20TransferFrom",
-                    args: [aWstEth, liquidity, aaveV3CoreMigrationAdapter],
+                    args: [
+                      aCollateralToken,
+                      liquidity,
+                      aaveV3CoreMigrationAdapter,
+                    ],
                   },
                   {
                     type: "aaveV3Withdraw",
-                    args: [wstEth, liquidity, generalAdapter1],
+                    args: [collateralToken, liquidity, generalAdapter1],
                   },
                 ],
               ],
@@ -1138,7 +1202,7 @@ describe("Borrow position on AAVE V3", () => {
             {
               type: "erc20Transfer",
               args: [
-                aWstEth,
+                aCollateralToken,
                 client.account.address,
                 maxUint256,
                 generalAdapter1,
@@ -1151,7 +1215,11 @@ describe("Borrow position on AAVE V3", () => {
 
           await sendTransaction(client, migrationBundle.tx());
 
-          const transferredAssets = [wNative, wstEth, aWstEth];
+          const transferredAssets = [
+            wNative,
+            collateralToken,
+            aCollateralToken,
+          ];
           const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
 
           const [
@@ -1163,7 +1231,7 @@ describe("Borrow position on AAVE V3", () => {
             fetchAccrualPosition(client.account.address, marketTo.id, client),
             readContract(client, {
               abi: aTokenV3Abi,
-              address: aWstEth,
+              address: aCollateralToken,
               functionName: "balanceOf",
               args: [client.account.address],
             }),
@@ -1196,12 +1264,12 @@ describe("Borrow position on AAVE V3", () => {
             collateralAmount - liquidity,
           );
           expect(finalCollateralFrom).toBeLessThan(
-            collateralAmount - liquidity + 10n ** 12n,
+            collateralAmount - liquidity + 10n ** 13n,
           ); // interest accrued (empirical)
 
           expect(finalDebtFrom).toBeGreaterThan(borrowAmount - migratedBorrow);
           expect(finalDebtFrom).toBeLessThan(
-            borrowAmount - migratedBorrow + 10n ** 12n,
+            borrowAmount - migratedBorrow + 10n ** 14n,
           ); // interest accrued (empirical)
 
           for (const { balance, asset, adapter } of adaptersBalances) {

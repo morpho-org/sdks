@@ -245,12 +245,12 @@ export const markets = {
     }),
   },
   [ChainId.PolygonMainnet]: {
-    eth_wstEth: new MarketParams({
+    wPol_wEth: new MarketParams({
       loanToken: wNative_polygon,
-      collateralToken: "0x03b54A6e9a984069379fae1a4fC4dBAE93B3bCCD",
-      oracle: "0x1Dc2444b54945064c131145cD6b8701e3454C63a",
+      collateralToken: "0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619",
+      oracle: "0x648Ff6ad9F0Cefe508AE979d7Bf4Fa48ae99CA9E",
       irm: adaptiveCurveIrm_polygon,
-      lltv: parseUnits("91.5", 16),
+      lltv: parseUnits("77", 16),
     }),
   },
 } as const;
