@@ -785,7 +785,7 @@ export const encodeOperation = (
         const maxSharePrice = MathLib.mulDivUp(
           assets,
           MathLib.wToRay(MathLib.WAD + slippage),
-          vault.toShares(assets),
+          vault.toShares(assets, "Down"),
         );
         actions.push({
           type: "erc4626Deposit",
