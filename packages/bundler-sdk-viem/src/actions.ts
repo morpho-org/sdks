@@ -623,7 +623,7 @@ export const encodeOperation = (
 
       const { assets: withdrawnAssets, shares: withdrawnShares } =
         market.withdraw(assets, shares);
-      const minSharePrice = MathLib.mulDivUp(
+      const minSharePrice = MathLib.mulDivDown(
         withdrawnAssets,
         MathLib.wToRay(MathLib.WAD - slippage),
         withdrawnShares,
@@ -661,7 +661,7 @@ export const encodeOperation = (
         assets,
         shares,
       );
-      const minSharePrice = MathLib.mulDivUp(
+      const minSharePrice = MathLib.mulDivDown(
         borrowedAssets,
         MathLib.wToRay(MathLib.WAD - slippage),
         borrowedShares,
@@ -799,7 +799,7 @@ export const encodeOperation = (
         });
       } else {
         const maxSharePrice = MathLib.mulDivUp(
-          vault.toAssets(shares),
+          vault.toAssets(shares, "Up"),
           MathLib.wToRay(MathLib.WAD + slippage),
           shares,
         );
@@ -835,7 +835,7 @@ export const encodeOperation = (
         const minSharePrice = MathLib.mulDivDown(
           assets,
           MathLib.wToRay(MathLib.WAD - slippage),
-          vault.toShares(assets),
+          vault.toShares(assets, "Up"),
         );
         actions.push({
           type: "erc4626Withdraw",
@@ -850,7 +850,7 @@ export const encodeOperation = (
         });
       } else {
         const minSharePrice = MathLib.mulDivDown(
-          vault.toAssets(shares),
+          vault.toAssets(shares, "Down"),
           MathLib.wToRay(MathLib.WAD - slippage),
           shares,
         );
