@@ -29,7 +29,7 @@ import {
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
 
-import { isAddressEqual, maxUint256 } from "viem";
+import { type UnionOmit, isAddressEqual, maxUint256 } from "viem";
 import { BundlerErrors } from "./errors.js";
 import type {
   BundlerOperation,
@@ -870,7 +870,6 @@ export const finalizeBundle = (
   // Simulate without slippage to skim the bundler of all possible surplus of shares & assets.
   steps = simulateBundlerOperations(operations, startData, { slippage: 0n });
 
-  const lastStep = getLast(steps);
   const daiPermit =
     dai != null
       ? operations.find(
@@ -894,7 +893,7 @@ export const finalizeBundle = (
   // Unwrap requested remaining wrapped tokens.
   const unwraps = [] as Erc20Operations["Erc20_Unwrap"][];
 
-  const endBundlerTokenData = lastStep.holdings[generalAdapter1] ?? {};
+  let endBundlerTokenData = getLast(steps).holdings[generalAdapter1] ?? {};
 
   unwrapTokens.forEach((wrappedToken) => {
     const remaining = endBundlerTokenData[wrappedToken]?.balance ?? 0n;
@@ -915,40 +914,89 @@ export const finalizeBundle = (
     });
   });
 
-  if (unwraps.length > 0)
+  if (unwraps.length > 0) {
     steps = simulateBundlerOperations(operations.concat(unwraps), startData, {
       slippage: 0n,
     });
+    endBundlerTokenData = getLast(steps).holdings[generalAdapter1] ?? {};
+  }
 
   // Skim any token expected to be left on the bundler.
   const skims = [] as Erc20Operations["Erc20_Transfer"][];
-  {
-    const startBundlerTokenData = steps[0].holdings[generalAdapter1] ?? {};
-    const endBundlerTokenData = getLast(steps).holdings[generalAdapter1] ?? {};
+  const startBundlerTokenData = steps[0].holdings[generalAdapter1] ?? {};
 
-    skims.push(
-      ...entries(endBundlerTokenData)
-        .filter(
-          ([token, holding]) =>
-            holding != null &&
-            holding.balance - (startBundlerTokenData[token]?.balance ?? 0n) >
-              5n,
-        )
-        .map(
-          ([address]) =>
-            ({
-              type: "Erc20_Transfer",
-              address,
-              sender: generalAdapter1,
-              args: {
-                amount: maxUint256,
-                from: generalAdapter1,
-                to: receiver,
-              },
-            }) as Erc20Operations["Erc20_Transfer"],
-        ),
-    );
-  }
+  skims.push(
+    ...entries(endBundlerTokenData)
+      .filter(
+        ([token, holding]) =>
+          holding != null &&
+          holding.balance - (startBundlerTokenData[token]?.balance ?? 0n) > 5n,
+      )
+      .map(
+        ([address]) =>
+          ({
+            type: "Erc20_Transfer",
+            address,
+            sender: generalAdapter1,
+            args: {
+              amount: maxUint256,
+              from: generalAdapter1,
+              to: receiver,
+            },
+          }) as const,
+      ),
+  );
+
+  const uniqueSkimTokens = new Set(skims.map(({ address }) => address));
+  const pushCustomSkim = (operation: UnionOmit<BundlerOperation, "sender">) => {
+    // Paraswap does not guarantee that the amount effectively bought (resp. sold) corresponds to
+    // the requested amount to buy (resp. sell), so we force skim the possible surplus of bought (resp. sold) token.
+    switch (operation.type) {
+      case "Paraswap_Buy":
+      case "Paraswap_Sell":
+        if (!uniqueSkimTokens.has(operation.address)) {
+          uniqueSkimTokens.add(operation.address);
+
+          skims.push({
+            type: "Erc20_Transfer",
+            address: operation.address,
+            sender: generalAdapter1,
+            args: {
+              amount: maxUint256,
+              from: generalAdapter1,
+              to: receiver,
+            },
+          });
+        }
+        break;
+      case "Blue_Paraswap_BuyDebt": {
+        const { params } = startData.getMarket(operation.args.id);
+
+        if (!uniqueSkimTokens.has(params.loanToken)) {
+          uniqueSkimTokens.add(params.loanToken);
+
+          skims.push({
+            type: "Erc20_Transfer",
+            address: params.loanToken,
+            sender: generalAdapter1,
+            args: {
+              amount: maxUint256,
+              from: generalAdapter1,
+              to: receiver,
+            },
+          });
+        }
+        break;
+      }
+      default:
+        break;
+    }
+
+    if ("callback" in operation.args)
+      operation.args.callback?.forEach(pushCustomSkim);
+  };
+
+  operations.forEach(pushCustomSkim);
 
   return operations.concat(unwraps, skims);
 };
