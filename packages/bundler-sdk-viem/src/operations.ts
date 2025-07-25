@@ -925,69 +925,29 @@ export const finalizeBundle = (
   const skims = [] as Erc20Operations["Erc20_Transfer"][];
   const startBundlerTokenData = steps[0].holdings[generalAdapter1] ?? {};
 
-  skims.push(
-    ...entries(endBundlerTokenData)
+  const uniqueSkimTokens = new Set(
+    entries(endBundlerTokenData)
       .filter(
         ([token, holding]) =>
           holding != null &&
           holding.balance - (startBundlerTokenData[token]?.balance ?? 0n) > 5n,
       )
-      .map(
-        ([address]) =>
-          ({
-            type: "Erc20_Transfer",
-            address,
-            sender: generalAdapter1,
-            args: {
-              amount: maxUint256,
-              from: generalAdapter1,
-              to: receiver,
-            },
-          }) as const,
-      ),
+      .map(([address]) => address),
   );
 
-  const uniqueSkimTokens = new Set(skims.map(({ address }) => address));
   const pushCustomSkim = (operation: UnionOmit<BundlerOperation, "sender">) => {
     // Paraswap does not guarantee that the amount effectively bought (resp. sold) corresponds to
     // the requested amount to buy (resp. sell), so we force skim the possible surplus of bought (resp. sold) token.
     switch (operation.type) {
       case "Paraswap_Buy":
       case "Paraswap_Sell":
-        if (!uniqueSkimTokens.has(operation.address)) {
-          uniqueSkimTokens.add(operation.address);
-
-          skims.push({
-            type: "Erc20_Transfer",
-            address: operation.address,
-            sender: generalAdapter1,
-            args: {
-              amount: maxUint256,
-              from: generalAdapter1,
-              to: receiver,
-            },
-          });
-        }
+        uniqueSkimTokens.add(operation.address);
         break;
-      case "Blue_Paraswap_BuyDebt": {
-        const { params } = startData.getMarket(operation.args.id);
-
-        if (!uniqueSkimTokens.has(params.loanToken)) {
-          uniqueSkimTokens.add(params.loanToken);
-
-          skims.push({
-            type: "Erc20_Transfer",
-            address: params.loanToken,
-            sender: generalAdapter1,
-            args: {
-              amount: maxUint256,
-              from: generalAdapter1,
-              to: receiver,
-            },
-          });
-        }
+      case "Blue_Paraswap_BuyDebt":
+        uniqueSkimTokens.add(
+          startData.getMarket(operation.args.id).params.loanToken,
+        );
         break;
-      }
       default:
         break;
     }
@@ -997,6 +957,23 @@ export const finalizeBundle = (
   };
 
   operations.forEach(pushCustomSkim);
+
+  skims.push(
+    ...Array.from(
+      uniqueSkimTokens,
+      (address) =>
+        ({
+          type: "Erc20_Transfer",
+          address,
+          sender: generalAdapter1,
+          args: {
+            amount: maxUint256,
+            from: generalAdapter1,
+            to: receiver,
+          },
+        }) as const,
+    ),
+  );
 
   return operations.concat(unwraps, skims);
 };
