@@ -58,7 +58,7 @@ describe("MetaMorpho_Reallocate", () => {
     await client.setBalance({ address: owner, value: parseEther("10000") });
 
     const assets =
-      dataBefore.getAccrualPosition(steakUsdc.address, usdc_wstEth.id)
+      dataBefore.getAccrualPosition(steakUsdc.address, usdc_wstEth.id, false)
         .supplyAssets - parseUnits("1000", 6);
 
     const steps = simulateOperations(
