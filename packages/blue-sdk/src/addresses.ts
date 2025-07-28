@@ -6,7 +6,6 @@ import {
 } from "@morpho-org/morpho-ts";
 import isPlainObject from "lodash.isplainobject";
 import mergeWith from "lodash.mergewith";
-import { zeroAddress } from "viem";
 import { ChainId } from "./chain.js";
 import { UnsupportedChainIdError } from "./errors.js";
 import type { Address } from "./types.js";
@@ -190,7 +189,8 @@ const _addressesRegistry = {
       bundler3: "0x1FA4431bC113D308beE1d46B0e98Cb805FB48C13",
       generalAdapter1: "0x9954aFB60BB5A222714c478ac86990F221788B88",
       paraswapAdapter: "0xAA5c30C1482c189cA0d56057D3ac4dD7Af1e4726",
-      aaveV3CoreMigrationAdapter: zeroAddress, //TODO
+      aaveV3CoreMigrationAdapter: "0x1923670d4F4eB7435d865E7477d28FEAFfA40C93",
+      compoundV3MigrationAdapter: "0x86Ca77a4a37A9CDBe9bBf4975F6d69531B96444b",
     },
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     adaptiveCurveIrm: "0x66F30587FB8D4206918deb78ecA7d5eBbafD06DA",
@@ -287,6 +287,7 @@ const _addressesRegistry = {
       bundler3: "0x7DD85759182495AF7F6757DA75036d24A9B58bc3",
       generalAdapter1: "0xC11329d19C2275c9E759867e879ECFcEeD7e30A0",
       paraswapAdapter: "0xAa870Da2a9F611A3A53d0D2AEe5664B3700a59c9",
+      compoundV3MigrationAdapter: "0x617f8d7885CCE689115Af04576F7cB6F2534fA9a",
     },
     adaptiveCurveIrm: "0x9a6061d51743B31D2c3Be75D83781Fa423f53F0E",
     publicAllocator: "0xB0c9a107fA17c779B3378210A7a593e88938C7C9",

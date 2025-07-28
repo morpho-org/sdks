@@ -33,13 +33,13 @@ const TEST_CONFIGS = [
     mmWNative: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1",
     wNativeMinPrice: 2000,
   },
-  // {
-  //   chainId: ChainId.ArbitrumMainnet,
-  //   aWNative: "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
-  //   testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
-  //   mmWNative: "0x4dB0B0a83de352817d0C30a88a36667b75D48b6E",
-  //   wNativeMinPrice: 2000,
-  // },
+  {
+    chainId: ChainId.ArbitrumMainnet,
+    aWNative: "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
+    testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
+    mmWNative: "0xBD14bEa2eCECeCD5F32149B0f84BE7f7F446B964",
+    wNativeMinPrice: 2000,
+  },
   {
     chainId: ChainId.PolygonMainnet,
     aWNative: "0x6d80113e533a2C0fe82EaBD35f1875DcEA89Ea97",
@@ -294,13 +294,17 @@ describe("Supply position on AAVE V3", () => {
 
         await migrationBundle.requirements.signatures[0]!.sign(client);
 
-        await sendTransaction(client, migrationBundle.tx());
+        await sendTransaction(client, {
+          ...migrationBundle.tx(),
+          gas: parseEther("0.000009"),
+        });
 
         const [
           bundlerPosition,
           wEthBundlerBalance,
           userPosition,
           userMMShares,
+          mmBundlerBalance,
         ] = await Promise.all([
           client.balanceOf({
             erc20: aWNative,
@@ -312,6 +316,10 @@ describe("Supply position on AAVE V3", () => {
           }),
           client.balanceOf({ erc20: aWNative }),
           client.balanceOf({ erc20: mmWNative }),
+          client.balanceOf({
+            erc20: mmWNative,
+            owner: aaveV3CoreMigrationAdapter,
+          }),
         ]);
 
         const userMMBalance = await client.readContract({
@@ -323,6 +331,7 @@ describe("Supply position on AAVE V3", () => {
 
         expect(bundlerPosition).toEqual(0n);
         expect(wEthBundlerBalance).toEqual(0n);
+        expect(mmBundlerBalance).toEqual(0n);
         expect(userPosition).toBeGreaterThan(positionAmount - migratedAmount); //interest have been accumulated
         expect(userMMBalance).toBeGreaterThanOrEqual(migratedAmount - 2n);
       });

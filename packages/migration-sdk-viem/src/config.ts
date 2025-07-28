@@ -181,26 +181,26 @@ export const migrationAddressesRegistry = {
     [MigratableProtocol.aaveV2]: null,
     [MigratableProtocol.aaveV3Optimizer]: null,
   },
-  // [ChainId.ArbitrumMainnet]: {
-  //   [MigratableProtocol.aaveV3]: {
-  //     pool: {
-  //       address: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
-  //       abi: poolAbi,
-  //     },
-  //     protocolDataProvider: {
-  //       address: "0x14496b405D62c24F91f04Cda1c69Dc526D56fDE5",
-  //       abi: protocolDataProviderAbi_v3,
-  //     },
-  //     addressesProvider: {
-  //       address: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
-  //       abi: addressesProviderAbi_v3,
-  //     },
-  //   },
-  //   [MigratableProtocol.compoundV3]: null,
-  //   [MigratableProtocol.compoundV2]: null,
-  //   [MigratableProtocol.aaveV2]: null,
-  //   [MigratableProtocol.aaveV3Optimizer]: null,
-  // },
+  [ChainId.ArbitrumMainnet]: {
+    [MigratableProtocol.aaveV3]: {
+      pool: {
+        address: "0x794a61358D6845594F94dc1DB02A252b5b4814aD",
+        abi: poolAbi,
+      },
+      protocolDataProvider: {
+        address: "0x14496b405D62c24F91f04Cda1c69Dc526D56fDE5",
+        abi: protocolDataProviderAbi_v3,
+      },
+      addressesProvider: {
+        address: "0xa97684ead0e402dC232d5A977953DF7ECBaB3CDb",
+        abi: addressesProviderAbi_v3,
+      },
+    },
+    [MigratableProtocol.compoundV3]: null,
+    [MigratableProtocol.compoundV2]: null,
+    [MigratableProtocol.aaveV2]: null,
+    [MigratableProtocol.aaveV3Optimizer]: null,
+  },
   [ChainId.PolygonMainnet]: {
     [MigratableProtocol.aaveV3]: {
       pool: {

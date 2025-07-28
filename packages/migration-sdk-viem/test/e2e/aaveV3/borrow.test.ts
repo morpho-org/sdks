@@ -51,14 +51,14 @@ const TEST_CONFIGS = [
     marketTo: markets[ChainId.BaseMainnet].eth_wstEth,
     maxLoanPrice: 1,
   },
-  // {
-  //   chainId: ChainId.ArbitrumMainnet,
-  //   aCollateralToken: "0x513c7E3a9c69cA3e22550eF58AC1C0088e918FFf",
-  //   variableDebtToken: "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351",
-  //   testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
-  //   marketTo: markets[ChainId.ArbitrumMainnet].eth_wstEth,
-  //   maxLoanPrice: 1,
-  // },
+  {
+    chainId: ChainId.ArbitrumMainnet,
+    aCollateralToken: "0x513c7E3a9c69cA3e22550eF58AC1C0088e918FFf",
+    variableDebtToken: "0x0c84331e39d6658Cd6e6b9ba04736cC4c4734351",
+    testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
+    marketTo: markets[ChainId.ArbitrumMainnet].eth_wstEth,
+    maxLoanPrice: 1,
+  },
   {
     chainId: ChainId.PolygonMainnet,
     aCollateralToken: "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
