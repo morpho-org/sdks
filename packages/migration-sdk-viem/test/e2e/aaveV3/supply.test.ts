@@ -289,7 +289,6 @@ describe("Supply position on AAVE V3", () => {
 
         await sendTransaction(client, {
           ...migrationBundle.tx(),
-          gas: parseEther("0.000009"),
         });
 
         const [
