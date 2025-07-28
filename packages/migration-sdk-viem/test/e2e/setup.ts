@@ -13,6 +13,6 @@ export const test = {
   }),
   [ChainId.ArbitrumMainnet]: createViemTest(arbitrum, {
     forkUrl: process.env.ARBITRUM_RPC_URL,
-    forkBlockNumber: 361_575_517,
+    forkBlockNumber: 362_502_023,
   }),
 } as const;
