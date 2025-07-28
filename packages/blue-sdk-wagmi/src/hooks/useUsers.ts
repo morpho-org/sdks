@@ -65,7 +65,7 @@ export function useUsers<config extends Config = ResolvedRegister["config"]>({
       const { data, error, isFetching } = orderedResults[index]!;
 
       result.data[user] = data;
-      result.error[user] = error;
+      result.error[user] = error as UseUserReturnType["error"];
       result.isFetching[user] = isFetching;
 
       if (isFetching) result.isFetchingAny = true;

@@ -66,7 +66,7 @@ export function useMarkets<config extends Config = ResolvedRegister["config"]>({
       const { data, error, isFetching } = orderedResults[index]!;
 
       result.data[marketId] = data;
-      result.error[marketId] = error;
+      result.error[marketId] = error as UseMarketReturnType["error"];
       result.isFetching[marketId] = isFetching;
 
       if (isFetching) result.isFetchingAny = true;

@@ -46,6 +46,7 @@ const TEST_CONFIGS: {
 }[] = [
   {
     chainId: ChainId.EthMainnet,
+    // @ts-expect-error
     testFn: test[ChainId.EthMainnet],
     marketFrom: markets[ChainId.EthMainnet].eth_wstEth_2,
     marketTo: new MarketParams({
@@ -55,7 +56,7 @@ const TEST_CONFIGS: {
   },
   {
     chainId: ChainId.BaseMainnet,
-    //@ts-expect-error
+    // @ts-expect-error
     testFn: test[ChainId.BaseMainnet],
     marketFrom: new MarketParams({
       collateralToken: "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
