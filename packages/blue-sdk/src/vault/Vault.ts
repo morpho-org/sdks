@@ -1,3 +1,4 @@
+import { Time } from "@morpho-org/morpho-ts";
 import { type CapacityLimit, CapacityLimitReason } from "../market/index.js";
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import { VaultToken } from "../token/index.js";
@@ -270,39 +271,29 @@ export class AccrualVault extends Vault implements IAccrualVault {
   }
 
   /**
-   * The MetaMorpho vault's APY on its assets averaged over its market deposits,
-   * before deducting the performance fee, at the time of each market's last update (scaled by WAD).
+   * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
+   * weighted-averaged over its market deposits, before deducting the performance fee (scaled by WAD).
    * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
    */
   get apy() {
-    if (this.totalAssets === 0n) return 0n;
-
-    return (
-      this.allocations
-        .values()
-        .reduce(
-          (total, { position }) =>
-            total + position.market.supplyApy * position.supplyAssets,
-          0n,
-        ) / this.totalAssets
-    );
+    return this.getApy();
   }
 
   /**
-   * The MetaMorpho vault's APY on its assets averaged over its market deposits,
-   * after deducting the performance fee, at the time of each market's last update (scaled by WAD).
+   * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
+   * weighted-averaged over its market deposits, after deducting the performance fee (scaled by WAD).
    * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
    */
   get netApy() {
-    return MathLib.wMulDown(this.apy, MathLib.WAD - this.fee);
+    return this.getNetApy();
   }
 
   /**
-   * The MetaMorpho vault's APY on its assets averaged over its market deposits,
-   * before deducting the performance fee, at the given timestamp,
-   * if the state of all the markets remains unchanged (not accrued) (scaled by WAD).
+   * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
+   * weighted-averaged over its market deposits, before deducting the performance fee,
+   * if interest was to be accrued on each market at the given timestamp (scaled by WAD).
    */
-  public getApy(timestamp: BigIntish) {
+  public getApy(timestamp: BigIntish = Time.timestamp()) {
     if (this.totalAssets === 0n) return 0n;
 
     return (
@@ -311,18 +302,18 @@ export class AccrualVault extends Vault implements IAccrualVault {
         .reduce(
           (total, { position }) =>
             total +
-            position.market.getSupplyApy(timestamp) * position.supplyAssets,
+            position.market.getAvgSupplyApy(timestamp) * position.supplyAssets,
           0n,
         ) / this.totalAssets
     );
   }
 
   /**
-   * The MetaMorpho vault's APY on its assets averaged over its market deposits,
-   * after deducting the performance fee, at the given timestamp,
-   * if the state of all the markets remains unchanged (not accrued) (scaled by WAD).
+   * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
+   * weighted-averaged over its market deposits, after deducting the performance fee,
+   * if interest was to be accrued on each market at the given timestamp (scaled by WAD).
    */
-  public getNetApy(timestamp: BigIntish) {
+  public getNetApy(timestamp: BigIntish = Time.timestamp()) {
     return MathLib.wMulDown(this.getApy(timestamp), MathLib.WAD - this.fee);
   }
 
