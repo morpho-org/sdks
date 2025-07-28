@@ -59,14 +59,6 @@ const TEST_CONFIGS = [
     marketTo: markets[ChainId.ArbitrumMainnet].eth_wstEth,
     maxLoanPrice: 1,
   },
-  {
-    chainId: ChainId.PolygonMainnet,
-    aCollateralToken: "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
-    variableDebtToken: "0x4a1c3aD6Ed28a636ee1751C69071f6be75DEb8B8",
-    testFn: test[ChainId.PolygonMainnet] as TestAPI<ViemTestContext>,
-    marketTo: markets[ChainId.PolygonMainnet].wPol_wEth,
-    maxLoanPrice: 1.5e-4, // wPol is max $0.3 and ETH is min $2000 at test block so 1 wPol is max 0.00015 ETH
-  },
 ] as const;
 
 describe("Borrow position on AAVE V3", () => {

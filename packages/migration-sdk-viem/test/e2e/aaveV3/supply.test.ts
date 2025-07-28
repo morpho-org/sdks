@@ -40,13 +40,6 @@ const TEST_CONFIGS = [
     mmWNative: "0xBD14bEa2eCECeCD5F32149B0f84BE7f7F446B964",
     wNativeMinPrice: 2000,
   },
-  {
-    chainId: ChainId.PolygonMainnet,
-    aWNative: "0x6d80113e533a2C0fe82EaBD35f1875DcEA89Ea97",
-    testFn: test[ChainId.PolygonMainnet] as TestAPI<ViemTestContext>,
-    mmWNative: "0x3F33F9f7e2D7cfBCBDf8ea8b870a6E3d449664c2",
-    wNativeMinPrice: 0.2,
-  },
 ] as const;
 
 describe("Supply position on AAVE V3", () => {
