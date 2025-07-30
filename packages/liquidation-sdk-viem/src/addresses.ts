@@ -199,7 +199,7 @@ export const preLiquidationFactoryConfigs: Record<
   },
   [ChainId.EtherlinkMainnet]: {
     address: addressesRegistry[ChainId.EtherlinkMainnet].preLiquidationFactory,
-    startBlock: 21047448n,
+    startBlock: 21050766n,
   },
   [ChainId.TacMainnet]: {
     address: addressesRegistry[ChainId.TacMainnet].preLiquidationFactory,
