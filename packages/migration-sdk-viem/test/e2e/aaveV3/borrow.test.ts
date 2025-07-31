@@ -9,12 +9,14 @@ import {
 import {
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
+  type MarketParams,
   MathLib,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import { blueAbi, fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";
+import { testAccount } from "@morpho-org/test";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
 import {
   type Address,
@@ -33,6 +35,8 @@ import {
 import { MigratableBorrowPosition_AaveV3 } from "../../../src/positions/borrow/aaveV3.borrow.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../../src/positions/supply/aaveV3.supply.js";
 import { test } from "../setup.js";
+
+const lp = testAccount(1);
 
 const TEST_CONFIGS = [
   {
@@ -79,6 +83,30 @@ describe("Borrow position on AAVE V3", () => {
       usdc,
       morpho,
     } = addressesRegistry[chainId];
+
+    const addBlueLiquidity = async (
+      client: ViemTestContext["client"],
+      market: MarketParams,
+      amount: bigint,
+    ) => {
+      await client.deal({
+        account: lp,
+        amount,
+        erc20: market.loanToken,
+      });
+      await client.approve({
+        account: lp,
+        address: market.loanToken,
+        args: [morpho, amount],
+      });
+      await client.writeContract({
+        account: lp,
+        abi: blueAbi,
+        address: morpho,
+        functionName: "supply",
+        args: [market, amount, 0n, lp.address, "0x"],
+      });
+    };
 
     const writeSupply = async (
       client: ViemTestContext["client"],
@@ -308,6 +336,7 @@ describe("Borrow position on AAVE V3", () => {
 
         await writeSupply(client, collateralToken, collateralAmount, true);
         await writeBorrow(client, wNative, borrowAmount);
+        await addBlueLiquidity(client, marketTo, migratedBorrow);
 
         const allPositions = await fetchMigratablePositions(
           client.account.address,
@@ -483,6 +512,7 @@ describe("Borrow position on AAVE V3", () => {
 
         await writeSupply(client, collateralToken, collateralAmount, true);
         await writeBorrow(client, wNative, borrowAmount);
+        await addBlueLiquidity(client, marketTo, borrowAmount);
 
         const allPositions = await fetchMigratablePositions(
           client.account.address,
@@ -547,7 +577,7 @@ describe("Borrow position on AAVE V3", () => {
                   args: [
                     marketTo,
                     MathLib.wMulUp(
-                      borrowAmount,
+                      position.borrow,
                       MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
                     ),
                     0n,
@@ -683,6 +713,7 @@ describe("Borrow position on AAVE V3", () => {
 
           await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, wNative, borrowAmount);
+          await addBlueLiquidity(client, marketTo, migratedBorrow);
 
           const allPositions = await fetchMigratablePositions(
             client.account.address,
@@ -878,6 +909,7 @@ describe("Borrow position on AAVE V3", () => {
 
           await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, wNative, borrowAmount);
+          await addBlueLiquidity(client, marketTo, borrowAmount);
 
           const allPositions = await fetchMigratablePositions(
             client.account.address,
@@ -945,7 +977,7 @@ describe("Borrow position on AAVE V3", () => {
                     args: [
                       marketTo,
                       MathLib.wMulUp(
-                        borrowAmount,
+                        position.borrow,
                         MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
                       ),
                       0n,
@@ -1093,6 +1125,7 @@ describe("Borrow position on AAVE V3", () => {
 
           await writeSupply(client, collateralToken, collateralAmount, true);
           await writeBorrow(client, wNative, borrowAmount);
+          await addBlueLiquidity(client, marketTo, migratedBorrow);
           await client.deal({
             erc20: collateralToken,
             account: aCollateralToken,
