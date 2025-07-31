@@ -1,6 +1,6 @@
 import { ChainId } from "@morpho-org/blue-sdk";
 import { createViemTest } from "@morpho-org/test/vitest";
-import { base, mainnet } from "viem/chains";
+import { arbitrum, base, mainnet } from "viem/chains";
 
 export const test = {
   [ChainId.EthMainnet]: createViemTest(mainnet, {
@@ -10,5 +10,9 @@ export const test = {
   [ChainId.BaseMainnet]: createViemTest(base, {
     forkUrl: process.env.BASE_RPC_URL,
     forkBlockNumber: 26_539_234,
+  }),
+  [ChainId.ArbitrumMainnet]: createViemTest(arbitrum, {
+    forkUrl: process.env.ARBITRUM_RPC_URL,
+    forkBlockNumber: 362_502_023,
   }),
 } as const;
