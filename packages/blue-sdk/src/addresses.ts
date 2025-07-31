@@ -556,6 +556,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.LiskMainnet]: {
     [_addressesRegistry[ChainId.LiskMainnet].wNative]: NATIVE_ADDRESS,
   },
+  [ChainId.HyperliquidMainnet]: {
+    [_addressesRegistry[ChainId.HyperliquidMainnet].wNative]: NATIVE_ADDRESS,
+  },
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: number) {

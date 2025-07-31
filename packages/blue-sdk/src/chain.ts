@@ -196,7 +196,7 @@ export namespace ChainUtils {
       name: "Hyperliquid",
       id: ChainId.HyperliquidMainnet,
       nativeCurrency: { name: "Hype", symbol: "HYPE", decimals: 18 },
-      explorerUrl: "https://purrsec.com",
+      explorerUrl: "https://hyperevmscan.io",
       identifier: "hyperliquid",
     },
   };
