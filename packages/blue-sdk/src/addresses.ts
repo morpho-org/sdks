@@ -247,7 +247,7 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0x39d8622C607A691D7705E8842fbB12E3c38dCD41",
     preLiquidationFactory: "0xe3cE2051a24e58DBFC0eFBe4c2d9e89c5eAe4695",
 
-    wNative: "0xfc00000000000000000000000000000000000006",
+    wNative: "0xFC00000000000000000000000000000000000006",
   },
   [ChainId.ScrollMainnet]: {
     morpho: "0x2d012EdbAdc37eDc2BC62791B666f9193FDF5a55",
@@ -401,6 +401,20 @@ const _addressesRegistry = {
 
     wNative: "0xEE7D8BCFb72bC1880D0Cf19822eB0A2e6577aB62",
   },
+  [ChainId.EtherlinkMainnet]: {
+    morpho: "0xbCE7364E63C3B13C73E9977a83c9704E2aCa876e",
+    bundler3: {
+      bundler3: "0x69dc8086191437b55775b79C730BB3876397e7D1",
+      generalAdapter1: "0xEabdAC78A7f0a9B3dF0e23D69A5a5fF7f580a910",
+    },
+    adaptiveCurveIrm: "0xC1523BE776e66ba07b609b1914D0925278f21FE5",
+    publicAllocator: "0x8b8B1bd41d36c06253203CD21463994aB752c1e6",
+    metaMorphoFactory: "0x997a79c3C04c5B9eb27d343ae126bcCFb5D74781",
+    chainlinkOracleFactory: "0x12FA40f687a35611720E1DcB59976B6e51247298",
+    preLiquidationFactory: "0xd1c37fDd941256FC184eF3A07Be540a90b81Ec21",
+
+    wNative: "0xc9B53AB2679f573e480d01e0f49e2B5CFB7a3EAb",
+  },
   [ChainId.TacMainnet]: {
     morpho: "0x918B9F2E4B44E20c6423105BB6cCEB71473aD35c",
     bundler3: {
@@ -518,6 +532,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.ArbitrumMainnet]: {
     [_addressesRegistry[ChainId.ArbitrumMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.EtherlinkMainnet]: {
+    [_addressesRegistry[ChainId.EtherlinkMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.TacMainnet]: {
     [_addressesRegistry[ChainId.TacMainnet].wNative]: NATIVE_ADDRESS,
