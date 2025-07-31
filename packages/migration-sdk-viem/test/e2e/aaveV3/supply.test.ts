@@ -287,9 +287,7 @@ describe("Supply position on AAVE V3", () => {
 
         await migrationBundle.requirements.signatures[0]!.sign(client);
 
-        await sendTransaction(client, {
-          ...migrationBundle.tx(),
-        });
+        await sendTransaction(client, migrationBundle.tx());
 
         const [
           bundlerPosition,
