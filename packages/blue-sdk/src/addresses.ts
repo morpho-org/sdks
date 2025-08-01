@@ -445,6 +445,20 @@ const _addressesRegistry = {
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xF242275d3a6527d877f2c927a82D9b057609cc71",
   },
+  [ChainId.HyperliquidMainnet]: {
+    morpho: "0x68e37dE8d93d3496ae143F2E900490f6280C57cD",
+    bundler3: {
+      bundler3: "0xa3F50477AfA601C771874260A3B34B40e244Fa0e",
+      generalAdapter1: "0xD7F48aDE56613E8605863832B7B8A1985B934aE4",
+    },
+    adaptiveCurveIrm: "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483",
+    publicAllocator: "0x517505be22D9068687334e69ae7a02fC77edf4Fc",
+    metaMorphoFactory: "0xec051b19d654C48c357dC974376DeB6272f24e53",
+    chainlinkOracleFactory: "0xeb476f124FaD625178759d13557A72394A6f9aF5",
+    preLiquidationFactory: "0x1b6782Ac7A859503cE953FBf4736311CC335B8f0",
+
+    wNative: "0x5555555555555555555555555555555555555555",
+  },
 } as const;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -541,6 +555,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.LiskMainnet]: {
     [_addressesRegistry[ChainId.LiskMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.HyperliquidMainnet]: {
+    [_addressesRegistry[ChainId.HyperliquidMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
