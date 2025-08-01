@@ -66,7 +66,7 @@ export function useMarketsParams<
       const { data, error, isFetching } = orderedResults[index]!;
 
       result.data[marketId] = data;
-      result.error[marketId] = error;
+      result.error[marketId] = error as UseMarketParamsReturnType["error"];
       result.isFetching[marketId] = isFetching;
 
       if (isFetching) result.isFetchingAny = true;

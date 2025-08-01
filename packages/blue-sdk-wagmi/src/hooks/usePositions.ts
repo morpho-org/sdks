@@ -74,7 +74,8 @@ export function usePositions<
     const { data, error, isFetching } = orderedResults[index]!;
 
     (result.data[user] ??= {})[marketId] = data;
-    (result.error[user] ??= {})[marketId] = error;
+    (result.error[user] ??= {})[marketId] =
+      error as UsePositionReturnType["error"];
     (result.isFetching[user] ??= {})[marketId] = isFetching;
 
     if (isFetching) result.isFetchingAny = true;

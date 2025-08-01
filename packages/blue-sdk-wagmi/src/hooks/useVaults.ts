@@ -65,7 +65,7 @@ export function useVaults<config extends Config = ResolvedRegister["config"]>({
       const { data, error, isFetching } = orderedResults[index]!;
 
       result.data[vault] = data;
-      result.error[vault] = error;
+      result.error[vault] = error as UseVaultReturnType["error"];
       result.isFetching[vault] = isFetching;
 
       if (isFetching) result.isFetchingAny = true;

@@ -48,6 +48,7 @@ const TEST_CONFIGS: {
 }[ChainId.EthMainnet][] = [
   {
     chainId: ChainId.EthMainnet,
+    // @ts-expect-error
     testFn: test[ChainId.EthMainnet],
     markets: {
       cEth: {

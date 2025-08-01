@@ -73,7 +73,7 @@ export function useHoldings<
     const { data, error, isFetching } = orderedResults[index]!;
 
     (result.data[user] ??= {})[token] = data;
-    (result.error[user] ??= {})[token] = error;
+    (result.error[user] ??= {})[token] = error as UseHoldingReturnType["error"];
     (result.isFetching[user] ??= {})[token] = isFetching;
 
     if (isFetching) result.isFetchingAny = true;
