@@ -132,6 +132,18 @@ export class UnknownVaultMarketPublicAllocatorConfigError extends UnknownDataErr
   }
 }
 
+export class UnknownVaultV2AdapterError extends UnknownDataError {
+  constructor(public readonly adapter: Address) {
+    super(`unknown vault v2 adapter "${adapter}"`);
+  }
+}
+
+export class UnknownVaultV2Error extends UnknownDataError {
+  constructor(public readonly vault: Address) {
+    super(`unknown vault v2 "${vault}"`);
+  }
+}
+
 export namespace Erc20Errors {
   export class InsufficientBalance extends Error {
     constructor(

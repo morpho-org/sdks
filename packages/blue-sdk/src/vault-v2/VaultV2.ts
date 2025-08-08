@@ -15,6 +15,8 @@ export interface IVaultV2 extends IToken {
   adapters: Address[];
   maxRate: bigint;
   liquidityAdapter: Address;
+  performanceFeeRecipient: Address;
+  managementFeeRecipient: Address;
 }
 
 export class VaultV2 extends WrappedToken implements IVaultV2 {
@@ -43,6 +45,9 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
 
   public liquidityAdapter: Address;
 
+  public performanceFeeRecipient: Address;
+  public managementFeeRecipient: Address;
+
   constructor({
     totalSupply,
     asset,
@@ -54,6 +59,8 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     performanceFee,
     managementFee,
     liquidityAdapter,
+    performanceFeeRecipient,
+    managementFeeRecipient,
     ...config
   }: IVaultV2) {
     super(config, asset);
@@ -67,6 +74,16 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     this.performanceFee = performanceFee;
     this.managementFee = managementFee;
     this.liquidityAdapter = liquidityAdapter;
+    this.performanceFeeRecipient = performanceFeeRecipient;
+    this.managementFeeRecipient = managementFeeRecipient;
+  }
+
+  public toAssets(shares: bigint) {
+    return this._unwrap(shares, "Down");
+  }
+
+  public toShares(assets: bigint) {
+    return this._wrap(assets, "Down");
   }
 
   protected _wrap(amount: bigint, rounding: RoundingDirection) {
@@ -107,7 +124,8 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     );
     const elapsed = BigInt(timestamp) - vault.lastUpdate;
 
-    if (elapsed <= 0n) return vault;
+    if (elapsed <= 0n)
+      return { vault, performanceFeeShares: 0n, managementFeeShares: 0n };
 
     const realAssets = vault.accrualAdapters.reduce(
       (curr, adapter) => curr + adapter.realAssets(timestamp),
@@ -147,6 +165,6 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     vault.lastUpdate = BigInt(timestamp);
 
-    return vault;
+    return { vault, performanceFeeShares, managementFeeShares };
   }
 }

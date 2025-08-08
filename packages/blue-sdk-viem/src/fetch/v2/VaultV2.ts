@@ -34,6 +34,8 @@ export async function fetchVaultV2(
     maxRate,
     liquidityAdapter,
     adaptersLength,
+    performanceFeeRecipient,
+    managementFeeRecipient,
   ] = await Promise.all([
     fetchToken(address, client, parameters),
     readContract(client, {
@@ -96,6 +98,18 @@ export async function fetchVaultV2(
       abi: vaultV2Abi,
       functionName: "adaptersLength",
     }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: vaultV2Abi,
+      functionName: "performanceFeeRecipient",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: vaultV2Abi,
+      functionName: "managementFeeRecipient",
+    }),
   ]);
 
   const adapters = await Promise.all(
@@ -122,6 +136,8 @@ export async function fetchVaultV2(
     lastUpdate,
     liquidityAdapter,
     adapters,
+    performanceFeeRecipient,
+    managementFeeRecipient,
   });
 }
 

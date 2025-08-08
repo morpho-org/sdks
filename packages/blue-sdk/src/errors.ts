@@ -41,6 +41,12 @@ export class UnsupportedPreLiquidationParamsError extends Error {
   }
 }
 
+export class UnsupportedVaultV2AdapterError extends Error {
+  constructor(public readonly address: Address) {
+    super(`type of adapter ${address} is not supported`);
+  }
+}
+
 export namespace BlueErrors {
   export class AlreadySet extends Error {
     constructor(

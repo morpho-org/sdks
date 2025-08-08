@@ -84,7 +84,7 @@ describe("AccrualVaultV2", () => {
 
     const block = await client.getBlock({ blockTag: "latest" });
 
-    const accruedVaultV2 = vaultV2.accrueInterest(block.timestamp);
+    const { vault: accruedVaultV2 } = vaultV2.accrueInterest(block.timestamp);
     const [expectedTotalAssets, performanceFeeShares, managementFeeShares] =
       await readContract(client, {
         address: vaultV2Address,
