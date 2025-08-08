@@ -58,6 +58,10 @@ export interface ChainAddresses {
   usdc?: Address;
   stEth?: Address;
   wstEth?: Address;
+
+  /* Vault V2 */
+  vaultV2Factory?: Address;
+  vaultV2MorphoVaultV1AdapterFactory?: Address;
 }
 
 const _addressesRegistry = {

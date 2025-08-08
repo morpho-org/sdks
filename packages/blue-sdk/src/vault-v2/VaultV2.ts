@@ -10,8 +10,6 @@ export interface IVaultV2 extends IToken {
   totalAssets: bigint;
   performanceFee: bigint;
   managementFee: bigint;
-  performanceFeeShares: bigint;
-  managementFeeShares: bigint;
   virtualShares: bigint;
   lastUpdate: bigint;
   adapters: Address[];
@@ -32,10 +30,6 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
    */
   public totalAssets: bigint;
 
-  public performanceFeeShares: bigint;
-
-  public managementFeeShares: bigint;
-
   public virtualShares: bigint;
 
   public lastUpdate: bigint;
@@ -53,8 +47,6 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     totalSupply,
     asset,
     totalAssets,
-    performanceFeeShares,
-    managementFeeShares,
     virtualShares,
     lastUpdate,
     adapters,
@@ -67,8 +59,6 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     super(config, asset);
     this.totalSupply = totalSupply;
     this.totalAssets = totalAssets;
-    this.performanceFeeShares = performanceFeeShares;
-    this.managementFeeShares = managementFeeShares;
     this.virtualShares = virtualShares;
     this.lastUpdate = lastUpdate;
     this.asset = asset;
@@ -79,24 +69,20 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     this.liquidityAdapter = liquidityAdapter;
   }
 
-  protected _wrap(amount: bigint, rounding: RoundingDirection = "Down") {
-    const newTotalSupply =
-      this.totalSupply + this.performanceFeeShares + this.managementFeeShares;
+  protected _wrap(amount: bigint, rounding: RoundingDirection) {
     return MathLib.mulDiv(
       amount,
-      newTotalSupply + this.virtualShares,
+      this.totalSupply + this.virtualShares,
       this.totalAssets + 1n,
       rounding,
     );
   }
 
-  protected _unwrap(amount: bigint, rounding: RoundingDirection = "Down") {
-    const newTotalSupply =
-      this.totalSupply + this.performanceFeeShares + this.managementFeeShares;
+  protected _unwrap(amount: bigint, rounding: RoundingDirection) {
     return MathLib.mulDiv(
       amount,
       this.totalAssets + 1n,
-      newTotalSupply + this.virtualShares,
+      this.totalSupply + this.virtualShares,
       rounding,
     );
   }
@@ -113,7 +99,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     super({ ...vault, adapters: accrualAdapters.map((a) => a.address) });
   }
 
-  public accrueInterests(timestamp: BigIntish) {
+  public accrueInterest(timestamp: BigIntish) {
     const vault = new AccrualVaultV2(
       this,
       this.accrualAdapters,

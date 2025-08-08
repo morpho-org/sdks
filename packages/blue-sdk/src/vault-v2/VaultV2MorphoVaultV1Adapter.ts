@@ -14,7 +14,7 @@ export class VaultV2MorphoVaultV1Adapter
   extends VaultV2Adapter
   implements IVaultV2MorphoVaultV1Adapter
 {
-  public morphoVaultV1: Address;
+  public readonly morphoVaultV1: Address;
 
   constructor({
     morphoVaultV1,
