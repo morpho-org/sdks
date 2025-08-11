@@ -1,2 +1,6 @@
 packages:
   - packages/*
+onlyBuiltDependencies:
+  - bufferutil
+  - secp256k1
+  - utf-8-validate
