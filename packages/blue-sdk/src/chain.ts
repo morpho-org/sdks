@@ -51,7 +51,7 @@ export namespace ChainUtils {
     return `${getExplorerUrl(chainId)}/tx/${tx}`;
   };
 
-  export const CHAIN_METADATA: Record<ChainId, ChainMetadata> = {
+  export const CHAIN_METADATA = {
     [ChainId.EthMainnet]: {
       name: "Ethereum",
       id: ChainId.EthMainnet,
@@ -199,5 +199,5 @@ export namespace ChainUtils {
       explorerUrl: "https://hyperevmscan.io",
       identifier: "hyperliquid",
     },
-  };
+  } satisfies Record<ChainId, ChainMetadata>;
 }
