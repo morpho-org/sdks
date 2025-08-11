@@ -18,6 +18,8 @@
     "build": "tsc --noEmit && tsc --build tsconfig.build.json"
   },
   "dependencies": {
+    "@types/lodash.merge": "^4.6.9",
+    "lodash.merge": "^4.6.2",
     "mutative": "^1.1.0"
   },
   "peerDependencies": {

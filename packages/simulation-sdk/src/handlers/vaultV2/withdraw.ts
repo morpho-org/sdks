@@ -73,21 +73,6 @@ export const handleVaultV2WithdrawOperation: OperationHandler<
         args: {
           amount: assets - idleAssets,
           from: zeroAddress,
-          to: vaultV2.liquidityAdapter,
-        },
-      },
-      data,
-    );
-    // END OF TODO
-
-    handleErc20Operation(
-      {
-        type: "Erc20_Transfer",
-        sender: address,
-        address: vaultV2.asset,
-        args: {
-          amount: assets - idleAssets,
-          from: vaultV2.liquidityAdapter,
           to: vaultV2.address,
         },
       },

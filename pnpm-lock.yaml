@@ -376,7 +376,7 @@ importers:
         version: 2.22.18(bufferutil@4.0.8)(ts-node@10.9.2(@types/node@22.13.1)(typescript@5.7.2))(typescript@5.7.2)(utf-8-validate@5.0.10)
       nock:
         specifier: beta
-        version: 14.0.0-beta.19
+        version: 15.0.0-beta.5
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -446,7 +446,7 @@ importers:
         version: 16.10.0
       nock:
         specifier: beta
-        version: 14.0.0-beta.19
+        version: 15.0.0-beta.5
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -510,7 +510,7 @@ importers:
         version: 16.10.0
       nock:
         specifier: beta
-        version: 14.0.0-beta.19
+        version: 15.0.0-beta.5
       typescript:
         specifier: ^5.7.2
         version: 5.7.2
@@ -599,6 +599,12 @@ importers:
 
   packages/simulation-sdk:
     dependencies:
+      '@types/lodash.merge':
+        specifier: ^4.6.9
+        version: 4.6.9
+      lodash.merge:
+        specifier: ^4.6.2
+        version: 4.6.2
       mutative:
         specifier: ^1.1.0
         version: 1.1.0
@@ -738,7 +744,7 @@ importers:
         version: 3.0.5(@types/debug@4.1.12)(@types/node@22.13.1)(@vitest/ui@3.0.5)(happy-dom@17.0.0)(terser@5.36.0)
       wagmi:
         specifier: ^2.14.10
-        version: 2.14.10(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+        version: 2.14.10(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
 
   packages/test-wagmi:
     devDependencies:
@@ -1895,8 +1901,8 @@ packages:
     resolution: {integrity: sha512-z10PF9JV6SbjFq+/rYabM+8CVlMokgl8RFGvieSGNTmrkQanfHn+15XBrhG3BgUfvmTeSeyShfOHpG0i9zEdcg==}
     deprecated: Motion One for Vue is deprecated. Use Oku Motion instead https://oku-ui.com/motion
 
-  '@mswjs/interceptors@0.37.3':
-    resolution: {integrity: sha512-USvgCL/uOGFtVa6SVyRrC8kIAedzRohxIXN5LISlg5C5vLZCn7dgMFVSNhSF9cuBEFrm/O2spDWEZeMnw4ZXYg==}
+  '@mswjs/interceptors@0.39.5':
+    resolution: {integrity: sha512-B9nHSJYtsv79uo7QdkZ/b/WoKm20IkVSmTc/WCKarmDtFwM0dRx2ouEniqwNkzCSLn3fydzKmnMzjtfdOWt3VQ==}
     engines: {node: '>=18'}
 
   '@noble/ciphers@1.0.0':
@@ -2048,6 +2054,7 @@ packages:
   '@paraswap/sdk@7.2.3':
     resolution: {integrity: sha512-c1YZoCOrWViXNdIfd6+kyhIKXS+qsXrwb2CVygfGKon+qqQaUCdgK1DsrcIn2x/RMfg349f0jd6LG2bwfr3gOA==}
     engines: {node: '>=18'}
+    deprecated: Package no longer supported. Contact Support at https://www.npmjs.com/support for more info.
     peerDependencies:
       axios: '>=0.25.0 <2.0.0'
       ethers: ^5.5.0 || ^6.0.0
@@ -2452,6 +2459,9 @@ packages:
   '@types/lodash.kebabcase@4.1.9':
     resolution: {integrity: sha512-kPrrmcVOhSsjAVRovN0lRfrbuidfg0wYsrQa5IYuoQO1fpHHGSme66oyiYA/5eQPVl8Z95OA3HG0+d2SvYC85w==}
 
+  '@types/lodash.merge@4.6.9':
+    resolution: {integrity: sha512-23sHDPmzd59kUgWyKGiOMO2Qb9YtqRO/x4IhkgNUiPQ1+5MUVqi6bCZeq9nBJ17msjIMbEIO5u+XW4Kz6aGUhQ==}
+
   '@types/lodash.mergewith@4.6.9':
     resolution: {integrity: sha512-fgkoCAOF47K7sxrQ7Mlud2TH023itugZs2bUg8h/KzT+BnZNrR2jAOmaokbLunHNnobXVWOezAeNn/lZqwxkcw==}
 
@@ -2567,6 +2577,7 @@ packages:
 
   '@walletconnect/ethereum-provider@2.17.0':
     resolution: {integrity: sha512-b+KTAXOb6JjoxkwpgYQQKPUcTwENGmdEdZoIDLeRicUmZTn/IQKfkMoC2frClB4YxkyoVMtj1oMV2JAax+yu9A==}
+    deprecated: 'Reliability and performance improvements. See: https://github.com/WalletConnect/walletconnect-monorepo/releases'
 
   '@walletconnect/events@1.0.1':
     resolution: {integrity: sha512-NPTqaoi0oPBVNuLv7qPaJazmGHs5JGyO8eEAk5VGKmJzDR7AHzD4k6ilox5kxk1iwiOnFopBOOMLs86Oa76HpQ==}
@@ -4445,9 +4456,9 @@ packages:
   no-case@3.0.4:
     resolution: {integrity: sha512-fgAN3jGAh+RoxUGZHTSOLJIqUc2wmoBwGR4tbpNAKmmovFoWq0OdRkb0VkldReO2a2iBT/OEulG9XSUc10r3zg==}
 
-  nock@14.0.0-beta.19:
-    resolution: {integrity: sha512-xqWQQZ/Hv01tj5uL7BE4j752hhB2MHP7aaEcTp/iDT1EHsh3TYZOIx4HHFL81yRc8KFx4pqb2P2OtuxKShKhjw==}
-    engines: {node: '>= 18'}
+  nock@15.0.0-beta.5:
+    resolution: {integrity: sha512-PnPM6UiBb4y+BoEvSE/tYioWzyExRdEk+wnjO0uty3j/gAvz7lo5VR6FQRX3vnSjcv6uvDxTDhjx686BOCpT0Q==}
+    engines: {node: '>=18.20.0 <20 || >=20.12.1'}
 
   node-addon-api@2.0.2:
     resolution: {integrity: sha512-Ntyt4AIXyaLIuMHF6IOoTakB3K+RWxwtsHNRxllEoA6vPwP9o4866g6YWDLUdnucilZhmkxiHwHr11gAENw+QA==}
@@ -4744,10 +4755,6 @@ packages:
 
   promise@7.3.1:
     resolution: {integrity: sha512-nolQXZ/4L+bP/UGlkfaIujX9BKxGwmQ9OT4mOt5yvy8iK1h3wqTEJCijzGANTCCl9nWjY41juyAn2K3Q1hLLTg==}
-
-  propagate@2.0.1:
-    resolution: {integrity: sha512-vGrhOavPSTz4QVNuBNdcNXePNdNMaO1xj9yBeH1ScQPjk/rhg9sSlCXPhMkFuaNNW/syTvYqsnbIJxMBfRbbag==}
-    engines: {node: '>= 8'}
 
   proxy-compare@2.5.1:
     resolution: {integrity: sha512-oyfc0Tx87Cpwva5ZXezSp5V9vht1c7dZBhvuV/y3ctkgMVUmiAGDVeeB0dKhGSyT0v1ZTEQYpe/RXlBVBNuCLA==}
@@ -7381,7 +7388,7 @@ snapshots:
       '@motionone/dom': 10.18.0
       tslib: 2.8.1
 
-  '@mswjs/interceptors@0.37.3':
+  '@mswjs/interceptors@0.39.5':
     dependencies:
       '@open-draft/deferred-promise': 2.2.0
       '@open-draft/logger': 0.3.0
@@ -7923,6 +7930,10 @@ snapshots:
     dependencies:
       '@types/lodash': 4.17.12
 
+  '@types/lodash.merge@4.6.9':
+    dependencies:
+      '@types/lodash': 4.17.12
+
   '@types/lodash.mergewith@4.6.9':
     dependencies:
       '@types/lodash': 4.17.12
@@ -8034,7 +8045,7 @@ snapshots:
       loupe: 3.1.2
       tinyrainbow: 2.0.0
 
-  '@wagmi/connectors@5.7.6(@types/react@19.0.7)(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
+  '@wagmi/connectors@5.7.6(@types/react@19.0.7)(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
     dependencies:
       '@coinbase/wallet-sdk': 4.2.3
       '@metamask/sdk': 0.32.0(bufferutil@4.0.8)(encoding@0.1.13)(utf-8-validate@5.0.10)
@@ -8068,56 +8079,7 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@wagmi/connectors@5.7.6(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
-    dependencies:
-      '@coinbase/wallet-sdk': 4.2.3
-      '@metamask/sdk': 0.32.0(bufferutil@4.0.8)(encoding@0.1.13)(utf-8-validate@5.0.10)
-      '@safe-global/safe-apps-provider': 0.18.5(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
-      '@safe-global/safe-apps-sdk': 9.1.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
-      '@wagmi/core': 2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
-      '@walletconnect/ethereum-provider': 2.17.0(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(utf-8-validate@5.0.10)
-      cbw-sdk: '@coinbase/wallet-sdk@3.9.3'
-      viem: 2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
-    optionalDependencies:
-      typescript: 5.7.2
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@capacitor/preferences'
-      - '@netlify/blobs'
-      - '@planetscale/database'
-      - '@react-native-async-storage/async-storage'
-      - '@types/react'
-      - '@upstash/redis'
-      - '@vercel/kv'
-      - bufferutil
-      - encoding
-      - ioredis
-      - react
-      - supports-color
-      - utf-8-validate
-      - zod
-
   '@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
-    dependencies:
-      eventemitter3: 5.0.1
-      mipd: 0.0.7(typescript@5.7.2)
-      viem: 2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
-      zustand: 5.0.0(@types/react@19.0.7)(react@19.0.0)(use-sync-external-store@1.4.0(react@19.0.0))
-    optionalDependencies:
-      '@tanstack/query-core': 5.62.16
-      typescript: 5.7.2
-    transitivePeerDependencies:
-      - '@types/react'
-      - immer
-      - react
-      - use-sync-external-store
-
-  '@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))':
     dependencies:
       eventemitter3: 5.0.1
       mipd: 0.0.7(typescript@5.7.2)
@@ -10441,11 +10403,10 @@ snapshots:
       lower-case: 2.0.2
       tslib: 2.8.1
 
-  nock@14.0.0-beta.19:
+  nock@15.0.0-beta.5:
     dependencies:
-      '@mswjs/interceptors': 0.37.3
+      '@mswjs/interceptors': 0.39.5
       json-stringify-safe: 5.0.1
-      propagate: 2.0.1
 
   node-addon-api@2.0.2: {}
 
@@ -10726,8 +10687,6 @@ snapshots:
   promise@7.3.1:
     dependencies:
       asap: 2.0.6
-
-  propagate@2.0.1: {}
 
   proxy-compare@2.5.1: {}
 
@@ -11500,41 +11459,8 @@ snapshots:
   wagmi@2.14.10(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)):
     dependencies:
       '@tanstack/react-query': 5.62.11(react@19.0.0)
-      '@wagmi/connectors': 5.7.6(@types/react@19.0.7)(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
+      '@wagmi/connectors': 5.7.6(@types/react@19.0.7)(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
       '@wagmi/core': 2.16.3(@tanstack/query-core@5.62.16)(@types/react@19.0.7)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
-      react: 19.0.0
-      use-sync-external-store: 1.4.0(react@19.0.0)
-      viem: 2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)
-    optionalDependencies:
-      typescript: 5.7.2
-    transitivePeerDependencies:
-      - '@azure/app-configuration'
-      - '@azure/cosmos'
-      - '@azure/data-tables'
-      - '@azure/identity'
-      - '@azure/keyvault-secrets'
-      - '@azure/storage-blob'
-      - '@capacitor/preferences'
-      - '@netlify/blobs'
-      - '@planetscale/database'
-      - '@react-native-async-storage/async-storage'
-      - '@tanstack/query-core'
-      - '@types/react'
-      - '@upstash/redis'
-      - '@vercel/kv'
-      - bufferutil
-      - encoding
-      - immer
-      - ioredis
-      - supports-color
-      - utf-8-validate
-      - zod
-
-  wagmi@2.14.10(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)):
-    dependencies:
-      '@tanstack/react-query': 5.62.11(react@19.0.0)
-      '@wagmi/connectors': 5.7.6(@wagmi/core@2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
-      '@wagmi/core': 2.16.3(@tanstack/query-core@5.62.16)(react@19.0.0)(typescript@5.7.2)(use-sync-external-store@1.4.0(react@19.0.0))(viem@2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10))
       react: 19.0.0
       use-sync-external-store: 1.4.0(react@19.0.0)
       viem: 2.23.0(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)

@@ -1,4 +1,10 @@
-import { maxUint256, parseEther, parseUnits } from "viem";
+import {
+  type Address,
+  maxUint256,
+  parseEther,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 
 import {
   ChainId,
@@ -12,10 +18,13 @@ import {
   Token,
   User,
   Vault,
+  VaultV2,
+  VaultV2MorphoVaultV1Adapter,
   registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
 import { randomMarket, randomVault } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
+import _merge from "lodash.merge";
 
 import { SimulationState } from "../src/index.js";
 
@@ -35,6 +44,24 @@ registerCustomAddresses({
     },
   },
 });
+
+const emptyHolding = (user: Address, token: Address) =>
+  new Holding({
+    erc20Allowances: {
+      morpho: 0n,
+      permit2: 0n,
+      "bundler3.generalAdapter1": 0n,
+    },
+    user,
+    token,
+    balance: 0n,
+    permit2BundlerAllowance: {
+      amount: 0n,
+      expiration: 0n,
+      nonce: 0n,
+    },
+    erc2612Nonce: 0n,
+  });
 
 export const marketA1 = new Market({
   params: randomMarket({ loanToken: tokenA }),
@@ -1630,11 +1657,90 @@ export const metaMorphoFixture = {
   },
 } as const;
 
+export const vaultV2MorphoVaultV1AdapterA = new VaultV2MorphoVaultV1Adapter({
+  morphoVaultV1: vaultA.address,
+  address: "0x2a0000000000000000000000000000000000000a",
+  parentVault: "0x200000000000000000000000000000000000000A",
+  adapterId: "0x1",
+  skimRecipient: zeroAddress,
+});
+export const vaultV2A = new VaultV2({
+  asset: tokenA,
+  adapters: [vaultV2MorphoVaultV1AdapterA.address],
+  address: "0x200000000000000000000000000000000000000A",
+  totalAssets: 0n,
+  totalSupply: 0n,
+  performanceFee: 0n,
+  managementFee: 0n,
+  performanceFeeRecipient: zeroAddress,
+  managementFeeRecipient: zeroAddress,
+  virtualShares: 10n ** BigInt(18 - blueFixture.tokens[tokenA].decimals),
+  lastUpdate: timestamp,
+  maxRate: 0n,
+  liquidityAdapter: vaultV2MorphoVaultV1AdapterA.address,
+  decimals: 18,
+  symbol: "VAULTV2A",
+  name: "Vault V2 A",
+});
+export const vaultV2B = new VaultV2({
+  asset: tokenB,
+  adapters: [],
+  address: "0x200000000000000000000000000000000000000B",
+  totalAssets: 0n,
+  totalSupply: 0n,
+  performanceFee: 0n,
+  managementFee: 0n,
+  performanceFeeRecipient: zeroAddress,
+  managementFeeRecipient: zeroAddress,
+  virtualShares: 10n ** BigInt(18 - blueFixture.tokens[tokenB].decimals),
+  lastUpdate: timestamp,
+  maxRate: 0n,
+  liquidityAdapter: zeroAddress,
+  decimals: 18,
+  symbol: "VAULTV2B",
+  name: "Vault V2 B",
+});
+
+export const v2Fixture = {
+  vaultV2Adapters: {
+    [vaultV2MorphoVaultV1AdapterA.address]: vaultV2MorphoVaultV1AdapterA,
+  },
+  vaultV2s: {
+    [vaultV2A.address]: vaultV2A,
+    [vaultV2B.address]: vaultV2B,
+  },
+  tokens: {
+    [vaultV2A.address]: new Token(vaultV2A),
+    [vaultV2B.address]: new Token(vaultV2B),
+  },
+  holdings: {
+    [vaultV2A.address]: {
+      [tokenA]: emptyHolding(vaultV2A.address, tokenA),
+    },
+    [vaultV2B.address]: {
+      [tokenB]: emptyHolding(vaultV2B.address, tokenB),
+    },
+    [vaultV2MorphoVaultV1AdapterA.address]: {
+      [vaultA.address]: emptyHolding(
+        vaultV2MorphoVaultV1AdapterA.address,
+        vaultA.address,
+      ),
+    },
+    [userA]: {
+      [vaultV2A.address]: emptyHolding(userA, vaultV2A.address),
+      [vaultV2B.address]: emptyHolding(userA, vaultV2B.address),
+    },
+    [userB]: {
+      [vaultV2A.address]: emptyHolding(userB, vaultV2A.address),
+      [vaultV2B.address]: emptyHolding(userB, vaultV2B.address),
+    },
+  },
+};
+
 export const dataFixture = new SimulationState({
   chainId: ChainId.EthMainnet,
   block: { number: 1n, timestamp },
-  ...blueFixture,
-  ...metaMorphoFixture,
+  ..._merge(blueFixture, metaMorphoFixture, v2Fixture),
 });
 
 export const wrapFixtures = new SimulationState({
