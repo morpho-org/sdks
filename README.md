@@ -19,11 +19,6 @@
 - [**`@morpho-org/blue-sdk-wagmi`**](./packages/blue-sdk-wagmi/): Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities
 - [**`@morpho-org/simulation-sdk-wagmi`**](./packages/simulation-sdk-wagmi/): Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states
 
-### Ethers
-
-- [**`@morpho-org/blue-sdk-ethers`**](./packages/blue-sdk-ethers/): Ethers-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) ethers-based fetch methods
-- [**`@morpho-org/liquidity-sdk-ethers`**](./packages/liquidity-sdk-ethers/): Ethers-based package that helps seamlessly calculate the liquidity available through the PublicAllocator
-
 ### Development
 
 - [**`@morpho-org/morpho-ts`**](./packages/morpho-ts/): TypeScript package to handle all things time & format-related

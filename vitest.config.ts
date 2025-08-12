@@ -11,7 +11,6 @@ export default defineConfig({
         "**/artifacts/**",
         "packages/test/**",
         "packages/morpho-test/**",
-        "packages/blue-sdk-ethers*/**",
       ],
     },
     sequence: {
@@ -33,13 +32,6 @@ export default defineConfig({
         test: {
           name: "blue-sdk",
           include: ["packages/blue-sdk/test/**/*.test.ts"],
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "blue-sdk-ethers",
-          include: ["packages/blue-sdk-ethers/test/**/*.test.ts"],
         },
       },
       {
@@ -102,13 +94,6 @@ export default defineConfig({
           name: "liquidation-sdk-viem",
           include: ["packages/liquidation-sdk-viem/test/**/*.test.ts"],
           testTimeout: 90_000,
-        },
-      },
-      {
-        extends: true,
-        test: {
-          name: "liquidity-sdk-ethers",
-          include: ["packages/liquidity-sdk-ethers/test/**/*.test.ts"],
         },
       },
       {

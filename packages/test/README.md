@@ -53,22 +53,6 @@ export const test = createViemTest(mainnet, {
 
 See more on its internal usage for [viem-based E2E tests here](../blue-sdk-viem/test/).
 
-### Vitest (ethers)
-
-Export an extended Vitest `test`:
-
-```typescript
-import { createEthersTest } from "@morpho-org/test/vitest/ethers";
-import { mainnet } from "viem/chains";
-
-export const test = createEthersTest(mainnet, {
-  forkUrl: process.env.MAINNET_RPC_URL,
-  forkBlockNumber: 19_530_000,
-});
-```
-
-See more on its internal usage for [ethers-based E2E tests here](../blue-sdk-ethers/test/e2e/).
-
 ### Playwright
 
 Export an extended Playwright `test`:
