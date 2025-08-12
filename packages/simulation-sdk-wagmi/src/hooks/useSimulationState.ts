@@ -8,6 +8,8 @@ import {
   type FetchMarketsParameters,
   type FetchTokensParameters,
   type FetchUsersParameters,
+  type FetchVaultV2AdaptersParameters,
+  type FetchVaultV2sParameters,
   type FetchVaultsParameters,
   useChainId,
   useHoldings,
@@ -17,6 +19,8 @@ import {
   useUsers,
   useVaultMarketConfigs,
   useVaultUsers,
+  useVaultV2Adapters,
+  useVaultV2s,
   useVaults,
 } from "@morpho-org/blue-sdk-wagmi";
 import { values } from "@morpho-org/morpho-ts";
@@ -28,7 +32,9 @@ import { type Config, type ResolvedRegister, useReadContract } from "wagmi";
 export type FetchSimulationStateParameters = FetchMarketsParameters &
   FetchUsersParameters &
   FetchTokensParameters &
-  FetchVaultsParameters & {
+  FetchVaultsParameters &
+  FetchVaultV2sParameters &
+  FetchVaultV2AdaptersParameters & {
     includeVaultQueues?: boolean;
   };
 
@@ -60,6 +66,8 @@ export interface SimulationStateLike<T> {
   holdings?: Record<Address, Record<Address, T>>;
   vaultMarketConfigs?: Record<Address, Record<MarketId, T>>;
   vaultUsers?: Record<Address, Record<Address, T>>;
+  vaultV2s?: Record<Address, T>;
+  vaultV2Adapters?: Record<Address, T>;
 }
 
 export type UseSimulationReturnType<T> =
@@ -249,6 +257,24 @@ export function useSimulationState<
     },
   });
 
+  const vaultV2s = useVaultV2s({
+    ...parameters,
+    blockNumber: block?.number,
+    query: {
+      ...parameters.query,
+      enabled: block != null && parameters.query?.enabled,
+    },
+  });
+
+  const vaultV2Adapters = useVaultV2Adapters({
+    ...parameters,
+    blockNumber: block?.number,
+    query: {
+      ...parameters.query,
+      enabled: block != null && parameters.query?.enabled,
+    },
+  });
+
   const data = useMemo(() => {
     if (block == null) return;
 
@@ -264,6 +290,8 @@ export function useSimulationState<
       holdings: holdings.data,
       vaultMarketConfigs: vaultMarketConfigs.data,
       vaultUsers: vaultUsers.data,
+      vaultV2s: vaultV2s.data,
+      vaultV2Adapters: vaultV2Adapters.data,
     });
   }, [
     chainId,
@@ -277,6 +305,8 @@ export function useSimulationState<
     holdings.data,
     vaultMarketConfigs.data,
     vaultUsers.data,
+    vaultV2s.data,
+    vaultV2Adapters.data,
   ]);
 
   const error = useMemo(() => {
@@ -290,6 +320,8 @@ export function useSimulationState<
       holdings: holdings.error,
       vaultMarketConfigs: vaultMarketConfigs.error,
       vaultUsers: vaultUsers.error,
+      vaultV2s: vaultV2s.error,
+      vaultV2Adapters: vaultV2Adapters.error,
     };
   }, [
     feeRecipient.error,
@@ -301,6 +333,8 @@ export function useSimulationState<
     holdings.error,
     vaultMarketConfigs.error,
     vaultUsers.error,
+    vaultV2s.error,
+    vaultV2Adapters.error,
   ]);
 
   if (block == null)
@@ -324,7 +358,9 @@ export function useSimulationState<
       positions.isFetchingAny ||
       holdings.isFetchingAny ||
       vaultMarketConfigs.isFetchingAny ||
-      vaultUsers.isFetchingAny,
+      vaultUsers.isFetchingAny ||
+      vaultV2s.isFetchingAny ||
+      vaultV2Adapters.isFetchingAny,
     isFetching: {
       global: { feeRecipient: feeRecipient.isFetching },
       markets: markets.isFetching,
@@ -335,6 +371,8 @@ export function useSimulationState<
       holdings: holdings.isFetching,
       vaultMarketConfigs: vaultMarketConfigs.isFetching,
       vaultUsers: vaultUsers.isFetching,
+      vaultV2s: vaultV2s.isFetching,
+      vaultV2Adapters: vaultV2Adapters.isFetching,
     },
     isPending: false,
   };

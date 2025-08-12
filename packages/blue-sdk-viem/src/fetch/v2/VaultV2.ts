@@ -1,15 +1,10 @@
-import {
-  AccrualVaultV2,
-  UnsupportedChainIdError,
-  VaultV2,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
+import { AccrualVaultV2, VaultV2 } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { vaultV2Abi, vaultV2MorphoVaultV1AdapterFactoryAbi } from "../../abis";
+import { vaultV2Abi } from "../../abis";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchToken } from "../Token";
-import { fetchAccrualVaultV2MorphoVaultV1Adapter } from "./VaultV2MorphoVaultV1Adapter";
+import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter";
 
 export async function fetchVaultV2(
   address: Address,
@@ -147,12 +142,6 @@ export async function fetchAccrualVaultV2(
   parameters: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
-  const { vaultV2MorphoVaultV1AdapterFactory } = getChainAddresses(
-    parameters.chainId,
-  );
-
-  if (!vaultV2MorphoVaultV1AdapterFactory)
-    throw new UnsupportedChainIdError(parameters.chainId);
 
   const vaultV2 = await fetchVaultV2(address, client, parameters);
 
@@ -164,24 +153,9 @@ export async function fetchAccrualVaultV2(
       functionName: "balanceOf",
       args: [vaultV2.address],
     }),
-    ...vaultV2.adapters.map(async (adapter) => {
-      if (
-        await readContract(client, {
-          ...parameters,
-          address: vaultV2MorphoVaultV1AdapterFactory,
-          abi: vaultV2MorphoVaultV1AdapterFactoryAbi,
-          functionName: "isMorphoVaultV1Adapter",
-          args: [adapter],
-        })
-      )
-        return fetchAccrualVaultV2MorphoVaultV1Adapter(
-          adapter,
-          client,
-          parameters,
-        );
-
-      throw "Unknown adapter type";
-    }),
+    ...vaultV2.adapters.map(async (adapter) =>
+      fetchAccrualVaultV2Adapter(adapter, client, parameters),
+    ),
   ]);
 
   return new AccrualVaultV2(vaultV2, adapters, assetBalance);

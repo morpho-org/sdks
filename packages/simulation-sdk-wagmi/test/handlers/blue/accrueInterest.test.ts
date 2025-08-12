@@ -31,6 +31,8 @@ describe("Blue_AccrueInterest", () => {
           users: [],
           tokens: [],
           vaults: [],
+          vaultV2Adapters: [],
+          vaultV2s: [],
           block,
           accrueInterest: false,
         }),
