@@ -1,4 +1,9 @@
-import { type Client, zeroAddress } from "viem";
+import {
+  type Address,
+  type Client,
+  type ReadContractReturnType,
+  zeroAddress,
+} from "viem";
 
 import {
   Market,
@@ -14,6 +19,35 @@ import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
 import { abi, code } from "../queries/GetMarket";
 import { readContractRestructured } from "../utils";
 
+export const transformDeploylessMarketRead =
+  (adaptiveCurveIrm: Address) =>
+  ({
+    marketParams,
+    market: {
+      totalSupplyAssets,
+      totalSupplyShares,
+      totalBorrowAssets,
+      totalBorrowShares,
+      lastUpdate,
+      fee,
+    },
+    hasPrice,
+    price,
+    rateAtTarget,
+  }: ReadContractReturnType<typeof abi, "query">) =>
+    new Market({
+      params: new MarketParams(marketParams),
+      totalSupplyAssets,
+      totalBorrowAssets,
+      totalSupplyShares,
+      totalBorrowShares,
+      lastUpdate,
+      fee,
+      price: hasPrice ? price : undefined,
+      rateAtTarget:
+        marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
+    });
+
 export async function fetchMarket(
   id: MarketId,
   client: Client,
@@ -25,20 +59,7 @@ export async function fetchMarket(
 
   if (deployless) {
     try {
-      const {
-        marketParams,
-        market: {
-          totalSupplyAssets,
-          totalSupplyShares,
-          totalBorrowAssets,
-          totalBorrowShares,
-          lastUpdate,
-          fee,
-        },
-        hasPrice,
-        price,
-        rateAtTarget,
-      } = await readContract(client, {
+      const market = await readContract(client, {
         ...parameters,
         abi,
         code,
@@ -46,18 +67,7 @@ export async function fetchMarket(
         args: [morpho, id, adaptiveCurveIrm],
       });
 
-      return new Market({
-        params: new MarketParams(marketParams),
-        totalSupplyAssets,
-        totalBorrowAssets,
-        totalSupplyShares,
-        totalBorrowShares,
-        lastUpdate,
-        fee,
-        price: hasPrice ? price : undefined,
-        rateAtTarget:
-          marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
-      });
+      return transformDeploylessMarketRead(adaptiveCurveIrm)(market);
     } catch {
       // Fallback to multicall if deployless call fails.
     }

@@ -19,6 +19,13 @@ enum OptionalBoolean {
     True
 }
 
+struct HoldingRequest {
+    IERC20Permit token;
+    address user;
+    bool isWrappedBackedToken;
+    bool isErc20Permissioned;
+}
+
 struct HoldingResponse {
     uint256 balance;
     ERC20Allowances erc20Allowances;
@@ -29,41 +36,37 @@ struct HoldingResponse {
 }
 
 contract GetHolding {
-    function query(
-        IERC20Permit token,
-        address account,
-        address morpho,
-        IPermit2 permit2,
-        address generalAdapter1,
-        bool isWrappedBackedToken,
-        bool isErc20Permissioned
-    ) external view returns (HoldingResponse memory res) {
-        res.balance = token.balanceOf(account);
+    function query(HoldingRequest calldata req, address morpho, IPermit2 permit2, address generalAdapter1)
+        external
+        view
+        returns (HoldingResponse memory res)
+    {
+        res.balance = req.token.balanceOf(req.user);
         res.erc20Allowances = ERC20Allowances({
-            morpho: token.allowance(account, morpho),
-            permit2: token.allowance(account, address(permit2)),
-            generalAdapter1: token.allowance(account, generalAdapter1)
+            morpho: req.token.allowance(req.user, morpho),
+            permit2: req.token.allowance(req.user, address(permit2)),
+            generalAdapter1: req.token.allowance(req.user, generalAdapter1)
         });
-        res.permit2BundlerAllowance = permit2.allowance(account, address(token), generalAdapter1);
+        res.permit2BundlerAllowance = permit2.allowance(req.user, address(req.token), generalAdapter1);
 
-        try token.nonces(account) returns (uint256 nonce) {
+        try req.token.nonces(req.user) returns (uint256 nonce) {
             res.isErc2612 = true;
             res.erc2612Nonce = nonce;
         } catch {}
 
-        try IERC20Permissioned(address(token)).hasPermission(account) returns (bool hasPermission) {
+        try IERC20Permissioned(address(req.token)).hasPermission(req.user) returns (bool hasPermission) {
             res.canTransfer = hasPermission ? OptionalBoolean.True : OptionalBoolean.False;
         } catch {
-            res.canTransfer = isErc20Permissioned ? OptionalBoolean.False : OptionalBoolean.True;
+            res.canTransfer = req.isErc20Permissioned ? OptionalBoolean.False : OptionalBoolean.True;
         }
 
-        if (isWrappedBackedToken) {
+        if (req.isWrappedBackedToken) {
             res.canTransfer = OptionalBoolean.Undefined;
 
-            try IWrappedBackedToken(address(token)).whitelistControllerAggregator() returns (
+            try IWrappedBackedToken(address(req.token)).whitelistControllerAggregator() returns (
                 IWhitelistControllerAggregator whitelistControllerAggregator
             ) {
-                try whitelistControllerAggregator.isWhitelisted(account) returns (bool isWhitelisted) {
+                try whitelistControllerAggregator.isWhitelisted(req.user) returns (bool isWhitelisted) {
                     res.canTransfer = isWhitelisted ? OptionalBoolean.True : OptionalBoolean.False;
                 } catch {}
             } catch {}

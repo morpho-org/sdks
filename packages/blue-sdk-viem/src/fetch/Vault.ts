@@ -1,4 +1,9 @@
-import { type Address, type Client, zeroAddress } from "viem";
+import {
+  type Address,
+  type Client,
+  type ReadContractReturnType,
+  zeroAddress,
+} from "viem";
 
 import {
   AccrualVault,
@@ -18,6 +23,52 @@ import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 import { abi, code } from "../queries/GetVault";
 import { fetchVaultConfig } from "./VaultConfig";
 
+export const transformDeploylessVaultRead =
+  (publicAllocator: Address | undefined) =>
+  ({
+    config,
+    owner,
+    curator,
+    guardian,
+    timelock,
+    pendingTimelock,
+    pendingGuardian,
+    pendingOwner,
+    fee,
+    feeRecipient,
+    skimRecipient,
+    totalSupply,
+    totalAssets,
+    lastTotalAssets,
+    supplyQueue,
+    withdrawQueue,
+    publicAllocatorConfig,
+  }: ReadContractReturnType<typeof abi, "query">) =>
+    new Vault({
+      ...new VaultConfig({
+        ...config,
+        eip5267Domain: new Eip5267Domain(config.eip5267Domain),
+        address: config.vault,
+      }),
+      owner,
+      curator,
+      guardian,
+      feeRecipient,
+      skimRecipient,
+      timelock,
+      fee,
+      pendingOwner,
+      pendingGuardian,
+      pendingTimelock,
+      publicAllocatorConfig:
+        publicAllocator != null ? publicAllocatorConfig : undefined,
+      supplyQueue: supplyQueue as MarketId[],
+      withdrawQueue: withdrawQueue as MarketId[],
+      totalSupply,
+      totalAssets,
+      lastTotalAssets,
+    });
+
 export async function fetchVault(
   address: Address,
   client: Client,
@@ -29,25 +80,7 @@ export async function fetchVault(
 
   if (deployless) {
     try {
-      const {
-        config,
-        owner,
-        curator,
-        guardian,
-        timelock,
-        pendingTimelock,
-        pendingGuardian,
-        pendingOwner,
-        fee,
-        feeRecipient,
-        skimRecipient,
-        totalSupply,
-        totalAssets,
-        lastTotalAssets,
-        supplyQueue,
-        withdrawQueue,
-        publicAllocatorConfig,
-      } = await readContract(client, {
+      const vault = await readContract(client, {
         ...parameters,
         abi,
         code,
@@ -55,30 +88,7 @@ export async function fetchVault(
         args: [address, publicAllocator ?? zeroAddress],
       });
 
-      return new Vault({
-        ...new VaultConfig({
-          ...config,
-          eip5267Domain: new Eip5267Domain(config.eip5267Domain),
-          address,
-        }),
-        owner,
-        curator,
-        guardian,
-        feeRecipient,
-        skimRecipient,
-        timelock,
-        fee,
-        pendingOwner,
-        pendingGuardian,
-        pendingTimelock,
-        publicAllocatorConfig:
-          publicAllocator != null ? publicAllocatorConfig : undefined,
-        supplyQueue: supplyQueue as MarketId[],
-        withdrawQueue: withdrawQueue as MarketId[],
-        totalSupply,
-        totalAssets,
-        lastTotalAssets,
-      });
+      return transformDeploylessVaultRead(publicAllocator)(vault);
     } catch {
       // Fallback to multicall if deployless call fails.
     }
@@ -290,6 +300,7 @@ export async function fetchVault(
     lostAssets,
   });
 }
+
 export async function fetchAccrualVault(
   address: Address,
   client: Client,

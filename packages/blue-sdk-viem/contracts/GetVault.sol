@@ -7,6 +7,7 @@ import {IMetaMorpho, PendingUint192, PendingAddress} from "./interfaces/IMetaMor
 import {IPublicAllocator} from "./interfaces/IPublicAllocator.sol";
 
 struct VaultConfig {
+    address vault;
     address asset;
     string symbol;
     string name;
@@ -48,6 +49,7 @@ contract GetVault {
         returns (VaultResponse memory res)
     {
         res.config = VaultConfig({
+            vault: address(vault),
             asset: vault.asset(),
             symbol: vault.symbol(),
             name: vault.name(),

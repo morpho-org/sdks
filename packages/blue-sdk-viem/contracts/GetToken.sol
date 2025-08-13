@@ -17,7 +17,7 @@ struct TokenResponse {
 }
 
 contract GetToken {
-    function query(IERC20 token, bool isWstEth) external view returns (TokenResponse memory res) {
+    function query(IERC20 token, address wstEth) external view returns (TokenResponse memory res) {
         try token.name() returns (string memory name) {
             res.hasName = true;
             res.name = name;
@@ -32,7 +32,9 @@ contract GetToken {
             res.decimals = decimals;
         } catch {}
 
-        if (isWstEth) res.stEthPerWstEth = IWstEth(address(token)).stEthPerToken();
+        if (wstEth != address(0) && address(token) == wstEth) {
+            res.stEthPerWstEth = IWstEth(address(token)).stEthPerToken();
+        }
 
         try IERC20Permit(address(token)).eip712Domain() returns (Eip5267Domain memory eip5267Domain) {
             res.hasEip5267Domain = true;

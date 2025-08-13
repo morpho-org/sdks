@@ -50,7 +50,7 @@
     "executooor-viem": "^1.3.3",
     "fetch-mock": "^11.1.5",
     "graphql": "^16.10.0",
-    "hardhat": "^2.22.18",
+    "hardhat": "^2.26.3",
     "nock": "beta",
     "typescript": "^5.7.2",
     "viem": "^2.23.0",

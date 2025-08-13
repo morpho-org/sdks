@@ -28,7 +28,7 @@
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "hardhat": "^2.22.18",
+    "hardhat": "^2.26.3",
     "typescript": "^5.7.2",
     "viem": "^2.23.0",
     "vitest": "^3.0.5"

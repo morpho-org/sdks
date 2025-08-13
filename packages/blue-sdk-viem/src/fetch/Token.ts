@@ -1,10 +1,12 @@
 import {
   type Address,
   type Client,
+  type ReadContractReturnType,
   erc20Abi,
   erc20Abi_bytes32,
   hexToString,
   isHex,
+  zeroAddress,
 } from "viem";
 
 import {
@@ -27,6 +29,34 @@ export const decodeBytes32String = (hexOrStr: string) => {
   return hexOrStr;
 };
 
+export const transformDeploylessTokenRead =
+  (chainId: number) =>
+  (address: Address, token: ReadContractReturnType<typeof abi, "query">) => {
+    const eip5267Domain = token.hasEip5267Domain
+      ? new Eip5267Domain(token.eip5267Domain)
+      : undefined;
+
+    const { wstEth, stEth } = getChainAddresses(chainId);
+
+    const isWstEth = address === wstEth;
+    if (isWstEth && stEth != null)
+      return new ExchangeRateWrappedToken(
+        { ...token, address, eip5267Domain },
+        stEth,
+        token.stEthPerWstEth,
+      );
+
+    const unwrappedToken = getUnwrappedToken(address, chainId);
+    if (unwrappedToken)
+      return new ConstantWrappedToken(
+        { ...token, address, eip5267Domain },
+        unwrappedToken,
+        token.decimals,
+      );
+
+    return new Token({ ...token, address, eip5267Domain });
+  };
+
 export async function fetchToken(
   address: Address,
   client: Client,
@@ -40,36 +70,15 @@ export async function fetchToken(
 
   if (deployless) {
     try {
-      const isWstEth = address === wstEth;
-
       const token = await readContract(client, {
         ...parameters,
         abi,
         code,
         functionName: "query",
-        args: [address, isWstEth],
+        args: [address, wstEth ?? zeroAddress],
       });
 
-      const eip5267Domain = token.hasEip5267Domain
-        ? new Eip5267Domain(token.eip5267Domain)
-        : undefined;
-
-      if (isWstEth && stEth != null)
-        return new ExchangeRateWrappedToken(
-          { ...token, address, eip5267Domain },
-          stEth,
-          token.stEthPerWstEth,
-        );
-
-      const unwrapToken = getUnwrappedToken(address, parameters.chainId);
-      if (unwrapToken)
-        return new ConstantWrappedToken(
-          { ...token, address, eip5267Domain },
-          unwrapToken,
-          token.decimals,
-        );
-
-      return new Token({ ...token, address, eip5267Domain });
+      return transformDeploylessTokenRead(parameters.chainId)(address, token);
     } catch {
       // Fallback to multicall if deployless call fails.
     }

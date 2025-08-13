@@ -9,6 +9,7 @@ import {
 import {
   type Address,
   type Client,
+  type ReadContractReturnType,
   erc20Abi,
   maxUint256,
   zeroAddress,
@@ -27,6 +28,33 @@ import { abi, code } from "../queries/GetHolding";
 import type { DeploylessFetchParameters } from "../types";
 
 export const optionalBoolean = [undefined, false, true] as const;
+
+export const transformDeploylessHoldingRead = (
+  { user, token }: { user: Address; token: Address },
+  {
+    balance,
+    erc20Allowances: {
+      generalAdapter1: generalAdapter1Erc20Allowance,
+      ...erc20Allowances
+    },
+    permit2BundlerAllowance,
+    isErc2612,
+    erc2612Nonce,
+    canTransfer,
+  }: ReadContractReturnType<typeof abi, "query">,
+) =>
+  new Holding({
+    user,
+    token,
+    erc20Allowances: {
+      "bundler3.generalAdapter1": generalAdapter1Erc20Allowance,
+      ...erc20Allowances,
+    },
+    permit2BundlerAllowance,
+    erc2612Nonce: isErc2612 ? erc2612Nonce : undefined,
+    balance,
+    canTransfer: optionalBoolean[canTransfer],
+  });
 
 export async function fetchHolding(
   user: Address,
@@ -63,44 +91,27 @@ export async function fetchHolding(
     } = getChainAddresses(parameters.chainId);
 
     try {
-      const {
-        balance,
-        erc20Allowances: {
-          generalAdapter1: generalAdapter1Erc20Allowance,
-          ...erc20Allowances
-        },
-        permit2BundlerAllowance,
-        isErc2612,
-        erc2612Nonce,
-        canTransfer,
-      } = await readContract(client, {
+      const holding = await readContract(client, {
         ...parameters,
         abi,
         code,
         functionName: "query",
         args: [
-          token,
-          user,
+          {
+            user,
+            token,
+            isWrappedBackedToken:
+              !!permissionedBackedTokens[parameters.chainId]?.has(token),
+            isErc20Permissioned:
+              !!permissionedWrapperTokens[parameters.chainId]?.has(token),
+          },
           morpho,
           permit2,
           generalAdapter1,
-          !!permissionedBackedTokens[parameters.chainId]?.has(token),
-          !!permissionedWrapperTokens[parameters.chainId]?.has(token),
         ],
       });
 
-      return new Holding({
-        user,
-        token,
-        erc20Allowances: {
-          "bundler3.generalAdapter1": generalAdapter1Erc20Allowance,
-          ...erc20Allowances,
-        },
-        permit2BundlerAllowance,
-        erc2612Nonce: isErc2612 ? erc2612Nonce : undefined,
-        balance,
-        canTransfer: optionalBoolean[canTransfer],
-      });
+      return transformDeploylessHoldingRead({ user, token }, holding);
     } catch {
       // Fallback to multicall if deployless call fails.
     }

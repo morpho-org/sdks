@@ -1,4 +1,9 @@
-import { type Address, type Client, erc20Abi } from "viem";
+import {
+  type Address,
+  type Client,
+  type ReadContractReturnType,
+  erc20Abi,
+} from "viem";
 
 import { VaultUser } from "@morpho-org/blue-sdk";
 
@@ -8,6 +13,17 @@ import type { DeploylessFetchParameters } from "../types";
 import { metaMorphoAbi } from "../abis";
 import { abi, code } from "../queries/GetVaultUser";
 import { fetchVaultConfig } from "./VaultConfig";
+
+export const transformDeploylessVaultUserRead = (
+  { vault, user }: { vault: Address; user: Address },
+  { isAllocator, allowance }: ReadContractReturnType<typeof abi, "query">,
+) =>
+  new VaultUser({
+    vault,
+    user,
+    isAllocator,
+    allowance,
+  });
 
 export async function fetchVaultUser(
   vault: Address,
@@ -19,20 +35,15 @@ export async function fetchVaultUser(
 
   if (deployless) {
     try {
-      const { isAllocator, allowance } = await readContract(client, {
+      const vaultUser = await readContract(client, {
         ...parameters,
         abi,
         code,
         functionName: "query",
-        args: [vault, user],
+        args: [{ vault, user }],
       });
 
-      return new VaultUser({
-        vault,
-        user,
-        isAllocator,
-        allowance,
-      });
+      return transformDeploylessVaultUserRead({ vault, user }, vaultUser);
     } catch {
       // Fallback to multicall if deployless call fails.
     }
