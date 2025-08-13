@@ -1,4 +1,4 @@
-import { http, type Chain, zeroHash } from "viem";
+import { http, type Chain, zeroAddress, zeroHash } from "viem";
 import { test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "../anvil";
 import { type AnvilTestClient, createAnvilTestClient } from "../client";
