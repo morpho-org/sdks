@@ -165,6 +165,10 @@ const _addressesRegistry = {
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
+
+    vaultV2Factory: "0xc2f730a67ae81a7d2c17268a9652338449bf264b",
+    vaultV2MorphoVaultV1AdapterFactory:
+      "0xf123759c14b824e5670258e67c9fcea7ff368b50",
   },
   [ChainId.PolygonMainnet]: {
     morpho: "0x1bF0c2541F820E775182832f06c0B7Fc27A25f67",

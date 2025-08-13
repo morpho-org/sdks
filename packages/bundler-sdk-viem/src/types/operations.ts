@@ -13,6 +13,8 @@ import {
   PARASWAP_OPERATIONS,
   type ParaswapOperationArgs,
   type ParaswapOperationType,
+  type VaultV2OperationArgs,
+  type VaultV2OperationType,
   type WithOperationArgs,
 } from "@morpho-org/simulation-sdk";
 import type { UnionOmit } from "viem";
@@ -99,33 +101,54 @@ export type Erc20BundlerOperations = {
 export type Erc20BundlerOperation =
   Erc20BundlerOperations[Erc20BundlerOperationType];
 
+export const VAULTV2_BUNDLER_OPERATIONS = [
+  "VaultV2_Deposit",
+  "VaultV2_Withdraw",
+] as const satisfies readonly VaultV2OperationType[];
+
+export type VaultV2BundlerOperationType =
+  (typeof VAULTV2_BUNDLER_OPERATIONS)[number];
+export type VaultV2BundlerOperations = {
+  [OperationType in VaultV2BundlerOperationType]: WithOperationArgs<
+    OperationType,
+    VaultV2OperationArgs
+  >;
+};
+export type VaultV2BundlerOperation =
+  VaultV2BundlerOperations[VaultV2BundlerOperationType];
+
 export interface BundlerOperationArgs
   extends BlueOperationArgs,
     MetaMorphoOperationArgs,
     ParaswapOperationArgs,
-    Erc20OperationArgs {}
+    Erc20OperationArgs,
+    VaultV2OperationArgs {}
 
 export type BundlerOperations = BlueBundlerOperations &
   MetaMorphoBundlerOperations &
   ParaswapBundlerOperations &
-  Erc20BundlerOperations;
+  Erc20BundlerOperations &
+  VaultV2BundlerOperations;
 
 export type BundlerOperationType =
   | BlueBundlerOperationType
   | MetaMorphoBundlerOperationType
   | ParaswapBundlerOperationType
-  | Erc20BundlerOperationType;
+  | Erc20BundlerOperationType
+  | VaultV2BundlerOperationType;
 
 export type BundlerOperation =
   | BlueBundlerOperation
   | MetaMorphoBundlerOperation
   | ParaswapBundlerOperation
-  | Erc20BundlerOperation;
+  | Erc20BundlerOperation
+  | VaultV2BundlerOperation;
 
 export const BUNDLER_OPERATIONS = [
   ...BLUE_BUNDLER_OPERATIONS,
   ...METAMORPHO_BUNDLER_OPERATIONS,
   ...ERC20_BUNDLER_OPERATIONS,
+  ...VAULTV2_BUNDLER_OPERATIONS,
 ] as const satisfies readonly OperationType[];
 
 export type CallbackBundlerOperationType = (typeof CALLBACK_OPERATIONS)[number];
@@ -164,6 +187,14 @@ export const isCallbackBundlerOperation = (
   operation: BundlerOperation,
 ): operation is CallbackBundlerOperation => {
   return (CALLBACK_OPERATIONS as readonly OperationType[]).includes(
+    operation.type,
+  );
+};
+
+export const isVaultV2BundlerOperation = (
+  operation: BundlerOperation,
+): operation is VaultV2BundlerOperation => {
+  return (VAULTV2_BUNDLER_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };
@@ -223,23 +254,36 @@ export type Erc20InputBundlerOperationType =
 export type Erc20InputBundlerOperation =
   Erc20BundlerOperations[Erc20InputBundlerOperationType];
 
+export const VAULTV2_INPUT_OPERATIONS = [
+  "VaultV2_Deposit",
+  "VaultV2_Withdraw",
+] as const satisfies readonly VaultV2BundlerOperationType[];
+
+export type VaultV2InputBundlerOperationType =
+  (typeof VAULTV2_INPUT_OPERATIONS)[number];
+export type VaultV2InputBundlerOperation =
+  VaultV2BundlerOperations[VaultV2InputBundlerOperationType];
+
 export interface InputBundlerOperationArgs
   extends BlueOperationArgs,
     MetaMorphoOperationArgs,
     ParaswapOperationArgs,
-    Erc20OperationArgs {}
+    Erc20OperationArgs,
+    VaultV2OperationArgs {}
 
 export type InputBundlerOperationType =
   | BlueInputBundlerOperationType
   | MetaMorphoInputBundlerOperationType
   | ParaswapInputBundlerOperationType
-  | Erc20InputBundlerOperationType;
+  | Erc20InputBundlerOperationType
+  | VaultV2InputBundlerOperationType;
 
 export type InputBundlerOperation =
   | BlueInputBundlerOperation
   | MetaMorphoInputBundlerOperation
   | ParaswapInputBundlerOperation
-  | Erc20InputBundlerOperation;
+  | Erc20InputBundlerOperation
+  | VaultV2InputBundlerOperation;
 
 export const isBlueInputBundlerOperation = (operation: {
   type: OperationType;
@@ -269,6 +313,14 @@ export const isParaswapInputBundlerOperation = (operation: {
   type: OperationType;
 }): operation is ParaswapInputBundlerOperation => {
   return (PARASWAP_INPUT_OPERATIONS as readonly OperationType[]).includes(
+    operation.type,
+  );
+};
+
+export const isVaultV2InputBundlerOperation = (operation: {
+  type: OperationType;
+}): operation is VaultV2InputBundlerOperation => {
+  return (VAULTV2_INPUT_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };

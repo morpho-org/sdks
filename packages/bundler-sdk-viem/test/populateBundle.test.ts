@@ -16,7 +16,11 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
-import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import {
+  type WagmiTestContext,
+  renderHook,
+  waitFor,
+} from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
 import {
   formatUnits,
@@ -25,7 +29,8 @@ import {
   parseUnits,
   zeroAddress,
 } from "viem";
-import { describe, expect } from "vitest";
+import type { base } from "viem/chains";
+import { beforeEach, describe, expect } from "vitest";
 import { donate, donator, setupTestBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
@@ -2412,6 +2417,138 @@ describe("populateBundle", () => {
           expect(await client.balanceOf({ erc20: wNative })).toBe(
             extraWethAmount - accruedInterests,
           ); // should not have experienced any slippage
+        },
+      );
+    });
+
+    describe("base", () => {
+      const {
+        bundler3: { generalAdapter1 },
+        usdc,
+        permit2,
+      } = addressesRegistry[ChainId.BaseMainnet];
+
+      beforeEach<WagmiTestContext<typeof base>>(async ({ client }) => {
+        const auth = await client.signAuthorization({
+          account: client.account,
+          contractAddress: zeroAddress,
+          executor: "self",
+        });
+
+        await client.sendTransaction({
+          authorizationList: [auth],
+          to: client.account.address,
+          data: "0x",
+        });
+      });
+
+      test["vault-v2"].only(
+        "should deposit into Vault V2 via permit",
+        async ({ client, config }) => {
+          const amount = parseUnits("1000000", 6);
+          await client.deal({
+            erc20: usdc,
+            amount,
+          });
+
+          const block = await client.getBlock();
+
+          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2AdapterAddress =
+            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [],
+              users: [
+                client.account.address,
+                generalAdapter1,
+                vaultV2Address,
+                vaultV1Address,
+                vaultV2AdapterAddress,
+              ],
+              tokens: [usdc, vaultV2Address, vaultV1Address],
+              vaults: [vaultV1Address],
+              vaultV2s: [vaultV2Address],
+              vaultV2Adapters: [vaultV2AdapterAddress],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupTestBundle(client, data, [
+            {
+              type: "VaultV2_Deposit",
+              sender: client.account.address,
+              address: vaultV2Address,
+              args: {
+                assets: amount,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          expect(bundle.requirements.signatures.length).toBe(1);
+
+          expect(bundle.requirements.txs).toStrictEqual([]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: usdc,
+              args: {
+                amount,
+                spender: generalAdapter1,
+                nonce: 6n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount,
+                from: client.account.address,
+                to: generalAdapter1,
+              },
+            },
+            {
+              type: "VaultV2_Deposit",
+              sender: generalAdapter1,
+              address: vaultV2Address,
+              args: {
+                assets: amount,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          const userShares = await client.balanceOf({ erc20: vaultV2Address });
+
+          expect(await client.balanceOf({ erc20: usdc })).toBe(0n);
+          expect(
+            await client.convertToAssets({
+              erc4626: vaultV2Address,
+              shares: userShares,
+            }),
+          ).toBe(amount - 1n);
+
+          expect(
+            await client.allowance({ erc20: usdc, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: vaultV2Address }),
+          ).toBe(0n);
         },
       );
     });
