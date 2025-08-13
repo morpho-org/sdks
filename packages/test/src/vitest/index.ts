@@ -1,4 +1,4 @@
-import { http, type Chain } from "viem";
+import { http, type Chain, zeroHash } from "viem";
 import { test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "../anvil";
 import { type AnvilTestClient, createAnvilTestClient } from "../client";
@@ -45,6 +45,24 @@ export const createViemTest = <chain extends Chain>(
 
       // Make block timestamp 100% predictable.
       await client.setBlockTimestampInterval({ interval: 1 });
+
+      // Remove code form contract
+      // cf. https://eips.ethereum.org/EIPS/eip-7702
+      const code = await client.getCode({ address: client.account.address });
+
+      if (code !== zeroHash) {
+        const auth = await client.signAuthorization({
+          account: client.account,
+          contractAddress: zeroAddress,
+          executor: "self",
+        });
+
+        await client.sendTransaction({
+          authorizationList: [auth],
+          to: client.account.address,
+          data: "0x",
+        });
+      }
 
       await use(client);
 

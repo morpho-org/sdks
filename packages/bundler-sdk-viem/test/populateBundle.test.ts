@@ -16,11 +16,7 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
-import {
-  type WagmiTestContext,
-  renderHook,
-  waitFor,
-} from "@morpho-org/test-wagmi";
+import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
 import {
   formatUnits,
@@ -29,8 +25,7 @@ import {
   parseUnits,
   zeroAddress,
 } from "viem";
-import type { base } from "viem/chains";
-import { beforeEach, describe, expect } from "vitest";
+import { describe, expect } from "vitest";
 import { donate, donator, setupTestBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
@@ -2427,20 +2422,6 @@ describe("populateBundle", () => {
         usdc,
         permit2,
       } = addressesRegistry[ChainId.BaseMainnet];
-
-      beforeEach<WagmiTestContext<typeof base>>(async ({ client }) => {
-        const auth = await client.signAuthorization({
-          account: client.account,
-          contractAddress: zeroAddress,
-          executor: "self",
-        });
-
-        await client.sendTransaction({
-          authorizationList: [auth],
-          to: client.account.address,
-          data: "0x",
-        });
-      });
 
       test["vault-v2"].only(
         "should deposit into Vault V2 via permit",
