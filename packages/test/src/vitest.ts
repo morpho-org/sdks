@@ -55,7 +55,7 @@ export const createViemTest = <chain extends Chain>(
       // cf. https://eips.ethereum.org/EIPS/eip-7702
       const code = await client.getCode({ address: client.account.address });
 
-      if (code !== "0x") {
+      if (code != null) {
         const auth = await client.signAuthorization({
           account: client.account,
           contractAddress: zeroAddress,
