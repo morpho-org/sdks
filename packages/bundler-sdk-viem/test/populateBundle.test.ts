@@ -13,6 +13,7 @@ import {
   fetchPosition,
   metaMorphoAbi,
   publicAllocatorAbi,
+  vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
@@ -2423,7 +2424,7 @@ describe("populateBundle", () => {
         permit2,
       } = addressesRegistry[ChainId.BaseMainnet];
 
-      test["vault-v2"].only(
+      test["vault-v2"](
         "should deposit into Vault V2 via permit",
         async ({ client, config }) => {
           const amount = parseUnits("1000000", 6);
@@ -2529,6 +2530,130 @@ describe("populateBundle", () => {
           ).toBe(0n);
           expect(
             await client.allowance({ erc20: usdc, spender: vaultV2Address }),
+          ).toBe(0n);
+        },
+      );
+
+      test["vault-v2"].only(
+        "should withdraw from Vault V2 via permit",
+        async ({ client, config }) => {
+          const amount = parseUnits("1000000", 6);
+
+          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2AdapterAddress =
+            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
+
+          await client.deal({
+            erc20: usdc,
+            amount,
+          });
+          await client.approve({
+            address: usdc,
+            args: [vaultV2Address, amount],
+          });
+          await client.deposit({
+            address: vaultV2Address,
+            args: [amount, client.account.address],
+          });
+
+          const withdrawAmount = amount / 2n;
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [],
+              users: [
+                client.account.address,
+                generalAdapter1,
+                vaultV2Address,
+                vaultV1Address,
+                vaultV2AdapterAddress,
+              ],
+              tokens: [usdc, vaultV2Address, vaultV1Address],
+              vaults: [vaultV1Address],
+              vaultV2s: [vaultV2Address],
+              vaultV2Adapters: [vaultV2AdapterAddress],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const [redeemedShares, initialUserShares] = await Promise.all([
+            client.readContract({
+              functionName: "previewWithdraw",
+              args: [withdrawAmount],
+              abi: vaultV2Abi,
+              address: vaultV2Address,
+            }),
+            client.balanceOf({ erc20: vaultV2Address }),
+          ]);
+
+          const { operations, bundle } = await setupTestBundle(client, data, [
+            {
+              type: "VaultV2_Withdraw",
+              sender: client.account.address,
+              address: vaultV2Address,
+              args: {
+                assets: withdrawAmount,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                receiver: client.account.address,
+              },
+            },
+          ]);
+
+          expect(bundle.requirements.signatures.length).toBe(1);
+
+          expect(bundle.requirements.txs).toStrictEqual([]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: vaultV2Address,
+              args: {
+                amount: expect.any(BigInt),
+                spender: generalAdapter1,
+                nonce: 0n,
+              },
+            },
+            {
+              type: "VaultV2_Withdraw",
+              sender: generalAdapter1,
+              address: vaultV2Address,
+              args: {
+                assets: withdrawAmount,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                receiver: client.account.address,
+              },
+            },
+          ]);
+
+          const userShares = await client.balanceOf({ erc20: vaultV2Address });
+
+          expect(await client.balanceOf({ erc20: usdc })).toBe(withdrawAmount);
+          expect(userShares).toBe(initialUserShares - redeemedShares);
+
+          expect(
+            await client.allowance({ erc20: vaultV2Address, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({
+              erc20: vaultV2Address,
+              spender: generalAdapter1,
+            }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({
+              erc20: vaultV2Address,
+              spender: vaultV2Address,
+            }),
           ).toBe(0n);
         },
       );

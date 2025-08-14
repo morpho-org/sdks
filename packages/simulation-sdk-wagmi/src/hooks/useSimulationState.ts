@@ -1,4 +1,9 @@
-import { type MarketId, addresses } from "@morpho-org/blue-sdk";
+import {
+  Eip5267Domain,
+  type MarketId,
+  Token,
+  addresses,
+} from "@morpho-org/blue-sdk";
 import {
   type DeploylessFetchParameters,
   blueAbi,
@@ -277,6 +282,24 @@ export function useSimulationState<
 
   const data = useMemo(() => {
     if (block == null) return;
+
+    for (const token of values(tokens.data)) {
+      if (!token) continue;
+      const vaultV2 = vaultV2s.data[token.address];
+      if (!vaultV2) continue;
+
+      const eip5267Domain = new Eip5267Domain({
+        fields: "0x0c",
+        name: "",
+        version: "",
+        chainId: BigInt(chainId),
+        verifyingContract: token.address,
+        salt: "0x",
+        extensions: [],
+      });
+
+      tokens.data[token.address] = new Token({ ...token, eip5267Domain });
+    }
 
     return new SimulationState({
       chainId,
