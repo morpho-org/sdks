@@ -1,6 +1,8 @@
 import {
   AccrualPosition,
   AccrualVault,
+  AccrualVaultV2,
+  AccrualVaultV2MorphoVaultV1Adapter,
   type Address,
   AssetBalances,
   ChainId,
@@ -16,11 +18,15 @@ import {
   type Token,
   UnknownDataError,
   UnknownTokenError,
+  UnsupportedVaultV2AdapterError,
   type User,
   type Vault,
   type VaultMarketConfig,
   VaultToken,
   type VaultUser,
+  type VaultV2,
+  type VaultV2Adapter,
+  VaultV2MorphoVaultV1Adapter,
   WrappedToken,
   _try,
   getChainAddresses,
@@ -42,6 +48,8 @@ import {
   UnknownVaultError,
   UnknownVaultMarketConfigError,
   UnknownVaultUserError,
+  UnknownVaultV2AdapterError,
+  UnknownVaultV2Error,
   UnknownWrappedTokenError,
 } from "./errors.js";
 import { type MaybeDraft, simulateOperation } from "./handlers/index.js";
@@ -110,6 +118,8 @@ export interface InputSimulationState {
    * VaultUsers indexed by vault then by user.
    */
   vaultUsers?: Record<Address, Record<Address, VaultUser | undefined>>;
+  vaultV2s?: Record<Address, VaultV2 | undefined>;
+  vaultV2Adapters?: Record<Address, VaultV2Adapter | undefined>;
 }
 
 export class SimulationState implements InputSimulationState {
@@ -149,6 +159,8 @@ export class SimulationState implements InputSimulationState {
     Address,
     Record<Address, VaultUser | undefined>
   >;
+  public readonly vaultV2s: Record<Address, VaultV2 | undefined>;
+  public readonly vaultV2Adapters: Record<Address, VaultV2Adapter | undefined>;
 
   constructor({
     chainId,
@@ -162,6 +174,8 @@ export class SimulationState implements InputSimulationState {
     holdings = {},
     vaultMarketConfigs = {},
     vaultUsers = {},
+    vaultV2s = {},
+    vaultV2Adapters = {},
   }: InputSimulationState) {
     this.chainId = chainId;
     this.block = { number, timestamp };
@@ -175,6 +189,8 @@ export class SimulationState implements InputSimulationState {
     this.holdings = holdings;
     this.vaultMarketConfigs = vaultMarketConfigs;
     this.vaultUsers = vaultUsers;
+    this.vaultV2s = vaultV2s;
+    this.vaultV2Adapters = vaultV2Adapters;
   }
 
   public getMarket(marketId: MarketId) {
@@ -329,6 +345,68 @@ export class SimulationState implements InputSimulationState {
 
   public tryGetWrappedToken(address: Address) {
     return _try(this.getWrappedToken.bind(this, address), UnknownDataError);
+  }
+
+  public getVaultV2Adapter(address: Address) {
+    const vaultV2Adapter = this.vaultV2Adapters[address];
+
+    if (vaultV2Adapter == null) throw new UnknownVaultV2AdapterError(address);
+
+    return vaultV2Adapter;
+  }
+
+  public tryGetVaultV2Adapter(address: Address) {
+    return _try(
+      this.getVaultV2Adapter.bind(this, address),
+      UnknownVaultV2AdapterError,
+    );
+  }
+
+  public getAccrualVaultV2Adapter(address: Address) {
+    const vaultV2Adapter = this.getVaultV2Adapter(address);
+
+    if (vaultV2Adapter instanceof VaultV2MorphoVaultV1Adapter)
+      return new AccrualVaultV2MorphoVaultV1Adapter(
+        vaultV2Adapter,
+        this.getAccrualVault(vaultV2Adapter.morphoVaultV1),
+        this.getHolding(vaultV2Adapter.address, vaultV2Adapter.morphoVaultV1)
+          .balance,
+      );
+
+    throw new UnsupportedVaultV2AdapterError(address);
+  }
+
+  public tryGetAccrualVaultV2Adapter(address: Address) {
+    return _try(
+      this.getAccrualVaultV2Adapter.bind(this, address),
+      UnknownDataError,
+    );
+  }
+
+  public getVaultV2(address: Address) {
+    const vaultV2 = this.vaultV2s[address];
+
+    if (vaultV2 == null) throw new UnknownVaultV2Error(address);
+
+    return vaultV2;
+  }
+
+  public tryGetVaultV2(address: Address) {
+    return _try(this.getVaultV2.bind(this, address), UnknownVaultV2Error);
+  }
+
+  public getAccrualVaultV2(address: Address) {
+    const vaultV2 = this.getVaultV2(address);
+
+    return new AccrualVaultV2(
+      vaultV2,
+      vaultV2.adapters.map(this.getAccrualVaultV2Adapter.bind(this)),
+      this.getHolding(vaultV2.address, vaultV2.asset).balance,
+    );
+  }
+
+  public tryGetAccrualVaultV2(address: Address) {
+    return _try(this.getAccrualVaultV2.bind(this, address), UnknownDataError);
   }
 
   public getBundleBalance(

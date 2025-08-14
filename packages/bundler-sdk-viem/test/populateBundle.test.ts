@@ -13,6 +13,7 @@ import {
   fetchPosition,
   metaMorphoAbi,
   publicAllocatorAbi,
+  vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
@@ -71,6 +72,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [wNative],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -130,6 +133,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, dai, dai_sUsde.collateralToken],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -247,6 +252,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -436,6 +443,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [usdc, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -535,6 +544,8 @@ describe("populateBundle", () => {
               ],
               tokens: [usdc, steakUsdc.address],
               vaults: [steakUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -624,6 +635,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -745,6 +758,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -894,6 +909,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1040,6 +1057,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1181,6 +1200,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1243,6 +1264,8 @@ describe("populateBundle", () => {
               ],
               tokens: [usdc, stEth, wstEth, steakUsdc.address],
               vaults: [steakUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1444,6 +1467,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1691,6 +1716,8 @@ describe("populateBundle", () => {
                 re7Weth.address,
               ],
               vaults: [bbEth.address, re7Weth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -2017,6 +2044,8 @@ describe("populateBundle", () => {
                 bbUsdc.address,
               ],
               vaults: [steakUsdc.address, bbEth.address, bbUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -2201,6 +2230,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -2385,6 +2416,248 @@ describe("populateBundle", () => {
         },
       );
     });
+
+    describe("base", () => {
+      const {
+        bundler3: { generalAdapter1 },
+        usdc,
+        permit2,
+      } = addressesRegistry[ChainId.BaseMainnet];
+
+      test["vault-v2"](
+        "should deposit into Vault V2 via permit",
+        async ({ client, config }) => {
+          const amount = parseUnits("1000000", 6);
+          await client.deal({
+            erc20: usdc,
+            amount,
+          });
+
+          const block = await client.getBlock();
+
+          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2AdapterAddress =
+            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [],
+              users: [
+                client.account.address,
+                generalAdapter1,
+                vaultV2Address,
+                vaultV1Address,
+                vaultV2AdapterAddress,
+              ],
+              tokens: [usdc, vaultV2Address, vaultV1Address],
+              vaults: [vaultV1Address],
+              vaultV2s: [vaultV2Address],
+              vaultV2Adapters: [vaultV2AdapterAddress],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupTestBundle(client, data, [
+            {
+              type: "VaultV2_Deposit",
+              sender: client.account.address,
+              address: vaultV2Address,
+              args: {
+                assets: amount,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          expect(bundle.requirements.signatures.length).toBe(1);
+
+          expect(bundle.requirements.txs).toStrictEqual([]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: usdc,
+              args: {
+                amount,
+                spender: generalAdapter1,
+                nonce: 6n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount,
+                from: client.account.address,
+                to: generalAdapter1,
+              },
+            },
+            {
+              type: "VaultV2_Deposit",
+              sender: generalAdapter1,
+              address: vaultV2Address,
+              args: {
+                assets: amount,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+          ]);
+
+          const userShares = await client.balanceOf({ erc20: vaultV2Address });
+
+          expect(await client.balanceOf({ erc20: usdc })).toBe(0n);
+          expect(
+            await client.convertToAssets({
+              erc4626: vaultV2Address,
+              shares: userShares,
+            }),
+          ).toBe(amount - 1n);
+
+          expect(
+            await client.allowance({ erc20: usdc, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({ erc20: usdc, spender: vaultV2Address }),
+          ).toBe(0n);
+        },
+      );
+
+      test["vault-v2"](
+        "should withdraw from Vault V2 via permit",
+        async ({ client, config }) => {
+          const amount = parseUnits("1000000", 6);
+
+          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2AdapterAddress =
+            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
+
+          await client.deal({
+            erc20: usdc,
+            amount,
+          });
+          await client.approve({
+            address: usdc,
+            args: [vaultV2Address, amount],
+          });
+          await client.deposit({
+            address: vaultV2Address,
+            args: [amount, client.account.address],
+          });
+
+          const withdrawAmount = amount / 2n;
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [],
+              users: [
+                client.account.address,
+                generalAdapter1,
+                vaultV2Address,
+                vaultV1Address,
+                vaultV2AdapterAddress,
+              ],
+              tokens: [usdc, vaultV2Address, vaultV1Address],
+              vaults: [vaultV1Address],
+              vaultV2s: [vaultV2Address],
+              vaultV2Adapters: [vaultV2AdapterAddress],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const [redeemedShares, initialUserShares] = await Promise.all([
+            client.readContract({
+              functionName: "previewWithdraw",
+              args: [withdrawAmount],
+              abi: vaultV2Abi,
+              address: vaultV2Address,
+            }),
+            client.balanceOf({ erc20: vaultV2Address }),
+          ]);
+
+          const { operations, bundle } = await setupTestBundle(client, data, [
+            {
+              type: "VaultV2_Withdraw",
+              sender: client.account.address,
+              address: vaultV2Address,
+              args: {
+                assets: withdrawAmount,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                receiver: client.account.address,
+              },
+            },
+          ]);
+
+          expect(bundle.requirements.signatures.length).toBe(1);
+
+          expect(bundle.requirements.txs).toStrictEqual([]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: vaultV2Address,
+              args: {
+                amount: expect.any(BigInt),
+                spender: generalAdapter1,
+                nonce: 0n,
+              },
+            },
+            {
+              type: "VaultV2_Withdraw",
+              sender: generalAdapter1,
+              address: vaultV2Address,
+              args: {
+                assets: withdrawAmount,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                receiver: client.account.address,
+              },
+            },
+          ]);
+
+          const userShares = await client.balanceOf({ erc20: vaultV2Address });
+
+          expect(await client.balanceOf({ erc20: usdc })).toBe(withdrawAmount);
+          expect(userShares).toBe(initialUserShares - redeemedShares);
+
+          expect(
+            await client.allowance({ erc20: vaultV2Address, spender: permit2 }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({
+              erc20: vaultV2Address,
+              spender: generalAdapter1,
+            }),
+          ).toBe(0n);
+          expect(
+            await client.allowance({
+              erc20: vaultV2Address,
+              spender: vaultV2Address,
+            }),
+          ).toBe(0n);
+        },
+      );
+    });
   });
 
   describe("without signatures", () => {
@@ -2425,6 +2698,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [wNative],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -2494,6 +2769,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -2693,6 +2970,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [usdc, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -2806,6 +3085,8 @@ describe("populateBundle", () => {
               ],
               tokens: [usdc, stEth, wstEth, steakUsdc.address],
               vaults: [steakUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -2906,6 +3187,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3032,6 +3315,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3189,6 +3474,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3340,6 +3627,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3481,6 +3770,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3544,6 +3835,8 @@ describe("populateBundle", () => {
               ],
               tokens: [usdc, stEth, wstEth, steakUsdc.address],
               vaults: [steakUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3757,6 +4050,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -4021,6 +4316,8 @@ describe("populateBundle", () => {
                 re7Weth.address,
               ],
               vaults: [bbEth.address, re7Weth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -4358,6 +4655,8 @@ describe("populateBundle", () => {
                 bbUsdc.address,
               ],
               vaults: [steakUsdc.address, bbEth.address, bbUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -4552,6 +4851,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -4760,6 +5061,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -4873,6 +5176,8 @@ describe("populateBundle", () => {
               users: [whitelisted, generalAdapter1],
               tokens: [usdc, verUsdc, wNative],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );

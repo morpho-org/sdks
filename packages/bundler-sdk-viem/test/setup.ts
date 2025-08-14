@@ -11,4 +11,8 @@ export const test = {
     forkUrl: process.env.BASE_RPC_URL,
     forkBlockNumber: 26_539_234,
   }),
+  "vault-v2": createWagmiTest(base, {
+    forkUrl: process.env.BASE_RPC_URL,
+    forkBlockNumber: 34_100_065,
+  }),
 } as const;

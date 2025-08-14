@@ -1067,6 +1067,107 @@ export const encodeOperation = (
 
       break;
     }
+    case "VaultV2_Deposit": {
+      const {
+        assets = 0n,
+        shares = 0n,
+        onBehalf,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
+      } = operation.args;
+
+      // Accrue interest to calculate the expected share price.
+      const { vault } = dataBefore
+        .getAccrualVaultV2(operation.address)
+        .accrueInterest(dataBefore.block.timestamp);
+
+      if (shares === 0n) {
+        const maxSharePrice = MathLib.mulDivUp(
+          assets,
+          MathLib.wToRay(MathLib.WAD + slippage),
+          vault.toShares(assets),
+        );
+        actions.push({
+          type: "erc4626Deposit",
+          args: [
+            operation.address,
+            assets,
+            maxSharePrice,
+            onBehalf,
+            operation.skipRevert,
+          ],
+        });
+      } else {
+        const maxSharePrice = MathLib.mulDivUp(
+          vault.toAssets(shares),
+          MathLib.wToRay(MathLib.WAD + slippage),
+          shares,
+        );
+        actions.push({
+          type: "erc4626Mint",
+          args: [
+            operation.address,
+            shares,
+            maxSharePrice,
+            onBehalf,
+            operation.skipRevert,
+          ],
+        });
+      }
+
+      break;
+    }
+    case "VaultV2_Withdraw": {
+      const {
+        assets = 0n,
+        shares = 0n,
+        onBehalf,
+        receiver,
+        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
+      } = operation.args;
+
+      // Accrue interest to calculate the expected share price.
+      const { vault } = dataBefore
+        .getAccrualVaultV2(operation.address)
+        .accrueInterest(dataBefore.block.timestamp);
+
+      if (shares === 0n) {
+        const minSharePrice = MathLib.mulDivDown(
+          assets,
+          MathLib.wToRay(MathLib.WAD - slippage),
+          vault.toShares(assets),
+        );
+        actions.push({
+          type: "erc4626Withdraw",
+          args: [
+            operation.address,
+            assets,
+            minSharePrice,
+            receiver,
+            onBehalf,
+            operation.skipRevert,
+          ],
+        });
+      } else {
+        const minSharePrice = MathLib.mulDivDown(
+          vault.toAssets(shares),
+          MathLib.wToRay(MathLib.WAD - slippage),
+          shares,
+        );
+        actions.push({
+          type: "erc4626Redeem",
+          args: [
+            operation.address,
+            shares,
+            minSharePrice,
+            receiver,
+            onBehalf,
+            operation.skipRevert,
+          ],
+        });
+      }
+
+      break;
+    }
   }
 
   return {
