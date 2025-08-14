@@ -178,11 +178,11 @@ export class Vault extends VaultToken implements IVault {
     return MathLib.zeroFloorSub(this.totalAssets, this.lastTotalAssets);
   }
 
-  public toAssets(shares: bigint, rounding?: RoundingDirection) {
+  public toAssets(shares: bigint, rounding: RoundingDirection = "Down") {
     return this._unwrap(shares, rounding);
   }
 
-  public toShares(assets: bigint, rounding?: RoundingDirection) {
+  public toShares(assets: bigint, rounding: RoundingDirection = "Up") {
     return this._wrap(assets, rounding);
   }
 }

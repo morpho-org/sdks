@@ -23,10 +23,25 @@ export interface ChainAddresses {
    * @deprecated All bundles should use Bundler3 instead.
    */
   bundler?: Address;
+  /**
+   * @deprecated All bundles should use Bundler3 instead.
+   */
   aaveV3OptimizerBundler?: Address;
+  /**
+   * @deprecated All bundles should use Bundler3 instead.
+   */
   aaveV2Bundler?: Address;
+  /**
+   * @deprecated All bundles should use Bundler3 instead.
+   */
   aaveV3Bundler?: Address;
+  /**
+   * @deprecated All bundles should use Bundler3 instead.
+   */
   compoundV3Bundler?: Address;
+  /**
+   * @deprecated All bundles should use Bundler3 instead.
+   */
   compoundV2Bundler?: Address;
   bundler3: {
     bundler3: Address;
@@ -87,10 +102,25 @@ const _addressesRegistry = {
       aaveV3OptimizerMigrationAdapter:
         "0x9e2ea2d5785598a163D569D795f286F5C55ad972",
     },
+    /**
+     * @deprecated All bundles should use Bundler3 instead.
+     */
     aaveV3OptimizerBundler: "0x16F38d2E764E7BeBF625a8E995b34968226D2F9c",
+    /**
+     * @deprecated All bundles should use Bundler3 instead.
+     */
     aaveV2Bundler: "0xb3dCc75DB379925edFd3007511A8CE0cB4aa8e76",
+    /**
+     * @deprecated All bundles should use Bundler3 instead.
+     */
     aaveV3Bundler: "0x98ccB155E86bb478d514a827d16f58c6912f9BDC",
+    /**
+     * @deprecated All bundles should use Bundler3 instead.
+     */
     compoundV3Bundler: "0x3a0e2E9FB9c95fBc843daF166276C90B6C479558",
+    /**
+     * @deprecated All bundles should use Bundler3 instead.
+     */
     compoundV2Bundler: "0x26bF52a84360Ad3d01d7CDc28FC2dDC04d8c8647",
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
@@ -151,8 +181,17 @@ const _addressesRegistry = {
       compoundV3MigrationAdapter: "0x85D4812Ef92c040d4270eD8547b6835e41FbbB70",
       aaveV3CoreMigrationAdapter: "0xb27Aa2a964eAd5ed661D86974b37e4fB995b36f5",
     },
+    /**
+     * @deprecated All bundles should use Bundler3 instead.
+     */
     compoundV2Bundler: "0x123f3167a416cA19365dE03a65e0AF3532af7223",
+    /**
+     * @deprecated All bundles should use Bundler3 instead.
+     */
     aaveV3Bundler: "0xcAe2929baBc60Be34818EaA5F40bF69265677108",
+    /**
+     * @deprecated All bundles should use Bundler3 instead.
+     */
     compoundV3Bundler: "0x1f8076e2EB6f10b12e6886f30D4909A91969F7dA",
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
@@ -253,7 +292,7 @@ const _addressesRegistry = {
     publicAllocator: "0x37a888192165fC39884f87c64E2476BfD2C09675",
     metaMorphoFactory: "0x27D4Af0AC9E7FDfA6D0853236f249CC27AE79488",
     chainlinkOracleFactory: "0x39d8622C607A691D7705E8842fbB12E3c38dCD41",
-    preLiquidationFactory: "0xe3cE2051a24e58DBFC0eFBe4c2d9e89c5eAe4695",
+    preLiquidationFactory: "0x373ccddcd3F09D2e1430B3F2b290B9bF56Ae7336",
 
     wNative: "0xFC00000000000000000000000000000000000006",
   },
@@ -469,6 +508,295 @@ const _addressesRegistry = {
   },
 } as const;
 
+export type ChainDeployments<Addresses = ChainAddresses> = {
+  [key in keyof Addresses]: Address extends Addresses[key]
+    ? bigint
+    : ChainDeployments<Addresses[key]>;
+};
+
+const _deployments = {
+  [ChainId.EthMainnet]: {
+    morpho: 18883124n,
+    permit2: 15986406n,
+    bundler3: {
+      bundler3: 21643807n,
+      generalAdapter1: 21872136n,
+      paraswapAdapter: 21643807n,
+      erc20WrapperAdapter: 21872136n,
+      compoundV2MigrationAdapter: 21643807n,
+      compoundV3MigrationAdapter: 21643807n,
+      aaveV2MigrationAdapter: 21643807n,
+      aaveV3CoreMigrationAdapter: 21643807n,
+      aaveV3PrimeMigrationAdapter: 21643807n,
+      aaveV3EtherFiMigrationAdapter: 21643807n,
+      aaveV3OptimizerMigrationAdapter: 21643807n,
+    },
+    adaptiveCurveIrm: 18883124n,
+    publicAllocator: 19375099n,
+    metaMorphoFactory: 21439510n,
+    chainlinkOracleFactory: 19375066n,
+    preLiquidationFactory: 21414664n,
+  },
+  [ChainId.BaseMainnet]: {
+    morpho: 13977148n,
+    permit2: 1425180n,
+    bundler3: {
+      bundler3: 25161671n,
+      generalAdapter1: 26539234n,
+      paraswapAdapter: 25161671n,
+      erc20WrapperAdapter: 26539234n,
+      compoundV3MigrationAdapter: 25161671n,
+      aaveV3CoreMigrationAdapter: 25161671n,
+    },
+    adaptiveCurveIrm: 13977152n,
+    publicAllocator: 13979545n,
+    metaMorphoFactory: 23928808n,
+    chainlinkOracleFactory: 13978286n,
+    preLiquidationFactory: 23779056n,
+  },
+  [ChainId.PolygonMainnet]: {
+    morpho: 66931042n,
+    bundler3: {
+      bundler3: 68074185n,
+      generalAdapter1: 68074185n,
+      paraswapAdapter: 68074185n,
+      compoundV3MigrationAdapter: 68690465n,
+      aaveV2MigrationAdapter: 68690465n,
+      aaveV3CoreMigrationAdapter: 68690465n,
+    },
+    permit2: 35701901n,
+    adaptiveCurveIrm: 66931042n,
+    publicAllocator: 66931042n,
+    metaMorphoFactory: 66931042n,
+    chainlinkOracleFactory: 66931042n,
+    preLiquidationFactory: 68074185n,
+  },
+  [ChainId.ArbitrumMainnet]: {
+    morpho: 296446593n,
+    bundler3: {
+      bundler3: 307326238n,
+      generalAdapter1: 307326238n,
+      paraswapAdapter: 307326988n,
+      aaveV3CoreMigrationAdapter: 358694526n,
+      compoundV3MigrationAdapter: 358693964n,
+    },
+    permit2: 38692735n,
+    adaptiveCurveIrm: 296446593n,
+    publicAllocator: 296446593n,
+    metaMorphoFactory: 296447195n,
+    chainlinkOracleFactory: 296447195n,
+    preLiquidationFactory: 307326238n,
+  },
+  [ChainId.OptimismMainnet]: {
+    morpho: 130770075n,
+    bundler3: {
+      bundler3: 132139369n,
+      generalAdapter1: 132139369n,
+      paraswapAdapter: 132139438n,
+    },
+    permit2: 38854427n,
+    adaptiveCurveIrm: 130770075n,
+    publicAllocator: 130770075n,
+    metaMorphoFactory: 130770189n,
+    chainlinkOracleFactory: 130770189n,
+    preLiquidationFactory: 132139369n,
+  },
+  [ChainId.WorldChainMainnet]: {
+    morpho: 9025669n,
+    bundler3: {
+      bundler3: 10273494n,
+      generalAdapter1: 10273494n,
+    },
+    adaptiveCurveIrm: 9025669n,
+    publicAllocator: 9025669n,
+    metaMorphoFactory: 9025733n,
+    chainlinkOracleFactory: 9025733n,
+    preLiquidationFactory: 10273494n,
+  },
+  [ChainId.FraxtalMainnet]: {
+    morpho: 15317931n,
+    bundler3: {
+      bundler3: 16536231n,
+      generalAdapter1: 16536231n,
+    },
+    adaptiveCurveIrm: 15317931n,
+    publicAllocator: 15317931n,
+    metaMorphoFactory: 15318007n,
+    chainlinkOracleFactory: 15318007n,
+    preLiquidationFactory: 16536231n,
+  },
+  [ChainId.ScrollMainnet]: {
+    morpho: 12842868n,
+    bundler3: {
+      bundler3: 13504587n,
+      generalAdapter1: 13504587n,
+    },
+    adaptiveCurveIrm: 12842868n,
+    publicAllocator: 12842868n,
+    metaMorphoFactory: 12842903n,
+    chainlinkOracleFactory: 12842903n,
+    preLiquidationFactory: 13504587n,
+  },
+  [ChainId.InkMainnet]: {
+    morpho: 4078776n,
+    bundler3: {
+      bundler3: 6385077n,
+      generalAdapter1: 6385077n,
+    },
+    adaptiveCurveIrm: 4078776n,
+    publicAllocator: 4078776n,
+    metaMorphoFactory: 4078830n,
+    chainlinkOracleFactory: 4078830n,
+    preLiquidationFactory: 6385077n,
+  },
+  [ChainId.Unichain]: {
+    morpho: 9139027n,
+    bundler3: {
+      bundler3: 9381237n,
+      generalAdapter1: 9381237n,
+      paraswapAdapter: 20872902n,
+      compoundV3MigrationAdapter: 22019479n,
+    },
+    adaptiveCurveIrm: 9139027n,
+    publicAllocator: 9139027n,
+    metaMorphoFactory: 9316789n,
+    chainlinkOracleFactory: 9316789n,
+    preLiquidationFactory: 9381237n,
+  },
+  [ChainId.SonicMainnet]: {
+    morpho: 9100931n,
+    bundler3: {
+      bundler3: 9102286n,
+      generalAdapter1: 9102286n,
+    },
+    adaptiveCurveIrm: 9100931n,
+    publicAllocator: 9100931n,
+    metaMorphoFactory: 9101319n,
+    chainlinkOracleFactory: 9101319n,
+    preLiquidationFactory: 9102286n,
+  },
+  [ChainId.HemiMainnet]: {
+    morpho: 1188872n,
+    bundler3: {
+      bundler3: 1188907n,
+      generalAdapter1: 1188907n,
+    },
+    adaptiveCurveIrm: 1188872n,
+    publicAllocator: 1188872n,
+    metaMorphoFactory: 1188885n,
+    chainlinkOracleFactory: 1188885n,
+    preLiquidationFactory: 1188907n,
+  },
+  [ChainId.ModeMainnet]: {
+    morpho: 19983370n,
+    bundler3: {
+      bundler3: 19983599n,
+      generalAdapter1: 19983599n,
+    },
+    adaptiveCurveIrm: 19983370n,
+    publicAllocator: 19983370n,
+    metaMorphoFactory: 19983443n,
+    chainlinkOracleFactory: 19983443n,
+    preLiquidationFactory: 19983599n,
+  },
+  [ChainId.CornMainnet]: {
+    morpho: 251401n,
+    bundler3: {
+      bundler3: 253107n,
+      generalAdapter1: 253107n,
+    },
+    adaptiveCurveIrm: 251401n,
+    publicAllocator: 251401n,
+    metaMorphoFactory: 253027n,
+    chainlinkOracleFactory: 253027n,
+    preLiquidationFactory: 253107n,
+  },
+  [ChainId.PlumeMainnet]: {
+    morpho: 765994n,
+    bundler3: {
+      bundler3: 789925n,
+      generalAdapter1: 789925n,
+    },
+    adaptiveCurveIrm: 765994n,
+    publicAllocator: 765994n,
+    metaMorphoFactory: 766078n,
+    chainlinkOracleFactory: 766078n,
+    preLiquidationFactory: 789925n,
+  },
+  [ChainId.CampMainnet]: {
+    morpho: 4804080n,
+    bundler3: {
+      bundler3: 4804690n,
+      generalAdapter1: 4804690n,
+    },
+    adaptiveCurveIrm: 4804080n,
+    publicAllocator: 4804080n,
+    metaMorphoFactory: 4804270n,
+    chainlinkOracleFactory: 4804270n,
+    preLiquidationFactory: 4804690n,
+  },
+  [ChainId.KatanaMainnet]: {
+    morpho: 2741069n,
+    bundler3: {
+      bundler3: 2741993n,
+      generalAdapter1: 2741993n,
+    },
+    adaptiveCurveIrm: 2741069n,
+    publicAllocator: 2741069n,
+    metaMorphoFactory: 2741420n,
+    chainlinkOracleFactory: 2741420n,
+    preLiquidationFactory: 2741993n,
+  },
+  [ChainId.EtherlinkMainnet]: {
+    morpho: 21047448n,
+    bundler3: {
+      bundler3: 21050766n,
+      generalAdapter1: 21050766n,
+    },
+    adaptiveCurveIrm: 21047448n,
+    publicAllocator: 21047448n,
+    metaMorphoFactory: 21050315n,
+    chainlinkOracleFactory: 21050315n,
+    preLiquidationFactory: 21050766n,
+  },
+  [ChainId.TacMainnet]: {
+    morpho: 853025n,
+    bundler3: {
+      bundler3: 978967n,
+      generalAdapter1: 978967n,
+    },
+    adaptiveCurveIrm: 853025n,
+    publicAllocator: 853025n,
+    metaMorphoFactory: 978654n,
+    chainlinkOracleFactory: 978654n,
+    preLiquidationFactory: 978967n,
+  },
+  [ChainId.LiskMainnet]: {
+    morpho: 15731231n,
+    bundler3: {
+      bundler3: 15731595n,
+      generalAdapter1: 15731595n,
+    },
+    adaptiveCurveIrm: 15731231n,
+    publicAllocator: 15731231n,
+    metaMorphoFactory: 15731333n,
+    chainlinkOracleFactory: 15731333n,
+    preLiquidationFactory: 15731595n,
+  },
+  [ChainId.HyperliquidMainnet]: {
+    morpho: 1988429n,
+    bundler3: {
+      bundler3: 1988956n,
+      generalAdapter1: 1988956n,
+    },
+    adaptiveCurveIrm: 1988429n,
+    publicAllocator: 1988429n,
+    metaMorphoFactory: 1988677n,
+    chainlinkOracleFactory: 1988677n,
+    preLiquidationFactory: 1988956n,
+  },
+} as const satisfies Record<ChainId, ChainDeployments>;
+
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
 
 export const getChainAddresses = (chainId: number): ChainAddresses => {
@@ -646,6 +974,7 @@ export const convexWrapperTokens: Record<number, Set<Address>> = {
 
 export let addressesRegistry = deepFreeze(_addressesRegistry);
 export let addresses = addressesRegistry as Record<number, ChainAddresses>;
+export let deployments = deepFreeze(_deployments);
 export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
 
 /**
@@ -656,8 +985,11 @@ export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
  * @param options.unwrappedTokens - A mapping of chain IDs to token address maps,
  *                                  where each entry maps wrapped tokens to their unwrapped equivalents.
  * @param options.addresses - Custom address entries to merge into the default registry.
- *                                  Can be a subset of `ChainAddresses` if chain is already known.
- *                                  Must provide all required addresses if chain is unknown.
+ *                            Can be a subset of `ChainAddresses` if chain is already known.
+ *                            Must provide all required addresses if chain is unknown.
+ * @param options.deployments - Custom deployment entries to merge into the default registry.
+ *                              Can be a subset of `ChainDeployments` if chain is already known.
+ *                              Must provide all required deployments if chain is unknown.
  *
  * @throws {Error} If attempting to override an existing address.
  *
@@ -676,29 +1008,45 @@ export let unwrappedTokensMapping = deepFreeze(_unwrappedTokensMapping);
 export function registerCustomAddresses({
   unwrappedTokens,
   addresses: customAddresses,
+  deployments: customDeployments,
 }: {
   unwrappedTokens?: Record<number, Record<Address, Address>>;
   addresses?:
     | DeepPartial<Record<keyof typeof _addressesRegistry, ChainAddresses>>
     | Record<number, ChainAddresses>;
+  deployments?:
+    | DeepPartial<Record<keyof typeof _deployments, ChainDeployments>>
+    | Record<number, ChainDeployments>;
 } = {}) {
-  // biome-ignore lint/suspicious/noExplicitAny: type is not trivial and not important here
-  const customizer = (objValue: any, srcValue: any, key: string) => {
-    if (
-      objValue !== undefined &&
-      !isPlainObject(objValue) &&
-      objValue !== srcValue
-    )
-      throw new Error(`Cannot override existing address: ${key}`);
-  };
+  const customizer =
+    (type: string) =>
+    // biome-ignore lint/suspicious/noExplicitAny: type is not trivial and not important here
+    (objValue: any, srcValue: any, key: string) => {
+      if (
+        objValue !== undefined &&
+        !isPlainObject(objValue) &&
+        objValue !== srcValue
+      )
+        throw new Error(`Cannot override existing ${type}: ${key}`);
+    };
 
   if (customAddresses)
     addresses = addressesRegistry = deepFreeze(
-      mergeWith({}, addressesRegistry, customAddresses, customizer),
+      mergeWith({}, addressesRegistry, customAddresses, customizer("address")),
+    );
+
+  if (customDeployments)
+    deployments = deepFreeze(
+      mergeWith({}, deployments, customDeployments, customizer("deployment")),
     );
 
   if (unwrappedTokens)
     unwrappedTokensMapping = deepFreeze(
-      mergeWith({}, unwrappedTokensMapping, unwrappedTokens, customizer),
+      mergeWith(
+        {},
+        unwrappedTokensMapping,
+        unwrappedTokens,
+        customizer("unwrapped token"),
+      ),
     );
 }

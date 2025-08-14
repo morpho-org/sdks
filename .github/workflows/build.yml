@@ -17,18 +17,15 @@ jobs:
 
           - blue-api-sdk
           - blue-sdk
-          - blue-sdk-ethers
           - blue-sdk-viem
           - blue-sdk-wagmi
 
           - simulation-sdk
           - simulation-sdk-wagmi
 
-          - bundler-sdk-ethers
           - bundler-sdk-viem
 
           - liquidation-sdk-viem
-          - liquidity-sdk-ethers
           - liquidity-sdk-viem
 
           - migration-sdk-viem

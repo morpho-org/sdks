@@ -14,10 +14,8 @@
   "files": ["lib"],
   "exports": {
     ".": "./src/index.ts",
-    "./vitest": "./src/vitest/index.ts",
-    "./vitest/ethers": "./src/vitest/ethers.ts",
-    "./fixtures": "./src/fixtures/index.ts",
-    "./fixtures/ethers": "./src/fixtures/ethers.ts",
+    "./vitest": "./src/vitest.ts",
+    "./fixtures": "./src/fixtures.ts",
     "./playwright": "./src/playwright.ts"
   },
   "scripts": {
@@ -33,15 +31,11 @@
   },
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
-    "ethers": "^6.13.0",
     "viem": "^2.21.10",
     "vitest": ">=2.0.0 <4.0.0"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
-      "optional": true
-    },
-    "ethers": {
       "optional": true
     },
     "vitest": {
@@ -52,7 +46,6 @@
     "@playwright/test": "^1.48.1",
     "@types/lodash.kebabcase": "^4.1.9",
     "@types/node": "^22.13.1",
-    "ethers": "^6.13.5",
     "typescript": "^5.7.2",
     "viem": "^2.33.3",
     "vitest": "^3.0.5",
@@ -66,24 +59,14 @@
         "require": "./lib/cjs/index.js"
       },
       "./vitest": {
-        "types": "./lib/esm/vitest/index.d.ts",
-        "import": "./lib/esm/vitest/index.js",
-        "require": "./lib/cjs/vitest/index.js"
-      },
-      "./vitest/ethers": {
-        "types": "./lib/esm/vitest/ethers.d.ts",
-        "import": "./lib/esm/vitest/ethers.js",
-        "require": "./lib/cjs/vitest/ethers.js"
+        "types": "./lib/esm/vitest.d.ts",
+        "import": "./lib/esm/vitest.js",
+        "require": "./lib/cjs/vitest.js"
       },
       "./fixtures": {
-        "types": "./lib/esm/fixtures/index.d.ts",
-        "import": "./lib/esm/fixtures/index.js",
-        "require": "./lib/cjs/fixtures/index.js"
-      },
-      "./fixtures/ethers": {
-        "types": "./lib/esm/fixtures/ethers.d.ts",
-        "import": "./lib/esm/fixtures/ethers.js",
-        "require": "./lib/cjs/fixtures/ethers.js"
+        "types": "./lib/esm/fixtures.d.ts",
+        "import": "./lib/esm/fixtures.js",
+        "require": "./lib/cjs/fixtures.js"
       },
       "./playwright": {
         "types": "./lib/esm/playwright.d.ts",
