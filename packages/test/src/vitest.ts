@@ -62,12 +62,21 @@ export const createViemTest = <chain extends Chain>(
           executor: "self",
         });
 
-        await client.sendTransaction({
-          authorizationList: [auth],
-          to: client.account.address,
-          data: "0x",
-          account: client.account,
-        } as SendTransactionParameters<chain>);
+        await client
+          .sendTransaction({
+            authorizationList: [auth],
+            to: client.account.address,
+            data: "0x",
+            account: client.account,
+          } as SendTransactionParameters<chain>)
+          .catch(async (e) => {
+            if (
+              e.cause.details ===
+              "EIP-7702 authorization lists are not supported before the Prague hardfork"
+            )
+              return;
+            throw e;
+          });
       }
 
       await use(client);
