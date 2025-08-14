@@ -2534,7 +2534,7 @@ describe("populateBundle", () => {
         },
       );
 
-      test["vault-v2"].only(
+      test["vault-v2"](
         "should withdraw from Vault V2 via permit",
         async ({ client, config }) => {
           const amount = parseUnits("1000000", 6);
