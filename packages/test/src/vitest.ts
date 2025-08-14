@@ -1,4 +1,9 @@
-import { http, type Chain, zeroAddress, zeroHash } from "viem";
+import {
+  http,
+  type Chain,
+  type SendTransactionParameters,
+  zeroAddress,
+} from "viem";
 import { test } from "vitest";
 import { type AnvilArgs, spawnAnvil } from "./anvil";
 import { type AnvilTestClient, createAnvilTestClient } from "./client";
@@ -50,7 +55,7 @@ export const createViemTest = <chain extends Chain>(
       // cf. https://eips.ethereum.org/EIPS/eip-7702
       const code = await client.getCode({ address: client.account.address });
 
-      if (code !== zeroHash) {
+      if (code !== "0x") {
         const auth = await client.signAuthorization({
           account: client.account,
           contractAddress: zeroAddress,
@@ -61,7 +66,8 @@ export const createViemTest = <chain extends Chain>(
           authorizationList: [auth],
           to: client.account.address,
           data: "0x",
-        });
+          account: client.account,
+        } as SendTransactionParameters<chain>);
       }
 
       await use(client);
