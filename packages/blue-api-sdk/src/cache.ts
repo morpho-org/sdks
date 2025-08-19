@@ -560,6 +560,12 @@ export const typePolicies = {
       supplyShares: {
         read: readMaybeBigInt,
       },
+      assets: {
+        read: readMaybeBigInt,
+      },
+      shares: {
+        read: readMaybeBigInt,
+      },
       position: {
         merge: true,
       },
