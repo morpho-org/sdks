@@ -284,9 +284,9 @@ export function useSimulationState<
     if (block == null) return;
 
     for (const token of values(tokens.data)) {
-      if (!token) continue;
+      if (token == null) continue;
       const vaultV2 = vaultV2s.data[token.address];
-      if (!vaultV2) continue;
+      if (vaultV2 == null) continue;
 
       const eip5267Domain = new Eip5267Domain({
         fields: "0x0c",
