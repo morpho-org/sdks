@@ -24,7 +24,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { randomMarket, randomVault } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
-import _merge from "lodash.merge";
+import _merge from "lodash/merge";
 
 import { SimulationState } from "../src/index.js";
 
