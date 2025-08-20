@@ -101,13 +101,13 @@ export type Erc20BundlerOperations = {
 export type Erc20BundlerOperation =
   Erc20BundlerOperations[Erc20BundlerOperationType];
 
-export const VAULTV2_BUNDLER_OPERATIONS = [
+export const VAULT_V2_BUNDLER_OPERATIONS = [
   "VaultV2_Deposit",
   "VaultV2_Withdraw",
 ] as const satisfies readonly VaultV2OperationType[];
 
 export type VaultV2BundlerOperationType =
-  (typeof VAULTV2_BUNDLER_OPERATIONS)[number];
+  (typeof VAULT_V2_BUNDLER_OPERATIONS)[number];
 export type VaultV2BundlerOperations = {
   [OperationType in VaultV2BundlerOperationType]: WithOperationArgs<
     OperationType,
@@ -148,7 +148,7 @@ export const BUNDLER_OPERATIONS = [
   ...BLUE_BUNDLER_OPERATIONS,
   ...METAMORPHO_BUNDLER_OPERATIONS,
   ...ERC20_BUNDLER_OPERATIONS,
-  ...VAULTV2_BUNDLER_OPERATIONS,
+  ...VAULT_V2_BUNDLER_OPERATIONS,
 ] as const satisfies readonly OperationType[];
 
 export type CallbackBundlerOperationType = (typeof CALLBACK_OPERATIONS)[number];
@@ -194,7 +194,7 @@ export const isCallbackBundlerOperation = (
 export const isVaultV2BundlerOperation = (
   operation: BundlerOperation,
 ): operation is VaultV2BundlerOperation => {
-  return (VAULTV2_BUNDLER_OPERATIONS as readonly OperationType[]).includes(
+  return (VAULT_V2_BUNDLER_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };
@@ -254,13 +254,13 @@ export type Erc20InputBundlerOperationType =
 export type Erc20InputBundlerOperation =
   Erc20BundlerOperations[Erc20InputBundlerOperationType];
 
-export const VAULTV2_INPUT_OPERATIONS = [
+export const VAULT_V2_INPUT_OPERATIONS = [
   "VaultV2_Deposit",
   "VaultV2_Withdraw",
 ] as const satisfies readonly VaultV2BundlerOperationType[];
 
 export type VaultV2InputBundlerOperationType =
-  (typeof VAULTV2_INPUT_OPERATIONS)[number];
+  (typeof VAULT_V2_INPUT_OPERATIONS)[number];
 export type VaultV2InputBundlerOperation =
   VaultV2BundlerOperations[VaultV2InputBundlerOperationType];
 
@@ -320,7 +320,7 @@ export const isParaswapInputBundlerOperation = (operation: {
 export const isVaultV2InputBundlerOperation = (operation: {
   type: OperationType;
 }): operation is VaultV2InputBundlerOperation => {
-  return (VAULTV2_INPUT_OPERATIONS as readonly OperationType[]).includes(
+  return (VAULT_V2_INPUT_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };

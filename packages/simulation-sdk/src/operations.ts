@@ -355,13 +355,13 @@ export type Erc20Operations = {
 };
 export type Erc20Operation = Erc20Operations[Erc20OperationType];
 
-export const VAULTV2_OPERATIONS = [
+export const VAULT_V2_OPERATIONS = [
   "VaultV2_AccrueInterest",
   "VaultV2_Deposit",
   "VaultV2_Withdraw",
 ] as const;
 
-export type VaultV2OperationType = (typeof VAULTV2_OPERATIONS)[number];
+export type VaultV2OperationType = (typeof VAULT_V2_OPERATIONS)[number];
 export interface VaultV2OperationArgs {
   VaultV2_AccrueInterest: {};
   VaultV2_Deposit:
@@ -478,7 +478,7 @@ export const isErc20Operation = (
 export const isVaultV2Operation = (
   operation: Operation,
 ): operation is VaultV2Operation => {
-  return (VAULTV2_OPERATIONS as readonly OperationType[]).includes(
+  return (VAULT_V2_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };
