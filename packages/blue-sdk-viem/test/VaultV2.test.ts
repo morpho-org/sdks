@@ -1,4 +1,3 @@
-import { registerCustomAddresses } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, parseUnits } from "viem";
 import { readContract } from "viem/actions";
@@ -6,16 +5,6 @@ import { describe, expect } from "vitest";
 import { vaultV2Abi } from "../src";
 import { fetchAccrualVaultV2 } from "../src/fetch/v2/VaultV2";
 import { vaultV2Test } from "./setup";
-
-//TODO use from blue-sdk
-registerCustomAddresses({
-  addresses: {
-    8453: {
-      vaultV2MorphoVaultV1AdapterFactory:
-        "0xf123759c14b824e5670258e67c9fcea7ff368b50",
-    },
-  },
-});
 
 const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
 
