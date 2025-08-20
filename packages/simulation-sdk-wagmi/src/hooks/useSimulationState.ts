@@ -288,6 +288,7 @@ export function useSimulationState<
       const vaultV2 = vaultV2s.data[token.address];
       if (vaultV2 == null) continue;
 
+      // Vaults V2 are not EIP-5267 compliant so we hardcode their EIP-712 domain specification to support EIP-2612 permits.
       const eip5267Domain = new Eip5267Domain({
         fields: "0x0c",
         name: "",
