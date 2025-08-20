@@ -1,5 +1,6 @@
 import {
   UnsupportedChainIdError,
+  UnsupportedVaultV2AdapterError,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
@@ -41,7 +42,7 @@ export async function fetchVaultV2Adapter(
   if (isMorphoVaultV1Adapter)
     return fetchVaultV2MorphoVaultV1Adapter(address, client, parameters);
 
-  throw "Unknown adapter type";
+  throw new UnsupportedVaultV2AdapterError(address);
 }
 
 export async function fetchAccrualVaultV2Adapter(
@@ -74,5 +75,5 @@ export async function fetchAccrualVaultV2Adapter(
   if (isMorphoVaultV1Adapter)
     return fetchAccrualVaultV2MorphoVaultV1Adapter(address, client, parameters);
 
-  throw "Unknown adapter type";
+  throw new UnsupportedVaultV2AdapterError(address);
 }
