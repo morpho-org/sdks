@@ -43,7 +43,7 @@ export class UnsupportedPreLiquidationParamsError extends Error {
 
 export class UnsupportedVaultV2AdapterError extends Error {
   constructor(public readonly address: Address) {
-    super(`type of adapter ${address} is not supported`);
+    super(`vault v2 adapter "${address}" is not supported`);
   }
 }
 
