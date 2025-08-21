@@ -73,6 +73,10 @@ export interface ChainAddresses {
   usdc?: Address;
   stEth?: Address;
   wstEth?: Address;
+
+  /* Vault V2 */
+  vaultV2Factory?: Address;
+  vaultV2MorphoVaultV1AdapterFactory?: Address;
 }
 
 const _addressesRegistry = {
@@ -200,6 +204,10 @@ const _addressesRegistry = {
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
+
+    vaultV2Factory: "0xC2F730a67AE81a7D2C17268A9652338449BF264b",
+    vaultV2MorphoVaultV1AdapterFactory:
+      "0xF123759C14B824e5670258e67C9FcEa7Ff368b50",
   },
   [ChainId.PolygonMainnet]: {
     morpho: "0x1bF0c2541F820E775182832f06c0B7Fc27A25f67",

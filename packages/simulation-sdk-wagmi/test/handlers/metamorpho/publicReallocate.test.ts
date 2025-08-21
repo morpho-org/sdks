@@ -86,6 +86,8 @@ describe("MetaMorpho_PublicReallocate", () => {
           users: [client.account.address, steakUsdc.address],
           tokens: [NATIVE_ADDRESS, steakUsdc.asset, steakUsdc.address],
           vaults: [steakUsdc.address],
+          vaultV2Adapters: [],
+          vaultV2s: [],
           block,
           accrueInterest: false,
         }),
