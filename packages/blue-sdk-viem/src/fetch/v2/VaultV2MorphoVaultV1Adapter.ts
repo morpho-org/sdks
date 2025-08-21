@@ -5,6 +5,7 @@ import {
 import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { vaultV2MorphoVaultV1AdapterAbi } from "../../abis";
+import { abi, code } from "../../queries/V2/GetVaultV2MorphoVaultV1Adapter";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchAccrualVault } from "../Vault";
 
@@ -16,7 +17,19 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
   parameters.chainId ??= await getChainId(client);
 
   if (deployless) {
-    //TODO implement
+    try {
+      const adapter = await readContract(client, {
+        ...parameters,
+        abi,
+        code,
+        functionName: "query",
+        args: [address],
+      });
+
+      return new VaultV2MorphoVaultV1Adapter({ ...adapter, address });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
   }
 
   const [parentVault, adapterId, skimRecipient, morphoVaultV1] =

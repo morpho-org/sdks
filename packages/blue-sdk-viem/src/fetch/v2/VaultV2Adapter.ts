@@ -20,10 +20,6 @@ export async function fetchVaultV2Adapter(
   parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;
 
-  if (parameters.deployless) {
-    //TODO implement
-  }
-
   const { vaultV2MorphoVaultV1AdapterFactory } = getChainAddresses(
     parameters.chainId,
   );
@@ -52,10 +48,6 @@ export async function fetchAccrualVaultV2Adapter(
 ) {
   parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;
-
-  if (parameters.deployless) {
-    //TODO implement
-  }
 
   const { vaultV2MorphoVaultV1AdapterFactory } = getChainAddresses(
     parameters.chainId,

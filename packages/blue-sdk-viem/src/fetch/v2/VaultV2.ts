@@ -2,6 +2,7 @@ import { AccrualVaultV2, VaultV2 } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { vaultV2Abi } from "../../abis";
+import { abi, code } from "../../queries/V2/GetVaultV2";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchToken } from "../Token";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter";
@@ -14,7 +15,24 @@ export async function fetchVaultV2(
   parameters.chainId ??= await getChainId(client);
 
   if (deployless) {
-    //TODO implement
+    try {
+      const { token, ...vault } = await readContract(client, {
+        ...parameters,
+        abi,
+        code,
+        functionName: "query",
+        args: [address],
+      });
+
+      return new VaultV2({
+        ...token,
+        ...vault,
+        address,
+        adapters: [...vault.adapters],
+      });
+    } catch {
+      // Fallback to multicall if deployless call fails.
+    }
   }
 
   const [
