@@ -51,7 +51,7 @@
     "fetch-mock": "^11.1.5",
     "graphql": "^16.10.0",
     "hardhat": "^2.22.18",
-    "nock": "beta",
+    "nock": "^14.0.10",
     "typescript": "^5.7.2",
     "viem": "^2.33.3",
     "vitest": "^3.0.5"
