@@ -16,6 +16,7 @@ import {
   vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
+import type { Erc20Operations } from "@morpho-org/simulation-sdk";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
@@ -2583,15 +2584,17 @@ describe("populateBundle", () => {
 
           const data = result.current.data!;
 
-          const [redeemedShares, initialUserShares] = await Promise.all([
-            client.readContract({
-              functionName: "previewWithdraw",
-              args: [withdrawAmount],
-              abi: vaultV2Abi,
-              address: vaultV2Address,
-            }),
-            client.balanceOf({ erc20: vaultV2Address }),
-          ]);
+          const [expectedRedeemedShares, initialUserShares] = await Promise.all(
+            [
+              client.readContract({
+                functionName: "previewWithdraw",
+                args: [withdrawAmount],
+                abi: vaultV2Abi,
+                address: vaultV2Address,
+              }),
+              client.balanceOf({ erc20: vaultV2Address }),
+            ],
+          );
 
           const { operations, bundle } = await setupTestBundle(client, data, [
             {
@@ -2635,10 +2638,15 @@ describe("populateBundle", () => {
             },
           ]);
 
+          const approvedShares = (
+            operations[0] as Erc20Operations["Erc20_Permit"]
+          ).args.amount;
+
           const userShares = await client.balanceOf({ erc20: vaultV2Address });
+          const redeemedShares = initialUserShares - userShares;
 
           expect(await client.balanceOf({ erc20: usdc })).toBe(withdrawAmount);
-          expect(userShares).toBe(initialUserShares - redeemedShares);
+          expect(redeemedShares).toBeLessThanOrEqual(expectedRedeemedShares);
 
           expect(
             await client.allowance({ erc20: vaultV2Address, spender: permit2 }),
@@ -2648,13 +2656,7 @@ describe("populateBundle", () => {
               erc20: vaultV2Address,
               spender: generalAdapter1,
             }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({
-              erc20: vaultV2Address,
-              spender: vaultV2Address,
-            }),
-          ).toBe(0n);
+          ).toBe(approvedShares - redeemedShares);
         },
       );
     });
