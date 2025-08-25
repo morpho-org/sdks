@@ -2399,8 +2399,9 @@ describe("populateBundle", () => {
         stEth,
         usdc,
         usdt,
+        dai,
       } = addressesRegistry[ChainId.EthMainnet];
-      const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc } =
+      const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc, dai_sUsde } =
         markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbEth, bbUsdc, re7Weth } =
         vaults[ChainId.EthMainnet];
@@ -2466,6 +2467,129 @@ describe("populateBundle", () => {
               }
             }]
           `,
+          );
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should supply DAI",
+        async ({ client, config }) => {
+          const id = dai_sUsde.id;
+
+          const assets = parseEther("55873.253");
+          await client.deal({
+            erc20: dai,
+            amount: assets,
+          });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [id],
+              users: [client.account.address, generalAdapter1],
+              tokens: [NATIVE_ADDRESS, dai, dai_sUsde.collateralToken],
+              vaults: [],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupTestBundle(
+            client,
+            data,
+            [
+              {
+                type: "Blue_Supply",
+                sender: client.account.address,
+                args: {
+                  id,
+                  assets,
+                  onBehalf: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+            { supportsSignature: false },
+          );
+
+          expect(bundle.requirements.signatures).toStrictEqual([]);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: { to: dai, data: expect.any(String) },
+              args: [dai, generalAdapter1, assets],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: assets,
+                spender: generalAdapter1,
+                nonce: 3n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: dai,
+              args: {
+                amount: assets,
+                from: client.account.address,
+                to: generalAdapter1,
+              },
+            },
+            {
+              type: "Blue_Supply",
+              sender: generalAdapter1,
+              args: {
+                id,
+                assets,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: 0n,
+                spender: generalAdapter1,
+                nonce: 4n,
+              },
+            },
+          ]);
+
+          const position = await fetchPosition(
+            client.account.address,
+            id,
+            client,
+          );
+
+          expect(
+            formatUnits(await client.balanceOf({ erc20: dai }), 18),
+          ).toBeCloseTo(0, 8);
+          expect(position.collateral).toBe(0n);
+          expect(position.supplyShares).toBe(50490517366679890639553905675n);
+          expect(position.borrowShares).toBe(0n);
+
+          expect(await client.allowance({ erc20: dai, spender: permit2 })).toBe(
+            0n,
+          );
+          expect(
+            await client.allowance({ erc20: dai, spender: generalAdapter1 }),
+          ).toBe(0n);
+          expect(await client.allowance({ erc20: dai, spender: morpho })).toBe(
+            0n,
           );
         },
       );
