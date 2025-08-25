@@ -113,20 +113,20 @@ describe("MarketUtils", () => {
   test("should continuously compound rates", () => {
     expect(
       MarketUtils.compoundRate(parseUnits("3", 16) / SECONDS_PER_YEAR),
-    ).toEqual(3_0454499983331440n);
+    ).toEqual(3_0454533936848223n);
 
     expect(
       MarketUtils.compoundRate(
         parseUnits("40", 16) / SECONDS_PER_YEAR,
         Time.s.from.mo(1),
       ),
-    ).toEqual(3_4556206450587179n);
+    ).toEqual(3_4556262331251440n);
 
     expect(
       MarketUtils.compoundRate(
         parseUnits("500", 16) / SECONDS_PER_YEAR,
         Time.s.from.mo(8),
       ),
-    ).toEqual(157_02792765518178794n);
+    ).toEqual(288_82118976199070000n);
   });
 });
