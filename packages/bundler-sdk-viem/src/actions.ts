@@ -328,9 +328,18 @@ export const encodeOperation = (
 
       // Simple permit is not supported, fallback to standard approval.
 
-      requirements.txs.push(
-        ...encodeErc20Approval(operation.address, spender, amount, dataBefore),
-      );
+      // Ignore zero permits used to reset allowances at the end of a bundle
+      // when the signer does not support signatures, as they cannot be bundled.
+      // Currently only used by DAI-specific permit which does not support specific amounts.
+      if (amount > 0n)
+        requirements.txs.push(
+          ...encodeErc20Approval(
+            operation.address,
+            spender,
+            amount,
+            dataBefore,
+          ),
+        );
 
       break;
     }
