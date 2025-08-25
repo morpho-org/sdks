@@ -1,4 +1,3 @@
-import { safeParseNumber } from "@morpho-org/blue-sdk-viem";
 import { keccak_256 } from "@noble/hashes/sha3";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
 import { formatEther } from "viem";
@@ -10,6 +9,7 @@ import {
 } from "../constants.js";
 import { MathLib, type RoundingDirection, SharesMath } from "../math/index.js";
 import type { BigIntish, MarketId } from "../types.js";
+import { safeParseNumber } from "../utils.js";
 import type { IMarketParams } from "./MarketParams.js";
 
 /**
@@ -101,7 +101,7 @@ export namespace MarketUtils {
    * @param period The period to compound the rate over (in seconds). Defaults to 1 year.
    * @deprecated The compounded rate is inaccurate if period is small (use `wTaylorCompounded` instead).
    */
-  // TODO: force period = SECONDS_PER_YER.
+  // TODO: force period = SECONDS_PER_YER and always return a Number for APYs.
   export function compoundRate(
     rate: BigIntish,
     period: BigIntish = SECONDS_PER_YEAR,
