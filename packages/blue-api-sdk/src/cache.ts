@@ -51,26 +51,26 @@ export const mergeArrayByField = <
       mergeObjects: MergeObjectsFunction;
     },
   ) => {
-    const _get = (
-      // biome-ignore lint/suspicious/noExplicitAny: recursion breaks type
-      data: any,
+    const _get = <T>(
+      data: T,
       path: string[],
     ): PropertyKey | null | undefined => {
-      if (path.length === 0) return data;
+      if (path.length === 0) return data as PropertyKey | null | undefined;
 
       const [key, ...rest] = path;
 
-      return _get(readField(key!, data), rest);
+      return _get(readField(key! as keyof T, data), rest);
     };
 
-    const getFirstValueAtPath = (
-      // biome-ignore lint/suspicious/noExplicitAny: recursion breaks type
-      data: any,
+    const getFirstValueAtPath = <T>(
+      data: T,
       i = splittedPaths.length - 1,
     ): PropertyKey | null | undefined => {
       if (i < 0) return;
 
-      return _get(data, splittedPaths[i]!) ?? getFirstValueAtPath(data, i - 1);
+      return (
+        _get<T>(data, splittedPaths[i]!) ?? getFirstValueAtPath<T>(data, i - 1)
+      );
     };
 
     const merged = existing ? existing.slice(0) : [];
