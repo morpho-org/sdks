@@ -27,8 +27,7 @@ export const bigIntComparator =
     return xA > xB ? -1 : 1;
   };
 
-// biome-ignore lint/suspicious/noExplicitAny: recursion breaks type
-const _get = (data: any, path: string[]): unknown => {
+const _get = <T>(data: T, path: string[]): unknown => {
   if (data === null) return null;
   if (data === undefined) return undefined;
 
@@ -36,7 +35,7 @@ const _get = (data: any, path: string[]): unknown => {
 
   const [key, ...rest] = path;
 
-  return _get(data[key!], rest);
+  return _get((data as Record<string, unknown>)[key!], rest);
 };
 
 export const hasValue = <
