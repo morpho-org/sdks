@@ -1012,8 +1012,11 @@ export function registerCustomAddresses({
 } = {}) {
   const customizer =
     (type: string) =>
-    // biome-ignore lint/suspicious/noExplicitAny: type is not trivial and not important here
-    (objValue: any, srcValue: any, key: string) => {
+    <T>(
+      objValue: T | undefined,
+      srcValue: T | undefined,
+      key: string,
+    ): void => {
       if (
         objValue !== undefined &&
         !isPlainObject(objValue) &&
