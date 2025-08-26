@@ -156,7 +156,7 @@ export class Market implements IMarket {
   get apyAtTarget() {
     if (this.rateAtTarget == null) return;
 
-    return MarketUtils.compoundRate(this.rateAtTarget);
+    return MarketUtils.rateToApy(this.rateAtTarget);
   }
 
   /**
@@ -303,7 +303,7 @@ export class Market implements IMarket {
   public getBorrowApy(timestamp: BigIntish = Time.timestamp()) {
     const borrowRate = this.getEndBorrowRate(timestamp);
 
-    return MarketUtils.compoundRate(borrowRate);
+    return MarketUtils.rateToApy(borrowRate);
   }
 
   /**
@@ -332,7 +332,7 @@ export class Market implements IMarket {
   public getAvgBorrowApy(timestamp: BigIntish = Time.timestamp()) {
     const borrowRate = this.getAvgBorrowRate(timestamp);
 
-    return MarketUtils.compoundRate(borrowRate);
+    return MarketUtils.rateToApy(borrowRate);
   }
 
   /**
