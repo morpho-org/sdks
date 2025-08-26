@@ -1,8 +1,6 @@
 import { parseUnits } from "viem";
-import { MarketUtils, MathLib, SECONDS_PER_YEAR } from "../../src/index.js";
-
-import { Time } from "@morpho-org/morpho-ts";
 import { describe, expect, test } from "vitest";
+import { MarketUtils, MathLib, SECONDS_PER_YEAR } from "../../src/index.js";
 
 const market = {
   loanToken: "0x0000000000000000000000000000000000000001",
@@ -112,21 +110,15 @@ describe("MarketUtils", () => {
 
   test("should continuously compound rates", () => {
     expect(
-      MarketUtils.compoundRate(parseUnits("3", 16) / SECONDS_PER_YEAR),
+      MarketUtils.rateToApy(parseUnits("3", 16) / SECONDS_PER_YEAR),
     ).toEqual(3_0454533936848223n);
 
     expect(
-      MarketUtils.compoundRate(
-        parseUnits("40", 16) / SECONDS_PER_YEAR,
-        Time.s.from.mo(1),
-      ),
-    ).toEqual(3_4556262331251440n);
+      MarketUtils.rateToApy(parseUnits("40", 16) / SECONDS_PER_YEAR),
+    ).toEqual(49_1824697617472700n);
 
     expect(
-      MarketUtils.compoundRate(
-        parseUnits("500", 16) / SECONDS_PER_YEAR,
-        Time.s.from.mo(8),
-      ),
-    ).toEqual(288_82118976199070000n);
+      MarketUtils.rateToApy(parseUnits("500", 16) / SECONDS_PER_YEAR),
+    ).toEqual(14741_3159098725030000n);
   });
 });

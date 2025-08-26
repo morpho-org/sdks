@@ -94,20 +94,27 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the per-second rate continuously compounded over the given period (scaled by WAD),
-   * as calculated in Morpho Blue assuming the market is frequently accrued onchain.
-   * If the period is 1 year, the compounded rate correspond to the Annual Percentage Yield (APY).
+   * Returns the per-second rate continuously compounded over the given period, as calculated in Morpho Blue (scaled by WAD).
    * @param rate The per-second rate to compound (scaled by WAD).
    * @param period The period to compound the rate over (in seconds). Defaults to 1 year.
-   * @deprecated The compounded rate is inaccurate if period is small (use `wTaylorCompounded` instead).
+   * @deprecated The compounded rate is inaccurate if rate * period >> 0. If interested in the APY, use `rateToApy` instead.
    */
-  // TODO: force period = SECONDS_PER_YER and always return a Number for APYs.
   export function compoundRate(
     rate: BigIntish,
     period: BigIntish = SECONDS_PER_YEAR,
   ) {
+    return MathLib.wTaylorCompounded(rate, period);
+  }
+
+  /**
+   * Returns the per-second rate continuously compounded over a year (scaled by WAD),
+   * as calculated in Morpho Blue assuming the market is frequently accrued onchain.
+   * @param rate The per-second rate to compound annually (scaled by WAD).
+   */
+  // TODO: return a Number for APYs.
+  export function rateToApy(rate: BigIntish) {
     return safeParseNumber(
-      Math.expm1(+formatEther(BigInt(rate) * BigInt(period))),
+      Math.expm1(+formatEther(BigInt(rate) * SECONDS_PER_YEAR)),
     );
   }
 
