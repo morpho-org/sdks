@@ -932,7 +932,7 @@ export const finalizeBundle = (
 
   const uniqueSkimTokens = new Set<Address>();
 
-  const pushCustomSkim = (operation: UnionOmit<BundlerOperation, "sender">) => {
+  const pushSkim = (operation: UnionOmit<BundlerOperation, "sender">) => {
     // Paraswap does not guarantee that the amount effectively bought (resp. sold) corresponds to
     // the requested amount to buy (resp. sell), so we force skim the possible surplus of bought (resp. sold) token.
     switch (operation.type) {
@@ -980,14 +980,14 @@ export const finalizeBundle = (
       case "MetaMorpho_PublicReallocate":
         uniqueSkimTokens.add(NATIVE_ADDRESS);
       default:
-        throw `Missing skim handler for "${operation.type}"`;
+        throw new BundlerErrors.MissingSkimHandler(operation.type);
     }
 
     if ("callback" in operation.args)
-      operation.args.callback?.forEach(pushCustomSkim);
+      operation.args.callback?.forEach(pushSkim);
   };
 
-  operations.forEach(pushCustomSkim);
+  operations.forEach(pushSkim);
 
   skims.push(
     ...Array.from(
@@ -1018,7 +1018,8 @@ export const finalizeBundle = (
     getLast(finalizedSteps).holdings[generalAdapter1],
   )) {
     if (!holding) continue;
-    if (holding.balance > 0n) throw `Missing final skim for "${holding.token}"`;
+    if (holding.balance > 0n)
+      throw new BundlerErrors.UnskimedToken(holding.token);
   }
 
   return finalizedOperations;
