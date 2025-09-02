@@ -979,7 +979,9 @@ export const finalizeBundle = (
         break;
       case "MetaMorpho_PublicReallocate":
         uniqueSkimTokens.add(NATIVE_ADDRESS);
+        break;
       default:
+        //@ts-ignore This is dead code but acts as a guard in case a new operation is added
         throw new BundlerErrors.MissingSkimHandler(operation.type);
     }
 
@@ -987,7 +989,7 @@ export const finalizeBundle = (
       operation.args.callback?.forEach(pushSkim);
   };
 
-  operations.forEach(pushSkim);
+  operations.concat(unwraps).forEach(pushSkim);
 
   skims.push(
     ...Array.from(
@@ -1011,7 +1013,6 @@ export const finalizeBundle = (
   const finalizedSteps = simulateBundlerOperations(
     finalizedOperations,
     startData,
-    { slippage: DEFAULT_SLIPPAGE_TOLERANCE },
   );
 
   for (const holding of values(
