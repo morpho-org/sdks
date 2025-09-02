@@ -10,7 +10,7 @@ import { markets, vaults } from "@morpho-org/morpho-test";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
-import { parseEther, parseUnits } from "viem";
+import { maxUint256, parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { donator, setupTestBundle } from "./helpers.js";
 import { test } from "./setup.js";
@@ -238,6 +238,26 @@ describe("sharedLiquidity", () => {
             onBehalf: client.account.address,
             receiver: client.account.address,
             slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+          },
+        },
+        {
+          type: "Erc20_Transfer",
+          sender: generalAdapter1,
+          address: wstEth,
+          args: {
+            amount: maxUint256,
+            from: generalAdapter1,
+            to: client.account.address,
+          },
+        },
+        {
+          type: "Erc20_Transfer",
+          sender: generalAdapter1,
+          address: usdc,
+          args: {
+            amount: maxUint256,
+            from: generalAdapter1,
+            to: client.account.address,
           },
         },
       ]);
