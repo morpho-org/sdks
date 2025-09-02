@@ -46,13 +46,13 @@ export namespace BundlerErrors {
 
   export class MissingSkimHandler extends Error {
     constructor(type: OperationType) {
-      super(`Missing skim handler for "${type}"`);
+      super(`missing skim handler for operation "${type}"`);
     }
   }
 
   export class UnskimedToken extends Error {
     constructor(token: Address) {
-      super(`Missing final skim for "${token}"`);
+      super(`missing final skim for token "${token}"`);
     }
   }
 }
