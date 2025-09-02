@@ -322,6 +322,7 @@ const _addressesRegistry = {
   },
   [ChainId.Unichain]: {
     morpho: "0x8f5ae9CddB9f68de460C77730b018Ae7E04a140A",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x7DD85759182495AF7F6757DA75036d24A9B58bc3",
       generalAdapter1: "0xC11329d19C2275c9E759867e879ECFcEeD7e30A0",
@@ -643,6 +644,7 @@ const _deployments = {
   },
   [ChainId.Unichain]: {
     morpho: 9139027n,
+    permit2: 0n,
     bundler3: {
       bundler3: 9381237n,
       generalAdapter1: 9381237n,
