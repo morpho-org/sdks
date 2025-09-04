@@ -109,9 +109,10 @@ export namespace BlueErrors {
   }
 }
 
+type UnknownConstructorArgs = [] | [unknown, ...unknown[]];
+
 export interface ErrorClass<E extends Error> {
-  // biome-ignore lint/suspicious/noExplicitAny: match any type of arg
-  new (...args: any[]): E;
+  new (...args: UnknownConstructorArgs): E;
 }
 
 export function _try<T, E extends Error>(
