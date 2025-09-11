@@ -936,16 +936,6 @@ export const finalizeBundle = (
     // Paraswap does not guarantee that the amount effectively bought (resp. sold) corresponds to
     // the requested amount to buy (resp. sell), so we force skim the possible surplus of bought (resp. sold) token.
     switch (operation.type) {
-      case "Blue_Paraswap_BuyDebt":
-        uniqueSkimTokens.add(
-          startData.getMarket(operation.args.id).params.loanToken,
-        );
-        break;
-      case "Paraswap_Buy":
-      case "Paraswap_Sell":
-        uniqueSkimTokens.add(operation.address);
-    }
-    switch (operation.type) {
       case "Blue_Borrow":
       case "Blue_Repay":
       case "Blue_Supply":
@@ -964,10 +954,17 @@ export const finalizeBundle = (
         uniqueSkimTokens.add(operation.args.token);
         break;
       case "Paraswap_Buy":
+        uniqueSkimTokens.add(operation.address);
+        uniqueSkimTokens.add(operation.args.srcToken);
+        break;
       case "Blue_Paraswap_BuyDebt":
+        uniqueSkimTokens.add(
+          startData.getMarket(operation.args.id).params.loanToken,
+        );
         uniqueSkimTokens.add(operation.args.srcToken);
         break;
       case "Paraswap_Sell":
+        uniqueSkimTokens.add(operation.address);
         uniqueSkimTokens.add(operation.args.dstToken);
         break;
       case "Erc20_Transfer":
