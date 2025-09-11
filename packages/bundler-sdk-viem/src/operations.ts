@@ -940,7 +940,6 @@ export const finalizeBundle = (
       case "Blue_Repay":
       case "Blue_Supply":
       case "Blue_Withdraw":
-      case "Blue_Paraswap_BuyDebt":
         uniqueSkimTokens.add(
           startData.getMarket(operation.args.id).params.loanToken,
         );
@@ -955,7 +954,19 @@ export const finalizeBundle = (
         uniqueSkimTokens.add(operation.args.token);
         break;
       case "Paraswap_Buy":
+        uniqueSkimTokens.add(operation.address);
+        uniqueSkimTokens.add(operation.args.srcToken);
+        break;
+      case "Blue_Paraswap_BuyDebt":
+        uniqueSkimTokens.add(
+          startData.getMarket(operation.args.id).params.loanToken,
+        );
+        uniqueSkimTokens.add(operation.args.srcToken);
+        break;
       case "Paraswap_Sell":
+        uniqueSkimTokens.add(operation.address);
+        uniqueSkimTokens.add(operation.args.dstToken);
+        break;
       case "Erc20_Transfer":
       case "Erc20_Transfer2":
         uniqueSkimTokens.add(operation.address);
