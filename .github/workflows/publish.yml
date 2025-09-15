@@ -50,6 +50,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
           registry-url: https://registry.npmjs.org
+          scope: '@morpho-org'
 
       # Required to use OIDC trusted publishing.
       - run: npm install -g npm@latest
