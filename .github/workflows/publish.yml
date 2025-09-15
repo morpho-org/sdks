@@ -49,7 +49,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-          registry-url: https://registry.npmjs.org
           scope: "@morpho-org"
           always-auth: true
 
