@@ -49,8 +49,7 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-          scope: "@morpho-org"
-          always-auth: true
+          registry-url: https://registry.npmjs.org
 
       - run: pnpm install --frozen-lockfile
 
