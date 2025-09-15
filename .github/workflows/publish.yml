@@ -51,6 +51,9 @@ jobs:
           cache: pnpm
           registry-url: https://registry.npmjs.org
 
+      # Required to use OIDC trusted publishing.
+      - run: npm install -g npm@latest
+
       - run: pnpm install --frozen-lockfile
 
       - id: release
