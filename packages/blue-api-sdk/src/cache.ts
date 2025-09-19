@@ -755,6 +755,16 @@ export const typePolicies = {
       },
     },
   },
+  VaultV2DepositData: {
+    fields: {
+      assets: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2WithdrawData: {
+    fields: {
+      assets: { read: readMaybeBigInt },
+    },
+  },
   BigIntDataPoint: {
     fields: {
       y: {
