@@ -1,13 +1,15 @@
 import {
   type Abi,
+  type AbiStateMutability,
   type Address,
+  type Client,
+  type ContractFunctionArgs,
   type ContractFunctionName,
   type Hash,
   type Hex,
   decodeFunctionData,
   getAddress,
 } from "viem";
-import type { AnvilTestClient } from "../client";
 
 type OtsTraceNode = {
   type: string;
@@ -25,6 +27,24 @@ type OtsTraceTransactionSchema = {
   Method: "ots_traceTransaction";
   Parameters: [hash: Hash];
   ReturnType: OtsTraceNode[];
+};
+
+export type GetFunctionCallsArgs<
+  TAbi extends Abi,
+  TName extends ContractFunctionName<TAbi>,
+> = {
+  txHash: Hash;
+  abi: TAbi;
+  contract: Address;
+  functionName: TName;
+};
+
+export type FunctionCall<
+  TAbi extends Abi,
+  TName extends ContractFunctionName<TAbi>,
+> = {
+  args: ContractFunctionArgs<TAbi, AbiStateMutability, TName>;
+  functionName: TName;
 };
 
 /**
@@ -60,22 +80,12 @@ type OtsTraceTransactionSchema = {
  * expect(count).toBe(1); // assert foo() was called once
  * ```
  */
-export async function getFunctionCallCount<
+export async function getFunctionCalls<
   TAbi extends Abi,
   TName extends ContractFunctionName<TAbi>,
 >(
-  client: AnvilTestClient,
-  {
-    txHash,
-    abi,
-    contract,
-    functionName,
-  }: {
-    txHash: Hash;
-    abi: TAbi;
-    contract: Address;
-    functionName: TName;
-  },
+  client: Client,
+  { txHash, abi, contract, functionName }: GetFunctionCallsArgs<TAbi, TName>,
 ) {
   const trace = await client.request<OtsTraceTransactionSchema>({
     method: "ots_traceTransaction",
@@ -84,7 +94,7 @@ export async function getFunctionCallCount<
 
   const target = getAddress(contract);
 
-  let count = 0;
+  const calls: FunctionCall<TAbi, TName>[] = [];
 
   const walk = (node: OtsTraceNode | OtsTraceNode[]) => {
     if (Array.isArray(node)) return node.forEach(walk);
@@ -92,11 +102,17 @@ export async function getFunctionCallCount<
     if (node?.to && node?.input) {
       if (getAddress(node.to) === target) {
         try {
-          const { functionName: name } = decodeFunctionData({
+          const call = decodeFunctionData({
             abi,
             data: node.input as Hex,
           });
-          if (name === functionName) count++;
+          if (call.functionName === functionName)
+            calls.push(
+              call as {
+                args: ContractFunctionArgs<TAbi, AbiStateMutability, TName>;
+                functionName: TName;
+              },
+            );
         } catch {}
       }
     }
@@ -105,5 +121,5 @@ export async function getFunctionCallCount<
   };
   walk(trace);
 
-  return count;
+  return calls;
 }

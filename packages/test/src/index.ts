@@ -2,4 +2,4 @@ export * from "./client";
 export * from "./fixtures";
 export * from "./anvil";
 
-export * from "./utils/getFunctionCallCount";
+export * from "./utils/getFunctionCalls";
