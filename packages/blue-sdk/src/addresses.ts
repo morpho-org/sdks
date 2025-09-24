@@ -499,6 +499,19 @@ const _addressesRegistry = {
 
     wNative: "0x5555555555555555555555555555555555555555",
   },
+  [ChainId.SeiMainnet]: {
+    morpho: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",
+    bundler3: {
+      bundler3: "0xa3F50477AfA601C771874260A3B34B40e244Fa0e",
+      generalAdapter1: "0xD7F48aDE56613E8605863832B7B8A1985B934aE4",
+    },
+    adaptiveCurveIrm: "0x6eFA8e3Aa8279eB2fd46b6083A9E52dA72EA56c4",
+    publicAllocator: "0xD878509446bE2C601f0f032F501851001B159D6B",
+    metaMorphoFactory: "0x8Dea49ec5bd5AeAc8bcf96B3E187F59354118291",
+    chainlinkOracleFactory: "0x4bD68c2FF3274207EC07ED281C915758b6F23F07",
+    preLiquidationFactory: "	0x65eD61058cEB4895B7d62437BaCEA39b04f6D27B",
+    wNative: "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -788,6 +801,18 @@ const _deployments = {
     metaMorphoFactory: 1988677n,
     chainlinkOracleFactory: 1988677n,
     preLiquidationFactory: 1988956n,
+  },
+  [ChainId.SeiMainnet]: {
+    morpho: 0n,
+    bundler3: {
+      bundler3: 0n,
+      generalAdapter1: 0n,
+    },
+    adaptiveCurveIrm: 0n,
+    publicAllocator: 0n,
+    metaMorphoFactory: 0n,
+    chainlinkOracleFactory: 0n,
+    preLiquidationFactory: 0n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
