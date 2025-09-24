@@ -8181,3 +8181,66 @@ export const preLiquidationAbi = [
   },
   { type: "error", name: "PreLltvTooHigh", inputs: [] },
 ] as const;
+
+export const vaultV2FactoryAbi = [
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "owner",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "asset",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "bytes32",
+        name: "salt",
+        type: "bytes32",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "newVaultV2",
+        type: "address",
+      },
+    ],
+    name: "CreateVaultV2",
+    type: "event",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "owner", type: "address" },
+      { internalType: "address", name: "asset", type: "address" },
+      { internalType: "bytes32", name: "salt", type: "bytes32" },
+    ],
+    name: "createVaultV2",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "account", type: "address" }],
+    name: "isVaultV2",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "owner", type: "address" },
+      { internalType: "address", name: "asset", type: "address" },
+      { internalType: "bytes32", name: "salt", type: "bytes32" },
+    ],
+    name: "vaultV2",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
