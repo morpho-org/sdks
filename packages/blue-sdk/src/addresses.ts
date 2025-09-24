@@ -59,6 +59,7 @@ export interface ChainAddresses {
   adaptiveCurveIrm: Address;
   publicAllocator?: Address;
   metaMorphoFactory?: Address;
+  vaultV2Factory?: Address;
   chainlinkOracleFactory?: Address;
   preLiquidationFactory?: Address;
   wNative?: Address;
@@ -121,6 +122,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
     metaMorphoFactory: "0x1897A8997241C1cD4bD0698647e4EB7213535c24",
+    vaultV2Factory: "0xA1D94F746dEfa1928926b84fB2596c06926C0405",
     chainlinkOracleFactory: "0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766",
     preLiquidationFactory: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
 
@@ -192,6 +194,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
     metaMorphoFactory: "0xFf62A7c278C62eD665133147129245053Bbf5918",
+    vaultV2Factory: "0x4501125508079A99ebBebCE205DeC9593C2b5857",
     chainlinkOracleFactory: "0x2DC205F24BCb6B311E5cdf0745B0741648Aebd3d",
     preLiquidationFactory: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
 
@@ -494,6 +497,7 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0xD4a426F010986dCad727e8dd6eed44cA4A9b7483",
     publicAllocator: "0x517505be22D9068687334e69ae7a02fC77edf4Fc",
     metaMorphoFactory: "0xec051b19d654C48c357dC974376DeB6272f24e53",
+    vaultV2Factory: "0xD7217E5687FF1071356C780b5fe4803D9D967da7",
     chainlinkOracleFactory: "0xeb476f124FaD625178759d13557A72394A6f9aF5",
     preLiquidationFactory: "0x1b6782Ac7A859503cE953FBf4736311CC335B8f0",
 
