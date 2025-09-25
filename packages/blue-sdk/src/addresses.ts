@@ -803,16 +803,16 @@ const _deployments = {
     preLiquidationFactory: 1988956n,
   },
   [ChainId.SeiMainnet]: {
-    morpho: 0n,
+    morpho: 166036723n,
     bundler3: {
-      bundler3: 0n,
-      generalAdapter1: 0n,
+      bundler3: 168897284n,
+      generalAdapter1: 168897284n,
     },
-    adaptiveCurveIrm: 0n,
-    publicAllocator: 0n,
-    metaMorphoFactory: 0n,
-    chainlinkOracleFactory: 0n,
-    preLiquidationFactory: 0n,
+    adaptiveCurveIrm: 166036723n,
+    publicAllocator: 166036723n,
+    metaMorphoFactory: 168896078n,
+    chainlinkOracleFactory: 168896078n,
+    preLiquidationFactory: 168897284n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
