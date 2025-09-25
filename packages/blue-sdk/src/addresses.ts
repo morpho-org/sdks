@@ -502,8 +502,8 @@ const _addressesRegistry = {
   [ChainId.SeiMainnet]: {
     morpho: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",
     bundler3: {
-      bundler3: "0xa3F50477AfA601C771874260A3B34B40e244Fa0e",
-      generalAdapter1: "0xD7F48aDE56613E8605863832B7B8A1985B934aE4",
+      bundler3: "0xF9457356F18A3349Bb317Ac144c3Bcc62e5761aD",
+      generalAdapter1: "0x02e0e71e145f254820B9D89c9E6068f08256F601",
     },
     adaptiveCurveIrm: "0x6eFA8e3Aa8279eB2fd46b6083A9E52dA72EA56c4",
     publicAllocator: "0xD878509446bE2C601f0f032F501851001B159D6B",
