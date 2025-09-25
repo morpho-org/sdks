@@ -509,7 +509,7 @@ const _addressesRegistry = {
     publicAllocator: "0xD878509446bE2C601f0f032F501851001B159D6B",
     metaMorphoFactory: "0x8Dea49ec5bd5AeAc8bcf96B3E187F59354118291",
     chainlinkOracleFactory: "0x4bD68c2FF3274207EC07ED281C915758b6F23F07",
-    preLiquidationFactory: "	0x65eD61058cEB4895B7d62437BaCEA39b04f6D27B",
+    preLiquidationFactory: "0x65eD61058cEB4895B7d62437BaCEA39b04f6D27B",
     wNative: "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
   },
 } as const;
