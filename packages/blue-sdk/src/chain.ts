@@ -20,6 +20,7 @@ export enum ChainId {
   TacMainnet = 239,
   LiskMainnet = 1135,
   HyperliquidMainnet = 999,
+  SeiMainnet = 1329,
 }
 
 export interface ChainMetadata {
@@ -198,6 +199,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Hype", symbol: "HYPE", decimals: 18 },
       explorerUrl: "https://hyperevmscan.io",
       identifier: "hyperliquid",
+    },
+    [ChainId.SeiMainnet]: {
+      name: "Sei",
+      id: ChainId.SeiMainnet,
+      nativeCurrency: { name: "Sei", symbol: "SEI", decimals: 18 },
+      explorerUrl: "https://seitrace.com",
+      identifier: "sei",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
