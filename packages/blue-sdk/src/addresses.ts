@@ -914,7 +914,7 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.HyperliquidMainnet]: {
     [_addressesRegistry[ChainId.HyperliquidMainnet].wNative]: NATIVE_ADDRESS,
   },
-    [ChainId.SeiMainnet]: {
+  [ChainId.SeiMainnet]: {
     [_addressesRegistry[ChainId.SeiMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
