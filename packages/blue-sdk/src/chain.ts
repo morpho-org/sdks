@@ -169,7 +169,7 @@ export namespace ChainUtils {
       name: "Katana",
       id: ChainId.KatanaMainnet,
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-      explorerUrl: "https://explorer.katanarpc.com",
+      explorerUrl: "https://katanascan.com",
       identifier: "katana",
     },
     [ChainId.EtherlinkMainnet]: {

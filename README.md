@@ -36,6 +36,10 @@
 
 - [**`@morpho-org/morpho-test`**](./packages/morpho-test/): Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks
 
+## Getting involved
+
+Learn [how to add a new chain configuration](./docs/adding-new-chain.md) to the sdks.
+
 ## Authors
 
 - [@rubilmax](https://github.com/rubilmax) (rubilmax.eth, [Twitter](https://x.com/rubilmax))
