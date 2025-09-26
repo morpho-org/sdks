@@ -57,6 +57,7 @@ Add your chain's contract addresses to the `_addressesRegistry` mapping:
   preLiquidationFactory: "0x...",
   wNative: "0x...", // Wrapped native token address
   // Add other required addresses as needed
+  // If USDC is provided, it must implement permit version 2
 },
 ```
 
