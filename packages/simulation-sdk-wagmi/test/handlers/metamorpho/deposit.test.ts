@@ -47,7 +47,7 @@ describe("MetaMorpho_AccrueInterest", () => {
             usdc_wbIB01.id,
           ],
           users: [client.account.address, steakUsdc.address],
-          tokens: [steakUsdc.asset],
+          tokens: [steakUsdc.asset, steakUsdc.address],
           vaults: [steakUsdc.address],
           vaultV2Adapters: [],
           vaultV2s: [],

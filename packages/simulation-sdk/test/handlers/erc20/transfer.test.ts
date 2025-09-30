@@ -1,5 +1,5 @@
 import _ from "lodash";
-import { parseUnits } from "viem";
+import { parseUnits, zeroAddress } from "viem";
 
 import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 
@@ -174,6 +174,58 @@ describe(type, () => {
           "to": "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
         }
       }]
+    `,
+    );
+  });
+
+  test("should not throw if unknown `to` user", () => {
+    expect(() =>
+      simulateOperation(
+        {
+          type,
+          sender: userB,
+          address: tokenA,
+          args: {
+            amount,
+            from: zeroAddress,
+            to: "0x0000000000000000000000000000000000000009",
+          },
+        },
+        dataFixture,
+      ),
+    ).not.toThrow();
+  });
+
+  test("should throw if unknown `to` user", () => {
+    expect(() =>
+      simulateOperation(
+        {
+          type,
+          sender: userB,
+          address: "0x0000000000000000000000000000000000000009",
+          args: {
+            amount,
+            from: zeroAddress,
+            to: userB,
+          },
+        },
+        dataFixture,
+      ),
+    ).toThrowErrorMatchingInlineSnapshot(
+      `
+    [Error: unknown holding of user "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB\" of token \"0x0000000000000000000000000000000000000009"
+
+    when simulating operation:
+    {
+      "type": "Erc20_Transfer",
+      "sender": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
+      "address": "0x0000000000000000000000000000000000000009",
+      "args": {
+        "amount": "1000000n",
+        "from": "0x0000000000000000000000000000000000000000",
+        "to": "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB"
+      }
+    }]
     `,
     );
   });

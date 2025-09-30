@@ -4,17 +4,17 @@ import { describe, expect } from "vitest";
 import { fetchVaultV2Adapter } from "../src";
 import { vaultV2Test } from "./setup";
 
-const vaultV2AdapterAddress = "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+const vaultV2AdapterAddress = "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F";
 
 describe("VaultV2Adapter", () => {
   describe("should fetch vaultV1 adapter", () => {
     vaultV2Test("with deployless reads", async ({ client }) => {
       const expectedData = new VaultV2MorphoVaultV1Adapter({
-        morphoVaultV1: "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca",
+        morphoVaultV1: "0xbeeF010f9cb27031ad51e3333f9aF9C6B1228183",
         address: vaultV2AdapterAddress,
-        parentVault: "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8",
+        parentVault: "0xfDE48B9B8568189f629Bc5209bf5FA826336557a",
         adapterId:
-          "0xe368c0b93175c7536364395c1444389c95d3fccfc109fe612cc0cb31b615366d",
+          "0xbd5376ffee54bf29509fe2422697ad0303a0cde85d9f6bf2b14c67f455a216a5",
         skimRecipient: zeroAddress,
       });
 
@@ -27,11 +27,11 @@ describe("VaultV2Adapter", () => {
 
     vaultV2Test("with multicall", async ({ client }) => {
       const expectedData = new VaultV2MorphoVaultV1Adapter({
-        morphoVaultV1: "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca",
+        morphoVaultV1: "0xbeeF010f9cb27031ad51e3333f9aF9C6B1228183",
         address: vaultV2AdapterAddress,
-        parentVault: "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8",
+        parentVault: "0xfDE48B9B8568189f629Bc5209bf5FA826336557a",
         adapterId:
-          "0xe368c0b93175c7536364395c1444389c95d3fccfc109fe612cc0cb31b615366d",
+          "0xbd5376ffee54bf29509fe2422697ad0303a0cde85d9f6bf2b14c67f455a216a5",
         skimRecipient: zeroAddress,
       });
 

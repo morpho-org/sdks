@@ -1,5 +1,6 @@
 import { keccak_256 } from "@noble/hashes/sha3";
 import { bytesToHex, hexToBytes } from "@noble/hashes/utils";
+import { formatEther } from "viem";
 import {
   LIQUIDATION_CURSOR,
   MAX_LIQUIDATION_INCENTIVE_FACTOR,
@@ -8,6 +9,7 @@ import {
 } from "../constants.js";
 import { MathLib, type RoundingDirection, SharesMath } from "../math/index.js";
 import type { BigIntish, MarketId } from "../types.js";
+import { safeParseNumber } from "../utils.js";
 import type { IMarketParams } from "./MarketParams.js";
 
 /**
@@ -93,15 +95,27 @@ export namespace MarketUtils {
 
   /**
    * Returns the per-second rate continuously compounded over the given period, as calculated in Morpho Blue (scaled by WAD).
-   * If the period is 1 year, the compounded rate correspond to the Annual Percentage Yield (APY)
    * @param rate The per-second rate to compound (scaled by WAD).
    * @param period The period to compound the rate over (in seconds). Defaults to 1 year.
+   * @deprecated The compounded rate is inaccurate if rate * period >> 0. If interested in the APY, use `rateToApy` instead.
    */
   export function compoundRate(
     rate: BigIntish,
     period: BigIntish = SECONDS_PER_YEAR,
   ) {
     return MathLib.wTaylorCompounded(rate, period);
+  }
+
+  /**
+   * Returns the per-second rate continuously compounded over a year (scaled by WAD),
+   * as calculated in Morpho Blue assuming the market is frequently accrued onchain.
+   * @param rate The per-second rate to compound annually (scaled by WAD).
+   */
+  // TODO: return a Number for APYs.
+  export function rateToApy(rate: BigIntish) {
+    return safeParseNumber(
+      Math.expm1(+formatEther(BigInt(rate) * SECONDS_PER_YEAR)),
+    );
   }
 
   /**

@@ -93,7 +93,7 @@ export const handleVaultV2DepositOperation: OperationHandler<
       },
       data,
     );
-    //TODO handle allocate
-    //TODO check caps
+    // TODO handle allocate
+    // TODO check caps
   }
 };

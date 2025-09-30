@@ -7,7 +7,7 @@ import { vaultV2Abi } from "../src";
 import { fetchAccrualVaultV2, fetchVaultV2 } from "../src/fetch/v2/VaultV2";
 import { vaultV2Test } from "./setup";
 
-const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
 
 describe("AccrualVaultV2", () => {
   vaultV2Test("should accrue interest", async ({ client }) => {
@@ -93,21 +93,21 @@ describe("AccrualVaultV2", () => {
   describe("should fetch vault V2", () => {
     vaultV2Test("with deployless reads", async ({ client }) => {
       const expectedData = new VaultV2({
-        adapters: ["0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0"],
+        adapters: ["0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F"],
         address: vaultV2Address,
         asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         decimals: 18,
-        lastUpdate: 1754641739n,
-        liquidityAdapter: "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0",
+        lastUpdate: 1758881557n,
+        liquidityAdapter: "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
         managementFee: 0n,
         managementFeeRecipient: zeroAddress,
-        maxRate: 63419583967n,
-        name: "Test USDC V2",
+        maxRate: 0n,
+        name: "test Vault USDC",
         performanceFee: 0n,
         performanceFeeRecipient: zeroAddress,
-        symbol: "morphoTestUSDCV2",
-        totalAssets: 2005725n,
-        totalSupply: 2005725000000000000n,
+        symbol: "tvUSDC",
+        totalAssets: 16963835n,
+        totalSupply: 16963835000000000000n,
         virtualShares: 1000000000000n,
       });
 
@@ -120,21 +120,21 @@ describe("AccrualVaultV2", () => {
 
     vaultV2Test("with multicall", async ({ client }) => {
       const expectedData = new VaultV2({
-        adapters: ["0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0"],
+        adapters: ["0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F"],
         address: vaultV2Address,
         asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         decimals: 18,
-        lastUpdate: 1754641739n,
-        liquidityAdapter: "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0",
+        lastUpdate: 1758881557n,
+        liquidityAdapter: "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
         managementFee: 0n,
         managementFeeRecipient: zeroAddress,
-        maxRate: 63419583967n,
-        name: "Test USDC V2",
+        maxRate: 0n,
+        name: "test Vault USDC",
         performanceFee: 0n,
         performanceFeeRecipient: zeroAddress,
-        symbol: "morphoTestUSDCV2",
-        totalAssets: 2005725n,
-        totalSupply: 2005725000000000000n,
+        symbol: "tvUSDC",
+        totalAssets: 16963835n,
+        totalSupply: 16963835000000000000n,
         virtualShares: 1000000000000n,
       });
 

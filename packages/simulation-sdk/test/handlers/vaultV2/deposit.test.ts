@@ -4,6 +4,7 @@ import { maxUint256, parseUnits } from "viem";
 import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
+  morphoVaultV1AdapterA,
   tokenA,
   tokenB,
   userA,
@@ -41,7 +42,9 @@ describe(type, () => {
     vaultV2Data.totalSupply += shares;
     vaultV2Data.totalAssets += assets;
 
-    expected.holdings[userA]![vaultV2Data.address]!.balance += shares;
+    expected.holdings[morphoVaultV1AdapterA.address]![tokenA]!.balance +=
+      assets;
+    expected.holdings[userA]![vaultV2A.address]!.balance += shares;
 
     expect(result).toEqual(expected);
   });
@@ -70,7 +73,9 @@ describe(type, () => {
     vaultV2Data.totalSupply += shares;
     vaultV2Data.totalAssets += assets;
 
-    expected.holdings[userA]![vaultV2Data.address]!.balance += shares;
+    expected.holdings[morphoVaultV1AdapterA.address]![tokenA]!.balance +=
+      assets;
+    expected.holdings[userA]![vaultV2A.address]!.balance += shares;
 
     expect(result).toEqual(expected);
   });

@@ -1,7 +1,7 @@
 import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
-import { Erc20Errors } from "../../errors.js";
+import { Erc20Errors, UnknownHoldingError } from "../../errors.js";
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
@@ -64,7 +64,11 @@ export const handleErc20TransferOperation: OperationHandler<
       throw new Erc20Errors.InsufficientBalance(address, from);
   }
 
-  const toHolding = data.tryGetHolding(to, address);
+  // We want to throw if user is known but not the asset
+  const toHoldings = data.holdings[to];
+  if (toHoldings == null) return;
+  const toHolding = toHoldings[address];
+  if (!toHolding) throw new UnknownHoldingError(to, address);
 
-  if (toHolding != null) toHolding.balance += amount;
+  toHolding.balance += amount;
 };

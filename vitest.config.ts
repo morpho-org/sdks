@@ -18,7 +18,7 @@ export default defineConfig({
     },
     globalSetup: "vitest.setup.ts",
     retry: process.env.CI ? 2 : 0,
-    testTimeout: 30_000,
+    testTimeout: 40_000,
     workspace: [
       {
         extends: true,
@@ -101,6 +101,13 @@ export default defineConfig({
         test: {
           name: "liquidity-sdk-viem",
           include: ["packages/liquidity-sdk-viem/test/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "test",
+          include: ["packages/test/test/**/*.test.ts"],
         },
       },
     ],

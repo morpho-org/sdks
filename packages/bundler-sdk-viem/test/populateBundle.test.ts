@@ -204,6 +204,16 @@ describe("populateBundle", () => {
                 nonce: 4n,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: dai,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           const position = await fetchPosition(
@@ -389,6 +399,16 @@ describe("populateBundle", () => {
                 to: client.account.address,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: stEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           const position = await fetchPosition(
@@ -493,6 +513,16 @@ describe("populateBundle", () => {
                 onBehalf: client.account.address,
                 receiver: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -605,6 +635,26 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: steakUsdc.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           expect(await client.balanceOf({ erc20: usdc })).toBe(0n);
@@ -708,6 +758,26 @@ describe("populateBundle", () => {
                 assets: amount,
                 owner: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbUsdt.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -850,6 +920,26 @@ describe("populateBundle", () => {
                 id: marketParams.id,
                 assets: maxUint256,
                 onBehalf: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbUsdt.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -1006,6 +1096,16 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 amount: maxUint256,
@@ -1150,6 +1250,16 @@ describe("populateBundle", () => {
               type: "Erc20_Transfer",
               address: wNative,
               sender: generalAdapter1,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
@@ -1391,7 +1501,27 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: steakUsdc.address,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
@@ -1631,6 +1761,36 @@ describe("populateBundle", () => {
                 amount: maxUint256,
                 receiver: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
             {
@@ -1919,6 +2079,46 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: re7Weth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
         },
       );
@@ -2152,6 +2352,26 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
@@ -2372,6 +2592,16 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
               address: stEth,
               sender: generalAdapter1,
               args: {
@@ -2439,9 +2669,9 @@ describe("populateBundle", () => {
 
           const block = await client.getBlock();
 
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
           const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+            "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F";
           const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
 
           const { result } = await renderHook(config, () =>
@@ -2543,9 +2773,9 @@ describe("populateBundle", () => {
         async ({ client, config }) => {
           const amount = parseUnits("1000000", 6);
 
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
           const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+            "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F";
           const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
 
           await client.deal({
@@ -2795,9 +3025,9 @@ describe("populateBundle", () => {
 
           const block = await client.getBlock();
 
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
           const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+            "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F";
           const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
 
           await client.deal({
@@ -2826,8 +3056,6 @@ describe("populateBundle", () => {
           await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
           const data = result.current.data!;
-
-          console.debug(JSON.stringify(data, undefined, 2));
 
           const { operations, bundle } = await setupTestBundle(client, data, [
             {
@@ -2942,8 +3170,9 @@ describe("populateBundle", () => {
         stEth,
         usdc,
         usdt,
+        dai,
       } = addressesRegistry[ChainId.EthMainnet];
-      const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc } =
+      const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc, dai_sUsde } =
         markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbEth, bbUsdc, re7Weth } =
         vaults[ChainId.EthMainnet];
@@ -3011,6 +3240,141 @@ describe("populateBundle", () => {
               }
             }]
           `,
+          );
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should supply DAI",
+        async ({ client, config }) => {
+          const id = dai_sUsde.id;
+
+          const assets = parseEther("55873.253");
+          await client.deal({
+            erc20: dai,
+            amount: assets,
+          });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [id],
+              users: [client.account.address, generalAdapter1],
+              tokens: [NATIVE_ADDRESS, dai, dai_sUsde.collateralToken],
+              vaults: [],
+              vaultV2s: [],
+              vaultV2Adapters: [],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupTestBundle(
+            client,
+            data,
+            [
+              {
+                type: "Blue_Supply",
+                sender: client.account.address,
+                args: {
+                  id,
+                  assets,
+                  onBehalf: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+            { supportsSignature: false },
+          );
+
+          expect(bundle.requirements.signatures).toStrictEqual([]);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: { to: dai, data: expect.any(String) },
+              args: [dai, generalAdapter1, assets],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: assets,
+                spender: generalAdapter1,
+                nonce: 3n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: dai,
+              args: {
+                amount: assets,
+                from: client.account.address,
+                to: generalAdapter1,
+              },
+            },
+            {
+              type: "Blue_Supply",
+              sender: generalAdapter1,
+              args: {
+                id,
+                assets,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: 0n,
+                spender: generalAdapter1,
+                nonce: 4n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: dai,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+          ]);
+
+          const position = await fetchPosition(
+            client.account.address,
+            id,
+            client,
+          );
+
+          expect(
+            formatUnits(await client.balanceOf({ erc20: dai }), 18),
+          ).toBeCloseTo(0, 8);
+          expect(position.collateral).toBe(0n);
+          expect(position.supplyShares).toBe(50490517366679890639553905675n);
+          expect(position.borrowShares).toBe(0n);
+
+          expect(await client.allowance({ erc20: dai, spender: permit2 })).toBe(
+            0n,
+          );
+          expect(
+            await client.allowance({ erc20: dai, spender: generalAdapter1 }),
+          ).toBe(0n);
+          expect(await client.allowance({ erc20: dai, spender: morpho })).toBe(
+            0n,
           );
         },
       );
@@ -3183,6 +3547,16 @@ describe("populateBundle", () => {
                 to: client.account.address,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: stEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           const position = await fetchPosition(
@@ -3301,6 +3675,16 @@ describe("populateBundle", () => {
                 onBehalf: client.account.address,
                 receiver: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -3424,6 +3808,26 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: steakUsdc.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           expect(await client.balanceOf({ erc20: usdc })).toBe(0n);
@@ -3532,6 +3936,26 @@ describe("populateBundle", () => {
                 assets: amount,
                 owner: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbUsdt.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -3682,6 +4106,26 @@ describe("populateBundle", () => {
                 id: marketParams.id,
                 assets: maxUint256,
                 onBehalf: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbUsdt.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -3843,6 +4287,16 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 amount: maxUint256,
@@ -3988,6 +4442,16 @@ describe("populateBundle", () => {
               type: "Erc20_Transfer",
               address: wNative,
               sender: generalAdapter1,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
@@ -4241,7 +4705,27 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: steakUsdc.address,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
@@ -4498,6 +4982,36 @@ describe("populateBundle", () => {
                 amount: maxUint256,
                 receiver: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
             {
@@ -4797,6 +5311,46 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: re7Weth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
         },
       );
@@ -5040,6 +5594,26 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
@@ -5265,6 +5839,16 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
               address: stEth,
               sender: generalAdapter1,
               args: {
@@ -5385,14 +5969,24 @@ describe("populateBundle", () => {
               },
             },
             {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
                 to: client.account.address,
               },
-              sender: generalAdapter1,
-              type: "Erc20_Transfer",
             },
           ]);
 
@@ -5569,9 +6163,9 @@ describe("populateBundle", () => {
 
           const block = await client.getBlock();
 
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
           const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+            "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F";
           const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
 
           const { result } = await renderHook(config, () =>
@@ -5686,9 +6280,9 @@ describe("populateBundle", () => {
         async ({ client, config }) => {
           const amount = parseUnits("1000000", 6);
 
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
+          const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
           const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
+            "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F";
           const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
 
           await client.deal({
