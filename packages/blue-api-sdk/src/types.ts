@@ -33,6 +33,15 @@ export type Scalars = {
   MarketId: { input: string; output: MarketId };
 };
 
+/** Account */
+export type Account = {
+  __typename?: "Account";
+  /** Account adress. */
+  address: Scalars["Address"]["output"];
+  /** Additional information about the account. */
+  metadata: PaginatedAddressMetadata;
+};
+
 export type AddressDataPoint = {
   __typename?: "AddressDataPoint";
   x: Scalars["Float"]["output"];
@@ -393,7 +402,7 @@ export type Market = {
 
 /** Morpho Blue market */
 export type MarketCurrentIrmCurveArgs = {
-  numberOfPoints?: InputMaybe<Scalars["Float"]["input"]>;
+  numberOfPoints?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
 /** Market APY aggregates */
@@ -1448,9 +1457,15 @@ export type MarketState = {
 /** Morpho Blue market state rewards */
 export type MarketStateReward = {
   __typename?: "MarketStateReward";
-  /** Amount of reward tokens per borrowed token (annualized). Scaled to reward asset decimals. */
+  /**
+   * Amount of reward tokens per borrowed token (annualized). Scaled to reward asset decimals.
+   * @deprecated Always 0 for specific merkl campaign type
+   */
   amountPerBorrowedToken: Scalars["BigInt"]["output"];
-  /** Amount of reward tokens per supplied token (annualized). Scaled to reward asset decimals. */
+  /**
+   * Amount of reward tokens per supplied token (annualized). Scaled to reward asset decimals.
+   * @deprecated Always 0 for specific merkl campaign type
+   */
   amountPerSuppliedToken: Scalars["BigInt"]["output"];
   asset: Asset;
   /** Borrow rewards APR. */
@@ -1467,9 +1482,15 @@ export type MarketStateReward = {
    * @deprecated Use `supplyApr` instead. This field will be removed in the future.
    */
   supplyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Amount of reward tokens per year on the borrow side. Scaled to reward asset decimals. */
+  /**
+   * Amount of reward tokens per year on the borrow side. Scaled to reward asset decimals.
+   * @deprecated Always 0 for specific merkl campaign type
+   */
   yearlyBorrowTokens: Scalars["BigInt"]["output"];
-  /** Amount of reward tokens per year on the supply side. Scaled to reward asset decimals. */
+  /**
+   * Amount of reward tokens per year on the supply side. Scaled to reward asset decimals.
+   * @deprecated Always 0 for specific merkl campaign type
+   */
   yearlySupplyTokens: Scalars["BigInt"]["output"];
 };
 
@@ -2069,8 +2090,6 @@ export type Query = {
   vaultPositions: PaginatedMetaMorphoPositions;
   vaultReallocates: PaginatedVaultReallocates;
   /** @deprecated WIP */
-  vaultV2Adapters: PaginatedVaultV2Adapters;
-  /** @deprecated WIP */
   vaultV2ByAddress: VaultV2;
   /** @deprecated WIP */
   vaultV2Factories: PaginatedVaultV2Factories;
@@ -2247,6 +2266,7 @@ export type QuerySearchArgs = {
   marketOrderBy?: InputMaybe<MarketOrderBy>;
   numberOfResults?: InputMaybe<Scalars["Int"]["input"]>;
   search: Scalars["String"]["input"];
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
   vaultOrderBy?: InputMaybe<VaultOrderBy>;
 };
 
@@ -2322,14 +2342,6 @@ export type QueryVaultReallocatesArgs = {
   orderDirection?: InputMaybe<OrderDirection>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
   where?: InputMaybe<VaultReallocateFilters>;
-};
-
-export type QueryVaultV2AdaptersArgs = {
-  first?: InputMaybe<Scalars["Int"]["input"]>;
-  orderBy?: InputMaybe<VaultV2AdapterOrderBy>;
-  orderDirection?: InputMaybe<OrderDirection>;
-  skip?: InputMaybe<Scalars["Int"]["input"]>;
-  where?: InputMaybe<VaultV2AdaptersFilters>;
 };
 
 export type QueryVaultV2ByAddressArgs = {
@@ -3590,14 +3602,14 @@ export type VaultV2 = {
   address: Scalars["Address"]["output"];
   allocators: Array<VaultV2Allocator>;
   asset: Asset;
-  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgApy */
+  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgApy, not capped by max rate */
   avgApy: Maybe<Scalars["Float"]["output"]>;
   /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgNetApy */
   avgNetApy: Maybe<Scalars["Float"]["output"]>;
   chain: Chain;
   creationBlockNumber: Scalars["BigInt"]["output"];
   creationTimestamp: Scalars["BigInt"]["output"];
-  curatorAddress: Scalars["Address"]["output"];
+  curator: Account;
   /** Curators operating on this vault */
   curators: PaginatedCurators;
   factory: Asset;
@@ -3611,7 +3623,7 @@ export type VaultV2 = {
   managementFeeRecipient: Scalars["Address"]["output"];
   metadata: Maybe<VaultV2Metadata>;
   name: Scalars["String"]["output"];
-  ownerAddress: Scalars["Address"]["output"];
+  owner: Account;
   performanceFee: Scalars["Float"]["output"];
   performanceFeeRecipient: Scalars["Address"]["output"];
   /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.rewards */
@@ -3649,26 +3661,15 @@ export type VaultV2AdapterFactory = {
   id: Scalars["ID"]["output"];
 };
 
-export enum VaultV2AdapterOrderBy {
-  Address = "Address",
-}
-
 export enum VaultV2AdapterType {
   MetaMorpho = "MetaMorpho",
 }
 
-export type VaultV2AdaptersFilters = {
-  /** Filter by vault v2 adapter address */
-  address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  /** Filter by chain id */
-  chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
-};
-
 /** Vault V2 allocator */
 export type VaultV2Allocator = {
   __typename?: "VaultV2Allocator";
-  /** Allocator adress. */
-  allocator: Scalars["Address"]["output"];
+  /** Allocator account. */
+  allocator: Account;
   /** Allocator since block number */
   blockNumber: Scalars["BigInt"]["output"];
   /** Allocator since timestamp */
@@ -3718,8 +3719,8 @@ export type VaultV2Sentinel = {
   __typename?: "VaultV2Sentinel";
   /** Sentinel since block number */
   blockNumber: Scalars["BigInt"]["output"];
-  /** Sentinel adress. */
-  sentinel: Scalars["Address"]["output"];
+  /** Sentinel account. */
+  sentinel: Account;
   /** Sentinel since timestamp */
   timestamp: Scalars["BigInt"]["output"];
 };
