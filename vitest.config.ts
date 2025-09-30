@@ -103,6 +103,13 @@ export default defineConfig({
           include: ["packages/liquidity-sdk-viem/test/**/*.test.ts"],
         },
       },
+      {
+        extends: true,
+        test: {
+          name: "test",
+          include: ["packages/test/test/**/*.test.ts"],
+        },
+      },
     ],
   },
 });

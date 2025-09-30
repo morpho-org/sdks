@@ -41,6 +41,11 @@ import {
 } from "viem/actions";
 import type { Chain } from "viem/chains";
 import { testAccount } from "./fixtures";
+import {
+  type FunctionCall,
+  type GetFunctionCallsArgs,
+  getFunctionCalls,
+} from "./utils/getFunctionCalls";
 
 export type AnvilTestClient<chain extends Chain = Chain> = Client<
   TracedTransport<HttpTransport>,
@@ -84,6 +89,13 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
           contractAddress: Address;
         }
       >;
+
+      getFunctionCalls<
+        TAbi extends Abi,
+        TName extends ContractFunctionName<TAbi>,
+      >(
+        args: GetFunctionCallsArgs<TAbi, TName>,
+      ): Promise<FunctionCall<TAbi, TName>[]>;
     }
 >;
 
@@ -300,6 +312,13 @@ export const createAnvilTestClient = <chain extends Chain>(
             await client.waitForTransactionReceipt({ hash });
 
           return hash;
+        },
+
+        getFunctionCalls<
+          TAbi extends Abi,
+          TName extends ContractFunctionName<TAbi>,
+        >(args: GetFunctionCallsArgs<TAbi, TName>) {
+          return getFunctionCalls(client, args);
         },
       };
     });

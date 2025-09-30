@@ -12,3 +12,4 @@ export * from "./position/index.js";
 export * from "./vault/index.js";
 export * from "./preLiquidation.js";
 export * from "./vault-v2/index.js";
+export * from "./utils.js";

@@ -72,7 +72,9 @@ export const createGetValue =
     getValue(data, path);
 
 export const keys = <T>(o?: T) =>
-  Object.keys(o ?? {}) as (T extends ArrayLike<unknown> ? number : keyof T)[];
+  Object.keys(o ?? {}) as (T extends ArrayLike<unknown>
+    ? `${number}`
+    : `${Extract<keyof T, string | number>}`)[];
 
 export const values = <T>(o?: T) =>
   Object.values(o ?? {}) as (T extends ArrayLike<infer U> ? U : T[keyof T])[];
