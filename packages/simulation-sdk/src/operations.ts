@@ -355,79 +355,29 @@ export type Erc20Operations = {
 };
 export type Erc20Operation = Erc20Operations[Erc20OperationType];
 
-export const VAULT_V2_OPERATIONS = [
-  "VaultV2_AccrueInterest",
-  "VaultV2_Deposit",
-  "VaultV2_Withdraw",
-] as const;
-
-export type VaultV2OperationType = (typeof VAULT_V2_OPERATIONS)[number];
-export interface VaultV2OperationArgs {
-  VaultV2_AccrueInterest: {};
-  VaultV2_Deposit:
-    | {
-        assets: bigint;
-        shares?: never;
-        onBehalf: Address;
-        slippage?: bigint;
-      }
-    | {
-        assets?: never;
-        shares: bigint;
-        onBehalf: Address;
-        slippage?: bigint;
-      };
-  VaultV2_Withdraw:
-    | {
-        assets: bigint;
-        shares?: never;
-        onBehalf: Address;
-        receiver: Address;
-        slippage?: bigint;
-      }
-    | {
-        assets?: never;
-        shares: bigint;
-        onBehalf: Address;
-        receiver: Address;
-        slippage?: bigint;
-      };
-}
-export type VaultV2Operations = {
-  [OperationType in VaultV2OperationType]: WithOperationArgs<
-    OperationType,
-    VaultV2OperationArgs
-  >;
-};
-export type VaultV2Operation = VaultV2Operations[VaultV2OperationType];
-
 export interface Operations
   extends BlueOperations,
     MetaMorphoOperations,
     ParaswapOperations,
-    Erc20Operations,
-    VaultV2Operations {}
+    Erc20Operations {}
 
 export interface OperationArgs
   extends BlueOperationArgs,
     MetaMorphoOperationArgs,
     ParaswapOperationArgs,
-    Erc20OperationArgs,
-    VaultV2OperationArgs {}
+    Erc20OperationArgs {}
 
 export type OperationType =
   | BlueOperationType
   | MetaMorphoOperationType
   | ParaswapOperationType
-  | Erc20OperationType
-  | VaultV2OperationType;
+  | Erc20OperationType;
 
 export type Operation =
   | BlueOperation
   | MetaMorphoOperation
   | ParaswapOperation
-  | Erc20Operation
-  | VaultV2Operation;
+  | Erc20Operation;
 
 export const CALLBACK_OPERATIONS = [
   "Blue_Repay",
@@ -471,14 +421,6 @@ export const isErc20Operation = (
   operation: Operation,
 ): operation is Erc20Operation => {
   return (ERC20_OPERATIONS as readonly OperationType[]).includes(
-    operation.type,
-  );
-};
-
-export const isVaultV2Operation = (
-  operation: Operation,
-): operation is VaultV2Operation => {
-  return (VAULT_V2_OPERATIONS as readonly OperationType[]).includes(
     operation.type,
   );
 };
