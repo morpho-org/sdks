@@ -46,6 +46,8 @@ import type {
   TransactionRequirement,
 } from "./types/index.js";
 
+export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
+
 const encodeErc20Approval = (
   token: Address,
   spender: Address,
@@ -595,10 +597,13 @@ export const encodeOperation = (
         assets,
         shares,
       );
-      const maxSharePrice = MathLib.mulDivUp(
-        suppliedAssets,
-        MathLib.wToRay(MathLib.WAD + slippage),
-        suppliedShares,
+      const maxSharePrice = MathLib.min(
+        MathLib.mulDivUp(
+          suppliedAssets,
+          MathLib.wToRay(MathLib.WAD + slippage),
+          suppliedShares,
+        ),
+        MAX_ABSOLUTE_SHARE_PRICE,
       );
 
       actions.push({
@@ -708,10 +713,13 @@ export const encodeOperation = (
         assets,
         shares,
       );
-      const maxSharePrice = MathLib.mulDivUp(
-        repaidAssets,
-        MathLib.wToRay(MathLib.WAD + slippage),
-        repaidShares,
+      const maxSharePrice = MathLib.min(
+        MathLib.mulDivUp(
+          repaidAssets,
+          MathLib.wToRay(MathLib.WAD + slippage),
+          repaidShares,
+        ),
+        MAX_ABSOLUTE_SHARE_PRICE,
       );
 
       actions.push({
@@ -791,11 +799,15 @@ export const encodeOperation = (
         .accrueInterest(dataBefore.block.timestamp);
 
       if (shares === 0n) {
-        const maxSharePrice = MathLib.mulDivUp(
-          assets,
-          MathLib.wToRay(MathLib.WAD + slippage),
-          vault.toShares(assets, "Down"),
+        const maxSharePrice = MathLib.min(
+          MathLib.mulDivUp(
+            assets,
+            MathLib.wToRay(MathLib.WAD + slippage),
+            vault.toShares(assets, "Down"),
+          ),
+          MAX_ABSOLUTE_SHARE_PRICE,
         );
+
         actions.push({
           type: "erc4626Deposit",
           args: [
@@ -807,11 +819,15 @@ export const encodeOperation = (
           ],
         });
       } else {
-        const maxSharePrice = MathLib.mulDivUp(
-          vault.toAssets(shares, "Up"),
-          MathLib.wToRay(MathLib.WAD + slippage),
-          shares,
+        const maxSharePrice = MathLib.min(
+          MathLib.mulDivUp(
+            vault.toAssets(shares, "Up"),
+            MathLib.wToRay(MathLib.WAD + slippage),
+            shares,
+          ),
+          MAX_ABSOLUTE_SHARE_PRICE,
         );
+
         actions.push({
           type: "erc4626Mint",
           args: [
