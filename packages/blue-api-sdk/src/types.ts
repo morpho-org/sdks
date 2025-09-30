@@ -2090,8 +2090,6 @@ export type Query = {
   vaultPositions: PaginatedMetaMorphoPositions;
   vaultReallocates: PaginatedVaultReallocates;
   /** @deprecated WIP */
-  vaultV2Adapters: PaginatedVaultV2Adapters;
-  /** @deprecated WIP */
   vaultV2ByAddress: VaultV2;
   /** @deprecated WIP */
   vaultV2Factories: PaginatedVaultV2Factories;
@@ -2344,14 +2342,6 @@ export type QueryVaultReallocatesArgs = {
   orderDirection?: InputMaybe<OrderDirection>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
   where?: InputMaybe<VaultReallocateFilters>;
-};
-
-export type QueryVaultV2AdaptersArgs = {
-  first?: InputMaybe<Scalars["Int"]["input"]>;
-  orderBy?: InputMaybe<VaultV2AdapterOrderBy>;
-  orderDirection?: InputMaybe<OrderDirection>;
-  skip?: InputMaybe<Scalars["Int"]["input"]>;
-  where?: InputMaybe<VaultV2AdaptersFilters>;
 };
 
 export type QueryVaultV2ByAddressArgs = {
@@ -3612,7 +3602,7 @@ export type VaultV2 = {
   address: Scalars["Address"]["output"];
   allocators: Array<VaultV2Allocator>;
   asset: Asset;
-  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgApy */
+  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgApy, not capped by max rate */
   avgApy: Maybe<Scalars["Float"]["output"]>;
   /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgNetApy */
   avgNetApy: Maybe<Scalars["Float"]["output"]>;
@@ -3671,20 +3661,9 @@ export type VaultV2AdapterFactory = {
   id: Scalars["ID"]["output"];
 };
 
-export enum VaultV2AdapterOrderBy {
-  Address = "Address",
-}
-
 export enum VaultV2AdapterType {
   MetaMorpho = "MetaMorpho",
 }
-
-export type VaultV2AdaptersFilters = {
-  /** Filter by vault v2 adapter address */
-  address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  /** Filter by chain id */
-  chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
-};
 
 /** Vault V2 allocator */
 export type VaultV2Allocator = {
