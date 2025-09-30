@@ -1657,16 +1657,16 @@ export const metaMorphoFixture = {
   },
 } as const;
 
-export const vaultV2MorphoVaultV1AdapterA = new VaultV2MorphoVaultV1Adapter({
+export const morphoVaultV1AdapterA = new VaultV2MorphoVaultV1Adapter({
   morphoVaultV1: vaultA.address,
-  address: "0x2a0000000000000000000000000000000000000a",
+  address: "0x2A0000000000000000000000000000000000000a",
   parentVault: "0x200000000000000000000000000000000000000A",
   adapterId: "0x1",
   skimRecipient: zeroAddress,
 });
 export const vaultV2A = new VaultV2({
   asset: tokenA,
-  adapters: [vaultV2MorphoVaultV1AdapterA.address],
+  adapters: [morphoVaultV1AdapterA.address],
   address: "0x200000000000000000000000000000000000000A",
   totalAssets: 0n,
   totalSupply: 0n,
@@ -1677,7 +1677,7 @@ export const vaultV2A = new VaultV2({
   virtualShares: 10n ** BigInt(18 - blueFixture.tokens[tokenA].decimals),
   lastUpdate: timestamp,
   maxRate: 0n,
-  liquidityAdapter: vaultV2MorphoVaultV1AdapterA.address,
+  liquidityAdapter: morphoVaultV1AdapterA.address,
   decimals: 18,
   symbol: "VAULTV2A",
   name: "Vault V2 A",
@@ -1685,7 +1685,7 @@ export const vaultV2A = new VaultV2({
 export const vaultV2B = new VaultV2({
   asset: tokenB,
   adapters: [],
-  address: "0x200000000000000000000000000000000000000B",
+  address: "0x200000000000000000000000000000000000000b",
   totalAssets: 0n,
   totalSupply: 0n,
   performanceFee: 0n,
@@ -1703,7 +1703,7 @@ export const vaultV2B = new VaultV2({
 
 export const v2Fixture = {
   vaultV2Adapters: {
-    [vaultV2MorphoVaultV1AdapterA.address]: vaultV2MorphoVaultV1AdapterA,
+    [morphoVaultV1AdapterA.address]: morphoVaultV1AdapterA,
   },
   vaultV2s: {
     [vaultV2A.address]: vaultV2A,
@@ -1720,11 +1720,12 @@ export const v2Fixture = {
     [vaultV2B.address]: {
       [tokenB]: emptyHolding(vaultV2B.address, tokenB),
     },
-    [vaultV2MorphoVaultV1AdapterA.address]: {
+    [morphoVaultV1AdapterA.address]: {
       [vaultA.address]: emptyHolding(
-        vaultV2MorphoVaultV1AdapterA.address,
+        morphoVaultV1AdapterA.address,
         vaultA.address,
       ),
+      [tokenA]: emptyHolding(morphoVaultV1AdapterA.address, tokenA),
     },
     [userA]: {
       [vaultV2A.address]: emptyHolding(userA, vaultV2A.address),

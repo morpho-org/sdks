@@ -366,6 +366,26 @@ describe("Borrow position on blue", () => {
               ],
             },
           },
+          {
+            type: "Erc20_Transfer",
+            sender: generalAdapter1,
+            address: marketFrom.collateralToken,
+            args: {
+              amount: maxUint256,
+              from: generalAdapter1,
+              to: client.account.address,
+            },
+          },
+          {
+            type: "Erc20_Transfer",
+            sender: generalAdapter1,
+            address: marketFrom.loanToken,
+            args: {
+              amount: maxUint256,
+              from: generalAdapter1,
+              to: client.account.address,
+            },
+          },
         ]);
         const bundle = encodeBundle(finalizedBundle, dataBefore, false);
         for (const req of bundle.requirements.txs) {
@@ -539,14 +559,24 @@ describe("Borrow position on blue", () => {
               },
             },
             {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: marketFrom.collateralToken,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: marketFrom.loanToken,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
                 to: client.account.address,
               },
-              sender: generalAdapter1,
-              type: "Erc20_Transfer",
             },
           ]);
           const bundle = encodeBundle(finalizedBundle, dataBefore, false);
@@ -718,8 +748,18 @@ describe("Borrow position on blue", () => {
           },
           {
             type: "Erc20_Transfer",
-            address: marketFrom.loanToken,
             sender: generalAdapter1,
+            address: marketFrom.collateralToken,
+            args: {
+              amount: maxUint256,
+              from: generalAdapter1,
+              to: client.account.address,
+            },
+          },
+          {
+            type: "Erc20_Transfer",
+            sender: generalAdapter1,
+            address: marketFrom.loanToken,
             args: {
               amount: maxUint256,
               from: generalAdapter1,

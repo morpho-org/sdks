@@ -5,7 +5,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { vaultV2MorphoVaultV1AdapterFactoryAbi } from "../../abis";
+import { morphoVaultV1AdapterFactoryAbi } from "../../abis";
 import type { DeploylessFetchParameters } from "../../types";
 import {
   fetchAccrualVaultV2MorphoVaultV1Adapter,
@@ -20,17 +20,15 @@ export async function fetchVaultV2Adapter(
   parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;
 
-  const { vaultV2MorphoVaultV1AdapterFactory } = getChainAddresses(
-    parameters.chainId,
-  );
+  const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
 
-  if (!vaultV2MorphoVaultV1AdapterFactory)
+  if (!morphoVaultV1AdapterFactory)
     throw new UnsupportedChainIdError(parameters.chainId);
 
   const isMorphoVaultV1Adapter = await readContract(client, {
     ...parameters,
-    address: vaultV2MorphoVaultV1AdapterFactory,
-    abi: vaultV2MorphoVaultV1AdapterFactoryAbi,
+    address: morphoVaultV1AdapterFactory,
+    abi: morphoVaultV1AdapterFactoryAbi,
     functionName: "isMorphoVaultV1Adapter",
     args: [address],
   });
@@ -49,17 +47,15 @@ export async function fetchAccrualVaultV2Adapter(
   parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;
 
-  const { vaultV2MorphoVaultV1AdapterFactory } = getChainAddresses(
-    parameters.chainId,
-  );
+  const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
 
-  if (!vaultV2MorphoVaultV1AdapterFactory)
+  if (!morphoVaultV1AdapterFactory)
     throw new UnsupportedChainIdError(parameters.chainId);
 
   const isMorphoVaultV1Adapter = await readContract(client, {
     ...parameters,
-    address: vaultV2MorphoVaultV1AdapterFactory,
-    abi: vaultV2MorphoVaultV1AdapterFactoryAbi,
+    address: morphoVaultV1AdapterFactory,
+    abi: morphoVaultV1AdapterFactoryAbi,
     functionName: "isMorphoVaultV1Adapter",
     args: [address],
   });

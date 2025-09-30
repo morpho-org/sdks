@@ -4,7 +4,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { vaultV2MorphoVaultV1AdapterAbi } from "../../abis";
+import { morphoVaultV1AdapterAbi } from "../../abis";
 import { abi, code } from "../../queries/V2/GetVaultV2MorphoVaultV1Adapter";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchAccrualVault } from "../Vault";
@@ -37,25 +37,25 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
       readContract(client, {
         ...parameters,
         address,
-        abi: vaultV2MorphoVaultV1AdapterAbi,
+        abi: morphoVaultV1AdapterAbi,
         functionName: "parentVault",
       }),
       readContract(client, {
         ...parameters,
         address,
-        abi: vaultV2MorphoVaultV1AdapterAbi,
+        abi: morphoVaultV1AdapterAbi,
         functionName: "adapterId",
       }),
       readContract(client, {
         ...parameters,
         address,
-        abi: vaultV2MorphoVaultV1AdapterAbi,
+        abi: morphoVaultV1AdapterAbi,
         functionName: "skimRecipient",
       }),
       readContract(client, {
         ...parameters,
         address,
-        abi: vaultV2MorphoVaultV1AdapterAbi,
+        abi: morphoVaultV1AdapterAbi,
         functionName: "morphoVaultV1",
       }),
     ]);

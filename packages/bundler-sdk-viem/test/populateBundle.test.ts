@@ -13,17 +13,13 @@ import {
   fetchPosition,
   metaMorphoAbi,
   publicAllocatorAbi,
-  vaultV2Abi,
 } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
-import type { Erc20Operations } from "@morpho-org/simulation-sdk";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
 import {
-  erc4626Abi,
   formatUnits,
-  maxUint160,
   maxUint256,
   parseEther,
   parseUnits,
@@ -202,6 +198,16 @@ describe("populateBundle", () => {
                 amount: 0n,
                 spender: generalAdapter1,
                 nonce: 4n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: dai,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -389,6 +395,16 @@ describe("populateBundle", () => {
                 to: client.account.address,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: stEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           const position = await fetchPosition(
@@ -493,6 +509,16 @@ describe("populateBundle", () => {
                 onBehalf: client.account.address,
                 receiver: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -605,6 +631,26 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: steakUsdc.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           expect(await client.balanceOf({ erc20: usdc })).toBe(0n);
@@ -708,6 +754,26 @@ describe("populateBundle", () => {
                 assets: amount,
                 owner: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbUsdt.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -850,6 +916,26 @@ describe("populateBundle", () => {
                 id: marketParams.id,
                 assets: maxUint256,
                 onBehalf: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbUsdt.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -1006,6 +1092,16 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 amount: maxUint256,
@@ -1150,6 +1246,16 @@ describe("populateBundle", () => {
               type: "Erc20_Transfer",
               address: wNative,
               sender: generalAdapter1,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
@@ -1391,7 +1497,27 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: steakUsdc.address,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
@@ -1631,6 +1757,36 @@ describe("populateBundle", () => {
                 amount: maxUint256,
                 receiver: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
             {
@@ -1919,6 +2075,46 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: re7Weth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
         },
       );
@@ -2152,6 +2348,26 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
@@ -2372,6 +2588,16 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
               address: stEth,
               sender: generalAdapter1,
               args: {
@@ -2419,515 +2645,6 @@ describe("populateBundle", () => {
         },
       );
     });
-
-    describe("base", () => {
-      const {
-        bundler3: { generalAdapter1 },
-        usdc,
-        permit2,
-        wNative,
-      } = addressesRegistry[ChainId.BaseMainnet];
-
-      test["vault-v2"](
-        "should deposit into Vault V2 via permit",
-        async ({ client, config }) => {
-          const amount = parseUnits("1000000", 6);
-          await client.deal({
-            erc20: usdc,
-            amount,
-          });
-
-          const block = await client.getBlock();
-
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
-          const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
-          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
-
-          const { result } = await renderHook(config, () =>
-            useSimulationState({
-              marketIds: [],
-              users: [
-                client.account.address,
-                generalAdapter1,
-                vaultV2Address,
-                vaultV1Address,
-                vaultV2AdapterAddress,
-              ],
-              tokens: [usdc, vaultV2Address, vaultV1Address],
-              vaults: [vaultV1Address],
-              vaultV2s: [vaultV2Address],
-              vaultV2Adapters: [vaultV2AdapterAddress],
-              block,
-            }),
-          );
-
-          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
-
-          const data = result.current.data!;
-
-          const { operations, bundle } = await setupTestBundle(client, data, [
-            {
-              type: "VaultV2_Deposit",
-              sender: client.account.address,
-              address: vaultV2Address,
-              args: {
-                assets: amount,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-          ]);
-
-          expect(bundle.requirements.signatures.length).toBe(1);
-
-          expect(bundle.requirements.txs).toStrictEqual([]);
-
-          expect(operations).toStrictEqual([
-            {
-              type: "Erc20_Permit",
-              sender: client.account.address,
-              address: usdc,
-              args: {
-                amount,
-                spender: generalAdapter1,
-                nonce: 6n,
-              },
-            },
-            {
-              type: "Erc20_Transfer",
-              sender: generalAdapter1,
-              address: usdc,
-              args: {
-                amount,
-                from: client.account.address,
-                to: generalAdapter1,
-              },
-            },
-            {
-              type: "VaultV2_Deposit",
-              sender: generalAdapter1,
-              address: vaultV2Address,
-              args: {
-                assets: amount,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-          ]);
-
-          const userShares = await client.balanceOf({ erc20: vaultV2Address });
-
-          expect(await client.balanceOf({ erc20: usdc })).toBe(0n);
-          expect(
-            await client.convertToAssets({
-              erc4626: vaultV2Address,
-              shares: userShares,
-            }),
-          ).toBe(amount - 1n);
-
-          expect(
-            await client.allowance({ erc20: usdc, spender: permit2 }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({ erc20: usdc, spender: vaultV2Address }),
-          ).toBe(0n);
-        },
-      );
-
-      test["vault-v2"](
-        "should withdraw from Vault V2 via permit",
-        async ({ client, config }) => {
-          const amount = parseUnits("1000000", 6);
-
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
-          const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
-          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
-
-          await client.deal({
-            erc20: usdc,
-            amount,
-          });
-          await client.approve({
-            address: usdc,
-            args: [vaultV2Address, amount],
-          });
-          await client.deposit({
-            address: vaultV2Address,
-            args: [amount, client.account.address],
-          });
-
-          const withdrawAmount = amount / 2n;
-
-          const block = await client.getBlock();
-
-          const { result } = await renderHook(config, () =>
-            useSimulationState({
-              marketIds: [],
-              users: [
-                client.account.address,
-                generalAdapter1,
-                vaultV2Address,
-                vaultV1Address,
-                vaultV2AdapterAddress,
-              ],
-              tokens: [usdc, vaultV2Address, vaultV1Address],
-              vaults: [vaultV1Address],
-              vaultV2s: [vaultV2Address],
-              vaultV2Adapters: [vaultV2AdapterAddress],
-              block,
-            }),
-          );
-
-          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
-
-          const data = result.current.data!;
-
-          const [expectedRedeemedShares, initialUserShares] = await Promise.all(
-            [
-              client.readContract({
-                functionName: "previewWithdraw",
-                args: [withdrawAmount],
-                abi: vaultV2Abi,
-                address: vaultV2Address,
-              }),
-              client.balanceOf({ erc20: vaultV2Address }),
-            ],
-          );
-
-          const { operations, bundle } = await setupTestBundle(client, data, [
-            {
-              type: "VaultV2_Withdraw",
-              sender: client.account.address,
-              address: vaultV2Address,
-              args: {
-                assets: withdrawAmount,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-                receiver: client.account.address,
-              },
-            },
-          ]);
-
-          expect(bundle.requirements.signatures.length).toBe(1);
-
-          expect(bundle.requirements.txs).toStrictEqual([]);
-
-          expect(operations).toStrictEqual([
-            {
-              type: "Erc20_Permit",
-              sender: client.account.address,
-              address: vaultV2Address,
-              args: {
-                amount: expect.any(BigInt),
-                spender: generalAdapter1,
-                nonce: 0n,
-              },
-            },
-            {
-              type: "VaultV2_Withdraw",
-              sender: generalAdapter1,
-              address: vaultV2Address,
-              args: {
-                assets: withdrawAmount,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-                receiver: client.account.address,
-              },
-            },
-          ]);
-
-          const approvedShares = (
-            operations[0] as Erc20Operations["Erc20_Permit"]
-          ).args.amount;
-
-          const userShares = await client.balanceOf({ erc20: vaultV2Address });
-          const redeemedShares = initialUserShares - userShares;
-
-          expect(await client.balanceOf({ erc20: usdc })).toBe(withdrawAmount);
-          expect(redeemedShares).toBeLessThanOrEqual(expectedRedeemedShares);
-
-          expect(
-            await client.allowance({ erc20: vaultV2Address, spender: permit2 }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({
-              erc20: vaultV2Address,
-              spender: generalAdapter1,
-            }),
-          ).toBe(approvedShares - redeemedShares);
-        },
-      );
-
-      test["vault-v2"](
-        "should deposit into Vault V2 via permit2",
-        async ({ client, config }) => {
-          const amount = parseEther("1");
-          await client.deal({
-            erc20: wNative,
-            amount,
-          });
-
-          const block = await client.getBlock();
-
-          const vaultV2Address = "0x933e79FBaE218F99341dCa625FdF4Ef596968F84";
-          const vaultV2AdapterAddress =
-            "0x1bb54236C76BCe1dE913Ec28CD684BE6ba4F1eb3";
-          const vaultV1Address = "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1";
-
-          const { result } = await renderHook(config, () =>
-            useSimulationState({
-              marketIds: [],
-              users: [
-                client.account.address,
-                generalAdapter1,
-                vaultV2Address,
-                vaultV1Address,
-                vaultV2AdapterAddress,
-              ],
-              tokens: [wNative, vaultV2Address, vaultV1Address],
-              vaults: [vaultV1Address],
-              vaultV2s: [vaultV2Address],
-              vaultV2Adapters: [vaultV2AdapterAddress],
-              block,
-            }),
-          );
-
-          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
-
-          const data = result.current.data!;
-
-          const { operations, bundle } = await setupTestBundle(client, data, [
-            {
-              type: "VaultV2_Deposit",
-              sender: client.account.address,
-              address: vaultV2Address,
-              args: {
-                assets: amount,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-          ]);
-
-          expect(bundle.requirements.signatures.length).toBe(1);
-
-          expect(bundle.requirements.txs).toStrictEqual([
-            {
-              type: "erc20Approve",
-              tx: { to: wNative, data: expect.any(String) },
-              args: [wNative, permit2, maxUint160],
-            },
-          ]);
-
-          expect(operations).toStrictEqual([
-            {
-              type: "Erc20_Approve",
-              sender: client.account.address,
-              address: wNative,
-              args: {
-                amount: maxUint160,
-                spender: permit2,
-              },
-            },
-            {
-              type: "Erc20_Permit2",
-              sender: client.account.address,
-              address: wNative,
-              args: {
-                amount,
-                expiration: expect.any(BigInt),
-                nonce: 0n,
-              },
-            },
-            {
-              type: "Erc20_Transfer2",
-              sender: generalAdapter1,
-              address: wNative,
-              args: {
-                amount,
-                from: client.account.address,
-                to: generalAdapter1,
-              },
-            },
-            {
-              type: "VaultV2_Deposit",
-              sender: generalAdapter1,
-              address: vaultV2Address,
-              args: {
-                assets: amount,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-          ]);
-
-          const userShares = await client.balanceOf({ erc20: vaultV2Address });
-
-          expect(await client.balanceOf({ erc20: wNative })).toBe(0n);
-          expect(
-            await client.convertToAssets({
-              erc4626: vaultV2Address,
-              shares: userShares,
-            }),
-          ).toBe(amount - 1n);
-
-          expect(
-            await client.allowance({
-              erc20: wNative,
-              spender: generalAdapter1,
-            }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({ erc20: wNative, spender: vaultV2Address }),
-          ).toBe(0n);
-        },
-      );
-
-      test["vault-v2"](
-        "should migrate from Vault V1 to Vault V2 via permit",
-        async ({ client, config }) => {
-          const userSharesV1 = parseUnits("100000", 18);
-
-          const block = await client.getBlock();
-
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
-          const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
-          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
-
-          await client.deal({
-            erc20: vaultV1Address,
-            amount: userSharesV1,
-          });
-
-          const { result } = await renderHook(config, () =>
-            useSimulationState({
-              marketIds: [],
-              users: [
-                client.account.address,
-                generalAdapter1,
-                vaultV2Address,
-                vaultV1Address,
-                vaultV2AdapterAddress,
-              ],
-              tokens: [usdc, vaultV2Address, vaultV1Address],
-              vaults: [vaultV1Address],
-              vaultV2s: [vaultV2Address],
-              vaultV2Adapters: [vaultV2AdapterAddress],
-              block,
-            }),
-          );
-
-          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
-
-          const data = result.current.data!;
-
-          console.debug(JSON.stringify(data, undefined, 2));
-
-          const { operations, bundle } = await setupTestBundle(client, data, [
-            {
-              type: "MetaMorpho_Withdraw",
-              sender: client.account.address,
-              address: vaultV1Address,
-              args: {
-                shares: userSharesV1,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-                owner: client.account.address,
-                receiver: client.account.address,
-              },
-            },
-            {
-              type: "VaultV2_Deposit",
-              sender: client.account.address,
-              address: vaultV2Address,
-              args: {
-                assets: maxUint256,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-          ]);
-
-          expect(bundle.requirements.signatures.length).toBe(1);
-
-          expect(bundle.requirements.txs).toStrictEqual([]);
-
-          expect(operations).toStrictEqual([
-            {
-              type: "Erc20_Permit",
-              sender: client.account.address,
-              address: vaultV1Address,
-              args: {
-                amount: userSharesV1,
-                spender: generalAdapter1,
-                nonce: 0n,
-              },
-            },
-            {
-              type: "MetaMorpho_Withdraw",
-              sender: generalAdapter1,
-              address: vaultV1Address,
-              args: {
-                shares: userSharesV1,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-                owner: client.account.address,
-                receiver: generalAdapter1,
-              },
-            },
-            {
-              type: "VaultV2_Deposit",
-              sender: generalAdapter1,
-              address: vaultV2Address,
-              args: {
-                assets: maxUint256,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-          ]);
-
-          const userSharesV2 = await client.balanceOf({
-            erc20: vaultV2Address,
-          });
-
-          expect(await client.balanceOf({ erc20: vaultV1Address })).toBe(0n);
-          expect(
-            await client.convertToAssets({
-              erc4626: vaultV2Address,
-              shares: userSharesV2,
-            }),
-          ).toBe(
-            (await client.readContract({
-              address: vaultV1Address,
-              abi: erc4626Abi,
-              functionName: "previewRedeem",
-              args: [userSharesV1],
-            })) - 1n,
-          );
-
-          expect(
-            await client.allowance({ erc20: vaultV1Address, spender: permit2 }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({
-              erc20: vaultV1Address,
-              spender: generalAdapter1,
-            }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({
-              erc20: vaultV1Address,
-              spender: vaultV2Address,
-            }),
-          ).toBe(0n);
-        },
-      );
-    });
   });
 
   describe("without signatures", () => {
@@ -2942,8 +2659,9 @@ describe("populateBundle", () => {
         stEth,
         usdc,
         usdt,
+        dai,
       } = addressesRegistry[ChainId.EthMainnet];
-      const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc } =
+      const { eth_wstEth, eth_wstEth_2, usdc_wstEth, usdc_wbtc, dai_sUsde } =
         markets[ChainId.EthMainnet];
       const { steakUsdc, bbUsdt, bbEth, bbUsdc, re7Weth } =
         vaults[ChainId.EthMainnet];
@@ -3011,6 +2729,141 @@ describe("populateBundle", () => {
               }
             }]
           `,
+          );
+        },
+      );
+
+      test[ChainId.EthMainnet](
+        "should supply DAI",
+        async ({ client, config }) => {
+          const id = dai_sUsde.id;
+
+          const assets = parseEther("55873.253");
+          await client.deal({
+            erc20: dai,
+            amount: assets,
+          });
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [id],
+              users: [client.account.address, generalAdapter1],
+              tokens: [NATIVE_ADDRESS, dai, dai_sUsde.collateralToken],
+              vaults: [],
+              vaultV2s: [],
+              vaultV2Adapters: [],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { operations, bundle } = await setupTestBundle(
+            client,
+            data,
+            [
+              {
+                type: "Blue_Supply",
+                sender: client.account.address,
+                args: {
+                  id,
+                  assets,
+                  onBehalf: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+            { supportsSignature: false },
+          );
+
+          expect(bundle.requirements.signatures).toStrictEqual([]);
+
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: { to: dai, data: expect.any(String) },
+              args: [dai, generalAdapter1, assets],
+            },
+          ]);
+
+          expect(operations).toStrictEqual([
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: assets,
+                spender: generalAdapter1,
+                nonce: 3n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: dai,
+              args: {
+                amount: assets,
+                from: client.account.address,
+                to: generalAdapter1,
+              },
+            },
+            {
+              type: "Blue_Supply",
+              sender: generalAdapter1,
+              args: {
+                id,
+                assets,
+                onBehalf: client.account.address,
+                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Permit",
+              sender: client.account.address,
+              address: dai,
+              args: {
+                amount: 0n,
+                spender: generalAdapter1,
+                nonce: 4n,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: dai,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+          ]);
+
+          const position = await fetchPosition(
+            client.account.address,
+            id,
+            client,
+          );
+
+          expect(
+            formatUnits(await client.balanceOf({ erc20: dai }), 18),
+          ).toBeCloseTo(0, 8);
+          expect(position.collateral).toBe(0n);
+          expect(position.supplyShares).toBe(50490517366679890639553905675n);
+          expect(position.borrowShares).toBe(0n);
+
+          expect(await client.allowance({ erc20: dai, spender: permit2 })).toBe(
+            0n,
+          );
+          expect(
+            await client.allowance({ erc20: dai, spender: generalAdapter1 }),
+          ).toBe(0n);
+          expect(await client.allowance({ erc20: dai, spender: morpho })).toBe(
+            0n,
           );
         },
       );
@@ -3183,6 +3036,16 @@ describe("populateBundle", () => {
                 to: client.account.address,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: stEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           const position = await fetchPosition(
@@ -3301,6 +3164,16 @@ describe("populateBundle", () => {
                 onBehalf: client.account.address,
                 receiver: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -3424,6 +3297,26 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: steakUsdc.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           expect(await client.balanceOf({ erc20: usdc })).toBe(0n);
@@ -3532,6 +3425,26 @@ describe("populateBundle", () => {
                 assets: amount,
                 owner: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbUsdt.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -3682,6 +3595,26 @@ describe("populateBundle", () => {
                 id: marketParams.id,
                 assets: maxUint256,
                 onBehalf: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbUsdt.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
           ]);
@@ -3843,6 +3776,16 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               sender: generalAdapter1,
+              address: usdt,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: bbUsdt.address,
               args: {
                 amount: maxUint256,
@@ -3988,6 +3931,16 @@ describe("populateBundle", () => {
               type: "Erc20_Transfer",
               address: wNative,
               sender: generalAdapter1,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
@@ -4241,7 +4194,27 @@ describe("populateBundle", () => {
             {
               type: "Erc20_Transfer",
               sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: steakUsdc.address,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
@@ -4498,6 +4471,36 @@ describe("populateBundle", () => {
                 amount: maxUint256,
                 receiver: client.account.address,
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
               },
             },
             {
@@ -4797,6 +4800,46 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wNative,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: bbEth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: re7Weth.address,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
         },
       );
@@ -5040,6 +5083,26 @@ describe("populateBundle", () => {
                 slippage: DEFAULT_SLIPPAGE_TOLERANCE,
               },
             },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: usdc,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
           ]);
 
           expect(await client.balanceOf({ erc20: wstEth })).toBe(0n);
@@ -5265,6 +5328,16 @@ describe("populateBundle", () => {
             },
             {
               type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: wstEth,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
               address: stEth,
               sender: generalAdapter1,
               args: {
@@ -5385,14 +5458,24 @@ describe("populateBundle", () => {
               },
             },
             {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
+              address: NATIVE_ADDRESS,
+              args: {
+                amount: maxUint256,
+                from: generalAdapter1,
+                to: client.account.address,
+              },
+            },
+            {
+              type: "Erc20_Transfer",
+              sender: generalAdapter1,
               address: wNative,
               args: {
                 amount: maxUint256,
                 from: generalAdapter1,
                 to: client.account.address,
               },
-              sender: generalAdapter1,
-              type: "Erc20_Transfer",
             },
           ]);
 
@@ -5410,7 +5493,6 @@ describe("populateBundle", () => {
         wNative,
         usdc,
         verUsdc,
-        permit2,
       } = addressesRegistry[ChainId.BaseMainnet];
 
       test[ChainId.BaseMainnet]
@@ -5557,265 +5639,6 @@ describe("populateBundle", () => {
           expect(position.supplyShares).toBe(assets * 1_000000n);
           expect(position.borrowShares).toBe(0n);
         });
-
-      test["vault-v2"](
-        "should deposit into Vault V2 via erc20 approval",
-        async ({ client, config }) => {
-          const amount = parseUnits("1000000", 6);
-          await client.deal({
-            erc20: usdc,
-            amount,
-          });
-
-          const block = await client.getBlock();
-
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
-          const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
-          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
-
-          const { result } = await renderHook(config, () =>
-            useSimulationState({
-              marketIds: [],
-              users: [
-                client.account.address,
-                generalAdapter1,
-                vaultV2Address,
-                vaultV1Address,
-                vaultV2AdapterAddress,
-              ],
-              tokens: [usdc, vaultV2Address, vaultV1Address],
-              vaults: [vaultV1Address],
-              vaultV2s: [vaultV2Address],
-              vaultV2Adapters: [vaultV2AdapterAddress],
-              block,
-            }),
-          );
-
-          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
-
-          const data = result.current.data!;
-
-          const { operations, bundle } = await setupTestBundle(
-            client,
-            data,
-            [
-              {
-                type: "VaultV2_Deposit",
-                sender: client.account.address,
-                address: vaultV2Address,
-                args: {
-                  assets: amount,
-                  onBehalf: client.account.address,
-                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-                },
-              },
-            ],
-            {
-              supportsSignature: false,
-            },
-          );
-
-          expect(bundle.requirements.signatures.length).toBe(0);
-
-          expect(bundle.requirements.txs).toStrictEqual([
-            {
-              type: "erc20Approve",
-              tx: { to: usdc, data: expect.any(String) },
-              args: [usdc, generalAdapter1, amount],
-            },
-          ]);
-
-          expect(operations).toStrictEqual([
-            {
-              type: "Erc20_Permit",
-              sender: client.account.address,
-              address: usdc,
-              args: {
-                amount,
-                spender: generalAdapter1,
-                nonce: 6n,
-              },
-            },
-            {
-              type: "Erc20_Transfer",
-              sender: generalAdapter1,
-              address: usdc,
-              args: {
-                amount,
-                from: client.account.address,
-                to: generalAdapter1,
-              },
-            },
-            {
-              type: "VaultV2_Deposit",
-              sender: generalAdapter1,
-              address: vaultV2Address,
-              args: {
-                assets: amount,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-              },
-            },
-          ]);
-
-          const userShares = await client.balanceOf({ erc20: vaultV2Address });
-
-          expect(await client.balanceOf({ erc20: usdc })).toBe(0n);
-          expect(
-            await client.convertToAssets({
-              erc4626: vaultV2Address,
-              shares: userShares,
-            }),
-          ).toBe(amount - 1n);
-
-          expect(
-            await client.allowance({ erc20: usdc, spender: permit2 }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({ erc20: usdc, spender: generalAdapter1 }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({ erc20: usdc, spender: vaultV2Address }),
-          ).toBe(0n);
-        },
-      );
-
-      test["vault-v2"](
-        "should withdraw from Vault V2 via erc20 approval",
-        async ({ client, config }) => {
-          const amount = parseUnits("1000000", 6);
-
-          const vaultV2Address = "0xfAD637e9900d2FD140d791db0a72C84bF26f4fF8";
-          const vaultV2AdapterAddress =
-            "0x193Fcd9AA26A6A5472B9855dF0d0866C15D0f3a0";
-          const vaultV1Address = "0xc1256Ae5FF1cf2719D4937adb3bbCCab2E00A2Ca";
-
-          await client.deal({
-            erc20: usdc,
-            amount,
-          });
-          await client.approve({
-            address: usdc,
-            args: [vaultV2Address, amount],
-          });
-          await client.deposit({
-            address: vaultV2Address,
-            args: [amount, client.account.address],
-          });
-
-          const withdrawAmount = amount / 2n;
-
-          const block = await client.getBlock();
-
-          const { result } = await renderHook(config, () =>
-            useSimulationState({
-              marketIds: [],
-              users: [
-                client.account.address,
-                generalAdapter1,
-                vaultV2Address,
-                vaultV1Address,
-                vaultV2AdapterAddress,
-              ],
-              tokens: [usdc, vaultV2Address, vaultV1Address],
-              vaults: [vaultV1Address],
-              vaultV2s: [vaultV2Address],
-              vaultV2Adapters: [vaultV2AdapterAddress],
-              block,
-            }),
-          );
-
-          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
-
-          const data = result.current.data!;
-
-          const [expectedRedeemedShares, initialUserShares] = await Promise.all(
-            [
-              client.readContract({
-                functionName: "previewWithdraw",
-                args: [withdrawAmount],
-                abi: vaultV2Abi,
-                address: vaultV2Address,
-              }),
-              client.balanceOf({ erc20: vaultV2Address }),
-            ],
-          );
-
-          const { operations, bundle } = await setupTestBundle(
-            client,
-            data,
-            [
-              {
-                type: "VaultV2_Withdraw",
-                sender: client.account.address,
-                address: vaultV2Address,
-                args: {
-                  assets: withdrawAmount,
-                  onBehalf: client.account.address,
-                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-                  receiver: client.account.address,
-                },
-              },
-            ],
-            { supportsSignature: false },
-          );
-
-          expect(operations).toStrictEqual([
-            {
-              type: "Erc20_Permit",
-              sender: client.account.address,
-              address: vaultV2Address,
-              args: {
-                amount: expect.any(BigInt),
-                spender: generalAdapter1,
-                nonce: 0n,
-              },
-            },
-            {
-              type: "VaultV2_Withdraw",
-              sender: generalAdapter1,
-              address: vaultV2Address,
-              args: {
-                assets: withdrawAmount,
-                onBehalf: client.account.address,
-                slippage: DEFAULT_SLIPPAGE_TOLERANCE,
-                receiver: client.account.address,
-              },
-            },
-          ]);
-
-          const approvedShares = (
-            operations[0] as Erc20Operations["Erc20_Permit"]
-          ).args.amount;
-
-          expect(bundle.requirements.signatures.length).toBe(0);
-
-          expect(bundle.requirements.txs).toStrictEqual([
-            {
-              type: "erc20Approve",
-              tx: { to: vaultV2Address, data: expect.any(String) },
-              args: [vaultV2Address, generalAdapter1, approvedShares],
-            },
-          ]);
-
-          const userShares = await client.balanceOf({ erc20: vaultV2Address });
-          const redeemedShares = initialUserShares - userShares;
-
-          expect(await client.balanceOf({ erc20: usdc })).toBe(withdrawAmount);
-          expect(redeemedShares).toBeLessThanOrEqual(expectedRedeemedShares);
-
-          expect(
-            await client.allowance({ erc20: vaultV2Address, spender: permit2 }),
-          ).toBe(0n);
-          expect(
-            await client.allowance({
-              erc20: vaultV2Address,
-              spender: generalAdapter1,
-            }),
-          ).toBe(approvedShares - redeemedShares);
-        },
-      );
     });
   });
 });

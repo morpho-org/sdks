@@ -2,9 +2,10 @@ name: Publish
 
 on:
   workflow_call:
-    secrets:
-      NPM_TOKEN:
-        required: true
+
+permissions:
+  id-token: write
+  contents: write
 
 jobs:
   publish:
@@ -48,6 +49,11 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+          registry-url: https://registry.npmjs.org
+          scope: '@morpho-org'
+
+      # Required to use OIDC trusted publishing.
+      - run: npm install -g npm@latest
 
       - run: pnpm install --frozen-lockfile
 
@@ -58,7 +64,6 @@ jobs:
       # Set version of each package to the most recent so they are referenced correctly in dependencies.
       - run: |
           pnpm -r -c exec 'node ../../scripts/release/version.js'
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
         if: steps.release.outputs.version
 
       - run: pnpm publish --no-git-checks --access public --tag ${{ steps.release.outputs.channel }}

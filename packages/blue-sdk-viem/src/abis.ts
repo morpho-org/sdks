@@ -3174,6 +3174,99 @@ export const blueOracleAbi = [
   },
 ] as const;
 
+export const metaMorphoFactoryAbi = [
+  {
+    inputs: [{ internalType: "address", name: "morpho", type: "address" }],
+    stateMutability: "nonpayable",
+    type: "constructor",
+  },
+  { inputs: [], name: "ZeroAddress", type: "error" },
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "metaMorpho",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "caller",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "address",
+        name: "initialOwner",
+        type: "address",
+      },
+      {
+        indexed: false,
+        internalType: "uint256",
+        name: "initialTimelock",
+        type: "uint256",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "asset",
+        type: "address",
+      },
+      { indexed: false, internalType: "string", name: "name", type: "string" },
+      {
+        indexed: false,
+        internalType: "string",
+        name: "symbol",
+        type: "string",
+      },
+      {
+        indexed: false,
+        internalType: "bytes32",
+        name: "salt",
+        type: "bytes32",
+      },
+    ],
+    name: "CreateMetaMorpho",
+    type: "event",
+  },
+  {
+    inputs: [],
+    name: "MORPHO",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "initialOwner", type: "address" },
+      { internalType: "uint256", name: "initialTimelock", type: "uint256" },
+      { internalType: "address", name: "asset", type: "address" },
+      { internalType: "string", name: "name", type: "string" },
+      { internalType: "string", name: "symbol", type: "string" },
+      { internalType: "bytes32", name: "salt", type: "bytes32" },
+    ],
+    name: "createMetaMorpho",
+    outputs: [
+      {
+        internalType: "contract IMetaMorphoV1_1",
+        name: "metaMorpho",
+        type: "address",
+      },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "", type: "address" }],
+    name: "isMetaMorpho",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+];
+
 export const metaMorphoAbi = [
   {
     type: "constructor",
@@ -8182,14 +8275,20 @@ export const preLiquidationAbi = [
   { type: "error", name: "PreLltvTooHigh", inputs: [] },
 ] as const;
 
-/* Vault V2 */
-
 export const vaultV2Abi = [
   {
     type: "constructor",
     inputs: [
-      { name: "_owner", type: "address", internalType: "address" },
-      { name: "_asset", type: "address", internalType: "address" },
+      {
+        name: "_owner",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "_asset",
+        type: "address",
+        internalType: "address",
+      },
     ],
     stateMutability: "nonpayable",
   },
@@ -8197,28 +8296,77 @@ export const vaultV2Abi = [
     type: "function",
     name: "DOMAIN_SEPARATOR",
     inputs: [],
-    outputs: [{ name: "", type: "bytes32", internalType: "bytes32" }],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "_totalAssets",
     inputs: [],
-    outputs: [{ name: "", type: "uint128", internalType: "uint128" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint128",
+        internalType: "uint128",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
-    name: "abdicateSubmit",
-    inputs: [{ name: "selector", type: "bytes4", internalType: "bytes4" }],
+    name: "abdicate",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
+    name: "abdicated",
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
     name: "absoluteCap",
-    inputs: [{ name: "id", type: "bytes32", internalType: "bytes32" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "id",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
@@ -8233,33 +8381,101 @@ export const vaultV2Abi = [
     name: "accrueInterestView",
     inputs: [],
     outputs: [
-      { name: "", type: "uint256", internalType: "uint256" },
-      { name: "", type: "uint256", internalType: "uint256" },
-      { name: "", type: "uint256", internalType: "uint256" },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "adapterRegistry",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "adapters",
-    inputs: [{ name: "", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    inputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "adaptersLength",
     inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "addAdapter",
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "allocate",
     inputs: [
-      { name: "adapter", type: "address", internalType: "address" },
-      { name: "data", type: "bytes", internalType: "bytes" },
-      { name: "assets", type: "uint256", internalType: "uint256" },
+      {
+        name: "adapter",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8267,100 +8483,248 @@ export const vaultV2Abi = [
   {
     type: "function",
     name: "allocation",
-    inputs: [{ name: "id", type: "bytes32", internalType: "bytes32" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "id",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "allowance",
     inputs: [
-      { name: "owner", type: "address", internalType: "address" },
-      { name: "spender", type: "address", internalType: "address" },
+      {
+        name: "owner",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "spender",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "approve",
     inputs: [
-      { name: "spender", type: "address", internalType: "address" },
-      { name: "shares", type: "uint256", internalType: "uint256" },
+      {
+        name: "spender",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "asset",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "balanceOf",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "canReceiveAssets",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "canReceiveShares",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "canSendAssets",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "canSendShares",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "convertToAssets",
-    inputs: [{ name: "shares", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "convertToShares",
-    inputs: [{ name: "assets", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "curator",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "deallocate",
     inputs: [
-      { name: "adapter", type: "address", internalType: "address" },
-      { name: "data", type: "bytes", internalType: "bytes" },
-      { name: "assets", type: "uint256", internalType: "uint256" },
+      {
+        name: "adapter",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8369,15 +8733,29 @@ export const vaultV2Abi = [
     type: "function",
     name: "decimals",
     inputs: [],
-    outputs: [{ name: "", type: "uint8", internalType: "uint8" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint8",
+        internalType: "uint8",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "decreaseAbsoluteCap",
     inputs: [
-      { name: "idData", type: "bytes", internalType: "bytes" },
-      { name: "newAbsoluteCap", type: "uint256", internalType: "uint256" },
+      {
+        name: "idData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "newAbsoluteCap",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8386,8 +8764,16 @@ export const vaultV2Abi = [
     type: "function",
     name: "decreaseRelativeCap",
     inputs: [
-      { name: "idData", type: "bytes", internalType: "bytes" },
-      { name: "newRelativeCap", type: "uint256", internalType: "uint256" },
+      {
+        name: "idData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "newRelativeCap",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8396,8 +8782,16 @@ export const vaultV2Abi = [
     type: "function",
     name: "decreaseTimelock",
     inputs: [
-      { name: "selector", type: "bytes4", internalType: "bytes4" },
-      { name: "newDuration", type: "uint256", internalType: "uint256" },
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+      {
+        name: "newDuration",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8406,51 +8800,125 @@ export const vaultV2Abi = [
     type: "function",
     name: "deposit",
     inputs: [
-      { name: "assets", type: "uint256", internalType: "uint256" },
-      { name: "onBehalf", type: "address", internalType: "address" },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "executableAt",
-    inputs: [{ name: "data", type: "bytes", internalType: "bytes" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "firstTotalAssets",
     inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "forceDeallocate",
     inputs: [
-      { name: "adapter", type: "address", internalType: "address" },
-      { name: "data", type: "bytes", internalType: "bytes" },
-      { name: "assets", type: "uint256", internalType: "uint256" },
-      { name: "onBehalf", type: "address", internalType: "address" },
+      {
+        name: "adapter",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "forceDeallocatePenalty",
-    inputs: [{ name: "adapter", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "adapter",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "increaseAbsoluteCap",
     inputs: [
-      { name: "idData", type: "bytes", internalType: "bytes" },
-      { name: "newAbsoluteCap", type: "uint256", internalType: "uint256" },
+      {
+        name: "idData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "newAbsoluteCap",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8459,8 +8927,16 @@ export const vaultV2Abi = [
     type: "function",
     name: "increaseRelativeCap",
     inputs: [
-      { name: "idData", type: "bytes", internalType: "bytes" },
-      { name: "newRelativeCap", type: "uint256", internalType: "uint256" },
+      {
+        name: "idData",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "newRelativeCap",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8469,8 +8945,16 @@ export const vaultV2Abi = [
     type: "function",
     name: "increaseTimelock",
     inputs: [
-      { name: "selector", type: "bytes4", internalType: "bytes4" },
-      { name: "newDuration", type: "uint256", internalType: "uint256" },
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+      {
+        name: "newDuration",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8478,108 +8962,248 @@ export const vaultV2Abi = [
   {
     type: "function",
     name: "isAdapter",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "isAllocator",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "isSentinel",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "lastUpdate",
     inputs: [],
-    outputs: [{ name: "", type: "uint64", internalType: "uint64" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "liquidityAdapter",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "liquidityData",
     inputs: [],
-    outputs: [{ name: "", type: "bytes", internalType: "bytes" }],
+    outputs: [
+      {
+        name: "",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "managementFee",
     inputs: [],
-    outputs: [{ name: "", type: "uint96", internalType: "uint96" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint96",
+        internalType: "uint96",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "managementFeeRecipient",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "maxDeposit",
-    inputs: [{ name: "", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "pure",
   },
   {
     type: "function",
     name: "maxMint",
-    inputs: [{ name: "", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "pure",
   },
   {
     type: "function",
     name: "maxRate",
     inputs: [],
-    outputs: [{ name: "", type: "uint64", internalType: "uint64" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint64",
+        internalType: "uint64",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "maxRedeem",
-    inputs: [{ name: "", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "pure",
   },
   {
     type: "function",
     name: "maxWithdraw",
-    inputs: [{ name: "", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "pure",
   },
   {
     type: "function",
     name: "mint",
     inputs: [
-      { name: "shares", type: "uint256", internalType: "uint256" },
-      { name: "onBehalf", type: "address", internalType: "address" },
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "multicall",
-    inputs: [{ name: "data", type: "bytes[]", internalType: "bytes[]" }],
+    inputs: [
+      {
+        name: "data",
+        type: "bytes[]",
+        internalType: "bytes[]",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
@@ -8587,48 +9211,112 @@ export const vaultV2Abi = [
     type: "function",
     name: "name",
     inputs: [],
-    outputs: [{ name: "", type: "string", internalType: "string" }],
+    outputs: [
+      {
+        name: "",
+        type: "string",
+        internalType: "string",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "nonces",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "owner",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "performanceFee",
     inputs: [],
-    outputs: [{ name: "", type: "uint96", internalType: "uint96" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint96",
+        internalType: "uint96",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "performanceFeeRecipient",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "permit",
     inputs: [
-      { name: "_owner", type: "address", internalType: "address" },
-      { name: "spender", type: "address", internalType: "address" },
-      { name: "shares", type: "uint256", internalType: "uint256" },
-      { name: "deadline", type: "uint256", internalType: "uint256" },
-      { name: "v", type: "uint8", internalType: "uint8" },
-      { name: "r", type: "bytes32", internalType: "bytes32" },
-      { name: "s", type: "bytes32", internalType: "bytes32" },
+      {
+        name: "_owner",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "spender",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "deadline",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "v",
+        type: "uint8",
+        internalType: "uint8",
+      },
+      {
+        name: "r",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+      {
+        name: "s",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8636,60 +9324,176 @@ export const vaultV2Abi = [
   {
     type: "function",
     name: "previewDeposit",
-    inputs: [{ name: "assets", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "previewMint",
-    inputs: [{ name: "shares", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "previewRedeem",
-    inputs: [{ name: "shares", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "previewWithdraw",
-    inputs: [{ name: "assets", type: "uint256", internalType: "uint256" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "receiveAssetsGate",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "receiveSharesGate",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "redeem",
     inputs: [
-      { name: "shares", type: "uint256", internalType: "uint256" },
-      { name: "receiver", type: "address", internalType: "address" },
-      { name: "onBehalf", type: "address", internalType: "address" },
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "relativeCap",
-    inputs: [{ name: "id", type: "bytes32", internalType: "bytes32" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "id",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
+    name: "removeAdapter",
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "revoke",
-    inputs: [{ name: "data", type: "bytes", internalType: "bytes" }],
+    inputs: [
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
@@ -8697,13 +9501,51 @@ export const vaultV2Abi = [
     type: "function",
     name: "sendAssetsGate",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
+    name: "sendSharesGate",
+    inputs: [],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    stateMutability: "view",
+  },
+  {
+    type: "function",
+    name: "setAdapterRegistry",
+    inputs: [
+      {
+        name: "newAdapterRegistry",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
     name: "setCurator",
-    inputs: [{ name: "newCurator", type: "address", internalType: "address" }],
+    inputs: [
+      {
+        name: "newCurator",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
@@ -8711,7 +9553,11 @@ export const vaultV2Abi = [
     type: "function",
     name: "setForceDeallocatePenalty",
     inputs: [
-      { name: "adapter", type: "address", internalType: "address" },
+      {
+        name: "adapter",
+        type: "address",
+        internalType: "address",
+      },
       {
         name: "newForceDeallocatePenalty",
         type: "uint256",
@@ -8723,20 +9569,18 @@ export const vaultV2Abi = [
   },
   {
     type: "function",
-    name: "setIsAdapter",
-    inputs: [
-      { name: "account", type: "address", internalType: "address" },
-      { name: "newIsAdapter", type: "bool", internalType: "bool" },
-    ],
-    outputs: [],
-    stateMutability: "nonpayable",
-  },
-  {
-    type: "function",
     name: "setIsAllocator",
     inputs: [
-      { name: "account", type: "address", internalType: "address" },
-      { name: "newIsAllocator", type: "bool", internalType: "bool" },
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "newIsAllocator",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8745,8 +9589,16 @@ export const vaultV2Abi = [
     type: "function",
     name: "setIsSentinel",
     inputs: [
-      { name: "account", type: "address", internalType: "address" },
-      { name: "newIsSentinel", type: "bool", internalType: "bool" },
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "newIsSentinel",
+        type: "bool",
+        internalType: "bool",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8755,8 +9607,16 @@ export const vaultV2Abi = [
     type: "function",
     name: "setLiquidityAdapterAndData",
     inputs: [
-      { name: "newLiquidityAdapter", type: "address", internalType: "address" },
-      { name: "newLiquidityData", type: "bytes", internalType: "bytes" },
+      {
+        name: "newLiquidityAdapter",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "newLiquidityData",
+        type: "bytes",
+        internalType: "bytes",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8765,7 +9625,11 @@ export const vaultV2Abi = [
     type: "function",
     name: "setManagementFee",
     inputs: [
-      { name: "newManagementFee", type: "uint256", internalType: "uint256" },
+      {
+        name: "newManagementFee",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8786,21 +9650,39 @@ export const vaultV2Abi = [
   {
     type: "function",
     name: "setMaxRate",
-    inputs: [{ name: "newMaxRate", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "newMaxRate",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "setName",
-    inputs: [{ name: "newName", type: "string", internalType: "string" }],
+    inputs: [
+      {
+        name: "newName",
+        type: "string",
+        internalType: "string",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "setOwner",
-    inputs: [{ name: "newOwner", type: "address", internalType: "address" }],
+    inputs: [
+      {
+        name: "newOwner",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
@@ -8808,7 +9690,11 @@ export const vaultV2Abi = [
     type: "function",
     name: "setPerformanceFee",
     inputs: [
-      { name: "newPerformanceFee", type: "uint256", internalType: "uint256" },
+      {
+        name: "newPerformanceFee",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8841,18 +9727,39 @@ export const vaultV2Abi = [
   },
   {
     type: "function",
-    name: "setSendAssetsGate",
+    name: "setReceiveSharesGate",
     inputs: [
-      { name: "newSendAssetsGate", type: "address", internalType: "address" },
+      {
+        name: "newReceiveSharesGate",
+        type: "address",
+        internalType: "address",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
-    name: "setSharesGate",
+    name: "setSendAssetsGate",
     inputs: [
-      { name: "newSharesGate", type: "address", internalType: "address" },
+      {
+        name: "newSendAssetsGate",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    type: "function",
+    name: "setSendSharesGate",
+    inputs: [
+      {
+        name: "newSendSharesGate",
+        type: "address",
+        internalType: "address",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -8860,21 +9767,26 @@ export const vaultV2Abi = [
   {
     type: "function",
     name: "setSymbol",
-    inputs: [{ name: "newSymbol", type: "string", internalType: "string" }],
+    inputs: [
+      {
+        name: "newSymbol",
+        type: "string",
+        internalType: "string",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
-    name: "sharesGate",
-    inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
-    stateMutability: "view",
-  },
-  {
-    type: "function",
     name: "submit",
-    inputs: [{ name: "data", type: "bytes", internalType: "bytes" }],
+    inputs: [
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
@@ -8882,72 +9794,158 @@ export const vaultV2Abi = [
     type: "function",
     name: "symbol",
     inputs: [],
-    outputs: [{ name: "", type: "string", internalType: "string" }],
+    outputs: [
+      {
+        name: "",
+        type: "string",
+        internalType: "string",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "timelock",
-    inputs: [{ name: "selector", type: "bytes4", internalType: "bytes4" }],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    inputs: [
+      {
+        name: "selector",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "totalAssets",
     inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "totalSupply",
     inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "transfer",
     inputs: [
-      { name: "to", type: "address", internalType: "address" },
-      { name: "shares", type: "uint256", internalType: "uint256" },
+      {
+        name: "to",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "transferFrom",
     inputs: [
-      { name: "from", type: "address", internalType: "address" },
-      { name: "to", type: "address", internalType: "address" },
-      { name: "shares", type: "uint256", internalType: "uint256" },
+      {
+        name: "from",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "to",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "shares",
+        type: "uint256",
+        internalType: "uint256",
+      },
     ],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "virtualShares",
     inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "withdraw",
     inputs: [
-      { name: "assets", type: "uint256", internalType: "uint256" },
-      { name: "receiver", type: "address", internalType: "address" },
-      { name: "onBehalf", type: "address", internalType: "address" },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "receiver",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "onBehalf",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "event",
-    name: "AbdicateSubmit",
+    name: "Abdicate",
     inputs: [
       {
         name: "selector",
@@ -8968,7 +9966,12 @@ export const vaultV2Abi = [
         indexed: true,
         internalType: "bytes4",
       },
-      { name: "data", type: "bytes", indexed: false, internalType: "bytes" },
+      {
+        name: "data",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
     ],
     anonymous: false,
   },
@@ -8999,6 +10002,19 @@ export const vaultV2Abi = [
         type: "uint256",
         indexed: false,
         internalType: "uint256",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "AddAdapter",
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
       },
     ],
     anonymous: false,
@@ -9156,8 +10172,18 @@ export const vaultV2Abi = [
         indexed: true,
         internalType: "address",
       },
-      { name: "id", type: "bytes32", indexed: true, internalType: "bytes32" },
-      { name: "idData", type: "bytes", indexed: false, internalType: "bytes" },
+      {
+        name: "id",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "idData",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
       {
         name: "newAbsoluteCap",
         type: "uint256",
@@ -9177,8 +10203,18 @@ export const vaultV2Abi = [
         indexed: true,
         internalType: "address",
       },
-      { name: "id", type: "bytes32", indexed: true, internalType: "bytes32" },
-      { name: "idData", type: "bytes", indexed: false, internalType: "bytes" },
+      {
+        name: "id",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "idData",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
       {
         name: "newRelativeCap",
         type: "uint256",
@@ -9285,8 +10321,18 @@ export const vaultV2Abi = [
     type: "event",
     name: "IncreaseAbsoluteCap",
     inputs: [
-      { name: "id", type: "bytes32", indexed: true, internalType: "bytes32" },
-      { name: "idData", type: "bytes", indexed: false, internalType: "bytes" },
+      {
+        name: "id",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "idData",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
       {
         name: "newAbsoluteCap",
         type: "uint256",
@@ -9300,8 +10346,18 @@ export const vaultV2Abi = [
     type: "event",
     name: "IncreaseRelativeCap",
     inputs: [
-      { name: "id", type: "bytes32", indexed: true, internalType: "bytes32" },
-      { name: "idData", type: "bytes", indexed: false, internalType: "bytes" },
+      {
+        name: "id",
+        type: "bytes32",
+        indexed: true,
+        internalType: "bytes32",
+      },
+      {
+        name: "idData",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
       {
         name: "newRelativeCap",
         type: "uint256",
@@ -9369,6 +10425,19 @@ export const vaultV2Abi = [
   },
   {
     type: "event",
+    name: "RemoveAdapter",
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
     name: "Revoke",
     inputs: [
       {
@@ -9383,7 +10452,25 @@ export const vaultV2Abi = [
         indexed: true,
         internalType: "bytes4",
       },
-      { name: "data", type: "bytes", indexed: false, internalType: "bytes" },
+      {
+        name: "data",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
+    name: "SetAdapterRegistry",
+    inputs: [
+      {
+        name: "newAdapterRegistry",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
     ],
     anonymous: false,
   },
@@ -9415,25 +10502,6 @@ export const vaultV2Abi = [
         type: "uint256",
         indexed: false,
         internalType: "uint256",
-      },
-    ],
-    anonymous: false,
-  },
-  {
-    type: "event",
-    name: "SetIsAdapter",
-    inputs: [
-      {
-        name: "account",
-        type: "address",
-        indexed: true,
-        internalType: "address",
-      },
-      {
-        name: "newIsAdapter",
-        type: "bool",
-        indexed: false,
-        internalType: "bool",
       },
     ],
     anonymous: false,
@@ -9607,6 +10675,19 @@ export const vaultV2Abi = [
   },
   {
     type: "event",
+    name: "SetReceiveSharesGate",
+    inputs: [
+      {
+        name: "newReceiveSharesGate",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+    ],
+    anonymous: false,
+  },
+  {
+    type: "event",
     name: "SetSendAssetsGate",
     inputs: [
       {
@@ -9620,10 +10701,10 @@ export const vaultV2Abi = [
   },
   {
     type: "event",
-    name: "SetSharesGate",
+    name: "SetSendSharesGate",
     inputs: [
       {
-        name: "newSharesGate",
+        name: "newSendSharesGate",
         type: "address",
         indexed: true,
         internalType: "address",
@@ -9654,7 +10735,12 @@ export const vaultV2Abi = [
         indexed: true,
         internalType: "bytes4",
       },
-      { name: "data", type: "bytes", indexed: false, internalType: "bytes" },
+      {
+        name: "data",
+        type: "bytes",
+        indexed: false,
+        internalType: "bytes",
+      },
       {
         name: "executableAt",
         type: "uint256",
@@ -9668,8 +10754,18 @@ export const vaultV2Abi = [
     type: "event",
     name: "Transfer",
     inputs: [
-      { name: "from", type: "address", indexed: true, internalType: "address" },
-      { name: "to", type: "address", indexed: true, internalType: "address" },
+      {
+        name: "from",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
+      {
+        name: "to",
+        type: "address",
+        indexed: true,
+        internalType: "address",
+      },
       {
         name: "shares",
         type: "uint256",
@@ -9716,42 +10812,186 @@ export const vaultV2Abi = [
     ],
     anonymous: false,
   },
-  { type: "error", name: "AbsoluteCapExceeded", inputs: [] },
-  { type: "error", name: "AbsoluteCapNotDecreasing", inputs: [] },
-  { type: "error", name: "AbsoluteCapNotIncreasing", inputs: [] },
-  { type: "error", name: "CannotReceiveAssets", inputs: [] },
-  { type: "error", name: "CannotReceiveShares", inputs: [] },
-  { type: "error", name: "CannotSendAssets", inputs: [] },
-  { type: "error", name: "CannotSendShares", inputs: [] },
-  { type: "error", name: "CastOverflow", inputs: [] },
-  { type: "error", name: "DataAlreadyPending", inputs: [] },
-  { type: "error", name: "DataNotTimelocked", inputs: [] },
-  { type: "error", name: "FeeInvariantBroken", inputs: [] },
-  { type: "error", name: "FeeTooHigh", inputs: [] },
-  { type: "error", name: "InfiniteTimelock", inputs: [] },
-  { type: "error", name: "InvalidSigner", inputs: [] },
-  { type: "error", name: "MaxRateTooHigh", inputs: [] },
-  { type: "error", name: "NoCode", inputs: [] },
-  { type: "error", name: "NotAdapter", inputs: [] },
-  { type: "error", name: "PenaltyTooHigh", inputs: [] },
-  { type: "error", name: "PermitDeadlineExpired", inputs: [] },
-  { type: "error", name: "RelativeCapAboveOne", inputs: [] },
-  { type: "error", name: "RelativeCapExceeded", inputs: [] },
-  { type: "error", name: "RelativeCapNotDecreasing", inputs: [] },
-  { type: "error", name: "RelativeCapNotIncreasing", inputs: [] },
-  { type: "error", name: "TimelockCapIsFixed", inputs: [] },
-  { type: "error", name: "TimelockDurationTooHigh", inputs: [] },
-  { type: "error", name: "TimelockNotDecreasing", inputs: [] },
-  { type: "error", name: "TimelockNotExpired", inputs: [] },
-  { type: "error", name: "TimelockNotIncreasing", inputs: [] },
-  { type: "error", name: "TransferFromReturnedFalse", inputs: [] },
-  { type: "error", name: "TransferFromReverted", inputs: [] },
-  { type: "error", name: "TransferReturnedFalse", inputs: [] },
-  { type: "error", name: "TransferReverted", inputs: [] },
-  { type: "error", name: "Unauthorized", inputs: [] },
-  { type: "error", name: "ZeroAbsoluteCap", inputs: [] },
-  { type: "error", name: "ZeroAddress", inputs: [] },
-  { type: "error", name: "ZeroAllocation", inputs: [] },
+  {
+    type: "error",
+    name: "Abdicated",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "AbsoluteCapExceeded",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "AbsoluteCapNotDecreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "AbsoluteCapNotIncreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "AutomaticallyTimelocked",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "CannotReceiveAssets",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "CannotReceiveShares",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "CannotSendAssets",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "CannotSendShares",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "CastOverflow",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DataAlreadyPending",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "DataNotTimelocked",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "FeeInvariantBroken",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "FeeTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidSigner",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "MaxRateTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NoCode",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotAdapter",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotInAdapterRegistry",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "PenaltyTooHigh",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "PermitDeadlineExpired",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "RelativeCapAboveOne",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "RelativeCapExceeded",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "RelativeCapNotDecreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "RelativeCapNotIncreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TimelockNotDecreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TimelockNotExpired",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TimelockNotIncreasing",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferFromReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferFromReverted",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferReverted",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "Unauthorized",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ZeroAbsoluteCap",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ZeroAddress",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ZeroAllocation",
+    inputs: [],
+  },
 ] as const;
 
 export const vaultV2FactoryAbi = [
@@ -9759,29 +10999,77 @@ export const vaultV2FactoryAbi = [
     type: "function",
     name: "createVaultV2",
     inputs: [
-      { name: "owner", type: "address", internalType: "address" },
-      { name: "asset", type: "address", internalType: "address" },
-      { name: "salt", type: "bytes32", internalType: "bytes32" },
+      {
+        name: "owner",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "asset",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "salt",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "isVaultV2",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "vaultV2",
     inputs: [
-      { name: "owner", type: "address", internalType: "address" },
-      { name: "asset", type: "address", internalType: "address" },
-      { name: "salt", type: "bytes32", internalType: "bytes32" },
+      {
+        name: "owner",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "asset",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "salt",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
     ],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
@@ -9817,32 +11105,72 @@ export const vaultV2FactoryAbi = [
   },
 ] as const;
 
-export const vaultV2MorphoVaultV1AdapterFactoryAbi = [
+export const morphoVaultV1AdapterFactoryAbi = [
   {
     type: "function",
     name: "createMorphoVaultV1Adapter",
     inputs: [
-      { name: "parentVault", type: "address", internalType: "address" },
-      { name: "morphoVaultV1", type: "address", internalType: "address" },
+      {
+        name: "parentVault",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "morphoVaultV1",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "nonpayable",
   },
   {
     type: "function",
     name: "isMorphoVaultV1Adapter",
-    inputs: [{ name: "account", type: "address", internalType: "address" }],
-    outputs: [{ name: "", type: "bool", internalType: "bool" }],
+    inputs: [
+      {
+        name: "account",
+        type: "address",
+        internalType: "address",
+      },
+    ],
+    outputs: [
+      {
+        name: "",
+        type: "bool",
+        internalType: "bool",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "morphoVaultV1Adapter",
     inputs: [
-      { name: "parentVault", type: "address", internalType: "address" },
-      { name: "morphoVaultV1", type: "address", internalType: "address" },
+      {
+        name: "parentVault",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "morphoVaultV1",
+        type: "address",
+        internalType: "address",
+      },
     ],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
@@ -9872,12 +11200,20 @@ export const vaultV2MorphoVaultV1AdapterFactoryAbi = [
   },
 ] as const;
 
-export const vaultV2MorphoVaultV1AdapterAbi = [
+export const morphoVaultV1AdapterAbi = [
   {
     type: "constructor",
     inputs: [
-      { name: "_parentVault", type: "address", internalType: "address" },
-      { name: "_morphoVaultV1", type: "address", internalType: "address" },
+      {
+        name: "_parentVault",
+        type: "address",
+        internalType: "address",
+      },
+      {
+        name: "_morphoVaultV1",
+        type: "address",
+        internalType: "address",
+      },
     ],
     stateMutability: "nonpayable",
   },
@@ -9885,21 +11221,51 @@ export const vaultV2MorphoVaultV1AdapterAbi = [
     type: "function",
     name: "adapterId",
     inputs: [],
-    outputs: [{ name: "", type: "bytes32", internalType: "bytes32" }],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32",
+        internalType: "bytes32",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "allocate",
     inputs: [
-      { name: "data", type: "bytes", internalType: "bytes" },
-      { name: "assets", type: "uint256", internalType: "uint256" },
-      { name: "", type: "bytes4", internalType: "bytes4" },
-      { name: "", type: "address", internalType: "address" },
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
     outputs: [
-      { name: "", type: "bytes32[]", internalType: "bytes32[]" },
-      { name: "", type: "int256", internalType: "int256" },
+      {
+        name: "",
+        type: "bytes32[]",
+        internalType: "bytes32[]",
+      },
+      {
+        name: "",
+        type: "int256",
+        internalType: "int256",
+      },
     ],
     stateMutability: "nonpayable",
   },
@@ -9907,21 +11273,51 @@ export const vaultV2MorphoVaultV1AdapterAbi = [
     type: "function",
     name: "allocation",
     inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "deallocate",
     inputs: [
-      { name: "data", type: "bytes", internalType: "bytes" },
-      { name: "assets", type: "uint256", internalType: "uint256" },
-      { name: "", type: "bytes4", internalType: "bytes4" },
-      { name: "", type: "address", internalType: "address" },
+      {
+        name: "data",
+        type: "bytes",
+        internalType: "bytes",
+      },
+      {
+        name: "assets",
+        type: "uint256",
+        internalType: "uint256",
+      },
+      {
+        name: "",
+        type: "bytes4",
+        internalType: "bytes4",
+      },
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
     ],
     outputs: [
-      { name: "", type: "bytes32[]", internalType: "bytes32[]" },
-      { name: "", type: "int256", internalType: "int256" },
+      {
+        name: "",
+        type: "bytes32[]",
+        internalType: "bytes32[]",
+      },
+      {
+        name: "",
+        type: "int256",
+        internalType: "int256",
+      },
     ],
     stateMutability: "nonpayable",
   },
@@ -9929,42 +11325,76 @@ export const vaultV2MorphoVaultV1AdapterAbi = [
     type: "function",
     name: "factory",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "ids",
     inputs: [],
-    outputs: [{ name: "", type: "bytes32[]", internalType: "bytes32[]" }],
+    outputs: [
+      {
+        name: "",
+        type: "bytes32[]",
+        internalType: "bytes32[]",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "morphoVaultV1",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "parentVault",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "realAssets",
     inputs: [],
-    outputs: [{ name: "", type: "uint256", internalType: "uint256" }],
+    outputs: [
+      {
+        name: "",
+        type: "uint256",
+        internalType: "uint256",
+      },
+    ],
     stateMutability: "view",
   },
   {
     type: "function",
     name: "setSkimRecipient",
     inputs: [
-      { name: "newSkimRecipient", type: "address", internalType: "address" },
+      {
+        name: "newSkimRecipient",
+        type: "address",
+        internalType: "address",
+      },
     ],
     outputs: [],
     stateMutability: "nonpayable",
@@ -9972,7 +11402,13 @@ export const vaultV2MorphoVaultV1AdapterAbi = [
   {
     type: "function",
     name: "skim",
-    inputs: [{ name: "token", type: "address", internalType: "address" }],
+    inputs: [
+      {
+        name: "token",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     outputs: [],
     stateMutability: "nonpayable",
   },
@@ -9980,7 +11416,13 @@ export const vaultV2MorphoVaultV1AdapterAbi = [
     type: "function",
     name: "skimRecipient",
     inputs: [],
-    outputs: [{ name: "", type: "address", internalType: "address" }],
+    outputs: [
+      {
+        name: "",
+        type: "address",
+        internalType: "address",
+      },
+    ],
     stateMutability: "view",
   },
   {
@@ -10015,13 +11457,59 @@ export const vaultV2MorphoVaultV1AdapterAbi = [
     ],
     anonymous: false,
   },
-  { type: "error", name: "ApproveReturnedFalse", inputs: [] },
-  { type: "error", name: "ApproveReverted", inputs: [] },
-  { type: "error", name: "AssetMismatch", inputs: [] },
-  { type: "error", name: "CannotSkimMorphoVaultV1Shares", inputs: [] },
-  { type: "error", name: "InvalidData", inputs: [] },
-  { type: "error", name: "NoCode", inputs: [] },
-  { type: "error", name: "NotAuthorized", inputs: [] },
-  { type: "error", name: "TransferReturnedFalse", inputs: [] },
-  { type: "error", name: "TransferReverted", inputs: [] },
+  {
+    type: "error",
+    name: "ApproveReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "ApproveReverted",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "AssetMismatch",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "CannotSkimMorphoVaultV1Shares",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "InvalidData",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NoCode",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "NotAuthorized",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferReturnedFalse",
+    inputs: [],
+  },
+  {
+    type: "error",
+    name: "TransferReverted",
+    inputs: [],
+  },
 ] as const;
+
+/**
+ * @deprecated Use `morphoVaultV1AdapterFactoryAbi` instead.
+ */
+export const vaultV1AdapterFactoryAbi = morphoVaultV1AdapterFactoryAbi;
+
+/**
+ * @deprecated Use `morphoVaultV1AdapterAbi` instead.
+ */
+export const vaultV1AdapterAbi = morphoVaultV1AdapterAbi;

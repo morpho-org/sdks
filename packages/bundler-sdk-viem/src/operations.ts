@@ -12,7 +12,13 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
+import {
+  entries,
+  getLast,
+  getValue,
+  keys,
+  values,
+} from "@morpho-org/morpho-ts";
 import {
   APPROVE_ONLY_ONCE_TOKENS,
   type Erc20Operations,
@@ -284,12 +290,6 @@ export const populateSubBundle = (
           if (draft.args.owner === sender) draft.args.owner = generalAdapter1;
           break;
         }
-        case "VaultV2_Deposit":
-        case "VaultV2_Withdraw": {
-          // Only if sender is owner otherwise the owner would be lost.
-          if (draft.args.onBehalf === sender)
-            draft.args.onBehalf = generalAdapter1;
-        }
       }
 
       // Redirect operation targets.
@@ -299,7 +299,6 @@ export const populateSubBundle = (
         case "Blue_WithdrawCollateral":
           draft.args.onBehalf = sender;
         case "MetaMorpho_Withdraw":
-        case "VaultV2_Withdraw":
         case "Paraswap_Buy":
         case "Paraswap_Sell":
         case "Blue_Paraswap_BuyDebt":
@@ -529,8 +528,6 @@ export const populateSubBundle = (
   ) {
     if (mainOperation.type === "MetaMorpho_Withdraw")
       mainOperation.args.owner = generalAdapter1;
-    if (mainOperation.type === "VaultV2_Withdraw")
-      mainOperation.args.onBehalf = generalAdapter1;
 
     return allOperations;
   }
@@ -569,7 +566,7 @@ export const populateSubBundle = (
 
 /**
  * Merges unnecessary duplicate `Erc20_Approve`, `Erc20_Transfer` and `Erc20_Wrap`.
- * Also redirects `Blue_Borrow|Withdraw|WithdrawCollateral` & `MetaMorpho_Withdraw` & `VaultV2_Withdraw` operations from the bundler to the receiver,
+ * Also redirects `Blue_Borrow|Withdraw|WithdrawCollateral` & `MetaMorpho_Withdraw` operations from the bundler to the receiver,
  * as long as the tokens received (possibly ERC4626 shares) are not used afterwards in the bundle.
  * For all the other remaining tokens, appends `Erc20_Transfer` operations to the bundle, from the bundler to the receiver.
  * @param operations The bundle to optimize.
@@ -762,10 +759,6 @@ export const finalizeBundle = (
         if (operation.args.owner !== generalAdapter1) return;
         break;
       }
-      case "VaultV2_Deposit": {
-        if (operation.args.onBehalf !== generalAdapter1) return;
-        break;
-      }
       default:
         return;
     }
@@ -789,9 +782,6 @@ export const finalizeBundle = (
 
     if (operation.type === "MetaMorpho_Deposit")
       operation.args.owner = receiver;
-
-    if (operation.type === "VaultV2_Deposit")
-      operation.args.onBehalf = receiver;
   });
 
   // Redirect borrows, withdrawals, MetaMorpho withdrawals & Vault V2 withdrawals.
@@ -807,9 +797,6 @@ export const finalizeBundle = (
         break;
       case "MetaMorpho_Withdraw":
         token = startData.getVault(operation.address).asset;
-        break;
-      case "VaultV2_Withdraw":
-        token = startData.getVaultV2(operation.address).asset;
         break;
       default:
         return;
@@ -843,10 +830,6 @@ export const finalizeBundle = (
         if (operation.args.owner !== generalAdapter1) return;
         break;
       }
-      case "VaultV2_Withdraw": {
-        if (operation.args.onBehalf !== generalAdapter1) return;
-        break;
-      }
       default:
         return;
     }
@@ -874,9 +857,6 @@ export const finalizeBundle = (
 
     if (operation.type === "MetaMorpho_Withdraw")
       operation.args.owner = inputTransfer.args.from;
-
-    if (operation.type === "VaultV2_Withdraw")
-      operation.args.onBehalf = inputTransfer.args.from;
   });
 
   // Filter out useless input transfers.
@@ -960,40 +940,78 @@ export const finalizeBundle = (
 
   // Skim any token expected to be left on the bundler.
   const skims = [] as Erc20Operations["Erc20_Transfer"][];
-  const startBundlerTokenData = steps[0].holdings[generalAdapter1] ?? {};
 
-  const uniqueSkimTokens = new Set(
-    entries(endBundlerTokenData)
-      .filter(
-        ([token, holding]) =>
-          holding != null &&
-          holding.balance - (startBundlerTokenData[token]?.balance ?? 0n) > 5n,
-      )
-      .map(([address]) => address),
-  );
+  const uniqueSkimTokens = new Set<Address>();
 
-  const pushCustomSkim = (operation: UnionOmit<BundlerOperation, "sender">) => {
+  const pushSkim = (operation: UnionOmit<BundlerOperation, "sender">) => {
     // Paraswap does not guarantee that the amount effectively bought (resp. sold) corresponds to
     // the requested amount to buy (resp. sell), so we force skim the possible surplus of bought (resp. sold) token.
     switch (operation.type) {
+      case "Blue_Borrow":
+      case "Blue_Repay":
+      case "Blue_Supply":
+      case "Blue_Withdraw":
+        uniqueSkimTokens.add(
+          startData.getMarket(operation.args.id).params.loanToken,
+        );
+        break;
+      case "Blue_WithdrawCollateral":
+      case "Blue_SupplyCollateral":
+        uniqueSkimTokens.add(
+          startData.getMarket(operation.args.id).params.collateralToken,
+        );
+        break;
+      case "Blue_FlashLoan":
+        uniqueSkimTokens.add(operation.args.token);
+        break;
       case "Paraswap_Buy":
-      case "Paraswap_Sell":
         uniqueSkimTokens.add(operation.address);
+        uniqueSkimTokens.add(operation.args.srcToken);
         break;
       case "Blue_Paraswap_BuyDebt":
         uniqueSkimTokens.add(
           startData.getMarket(operation.args.id).params.loanToken,
         );
+        uniqueSkimTokens.add(operation.args.srcToken);
+        break;
+      case "Paraswap_Sell":
+        uniqueSkimTokens.add(operation.address);
+        uniqueSkimTokens.add(operation.args.dstToken);
+        break;
+      case "Erc20_Transfer":
+      case "Erc20_Transfer2":
+        uniqueSkimTokens.add(operation.address);
+        break;
+      case "Blue_SetAuthorization":
+      case "Erc20_Approve":
+      case "Erc20_Permit":
+      case "Erc20_Permit2":
+        break;
+      case "Erc20_Wrap":
+      case "Erc20_Unwrap":
+        uniqueSkimTokens.add(operation.address);
+        uniqueSkimTokens.add(
+          startData.getWrappedToken(operation.address).underlying,
+        );
+        break;
+      case "MetaMorpho_Deposit":
+      case "MetaMorpho_Withdraw":
+        uniqueSkimTokens.add(operation.address);
+        uniqueSkimTokens.add(startData.getVault(operation.address).asset);
+        break;
+      case "MetaMorpho_PublicReallocate":
+        uniqueSkimTokens.add(NATIVE_ADDRESS);
         break;
       default:
-        break;
+        //@ts-ignore This is dead code but acts as a guard in case a new operation is added
+        throw new BundlerErrors.MissingSkimHandler(operation.type);
     }
 
     if ("callback" in operation.args)
-      operation.args.callback?.forEach(pushCustomSkim);
+      operation.args.callback?.forEach(pushSkim);
   };
 
-  operations.forEach(pushCustomSkim);
+  operations.concat(unwraps).forEach(pushSkim);
 
   skims.push(
     ...Array.from(
@@ -1012,7 +1030,22 @@ export const finalizeBundle = (
     ),
   );
 
-  return operations.concat(unwraps, skims);
+  const finalizedOperations = operations.concat(unwraps, skims);
+
+  const finalizedSteps = simulateBundlerOperations(
+    finalizedOperations,
+    startData,
+  );
+
+  for (const holding of values(
+    getLast(finalizedSteps).holdings[generalAdapter1],
+  )) {
+    if (!holding) continue;
+    if (holding.balance > 0n)
+      throw new BundlerErrors.UnskimedToken(holding.token);
+  }
+
+  return finalizedOperations;
 };
 
 export const populateBundle = (
@@ -1121,8 +1154,6 @@ export const getSimulatedBundlerOperation = (
       case "Blue_Repay":
       case "MetaMorpho_Deposit":
       case "MetaMorpho_Withdraw":
-      case "VaultV2_Deposit":
-      case "VaultV2_Withdraw":
       case "Paraswap_Buy":
       case "Paraswap_Sell":
       case "Blue_Paraswap_BuyDebt":

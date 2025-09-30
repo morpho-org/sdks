@@ -46,6 +46,8 @@ import type {
   TransactionRequirement,
 } from "./types/index.js";
 
+export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
+
 const encodeErc20Approval = (
   token: Address,
   spender: Address,
@@ -328,9 +330,18 @@ export const encodeOperation = (
 
       // Simple permit is not supported, fallback to standard approval.
 
-      requirements.txs.push(
-        ...encodeErc20Approval(operation.address, spender, amount, dataBefore),
-      );
+      // Ignore zero permits used to reset allowances at the end of a bundle
+      // when the signer does not support signatures, as they cannot be bundled.
+      // Currently only used by DAI-specific permit which does not support specific amounts.
+      if (amount > 0n)
+        requirements.txs.push(
+          ...encodeErc20Approval(
+            operation.address,
+            spender,
+            amount,
+            dataBefore,
+          ),
+        );
 
       break;
     }
@@ -586,10 +597,13 @@ export const encodeOperation = (
         assets,
         shares,
       );
-      const maxSharePrice = MathLib.mulDivUp(
-        suppliedAssets,
-        MathLib.wToRay(MathLib.WAD + slippage),
-        suppliedShares,
+      const maxSharePrice = MathLib.min(
+        MathLib.mulDivUp(
+          suppliedAssets,
+          MathLib.wToRay(MathLib.WAD + slippage),
+          suppliedShares,
+        ),
+        MAX_ABSOLUTE_SHARE_PRICE,
       );
 
       actions.push({
@@ -699,10 +713,13 @@ export const encodeOperation = (
         assets,
         shares,
       );
-      const maxSharePrice = MathLib.mulDivUp(
-        repaidAssets,
-        MathLib.wToRay(MathLib.WAD + slippage),
-        repaidShares,
+      const maxSharePrice = MathLib.min(
+        MathLib.mulDivUp(
+          repaidAssets,
+          MathLib.wToRay(MathLib.WAD + slippage),
+          repaidShares,
+        ),
+        MAX_ABSOLUTE_SHARE_PRICE,
       );
 
       actions.push({
@@ -782,11 +799,15 @@ export const encodeOperation = (
         .accrueInterest(dataBefore.block.timestamp);
 
       if (shares === 0n) {
-        const maxSharePrice = MathLib.mulDivUp(
-          assets,
-          MathLib.wToRay(MathLib.WAD + slippage),
-          vault.toShares(assets, "Down"),
+        const maxSharePrice = MathLib.min(
+          MathLib.mulDivUp(
+            assets,
+            MathLib.wToRay(MathLib.WAD + slippage),
+            vault.toShares(assets, "Down"),
+          ),
+          MAX_ABSOLUTE_SHARE_PRICE,
         );
+
         actions.push({
           type: "erc4626Deposit",
           args: [
@@ -798,11 +819,15 @@ export const encodeOperation = (
           ],
         });
       } else {
-        const maxSharePrice = MathLib.mulDivUp(
-          vault.toAssets(shares, "Up"),
-          MathLib.wToRay(MathLib.WAD + slippage),
-          shares,
+        const maxSharePrice = MathLib.min(
+          MathLib.mulDivUp(
+            vault.toAssets(shares, "Up"),
+            MathLib.wToRay(MathLib.WAD + slippage),
+            shares,
+          ),
+          MAX_ABSOLUTE_SHARE_PRICE,
         );
+
         actions.push({
           type: "erc4626Mint",
           args: [
@@ -1064,107 +1089,6 @@ export const encodeOperation = (
           ],
         },
       );
-
-      break;
-    }
-    case "VaultV2_Deposit": {
-      const {
-        assets = 0n,
-        shares = 0n,
-        onBehalf,
-        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
-      } = operation.args;
-
-      // Accrue interest to calculate the expected share price.
-      const { vault } = dataBefore
-        .getAccrualVaultV2(operation.address)
-        .accrueInterest(dataBefore.block.timestamp);
-
-      if (shares === 0n) {
-        const maxSharePrice = MathLib.mulDivUp(
-          assets,
-          MathLib.wToRay(MathLib.WAD + slippage),
-          vault.toShares(assets),
-        );
-        actions.push({
-          type: "erc4626Deposit",
-          args: [
-            operation.address,
-            assets,
-            maxSharePrice,
-            onBehalf,
-            operation.skipRevert,
-          ],
-        });
-      } else {
-        const maxSharePrice = MathLib.mulDivUp(
-          vault.toAssets(shares),
-          MathLib.wToRay(MathLib.WAD + slippage),
-          shares,
-        );
-        actions.push({
-          type: "erc4626Mint",
-          args: [
-            operation.address,
-            shares,
-            maxSharePrice,
-            onBehalf,
-            operation.skipRevert,
-          ],
-        });
-      }
-
-      break;
-    }
-    case "VaultV2_Withdraw": {
-      const {
-        assets = 0n,
-        shares = 0n,
-        onBehalf,
-        receiver,
-        slippage = DEFAULT_SLIPPAGE_TOLERANCE,
-      } = operation.args;
-
-      // Accrue interest to calculate the expected share price.
-      const { vault } = dataBefore
-        .getAccrualVaultV2(operation.address)
-        .accrueInterest(dataBefore.block.timestamp);
-
-      if (shares === 0n) {
-        const minSharePrice = MathLib.mulDivDown(
-          assets,
-          MathLib.wToRay(MathLib.WAD - slippage),
-          vault.toShares(assets),
-        );
-        actions.push({
-          type: "erc4626Withdraw",
-          args: [
-            operation.address,
-            assets,
-            minSharePrice,
-            receiver,
-            onBehalf,
-            operation.skipRevert,
-          ],
-        });
-      } else {
-        const minSharePrice = MathLib.mulDivDown(
-          vault.toAssets(shares),
-          MathLib.wToRay(MathLib.WAD - slippage),
-          shares,
-        );
-        actions.push({
-          type: "erc4626Redeem",
-          args: [
-            operation.address,
-            shares,
-            minSharePrice,
-            receiver,
-            onBehalf,
-            operation.skipRevert,
-          ],
-        });
-      }
 
       break;
     }
