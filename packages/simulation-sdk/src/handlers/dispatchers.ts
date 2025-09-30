@@ -8,7 +8,6 @@ import {
   isErc20Operation,
   isMetaMorphoOperation,
   isParaswapOperation,
-  isVaultV2Operation,
 } from "../operations.js";
 
 import { handleBlueOperation } from "./blue/index.js";
@@ -16,7 +15,6 @@ import { handleErc20Operation } from "./erc20/index.js";
 import { handleMetaMorphoOperation } from "./metamorpho/index.js";
 import { handleParaswapOperation } from "./paraswap/index.js";
 import type { MaybeDraft } from "./types.js";
-import { handleVaultV2Operation } from "./vaultV2";
 
 export type SimulationResult = [
   MaybeDraft<SimulationState>,
@@ -40,8 +38,6 @@ export const handleOperation = (
     else if (isErc20Operation(operation)) handleErc20Operation(operation, data);
     else if (isParaswapOperation(operation))
       handleParaswapOperation(operation, data);
-    else if (isVaultV2Operation(operation))
-      handleVaultV2Operation(operation, data);
 
     return data;
   } catch (error) {

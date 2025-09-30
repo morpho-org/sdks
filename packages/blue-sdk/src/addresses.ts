@@ -543,11 +543,12 @@ const _deployments = {
     adaptiveCurveIrm: 18883124n,
     publicAllocator: 19375099n,
     metaMorphoFactory: 21439510n,
-    vaultV2Factory: 23375073n,
-    morphoVaultV1AdapterFactory: 23375073n,
     registryList: 23375119n,
     chainlinkOracleFactory: 19375066n,
     preLiquidationFactory: 21414664n,
+
+    vaultV2Factory: 23375073n,
+    morphoVaultV1AdapterFactory: 23375073n,
   },
   [ChainId.BaseMainnet]: {
     morpho: 13977148n,
@@ -563,11 +564,12 @@ const _deployments = {
     adaptiveCurveIrm: 13977152n,
     publicAllocator: 13979545n,
     metaMorphoFactory: 23928808n,
-    vaultV2Factory: 35615206n,
-    morphoVaultV1AdapterFactory: 35615206n,
     registryList: 35615358n,
     chainlinkOracleFactory: 13978286n,
     preLiquidationFactory: 23779056n,
+
+    vaultV2Factory: 35615206n,
+    morphoVaultV1AdapterFactory: 35615206n,
   },
   [ChainId.PolygonMainnet]: {
     morpho: 66931042n,
