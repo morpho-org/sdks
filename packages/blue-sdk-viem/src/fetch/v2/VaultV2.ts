@@ -2,7 +2,7 @@ import { AccrualVaultV2, VaultV2 } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { vaultV2Abi } from "../../abis";
-import { abi, code } from "../../queries/V2/GetVaultV2";
+import { abi, code } from "../../queries/vault-v2/GetVaultV2";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchToken } from "../Token";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter";

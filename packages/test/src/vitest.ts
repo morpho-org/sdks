@@ -51,7 +51,7 @@ export const createViemTest = <chain extends Chain>(
       // Make block timestamp 100% predictable.
       await client.setBlockTimestampInterval({ interval: 1 });
 
-      // Remove code form contract
+      // Remove code from contract
       // cf. https://eips.ethereum.org/EIPS/eip-7702
       const code = await client.getCode({ address: client.account.address });
 
