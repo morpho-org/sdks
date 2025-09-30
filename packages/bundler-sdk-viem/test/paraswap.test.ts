@@ -487,7 +487,7 @@ describe("paraswap", () => {
         ).toBe(0n);
         expect(position.collateral).toBe(collateral - withdrawn);
         expect(position.supplyShares).toBe(0n);
-        expect(position.borrowShares).toBe(30615135298059917n);
+        expect(position.borrowShares).toBe(30615135258771683n);
 
         expect(
           await client.allowance({

@@ -59,8 +59,6 @@ export interface ChainAddresses {
   adaptiveCurveIrm: Address;
   publicAllocator?: Address;
   metaMorphoFactory?: Address;
-  vaultV2Factory?: Address;
-  morphoVaultV1AdapterFactory?: Address;
   registryList?: Address;
   chainlinkOracleFactory?: Address;
   preLiquidationFactory?: Address;
@@ -76,6 +74,10 @@ export interface ChainAddresses {
   usdc?: Address;
   stEth?: Address;
   wstEth?: Address;
+
+  /* Vault V2 */
+  vaultV2Factory?: Address;
+  morphoVaultV1AdapterFactory?: Address;
 }
 
 const _addressesRegistry = {
@@ -124,8 +126,6 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
     metaMorphoFactory: "0x1897A8997241C1cD4bD0698647e4EB7213535c24",
-    vaultV2Factory: "0xA1D94F746dEfa1928926b84fB2596c06926C0405",
-    morphoVaultV1AdapterFactory: "0xD1B8E2dee25c2b89DCD2f98448a7ce87d6F63394",
     registryList: "0x3696c5eAe4a7Ffd04Ea163564571E9CD8Ed9364e",
     chainlinkOracleFactory: "0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766",
     preLiquidationFactory: "0x6FF33615e792E35ed1026ea7cACCf42D9BF83476",
@@ -167,6 +167,9 @@ const _addressesRegistry = {
     crvUSDETHCRV: "0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14",
     "stkcvx2BTC-f-morpho": "0x385E12cf4040543Bc8C18e05C1298Be5B04f3f5e",
     "2BTC-f": "0xB7ECB2AA52AA64a717180E030241bC75Cd946726",
+
+    vaultV2Factory: "0xA1D94F746dEfa1928926b84fB2596c06926C0405",
+    morphoVaultV1AdapterFactory: "0xD1B8E2dee25c2b89DCD2f98448a7ce87d6F63394",
   },
   [ChainId.BaseMainnet]: {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
@@ -198,8 +201,6 @@ const _addressesRegistry = {
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
     metaMorphoFactory: "0xFf62A7c278C62eD665133147129245053Bbf5918",
-    vaultV2Factory: "0x4501125508079A99ebBebCE205DeC9593C2b5857",
-    morphoVaultV1AdapterFactory: "0xF42D9c36b34c9c2CF3Bc30eD2a52a90eEB604642",
     registryList: "0x5C2531Cbd2cf112Cf687da3Cd536708aDd7DB10a",
     chainlinkOracleFactory: "0x2DC205F24BCb6B311E5cdf0745B0741648Aebd3d",
     preLiquidationFactory: "0x8cd16b62E170Ee0bA83D80e1F80E6085367e2aef",
@@ -209,6 +210,9 @@ const _addressesRegistry = {
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
+
+    vaultV2Factory: "0x4501125508079A99ebBebCE205DeC9593C2b5857",
+    morphoVaultV1AdapterFactory: "0xF42D9c36b34c9c2CF3Bc30eD2a52a90eEB604642",
   },
   [ChainId.PolygonMainnet]: {
     morpho: "0x1bF0c2541F820E775182832f06c0B7Fc27A25f67",
@@ -539,11 +543,12 @@ const _deployments = {
     adaptiveCurveIrm: 18883124n,
     publicAllocator: 19375099n,
     metaMorphoFactory: 21439510n,
-    vaultV2Factory: 23375073n,
-    morphoVaultV1AdapterFactory: 23375073n,
     registryList: 23375119n,
     chainlinkOracleFactory: 19375066n,
     preLiquidationFactory: 21414664n,
+
+    vaultV2Factory: 23375073n,
+    morphoVaultV1AdapterFactory: 23375073n,
   },
   [ChainId.BaseMainnet]: {
     morpho: 13977148n,
@@ -559,11 +564,12 @@ const _deployments = {
     adaptiveCurveIrm: 13977152n,
     publicAllocator: 13979545n,
     metaMorphoFactory: 23928808n,
-    vaultV2Factory: 35615206n,
-    morphoVaultV1AdapterFactory: 35615206n,
     registryList: 35615358n,
     chainlinkOracleFactory: 13978286n,
     preLiquidationFactory: 23779056n,
+
+    vaultV2Factory: 35615206n,
+    morphoVaultV1AdapterFactory: 35615206n,
   },
   [ChainId.PolygonMainnet]: {
     morpho: 66931042n,
