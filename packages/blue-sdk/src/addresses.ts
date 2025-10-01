@@ -515,6 +515,19 @@ const _addressesRegistry = {
 
     wNative: "0x5555555555555555555555555555555555555555",
   },
+  [ChainId.SeiMainnet]: {
+    morpho: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",
+    bundler3: {
+      bundler3: "0xF9457356F18A3349Bb317Ac144c3Bcc62e5761aD",
+      generalAdapter1: "0x02e0e71e145f254820B9D89c9E6068f08256F601",
+    },
+    adaptiveCurveIrm: "0x6eFA8e3Aa8279eB2fd46b6083A9E52dA72EA56c4",
+    publicAllocator: "0xD878509446bE2C601f0f032F501851001B159D6B",
+    metaMorphoFactory: "0x8Dea49ec5bd5AeAc8bcf96B3E187F59354118291",
+    chainlinkOracleFactory: "0x4bD68c2FF3274207EC07ED281C915758b6F23F07",
+    preLiquidationFactory: "0x65eD61058cEB4895B7d62437BaCEA39b04f6D27B",
+    wNative: "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -816,6 +829,18 @@ const _deployments = {
     chainlinkOracleFactory: 1988677n,
     preLiquidationFactory: 1988956n,
   },
+  [ChainId.SeiMainnet]: {
+    morpho: 166036723n,
+    bundler3: {
+      bundler3: 168897284n,
+      generalAdapter1: 168897284n,
+    },
+    adaptiveCurveIrm: 166036723n,
+    publicAllocator: 166036723n,
+    metaMorphoFactory: 168896078n,
+    chainlinkOracleFactory: 168896078n,
+    preLiquidationFactory: 168897284n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -915,6 +940,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.HyperliquidMainnet]: {
     [_addressesRegistry[ChainId.HyperliquidMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.SeiMainnet]: {
+    [_addressesRegistry[ChainId.SeiMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 

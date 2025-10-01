@@ -755,18 +755,65 @@ export const typePolicies = {
       },
     },
   },
+  VaultV2Factory: {
+    fields: {
+      creationBlockNumber: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2DepositData: {
+    fields: {
+      assets: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2WithdrawData: {
+    fields: {
+      assets: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2Position: {
+    fields: {
+      shares: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2Sentinel: {
+    fields: {
+      blockNumber: { read: readMaybeBigInt },
+      timestamp: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2Timelock: {
+    fields: {
+      blockNumber: { read: readMaybeBigInt },
+      timestamp: { read: readMaybeBigInt },
+      duration: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2Transaction: {
+    fields: {
+      blockNumber: { read: readMaybeBigInt },
+      timestamp: { read: readMaybeBigInt },
+      shares: { read: readMaybeBigInt },
+    },
+  },
   BigIntDataPoint: {
     fields: {
-      y: {
-        read: readMaybeBigInt,
-      },
+      y: { read: readMaybeBigInt },
     },
   },
   CollateralAtRiskDataPoint: {
     fields: {
-      collateralAssets: {
-        read: readMaybeBigInt,
-      },
+      collateralAssets: { read: readMaybeBigInt },
+    },
+  },
+  CapEventData: {
+    fields: {
+      cap: { read: readMaybeBigInt },
+    },
+  },
+  ChainlinkOracleV2Event: {
+    fields: {
+      blockNumber: { read: readMaybeBigInt },
+      timestamp: { read: readMaybeBigInt },
     },
   },
 };
