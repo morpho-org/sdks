@@ -5,6 +5,11 @@ import { type IToken, WrappedToken } from "../../token";
 import type { BigIntish } from "../../types";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter";
 
+export interface IVaultV2Caps {
+  absolute: bigint;
+  relative: bigint;
+}
+
 export interface IVaultV2 extends IToken {
   asset: Address;
   /**
@@ -24,6 +29,8 @@ export interface IVaultV2 extends IToken {
   lastUpdate: bigint;
   adapters: Address[];
   liquidityAdapter: Address;
+  liquidityCaps: IVaultV2Caps | undefined;
+  liquidityAllocation: bigint | undefined;
   performanceFee: bigint;
   managementFee: bigint;
   performanceFeeRecipient: Address;
@@ -33,21 +40,23 @@ export interface IVaultV2 extends IToken {
 export class VaultV2 extends WrappedToken implements IVaultV2 {
   public readonly asset: Address;
 
-  public totalAssets: bigint;
-  public _totalAssets: bigint;
-  public totalSupply: bigint;
-  public virtualShares: bigint;
+  public totalAssets;
+  public _totalAssets;
+  public totalSupply;
+  public virtualShares;
 
-  public maxRate: bigint;
-  public lastUpdate: bigint;
+  public maxRate;
+  public lastUpdate;
 
-  public adapters: Address[];
-  public liquidityAdapter: Address;
+  public adapters;
+  public liquidityAdapter;
+  public liquidityCaps;
+  public liquidityAllocation;
 
-  public performanceFee: bigint;
-  public managementFee: bigint;
-  public performanceFeeRecipient: Address;
-  public managementFeeRecipient: Address;
+  public performanceFee;
+  public managementFee;
+  public performanceFeeRecipient;
+  public managementFeeRecipient;
 
   constructor({
     asset,
@@ -55,12 +64,14 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     _totalAssets,
     totalSupply,
     virtualShares,
+    maxRate,
     lastUpdate,
     adapters,
-    maxRate,
+    liquidityAdapter,
+    liquidityCaps,
+    liquidityAllocation,
     performanceFee,
     managementFee,
-    liquidityAdapter,
     performanceFeeRecipient,
     managementFeeRecipient,
     ...config
@@ -76,6 +87,8 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     this.lastUpdate = lastUpdate;
     this.adapters = adapters;
     this.liquidityAdapter = liquidityAdapter;
+    this.liquidityCaps = liquidityCaps;
+    this.liquidityAllocation = liquidityAllocation;
     this.performanceFee = performanceFee;
     this.managementFee = managementFee;
     this.performanceFeeRecipient = performanceFeeRecipient;

@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {IVaultV2} from "./interfaces/IVaultV2.sol";
+import {IVaultV2, Caps} from "./interfaces/IVaultV2.sol";
+import {IMorphoVaultV1AdapterFactory} from "./interfaces/IMorphoVaultV1AdapterFactory.sol";
 
 struct Token {
     address asset;
@@ -21,6 +22,8 @@ struct VaultV2Response {
     uint64 lastUpdate;
     address[] adapters;
     address liquidityAdapter;
+    bool isLiquidityAdapterKnown;
+    Caps liquidityCaps;
     uint96 performanceFee;
     uint96 managementFee;
     address performanceFeeRecipient;
@@ -28,7 +31,11 @@ struct VaultV2Response {
 }
 
 contract GetVaultV2 {
-    function query(IVaultV2 vault) external view returns (VaultV2Response memory res) {
+    function query(IVaultV2 vault, IMorphoVaultV1AdapterFactory morphoVaultV1AdapterFactory)
+        external
+        view
+        returns (VaultV2Response memory res)
+    {
         res.token =
             Token({asset: vault.asset(), symbol: vault.symbol(), name: vault.name(), decimals: vault.decimals()});
         res.asset = vault.asset();
@@ -48,6 +55,18 @@ contract GetVaultV2 {
         res.adapters = new address[](adaptersLength);
         for (uint256 i; i < adaptersLength; ++i) {
             res.adapters[i] = vault.adapters(i);
+        }
+
+        if (morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(address(vault))) {
+            res.isLiquidityAdapterKnown = true;
+
+            bytes32 liquidityAdapterId = keccak256(abi.encode("this", address(this)));
+
+            res.liquidityCaps = Caps({
+                absoluteCap: uint128(vault.absoluteCap(liquidityAdapterId)), // Safe to downcast, absoluteCap is stored as uint128.
+                relativeCap: uint128(vault.relativeCap(liquidityAdapterId)), // Safe to downcast, relativeCap is stored as uint128.
+                allocation: vault.allocation(liquidityAdapterId)
+            });
         }
     }
 }

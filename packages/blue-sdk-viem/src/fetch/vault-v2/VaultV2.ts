@@ -1,7 +1,19 @@
-import { AccrualVaultV2, VaultV2 } from "@morpho-org/blue-sdk";
-import { type Address, type Client, erc20Abi } from "viem";
+import {
+  AccrualVaultV2,
+  type IVaultV2Caps,
+  VaultV2,
+  getChainAddresses,
+} from "@morpho-org/blue-sdk";
+import {
+  type Address,
+  type Client,
+  encodeAbiParameters,
+  erc20Abi,
+  keccak256,
+  zeroAddress,
+} from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { vaultV2Abi } from "../../abis";
+import { morphoVaultV1AdapterFactoryAbi, vaultV2Abi } from "../../abis";
 import { abi, code } from "../../queries/vault-v2/GetVaultV2";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchToken } from "../Token";
@@ -14,21 +26,33 @@ export async function fetchVaultV2(
 ) {
   parameters.chainId ??= await getChainId(client);
 
+  const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
+
   if (deployless) {
     try {
-      const { token, ...vault } = await readContract(client, {
-        ...parameters,
-        abi,
-        code,
-        functionName: "query",
-        args: [address],
-      });
+      const { token, isLiquidityAdapterKnown, liquidityCaps, ...vault } =
+        await readContract(client, {
+          ...parameters,
+          abi,
+          code,
+          functionName: "query",
+          args: [address, morphoVaultV1AdapterFactory ?? zeroAddress],
+        });
 
       return new VaultV2({
         ...token,
         ...vault,
         address,
         adapters: [...vault.adapters],
+        liquidityCaps: isLiquidityAdapterKnown
+          ? {
+              absolute: liquidityCaps.absoluteCap,
+              relative: liquidityCaps.relativeCap,
+            }
+          : undefined,
+        liquidityAllocation: isLiquidityAdapterKnown
+          ? liquidityCaps.allocation
+          : undefined,
       });
     } catch {
       // Fallback to multicall if deployless call fails.
@@ -132,8 +156,17 @@ export async function fetchVaultV2(
     }),
   ]);
 
-  const adapters = await Promise.all(
-    Array.from({ length: Number(adaptersLength) }, (_, i) =>
+  const [hasMorphoVaultV1LiquidityAdapter, ...adapters] = await Promise.all([
+    morphoVaultV1AdapterFactory != null && liquidityAdapter !== zeroAddress
+      ? readContract(client, {
+          address: morphoVaultV1AdapterFactory,
+          abi: morphoVaultV1AdapterFactoryAbi,
+          functionName: "isMorphoVaultV1Adapter",
+          args: [liquidityAdapter],
+          ...parameters,
+        })
+      : undefined,
+    ...Array.from({ length: Number(adaptersLength) }, (_, i) =>
       readContract(client, {
         ...parameters,
         address,
@@ -142,7 +175,45 @@ export async function fetchVaultV2(
         args: [BigInt(i)],
       }),
     ),
-  );
+  ]);
+
+  let liquidityCaps: IVaultV2Caps | undefined;
+  let liquidityAllocation: bigint | undefined;
+  if (hasMorphoVaultV1LiquidityAdapter) {
+    const liquidityAdapterId = keccak256(
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }],
+        ["this", address],
+      ),
+    );
+
+    const [absoluteCap, relativeCap, allocation] = await Promise.all([
+      readContract(client, {
+        ...parameters,
+        address,
+        abi: vaultV2Abi,
+        functionName: "absoluteCap",
+        args: [liquidityAdapterId],
+      }),
+      readContract(client, {
+        ...parameters,
+        address,
+        abi: vaultV2Abi,
+        functionName: "relativeCap",
+        args: [liquidityAdapterId],
+      }),
+      readContract(client, {
+        ...parameters,
+        address,
+        abi: vaultV2Abi,
+        functionName: "allocation",
+        args: [liquidityAdapterId],
+      }),
+    ]);
+
+    liquidityCaps = { absolute: absoluteCap, relative: relativeCap };
+    liquidityAllocation = allocation;
+  }
 
   return new VaultV2({
     ...token,
@@ -155,6 +226,8 @@ export async function fetchVaultV2(
     lastUpdate,
     adapters,
     liquidityAdapter,
+    liquidityCaps,
+    liquidityAllocation,
     performanceFee,
     managementFee,
     performanceFeeRecipient,
