@@ -120,6 +120,7 @@ export const populateInputTransfer = (
   const useSimplePermit =
     erc2612Nonce != null &&
     (data.tryGetVault(address) != null || // MetaMorpho vaults implement EIP-2612.
+      data.tryGetVaultV2(address) != null || // Vaults V2 implement EIP-2612.
       hasSimplePermit);
   const useSimpleTransfer =
     permit2 == null ||
@@ -284,9 +285,11 @@ export const populateSubBundle = (
         case "Erc20_Wrap":
           if (isErc20Wrapper) break;
         case "MetaMorpho_Deposit":
-        case "MetaMorpho_Withdraw":
+        case "MetaMorpho_Withdraw": {
           // Only if sender is owner otherwise the owner would be lost.
           if (draft.args.owner === sender) draft.args.owner = generalAdapter1;
+          break;
+        }
       }
 
       // Redirect operation targets.
@@ -751,11 +754,14 @@ export const finalizeBundle = (
 
   // Redirect MetaMorpho deposits.
   operations.forEach((operation, index) => {
-    if (
-      operation.type !== "MetaMorpho_Deposit" ||
-      operation.args.owner !== generalAdapter1
-    )
-      return;
+    switch (operation.type) {
+      case "MetaMorpho_Deposit": {
+        if (operation.args.owner !== generalAdapter1) return;
+        break;
+      }
+      default:
+        return;
+    }
 
     const token = operation.address;
 
@@ -774,10 +780,11 @@ export const finalizeBundle = (
       // If the bundler's balance is at least once lower than assets, the bundler does need these assets.
       return;
 
-    operation.args.owner = receiver;
+    if (operation.type === "MetaMorpho_Deposit")
+      operation.args.owner = receiver;
   });
 
-  // Redirect borrows, withdrawals & MetaMorpho withdrawals.
+  // Redirect borrows, withdrawals, MetaMorpho withdrawals & Vault V2 withdrawals.
   operations.forEach((operation, index) => {
     let token: Address;
     switch (operation.type) {
@@ -818,11 +825,14 @@ export const finalizeBundle = (
 
   // Simplify Erc20_Transfer(sender = bundler, to = bundler) + MetaMorpho_Withdraw(owner = bundler) = MetaMorpho_Withdraw(owner = from).
   operations.forEach((operation, index) => {
-    if (
-      operation.type !== "MetaMorpho_Withdraw" ||
-      operation.args.owner !== generalAdapter1
-    )
-      return;
+    switch (operation.type) {
+      case "MetaMorpho_Withdraw": {
+        if (operation.args.owner !== generalAdapter1) return;
+        break;
+      }
+      default:
+        return;
+    }
 
     // shares are not defined when using assets, so we rely on simulation steps.
     const shares =
@@ -845,7 +855,8 @@ export const finalizeBundle = (
 
     inputTransfer.args.amount -= shares;
 
-    operation.args.owner = inputTransfer.args.from;
+    if (operation.type === "MetaMorpho_Withdraw")
+      operation.args.owner = inputTransfer.args.from;
   });
 
   // Filter out useless input transfers.

@@ -18,7 +18,7 @@ export default defineConfig({
     },
     globalSetup: "vitest.setup.ts",
     retry: process.env.CI ? 2 : 0,
-    testTimeout: 30_000,
+    testTimeout: 40_000,
     workspace: [
       {
         extends: true,

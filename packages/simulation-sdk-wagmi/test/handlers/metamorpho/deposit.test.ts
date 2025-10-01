@@ -49,6 +49,8 @@ describe("MetaMorpho_AccrueInterest", () => {
           users: [client.account.address, steakUsdc.address],
           tokens: [steakUsdc.asset, steakUsdc.address],
           vaults: [steakUsdc.address],
+          vaultV2Adapters: [],
+          vaultV2s: [],
           block,
           accrueInterest: false,
         }),
