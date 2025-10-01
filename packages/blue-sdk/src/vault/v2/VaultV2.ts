@@ -1,20 +1,31 @@
 import type { Address } from "viem";
-import { MathLib, type RoundingDirection } from "../math";
-import { type IToken, WrappedToken } from "../token";
-import type { BigIntish } from "../types";
+import { VaultV2Errors } from "../../errors";
+import { MathLib, type RoundingDirection } from "../../math";
+import { type IToken, WrappedToken } from "../../token";
+import type { BigIntish } from "../../types";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter";
 
 export interface IVaultV2 extends IToken {
   asset: Address;
-  totalSupply: bigint;
+  /**
+   * The total assets, *including* virtually accrued interest.
+   */
   totalAssets: bigint;
-  performanceFee: bigint;
-  managementFee: bigint;
+  /**
+   * The total assets, *excluding* virtually accrued interest.
+   */
+  _totalAssets: bigint;
+  /**
+   * The total supply of shares.
+   */
+  totalSupply: bigint;
   virtualShares: bigint;
+  maxRate: bigint;
   lastUpdate: bigint;
   adapters: Address[];
-  maxRate: bigint;
   liquidityAdapter: Address;
+  performanceFee: bigint;
+  managementFee: bigint;
   performanceFeeRecipient: Address;
   managementFeeRecipient: Address;
 }
@@ -22,36 +33,27 @@ export interface IVaultV2 extends IToken {
 export class VaultV2 extends WrappedToken implements IVaultV2 {
   public readonly asset: Address;
 
-  /**
-   * The ERC4626 vault's total supply of shares.
-   */
-  public totalSupply: bigint;
-
-  /**
-   * The ERC4626 vault's total assets, without accrued interest
-   */
   public totalAssets: bigint;
-
+  public _totalAssets: bigint;
+  public totalSupply: bigint;
   public virtualShares: bigint;
 
+  public maxRate: bigint;
   public lastUpdate: bigint;
 
   public adapters: Address[];
-
-  public maxRate: bigint;
+  public liquidityAdapter: Address;
 
   public performanceFee: bigint;
   public managementFee: bigint;
-
-  public liquidityAdapter: Address;
-
   public performanceFeeRecipient: Address;
   public managementFeeRecipient: Address;
 
   constructor({
-    totalSupply,
     asset,
     totalAssets,
+    _totalAssets,
+    totalSupply,
     virtualShares,
     lastUpdate,
     adapters,
@@ -64,16 +66,18 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     ...config
   }: IVaultV2) {
     super(config, asset);
-    this.totalSupply = totalSupply;
-    this.totalAssets = totalAssets;
-    this.virtualShares = virtualShares;
-    this.lastUpdate = lastUpdate;
+
     this.asset = asset;
+    this.totalAssets = totalAssets;
+    this._totalAssets = _totalAssets;
+    this.totalSupply = totalSupply;
+    this.virtualShares = virtualShares;
     this.maxRate = maxRate;
+    this.lastUpdate = lastUpdate;
     this.adapters = adapters;
+    this.liquidityAdapter = liquidityAdapter;
     this.performanceFee = performanceFee;
     this.managementFee = managementFee;
-    this.liquidityAdapter = liquidityAdapter;
     this.performanceFeeRecipient = performanceFeeRecipient;
     this.managementFeeRecipient = managementFeeRecipient;
   }
@@ -116,15 +120,29 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     super({ ...vault, adapters: accrualAdapters.map((a) => a.address) });
   }
 
+  /**
+   * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
+   * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the vault's `lastUpdate`.
+   */
   public accrueInterest(timestamp: BigIntish) {
     const vault = new AccrualVaultV2(
       this,
       this.accrualAdapters,
       this.assetBalance,
     );
-    const elapsed = BigInt(timestamp) - vault.lastUpdate;
 
-    if (elapsed <= 0n)
+    timestamp = BigInt(timestamp);
+
+    const elapsed = timestamp - this.lastUpdate;
+    if (elapsed < 0n)
+      throw new VaultV2Errors.InvalidInterestAccrual(
+        this.address,
+        timestamp,
+        this.lastUpdate,
+      );
+
+    // Corresponds to the `firstTotalAssets == 0` onchain check.
+    if (elapsed === 0n)
       return { vault, performanceFeeShares: 0n, managementFeeShares: 0n };
 
     const realAssets = vault.accrualAdapters.reduce(
@@ -132,10 +150,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       vault.assetBalance,
     );
     const maxTotalAssets =
-      vault.totalAssets +
-      MathLib.wMulDown(vault.totalAssets * elapsed, vault.maxRate);
+      vault._totalAssets +
+      MathLib.wMulDown(vault._totalAssets * elapsed, vault.maxRate);
     const newTotalAssets = MathLib.min(realAssets, maxTotalAssets);
-    const interest = MathLib.zeroFloorSub(newTotalAssets, vault.totalAssets);
+    const interest = MathLib.zeroFloorSub(newTotalAssets, vault._totalAssets);
 
     const performanceFeeAssets =
       interest > 0n && vault.performanceFee > 0n
@@ -160,9 +178,9 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     );
 
     vault.totalAssets = newTotalAssets;
+    vault._totalAssets = newTotalAssets;
     if (performanceFeeShares) vault.totalSupply += performanceFeeShares;
     if (managementFeeShares) vault.totalSupply += managementFeeShares;
-
     vault.lastUpdate = BigInt(timestamp);
 
     return { vault, performanceFeeShares, managementFeeShares };

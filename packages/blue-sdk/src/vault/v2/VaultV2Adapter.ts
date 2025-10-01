@@ -1,5 +1,5 @@
 import type { Address, Hash } from "viem";
-import type { BigIntish } from "../types";
+import type { BigIntish } from "../../types";
 
 export interface IVaultV2Adapter {
   address: Address;

@@ -115,6 +115,20 @@ export namespace BlueErrors {
   }
 }
 
+export namespace VaultV2Errors {
+  export class InvalidInterestAccrual extends Error {
+    constructor(
+      public readonly vault: Address,
+      public readonly timestamp: bigint,
+      public readonly lastUpdate: bigint,
+    ) {
+      super(
+        `invalid interest accrual on vault ${vault}: accrual timestamp ${timestamp} can't be prior to last update ${lastUpdate}`,
+      );
+    }
+  }
+}
+
 export interface ErrorClass<E extends Error> {
   // biome-ignore lint/suspicious/noExplicitAny: match any type of arg
   new (...args: any[]): E;
