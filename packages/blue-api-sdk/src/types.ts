@@ -33,6 +33,15 @@ export type Scalars = {
   MarketId: { input: string; output: MarketId };
 };
 
+/** Account */
+export type Account = {
+  __typename?: "Account";
+  /** Account adress. */
+  address: Scalars["Address"]["output"];
+  /** Additional information about the account. */
+  metadata: PaginatedAddressMetadata;
+};
+
 export type AddressDataPoint = {
   __typename?: "AddressDataPoint";
   x: Scalars["Float"]["output"];
@@ -195,6 +204,8 @@ export type Chain = {
 export type ChainlinkOracleV2Event = {
   __typename?: "ChainlinkOracleV2Event";
   blockNumber: Scalars["BigInt"]["output"];
+  /** Transaction caller address */
+  caller: Scalars["Address"]["output"];
   chainId: Scalars["Int"]["output"];
   timestamp: Scalars["BigInt"]["output"];
   txHash: Scalars["HexString"]["output"];
@@ -305,14 +316,6 @@ export type IntDataPoint = {
   y: Maybe<Scalars["Int"]["output"]>;
 };
 
-export type ManualVicFactory = {
-  __typename?: "ManualVicFactory";
-  address: Scalars["Address"]["output"];
-  chain: Chain;
-  creationBlockNumber: Scalars["BigInt"]["output"];
-  id: Scalars["ID"]["output"];
-};
-
 /** Morpho Blue market */
 export type Market = {
   __typename?: "Market";
@@ -399,7 +402,7 @@ export type Market = {
 
 /** Morpho Blue market */
 export type MarketCurrentIrmCurveArgs = {
-  numberOfPoints?: InputMaybe<Scalars["Float"]["input"]>;
+  numberOfPoints?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
 /** Market APY aggregates */
@@ -1006,6 +1009,7 @@ export type MarketPosition = {
    */
   supplyShares: Scalars["BigInt"]["output"];
   user: User;
+  whitelisted: Scalars["Boolean"]["output"];
 };
 
 /** Filtering options for market positions. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
@@ -1028,6 +1032,7 @@ export type MarketPositionFilters = {
   marketId_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by market unique key */
   marketUniqueKey_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  marketWhitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by greater than or equal to given supply shares */
   supplyShares_gte?: InputMaybe<Scalars["BigInt"]["input"]>;
@@ -1341,6 +1346,14 @@ export type MarketState = {
   avgNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** 6h average supply APY excluding rewards (6h timeframe is subject to change). */
   avgSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Biweekly Borrow APY excluding rewards */
+  biweeklyBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Biweekly Borrow APY including rewards */
+  biweeklyNetBorrowApy: Maybe<Scalars["Float"]["output"]>;
+  /** Biweekly Supply APY including rewards */
+  biweeklyNetSupplyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Biweekly Supply APY excluding rewards */
+  biweeklySupplyApy: Maybe<Scalars["Float"]["output"]>;
   /** Block number of the state */
   blockNumber: Maybe<Scalars["BigInt"]["output"]>;
   /** Instantaneous Borrow APY */
@@ -1444,9 +1457,15 @@ export type MarketState = {
 /** Morpho Blue market state rewards */
 export type MarketStateReward = {
   __typename?: "MarketStateReward";
-  /** Amount of reward tokens per borrowed token (annualized). Scaled to reward asset decimals. */
+  /**
+   * Amount of reward tokens per borrowed token (annualized). Scaled to reward asset decimals.
+   * @deprecated Always 0 for specific merkl campaign type
+   */
   amountPerBorrowedToken: Scalars["BigInt"]["output"];
-  /** Amount of reward tokens per supplied token (annualized). Scaled to reward asset decimals. */
+  /**
+   * Amount of reward tokens per supplied token (annualized). Scaled to reward asset decimals.
+   * @deprecated Always 0 for specific merkl campaign type
+   */
   amountPerSuppliedToken: Scalars["BigInt"]["output"];
   asset: Asset;
   /** Borrow rewards APR. */
@@ -1463,9 +1482,15 @@ export type MarketStateReward = {
    * @deprecated Use `supplyApr` instead. This field will be removed in the future.
    */
   supplyApy: Maybe<Scalars["Float"]["output"]>;
-  /** Amount of reward tokens per year on the borrow side. Scaled to reward asset decimals. */
+  /**
+   * Amount of reward tokens per year on the borrow side. Scaled to reward asset decimals.
+   * @deprecated Always 0 for specific merkl campaign type
+   */
   yearlyBorrowTokens: Scalars["BigInt"]["output"];
-  /** Amount of reward tokens per year on the supply side. Scaled to reward asset decimals. */
+  /**
+   * Amount of reward tokens per year on the supply side. Scaled to reward asset decimals.
+   * @deprecated Always 0 for specific merkl campaign type
+   */
   yearlySupplyTokens: Scalars["BigInt"]["output"];
 };
 
@@ -1793,12 +1818,6 @@ export type PaginatedCurators = {
   pageInfo: Maybe<PageInfo>;
 };
 
-export type PaginatedManualVicFactories = {
-  __typename?: "PaginatedManualVicFactories";
-  items: Maybe<Array<ManualVicFactory>>;
-  pageInfo: Maybe<PageInfo>;
-};
-
 export type PaginatedMarketPositions = {
   __typename?: "PaginatedMarketPositions";
   items: Maybe<Array<MarketPosition>>;
@@ -1904,6 +1923,12 @@ export type PaginatedVaultV2Adapters = {
 export type PaginatedVaultV2Factories = {
   __typename?: "PaginatedVaultV2Factories";
   items: Maybe<Array<VaultV2Factory>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
+export type PaginatedVaultV2Transactions = {
+  __typename?: "PaginatedVaultV2Transactions";
+  items: Maybe<Array<VaultV2Transaction>>;
   pageInfo: Maybe<PageInfo>;
 };
 
@@ -2018,6 +2043,8 @@ export type PublicallocatorReallocateFilters = {
 
 export type Query = {
   __typename?: "Query";
+  /** @deprecated WIP */
+  _crossVersionVaults: _PaginatedCrossVersionVault;
   asset: Asset;
   assetByAddress: Asset;
   assets: PaginatedAssets;
@@ -2063,18 +2090,26 @@ export type Query = {
   vaultPositions: PaginatedMetaMorphoPositions;
   vaultReallocates: PaginatedVaultReallocates;
   /** @deprecated WIP */
-  vaultV2Adapters: PaginatedVaultV2Adapters;
-  /** @deprecated WIP */
   vaultV2ByAddress: VaultV2;
   /** @deprecated WIP */
   vaultV2Factories: PaginatedVaultV2Factories;
   /** @deprecated WIP */
-  vaultV2ManualVicFactories: PaginatedManualVicFactories;
-  /** @deprecated WIP */
   vaultV2MetaMorphoAdapterFactories: PaginatedMetaMorphoAdapterFactories;
   /** @deprecated WIP */
+  vaultV2PositionByAddress: VaultV2Position;
+  /** @deprecated WIP */
   vaultV2s: PaginatedVaultV2s;
+  /** @deprecated WIP */
+  vaultV2transactions: PaginatedVaultV2Transactions;
   vaults: PaginatedMetaMorphos;
+};
+
+export type Query_CrossVersionVaultsArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  orderBy?: InputMaybe<VaultOrderBy>;
+  orderDirection?: InputMaybe<OrderDirection>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+  where?: InputMaybe<_CrossVersionVaultFilters>;
 };
 
 export type QueryAssetArgs = {
@@ -2114,7 +2149,6 @@ export type QueryMarketArgs = {
 
 export type QueryMarketAverageApysArgs = {
   chainId?: InputMaybe<Scalars["Int"]["input"]>;
-  startTimestamp: Scalars["Float"]["input"];
   uniqueKey: Scalars["String"]["input"];
 };
 
@@ -2232,6 +2266,7 @@ export type QuerySearchArgs = {
   marketOrderBy?: InputMaybe<MarketOrderBy>;
   numberOfResults?: InputMaybe<Scalars["Int"]["input"]>;
   search: Scalars["String"]["input"];
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
   vaultOrderBy?: InputMaybe<VaultOrderBy>;
 };
 
@@ -2309,17 +2344,15 @@ export type QueryVaultReallocatesArgs = {
   where?: InputMaybe<VaultReallocateFilters>;
 };
 
-export type QueryVaultV2AdaptersArgs = {
-  first?: InputMaybe<Scalars["Int"]["input"]>;
-  orderBy?: InputMaybe<VaultV2AdapterOrderBy>;
-  orderDirection?: InputMaybe<OrderDirection>;
-  skip?: InputMaybe<Scalars["Int"]["input"]>;
-  where?: InputMaybe<VaultV2AdaptersFilters>;
-};
-
 export type QueryVaultV2ByAddressArgs = {
   address: Scalars["String"]["input"];
   chainId: Scalars["Int"]["input"];
+};
+
+export type QueryVaultV2PositionByAddressArgs = {
+  chainId: Scalars["Int"]["input"];
+  userAddress: Scalars["String"]["input"];
+  vaultAddress: Scalars["String"]["input"];
 };
 
 export type QueryVaultV2sArgs = {
@@ -2328,6 +2361,14 @@ export type QueryVaultV2sArgs = {
   orderDirection?: InputMaybe<OrderDirection>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
   where?: InputMaybe<VaultV2sFilters>;
+};
+
+export type QueryVaultV2transactionsArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  orderBy?: InputMaybe<VaultV2TransactionOrderBy>;
+  orderDirection?: InputMaybe<OrderDirection>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+  where?: InputMaybe<VaultV2TransactionFilters>;
 };
 
 export type QueryVaultsArgs = {
@@ -2632,6 +2673,8 @@ export type User = {
   tag: Maybe<Scalars["String"]["output"]>;
   transactions: Array<Transaction>;
   vaultPositions: Array<VaultPosition>;
+  /** @deprecated WIP */
+  vaultV2Positions: Array<VaultV2Position>;
 };
 
 /** User state history */
@@ -3278,6 +3321,7 @@ export type VaultPosition = {
   state: Maybe<VaultPositionState>;
   user: User;
   vault: Vault;
+  whitelisted: Scalars["Boolean"]["output"];
 };
 
 /** Filtering options for vault positions. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
@@ -3297,6 +3341,7 @@ export type VaultPositionFilters = {
   vaultAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by MetaMorpho vault id */
   vaultId_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  vaultWhitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
 /** Vault position state history */
@@ -3449,6 +3494,10 @@ export type VaultState = {
   avgApy: Maybe<Scalars["Float"]["output"]>;
   /** 6h average vault APY including rewards, after deducting the performance fee (6h timeframe is subject to change). */
   avgNetApy: Maybe<Scalars["Float"]["output"]>;
+  /** Biweekly Vault APY excluding rewards, before deducting the performance fee. */
+  biweeklyApy: Maybe<Scalars["Float"]["output"]>;
+  /** Biweekly Vault APY including rewards, after deducting the performance fee. */
+  biweeklyNetApy: Maybe<Scalars["Float"]["output"]>;
   /** Block number of the state */
   blockNumber: Maybe<Scalars["BigInt"]["output"]>;
   /** Vault curator address. */
@@ -3551,36 +3600,43 @@ export type VaultV2 = {
   __typename?: "VaultV2";
   adapters: PaginatedVaultV2Adapters;
   address: Scalars["Address"]["output"];
+  allocators: Array<VaultV2Allocator>;
   asset: Asset;
-  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgApy */
+  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgApy, not capped by max rate */
   avgApy: Maybe<Scalars["Float"]["output"]>;
   /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.avgNetApy */
   avgNetApy: Maybe<Scalars["Float"]["output"]>;
   chain: Chain;
   creationBlockNumber: Scalars["BigInt"]["output"];
   creationTimestamp: Scalars["BigInt"]["output"];
+  curator: Account;
+  /** Curators operating on this vault */
+  curators: PaginatedCurators;
   factory: Asset;
   id: Scalars["ID"]["output"];
   /** @deprecated currently always 0 */
   idleAssets: Scalars["BigInt"]["output"];
   /** @deprecated currently always 0 */
   idleAssetsUsd: Maybe<Scalars["Float"]["output"]>;
-  /** @deprecated currently always metaMorphoAdapter */
   liquidityAdapter: Maybe<VaultV2Adapter>;
-  /** @deprecated currently always 0 */
   managementFee: Scalars["Float"]["output"];
-  /** @deprecated currently always 0x0000... */
   managementFeeRecipient: Scalars["Address"]["output"];
-  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.fee */
+  metadata: Maybe<VaultV2Metadata>;
+  name: Scalars["String"]["output"];
+  owner: Account;
   performanceFee: Scalars["Float"]["output"];
-  /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.feeRecipient */
   performanceFeeRecipient: Scalars["Address"]["output"];
   /** @deprecated currently always metaMorphoAdapter.metaMorpho.state.rewards */
   rewards: Array<VaultStateReward>;
+  sentinels: Array<VaultV2Sentinel>;
+  symbol: Scalars["String"]["output"];
+  timelocks: Array<VaultV2Timelock>;
   /** @deprecated currently always metaMorphoAdapter.position.assets */
   totalAssets: Maybe<Scalars["BigInt"]["output"]>;
   /** @deprecated currently always metaMorphoAdapter.position.assetsUsd */
   totalAssetsUsd: Maybe<Scalars["Float"]["output"]>;
+  totalSupply: Scalars["BigInt"]["output"];
+  whitelisted: Scalars["Boolean"]["output"];
 };
 
 export type VaultV2Adapter = {
@@ -3605,19 +3661,27 @@ export type VaultV2AdapterFactory = {
   id: Scalars["ID"]["output"];
 };
 
-export enum VaultV2AdapterOrderBy {
-  Address = "Address",
-}
-
 export enum VaultV2AdapterType {
   MetaMorpho = "MetaMorpho",
 }
 
-export type VaultV2AdaptersFilters = {
-  /** Filter by vault v2 adapter address */
-  address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  /** Filter by chain id */
-  chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+/** Vault V2 allocator */
+export type VaultV2Allocator = {
+  __typename?: "VaultV2Allocator";
+  /** Allocator account. */
+  allocator: Account;
+  /** Allocator since block number */
+  blockNumber: Scalars["BigInt"]["output"];
+  /** Allocator since timestamp */
+  timestamp: Scalars["BigInt"]["output"];
+};
+
+/** Vault V2 deposit data */
+export type VaultV2DepositData = {
+  __typename?: "VaultV2DepositData";
+  assets: Scalars["BigInt"]["output"];
+  onBehalf: Scalars["String"]["output"];
+  sender: Scalars["String"]["output"];
 };
 
 export type VaultV2Factory = {
@@ -3628,16 +3692,139 @@ export type VaultV2Factory = {
   id: Scalars["ID"]["output"];
 };
 
+/** Vault V2 metadata */
+export type VaultV2Metadata = {
+  __typename?: "VaultV2Metadata";
+  description: Scalars["String"]["output"];
+  forumLink: Maybe<Scalars["String"]["output"]>;
+  image: Scalars["String"]["output"];
+};
+
 export enum VaultV2OrderBy {
   Address = "Address",
 }
+
+export type VaultV2Position = {
+  __typename?: "VaultV2Position";
+  chain: Chain;
+  id: Scalars["ID"]["output"];
+  /** Amount of vault shares */
+  shares: Scalars["BigInt"]["output"];
+  user: User;
+  vault: VaultV2;
+};
+
+/** Vault V2 sentinel */
+export type VaultV2Sentinel = {
+  __typename?: "VaultV2Sentinel";
+  /** Sentinel since block number */
+  blockNumber: Scalars["BigInt"]["output"];
+  /** Sentinel account. */
+  sentinel: Account;
+  /** Sentinel since timestamp */
+  timestamp: Scalars["BigInt"]["output"];
+};
+
+/** Vault V2 allocator */
+export type VaultV2Timelock = {
+  __typename?: "VaultV2Timelock";
+  /** Last updated at block number */
+  blockNumber: Scalars["BigInt"]["output"];
+  /** Duration of the timelock */
+  duration: Scalars["BigInt"]["output"];
+  /** Targeted function */
+  functionName: Scalars["String"]["output"];
+  /** Targeted selector */
+  selector: Scalars["HexString"]["output"];
+  /** Last updated at timestamp */
+  timestamp: Scalars["BigInt"]["output"];
+};
+
+/** Vault V2 transaction */
+export type VaultV2Transaction = {
+  __typename?: "VaultV2Transaction";
+  blockNumber: Scalars["BigInt"]["output"];
+  chain: Chain;
+  data: VaultV2TransactionData;
+  logIndex: Scalars["Int"]["output"];
+  shares: Scalars["BigInt"]["output"];
+  timestamp: Scalars["BigInt"]["output"];
+  txHash: Scalars["HexString"]["output"];
+  txIndex: Scalars["Int"]["output"];
+  type: VaultV2TransactionType;
+  vault: VaultV2;
+};
+
+export type VaultV2TransactionData =
+  | VaultV2DepositData
+  | VaultV2TransferData
+  | VaultV2WithdrawData;
+
+/** Filtering options for transactions. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
+export type VaultV2TransactionFilters = {
+  /** Filter by greater than or equal to given amount of market assets, in underlying token units */
+  assets_gte?: InputMaybe<Scalars["BigInt"]["input"]>;
+  /** Filter by lower than or equal to given amount of market assets, in underlying token units */
+  assets_lte?: InputMaybe<Scalars["BigInt"]["input"]>;
+  /** Filter by chain id */
+  chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+  /** Filter by transaction hash */
+  hash?: InputMaybe<Scalars["String"]["input"]>;
+  /** Filter by greater than or equal to given amount of MetaMorpho vault shares */
+  shares_gte?: InputMaybe<Scalars["BigInt"]["input"]>;
+  /** Filter by lower than or equal to given amount of MetaMorpho vault shares */
+  shares_lte?: InputMaybe<Scalars["BigInt"]["input"]>;
+  /** Filter by greater than or equal to given timestamp */
+  timestamp_gte?: InputMaybe<Scalars["Int"]["input"]>;
+  /** Filter by lower than or equal to given timestamp */
+  timestamp_lte?: InputMaybe<Scalars["Int"]["input"]>;
+  /** Filter by transaction type */
+  type_in?: InputMaybe<Array<VaultV2TransactionType>>;
+  /** Filter by user address. Case insensitive. */
+  userAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by MetaMorpho vault address */
+  vaultAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+};
+
+export enum VaultV2TransactionOrderBy {
+  Shares = "Shares",
+  Time = "Time",
+}
+
+export enum VaultV2TransactionType {
+  Deposit = "Deposit",
+  Transfer = "Transfer",
+  Withdraw = "Withdraw",
+}
+
+/** Vault V2 transfer data */
+export type VaultV2TransferData = {
+  __typename?: "VaultV2TransferData";
+  from: Scalars["String"]["output"];
+  to: Scalars["String"]["output"];
+};
+
+/** Vault V2 withdraw data */
+export type VaultV2WithdrawData = {
+  __typename?: "VaultV2WithdrawData";
+  assets: Scalars["BigInt"]["output"];
+  onBehalf: Scalars["String"]["output"];
+  receiver: Scalars["String"]["output"];
+  sender: Scalars["String"]["output"];
+};
 
 export type VaultV2sFilters = {
   /** Filter by vault v2 address */
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by chain id */
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+  whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
+
+export enum VaultVersion {
+  V1 = "V1",
+  V2 = "V2",
+}
 
 /** Vault warning */
 export type VaultWarning = {
@@ -3651,3 +3838,86 @@ export enum WarningLevel {
   Red = "RED",
   Yellow = "YELLOW",
 }
+
+export type _CrossVersionVault = {
+  __typename?: "_CrossVersionVault";
+  /** null iif the vaiult is a vault V2 */
+  v1: Maybe<Vault>;
+  /** null iif the vaiult is a Vault V1 */
+  v2: Maybe<VaultV2>;
+};
+
+export type _CrossVersionVaultFilters = {
+  /** Filter by MetaMorpho vault address */
+  address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter out by MetaMorpho vault address */
+  address_not_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by greater than or equal to given APY. */
+  apy_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by lower than or equal to given APY. */
+  apy_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by asset contract address */
+  assetAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by asset id */
+  assetId_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by asset symbol */
+  assetSymbol_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by asset tags. */
+  assetTags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by chain id */
+  chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+  countryCode?: InputMaybe<Scalars["String"]["input"]>;
+  /** Filter by MetaMorpho creator address */
+  creatorAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by credora risk score greater than or equal to given value */
+  credoraRiskScore_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by credora risk score lower than or equal to given value */
+  credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by MetaMorpho current curator address */
+  curatorAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by MetaMorpho curators ids */
+  curator_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by MetaMorphoFactory address */
+  factoryAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by greater than or equal to given fee rate. */
+  fee_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by lower than or equal to given fee rate. */
+  fee_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by MetaMorpho vault id */
+  id_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by markets in which the vault has positions. */
+  marketUniqueKey_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by greater than or equal to given net APY. */
+  netApy_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by lower than or equal to given net APY. */
+  netApy_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by MetaMorpho owner address */
+  ownerAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by lower than or equal to given public allocator fee in dollar. */
+  publicAllocatorFeeUsd_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by lower than or equal to given public allocator fee in ETH (wad) */
+  publicAllocatorFee_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  search?: InputMaybe<Scalars["String"]["input"]>;
+  /** Filter by MetaMorpho vault symbol */
+  symbol_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** Filter by greater than or equal to given amount of total assets, in USD. */
+  totalAssetsUsd_gte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by lower than or equal to given amount of total assets, in USD. */
+  totalAssetsUsd_lte?: InputMaybe<Scalars["Float"]["input"]>;
+  /** Filter by greater than or equal to given amount of total assets, in underlying token units. */
+  totalAssets_gte?: InputMaybe<Scalars["BigInt"]["input"]>;
+  /** Filter by lower than or equal to given amount of total assets, in underlying token units. */
+  totalAssets_lte?: InputMaybe<Scalars["BigInt"]["input"]>;
+  /** Filter by greater than or equal to given amount of shares total supply. */
+  totalSupply_gte?: InputMaybe<Scalars["BigInt"]["input"]>;
+  /** Filter by lower than or equal to given amount of shares total supply. */
+  totalSupply_lte?: InputMaybe<Scalars["BigInt"]["input"]>;
+  version?: InputMaybe<VaultVersion>;
+  whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
+};
+
+export type _PaginatedCrossVersionVault = {
+  __typename?: "_PaginatedCrossVersionVault";
+  items: Maybe<Array<_CrossVersionVault>>;
+  pageInfo: Maybe<PageInfo>;
+};
