@@ -1,9 +1,11 @@
-import type { Address } from "viem";
+import { type Address, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors";
+import { type CapacityLimit, CapacityLimitReason } from "../../market";
 import { MathLib, type RoundingDirection } from "../../math";
 import { type IToken, WrappedToken } from "../../token";
 import type { BigIntish } from "../../types";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter";
+import { AccrualVaultV2MorphoVaultV1Adapter } from "./VaultV2MorphoVaultV1Adapter";
 
 export interface IVaultV2Caps {
   absolute: bigint;
@@ -127,10 +129,45 @@ export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   constructor(
     vault: IAccrualVaultV2,
-    public readonly accrualAdapters: IAccrualVaultV2Adapter[],
-    public readonly assetBalance: bigint,
+    public accrualLiquidityAdapter: IAccrualVaultV2Adapter,
+    public accrualAdapters: IAccrualVaultV2Adapter[],
+    public assetBalance: bigint,
   ) {
     super({ ...vault, adapters: accrualAdapters.map((a) => a.address) });
+  }
+
+  /**
+   * Returns the maximum amount of assets that can be deposited given a balance of assets.
+   * @param assets The maximum amount of assets to deposit.
+   */
+  public maxDeposit(assets: bigint): CapacityLimit {
+    if (this.liquidityAdapter === zeroAddress)
+      return { value: 0n, limiter: CapacityLimitReason.liquidity };
+
+    if (
+      this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
+    ) {
+      return this.accrualLiquidityAdapter.accrualVaultV1.maxDeposit(assets);
+    }
+
+    throw new VaultV2Errors.UnsupportedLiquidityAdapter(this.liquidityAdapter);
+  }
+
+  /**
+   * Returns the maximum amount of assets that can be withdrawn given an amount of shares to redeem.
+   * @param shares The maximum amount of shares to redeem.
+   */
+  public maxWithdraw(shares: bigint): CapacityLimit {
+    if (this.liquidityAdapter === zeroAddress)
+      return { value: 0n, limiter: CapacityLimitReason.liquidity };
+
+    if (
+      this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
+    ) {
+      return this.accrualLiquidityAdapter.accrualVaultV1.maxWithdraw(shares);
+    }
+
+    throw new VaultV2Errors.UnsupportedLiquidityAdapter(this.liquidityAdapter);
   }
 
   /**
@@ -140,6 +177,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   public accrueInterest(timestamp: BigIntish) {
     const vault = new AccrualVaultV2(
       this,
+      this.accrualLiquidityAdapter,
       this.accrualAdapters,
       this.assetBalance,
     );

@@ -326,7 +326,29 @@ export class AccrualVault extends Vault implements IAccrualVault {
     return MathLib.wDivDown(allocation.position.supplyAssets, this.totalAssets);
   }
 
+  /**
+   * Returns the deposit capacity limit of a given amount of assets on the vault.
+   * @param assets The maximum amount of assets to deposit.
+   * @deprecated Use `maxDeposit` instead.
+   */
   public getDepositCapacityLimit(assets: bigint): CapacityLimit {
+    return this.maxDeposit(assets);
+  }
+
+  /**
+   * Returns the withdraw capacity limit corresponding to a given amount of shares of the vault.
+   * @param shares The maximum amount of shares to redeem.
+   * @deprecated Use `maxWithdraw` instead.
+   */
+  public getWithdrawCapacityLimit(shares: bigint): CapacityLimit {
+    return this.maxWithdraw(shares);
+  }
+
+  /**
+   * Returns the maximum amount of assets that can be deposited given a balance of assets.
+   * @param assets The maximum amount of assets to deposit.
+   */
+  public maxDeposit(assets: bigint): CapacityLimit {
     const suppliable = this.allocations
       .values()
       .reduce(
@@ -353,7 +375,11 @@ export class AccrualVault extends Vault implements IAccrualVault {
     };
   }
 
-  public getWithdrawCapacityLimit(shares: bigint): CapacityLimit {
+  /**
+   * Returns the maximum amount of assets that can be withdrawn given an amount of shares to redeem.
+   * @param shares The maximum amount of shares to redeem.
+   */
+  public maxWithdraw(shares: bigint): CapacityLimit {
     const assets = this.toAssets(shares);
     const { liquidity } = this;
 

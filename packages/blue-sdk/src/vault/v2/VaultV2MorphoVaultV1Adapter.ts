@@ -1,4 +1,4 @@
-import type { Address } from "viem";
+import { type Address, encodeAbiParameters, keccak256 } from "viem";
 
 import { VaultV2Adapter } from "./VaultV2Adapter";
 
@@ -20,7 +20,16 @@ export class VaultV2MorphoVaultV1Adapter
     morphoVaultV1,
     ...vaultV2Adapter
   }: IVaultV2MorphoVaultV1Adapter) {
-    super(vaultV2Adapter);
+    super({
+      ...vaultV2Adapter,
+      adapterId: keccak256(
+        encodeAbiParameters(
+          [{ type: "string" }, { type: "address" }],
+          ["this", vaultV2Adapter.address],
+        ),
+      ),
+    });
+
     this.morphoVaultV1 = morphoVaultV1;
   }
 
@@ -38,13 +47,13 @@ export class AccrualVaultV2MorphoVaultV1Adapter
 {
   constructor(
     adapter: IAccrualVaultV2MorphoVaultV1Adapter,
-    public vaultV1: AccrualVault,
+    public accrualVaultV1: AccrualVault,
     public shares: bigint,
   ) {
     super(adapter);
   }
 
   realAssets(timestamp: BigIntish) {
-    return this.vaultV1.accrueInterest(timestamp).toAssets(this.shares);
+    return this.accrualVaultV1.accrueInterest(timestamp).toAssets(this.shares);
   }
 }

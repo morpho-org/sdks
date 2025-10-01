@@ -127,6 +127,12 @@ export namespace VaultV2Errors {
       );
     }
   }
+
+  export class UnsupportedLiquidityAdapter extends Error {
+    constructor(public readonly address: Address) {
+      super(`unsupported liquidity adapter "${address}"`);
+    }
+  }
 }
 
 export interface ErrorClass<E extends Error> {

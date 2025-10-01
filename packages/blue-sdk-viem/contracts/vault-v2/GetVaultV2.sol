@@ -60,7 +60,7 @@ contract GetVaultV2 {
         if (morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(address(vault))) {
             res.isLiquidityAdapterKnown = true;
 
-            bytes32 liquidityAdapterId = keccak256(abi.encode("this", address(this)));
+            bytes32 liquidityAdapterId = keccak256(abi.encode("this", address(vault)));
 
             res.liquidityCaps = Caps({
                 absoluteCap: uint128(vault.absoluteCap(liquidityAdapterId)), // Safe to downcast, absoluteCap is stored as uint128.

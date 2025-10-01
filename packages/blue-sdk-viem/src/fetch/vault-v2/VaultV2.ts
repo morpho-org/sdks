@@ -244,7 +244,7 @@ export async function fetchAccrualVaultV2(
 
   const vaultV2 = await fetchVaultV2(address, client, parameters);
 
-  const [assetBalance, ...adapters] = await Promise.all([
+  const [assetBalance, liquidityAdapter, ...adapters] = await Promise.all([
     readContract(client, {
       ...parameters,
       address: vaultV2.asset,
@@ -252,10 +252,11 @@ export async function fetchAccrualVaultV2(
       functionName: "balanceOf",
       args: [vaultV2.address],
     }),
+    fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, parameters),
     ...vaultV2.adapters.map(async (adapter) =>
       fetchAccrualVaultV2Adapter(adapter, client, parameters),
     ),
   ]);
 
-  return new AccrualVaultV2(vaultV2, adapters, assetBalance);
+  return new AccrualVaultV2(vaultV2, liquidityAdapter, adapters, assetBalance);
 }
