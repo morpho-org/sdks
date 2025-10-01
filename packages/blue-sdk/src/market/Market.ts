@@ -160,22 +160,6 @@ export class Market implements IMarket {
   }
 
   /**
-   * Returns the rate at which interest accrued for suppliers of this market,
-   * since the last time the market was updated (scaled by WAD).
-   * @deprecated There's no such thing as a supply rate in Morpho. Only the supply APY is meaningful.
-   */
-  get supplyRate() {
-    return MarketUtils.getSupplyRate(this.avgBorrowRate, this);
-  }
-
-  /**
-   * @deprecated Use `avgBorrowRate` instead.
-   */
-  get borrowRate() {
-    return this.getAccrualBorrowRates().avgBorrowRate;
-  }
-
-  /**
    * Returns the instantaneous rate at which interest accrues for borrowers of this market,
    * if `accrueInterest` was called immediately onchain (scaled by WAD).
    *
@@ -220,13 +204,6 @@ export class Market implements IMarket {
    */
   get borrowApy() {
     return this.getBorrowApy();
-  }
-
-  /**
-   * @deprecated Use `getEndBorrowRate(timestamp)` instead.
-   */
-  public getBorrowRate(timestamp: BigIntish = Time.timestamp()) {
-    return this.getAccrualBorrowRates(timestamp).endBorrowRate;
   }
 
   /**

@@ -78,39 +78,11 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the rate at which interest accrued for suppliers on the corresponding market,
-   * since the last time the market was updated (scaled by WAD).
-   * @param borrowRate The average borrow rate since the last market update (scaled by WAD).
-   * @param market The market state.
-   * @deprecated There's no such thing as a supply rate in Morpho. Only the supply APY is meaningful.
-   */
-  export function getSupplyRate(
-    borrowRate: BigIntish,
-    { utilization, fee }: { utilization: BigIntish; fee: BigIntish },
-  ) {
-    const borrowRateWithoutFees = MathLib.wMulUp(borrowRate, utilization);
-
-    return MathLib.wMulUp(borrowRateWithoutFees, MathLib.WAD - BigInt(fee));
-  }
-
-  /**
-   * Returns the per-second rate continuously compounded over the given period, as calculated in Morpho Blue (scaled by WAD).
-   * @param rate The per-second rate to compound (scaled by WAD).
-   * @param period The period to compound the rate over (in seconds). Defaults to 1 year.
-   * @deprecated The compounded rate is inaccurate if rate * period >> 0. If interested in the APY, use `rateToApy` instead.
-   */
-  export function compoundRate(
-    rate: BigIntish,
-    period: BigIntish = SECONDS_PER_YEAR,
-  ) {
-    return MathLib.wTaylorCompounded(rate, period);
-  }
-
-  /**
    * Returns the per-second rate continuously compounded over a year (scaled by WAD),
    * as calculated in Morpho Blue assuming the market is frequently accrued onchain.
    * @param rate The per-second rate to compound annually (scaled by WAD).
    */
+  // TODO: deprecatable
   // TODO: return a Number for APYs.
   export function rateToApy(rate: BigIntish) {
     return safeParseNumber(
