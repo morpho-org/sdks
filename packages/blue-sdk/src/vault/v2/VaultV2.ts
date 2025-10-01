@@ -1,4 +1,4 @@
-import { type Address, zeroAddress } from "viem";
+import { type Address, maxUint256, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors";
 import { type CapacityLimit, CapacityLimitReason } from "../../market";
 import { MathLib, type RoundingDirection } from "../../math";
@@ -142,15 +142,43 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    */
   public maxDeposit(assets: bigint): CapacityLimit {
     if (this.liquidityAdapter === zeroAddress)
-      return { value: 0n, limiter: CapacityLimitReason.liquidity };
+      return { value: maxUint256, limiter: CapacityLimitReason.liquidity };
 
+    let liquidityAdapterLimit: CapacityLimit | undefined;
     if (
       this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
     ) {
-      return this.accrualLiquidityAdapter.accrualVaultV1.maxDeposit(assets);
+      liquidityAdapterLimit =
+        this.accrualLiquidityAdapter.accrualVaultV1.maxDeposit(assets);
     }
 
-    throw new VaultV2Errors.UnsupportedLiquidityAdapter(this.liquidityAdapter);
+    if (
+      this.liquidityCaps == null ||
+      this.liquidityAllocation == null ||
+      liquidityAdapterLimit == null
+    )
+      throw new VaultV2Errors.UnsupportedLiquidityAdapter(
+        this.liquidityAdapter,
+      );
+
+    const absoluteMaxDeposit =
+      this.liquidityCaps.absolute - this.liquidityAllocation;
+    if (liquidityAdapterLimit.value > absoluteMaxDeposit)
+      return {
+        value: absoluteMaxDeposit,
+        limiter: CapacityLimitReason.vaultV2_absoluteCap,
+      };
+
+    const relativeMaxDeposit =
+      MathLib.wMulDown(this.totalAssets, this.liquidityCaps.relative) -
+      this.liquidityAllocation;
+    if (liquidityAdapterLimit.value > relativeMaxDeposit)
+      return {
+        value: relativeMaxDeposit,
+        limiter: CapacityLimitReason.vaultV2_relativeCap,
+      };
+
+    return liquidityAdapterLimit;
   }
 
   /**
@@ -159,7 +187,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    */
   public maxWithdraw(shares: bigint): CapacityLimit {
     if (this.liquidityAdapter === zeroAddress)
-      return { value: 0n, limiter: CapacityLimitReason.liquidity };
+      return {
+        value: this.assetBalance,
+        limiter: CapacityLimitReason.liquidity,
+      };
 
     if (
       this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
