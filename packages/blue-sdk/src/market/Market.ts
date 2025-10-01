@@ -151,7 +151,7 @@ export class Market implements IMarket {
   }
 
   /**
-   * The market's Annual Percentage Yield (APY) at the IRM's target utilization rate, if applicable (scaled by WAD).
+   * The market's Annual Percentage Yield (APY) at the IRM's target utilization rate, if applicable.
    */
   get apyAtTarget() {
     if (this.rateAtTarget == null) return;
@@ -272,7 +272,7 @@ export class Market implements IMarket {
 
   /**
    * The market's instantaneous borrow-side Annual Percentage Yield (APY) at the given timestamp,
-   * if the state remains unchanged (not accrued) (scaled by WAD).
+   * if the state remains unchanged (not accrued).
    * @param timestamp The timestamp at which to calculate the borrow APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
@@ -301,7 +301,7 @@ export class Market implements IMarket {
 
   /**
    * The market's experienced borrow-side Annual Percentage Yield (APY),
-   * if interest was to be accrued at the given timestamp (scaled by WAD).
+   * if interest was to be accrued at the given timestamp.
    * @param timestamp The timestamp at which to calculate the borrow APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).

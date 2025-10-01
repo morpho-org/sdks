@@ -111,14 +111,14 @@ describe("MarketUtils", () => {
   test("should continuously compound rates", () => {
     expect(
       MarketUtils.rateToApy(parseUnits("3", 16) / SECONDS_PER_YEAR),
-    ).toEqual(3_0454533936848223n);
+    ).toEqual(0.030454533936848223);
 
     expect(
       MarketUtils.rateToApy(parseUnits("40", 16) / SECONDS_PER_YEAR),
-    ).toEqual(49_1824697617472700n);
+    ).toEqual(0.4918246976174727);
 
     expect(
       MarketUtils.rateToApy(parseUnits("500", 16) / SECONDS_PER_YEAR),
-    ).toEqual(14741_3159098725030000n);
+    ).toEqual(147.41315909872503);
   });
 });

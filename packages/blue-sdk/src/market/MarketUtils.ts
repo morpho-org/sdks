@@ -9,7 +9,6 @@ import {
 } from "../constants.js";
 import { MathLib, type RoundingDirection, SharesMath } from "../math/index.js";
 import type { BigIntish, MarketId } from "../types.js";
-import { safeParseNumber } from "../utils.js";
 import type { IMarketParams } from "./MarketParams.js";
 
 /**
@@ -78,16 +77,12 @@ export namespace MarketUtils {
   }
 
   /**
-   * Returns the per-second rate continuously compounded over a year (scaled by WAD),
+   * Returns the per-second rate continuously compounded over a year,
    * as calculated in Morpho Blue assuming the market is frequently accrued onchain.
-   * @param rate The per-second rate to compound annually (scaled by WAD).
+   * @param rate The per-second rate to compound annually.
    */
-  // TODO: deprecatable
-  // TODO: return a Number for APYs.
   export function rateToApy(rate: BigIntish) {
-    return safeParseNumber(
-      Math.expm1(+formatEther(BigInt(rate) * SECONDS_PER_YEAR)),
-    );
+    return Math.expm1(+formatEther(BigInt(rate) * SECONDS_PER_YEAR));
   }
 
   /**
