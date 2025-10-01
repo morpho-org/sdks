@@ -12,41 +12,35 @@ struct Token {
 
 struct VaultV2Response {
     Token token;
-    uint256 totalSupply;
-    uint128 totalAssets;
     address asset;
+    uint256 totalAssets;
+    uint128 _totalAssets;
+    uint256 totalSupply;
+    uint256 virtualShares;
+    uint64 maxRate;
+    uint64 lastUpdate;
+    address[] adapters;
+    address liquidityAdapter;
     uint96 performanceFee;
     uint96 managementFee;
-    uint64 maxRate;
-    uint256 virtualShares;
-    uint64 lastUpdate;
-    address liquidityAdapter;
-    address[] adapters;
     address performanceFeeRecipient;
     address managementFeeRecipient;
 }
 
 contract GetVaultV2 {
-    function query(IVaultV2 vault)
-        external
-        view
-        returns (VaultV2Response memory res)
-    {
-        res.token = Token({
-            asset: vault.asset(),
-            symbol: vault.symbol(),
-            name: vault.name(),
-            decimals: vault.decimals()
-        });
-        res.totalSupply = vault.totalSupply();
-        res.totalAssets = vault._totalAssets();
+    function query(IVaultV2 vault) external view returns (VaultV2Response memory res) {
+        res.token =
+            Token({asset: vault.asset(), symbol: vault.symbol(), name: vault.name(), decimals: vault.decimals()});
         res.asset = vault.asset();
-        res.performanceFee = vault.performanceFee();
-        res.managementFee = vault.managementFee();
-        res.maxRate = vault.maxRate();
+        res.totalAssets = vault.totalAssets();
+        res._totalAssets = vault._totalAssets();
+        res.totalSupply = vault.totalSupply();
         res.virtualShares = vault.virtualShares();
+        res.maxRate = vault.maxRate();
         res.lastUpdate = vault.lastUpdate();
         res.liquidityAdapter = vault.liquidityAdapter();
+        res.performanceFee = vault.performanceFee();
+        res.managementFee = vault.managementFee();
         res.performanceFeeRecipient = vault.performanceFeeRecipient();
         res.managementFeeRecipient = vault.managementFeeRecipient();
 

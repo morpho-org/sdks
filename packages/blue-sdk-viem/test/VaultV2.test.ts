@@ -4,13 +4,19 @@ import { encodeFunctionData, parseUnits, zeroAddress } from "viem";
 import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
 import { vaultV2Abi } from "../src";
-import { fetchAccrualVaultV2, fetchVaultV2 } from "../src/fetch/v2/VaultV2";
+import {
+  fetchAccrualVaultV2,
+  fetchVaultV2,
+} from "../src/fetch/vault-v2/VaultV2";
 import { vaultV2Test } from "./setup";
 
 const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
 
 describe("AccrualVaultV2", () => {
   vaultV2Test("should accrue interest", async ({ client }) => {
+    const managementFee = parseUnits("2", 16) / Time.s.from.y(1n);
+    const performanceFee = parseUnits("5", 16);
+
     const owner = await readContract(client, {
       address: vaultV2Address,
       abi: vaultV2Abi,
@@ -33,11 +39,11 @@ describe("AccrualVaultV2", () => {
       },
       {
         functionName: "setManagementFee",
-        args: [parseUnits("2", 16) / Time.s.from.y(1n)],
+        args: [managementFee],
       },
       {
         functionName: "setPerformanceFee",
-        args: [parseUnits("5", 16)],
+        args: [performanceFee],
       },
     ] as const;
 
@@ -67,8 +73,8 @@ describe("AccrualVaultV2", () => {
 
     const vaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
 
-    expect(vaultV2.managementFee).not.toEqual(0n);
-    expect(vaultV2.performanceFee).not.toEqual(0n);
+    expect(vaultV2.managementFee).toEqual(managementFee);
+    expect(vaultV2.performanceFee).toEqual(performanceFee);
 
     await client.mine({ blocks: 1_000_000 });
 
@@ -107,6 +113,7 @@ describe("AccrualVaultV2", () => {
         performanceFeeRecipient: zeroAddress,
         symbol: "tvUSDC",
         totalAssets: 16963835n,
+        _totalAssets: 16963835n,
         totalSupply: 16963835000000000000n,
         virtualShares: 1000000000000n,
       });
@@ -134,6 +141,7 @@ describe("AccrualVaultV2", () => {
         performanceFeeRecipient: zeroAddress,
         symbol: "tvUSDC",
         totalAssets: 16963835n,
+        _totalAssets: 16963835n,
         totalSupply: 16963835000000000000n,
         virtualShares: 1000000000000n,
       });

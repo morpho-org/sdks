@@ -6,8 +6,8 @@ export interface IVaultV2MorphoVaultV1Adapter extends IVaultV2Adapter {
   morphoVaultV1: Address;
 }
 
-import type { BigIntish } from "../types";
-import type { AccrualVault } from "../vault";
+import type { BigIntish } from "../../types";
+import type { AccrualVault } from "../Vault";
 import type { IAccrualVaultV2Adapter, IVaultV2Adapter } from "./VaultV2Adapter";
 
 export class VaultV2MorphoVaultV1Adapter
