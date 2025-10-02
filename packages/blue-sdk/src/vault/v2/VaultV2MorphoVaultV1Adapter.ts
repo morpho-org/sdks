@@ -1,4 +1,4 @@
-import { type Address, encodeAbiParameters, keccak256 } from "viem";
+import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
 
 import { VaultV2Adapter } from "./VaultV2Adapter";
 
@@ -14,6 +14,15 @@ export class VaultV2MorphoVaultV1Adapter
   extends VaultV2Adapter
   implements IVaultV2MorphoVaultV1Adapter
 {
+  static adapterId(address: Address) {
+    return keccak256(
+      encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }],
+        ["this", address],
+      ),
+    );
+  }
+
   public readonly morphoVaultV1: Address;
 
   constructor({
@@ -22,12 +31,7 @@ export class VaultV2MorphoVaultV1Adapter
   }: IVaultV2MorphoVaultV1Adapter) {
     super({
       ...vaultV2Adapter,
-      adapterId: keccak256(
-        encodeAbiParameters(
-          [{ type: "string" }, { type: "address" }],
-          ["this", vaultV2Adapter.address],
-        ),
-      ),
+      adapterId: VaultV2MorphoVaultV1Adapter.adapterId(vaultV2Adapter.address),
     });
 
     this.morphoVaultV1 = morphoVaultV1;
@@ -55,5 +59,13 @@ export class AccrualVaultV2MorphoVaultV1Adapter
 
   realAssets(timestamp: BigIntish) {
     return this.accrualVaultV1.accrueInterest(timestamp).toAssets(this.shares);
+  }
+
+  maxDeposit(_data: Hex, assets: BigIntish) {
+    return this.accrualVaultV1.maxDeposit(assets);
+  }
+
+  maxWithdraw(_data: Hex) {
+    return this.accrualVaultV1.maxWithdraw(this.shares);
   }
 }

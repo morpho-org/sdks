@@ -7,23 +7,9 @@ import {
 } from "../math/index.js";
 import type { BigIntish } from "../types.js";
 
+import { type CapacityLimit, CapacityLimitReason } from "../utils.js";
 import { type IMarketParams, MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
-
-export enum CapacityLimitReason {
-  liquidity = "Liquidity",
-  balance = "Balance",
-  position = "Position",
-  collateral = "Collateral",
-  cap = "Cap",
-  vaultV2_absoluteCap = "VaultV2_AbsoluteCap",
-  vaultV2_relativeCap = "VaultV2_RelativeCap",
-}
-
-export interface CapacityLimit {
-  value: bigint;
-  limiter: CapacityLimitReason;
-}
 
 export interface MaxBorrowOptions {
   maxLtv?: bigint;

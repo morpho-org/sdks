@@ -11,6 +11,13 @@ struct Token {
     uint256 decimals;
 }
 
+struct VaultV2Allocation {
+    bytes32 id;
+    uint256 absoluteCap;
+    uint256 relativeCap;
+    uint256 allocation;
+}
+
 struct VaultV2Response {
     Token token;
     address asset;
@@ -22,8 +29,9 @@ struct VaultV2Response {
     uint64 lastUpdate;
     address[] adapters;
     address liquidityAdapter;
+    bytes liquidityData;
     bool isLiquidityAdapterKnown;
-    Caps liquidityCaps;
+    VaultV2Allocation[] liquidityAllocations;
     uint96 performanceFee;
     uint96 managementFee;
     address performanceFeeRecipient;
@@ -46,6 +54,7 @@ contract GetVaultV2 {
         res.maxRate = vault.maxRate();
         res.lastUpdate = vault.lastUpdate();
         res.liquidityAdapter = vault.liquidityAdapter();
+        res.liquidityData = vault.liquidityData();
         res.performanceFee = vault.performanceFee();
         res.managementFee = vault.managementFee();
         res.performanceFeeRecipient = vault.performanceFeeRecipient();
@@ -60,13 +69,22 @@ contract GetVaultV2 {
         if (morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(address(vault))) {
             res.isLiquidityAdapterKnown = true;
 
-            bytes32 liquidityAdapterId = keccak256(abi.encode("this", address(vault)));
-
-            res.liquidityCaps = Caps({
-                absoluteCap: uint128(vault.absoluteCap(liquidityAdapterId)), // Safe to downcast, absoluteCap is stored as uint128.
-                relativeCap: uint128(vault.relativeCap(liquidityAdapterId)), // Safe to downcast, relativeCap is stored as uint128.
-                allocation: vault.allocation(liquidityAdapterId)
+            res.liquidityAllocations = new VaultV2Allocation[](1);
+            res.liquidityAllocations[0] = VaultV2Allocation({
+                id: keccak256(abi.encode("this", address(vault))),
+                absoluteCap: 0,
+                relativeCap: 0,
+                allocation: 0
             });
+        }
+
+        uint256 liquidityAllocationsLength = res.liquidityAllocations.length;
+        for (uint256 i; i < liquidityAllocationsLength; ++i) {
+            VaultV2Allocation memory allocation = res.liquidityAllocations[i];
+
+            allocation.absoluteCap = vault.absoluteCap(allocation.id);
+            allocation.relativeCap = vault.relativeCap(allocation.id);
+            allocation.allocation = vault.allocation(allocation.id);
         }
     }
 }

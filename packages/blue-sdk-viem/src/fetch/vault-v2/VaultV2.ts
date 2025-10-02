@@ -1,15 +1,15 @@
 import {
   AccrualVaultV2,
-  type IVaultV2Caps,
+  type IVaultV2Allocation,
   VaultV2,
+  VaultV2MorphoVaultV1Adapter,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import {
   type Address,
   type Client,
-  encodeAbiParameters,
+  type Hash,
   erc20Abi,
-  keccak256,
   zeroAddress,
 } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -30,7 +30,7 @@ export async function fetchVaultV2(
 
   if (deployless) {
     try {
-      const { token, isLiquidityAdapterKnown, liquidityCaps, ...vault } =
+      const { token, isLiquidityAdapterKnown, liquidityAllocations, ...vault } =
         await readContract(client, {
           ...parameters,
           abi,
@@ -44,14 +44,8 @@ export async function fetchVaultV2(
         ...vault,
         address,
         adapters: [...vault.adapters],
-        liquidityCaps: isLiquidityAdapterKnown
-          ? {
-              absolute: liquidityCaps.absoluteCap,
-              relative: liquidityCaps.relativeCap,
-            }
-          : undefined,
-        liquidityAllocation: isLiquidityAdapterKnown
-          ? liquidityCaps.allocation
+        liquidityAllocations: isLiquidityAdapterKnown
+          ? [...liquidityAllocations]
           : undefined,
       });
     } catch {
@@ -71,6 +65,7 @@ export async function fetchVaultV2(
     lastUpdate,
     maxRate,
     liquidityAdapter,
+    liquidityData,
     adaptersLength,
     performanceFeeRecipient,
     managementFeeRecipient,
@@ -140,6 +135,12 @@ export async function fetchVaultV2(
       ...parameters,
       address,
       abi: vaultV2Abi,
+      functionName: "liquidityData",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: vaultV2Abi,
       functionName: "adaptersLength",
     }),
     readContract(client, {
@@ -177,43 +178,46 @@ export async function fetchVaultV2(
     ),
   ]);
 
-  let liquidityCaps: IVaultV2Caps | undefined;
-  let liquidityAllocation: bigint | undefined;
-  if (hasMorphoVaultV1LiquidityAdapter) {
-    const liquidityAdapterId = keccak256(
-      encodeAbiParameters(
-        [{ type: "string" }, { type: "address" }],
-        ["this", address],
-      ),
+  let liquidityAdapterIds: Hash[] | undefined;
+  if (hasMorphoVaultV1LiquidityAdapter)
+    liquidityAdapterIds = [VaultV2MorphoVaultV1Adapter.adapterId(address)];
+
+  let liquidityAllocations: IVaultV2Allocation[] | undefined;
+  if (liquidityAdapterIds != null)
+    liquidityAllocations = await Promise.all(
+      liquidityAdapterIds.map(async (id) => {
+        const [absoluteCap, relativeCap, allocation] = await Promise.all([
+          readContract(client, {
+            ...parameters,
+            address,
+            abi: vaultV2Abi,
+            functionName: "absoluteCap",
+            args: [id],
+          }),
+          readContract(client, {
+            ...parameters,
+            address,
+            abi: vaultV2Abi,
+            functionName: "relativeCap",
+            args: [id],
+          }),
+          readContract(client, {
+            ...parameters,
+            address,
+            abi: vaultV2Abi,
+            functionName: "allocation",
+            args: [id],
+          }),
+        ]);
+
+        return {
+          id,
+          absoluteCap,
+          relativeCap,
+          allocation,
+        };
+      }),
     );
-
-    const [absoluteCap, relativeCap, allocation] = await Promise.all([
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: vaultV2Abi,
-        functionName: "absoluteCap",
-        args: [liquidityAdapterId],
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: vaultV2Abi,
-        functionName: "relativeCap",
-        args: [liquidityAdapterId],
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: vaultV2Abi,
-        functionName: "allocation",
-        args: [liquidityAdapterId],
-      }),
-    ]);
-
-    liquidityCaps = { absolute: absoluteCap, relative: relativeCap };
-    liquidityAllocation = allocation;
-  }
 
   return new VaultV2({
     ...token,
@@ -226,8 +230,8 @@ export async function fetchVaultV2(
     lastUpdate,
     adapters,
     liquidityAdapter,
-    liquidityCaps,
-    liquidityAllocation,
+    liquidityData,
+    liquidityAllocations,
     performanceFee,
     managementFee,
     performanceFeeRecipient,

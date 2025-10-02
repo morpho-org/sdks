@@ -1,15 +1,17 @@
-import { type Address, maxUint256, zeroAddress } from "viem";
+import { type Address, type Hash, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors";
-import { type CapacityLimit, CapacityLimitReason } from "../../market";
 import { MathLib, type RoundingDirection } from "../../math";
 import { type IToken, WrappedToken } from "../../token";
 import type { BigIntish } from "../../types";
+import { type CapacityLimit, CapacityLimitReason } from "../../utils";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter";
 import { AccrualVaultV2MorphoVaultV1Adapter } from "./VaultV2MorphoVaultV1Adapter";
 
-export interface IVaultV2Caps {
-  absolute: bigint;
-  relative: bigint;
+export interface IVaultV2Allocation {
+  id: Hash;
+  absoluteCap: bigint;
+  relativeCap: bigint;
+  allocation: bigint;
 }
 
 export interface IVaultV2 extends IToken {
@@ -31,8 +33,8 @@ export interface IVaultV2 extends IToken {
   lastUpdate: bigint;
   adapters: Address[];
   liquidityAdapter: Address;
-  liquidityCaps: IVaultV2Caps | undefined;
-  liquidityAllocation: bigint | undefined;
+  liquidityData: Hex;
+  liquidityAllocations: IVaultV2Allocation[] | undefined;
   performanceFee: bigint;
   managementFee: bigint;
   performanceFeeRecipient: Address;
@@ -52,8 +54,8 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
 
   public adapters;
   public liquidityAdapter;
-  public liquidityCaps;
-  public liquidityAllocation;
+  public liquidityData;
+  public liquidityAllocations;
 
   public performanceFee;
   public managementFee;
@@ -70,8 +72,8 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     lastUpdate,
     adapters,
     liquidityAdapter,
-    liquidityCaps,
-    liquidityAllocation,
+    liquidityData,
+    liquidityAllocations,
     performanceFee,
     managementFee,
     performanceFeeRecipient,
@@ -89,23 +91,23 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     this.lastUpdate = lastUpdate;
     this.adapters = adapters;
     this.liquidityAdapter = liquidityAdapter;
-    this.liquidityCaps = liquidityCaps;
-    this.liquidityAllocation = liquidityAllocation;
+    this.liquidityData = liquidityData;
+    this.liquidityAllocations = liquidityAllocations;
     this.performanceFee = performanceFee;
     this.managementFee = managementFee;
     this.performanceFeeRecipient = performanceFeeRecipient;
     this.managementFeeRecipient = managementFeeRecipient;
   }
 
-  public toAssets(shares: bigint) {
+  public toAssets(shares: BigIntish) {
     return this._unwrap(shares, "Down");
   }
 
-  public toShares(assets: bigint) {
+  public toShares(assets: BigIntish) {
     return this._wrap(assets, "Down");
   }
 
-  protected _wrap(amount: bigint, rounding: RoundingDirection) {
+  protected _wrap(amount: BigIntish, rounding: RoundingDirection) {
     return MathLib.mulDiv(
       amount,
       this.totalSupply + this.virtualShares,
@@ -114,7 +116,7 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     );
   }
 
-  protected _unwrap(amount: bigint, rounding: RoundingDirection) {
+  protected _unwrap(amount: BigIntish, rounding: RoundingDirection) {
     return MathLib.mulDiv(
       amount,
       this.totalAssets + 1n,
@@ -137,68 +139,79 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   }
 
   /**
-   * Returns the maximum amount of assets that can be deposited given a balance of assets.
+   * Returns the maximum amount of assets that can be deposited to the vault.
    * @param assets The maximum amount of assets to deposit.
    */
-  public maxDeposit(assets: bigint): CapacityLimit {
+  public maxDeposit(assets: BigIntish): CapacityLimit {
     if (this.liquidityAdapter === zeroAddress)
-      return { value: maxUint256, limiter: CapacityLimitReason.liquidity };
+      return { value: BigInt(assets), limiter: CapacityLimitReason.liquidity };
 
     let liquidityAdapterLimit: CapacityLimit | undefined;
     if (
       this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
     ) {
-      liquidityAdapterLimit =
-        this.accrualLiquidityAdapter.accrualVaultV1.maxDeposit(assets);
+      liquidityAdapterLimit = this.accrualLiquidityAdapter.maxDeposit(
+        this.liquidityData,
+        assets,
+      );
     }
 
-    if (
-      this.liquidityCaps == null ||
-      this.liquidityAllocation == null ||
-      liquidityAdapterLimit == null
-    )
+    if (this.liquidityAllocations == null || liquidityAdapterLimit == null)
       throw new VaultV2Errors.UnsupportedLiquidityAdapter(
         this.liquidityAdapter,
       );
 
-    const absoluteMaxDeposit =
-      this.liquidityCaps.absolute - this.liquidityAllocation;
-    if (liquidityAdapterLimit.value > absoluteMaxDeposit)
-      return {
-        value: absoluteMaxDeposit,
-        limiter: CapacityLimitReason.vaultV2_absoluteCap,
-      };
+    // At this stage: `liquidityAdapterLimit.value <= assets`
 
-    const relativeMaxDeposit =
-      MathLib.wMulDown(this.totalAssets, this.liquidityCaps.relative) -
-      this.liquidityAllocation;
-    if (liquidityAdapterLimit.value > relativeMaxDeposit)
-      return {
-        value: relativeMaxDeposit,
-        limiter: CapacityLimitReason.vaultV2_relativeCap,
-      };
+    for (const { absoluteCap, relativeCap, allocation } of this
+      .liquidityAllocations) {
+      const absoluteMaxDeposit = absoluteCap - allocation;
+      if (liquidityAdapterLimit.value > absoluteMaxDeposit)
+        return {
+          value: absoluteMaxDeposit,
+          limiter: CapacityLimitReason.vaultV2_absoluteCap,
+        };
+
+      const relativeMaxDeposit =
+        MathLib.wMulDown(this.totalAssets, relativeCap) - allocation;
+      if (liquidityAdapterLimit.value > relativeMaxDeposit)
+        return {
+          value: relativeMaxDeposit,
+          limiter: CapacityLimitReason.vaultV2_relativeCap,
+        };
+    }
 
     return liquidityAdapterLimit;
   }
 
   /**
-   * Returns the maximum amount of assets that can be withdrawn given an amount of shares to redeem.
+   * Returns the maximum amount of assets that can be withdrawn from the vault.
    * @param shares The maximum amount of shares to redeem.
    */
-  public maxWithdraw(shares: bigint): CapacityLimit {
-    if (this.liquidityAdapter === zeroAddress)
+  public maxWithdraw(shares: BigIntish): CapacityLimit {
+    const assets = this.toAssets(shares);
+
+    let liquidity = this.assetBalance;
+    if (this.liquidityAdapter !== zeroAddress) {
+      if (
+        this.accrualLiquidityAdapter instanceof
+        AccrualVaultV2MorphoVaultV1Adapter
+      )
+        liquidity = this.accrualLiquidityAdapter.maxWithdraw(
+          this.liquidityData,
+        ).value;
+    }
+
+    if (assets > liquidity)
       return {
-        value: this.assetBalance,
+        value: liquidity,
         limiter: CapacityLimitReason.liquidity,
       };
 
-    if (
-      this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
-    ) {
-      return this.accrualLiquidityAdapter.accrualVaultV1.maxWithdraw(shares);
-    }
-
-    throw new VaultV2Errors.UnsupportedLiquidityAdapter(this.liquidityAdapter);
+    return {
+      value: assets,
+      limiter: CapacityLimitReason.balance,
+    };
   }
 
   /**
