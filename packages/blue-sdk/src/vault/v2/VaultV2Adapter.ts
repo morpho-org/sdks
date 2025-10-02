@@ -1,6 +1,6 @@
-import type { CapacityLimit } from "src/utils";
 import type { Address, Hash, Hex } from "viem";
 import type { BigIntish } from "../../types";
+import type { CapacityLimit } from "../../utils";
 
 export interface IVaultV2Adapter {
   address: Address;

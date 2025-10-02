@@ -180,7 +180,9 @@ export async function fetchVaultV2(
 
   let liquidityAdapterIds: Hash[] | undefined;
   if (hasMorphoVaultV1LiquidityAdapter)
-    liquidityAdapterIds = [VaultV2MorphoVaultV1Adapter.adapterId(address)];
+    liquidityAdapterIds = [
+      VaultV2MorphoVaultV1Adapter.adapterId(liquidityAdapter),
+    ];
 
   let liquidityAllocations: IVaultV2Allocation[] | undefined;
   if (liquidityAdapterIds != null)

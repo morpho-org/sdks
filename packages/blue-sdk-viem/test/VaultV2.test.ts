@@ -1,4 +1,4 @@
-import { VaultV2 } from "@morpho-org/blue-sdk";
+import { VaultV2, VaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, parseUnits, zeroAddress } from "viem";
 import { readContract } from "viem/actions";
@@ -105,8 +105,17 @@ describe("AccrualVaultV2", () => {
         decimals: 18,
         lastUpdate: 1758881557n,
         liquidityAdapter: "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
-        liquidityCaps: undefined,
-        liquidityAllocation: undefined,
+        liquidityData: "0x",
+        liquidityAllocations: [
+          {
+            id: VaultV2MorphoVaultV1Adapter.adapterId(
+              "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
+            ),
+            absoluteCap: 1000000000000n,
+            relativeCap: 1000000000000000000n,
+            allocation: 16980381n,
+          },
+        ],
         managementFee: 0n,
         managementFeeRecipient: zeroAddress,
         maxRate: 0n,
@@ -135,8 +144,17 @@ describe("AccrualVaultV2", () => {
         decimals: 18,
         lastUpdate: 1758881557n,
         liquidityAdapter: "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
-        liquidityCaps: { relative: 0n, absolute: 0n },
-        liquidityAllocation: 0n,
+        liquidityData: "0x",
+        liquidityAllocations: [
+          {
+            id: VaultV2MorphoVaultV1Adapter.adapterId(
+              "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
+            ),
+            absoluteCap: 1000000000000n,
+            relativeCap: 1000000000000000000n,
+            allocation: 16980381n,
+          },
+        ],
         managementFee: 0n,
         managementFeeRecipient: zeroAddress,
         maxRate: 0n,

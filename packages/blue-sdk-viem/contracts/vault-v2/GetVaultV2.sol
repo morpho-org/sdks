@@ -66,12 +66,12 @@ contract GetVaultV2 {
             res.adapters[i] = vault.adapters(i);
         }
 
-        if (morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(address(vault))) {
+        if (morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter)) {
             res.isLiquidityAdapterKnown = true;
 
             res.liquidityAllocations = new VaultV2Allocation[](1);
             res.liquidityAllocations[0] = VaultV2Allocation({
-                id: keccak256(abi.encode("this", address(vault))),
+                id: keccak256(abi.encode("this", res.liquidityAdapter)),
                 absoluteCap: 0,
                 relativeCap: 0,
                 allocation: 0
