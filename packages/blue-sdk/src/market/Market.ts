@@ -151,28 +151,12 @@ export class Market implements IMarket {
   }
 
   /**
-   * The market's Annual Percentage Yield (APY) at the IRM's target utilization rate, if applicable (scaled by WAD).
+   * The market's Annual Percentage Yield (APY) at the IRM's target utilization rate, if applicable.
    */
   get apyAtTarget() {
     if (this.rateAtTarget == null) return;
 
     return MarketUtils.rateToApy(this.rateAtTarget);
-  }
-
-  /**
-   * Returns the rate at which interest accrued for suppliers of this market,
-   * since the last time the market was updated (scaled by WAD).
-   * @deprecated There's no such thing as a supply rate in Morpho. Only the supply APY is meaningful.
-   */
-  get supplyRate() {
-    return MarketUtils.getSupplyRate(this.avgBorrowRate, this);
-  }
-
-  /**
-   * @deprecated Use `avgBorrowRate` instead.
-   */
-  get borrowRate() {
-    return this.getAccrualBorrowRates().avgBorrowRate;
   }
 
   /**
@@ -220,13 +204,6 @@ export class Market implements IMarket {
    */
   get borrowApy() {
     return this.getBorrowApy();
-  }
-
-  /**
-   * @deprecated Use `getEndBorrowRate(timestamp)` instead.
-   */
-  public getBorrowRate(timestamp: BigIntish = Time.timestamp()) {
-    return this.getAccrualBorrowRates(timestamp).endBorrowRate;
   }
 
   /**
@@ -295,7 +272,7 @@ export class Market implements IMarket {
 
   /**
    * The market's instantaneous borrow-side Annual Percentage Yield (APY) at the given timestamp,
-   * if the state remains unchanged (not accrued) (scaled by WAD).
+   * if the state remains unchanged (not accrued).
    * @param timestamp The timestamp at which to calculate the borrow APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
@@ -324,7 +301,7 @@ export class Market implements IMarket {
 
   /**
    * The market's experienced borrow-side Annual Percentage Yield (APY),
-   * if interest was to be accrued at the given timestamp (scaled by WAD).
+   * if interest was to be accrued at the given timestamp.
    * @param timestamp The timestamp at which to calculate the borrow APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
