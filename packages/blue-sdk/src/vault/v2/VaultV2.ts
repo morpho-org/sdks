@@ -1,9 +1,18 @@
-import type { Address } from "viem";
+import { type Address, type Hash, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors";
 import { MathLib, type RoundingDirection } from "../../math";
 import { type IToken, WrappedToken } from "../../token";
 import type { BigIntish } from "../../types";
+import { type CapacityLimit, CapacityLimitReason } from "../../utils";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter";
+import { AccrualVaultV2MorphoVaultV1Adapter } from "./VaultV2MorphoVaultV1Adapter";
+
+export interface IVaultV2Allocation {
+  id: Hash;
+  absoluteCap: bigint;
+  relativeCap: bigint;
+  allocation: bigint;
+}
 
 export interface IVaultV2 extends IToken {
   asset: Address;
@@ -24,6 +33,8 @@ export interface IVaultV2 extends IToken {
   lastUpdate: bigint;
   adapters: Address[];
   liquidityAdapter: Address;
+  liquidityData: Hex;
+  liquidityAllocations: IVaultV2Allocation[] | undefined;
   performanceFee: bigint;
   managementFee: bigint;
   performanceFeeRecipient: Address;
@@ -33,21 +44,23 @@ export interface IVaultV2 extends IToken {
 export class VaultV2 extends WrappedToken implements IVaultV2 {
   public readonly asset: Address;
 
-  public totalAssets: bigint;
-  public _totalAssets: bigint;
-  public totalSupply: bigint;
-  public virtualShares: bigint;
+  public totalAssets;
+  public _totalAssets;
+  public totalSupply;
+  public virtualShares;
 
-  public maxRate: bigint;
-  public lastUpdate: bigint;
+  public maxRate;
+  public lastUpdate;
 
-  public adapters: Address[];
-  public liquidityAdapter: Address;
+  public adapters;
+  public liquidityAdapter;
+  public liquidityData;
+  public liquidityAllocations;
 
-  public performanceFee: bigint;
-  public managementFee: bigint;
-  public performanceFeeRecipient: Address;
-  public managementFeeRecipient: Address;
+  public performanceFee;
+  public managementFee;
+  public performanceFeeRecipient;
+  public managementFeeRecipient;
 
   constructor({
     asset,
@@ -55,12 +68,14 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     _totalAssets,
     totalSupply,
     virtualShares,
+    maxRate,
     lastUpdate,
     adapters,
-    maxRate,
+    liquidityAdapter,
+    liquidityData,
+    liquidityAllocations,
     performanceFee,
     managementFee,
-    liquidityAdapter,
     performanceFeeRecipient,
     managementFeeRecipient,
     ...config
@@ -76,21 +91,23 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     this.lastUpdate = lastUpdate;
     this.adapters = adapters;
     this.liquidityAdapter = liquidityAdapter;
+    this.liquidityData = liquidityData;
+    this.liquidityAllocations = liquidityAllocations;
     this.performanceFee = performanceFee;
     this.managementFee = managementFee;
     this.performanceFeeRecipient = performanceFeeRecipient;
     this.managementFeeRecipient = managementFeeRecipient;
   }
 
-  public toAssets(shares: bigint) {
+  public toAssets(shares: BigIntish) {
     return this._unwrap(shares, "Down");
   }
 
-  public toShares(assets: bigint) {
+  public toShares(assets: BigIntish) {
     return this._wrap(assets, "Down");
   }
 
-  protected _wrap(amount: bigint, rounding: RoundingDirection) {
+  protected _wrap(amount: BigIntish, rounding: RoundingDirection) {
     return MathLib.mulDiv(
       amount,
       this.totalSupply + this.virtualShares,
@@ -99,7 +116,7 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     );
   }
 
-  protected _unwrap(amount: bigint, rounding: RoundingDirection) {
+  protected _unwrap(amount: BigIntish, rounding: RoundingDirection) {
     return MathLib.mulDiv(
       amount,
       this.totalAssets + 1n,
@@ -114,10 +131,87 @@ export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   constructor(
     vault: IAccrualVaultV2,
-    public readonly accrualAdapters: IAccrualVaultV2Adapter[],
-    public readonly assetBalance: bigint,
+    public accrualLiquidityAdapter: IAccrualVaultV2Adapter,
+    public accrualAdapters: IAccrualVaultV2Adapter[],
+    public assetBalance: bigint,
   ) {
     super({ ...vault, adapters: accrualAdapters.map((a) => a.address) });
+  }
+
+  /**
+   * Returns the maximum amount of assets that can be deposited to the vault.
+   * @param assets The maximum amount of assets to deposit.
+   */
+  public maxDeposit(assets: BigIntish): CapacityLimit {
+    if (this.liquidityAdapter === zeroAddress)
+      return { value: BigInt(assets), limiter: CapacityLimitReason.liquidity };
+
+    let liquidityAdapterLimit: CapacityLimit | undefined;
+    if (
+      this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
+    ) {
+      liquidityAdapterLimit = this.accrualLiquidityAdapter.maxDeposit(
+        this.liquidityData,
+        assets,
+      );
+    }
+
+    if (this.liquidityAllocations == null || liquidityAdapterLimit == null)
+      throw new VaultV2Errors.UnsupportedLiquidityAdapter(
+        this.liquidityAdapter,
+      );
+
+    // At this stage: `liquidityAdapterLimit.value <= assets`
+
+    for (const { absoluteCap, relativeCap, allocation } of this
+      .liquidityAllocations) {
+      const absoluteMaxDeposit = absoluteCap - allocation;
+      if (liquidityAdapterLimit.value > absoluteMaxDeposit)
+        return {
+          value: absoluteMaxDeposit,
+          limiter: CapacityLimitReason.vaultV2_absoluteCap,
+        };
+
+      const relativeMaxDeposit =
+        MathLib.wMulDown(this.totalAssets, relativeCap) - allocation;
+      if (liquidityAdapterLimit.value > relativeMaxDeposit)
+        return {
+          value: relativeMaxDeposit,
+          limiter: CapacityLimitReason.vaultV2_relativeCap,
+        };
+    }
+
+    return liquidityAdapterLimit;
+  }
+
+  /**
+   * Returns the maximum amount of assets that can be withdrawn from the vault.
+   * @param shares The maximum amount of shares to redeem.
+   */
+  public maxWithdraw(shares: BigIntish): CapacityLimit {
+    const assets = this.toAssets(shares);
+
+    let liquidity = this.assetBalance;
+    if (this.liquidityAdapter !== zeroAddress) {
+      if (
+        this.accrualLiquidityAdapter instanceof
+        AccrualVaultV2MorphoVaultV1Adapter
+      )
+        liquidity += this.accrualLiquidityAdapter.maxWithdraw(
+          this.liquidityData,
+        ).value;
+    }
+
+    if (assets > liquidity)
+      return {
+        value: liquidity,
+        limiter: CapacityLimitReason.liquidity,
+      };
+
+    return {
+      value: assets,
+      limiter: CapacityLimitReason.balance,
+    };
   }
 
   /**
@@ -127,6 +221,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   public accrueInterest(timestamp: BigIntish) {
     const vault = new AccrualVaultV2(
       this,
+      this.accrualLiquidityAdapter,
       this.accrualAdapters,
       this.assetBalance,
     );

@@ -1,3 +1,18 @@
+export enum CapacityLimitReason {
+  liquidity = "Liquidity",
+  balance = "Balance",
+  position = "Position",
+  collateral = "Collateral",
+  cap = "Cap",
+  vaultV2_absoluteCap = "VaultV2_AbsoluteCap",
+  vaultV2_relativeCap = "VaultV2_RelativeCap",
+}
+
+export interface CapacityLimit {
+  value: bigint;
+  limiter: CapacityLimitReason;
+}
+
 // Alternative to Number.toFixed that doesn't use scientific notation for excessively small or large numbers.
 const toFixed = (x: number, decimals: number) =>
   new Intl.NumberFormat("en-US", {
