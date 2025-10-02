@@ -197,7 +197,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         this.accrualLiquidityAdapter instanceof
         AccrualVaultV2MorphoVaultV1Adapter
       )
-        liquidity = this.accrualLiquidityAdapter.maxWithdraw(
+        liquidity += this.accrualLiquidityAdapter.maxWithdraw(
           this.liquidityData,
         ).value;
     }
