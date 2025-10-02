@@ -119,6 +119,8 @@ const _addressesRegistry = {
     crvUSDETHCRV: "0x4eBdF703948ddCEA3B11f675B4D1Fba9d2414A14",
     "stkcvx2BTC-f-morpho": "0x385E12cf4040543Bc8C18e05C1298Be5B04f3f5e",
     "2BTC-f": "0xB7ECB2AA52AA64a717180E030241bC75Cd946726",
+    MUSD: "0xdD468A1DDc392dcdbEf6db6e34E89AA338F9F186",
+    aMUSD: "0x52317a47585A6ACDfbD7a29B494c3E2baAE96aBc",
   },
   [ChainId.BaseMainnet]: {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
@@ -809,6 +811,8 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
       _addressesRegistry[ChainId.EthMainnet].crvUSDETHCRV,
     [_addressesRegistry[ChainId.EthMainnet]["stkcvx2BTC-f-morpho"]]:
       _addressesRegistry[ChainId.EthMainnet]["2BTC-f"],
+    [_addressesRegistry[ChainId.EthMainnet].MUSD]:
+      _addressesRegistry[ChainId.EthMainnet].aMUSD,
   },
   [ChainId.BaseMainnet]: {
     [_addressesRegistry[ChainId.BaseMainnet].wNative]: NATIVE_ADDRESS,
