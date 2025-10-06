@@ -4,6 +4,7 @@ import { MathLib, type RoundingDirection } from "../math/index.js";
 import { VaultToken } from "../token/index.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 
+import { formatEther } from "viem";
 import type { IVaultConfig } from "./VaultConfig.js";
 import {
   type IVaultMarketAllocation,
@@ -272,7 +273,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
 
   /**
    * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
-   * weighted-averaged over its market deposits, before deducting the performance fee (scaled by WAD).
+   * weighted-averaged over its market deposits, before deducting the performance fee.
    * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
    */
   get apy() {
@@ -281,7 +282,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
 
   /**
    * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
-   * weighted-averaged over its market deposits, after deducting the performance fee (scaled by WAD).
+   * weighted-averaged over its market deposits, after deducting the performance fee.
    * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
    */
   get netApy() {
@@ -291,10 +292,10 @@ export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
    * weighted-averaged over its market deposits, before deducting the performance fee,
-   * if interest was to be accrued on each market at the given timestamp (scaled by WAD).
+   * if interest was to be accrued on each market at the given timestamp.
    */
   public getApy(timestamp: BigIntish = Time.timestamp()) {
-    if (this.totalAssets === 0n) return 0n;
+    if (this.totalAssets === 0n) return 0;
 
     return (
       this.allocations
@@ -302,19 +303,20 @@ export class AccrualVault extends Vault implements IAccrualVault {
         .reduce(
           (total, { position }) =>
             total +
-            position.market.getAvgSupplyApy(timestamp) * position.supplyAssets,
-          0n,
-        ) / this.totalAssets
+            position.market.getAvgSupplyApy(timestamp) *
+              Number(position.supplyAssets),
+          0,
+        ) / Number(this.totalAssets)
     );
   }
 
   /**
    * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
    * weighted-averaged over its market deposits, after deducting the performance fee,
-   * if interest was to be accrued on each market at the given timestamp (scaled by WAD).
+   * if interest was to be accrued on each market at the given timestamp.
    */
   public getNetApy(timestamp: BigIntish = Time.timestamp()) {
-    return MathLib.wMulDown(this.getApy(timestamp), MathLib.WAD - this.fee);
+    return this.getApy(timestamp) * (1 - +formatEther(this.fee));
   }
 
   public getAllocationProportion(marketId: MarketId) {
