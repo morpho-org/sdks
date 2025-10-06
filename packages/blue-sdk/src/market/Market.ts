@@ -7,6 +7,7 @@ import {
 } from "../math/index.js";
 import type { BigIntish } from "../types.js";
 
+import { formatEther } from "viem";
 import { type IMarketParams, MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
 
@@ -191,7 +192,7 @@ export class Market implements IMarket {
   }
 
   /**
-   * The market's current, instantaneous supply-side Annual Percentage Yield (APY) (scaled by WAD).
+   * The market's current, instantaneous supply-side Annual Percentage Yield (APY).
    * If interested in the APY at a specific timestamp, use `getSupplyApy(timestamp)` instead.
    */
   get supplyApy() {
@@ -199,7 +200,7 @@ export class Market implements IMarket {
   }
 
   /**
-   * The market's current, instantaneous borrow-side Annual Percentage Yield (APY) (scaled by WAD).
+   * The market's current, instantaneous borrow-side Annual Percentage Yield (APY).
    * If interested in the APY at a specific timestamp, use `getBorrowApy(timestamp)` instead.
    */
   get borrowApy() {
@@ -285,7 +286,7 @@ export class Market implements IMarket {
 
   /**
    * The market's instantaneous supply-side Annual Percentage Yield (APY) at the given timestamp,
-   * if the state remains unchanged (not accrued) (scaled by WAD).
+   * if the state remains unchanged (not accrued).
    * @param timestamp The timestamp at which to calculate the supply APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
@@ -293,9 +294,8 @@ export class Market implements IMarket {
   public getSupplyApy(timestamp: BigIntish = Time.timestamp()) {
     const borrowApy = this.getBorrowApy(timestamp);
 
-    return MathLib.wMulUp(
-      MathLib.wMulDown(borrowApy, this.utilization),
-      MathLib.WAD - this.fee,
+    return (
+      borrowApy * +formatEther(this.utilization) * (1 - +formatEther(this.fee))
     );
   }
 
@@ -314,7 +314,7 @@ export class Market implements IMarket {
 
   /**
    * The market's experienced supply-side Annual Percentage Yield (APY),
-   * if interest was to be accrued at the given timestamp (scaled by WAD).
+   * if interest was to be accrued at the given timestamp.
    * @param timestamp The timestamp at which to calculate the supply APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
@@ -322,9 +322,8 @@ export class Market implements IMarket {
   public getAvgSupplyApy(timestamp: BigIntish = Time.timestamp()) {
     const borrowApy = this.getAvgBorrowApy(timestamp);
 
-    return MathLib.wMulUp(
-      MathLib.wMulDown(borrowApy, this.utilization),
-      MathLib.WAD - this.fee,
+    return (
+      borrowApy * +formatEther(this.utilization) * (1 - +formatEther(this.fee))
     );
   }
 
