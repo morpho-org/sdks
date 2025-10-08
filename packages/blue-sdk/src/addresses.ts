@@ -444,6 +444,7 @@ const _addressesRegistry = {
     registryList: "0x857B55cEb57dA0C2A83EE08a8dB529B931089aee",
     chainlinkOracleFactory: "0xeb476f124FaD625178759d13557A72394A6f9aF5",
     preLiquidationFactory: "0x1b6782Ac7A859503cE953FBf4736311CC335B8f0",
+
     wNative: "0x5555555555555555555555555555555555555555",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
