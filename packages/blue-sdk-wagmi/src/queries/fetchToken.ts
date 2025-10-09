@@ -24,7 +24,7 @@ export function fetchTokenQueryOptions<config extends Config>(
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
     async queryFn({ queryKey }) {
       const { token, chainId, ...parameters } = queryKey[1];
-      if (!token) throw Error("token is required");
+      if (token == null) throw Error("token is required");
 
       return fetchToken(token, config.getClient({ chainId }), {
         chainId,
