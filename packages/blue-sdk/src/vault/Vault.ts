@@ -1,8 +1,8 @@
 import { Time } from "@morpho-org/morpho-ts";
-import { type CapacityLimit, CapacityLimitReason } from "../market/index.js";
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import { VaultToken } from "../token/index.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
+import { type CapacityLimit, CapacityLimitReason } from "../utils.js";
 
 import type { IVaultConfig } from "./VaultConfig.js";
 import {
@@ -178,11 +178,11 @@ export class Vault extends VaultToken implements IVault {
     return MathLib.zeroFloorSub(this.totalAssets, this.lastTotalAssets);
   }
 
-  public toAssets(shares: bigint, rounding: RoundingDirection = "Down") {
+  public toAssets(shares: BigIntish, rounding: RoundingDirection = "Down") {
     return this._unwrap(shares, rounding);
   }
 
-  public toShares(assets: bigint, rounding: RoundingDirection = "Up") {
+  public toShares(assets: BigIntish, rounding: RoundingDirection = "Up") {
     return this._wrap(assets, rounding);
   }
 }
@@ -326,7 +326,31 @@ export class AccrualVault extends Vault implements IAccrualVault {
     return MathLib.wDivDown(allocation.position.supplyAssets, this.totalAssets);
   }
 
+  /**
+   * Returns the deposit capacity limit of a given amount of assets on the vault.
+   * @param assets The maximum amount of assets to deposit.
+   * @deprecated Use `maxDeposit` instead.
+   */
   public getDepositCapacityLimit(assets: bigint): CapacityLimit {
+    return this.maxDeposit(assets);
+  }
+
+  /**
+   * Returns the withdraw capacity limit corresponding to a given amount of shares of the vault.
+   * @param shares The maximum amount of shares to redeem.
+   * @deprecated Use `maxWithdraw` instead.
+   */
+  public getWithdrawCapacityLimit(shares: bigint): CapacityLimit {
+    return this.maxWithdraw(shares);
+  }
+
+  /**
+   * Returns the maximum amount of assets that can be deposited to the vault.
+   * @param assets The maximum amount of assets to deposit.
+   */
+  public maxDeposit(assets: BigIntish): CapacityLimit {
+    assets = BigInt(assets);
+
     const suppliable = this.allocations
       .values()
       .reduce(
@@ -353,7 +377,11 @@ export class AccrualVault extends Vault implements IAccrualVault {
     };
   }
 
-  public getWithdrawCapacityLimit(shares: bigint): CapacityLimit {
+  /**
+   * Returns the maximum amount of assets that can be withdrawn from the vault.
+   * @param shares The maximum amount of shares to redeem.
+   */
+  public maxWithdraw(shares: BigIntish): CapacityLimit {
     const assets = this.toAssets(shares);
     const { liquidity } = this;
 

@@ -18,7 +18,7 @@ export default defineConfig({
     },
     globalSetup: "vitest.setup.ts",
     retry: process.env.CI ? 2 : 0,
-    testTimeout: 40_000,
+    testTimeout: 30_000,
     workspace: [
       {
         extends: true,
@@ -39,6 +39,7 @@ export default defineConfig({
         test: {
           name: "blue-sdk-viem",
           include: ["packages/blue-sdk-viem/test/**/*.test.ts"],
+          testTimeout: 60_000,
         },
       },
       {
