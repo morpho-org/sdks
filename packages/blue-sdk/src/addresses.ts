@@ -446,6 +446,8 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x1b6782Ac7A859503cE953FBf4736311CC335B8f0",
 
     wNative: "0x5555555555555555555555555555555555555555",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
   },
   [ChainId.SeiMainnet]: {
     morpho: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",
