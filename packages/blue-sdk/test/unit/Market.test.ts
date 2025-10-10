@@ -48,7 +48,7 @@ describe("Market", () => {
     });
 
     expect(market2.getAvgSupplyRate(timestamp) * Time.s.from.y(1n)).toBe(
-      67_4999999967168000n, // due to rounding of rateAtTarget definition
+      67_4999999967168000n,
     );
     expect(market2.getAvgSupplyApy(timestamp)).toBe(0.964032975905364);
     expect(market2.getAvgBorrowApy(timestamp)).toBe(1.718281828393502);
