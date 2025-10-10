@@ -6,8 +6,6 @@ import {
   type RoundingDirection,
 } from "../math/index.js";
 import type { BigIntish } from "../types.js";
-
-import { formatEther } from "viem";
 import { type IMarketParams, MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
 
@@ -292,10 +290,13 @@ export class Market implements IMarket {
    * Defaults to `Time.timestamp()` (returns the current supply APY).
    */
   public getSupplyApy(timestamp: BigIntish = Time.timestamp()) {
-    const borrowApy = this.getBorrowApy(timestamp);
+    const borrowRate = this.getEndBorrowRate(timestamp);
 
-    return (
-      borrowApy * +formatEther(this.utilization) * (1 - +formatEther(this.fee))
+    return MarketUtils.rateToApy(
+      MathLib.wMulUp(
+        MathLib.wMulDown(borrowRate, this.utilization),
+        MathLib.WAD - this.fee,
+      ),
     );
   }
 
@@ -313,6 +314,22 @@ export class Market implements IMarket {
   }
 
   /**
+   * Returns the average rate at which interest _would_ accrue for suppliers of this market,
+   * if `accrueInterest` was called at the given timestamp (scaled by WAD).
+   * @param timestamp The timestamp at which to calculate the average supply rate.
+   * Must be greater than or equal to `lastUpdate`.
+   * Defaults to `Time.timestamp()` (returns the current average supply rate).
+   */
+  public getAvgSupplyRate(timestamp: BigIntish = Time.timestamp()) {
+    const borrowRate = this.getAvgBorrowRate(timestamp);
+
+    return MathLib.wMulUp(
+      MathLib.wMulDown(borrowRate, this.utilization),
+      MathLib.WAD - this.fee,
+    );
+  }
+
+  /**
    * The market's experienced supply-side Annual Percentage Yield (APY),
    * if interest was to be accrued at the given timestamp.
    * @param timestamp The timestamp at which to calculate the supply APY.
@@ -320,11 +337,7 @@ export class Market implements IMarket {
    * Defaults to `Time.timestamp()` (returns the current supply APY).
    */
   public getAvgSupplyApy(timestamp: BigIntish = Time.timestamp()) {
-    const borrowApy = this.getAvgBorrowApy(timestamp);
-
-    return (
-      borrowApy * +formatEther(this.utilization) * (1 - +formatEther(this.fee))
-    );
+    return MarketUtils.rateToApy(this.getAvgSupplyRate(timestamp));
   }
 
   /**
