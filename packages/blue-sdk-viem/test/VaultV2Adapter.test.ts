@@ -177,4 +177,64 @@ describe("LiquidityAdapter", () => {
       },
     );
   });
+
+  describe("maxWithdraw function", () => {
+    vaultV2Test(
+      "should be limited by liquidity when assets > liquidity",
+      async ({ client }) => {
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
+
+        const shares = parseUnits("1000000", 18); // 1M shares
+        const result = accrualVaultV2.maxWithdraw(shares);
+
+        expect(result.limiter).toBe(CapacityLimitReason.liquidity);
+        expect(result.value).toBeLessThan(accrualVaultV2.toAssets(shares));
+      },
+    );
+
+    vaultV2Test(
+      "should be limited by balance when assets <= liquidity",
+      async ({ client }) => {
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
+
+        const shares = parseUnits("10", 18); // 10 shares
+        const result = accrualVaultV2.maxWithdraw(shares);
+
+        expect(result.limiter).toBe(CapacityLimitReason.balance);
+        expect(result.value).toBe(accrualVaultV2.toAssets(shares));
+      },
+    );
+
+    vaultV2Test(
+      "should work when liquidityAdapter is zero address",
+      async ({ client }) => {
+        // Set liquidity adapter to zero address
+        await client.writeContract({
+          account: allocator,
+          address: vaultV2Address,
+          abi: vaultV2Abi,
+          functionName: "setLiquidityAdapterAndData",
+          args: [zeroAddress, "0x"],
+        });
+
+        // Unexpected fails with "unsupported liquidity adapter" because zero address
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
+
+        const shares = parseUnits("100", 18);
+        const result = accrualVaultV2.maxWithdraw(shares);
+
+        expect(result.limiter).toBe(CapacityLimitReason.balance);
+        expect(result.value).toBe(accrualVaultV2.toAssets(shares));
+      },
+    );
+  });
 });
