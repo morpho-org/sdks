@@ -451,7 +451,7 @@ const _addressesRegistry = {
   },
   [ChainId.SeiMainnet]: {
     morpho: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",
-    permit2: "0xB952578f3520EE8Ea45b7914994dcf4702cEe578",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0xF9457356F18A3349Bb317Ac144c3Bcc62e5761aD",
       generalAdapter1: "0x02e0e71e145f254820B9D89c9E6068f08256F601",
