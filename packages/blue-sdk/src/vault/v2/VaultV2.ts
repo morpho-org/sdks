@@ -131,7 +131,7 @@ export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   constructor(
     vault: IAccrualVaultV2,
-    public accrualLiquidityAdapter: IAccrualVaultV2Adapter,
+    public accrualLiquidityAdapter: IAccrualVaultV2Adapter | undefined,
     public accrualAdapters: IAccrualVaultV2Adapter[],
     public assetBalance: bigint,
   ) {
@@ -165,15 +165,19 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     for (const { absoluteCap, relativeCap, allocation } of this
       .liquidityAllocations) {
-      const absoluteMaxDeposit = absoluteCap - allocation;
+      // `absoluteCap` can be set lower than `allocation`.
+      const absoluteMaxDeposit = MathLib.zeroFloorSub(absoluteCap, allocation);
       if (liquidityAdapterLimit.value > absoluteMaxDeposit)
         return {
           value: absoluteMaxDeposit,
           limiter: CapacityLimitReason.vaultV2_absoluteCap,
         };
 
-      const relativeMaxDeposit =
-        MathLib.wMulDown(this.totalAssets, relativeCap) - allocation;
+      // `relativeCap` can be set lower than `allocation / totalAssets`.
+      const relativeMaxDeposit = MathLib.zeroFloorSub(
+        MathLib.wMulDown(this.totalAssets, relativeCap),
+        allocation,
+      );
       if (liquidityAdapterLimit.value > relativeMaxDeposit)
         return {
           value: relativeMaxDeposit,
@@ -192,15 +196,12 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     const assets = this.toAssets(shares);
 
     let liquidity = this.assetBalance;
-    if (this.liquidityAdapter !== zeroAddress) {
-      if (
-        this.accrualLiquidityAdapter instanceof
-        AccrualVaultV2MorphoVaultV1Adapter
-      )
-        liquidity += this.accrualLiquidityAdapter.maxWithdraw(
-          this.liquidityData,
-        ).value;
-    }
+    if (
+      this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
+    )
+      liquidity += this.accrualLiquidityAdapter.maxWithdraw(
+        this.liquidityData,
+      ).value;
 
     if (assets > liquidity)
       return {
