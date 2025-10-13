@@ -144,7 +144,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    */
   public maxDeposit(assets: BigIntish): CapacityLimit {
     if (this.liquidityAdapter === zeroAddress)
-      return { value: BigInt(assets), limiter: CapacityLimitReason.liquidity };
+      return { value: BigInt(assets), limiter: CapacityLimitReason.balance };
 
     let liquidityAdapterLimit: CapacityLimit | undefined;
     if (
@@ -178,7 +178,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         MathLib.wMulDown(this.totalAssets, relativeCap),
         allocation,
       );
-      if (liquidityAdapterLimit.value > relativeMaxDeposit)
+      if (
+        liquidityAdapterLimit.value > relativeMaxDeposit &&
+        relativeCap !== MathLib.WAD
+      )
         return {
           value: relativeMaxDeposit,
           limiter: CapacityLimitReason.vaultV2_relativeCap,
@@ -194,6 +197,8 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    */
   public maxWithdraw(shares: BigIntish): CapacityLimit {
     const assets = this.toAssets(shares);
+    if (this.liquidityAdapter === zeroAddress)
+      return { value: BigInt(assets), limiter: CapacityLimitReason.balance };
 
     let liquidity = this.assetBalance;
     if (

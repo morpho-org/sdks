@@ -3,7 +3,14 @@ import {
   CapacityLimitReason,
   VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
-import { maxInt256, parseEther, parseUnits, zeroAddress } from "viem";
+import {
+  encodeAbiParameters,
+  encodeFunctionData,
+  maxInt256,
+  parseEther,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
 import { fetchAccrualVaultV2, fetchVaultV2Adapter, vaultV2Abi } from "../src";
@@ -75,8 +82,10 @@ describe("LiquidityAdapter", () => {
       const depositAmount = parseUnits("2000000", 6); // 1M
       const result = accrualVaultV2.maxDeposit(depositAmount);
 
-      expect(result.value).toBe(absoluteCap - allocation);
-      expect(result.limiter).toBe(CapacityLimitReason.vaultV2_absoluteCap);
+      expect(result).toStrictEqual({
+        value: absoluteCap - allocation,
+        limiter: CapacityLimitReason.vaultV2_absoluteCap,
+      });
     });
 
     vaultV2Test("should be limited by relative cap", async ({ client }) => {
@@ -84,12 +93,28 @@ describe("LiquidityAdapter", () => {
         account: curator,
         amount: parseEther("1"),
       });
+      const idData = encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }],
+        ["this", vaultV2AdapterAddress],
+      );
+      const data = encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "decreaseRelativeCap",
+        args: [idData, parseEther("200000")],
+      });
+      await client.writeContract({
+        account: curator,
+        address: vaultV2Address,
+        abi: vaultV2Abi,
+        functionName: "submit",
+        args: [data],
+      });
       await client.writeContract({
         account: curator,
         address: vaultV2Address,
         abi: vaultV2Abi,
         functionName: "decreaseRelativeCap",
-        args: ["0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F", 1n],
+        args: [idData, 1n],
       });
 
       const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
@@ -97,8 +122,51 @@ describe("LiquidityAdapter", () => {
       const depositAmount = parseUnits("100000", 6); // 100K
       const result = accrualVaultV2.maxDeposit(depositAmount);
 
-      expect(result.value).toBe(0n);
-      expect(result.limiter).toBe(CapacityLimitReason.vaultV2_relativeCap);
+      expect(result).toStrictEqual({
+        value: 0n,
+        limiter: CapacityLimitReason.vaultV2_relativeCap,
+      });
+    });
+
+    vaultV2Test("should be limited by metamorpho", async ({ client }) => {
+      await client.deal({
+        account: curator,
+        amount: parseEther("1"),
+      });
+      const idData = encodeAbiParameters(
+        [{ type: "string" }, { type: "address" }],
+        ["this", vaultV2AdapterAddress],
+      );
+      const data = encodeFunctionData({
+        abi: vaultV2Abi,
+        functionName: "increaseAbsoluteCap",
+        args: [idData, parseEther("200000")],
+      });
+      await client.writeContract({
+        account: curator,
+        address: vaultV2Address,
+        abi: vaultV2Abi,
+        functionName: "submit",
+        args: [data],
+      });
+
+      await client.writeContract({
+        account: curator,
+        address: vaultV2Address,
+        abi: vaultV2Abi,
+        functionName: "increaseAbsoluteCap",
+        args: [idData, parseEther("200000")],
+      });
+
+      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+
+      const result = accrualVaultV2.maxDeposit(maxInt256);
+      const maxDepositMetaMorphoVaultV1 =
+        accrualVaultV2.accrualLiquidityAdapter?.maxDeposit(
+          accrualVaultV2.liquidityData,
+          maxInt256,
+        );
+      expect(result).toStrictEqual(maxDepositMetaMorphoVaultV1);
     });
 
     vaultV2Test(
@@ -115,6 +183,28 @@ describe("LiquidityAdapter", () => {
             liquidityAllocations: undefined,
           },
           accrualVaultV2.accrualLiquidityAdapter,
+          accrualVaultV2.accrualAdapters,
+          accrualVaultV2.assetBalance,
+        );
+
+        const depositAmount = parseUnits("1000", 6);
+        expect(() => modified1AccrualVaultV2.maxDeposit(depositAmount)).toThrow(
+          "unsupported liquidity adapter",
+        );
+      },
+    );
+
+    vaultV2Test(
+      "should throw error for undefined liquidity adapter",
+      async ({ client }) => {
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
+
+        const modified1AccrualVaultV2 = new AccrualVaultV2(
+          accrualVaultV2,
+          undefined,
           accrualVaultV2.accrualAdapters,
           accrualVaultV2.assetBalance,
         );
@@ -144,8 +234,10 @@ describe("LiquidityAdapter", () => {
         );
 
         const result = accrualVaultV2.maxDeposit(maxInt256);
-        expect(result.value).toBe(maxInt256);
-        expect(result.limiter).toBe(CapacityLimitReason.liquidity);
+        expect(result).toStrictEqual({
+          value: maxInt256,
+          limiter: CapacityLimitReason.balance,
+        });
       },
     );
   });
@@ -162,8 +254,12 @@ describe("LiquidityAdapter", () => {
         const shares = parseUnits("1000000", 18); // 1M shares
         const result = accrualVaultV2.maxWithdraw(shares);
 
-        expect(result.limiter).toBe(CapacityLimitReason.liquidity);
-        expect(result.value).toBeLessThan(accrualVaultV2.toAssets(shares));
+        expect(result).toStrictEqual({
+          value: accrualVaultV2.accrualLiquidityAdapter?.maxWithdraw(
+            accrualVaultV2.liquidityData,
+          ).value,
+          limiter: CapacityLimitReason.liquidity,
+        });
       },
     );
 
@@ -178,8 +274,10 @@ describe("LiquidityAdapter", () => {
         const shares = parseUnits("10", 18); // 10 shares
         const result = accrualVaultV2.maxWithdraw(shares);
 
-        expect(result.limiter).toBe(CapacityLimitReason.balance);
-        expect(result.value).toBe(accrualVaultV2.toAssets(shares));
+        expect(result).toStrictEqual({
+          value: accrualVaultV2.toAssets(shares),
+          limiter: CapacityLimitReason.balance,
+        });
       },
     );
 
@@ -203,8 +301,10 @@ describe("LiquidityAdapter", () => {
         const shares = parseUnits("100", 18);
         const result = accrualVaultV2.maxWithdraw(shares);
 
-        expect(result.limiter).toBe(CapacityLimitReason.liquidity);
-        expect(result.value).toBe(0n);
+        expect(result).toStrictEqual({
+          value: accrualVaultV2.toAssets(shares),
+          limiter: CapacityLimitReason.balance,
+        });
       },
     );
   });
