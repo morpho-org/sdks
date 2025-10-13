@@ -57,7 +57,7 @@ export class AccrualVaultV2MorphoVaultV1Adapter
     super(adapter);
   }
 
-  realAssets(timestamp: BigIntish) {
+  realAssets(timestamp?: BigIntish) {
     return this.accrualVaultV1.accrueInterest(timestamp).toAssets(this.shares);
   }
 
