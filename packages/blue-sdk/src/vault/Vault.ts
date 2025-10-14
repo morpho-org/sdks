@@ -1,10 +1,12 @@
 import { Time } from "@morpho-org/morpho-ts";
-import { type CapacityLimit, CapacityLimitReason } from "../market/index.js";
+import {
+  type CapacityLimit,
+  CapacityLimitReason,
+  MarketUtils,
+} from "../market/index.js";
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import { VaultToken } from "../token/index.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
-
-import { formatEther } from "viem";
 import type { IVaultConfig } from "./VaultConfig.js";
 import {
   type IVaultMarketAllocation,
@@ -283,10 +285,30 @@ export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
    * weighted-averaged over its market deposits, after deducting the performance fee.
-   * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
+   * If interested in the APY at a specific timestamp, use `getNetApy(timestamp)` instead.
    */
   get netApy() {
     return this.getNetApy();
+  }
+
+  /**
+   * The MetaMorpho vault's per-second rate at which interest _would_ accrue,
+   * weighted-averaged over its market deposits, before deducting the performance fee,
+   * if interest was to be accrued on each market at the given timestamp.
+   */
+  private _getAvgRate(timestamp: BigIntish = Time.timestamp()) {
+    if (this.totalAssets === 0n) return 0n;
+
+    return (
+      this.allocations
+        .values()
+        .reduce(
+          (total, { position }) =>
+            total +
+            position.market.getAvgSupplyRate(timestamp) * position.supplyAssets,
+          0n,
+        ) / this.totalAssets
+    );
   }
 
   /**
@@ -297,17 +319,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
   public getApy(timestamp: BigIntish = Time.timestamp()) {
     if (this.totalAssets === 0n) return 0;
 
-    return (
-      this.allocations
-        .values()
-        .reduce(
-          (total, { position }) =>
-            total +
-            position.market.getAvgSupplyApy(timestamp) *
-              Number(position.supplyAssets),
-          0,
-        ) / Number(this.totalAssets)
-    );
+    return MarketUtils.rateToApy(this._getAvgRate(timestamp));
   }
 
   /**
@@ -316,7 +328,9 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * if interest was to be accrued on each market at the given timestamp.
    */
   public getNetApy(timestamp: BigIntish = Time.timestamp()) {
-    return this.getApy(timestamp) * (1 - +formatEther(this.fee));
+    return MarketUtils.rateToApy(
+      MathLib.wMulDown(this._getAvgRate(timestamp), MathLib.WAD - this.fee),
+    );
   }
 
   public getAllocationProportion(marketId: MarketId) {
