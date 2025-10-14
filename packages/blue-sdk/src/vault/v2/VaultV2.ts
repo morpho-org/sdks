@@ -173,19 +173,21 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
           limiter: CapacityLimitReason.vaultV2_absoluteCap,
         };
 
-      // `relativeCap` can be set lower than `allocation / totalAssets`.
-      const relativeMaxDeposit = MathLib.zeroFloorSub(
-        MathLib.wMulDown(this.totalAssets, relativeCap),
-        allocation,
-      );
-      if (
-        liquidityAdapterLimit.value > relativeMaxDeposit &&
-        relativeCap !== MathLib.WAD
-      )
-        return {
-          value: relativeMaxDeposit,
-          limiter: CapacityLimitReason.vaultV2_relativeCap,
-        };
+      if (relativeCap !== MathLib.WAD) {
+        // `relativeCap` can be set lower than `allocation / totalAssets`.
+        const relativeMaxDeposit = MathLib.zeroFloorSub(
+          MathLib.wMulDown(this.totalAssets, relativeCap),
+          allocation,
+        );
+        if (
+          liquidityAdapterLimit.value > relativeMaxDeposit &&
+          relativeCap !== MathLib.WAD
+        )
+          return {
+            value: relativeMaxDeposit,
+            limiter: CapacityLimitReason.vaultV2_relativeCap,
+          };
+      }
     }
 
     return liquidityAdapterLimit;
