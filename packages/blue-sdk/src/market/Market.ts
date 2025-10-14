@@ -6,7 +6,6 @@ import {
   type RoundingDirection,
 } from "../math/index.js";
 import type { BigIntish } from "../types.js";
-
 import { type CapacityLimit, CapacityLimitReason } from "../utils.js";
 import { type IMarketParams, MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
@@ -139,28 +138,12 @@ export class Market implements IMarket {
   }
 
   /**
-   * The market's Annual Percentage Yield (APY) at the IRM's target utilization rate, if applicable (scaled by WAD).
+   * The market's Annual Percentage Yield (APY) at the IRM's target utilization rate, if applicable.
    */
   get apyAtTarget() {
     if (this.rateAtTarget == null) return;
 
     return MarketUtils.rateToApy(this.rateAtTarget);
-  }
-
-  /**
-   * Returns the rate at which interest accrued for suppliers of this market,
-   * since the last time the market was updated (scaled by WAD).
-   * @deprecated There's no such thing as a supply rate in Morpho. Only the supply APY is meaningful.
-   */
-  get supplyRate() {
-    return MarketUtils.getSupplyRate(this.avgBorrowRate, this);
-  }
-
-  /**
-   * @deprecated Use `avgBorrowRate` instead.
-   */
-  get borrowRate() {
-    return this.getAccrualBorrowRates().avgBorrowRate;
   }
 
   /**
@@ -195,7 +178,7 @@ export class Market implements IMarket {
   }
 
   /**
-   * The market's current, instantaneous supply-side Annual Percentage Yield (APY) (scaled by WAD).
+   * The market's current, instantaneous supply-side Annual Percentage Yield (APY).
    * If interested in the APY at a specific timestamp, use `getSupplyApy(timestamp)` instead.
    */
   get supplyApy() {
@@ -203,18 +186,11 @@ export class Market implements IMarket {
   }
 
   /**
-   * The market's current, instantaneous borrow-side Annual Percentage Yield (APY) (scaled by WAD).
+   * The market's current, instantaneous borrow-side Annual Percentage Yield (APY).
    * If interested in the APY at a specific timestamp, use `getBorrowApy(timestamp)` instead.
    */
   get borrowApy() {
     return this.getBorrowApy();
-  }
-
-  /**
-   * @deprecated Use `getEndBorrowRate(timestamp)` instead.
-   */
-  public getBorrowRate(timestamp: BigIntish = Time.timestamp()) {
-    return this.getAccrualBorrowRates(timestamp).endBorrowRate;
   }
 
   /**
@@ -283,7 +259,7 @@ export class Market implements IMarket {
 
   /**
    * The market's instantaneous borrow-side Annual Percentage Yield (APY) at the given timestamp,
-   * if the state remains unchanged (not accrued) (scaled by WAD).
+   * if the state remains unchanged (not accrued).
    * @param timestamp The timestamp at which to calculate the borrow APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
@@ -296,23 +272,25 @@ export class Market implements IMarket {
 
   /**
    * The market's instantaneous supply-side Annual Percentage Yield (APY) at the given timestamp,
-   * if the state remains unchanged (not accrued) (scaled by WAD).
+   * if the state remains unchanged (not accrued).
    * @param timestamp The timestamp at which to calculate the supply APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
    */
   public getSupplyApy(timestamp: BigIntish = Time.timestamp()) {
-    const borrowApy = this.getBorrowApy(timestamp);
+    const borrowRate = this.getEndBorrowRate(timestamp);
 
-    return MathLib.wMulUp(
-      MathLib.wMulDown(borrowApy, this.utilization),
-      MathLib.WAD - this.fee,
+    return MarketUtils.rateToApy(
+      MathLib.wMulUp(
+        MathLib.wMulDown(borrowRate, this.utilization),
+        MathLib.WAD - this.fee,
+      ),
     );
   }
 
   /**
    * The market's experienced borrow-side Annual Percentage Yield (APY),
-   * if interest was to be accrued at the given timestamp (scaled by WAD).
+   * if interest was to be accrued at the given timestamp.
    * @param timestamp The timestamp at which to calculate the borrow APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current borrow APY).
@@ -324,19 +302,30 @@ export class Market implements IMarket {
   }
 
   /**
+   * Returns the average rate at which interest _would_ accrue for suppliers of this market,
+   * if `accrueInterest` was called at the given timestamp (scaled by WAD).
+   * @param timestamp The timestamp at which to calculate the average supply rate.
+   * Must be greater than or equal to `lastUpdate`.
+   * Defaults to `Time.timestamp()` (returns the current average supply rate).
+   */
+  public getAvgSupplyRate(timestamp: BigIntish = Time.timestamp()) {
+    const borrowRate = this.getAvgBorrowRate(timestamp);
+
+    return MathLib.wMulUp(
+      MathLib.wMulDown(borrowRate, this.utilization),
+      MathLib.WAD - this.fee,
+    );
+  }
+
+  /**
    * The market's experienced supply-side Annual Percentage Yield (APY),
-   * if interest was to be accrued at the given timestamp (scaled by WAD).
+   * if interest was to be accrued at the given timestamp.
    * @param timestamp The timestamp at which to calculate the supply APY.
    * Must be greater than or equal to `lastUpdate`.
    * Defaults to `Time.timestamp()` (returns the current supply APY).
    */
   public getAvgSupplyApy(timestamp: BigIntish = Time.timestamp()) {
-    const borrowApy = this.getAvgBorrowApy(timestamp);
-
-    return MathLib.wMulUp(
-      MathLib.wMulDown(borrowApy, this.utilization),
-      MathLib.WAD - this.fee,
-    );
+    return MarketUtils.rateToApy(this.getAvgSupplyRate(timestamp));
   }
 
   /**

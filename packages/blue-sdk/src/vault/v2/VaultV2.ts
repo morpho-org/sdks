@@ -179,10 +179,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
           MathLib.wMulDown(this.totalAssets, relativeCap),
           allocation,
         );
-        if (
-          liquidityAdapterLimit.value > relativeMaxDeposit &&
-          relativeCap !== MathLib.WAD
-        )
+        if (liquidityAdapterLimit.value > relativeMaxDeposit)
           return {
             value: relativeMaxDeposit,
             limiter: CapacityLimitReason.vaultV2_relativeCap,
