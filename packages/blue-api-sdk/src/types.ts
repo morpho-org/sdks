@@ -42,6 +42,12 @@ export type Account = {
   metadata: PaginatedAddressMetadata;
 };
 
+/** Account */
+export type AccountMetadataArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
 export type AddressDataPoint = {
   __typename?: "AddressDataPoint";
   x: Scalars["Float"]["output"];
@@ -257,11 +263,18 @@ export type CuratorAddress = {
   metadata: Maybe<PaginatedAddressMetadata>;
 };
 
+/** Curator Address */
+export type CuratorAddressMetadataArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
 /** Filtering options for curators. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
 export type CuratorFilters = {
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   chainId?: InputMaybe<Scalars["Int"]["input"]>;
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+  ownerOnly?: InputMaybe<Scalars["Boolean"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
   verified?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
@@ -1715,11 +1728,16 @@ export type OracleFeed = {
   address: Scalars["Address"]["output"];
   chain: Chain;
   decimals: Maybe<Scalars["Int"]["output"]>;
+  /** @deprecated description is no longer parsed & maintained */
   description: Maybe<Scalars["String"]["output"]>;
+  /** @deprecated price is no longer indexed */
   historicalPrice: Maybe<Array<BigIntDataPoint>>;
   id: Scalars["ID"]["output"];
+  /** @deprecated pairs are not maintained */
   pair: Maybe<Array<Scalars["String"]["output"]>>;
+  /** @deprecated price is no longer updated */
   price: Maybe<BigIntDataPoint>;
+  /** @deprecated vendor is no longer maintained */
   vendor: Maybe<Scalars["String"]["output"]>;
 };
 
@@ -2525,11 +2543,11 @@ export enum TimeseriesInterval {
 }
 
 export type TimeseriesOptions = {
-  /** Unix timestamp (Inclusive). */
+  /** End timestamp (in seconds, inclusive) of the timeseries. If not provided, the latest available data point will be used */
   endTimestamp?: InputMaybe<Scalars["Int"]["input"]>;
   /** The timestamp interval to space and group points. Defaults to around 50 points between startTimestamp and endTimestamp. */
   interval?: InputMaybe<TimeseriesInterval>;
-  /** Unix timestamp (Inclusive). */
+  /** Start timestamp (in seconds, inclusive). If not provided, the earliest available data point will be used */
   startTimestamp?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
@@ -2964,6 +2982,12 @@ export type VaultAllocator = {
   metadata: Maybe<PaginatedAddressMetadata>;
   /** Allocator since timestamp */
   timestamp: Scalars["BigInt"]["output"];
+};
+
+/** Vault allocator */
+export type VaultAllocatorMetadataArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
 /** Vault APY aggregates */
@@ -3575,6 +3599,24 @@ export type VaultState = {
   yearlyNetApy: Maybe<Scalars["Float"]["output"]>;
 };
 
+/** MetaMorpho vault state */
+export type VaultStateCuratorMetadataArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+/** MetaMorpho vault state */
+export type VaultStateGuardianMetadataArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+/** MetaMorpho vault state */
+export type VaultStateOwnerMetadataArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
 /** MetaMorpho vault state rewards */
 export type VaultStateReward = {
   __typename?: "VaultStateReward";
@@ -3631,12 +3673,22 @@ export type VaultV2 = {
   sentinels: Array<VaultV2Sentinel>;
   symbol: Scalars["String"]["output"];
   timelocks: Array<VaultV2Timelock>;
-  /** @deprecated currently always metaMorphoAdapter.position.assets */
+  /** @deprecated idle assets are not included */
   totalAssets: Maybe<Scalars["BigInt"]["output"]>;
-  /** @deprecated currently always metaMorphoAdapter.position.assetsUsd */
+  /** @deprecated idle assets are not included */
   totalAssetsUsd: Maybe<Scalars["Float"]["output"]>;
   totalSupply: Scalars["BigInt"]["output"];
   whitelisted: Scalars["Boolean"]["output"];
+};
+
+export type VaultV2AdaptersArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type VaultV2CuratorsArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
 export type VaultV2Adapter = {
