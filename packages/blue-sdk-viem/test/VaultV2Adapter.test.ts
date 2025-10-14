@@ -1,12 +1,12 @@
 import {
   AccrualVaultV2,
   CapacityLimitReason,
+  MathLib,
   VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
 import {
   encodeAbiParameters,
   encodeFunctionData,
-  maxInt256,
   parseEther,
   parseUnits,
   zeroAddress,
@@ -160,13 +160,11 @@ describe("LiquidityAdapter", () => {
 
       const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
 
-      const result = accrualVaultV2.maxDeposit(maxInt256);
-      const maxDepositMetaMorphoVaultV1 =
-        accrualVaultV2.accrualLiquidityAdapter?.maxDeposit(
-          accrualVaultV2.liquidityData,
-          maxInt256,
-        );
-      expect(result).toStrictEqual(maxDepositMetaMorphoVaultV1);
+      const result = accrualVaultV2.maxDeposit(MathLib.MAX_UINT_256);
+      expect(result).toStrictEqual({
+        value: 1000107016593428362n,
+        limiter: CapacityLimitReason.cap,
+      });
     });
 
     vaultV2Test(
@@ -233,9 +231,9 @@ describe("LiquidityAdapter", () => {
           client,
         );
 
-        const result = accrualVaultV2.maxDeposit(maxInt256);
+        const result = accrualVaultV2.maxDeposit(MathLib.MAX_UINT_256);
         expect(result).toStrictEqual({
-          value: maxInt256,
+          value: MathLib.MAX_UINT_256,
           limiter: CapacityLimitReason.balance,
         });
       },
@@ -255,9 +253,7 @@ describe("LiquidityAdapter", () => {
         const result = accrualVaultV2.maxWithdraw(shares);
 
         expect(result).toStrictEqual({
-          value: accrualVaultV2.accrualLiquidityAdapter?.maxWithdraw(
-            accrualVaultV2.liquidityData,
-          ).value,
+          value: 16980587n,
           limiter: CapacityLimitReason.liquidity,
         });
       },
