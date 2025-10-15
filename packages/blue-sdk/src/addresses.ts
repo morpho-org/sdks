@@ -19,30 +19,6 @@ export const NATIVE_ADDRESS = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 export interface ChainAddresses {
   morpho: Address;
   permit2?: Address;
-  /**
-   * @deprecated All bundles should use Bundler3 instead.
-   */
-  bundler?: Address;
-  /**
-   * @deprecated All bundles should use Bundler3 instead.
-   */
-  aaveV3OptimizerBundler?: Address;
-  /**
-   * @deprecated All bundles should use Bundler3 instead.
-   */
-  aaveV2Bundler?: Address;
-  /**
-   * @deprecated All bundles should use Bundler3 instead.
-   */
-  aaveV3Bundler?: Address;
-  /**
-   * @deprecated All bundles should use Bundler3 instead.
-   */
-  compoundV3Bundler?: Address;
-  /**
-   * @deprecated All bundles should use Bundler3 instead.
-   */
-  compoundV2Bundler?: Address;
   bundler3: {
     bundler3: Address;
     generalAdapter1: Address;
@@ -84,10 +60,6 @@ const _addressesRegistry = {
   [ChainId.EthMainnet]: {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    bundler: "0x4095F064B8d3c3548A3bebfd0Bbfd04750E30077",
     bundler3: {
       bundler3: "0x6566194141eefa99Af43Bb5Aa71460Ca2Dc90245",
       generalAdapter1: "0x4A6c312ec70E8747a587EE860a0353cd42Be0aE0",
@@ -103,26 +75,6 @@ const _addressesRegistry = {
       aaveV3OptimizerMigrationAdapter:
         "0x9e2ea2d5785598a163D569D795f286F5C55ad972",
     },
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    aaveV3OptimizerBundler: "0x16F38d2E764E7BeBF625a8E995b34968226D2F9c",
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    aaveV2Bundler: "0xb3dCc75DB379925edFd3007511A8CE0cB4aa8e76",
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    aaveV3Bundler: "0x98ccB155E86bb478d514a827d16f58c6912f9BDC",
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    compoundV3Bundler: "0x3a0e2E9FB9c95fBc843daF166276C90B6C479558",
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    compoundV2Bundler: "0x26bF52a84360Ad3d01d7CDc28FC2dDC04d8c8647",
     adaptiveCurveIrm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
     publicAllocator: "0xfd32fA2ca22c76dD6E550706Ad913FC6CE91c75D",
     metaMorphoFactory: "0x1897A8997241C1cD4bD0698647e4EB7213535c24",
@@ -174,10 +126,6 @@ const _addressesRegistry = {
   [ChainId.BaseMainnet]: {
     morpho: "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb",
     permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    bundler: "0x23055618898e202386e6c13955a58D3C68200BFB",
     bundler3: {
       bundler3: "0x6BFd8137e702540E7A42B74178A4a49Ba43920C4",
       generalAdapter1: "0xb98c948CFA24072e58935BC004a8A7b376AE746A",
@@ -186,18 +134,6 @@ const _addressesRegistry = {
       compoundV3MigrationAdapter: "0x85D4812Ef92c040d4270eD8547b6835e41FbbB70",
       aaveV3CoreMigrationAdapter: "0xb27Aa2a964eAd5ed661D86974b37e4fB995b36f5",
     },
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    compoundV2Bundler: "0x123f3167a416cA19365dE03a65e0AF3532af7223",
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    aaveV3Bundler: "0xcAe2929baBc60Be34818EaA5F40bF69265677108",
-    /**
-     * @deprecated All bundles should use Bundler3 instead.
-     */
-    compoundV3Bundler: "0x1f8076e2EB6f10b12e6886f30D4909A91969F7dA",
     adaptiveCurveIrm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
     publicAllocator: "0xA090dD1a701408Df1d4d0B85b716c87565f90467",
     metaMorphoFactory: "0xFf62A7c278C62eD665133147129245053Bbf5918",
@@ -514,6 +450,8 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x1b6782Ac7A859503cE953FBf4736311CC335B8f0",
 
     wNative: "0x5555555555555555555555555555555555555555",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0xb88339CB7199b77E23DB6E890353E22632Ba630f",
   },
   [ChainId.SeiMainnet]: {
     morpho: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",

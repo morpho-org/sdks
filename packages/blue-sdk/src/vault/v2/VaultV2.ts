@@ -131,7 +131,7 @@ export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   constructor(
     vault: IAccrualVaultV2,
-    public accrualLiquidityAdapter: IAccrualVaultV2Adapter,
+    public accrualLiquidityAdapter: IAccrualVaultV2Adapter | undefined,
     public accrualAdapters: IAccrualVaultV2Adapter[],
     public assetBalance: bigint,
   ) {
@@ -144,7 +144,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    */
   public maxDeposit(assets: BigIntish): CapacityLimit {
     if (this.liquidityAdapter === zeroAddress)
-      return { value: BigInt(assets), limiter: CapacityLimitReason.liquidity };
+      return { value: BigInt(assets), limiter: CapacityLimitReason.balance };
 
     let liquidityAdapterLimit: CapacityLimit | undefined;
     if (
@@ -165,20 +165,26 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     for (const { absoluteCap, relativeCap, allocation } of this
       .liquidityAllocations) {
-      const absoluteMaxDeposit = absoluteCap - allocation;
+      // `absoluteCap` can be set lower than `allocation`.
+      const absoluteMaxDeposit = MathLib.zeroFloorSub(absoluteCap, allocation);
       if (liquidityAdapterLimit.value > absoluteMaxDeposit)
         return {
           value: absoluteMaxDeposit,
           limiter: CapacityLimitReason.vaultV2_absoluteCap,
         };
 
-      const relativeMaxDeposit =
-        MathLib.wMulDown(this.totalAssets, relativeCap) - allocation;
-      if (liquidityAdapterLimit.value > relativeMaxDeposit)
-        return {
-          value: relativeMaxDeposit,
-          limiter: CapacityLimitReason.vaultV2_relativeCap,
-        };
+      if (relativeCap !== MathLib.WAD) {
+        // `relativeCap` can be set lower than `allocation / totalAssets`.
+        const relativeMaxDeposit = MathLib.zeroFloorSub(
+          MathLib.wMulDown(this.totalAssets, relativeCap),
+          allocation,
+        );
+        if (liquidityAdapterLimit.value > relativeMaxDeposit)
+          return {
+            value: relativeMaxDeposit,
+            limiter: CapacityLimitReason.vaultV2_relativeCap,
+          };
+      }
     }
 
     return liquidityAdapterLimit;
@@ -190,17 +196,16 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    */
   public maxWithdraw(shares: BigIntish): CapacityLimit {
     const assets = this.toAssets(shares);
+    if (this.liquidityAdapter === zeroAddress)
+      return { value: BigInt(assets), limiter: CapacityLimitReason.balance };
 
     let liquidity = this.assetBalance;
-    if (this.liquidityAdapter !== zeroAddress) {
-      if (
-        this.accrualLiquidityAdapter instanceof
-        AccrualVaultV2MorphoVaultV1Adapter
-      )
-        liquidity += this.accrualLiquidityAdapter.maxWithdraw(
-          this.liquidityData,
-        ).value;
-    }
+    if (
+      this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
+    )
+      liquidity += this.accrualLiquidityAdapter.maxWithdraw(
+        this.liquidityData,
+      ).value;
 
     if (assets > liquidity)
       return {

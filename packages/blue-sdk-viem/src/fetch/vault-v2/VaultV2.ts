@@ -258,7 +258,9 @@ export async function fetchAccrualVaultV2(
       functionName: "balanceOf",
       args: [vaultV2.address],
     }),
-    fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, parameters),
+    vaultV2.liquidityAdapter !== zeroAddress
+      ? fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, parameters)
+      : undefined,
     ...vaultV2.adapters.map(async (adapter) =>
       fetchAccrualVaultV2Adapter(adapter, client, parameters),
     ),
