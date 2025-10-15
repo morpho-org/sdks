@@ -29,7 +29,11 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
         args: [address],
       });
 
-      return new VaultV2MorphoMarketV1Adapter({ ...adapter, address });
+      return new VaultV2MorphoMarketV1Adapter({
+        ...adapter,
+        marketParamsList: [...adapter.marketParamsList],
+        address,
+      });
     } catch {
       // Fallback to multicall if deployless call fails.
     }
