@@ -824,11 +824,13 @@ const _deployments = {
       bundler3: 168897284n,
       generalAdapter1: 168897284n,
     },
+    permit2: 118721449n,
     adaptiveCurveIrm: 166036723n,
     publicAllocator: 166036723n,
     metaMorphoFactory: 168896078n,
     chainlinkOracleFactory: 168896078n,
     preLiquidationFactory: 168897284n,
+    usdc: 154131168n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
