@@ -11929,6 +11929,61 @@ export const morphoMarketV1AdapterAbi = [
   },
 ] as const;
 
+export const morphoMarketV1AdapterFactoryAbi = [
+  {
+    anonymous: false,
+    inputs: [
+      {
+        indexed: true,
+        internalType: "address",
+        name: "parentVault",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "morpho",
+        type: "address",
+      },
+      {
+        indexed: true,
+        internalType: "address",
+        name: "morphoMarketV1Adapter",
+        type: "address",
+      },
+    ],
+    name: "CreateMorphoMarketV1Adapter",
+    type: "event",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "parentVault", type: "address" },
+      { internalType: "address", name: "morpho", type: "address" },
+    ],
+    name: "createMorphoMarketV1Adapter",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ internalType: "address", name: "account", type: "address" }],
+    name: "isMorphoMarketV1Adapter",
+    outputs: [{ internalType: "bool", name: "", type: "bool" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [
+      { internalType: "address", name: "parentVault", type: "address" },
+      { internalType: "address", name: "morpho", type: "address" },
+    ],
+    name: "morphoMarketV1Adapter",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+];
+
 /**
  * @deprecated Use `morphoVaultV1AdapterFactoryAbi` instead.
  */

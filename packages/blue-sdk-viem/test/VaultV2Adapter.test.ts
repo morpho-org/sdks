@@ -2,6 +2,7 @@ import {
   AccrualVaultV2,
   CapacityLimitReason,
   MathLib,
+  VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
 import {
@@ -71,10 +72,14 @@ describe("VaultV2Adapter", () => {
 
   describe("should fetch marketV1 adapter", () => {
     vaultV2Test("with deployless reads", async ({ client }) => {
-      // const expectedData = new VaultV2MorphoMarketV1Adapter({
-      //   marketParamsList: [],
-      //   address: vaultV2AdapterAddress,
-      // });
+      const expectedData = new VaultV2MorphoMarketV1Adapter({
+        address: vaultV2AdapterMarketV1Address,
+        parentVault: "0x678b8851DFcA08E40F3e31C8ABd08dE3E8E14b64",
+        adapterId:
+          "0x6bf98c2b0a1a5951417b9bc8ec03b602064674ab96abfca59bf4be5d1eaf1fb9",
+        skimRecipient: zeroAddress,
+        marketParamsList: [],
+      });
 
       const value = await fetchVaultV2Adapter(
         vaultV2AdapterMarketV1Address,
@@ -84,7 +89,28 @@ describe("VaultV2Adapter", () => {
         },
       );
 
-      console.log(value);
+      expect(value).toStrictEqual(expectedData);
+    });
+
+    vaultV2Test("with multicall", async ({ client }) => {
+      const expectedData = new VaultV2MorphoMarketV1Adapter({
+        address: vaultV2AdapterMarketV1Address,
+        parentVault: "0x678b8851DFcA08E40F3e31C8ABd08dE3E8E14b64",
+        adapterId:
+          "0x6bf98c2b0a1a5951417b9bc8ec03b602064674ab96abfca59bf4be5d1eaf1fb9",
+        skimRecipient: zeroAddress,
+        marketParamsList: [],
+      });
+
+      const value = await fetchVaultV2Adapter(
+        vaultV2AdapterMarketV1Address,
+        client,
+        {
+          deployless: false,
+        },
+      );
+
+      expect(value).toStrictEqual(expectedData);
     });
   });
 });
@@ -196,7 +222,7 @@ describe("LiquidityAdapter", () => {
 
       const result = accrualVaultV2.maxDeposit(MathLib.MAX_UINT_256);
       expect(result).toStrictEqual({
-        value: 1000107016593428362n,
+        value: 1000301472035887388n,
         limiter: CapacityLimitReason.cap,
       });
     });
@@ -287,7 +313,7 @@ describe("LiquidityAdapter", () => {
         const result = accrualVaultV2.maxWithdraw(shares);
 
         expect(result).toStrictEqual({
-          value: 16980587n,
+          value: 17023088n,
           limiter: CapacityLimitReason.liquidity,
         });
       },
