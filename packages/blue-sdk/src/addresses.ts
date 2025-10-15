@@ -451,6 +451,7 @@ const _addressesRegistry = {
   },
   [ChainId.SeiMainnet]: {
     morpho: "0xc9cDAc20FCeAAF616f7EB0bb6Cd2c69dcfa9094c",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0xF9457356F18A3349Bb317Ac144c3Bcc62e5761aD",
       generalAdapter1: "0x02e0e71e145f254820B9D89c9E6068f08256F601",
@@ -461,6 +462,7 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0x4bD68c2FF3274207EC07ED281C915758b6F23F07",
     preLiquidationFactory: "0x65eD61058cEB4895B7d62437BaCEA39b04f6D27B",
     wNative: "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
+    usdc: "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392",
   },
 } as const;
 
