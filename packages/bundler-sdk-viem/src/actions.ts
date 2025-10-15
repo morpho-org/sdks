@@ -239,9 +239,8 @@ export const encodeOperation = (
       if (spender !== generalAdapter1)
         throw new BundlerErrors.UnexpectedSignature(spender);
 
+      const isDai = dai != null && operation.address === dai;
       if (supportsSignature) {
-        const isDai = dai != null && operation.address === dai;
-
         const action: Action = isDai
           ? {
               type: "permitDai",
@@ -333,7 +332,7 @@ export const encodeOperation = (
       // Ignore zero permits used to reset allowances at the end of a bundle
       // when the signer does not support signatures, as they cannot be bundled.
       // Currently only used by DAI-specific permit which does not support specific amounts.
-      if (amount > 0n)
+      if (amount > 0n || !isDai)
         requirements.txs.push(
           ...encodeErc20Approval(
             operation.address,
