@@ -492,6 +492,20 @@ const _addressesRegistry = {
     wNative: "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
     usdc: "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392",
   },
+  [ChainId.ZeroGMainnet]: {
+    morpho: "0x9CDD13a2212D94C4f12190cA30783B743E83C89e",
+    bundler3: {
+      bundler3: "0xbDaFC7ceF85C5fF69164330F521089C9E15DDDae",
+      generalAdapter1: "0xFaD987d0EedfbAC709EC27ee4a94f36A1300a054",
+    },
+    adaptiveCurveIrm: "0xf52e20C42FEc624819D4184226C4777D7cbd767e",
+    publicAllocator: "0x28a80F3713735CAD44bD9d7E1da9Fa16b0244497",
+    metaMorphoFactory: "0x41528AadC7314658b07Ca6e7213B9b77289B477f",
+    chainlinkOracleFactory: "0x5115c1a74ABf096150593EecF3e20F016fc9dB43",
+    preLiquidationFactory: "0x534858821653467c2ae231dc027aa1F2c8D91802",
+
+    wNative: "0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -832,6 +846,18 @@ const _deployments = {
     preLiquidationFactory: 168897284n,
     usdc: 154131168n,
   },
+  [ChainId.ZeroGMainnet]: {
+    morpho: 7526486n,
+    bundler3: {
+      bundler3: 7527649n,
+      generalAdapter1: 7527649n,
+    },
+    adaptiveCurveIrm: 7526486n,
+    publicAllocator: 7526486n,
+    metaMorphoFactory: 7526768n,
+    chainlinkOracleFactory: 7526768n,
+    preLiquidationFactory: 7527649n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -934,6 +960,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.SeiMainnet]: {
     [_addressesRegistry[ChainId.SeiMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.ZeroGMainnet]: {
+    [_addressesRegistry[ChainId.ZeroGMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
