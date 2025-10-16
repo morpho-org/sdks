@@ -5,18 +5,17 @@ import {
   encodeAbiParameters,
   keccak256,
 } from "viem";
-
-import { VaultV2Adapter } from "./VaultV2Adapter";
-
-export interface IVaultV2MorphoMarketV1Adapter extends IVaultV2Adapter {
-  marketParamsList: IMarketParams[];
-}
-
 import { type IMarketParams, MarketParams } from "../../market";
 import type { AccrualPosition } from "../../position";
 import type { BigIntish } from "../../types";
 import { CapacityLimitReason } from "../../utils";
+import { VaultV2Adapter } from "./VaultV2Adapter";
 import type { IAccrualVaultV2Adapter, IVaultV2Adapter } from "./VaultV2Adapter";
+
+export interface IVaultV2MorphoMarketV1Adapter
+  extends Omit<IVaultV2Adapter, "adapterId"> {
+  marketParamsList: IMarketParams[];
+}
 
 const marketParamsAbi = {
   type: "tuple",

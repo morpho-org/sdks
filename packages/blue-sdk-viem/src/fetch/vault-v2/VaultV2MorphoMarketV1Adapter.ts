@@ -2,6 +2,7 @@ import {
   AccrualVaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1Adapter,
 } from "@morpho-org/blue-sdk";
+import { readContractRestructured } from "src/utils";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { morphoMarketV1AdapterAbi } from "../../abis";
@@ -39,19 +40,13 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
     }
   }
 
-  const [parentVault, adapterId, skimRecipient, marketParamsListLength] =
+  const [parentVault, skimRecipient, marketParamsListLength] =
     await Promise.all([
       readContract(client, {
         ...parameters,
         address,
         abi: morphoMarketV1AdapterAbi,
         functionName: "parentVault",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoMarketV1AdapterAbi,
-        functionName: "adapterId",
       }),
       readContract(client, {
         ...parameters,
@@ -69,7 +64,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
 
   const marketParamsList = await Promise.all(
     new Array(Number(marketParamsListLength)).fill(null).map((_, i) =>
-      readContract(client, {
+      readContractRestructured(client, {
         ...parameters,
         address,
         abi: morphoMarketV1AdapterAbi,
@@ -81,18 +76,9 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
 
   return new VaultV2MorphoMarketV1Adapter({
     parentVault,
-    adapterId,
     skimRecipient,
     address,
-    marketParamsList: marketParamsList.map(
-      ([loanToken, collateralToken, oracle, irm, lltv]) => ({
-        loanToken,
-        collateralToken,
-        oracle,
-        irm,
-        lltv,
-      }),
-    ),
+    marketParamsList,
   });
 }
 
