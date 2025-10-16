@@ -29,16 +29,12 @@ const expectedDataVaultV1Adapter = new VaultV2MorphoVaultV1Adapter({
   morphoVaultV1: "0xbeeF010f9cb27031ad51e3333f9aF9C6B1228183",
   address: vaultV2AdapterVaultV1Address,
   parentVault: "0xfDE48B9B8568189f629Bc5209bf5FA826336557a",
-  adapterId:
-    "0xbd5376ffee54bf29509fe2422697ad0303a0cde85d9f6bf2b14c67f455a216a5",
   skimRecipient: zeroAddress,
 });
 
 const expectedDataMarketV1Adapter = new VaultV2MorphoMarketV1Adapter({
   address: vaultV2AdapterMarketV1Address,
   parentVault: "0x678b8851DFcA08E40F3e31C8ABd08dE3E8E14b64",
-  adapterId:
-    "0x6bf98c2b0a1a5951417b9bc8ec03b602064674ab96abfca59bf4be5d1eaf1fb9",
   skimRecipient: zeroAddress,
   marketParamsList: [],
 });
