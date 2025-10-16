@@ -242,7 +242,8 @@ export async function fetchVault(
   const [supplyQueue, withdrawQueue, publicAllocatorConfig] = await Promise.all(
     [
       Promise.all(
-        new Array(Number(supplyQueueSize)).fill(null).map(
+        Array.from(
+          { length: Number(supplyQueueSize) },
           (_, i) =>
             readContract(client, {
               ...parameters,
@@ -254,7 +255,8 @@ export async function fetchVault(
         ),
       ),
       Promise.all(
-        new Array(Number(withdrawQueueSize)).fill(null).map(
+        Array.from(
+          { length: Number(withdrawQueueSize) },
           (_, i) =>
             readContract(client, {
               ...parameters,

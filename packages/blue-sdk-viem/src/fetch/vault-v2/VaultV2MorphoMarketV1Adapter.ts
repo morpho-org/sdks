@@ -63,7 +63,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
     ]);
 
   const marketParamsList = await Promise.all(
-    new Array(Number(marketParamsListLength)).fill(null).map((_, i) =>
+    Array.from({ length: Number(marketParamsListLength) }, (_, i) =>
       readContractRestructured(client, {
         ...parameters,
         address,
