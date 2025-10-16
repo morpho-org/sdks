@@ -2,7 +2,6 @@ import {
   AccrualVaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1Adapter,
 } from "@morpho-org/blue-sdk";
-import { readContractRestructured } from "src/utils";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { morphoMarketV1AdapterAbi } from "../../abis";
@@ -11,6 +10,7 @@ import {
   code,
 } from "../../queries/vault-v2/GetVaultV2MorphoMarketV1Adapter";
 import type { DeploylessFetchParameters } from "../../types";
+import { readContractRestructured } from "../../utils";
 import { fetchAccrualPosition } from "../Position";
 
 export async function fetchVaultV2MorphoMarketV1Adapter(
