@@ -209,38 +209,44 @@ describe("LiquidityAdapter vaultV1", () => {
       });
     });
   });
-});
 
-describe("maxWithdraw function", () => {
-  vaultV2Test(
-    "should be limited by liquidity when assets > liquidity",
-    async ({ client }) => {
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+  describe("maxWithdraw function", () => {
+    vaultV2Test(
+      "should be limited by liquidity when assets > liquidity",
+      async ({ client }) => {
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
 
-      const shares = parseUnits("1000000", 18); // 1M shares
-      const result = accrualVaultV2.maxWithdraw(shares);
+        const shares = parseUnits("1000000", 18); // 1M shares
+        const result = accrualVaultV2.maxWithdraw(shares);
 
-      expect(result).toStrictEqual({
-        value: 17023088n,
-        limiter: CapacityLimitReason.liquidity,
-      });
-    },
-  );
+        expect(result).toStrictEqual({
+          value: 17023088n,
+          limiter: CapacityLimitReason.liquidity,
+        });
+      },
+    );
 
-  vaultV2Test(
-    "should be limited by balance when assets <= liquidity",
-    async ({ client }) => {
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+    vaultV2Test(
+      "should be limited by balance when assets <= liquidity",
+      async ({ client }) => {
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
 
-      const shares = parseUnits("10", 18); // 10 shares
-      const result = accrualVaultV2.maxWithdraw(shares);
+        const shares = parseUnits("10", 18); // 10 shares
+        const result = accrualVaultV2.maxWithdraw(shares);
 
-      expect(result).toStrictEqual({
-        value: accrualVaultV2.toAssets(shares),
-        limiter: CapacityLimitReason.balance,
-      });
-    },
-  );
+        expect(result).toStrictEqual({
+          value: accrualVaultV2.toAssets(shares),
+          limiter: CapacityLimitReason.balance,
+        });
+      },
+    );
+  });
 });
 
 describe("LiquidityAdapter marketV1", () => {
