@@ -1,5 +1,4 @@
 import {
-  UnsupportedChainIdError,
   UnsupportedVaultV2AdapterError,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -9,6 +8,7 @@ import { morphoVaultV1AdapterFactoryAbi } from "../../abis";
 import { morphoMarketV1AdapterFactoryAbi } from "../../abis";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter";
+import { fetchAccrualVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter";
 import {
   fetchAccrualVaultV2MorphoVaultV1Adapter,
   fetchVaultV2MorphoVaultV1Adapter,
@@ -63,21 +63,39 @@ export async function fetchAccrualVaultV2Adapter(
   parameters.chainId ??= await getChainId(client);
   parameters.deployless ??= true;
 
-  const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
+  const { morphoVaultV1AdapterFactory, morphoMarketV1AdapterFactory } =
+    getChainAddresses(parameters.chainId);
 
-  if (!morphoVaultV1AdapterFactory)
-    throw new UnsupportedChainIdError(parameters.chainId);
-
-  const isMorphoVaultV1Adapter = await readContract(client, {
-    ...parameters,
-    address: morphoVaultV1AdapterFactory,
-    abi: morphoVaultV1AdapterFactoryAbi,
-    functionName: "isMorphoVaultV1Adapter",
-    args: [address],
-  });
+  const [isMorphoVaultV1Adapter, isMorphoMarketV1Adapter] = await Promise.all([
+    morphoVaultV1AdapterFactory
+      ? readContract(client, {
+          ...parameters,
+          address: morphoVaultV1AdapterFactory,
+          abi: morphoVaultV1AdapterFactoryAbi,
+          functionName: "isMorphoVaultV1Adapter",
+          args: [address],
+        })
+      : false,
+    morphoMarketV1AdapterFactory
+      ? readContract(client, {
+          ...parameters,
+          address: morphoMarketV1AdapterFactory,
+          abi: morphoMarketV1AdapterFactoryAbi,
+          functionName: "isMorphoMarketV1Adapter",
+          args: [address],
+        })
+      : false,
+  ]);
 
   if (isMorphoVaultV1Adapter)
     return fetchAccrualVaultV2MorphoVaultV1Adapter(address, client, parameters);
+
+  if (isMorphoMarketV1Adapter)
+    return fetchAccrualVaultV2MorphoMarketV1Adapter(
+      address,
+      client,
+      parameters,
+    );
 
   throw new UnsupportedVaultV2AdapterError(address);
 }
