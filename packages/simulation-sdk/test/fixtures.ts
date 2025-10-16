@@ -1661,7 +1661,6 @@ export const morphoVaultV1AdapterA = new VaultV2MorphoVaultV1Adapter({
   morphoVaultV1: vaultA.address,
   address: "0x2A0000000000000000000000000000000000000a",
   parentVault: "0x200000000000000000000000000000000000000A",
-  adapterId: "0x1",
   skimRecipient: zeroAddress,
 });
 export const vaultV2A = new VaultV2({

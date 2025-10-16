@@ -6,7 +6,6 @@ import {IMorphoVaultV1Adapter} from "./interfaces/IMorphoVaultV1Adapter.sol";
 struct VaultV2MorphoVaultV1AdapterResponse {
     address morphoVaultV1;
     address parentVault;
-    bytes32 adapterId;
     address skimRecipient;
 }
 
@@ -18,7 +17,6 @@ contract GetVaultV2MorphoVaultV1Adapter {
     {
         res.morphoVaultV1 = adapter.morphoVaultV1();
         res.parentVault = adapter.parentVault();
-        res.adapterId = adapter.adapterId();
         res.skimRecipient = adapter.skimRecipient();
     }
 }

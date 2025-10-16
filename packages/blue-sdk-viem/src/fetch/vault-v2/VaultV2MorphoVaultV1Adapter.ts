@@ -35,38 +35,30 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
     }
   }
 
-  const [parentVault, adapterId, skimRecipient, morphoVaultV1] =
-    await Promise.all([
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoVaultV1AdapterAbi,
-        functionName: "parentVault",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoVaultV1AdapterAbi,
-        functionName: "adapterId",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoVaultV1AdapterAbi,
-        functionName: "skimRecipient",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoVaultV1AdapterAbi,
-        functionName: "morphoVaultV1",
-      }),
-    ]);
+  const [parentVault, skimRecipient, morphoVaultV1] = await Promise.all([
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "parentVault",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "skimRecipient",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoVaultV1AdapterAbi,
+      functionName: "morphoVaultV1",
+    }),
+  ]);
 
   return new VaultV2MorphoVaultV1Adapter({
     morphoVaultV1,
     parentVault,
-    adapterId,
     skimRecipient,
     address,
   });

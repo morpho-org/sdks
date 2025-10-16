@@ -2,7 +2,8 @@ import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
 
 import { VaultV2Adapter } from "./VaultV2Adapter";
 
-export interface IVaultV2MorphoVaultV1Adapter extends IVaultV2Adapter {
+export interface IVaultV2MorphoVaultV1Adapter
+  extends Omit<IVaultV2Adapter, "adapterId"> {
   morphoVaultV1: Address;
 }
 
@@ -57,7 +58,7 @@ export class AccrualVaultV2MorphoVaultV1Adapter
     super(adapter);
   }
 
-  realAssets(timestamp: BigIntish) {
+  realAssets(timestamp?: BigIntish) {
     return this.accrualVaultV1.accrueInterest(timestamp).toAssets(this.shares);
   }
 

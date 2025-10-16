@@ -5,7 +5,6 @@ import { type IToken, WrappedToken } from "../../token";
 import type { BigIntish } from "../../types";
 import { type CapacityLimit, CapacityLimitReason } from "../../utils";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter";
-import { AccrualVaultV2MorphoVaultV1Adapter } from "./VaultV2MorphoVaultV1Adapter";
 
 export interface IVaultV2Allocation {
   id: Hash;
@@ -147,14 +146,11 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       return { value: BigInt(assets), limiter: CapacityLimitReason.balance };
 
     let liquidityAdapterLimit: CapacityLimit | undefined;
-    if (
-      this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
-    ) {
+    if (this.accrualLiquidityAdapter != null)
       liquidityAdapterLimit = this.accrualLiquidityAdapter.maxDeposit(
         this.liquidityData,
         assets,
       );
-    }
 
     if (this.liquidityAllocations == null || liquidityAdapterLimit == null)
       throw new VaultV2Errors.UnsupportedLiquidityAdapter(
@@ -200,9 +196,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       return { value: BigInt(assets), limiter: CapacityLimitReason.balance };
 
     let liquidity = this.assetBalance;
-    if (
-      this.accrualLiquidityAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter
-    )
+    if (this.accrualLiquidityAdapter != null)
       liquidity += this.accrualLiquidityAdapter.maxWithdraw(
         this.liquidityData,
       ).value;

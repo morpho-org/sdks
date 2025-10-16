@@ -131,9 +131,10 @@ export const check = async <
               isPreLiquidation ? position.preLiquidation : morpho,
             ],
           }),
-          ...new Array(10)
-            .fill(undefined)
-            .map((_v, i) => seizableCollateral / 2n ** BigInt(i))
+          ...Array.from(
+            { length: 10 },
+            (_, i) => seizableCollateral / 2n ** BigInt(i),
+          )
             .filter(
               (seizedAssets) =>
                 collateralToken.toUsd(seizedAssets)! >

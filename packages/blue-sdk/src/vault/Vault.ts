@@ -414,7 +414,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to each of the vault's market's `lastUpdate`.
    */
-  public accrueInterest(timestamp: BigIntish) {
+  public accrueInterest(timestamp?: BigIntish) {
     const vault = new AccrualVault(
       this,
       // Keep withdraw queue order.
