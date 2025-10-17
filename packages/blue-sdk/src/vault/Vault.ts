@@ -205,7 +205,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * @inheritdoc
    * Reflects the sum of assets of the vault's allocations.
-   * Only includes virtually accrued interest if the vault's allocations are include virtually accrued interest.
+   * Only includes virtually accrued interest if the vault's allocations include virtually accrued interest.
    */
   declare totalAssets: bigint;
 
