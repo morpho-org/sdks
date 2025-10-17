@@ -1,5 +1,8 @@
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
-import { UnknownMarketParamsError } from "../errors.js";
+import {
+  InvalidMarketParamsError,
+  UnknownMarketParamsError,
+} from "../errors.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 
 import { type Hex, decodeAbiParameters } from "viem";
@@ -61,9 +64,13 @@ export class MarketParams implements IMarketParams {
   }
 
   static fromHex(data: Hex) {
-    const [marketParams] = decodeAbiParameters([marketParamsAbi], data);
+    try {
+      const [marketParams] = decodeAbiParameters([marketParamsAbi], data);
 
-    return new MarketParams(marketParams);
+      return new MarketParams(marketParams);
+    } catch {
+      throw new InvalidMarketParamsError(data);
+    }
   }
 
   /**

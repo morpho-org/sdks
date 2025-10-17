@@ -60,4 +60,25 @@ describe("augment/MarketParams", () => {
 
     expect(MarketParams.fromHex(data)).toStrictEqual(usdc_wstEth);
   });
+
+  test("should not decode invalid config from bytes", async () => {
+    const data = encodeAbiParameters(
+      [
+        { type: "address", name: "loanToken" },
+        { type: "address", name: "collateralToken" },
+        { type: "address", name: "oracle" },
+        { type: "uint256", name: "lltv" },
+      ],
+      [
+        usdc_wstEth.loanToken,
+        usdc_wstEth.collateralToken,
+        usdc_wstEth.oracle,
+        usdc_wstEth.lltv,
+      ],
+    );
+
+    expect(() => MarketParams.fromHex(data)).toThrow(
+      `cannot decode valid MarketParams from "${data}"`,
+    );
+  });
 });
