@@ -62,7 +62,7 @@ Add your chain's contract addresses to the `_addressesRegistry` mapping:
 ```
 
 Remember to set the USDC address if it supports Permit2, otherwise the signature will default to version 1 (with hasSimplePermit true).
-Also make sure to add the Permit2 contract (if available) to enable transactional flows using Permit2.
+Also make sure to add the Permit2 contract (if available) to enable transactional flows using Permit2, otherwise the approval will default to the classic erc20 approval.
 
 ### 4. Add Deployment Blocks
 
