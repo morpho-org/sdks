@@ -1,5 +1,5 @@
 import type { RoundingDirection } from "../math/index.js";
-import type { Address } from "../types.js";
+import type { Address, BigIntish } from "../types.js";
 import type { IVaultConfig } from "../vault/VaultConfig.js";
 import { VaultUtils } from "../vault/VaultUtils.js";
 import { WrappedToken } from "./WrappedToken.js";
@@ -33,11 +33,11 @@ export class VaultToken extends WrappedToken implements IVaultToken {
     this.decimalsOffset = BigInt(config.decimalsOffset);
   }
 
-  protected _wrap(amount: bigint, rounding: RoundingDirection) {
+  protected _wrap(amount: BigIntish, rounding: RoundingDirection) {
     return VaultUtils.toShares(amount, this, rounding);
   }
 
-  protected _unwrap(amount: bigint, rounding: RoundingDirection) {
+  protected _unwrap(amount: BigIntish, rounding: RoundingDirection) {
     return VaultUtils.toAssets(amount, this, rounding);
   }
 }
