@@ -2,6 +2,7 @@ import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { UnknownMarketParamsError } from "../errors.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
 
+import { type Hex, decodeAbiParameters } from "viem";
 import { MarketUtils } from "./MarketUtils.js";
 
 export interface IMarketParams {
@@ -16,6 +17,17 @@ export type InputMarketParams = Pick<
   MarketParams,
   "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
 >;
+
+export const marketParamsAbi = {
+  type: "tuple",
+  components: [
+    { type: "address", name: "loanToken" },
+    { type: "address", name: "collateralToken" },
+    { type: "address", name: "oracle" },
+    { type: "address", name: "irm" },
+    { type: "uint256", name: "lltv" },
+  ],
+} as const;
 
 /**
  * Represents a market's configuration (also called market params).
@@ -46,6 +58,12 @@ export class MarketParams implements IMarketParams {
       irm: ZERO_ADDRESS,
       lltv: 0n,
     });
+  }
+
+  static fromHex(data: Hex) {
+    const [marketParams] = decodeAbiParameters([marketParamsAbi], data);
+
+    return new MarketParams(marketParams);
   }
 
   /**

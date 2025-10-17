@@ -1,11 +1,9 @@
+import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
 import {
-  type Address,
-  type Hex,
-  decodeAbiParameters,
-  encodeAbiParameters,
-  keccak256,
-} from "viem";
-import { type IMarketParams, MarketParams } from "../../market";
+  type IMarketParams,
+  MarketParams,
+  marketParamsAbi,
+} from "../../market";
 import type { AccrualPosition } from "../../position";
 import type { BigIntish } from "../../types";
 import { CapacityLimitReason } from "../../utils";
@@ -16,17 +14,6 @@ export interface IVaultV2MorphoMarketV1Adapter
   extends Omit<IVaultV2Adapter, "adapterId"> {
   marketParamsList: IMarketParams[];
 }
-
-const marketParamsAbi = {
-  type: "tuple",
-  components: [
-    { type: "address", name: "loanToken" },
-    { type: "address", name: "collateralToken" },
-    { type: "address", name: "oracle" },
-    { type: "address", name: "irm" },
-    { type: "uint256", name: "lltv" },
-  ],
-} as const;
 
 export class VaultV2MorphoMarketV1Adapter
   extends VaultV2Adapter
@@ -113,9 +100,8 @@ export class AccrualVaultV2MorphoMarketV1Adapter
     };
   }
 
-  maxWithdraw(_data: Hex) {
-    const [marketParams] = decodeAbiParameters([marketParamsAbi], _data);
-    const marketId = new MarketParams(marketParams).id;
+  maxWithdraw(data: Hex) {
+    const marketId = MarketParams.fromHex(data).id;
     const position = this.positions.find(
       (position) => position.marketId === marketId,
     );
