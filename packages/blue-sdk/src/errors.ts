@@ -1,5 +1,11 @@
-import { formatUnits } from "viem";
+import { type Hex, formatUnits } from "viem";
 import type { Address, MarketId } from "./types.js";
+
+export class InvalidMarketParamsError extends Error {
+  constructor(public readonly data: Hex) {
+    super(`cannot decode valid MarketParams from "${data}"`);
+  }
+}
 
 export class UnknownDataError extends Error {}
 
