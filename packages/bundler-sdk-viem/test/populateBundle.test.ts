@@ -71,6 +71,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [wNative],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -130,6 +132,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, dai, dai_sUsde.collateralToken],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -257,6 +261,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -456,6 +462,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [usdc, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -565,6 +573,8 @@ describe("populateBundle", () => {
               ],
               tokens: [usdc, steakUsdc.address],
               vaults: [steakUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -674,6 +684,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -815,6 +827,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -984,6 +998,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1140,6 +1156,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1291,6 +1309,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1353,6 +1373,8 @@ describe("populateBundle", () => {
               ],
               tokens: [usdc, stEth, wstEth, steakUsdc.address],
               vaults: [steakUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1574,6 +1596,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -1851,6 +1875,8 @@ describe("populateBundle", () => {
                 re7Weth.address,
               ],
               vaults: [bbEth.address, re7Weth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -2217,6 +2243,8 @@ describe("populateBundle", () => {
                 bbUsdc.address,
               ],
               vaults: [steakUsdc.address, bbEth.address, bbUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -2421,6 +2449,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -2656,6 +2686,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [wNative],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -2720,6 +2752,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, dai, dai_sUsde.collateralToken],
               vaults: [],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -2858,6 +2892,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -3067,6 +3103,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [usdc, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -3190,6 +3228,8 @@ describe("populateBundle", () => {
               ],
               tokens: [usdc, stEth, wstEth, steakUsdc.address],
               vaults: [steakUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3310,6 +3350,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3456,6 +3498,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3633,6 +3677,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbUsdt.address],
               tokens: [usdt, stEth, wstEth, bbUsdt.address],
               vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3794,6 +3840,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -3945,6 +3993,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -4008,6 +4058,8 @@ describe("populateBundle", () => {
               ],
               tokens: [usdc, stEth, wstEth, steakUsdc.address],
               vaults: [steakUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -4241,6 +4293,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1, bbEth.address],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth, bbEth.address],
               vaults: [bbEth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -4535,6 +4589,8 @@ describe("populateBundle", () => {
                 re7Weth.address,
               ],
               vaults: [bbEth.address, re7Weth.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -4912,6 +4968,8 @@ describe("populateBundle", () => {
                 bbUsdc.address,
               ],
               vaults: [steakUsdc.address, bbEth.address, bbUsdc.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
               block,
             }),
           );
@@ -5126,6 +5184,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative, stEth, wstEth],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -5344,6 +5404,8 @@ describe("populateBundle", () => {
               users: [client.account.address, generalAdapter1],
               tokens: [NATIVE_ADDRESS, wNative],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );
@@ -5467,6 +5529,8 @@ describe("populateBundle", () => {
               users: [whitelisted, generalAdapter1],
               tokens: [usdc, verUsdc, wNative],
               vaults: [],
+              vaultV2Adapters: [],
+              vaultV2s: [],
               block,
             }),
           );

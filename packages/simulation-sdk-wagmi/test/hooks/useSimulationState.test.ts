@@ -34,6 +34,8 @@ describe("useSimulationState", () => {
         users: [],
         tokens: [],
         vaults: [],
+        vaultV2Adapters: [],
+        vaultV2s: [],
       }),
     );
 
@@ -58,6 +60,8 @@ describe("useSimulationState", () => {
         users: [],
         tokens: [],
         vaults: [],
+        vaultV2Adapters: [],
+        vaultV2s: [],
         block,
       }),
     );
@@ -90,6 +94,8 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+        vaultV2Adapters: {},
+        vaultV2s: {},
       },
       isFetching: {
         global: {
@@ -103,6 +109,8 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+        vaultV2Adapters: {},
+        vaultV2s: {},
       },
       isFetchingAny: true,
       isPending: false,
@@ -135,6 +143,8 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+        vaultV2Adapters: {},
+        vaultV2s: {},
       },
       isFetching: {
         global: {
@@ -148,6 +158,8 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+        vaultV2Adapters: {},
+        vaultV2s: {},
       },
       isFetchingAny: false,
       isPending: false,
@@ -166,6 +178,8 @@ describe("useSimulationState", () => {
         users: [],
         tokens: [],
         vaults: [],
+        vaultV2Adapters: [],
+        vaultV2s: [],
         block,
       }),
     );
@@ -202,6 +216,8 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+        vaultV2Adapters: {},
+        vaultV2s: {},
       },
       isFetching: {
         global: {
@@ -217,6 +233,8 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+        vaultV2Adapters: {},
+        vaultV2s: {},
       },
       isFetchingAny: true,
       isPending: false,
@@ -263,6 +281,8 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+        vaultV2Adapters: {},
+        vaultV2s: {},
       },
       isFetching: {
         global: {
@@ -278,6 +298,8 @@ describe("useSimulationState", () => {
         vaults: {},
         vaultUsers: {},
         vaultMarketConfigs: {},
+        vaultV2Adapters: {},
+        vaultV2s: {},
       },
       isFetchingAny: false,
       isPending: false,
@@ -304,6 +326,8 @@ describe("useSimulationState", () => {
         users: [client.account.address],
         tokens: [usdc],
         vaults: [],
+        vaultV2Adapters: [],
+        vaultV2s: [],
         block,
       }),
     );
@@ -365,6 +389,8 @@ describe("useSimulationState", () => {
         users: [client.account.address],
         tokens: [usdc],
         vaults: [],
+        vaultV2Adapters: [],
+        vaultV2s: [],
         block,
       }),
     );
@@ -424,6 +450,8 @@ describe("useSimulationState", () => {
           users: [client.account.address],
           tokens: [usdc],
           vaults: [],
+          vaultV2Adapters: [],
+          vaultV2s: [],
           block,
         }),
       { initialProps: block },
@@ -520,6 +548,8 @@ describe("useSimulationState", () => {
         users: [client.account.address, steakUsdc.address, generalAdapter1],
         tokens: [steakUsdc.asset, steakUsdc.address],
         vaults: [steakUsdc.address],
+        vaultV2Adapters: [],
+        vaultV2s: [],
         block,
       }),
     );

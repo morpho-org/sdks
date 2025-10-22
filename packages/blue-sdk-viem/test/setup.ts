@@ -1,5 +1,5 @@
 import { createViemTest } from "@morpho-org/test/vitest";
-import { mainnet } from "viem/chains";
+import { base, mainnet } from "viem/chains";
 
 /**
  * This test will run on `mainnet` forked at block `19,530,000`.
@@ -23,4 +23,9 @@ export const test2 = createViemTest(mainnet, {
 export const preLiquidationTest = createViemTest(mainnet, {
   forkUrl: process.env.MAINNET_RPC_URL,
   forkBlockNumber: 21_950_000,
+});
+
+export const vaultV2Test = createViemTest(base, {
+  forkUrl: process.env.BASE_RPC_URL,
+  forkBlockNumber: 36_870_000,
 });
