@@ -108,7 +108,8 @@ export class Market implements IMarket {
     price,
     rateAtTarget,
   }: IMarket) {
-    this.params = new MarketParams(params);
+    this.params =
+      params instanceof MarketParams ? params : new MarketParams(params);
     this.totalSupplyAssets = totalSupplyAssets;
     this.totalBorrowAssets = totalBorrowAssets;
     this.totalSupplyShares = totalSupplyShares;
