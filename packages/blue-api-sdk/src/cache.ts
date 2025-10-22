@@ -760,6 +760,17 @@ export const typePolicies = {
       creationBlockNumber: { read: readMaybeBigInt },
     },
   },
+  VaultV2: {
+    fields: {
+      creationBlockNumber: { read: readMaybeBigInt },
+      creationTimestamp: { read: readMaybeBigInt },
+      idleAssets: { read: readMaybeBigInt },
+      liquidity: { read: readMaybeBigInt },
+      maxRate: { read: readMaybeBigInt },
+      totalAssets: { read: readMaybeBigInt },
+      totalSupply: { read: readMaybeBigInt },
+    },
+  },
   VaultV2DepositData: {
     fields: {
       assets: { read: readMaybeBigInt },
