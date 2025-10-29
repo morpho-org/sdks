@@ -36,6 +36,12 @@
 
 - [**`@morpho-org/morpho-test`**](./packages/morpho-test/): Framework-agnostic extension of `@morpho-org/blue-sdk` that exports test fixtures useful for E2E tests on forks
 
+### Test coverage
+
+1. Install `lcov`: `sudo apt install lcov`
+2. Generate coverage info: `pnpm test:coverage`
+3. Generate hierarchical coverage report: `pnpm coverage:report`
+
 ## Getting involved
 
 Learn [how to add a new chain configuration](./docs/adding-new-chain.md) to the sdks.

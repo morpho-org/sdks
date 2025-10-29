@@ -3,13 +3,11 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     coverage: {
-      reporter: process.env.CI ? ["lcov"] : ["text", "json", "html"],
+      reporter: ["text-summary", "lcov"],
+      include: ["packages/**/src/**"],
       exclude: [
-        "vitest.*.ts",
-        "**/lib/**",
-        "**/dist/**",
-        "**/artifacts/**",
         "packages/test/**",
+        "packages/test-wagmi/**",
         "packages/morpho-test/**",
       ],
     },
