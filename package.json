@@ -22,7 +22,8 @@
     "lint": "biome check && $npm_execpath lint:address",
     "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
     "test": "dotenv -- vitest",
-    "coverage": "vitest run --coverage"
+    "test:coverage": "$npm_execpath test --coverage",
+    "coverage:report": "genhtml --hierarchical --sort --prefix \"$(pwd)\" -o coverage/lcov coverage/lcov.info"
   },
   "devDependencies": {
     "@actions/core": "^1.11.1",
