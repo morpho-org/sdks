@@ -1,9 +1,12 @@
 import { Time } from "@morpho-org/morpho-ts";
-import { type CapacityLimit, CapacityLimitReason } from "../market/index.js";
+import {
+  type CapacityLimit,
+  CapacityLimitReason,
+  MarketUtils,
+} from "../market/index.js";
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import { VaultToken } from "../token/index.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
-
 import type { IVaultConfig } from "./VaultConfig.js";
 import {
   type IVaultMarketAllocation,
@@ -200,6 +203,13 @@ export interface IAccrualVault
 
 export class AccrualVault extends Vault implements IAccrualVault {
   /**
+   * @inheritdoc
+   * Reflects the sum of assets of the vault's allocations.
+   * Only includes virtually accrued interest if the vault's allocations include virtually accrued interest.
+   */
+  declare totalAssets: bigint;
+
+  /**
    * The allocation of the vault on each market enabled.
    */
   public readonly allocations: Map<MarketId, VaultMarketAllocation>;
@@ -272,7 +282,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
 
   /**
    * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
-   * weighted-averaged over its market deposits, before deducting the performance fee (scaled by WAD).
+   * weighted-averaged over its market deposits, before deducting the performance fee.
    * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
    */
   get apy() {
@@ -281,19 +291,19 @@ export class AccrualVault extends Vault implements IAccrualVault {
 
   /**
    * The MetaMorpho vault's current instantaneous Annual Percentage Yield (APY)
-   * weighted-averaged over its market deposits, after deducting the performance fee (scaled by WAD).
-   * If interested in the APY at a specific timestamp, use `getApy(timestamp)` instead.
+   * weighted-averaged over its market deposits, after deducting the performance fee.
+   * If interested in the APY at a specific timestamp, use `getNetApy(timestamp)` instead.
    */
   get netApy() {
     return this.getNetApy();
   }
 
   /**
-   * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
+   * The MetaMorpho vault's per-second rate at which interest _would_ accrue,
    * weighted-averaged over its market deposits, before deducting the performance fee,
-   * if interest was to be accrued on each market at the given timestamp (scaled by WAD).
+   * if interest was to be accrued on each market at the given timestamp.
    */
-  public getApy(timestamp: BigIntish = Time.timestamp()) {
+  private _getAvgRate(timestamp: BigIntish = Time.timestamp()) {
     if (this.totalAssets === 0n) return 0n;
 
     return (
@@ -302,7 +312,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
         .reduce(
           (total, { position }) =>
             total +
-            position.market.getAvgSupplyApy(timestamp) * position.supplyAssets,
+            position.market.getAvgSupplyRate(timestamp) * position.supplyAssets,
           0n,
         ) / this.totalAssets
     );
@@ -310,11 +320,24 @@ export class AccrualVault extends Vault implements IAccrualVault {
 
   /**
    * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
+   * weighted-averaged over its market deposits, before deducting the performance fee,
+   * if interest was to be accrued on each market at the given timestamp.
+   */
+  public getApy(timestamp: BigIntish = Time.timestamp()) {
+    if (this.totalAssets === 0n) return 0;
+
+    return MarketUtils.rateToApy(this._getAvgRate(timestamp));
+  }
+
+  /**
+   * The MetaMorpho vault's experienced Annual Percentage Yield (APY)
    * weighted-averaged over its market deposits, after deducting the performance fee,
-   * if interest was to be accrued on each market at the given timestamp (scaled by WAD).
+   * if interest was to be accrued on each market at the given timestamp.
    */
   public getNetApy(timestamp: BigIntish = Time.timestamp()) {
-    return MathLib.wMulDown(this.getApy(timestamp), MathLib.WAD - this.fee);
+    return MarketUtils.rateToApy(
+      MathLib.wMulDown(this._getAvgRate(timestamp), MathLib.WAD - this.fee),
+    );
   }
 
   public getAllocationProportion(marketId: MarketId) {
