@@ -380,7 +380,7 @@ describe("should liquidate Spectra Tokens", () => {
 
       await client.deal({
         erc20: marketParams.collateralToken,
-        account: "0x23228469b3439d81dc64e3523068976201ba08c3",
+        account: "0x23228469b3439d81DC64e3523068976201bA08C3",
         amount: 8977038222000000000000n,
       });
 
@@ -521,7 +521,7 @@ describe("should liquidate Spectra Tokens", () => {
 
       await client.deal({
         erc20: marketParams.collateralToken,
-        account: "0x23228469b3439d81dc64e3523068976201ba08c3",
+        account: "0x23228469b3439d81DC64e3523068976201bA08C3",
         amount: 8977038222000000000000n,
       });
 

@@ -6,21 +6,9 @@ import {
   type RoundingDirection,
 } from "../math/index.js";
 import type { BigIntish } from "../types.js";
+import { type CapacityLimit, CapacityLimitReason } from "../utils.js";
 import { type IMarketParams, MarketParams } from "./MarketParams.js";
 import { MarketUtils } from "./MarketUtils.js";
-
-export enum CapacityLimitReason {
-  liquidity = "Liquidity",
-  balance = "Balance",
-  position = "Position",
-  collateral = "Collateral",
-  cap = "Cap",
-}
-
-export interface CapacityLimit {
-  value: bigint;
-  limiter: CapacityLimitReason;
-}
 
 export interface MaxBorrowOptions {
   maxLtv?: bigint;

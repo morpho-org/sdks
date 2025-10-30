@@ -44,9 +44,9 @@
     "@morpho-org/test": "workspace:^",
     "@types/node": "^22.13.1",
     "graphql": "^16.10.0",
-    "nock": "beta",
+    "nock": "^14.0.10",
     "typescript": "^5.7.2",
-    "viem": "^2.23.0",
+    "viem": "^2.33.3",
     "vitest": "^3.0.5"
   },
   "publishConfig": {

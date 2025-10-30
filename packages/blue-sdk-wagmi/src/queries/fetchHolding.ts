@@ -24,8 +24,8 @@ export function fetchHoldingQueryOptions<config extends Config>(
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
     async queryFn({ queryKey }) {
       const { user, token, chainId, ...parameters } = queryKey[1];
-      if (!user) throw Error("user is required");
-      if (!token) throw Error("token is required");
+      if (user == null) throw Error("user is required");
+      if (token == null) throw Error("token is required");
 
       return fetchHolding(user, token, config.getClient({ chainId }), {
         chainId,
