@@ -154,6 +154,10 @@ export function getLastDefined<T>(array: T[]) {
 }
 
 export function deepFreeze<T>(obj: T): T {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
   const propNames = Object.getOwnPropertyNames(obj);
 
   for (const name of propNames) {
