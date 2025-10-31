@@ -104,6 +104,16 @@ export const mergeArrayByField = <
 };
 
 export const typePolicies = {
+  Block: {
+    fields: {
+      number: {
+        read: readMaybeBigInt,
+      },
+      timestamp: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
   Transaction: {
     fields: {
       blockNumber: {
@@ -170,6 +180,13 @@ export const typePolicies = {
     fields: {
       chain: {
         merge: true,
+      },
+    },
+  },
+  OracleVault: {
+    fields: {
+      price: {
+        read: readMaybeBigInt,
       },
     },
   },
@@ -319,7 +336,16 @@ export const typePolicies = {
       timestamp: {
         read: readMaybeBigInt,
       },
+      blockNumber: {
+        read: readMaybeBigInt,
+      },
       rateAtTarget: {
+        read: readMaybeBigInt,
+      },
+      size: {
+        read: readMaybeBigInt,
+      },
+      totalLiquidity: {
         read: readMaybeBigInt,
       },
       rewards: {
@@ -355,6 +381,13 @@ export const typePolicies = {
         read: readMaybeBigInt,
       },
       quoteVaultConversionSample: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  MarketParams: {
+    fields: {
+      lltv: {
         read: readMaybeBigInt,
       },
     },
@@ -411,16 +444,31 @@ export const typePolicies = {
       supplyShares: {
         read: readMaybeBigInt,
       },
+      supplyPnl: {
+        read: readMaybeBigInt,
+      },
       borrowAssets: {
         read: readMaybeBigInt,
       },
       borrowShares: {
         read: readMaybeBigInt,
       },
+      borrowPnl: {
+        read: readMaybeBigInt,
+      },
       collateral: {
         read: readMaybeBigInt,
       },
       collateralPrice: {
+        read: readMaybeBigInt,
+      },
+      collateralValue: {
+        read: readMaybeBigInt,
+      },
+      margin: {
+        read: readMaybeBigInt,
+      },
+      marginPnl: {
         read: readMaybeBigInt,
       },
       position: {
@@ -477,6 +525,9 @@ export const typePolicies = {
   VaultState: {
     fields: {
       timestamp: {
+        read: readMaybeBigInt,
+      },
+      blockNumber: {
         read: readMaybeBigInt,
       },
       totalAssets: {
@@ -598,6 +649,9 @@ export const typePolicies = {
       removableAt: {
         read: readMaybeBigInt,
       },
+      blockNumber: {
+        read: readMaybeBigInt,
+      },
       market: {
         merge: true,
       },
@@ -629,6 +683,13 @@ export const typePolicies = {
     fields: {
       allocation: {
         merge: mergeArrayByField<VaultAllocation>("market.id"),
+      },
+    },
+  },
+  VaultAdminEvent: {
+    fields: {
+      timestamp: {
+        read: readMaybeBigInt,
       },
     },
   },
@@ -681,6 +742,19 @@ export const typePolicies = {
       },
     },
   },
+  PublicAllocatorReallocate: {
+    fields: {
+      assets: {
+        read: readMaybeBigInt,
+      },
+      blockNumber: {
+        read: readMaybeBigInt,
+      },
+      timestamp: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
   PublicAllocatorSharedLiquidity: {
     fields: {
       assets: {
@@ -697,6 +771,47 @@ export const typePolicies = {
       },
     },
   },
+  ReallocateSupplyEventData: {
+    fields: {
+      suppliedAssets: {
+        read: readMaybeBigInt,
+      },
+      suppliedShares: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  ReallocateWithdrawEventData: {
+    fields: {
+      withdrawnAssets: {
+        read: readMaybeBigInt,
+      },
+      withdrawnShares: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  SetFeeEventData: {
+    fields: {
+      fee: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  SkimEventData: {
+    fields: {
+      amount: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  TimelockEventData: {
+    fields: {
+      timelock: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
   MarketTransferTransactionData: {
     fields: {
       assets: {
@@ -707,6 +822,62 @@ export const typePolicies = {
       },
       market: {
         merge: true,
+      },
+    },
+  },
+  MetaMorphoAdapter: {
+    fields: {
+      assets: {
+        read: readMaybeBigInt,
+      },
+      creationBlockNumber: {
+        read: readMaybeBigInt,
+      },
+      creationTimestamp: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  MetaMorphoAdapterFactory: {
+    fields: {
+      creationBlockNumber: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  MorphoChainlinkOracleData: {
+    fields: {
+      scaleFactor: {
+        read: readMaybeBigInt,
+      },
+      vaultConversionSample: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  MorphoChainlinkOracleV2Data: {
+    fields: {
+      baseVaultConversionSample: {
+        read: readMaybeBigInt,
+      },
+      quoteVaultConversionSample: {
+        read: readMaybeBigInt,
+      },
+      scaleFactor: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  MorphoMarketV1Adapter: {
+    fields: {
+      assets: {
+        read: readMaybeBigInt,
+      },
+      creationBlockNumber: {
+        read: readMaybeBigInt,
+      },
+      creationTimestamp: {
+        read: readMaybeBigInt,
       },
     },
   },
@@ -771,6 +942,29 @@ export const typePolicies = {
       totalSupply: { read: readMaybeBigInt },
     },
   },
+  VaultV2Allocator: {
+    fields: {
+      blockNumber: {
+        read: readMaybeBigInt,
+      },
+      timestamp: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  VaultV2Caps: {
+    fields: {
+      absoluteCap: {
+        read: readMaybeBigInt,
+      },
+      allocation: {
+        read: readMaybeBigInt,
+      },
+      relativeCap: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
   VaultV2DepositData: {
     fields: {
       assets: { read: readMaybeBigInt },
@@ -784,6 +978,7 @@ export const typePolicies = {
   VaultV2Position: {
     fields: {
       shares: { read: readMaybeBigInt },
+      assets: { read: readMaybeBigInt },
     },
   },
   VaultV2Sentinel: {
