@@ -1855,12 +1855,15 @@ export type OracleVault = {
   address: Scalars["Address"]["output"];
   assetId: Maybe<Scalars["String"]["output"]>;
   chain: Chain;
+  /** @deprecated No longer maintained. */
   decimals: Maybe<Scalars["Int"]["output"]>;
   historicalPrice: Maybe<Array<BigIntDataPoint>>;
   id: Scalars["ID"]["output"];
   metamorphoId: Maybe<Scalars["String"]["output"]>;
+  /** @deprecated No longer maintained. */
   pair: Maybe<Array<Scalars["String"]["output"]>>;
   price: Maybe<BigIntDataPoint>;
+  /** @deprecated No longer maintained. */
   vendor: Maybe<Scalars["String"]["output"]>;
 };
 
@@ -2038,6 +2041,12 @@ export type PaginatedVaultV2Factories = {
   pageInfo: Maybe<PageInfo>;
 };
 
+export type PaginatedVaultV2Positions = {
+  __typename?: "PaginatedVaultV2Positions";
+  items: Maybe<Array<VaultV2Position>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
 export type PaginatedVaultV2Transactions = {
   __typename?: "PaginatedVaultV2Transactions";
   items: Maybe<Array<VaultV2Transaction>>;
@@ -2201,17 +2210,11 @@ export type Query = {
   vaultPosition: VaultPosition;
   vaultPositions: PaginatedMetaMorphoPositions;
   vaultReallocates: PaginatedVaultReallocates;
-  /** @deprecated WIP */
   vaultV2ByAddress: VaultV2;
-  /** @deprecated WIP */
   vaultV2Factories: PaginatedVaultV2Factories;
-  /** @deprecated WIP */
   vaultV2MetaMorphoAdapterFactories: PaginatedMetaMorphoAdapterFactories;
-  /** @deprecated WIP */
   vaultV2PositionByAddress: VaultV2Position;
-  /** @deprecated WIP */
   vaultV2s: PaginatedVaultV2s;
-  /** @deprecated WIP */
   vaultV2transactions: PaginatedVaultV2Transactions;
   vaults: PaginatedMetaMorphos;
 };
@@ -3749,9 +3752,9 @@ export type VaultV2 = {
   address: Scalars["Address"]["output"];
   allocators: Array<VaultV2Allocator>;
   asset: Asset;
-  /** This is not the realized apy but the compounded weighted average apr of all adapters (capped by max rate) */
+  /** 6hr average apy of the vault. At the moment, this is not the realized apy but the compounded weighted average apr of all adapters (capped by max rate) */
   avgApy: Maybe<Scalars["Float"]["output"]>;
-  /** This is not the realized apy but the compounded weighted average apr of all adapters (capped by max rate), minus vault V2 fees, plus the instantaneous rewards distributed to vault users */
+  /** 6hr average apy of the vault. At the moment, this is not the realized apy but the compounded weighted average apr of all adapters (capped by max rate), minus vault V2 fees, plus the instantaneous rewards distributed to vault users */
   avgNetApy: Maybe<Scalars["Float"]["output"]>;
   caps: PaginatedVaultV2Caps;
   chain: Chain;
@@ -3767,12 +3770,14 @@ export type VaultV2 = {
    */
   historicalState: VaultV2History;
   id: Scalars["ID"]["output"];
+  /** The assets deposited to the vault that are not generating interests. */
   idleAssets: Scalars["BigInt"]["output"];
+  /** The USD value of assets deposited to the vault that are not generating interests. */
   idleAssetsUsd: Maybe<Scalars["Float"]["output"]>;
-  /** The liquidity available from the liquidity adapter. Falls back to idle assets if no adapter is set. */
+  /** The liquidity available from the liquidity adapter + idle assets. */
   liquidity: Scalars["BigInt"]["output"];
   liquidityAdapter: Maybe<VaultV2Adapter>;
-  /** The USD value of liquidity available from the liquidity adapter. Falls back to idle assets if no adapter is set. */
+  /** The USD value of liquidity available from the liquidity adapter + idle assets. */
   liquidityUsd: Maybe<Scalars["Float"]["output"]>;
   /** Annual management fee rate (unitless fraction, e.g., 0.025 for 2.5%) */
   managementFee: Scalars["Float"]["output"];
@@ -3784,16 +3789,19 @@ export type VaultV2 = {
   owner: Account;
   performanceFee: Scalars["Float"]["output"];
   performanceFeeRecipient: Scalars["Address"]["output"];
-  /** Rewards aggregated from all underlying adapters. Each reward is weighted by the adapter's asset allocation. */
+  positions: PaginatedVaultV2Positions;
+  /** Rewards aggregated from all underlying adapters + vault specific campaigns. Each underlying rewards are weighted by the adapter's asset allocation. */
   rewards: Array<VaultStateReward>;
   sentinels: Array<VaultV2Sentinel>;
   symbol: Scalars["String"]["output"];
   timelocks: Array<VaultV2Timelock>;
-  /** @deprecated interest is not virtually accrued */
+  /** Total assets deposited to the vault. At the moment, interest is not virtually accrued */
   totalAssets: Maybe<Scalars["BigInt"]["output"]>;
-  /** @deprecated interest is not virtually accrued */
+  /** Total assets deposited to the vault. At the moment, interest is not virtually accrued */
   totalAssetsUsd: Maybe<Scalars["Float"]["output"]>;
   totalSupply: Scalars["BigInt"]["output"];
+  /** Vault V2 warnings */
+  warnings: Array<VaultV2Warning>;
   /** A VaultV2 is whitelisted if the curator is whitelisted and the vault passes our sanity checks. */
   whitelisted: Scalars["Boolean"]["output"];
 };
@@ -3811,6 +3819,15 @@ export type VaultV2CapsArgs = {
 export type VaultV2CuratorsArgs = {
   first?: InputMaybe<Scalars["Int"]["input"]>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type VaultV2PositionsArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type VaultV2WarningsArgs = {
+  where?: InputMaybe<VaultV2WarningsFilters>;
 };
 
 export type VaultV2Adapter = {
@@ -3867,6 +3884,8 @@ export enum VaultV2CapType {
 export type VaultV2Caps = {
   __typename?: "VaultV2Caps";
   absoluteCap: Scalars["BigInt"]["output"];
+  /** Assets allocation of the Cap. Note that the allocation is not always up to date, because interest and losses are accounted only when (de)allocating in the corresponding adapters. */
+  allocation: Scalars["BigInt"]["output"];
   data: Maybe<VaultV2CapData>;
   id: Scalars["HexString"]["output"];
   idData: Scalars["HexString"]["output"];
@@ -3959,6 +3978,10 @@ export enum VaultV2OrderBy {
 
 export type VaultV2Position = {
   __typename?: "VaultV2Position";
+  /** Value of vault shares held, in underlying token units. */
+  assets: Scalars["BigInt"]["output"];
+  /** Value of vault shares held, in USD. */
+  assetsUsd: Maybe<Scalars["Float"]["output"]>;
   chain: Chain;
   id: Scalars["ID"]["output"];
   /** Amount of vault shares */
@@ -4055,6 +4078,29 @@ export type VaultV2TransferData = {
   __typename?: "VaultV2TransferData";
   from: Scalars["String"]["output"];
   to: Scalars["String"]["output"];
+};
+
+/** Vault V2 warning */
+export type VaultV2Warning = {
+  __typename?: "VaultV2Warning";
+  level: VaultV2WarningLevel;
+  metadata: Maybe<CustomMetadata>;
+  type: Scalars["String"]["output"];
+};
+
+/** Warning level for Vault V2 warnings. GREEN indicates passing checks, YELLOW indicates caution, RED indicates danger. */
+export enum VaultV2WarningLevel {
+  Green = "GREEN",
+  Red = "RED",
+  Yellow = "YELLOW",
+}
+
+/** Filtering options for vault V2 warnings. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
+export type VaultV2WarningsFilters = {
+  /** Filter by warning level */
+  level_in?: InputMaybe<Array<VaultV2WarningLevel>>;
+  /** Filter by warning type */
+  type_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
 };
 
 /** Vault V2 withdraw data */
