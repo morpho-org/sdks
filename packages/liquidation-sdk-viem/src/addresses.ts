@@ -126,6 +126,7 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
   [ChainId.HyperliquidMainnet]: {},
   [ChainId.SeiMainnet]: {},
   [ChainId.ZeroGMainnet]: {},
+  [ChainId.MonadMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
@@ -224,5 +225,9 @@ export const preLiquidationFactoryConfigs: Record<
   [ChainId.ZeroGMainnet]: {
     address: addressesRegistry[ChainId.ZeroGMainnet].preLiquidationFactory,
     startBlock: 7527649n,
+  },
+  [ChainId.MonadMainnet]: {
+    address: addressesRegistry[ChainId.MonadMainnet].preLiquidationFactory,
+    startBlock: 32321504n,
   },
 };

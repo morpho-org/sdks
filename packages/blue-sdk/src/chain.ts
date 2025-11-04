@@ -22,6 +22,7 @@ export enum ChainId {
   HyperliquidMainnet = 999,
   SeiMainnet = 1329,
   ZeroGMainnet = 16661,
+  MonadMainnet = 143,
 }
 
 export interface ChainMetadata {
@@ -214,6 +215,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 },
       explorerUrl: "https://chainscan.0g.ai",
       identifier: "0G",
+    },
+    [ChainId.MonadMainnet]: {
+      name: "Monad",
+      id: ChainId.MonadMainnet,
+      nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
+      explorerUrl: "https://monad.socialscan.io",
+      identifier: "monad",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
