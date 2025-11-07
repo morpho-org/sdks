@@ -22,6 +22,7 @@ export enum ChainId {
   HyperliquidMainnet = 999,
   SeiMainnet = 1329,
   ZeroGMainnet = 16661,
+  LineaMainnet = 59144,
 }
 
 export interface ChainMetadata {
@@ -214,6 +215,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "0G", symbol: "0G", decimals: 18 },
       explorerUrl: "https://chainscan.0g.ai",
       identifier: "0G",
+    },
+    [ChainId.LineaMainnet]: {
+      name: "Linea",
+      id: ChainId.LineaMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://lineascan.build",
+      identifier: "linea",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
