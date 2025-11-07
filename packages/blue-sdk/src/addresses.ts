@@ -524,6 +524,7 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xB5b3e541abD19799E0c65905a5a42BD37d6c94c0",
 
     wNative: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
+    usdc: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
   },
 } as const;
 
@@ -894,6 +895,7 @@ const _deployments = {
     registryList: 32322465n,
     chainlinkOracleFactory: 32320327n,
     preLiquidationFactory: 32321504n,
+    usdc: 22909616n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
