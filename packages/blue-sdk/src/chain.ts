@@ -23,6 +23,7 @@ export enum ChainId {
   SeiMainnet = 1329,
   ZeroGMainnet = 16661,
   LineaMainnet = 59144,
+  MonadMainnet = 143,
 }
 
 export interface ChainMetadata {
@@ -222,6 +223,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://lineascan.build",
       identifier: "linea",
+    },
+    [ChainId.MonadMainnet]: {
+      name: "Monad",
+      id: ChainId.MonadMainnet,
+      nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
+      explorerUrl: "https://monad.socialscan.io",
+      identifier: "monad",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
