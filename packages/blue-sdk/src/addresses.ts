@@ -527,7 +527,6 @@ const _addressesRegistry = {
   },
   [ChainId.MonadMainnet]: {
     morpho: "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee",
-
     bundler3: {
       bundler3: "0x82b684483e844422FD339df0b67b3B111F02c66E",
       generalAdapter1: "0x725AB8CAd931BCb80Fdbf10955a806765cCe00e5",
@@ -545,7 +544,7 @@ const _addressesRegistry = {
     wNative: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
     usdc: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
   },
-} as const satisfies Record<ChainId, ChainDeployments>;
+} as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
   [key in keyof Addresses]: Address extends Addresses[key]
