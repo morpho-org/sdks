@@ -506,9 +506,27 @@ const _addressesRegistry = {
 
     wNative: "0x1Cd0690fF9a693f5EF2dD976660a8dAFc81A109c",
   },
+  [ChainId.LineaMainnet]: {
+    morpho: "0x6B0D716aC0A45536172308e08fC2C40387262c9F",
+    bundler3: {
+      bundler3: "0x1Ee8Ec299E8014760D50A4E3CfC3b44Cc2242625",
+      generalAdapter1: "0x454dAb6ce9891245696b239b4845a1cDC268255d",
+    },
+    adaptiveCurveIrm: "0x85C2Ef4Bd69f42D7Da19Fb9dcdD7Fb8d0F59cDeE",
+    publicAllocator: "0x2d4cf00e18D48fD030d9b1E2FAAE6e0384C7610B",
+    metaMorphoFactory: "0xA148a8223B622A72dC36472DE1492aBb5c089BA7",
+    vaultV2Factory: "0x5DC11CF8BA4C39d1194F91218D35008d9F52A5d0",
+    morphoMarketV1AdapterFactory: "0x3267BbdC94274B4BE081c01ffc6123dA12E8c043",
+    morphoVaultV1AdapterFactory: "0x6FaF26DD640e22457cA4fd5DA702BA3E169eEd87",
+    registryList: "0x122Ea8ff8888C29F8736665d576e3fAEF15D27D5",
+    chainlinkOracleFactory: "0x3FFF726062B03BfD5BC485eeEEcc92CF1d8F0105",
+    preLiquidationFactory: "0x05a0Ff4E564ED1ba6B42247E19edFf83545C3C40",
+
+    wNative: "0xe5D7C2a44FfDDf6b295A15c148167daaAf5Cf34f",
+    usdc: "0x176211869cA2b568f2A7D4EE941E073a821EE1ff",
+  },
   [ChainId.MonadMainnet]: {
     morpho: "0xD5D960E8C380B724a48AC59E2DfF1b2CB4a1eAee",
-
     bundler3: {
       bundler3: "0x82b684483e844422FD339df0b67b3B111F02c66E",
       generalAdapter1: "0x725AB8CAd931BCb80Fdbf10955a806765cCe00e5",
@@ -878,15 +896,29 @@ const _deployments = {
     chainlinkOracleFactory: 7526768n,
     preLiquidationFactory: 7527649n,
   },
+  [ChainId.LineaMainnet]: {
+    morpho: 25072608n,
+    bundler3: {
+      bundler3: 25072853n,
+      generalAdapter1: 25072853n,
+    },
+    adaptiveCurveIrm: 25072608n,
+    publicAllocator: 25072608n,
+    metaMorphoFactory: 25072665n,
+    vaultV2Factory: 25072951n,
+    morphoMarketV1AdapterFactory: 25072951n,
+    morphoVaultV1AdapterFactory: 25072951n,
+    registryList: 25073088n,
+    chainlinkOracleFactory: 25072665n,
+    preLiquidationFactory: 25072853n,
+  },
   [ChainId.MonadMainnet]: {
     morpho: 31907457n,
-
     bundler3: {
       bundler3: 32321504n,
       generalAdapter1: 32321504n,
     },
     adaptiveCurveIrm: 31907457n,
-
     publicAllocator: 31907457n,
     metaMorphoFactory: 32320327n,
     vaultV2Factory: 32321811n,
@@ -1003,6 +1035,10 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.ZeroGMainnet]: {
     [_addressesRegistry[ChainId.ZeroGMainnet].wNative]: NATIVE_ADDRESS,
   },
+  [ChainId.LineaMainnet]: {
+    [_addressesRegistry[ChainId.LineaMainnet].wNative]: NATIVE_ADDRESS,
+  },
+
   [ChainId.MonadMainnet]: {
     [_addressesRegistry[ChainId.MonadMainnet].wNative]: NATIVE_ADDRESS,
   },
