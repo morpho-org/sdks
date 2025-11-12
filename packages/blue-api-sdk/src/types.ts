@@ -435,7 +435,7 @@ export type Market = {
   riskAnalysis: Array<RiskAnalysis>;
   /** Current state */
   state: Maybe<MarketState>;
-  /** Vaults with the market in supply queue */
+  /** Whitelisted vaults having the market enabled with a non-zero cap. */
   supplyingVaults: Array<Vault>;
   targetBorrowUtilization: Scalars["BigInt"]["output"];
   targetWithdrawUtilization: Scalars["BigInt"]["output"];
@@ -2031,6 +2031,12 @@ export type PaginatedVaultV2Factories = {
   pageInfo: Maybe<PageInfo>;
 };
 
+export type PaginatedVaultV2HistoricalCaps = {
+  __typename?: "PaginatedVaultV2HistoricalCaps";
+  items: Maybe<Array<VaultV2HistoricalCaps>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
 export type PaginatedVaultV2Positions = {
   __typename?: "PaginatedVaultV2Positions";
   items: Maybe<Array<VaultV2Position>>;
@@ -2778,7 +2784,6 @@ export type User = {
   tag: Maybe<Scalars["String"]["output"]>;
   transactions: Array<Transaction>;
   vaultPositions: Array<VaultPosition>;
-  /** @deprecated WIP */
   vaultV2Positions: Array<VaultV2Position>;
 };
 
@@ -2786,15 +2791,17 @@ export type User = {
 export type UserHistory = {
   __typename?: "UserHistory";
   /** Total borrow assets of all the user's market positions, in USD. */
-  marketsBorrowAssetsUsd: Maybe<Array<FloatDataPoint>>;
+  marketsBorrowAssetsUsd: Array<FloatDataPoint>;
   /** Total collateral of all the user's market positions, in USD. */
-  marketsCollateralUsd: Maybe<Array<FloatDataPoint>>;
+  marketsCollateralUsd: Array<FloatDataPoint>;
   /** Total margin of all the user's market positions, in USD. */
-  marketsMarginUsd: Maybe<Array<FloatDataPoint>>;
+  marketsMarginUsd: Array<FloatDataPoint>;
   /** Total supply assets of all the user's market positions, in USD. */
-  marketsSupplyAssetsUsd: Maybe<Array<FloatDataPoint>>;
+  marketsSupplyAssetsUsd: Array<FloatDataPoint>;
+  /** Total value of all the user's VaultV2 positions, in USD. */
+  vaultV2sAssetsUsd: Array<FloatDataPoint>;
   /** Total value of all the user's vault positions, in USD. */
-  vaultsAssetsUsd: Maybe<Array<FloatDataPoint>>;
+  vaultsAssetsUsd: Array<FloatDataPoint>;
 };
 
 /** User state history */
@@ -2814,6 +2821,11 @@ export type UserHistoryMarketsMarginUsdArgs = {
 
 /** User state history */
 export type UserHistoryMarketsSupplyAssetsUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** User state history */
+export type UserHistoryVaultV2sAssetsUsdArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -2853,6 +2865,12 @@ export type UserState = {
   marketsSupplyPnlUsd: Maybe<Scalars["Float"]["output"]>;
   /** Return Over Equity of the supply side of all the user's market positions, taking into account prices variation. */
   marketsSupplyRoeUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Total value of all the user's VaultV2 positions, in USD. */
+  vaultV2sAssetsUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's VaultV2 positions, in USD. */
+  vaultV2sPnlUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Return Over Equity of all the user's VaultV2 positions, taking into account prices variation. */
+  vaultV2sRoeUsd: Maybe<Scalars["Float"]["output"]>;
   /** Total value of all the user's vault positions, in USD. */
   vaultsAssetsUsd: Maybe<Scalars["Float"]["output"]>;
   /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of all the user's vault positions, in USD. */
@@ -3471,9 +3489,9 @@ export type VaultPositionHistory = {
   assets: Maybe<Array<BigIntDataPoint>>;
   /** Value of the position since its inception, in USD. */
   assetsUsd: Maybe<Array<FloatDataPoint>>;
-  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of the position since its inception, in underlying assets. */
+  /** Profit & Loss of the position (due to the interest) of the position since its inception, in underlying assets. */
   pnl: Maybe<Array<BigIntDataPoint>>;
-  /** Profit (from the underlying asset's price variation) & Loss (from bad debt socialization) of the position since its inception, in USD for display purposes. */
+  /** Profit & Loss of the position (due to the asset's price variation and interest) since its inception, in USD. */
   pnlUsd: Maybe<Array<FloatDataPoint>>;
   /** Return Over Equity of the position since its inception. */
   roe: Maybe<Array<FloatDataPoint>>;
@@ -3532,7 +3550,7 @@ export type VaultPositionState = {
   id: Scalars["ID"]["output"];
   /** Profit & Loss of the position (due to the interest) since its inception, in loan assets. */
   pnl: Maybe<Scalars["BigInt"]["output"]>;
-  /** Profit & Loss of the position's supply side (due to the asset's price variation and interest) since its inception, in USD. */
+  /** Profit & Loss of the position (due to the asset's price variation and interest) since its inception, in USD. */
   pnlUsd: Maybe<Scalars["Float"]["output"]>;
   /** Return Over Equity of the position since its inception. */
   roe: Maybe<Scalars["Float"]["output"]>;
@@ -3742,9 +3760,9 @@ export type VaultV2 = {
   address: Scalars["Address"]["output"];
   allocators: Array<VaultV2Allocator>;
   asset: Asset;
-  /** 6hr average apy of the vault. At the moment, this is not the realized apy but the compounded weighted average apr of all adapters (capped by max rate) */
+  /** Realized average APY of the vault, calculated from share price evolution over a predefined lookback period. Uses normalized timestamps (rounded to hour/day/week boundaries) for optimal caching and performance. Available periods: 1h, 6h (default), 1d, 7d, 30d, 90d, 1y, or 'inception' for all-time APY. */
   avgApy: Maybe<Scalars["Float"]["output"]>;
-  /** 6hr average apy of the vault. At the moment, this is not the realized apy but the compounded weighted average apr of all adapters (capped by max rate), minus vault V2 fees, plus the instantaneous rewards distributed to vault users */
+  /** Realized average net APY of the vault (after fees, with rewards), calculated from share price evolution over a predefined lookback period. Uses normalized timestamps (rounded to hour/day/week boundaries) for optimal caching and performance. Available periods: 1h, 6h (default), 1d, 7d, 30d, 90d, 1y, or 'inception' for all-time net APY. */
   avgNetApy: Maybe<Scalars["Float"]["output"]>;
   caps: PaginatedVaultV2Caps;
   chain: Chain;
@@ -3760,9 +3778,9 @@ export type VaultV2 = {
    */
   historicalState: VaultV2History;
   id: Scalars["ID"]["output"];
-  /** The assets deposited to the vault that are not generating interests. */
+  /** The assets deposited to the vault that are not generating interest. */
   idleAssets: Scalars["BigInt"]["output"];
-  /** The USD value of assets deposited to the vault that are not generating interests. */
+  /** The USD value of assets deposited to the vault that are not generating interest. */
   idleAssetsUsd: Maybe<Scalars["Float"]["output"]>;
   /** The liquidity available from the liquidity adapter + idle assets. */
   liquidity: Scalars["BigInt"]["output"];
@@ -3772,6 +3790,8 @@ export type VaultV2 = {
   /** Annual management fee rate (unitless fraction, e.g., 0.025 for 2.5%) */
   managementFee: Scalars["Float"]["output"];
   managementFeeRecipient: Scalars["Address"]["output"];
+  /** Max APY */
+  maxApy: Scalars["BigInt"]["output"];
   /** Max rate per second */
   maxRate: Scalars["BigInt"]["output"];
   metadata: Maybe<VaultV2Metadata>;
@@ -3799,6 +3819,14 @@ export type VaultV2 = {
 export type VaultV2AdaptersArgs = {
   first?: InputMaybe<Scalars["Int"]["input"]>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+export type VaultV2AvgApyArgs = {
+  lookback?: InputMaybe<VaultV2LookbackPeriod>;
+};
+
+export type VaultV2AvgNetApyArgs = {
+  lookback?: InputMaybe<VaultV2LookbackPeriod>;
 };
 
 export type VaultV2CapsArgs = {
@@ -3899,6 +3927,23 @@ export type VaultV2Factory = {
   id: Scalars["ID"]["output"];
 };
 
+/** Vault V2 historical allocation data per cap */
+export type VaultV2HistoricalCaps = {
+  __typename?: "VaultV2HistoricalCaps";
+  /** Absolute cap limit for this cap, in vault asset units */
+  absoluteCap: Array<BigIntDataPoint>;
+  /** Allocated assets in this cap, in vault asset units */
+  allocation: Array<BigIntDataPoint>;
+  /** Allocated assets in USD for display purpose */
+  allocationUsd: Array<FloatDataPoint>;
+  /** The cap this allocation refers to */
+  cap: Maybe<VaultV2Caps>;
+  /** Relative allocation (allocation / totalAssets) */
+  relativeAllocation: Array<FloatDataPoint>;
+  /** Relative cap limit for this cap, in vault asset units */
+  relativeCap: Array<BigIntDataPoint>;
+};
+
 /** Vault V2 history */
 export type VaultV2History = {
   __typename?: "VaultV2History";
@@ -3906,6 +3951,12 @@ export type VaultV2History = {
   avgApy: Array<FloatDataPoint>;
   /** Average Net APY computed from share price evolution over a lookback period (1-24 hours). Returns annualized compound rate. Includes rewards and deductedfees. */
   avgNetApy: Array<FloatDataPoint>;
+  /** Historical allocation data grouped by caps. Returns allocation timeseries for requested caps within the requested timerange. */
+  caps: PaginatedVaultV2HistoricalCaps;
+  /** The assets deposited to the vault that are not generating interest. */
+  idleAssets: Array<BigIntDataPoint>;
+  /** Idle assets in USD for display purpose. */
+  idleAssetsUsd: Array<FloatDataPoint>;
   /** Real assets in the vault (excluding virtual accrual). */
   realAssets: Array<BigIntDataPoint>;
   /** Real assets in USD for display purpose. */
@@ -3929,6 +3980,22 @@ export type VaultV2HistoryAvgApyArgs = {
 /** Vault V2 history */
 export type VaultV2HistoryAvgNetApyArgs = {
   lookbackHours?: InputMaybe<Scalars["Int"]["input"]>;
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 history */
+export type VaultV2HistoryCapsArgs = {
+  capType_in?: InputMaybe<Array<VaultV2CapType>>;
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 history */
+export type VaultV2HistoryIdleAssetsArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 history */
+export type VaultV2HistoryIdleAssetsUsdArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
@@ -3962,6 +4029,26 @@ export type VaultV2HistoryTotalSupplyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
+/** Predefined lookback periods for vault APY calculations. Using these periods ensures better query performance through timestamp normalization and caching. */
+export enum VaultV2LookbackPeriod {
+  /** Since vault inception (all-time) */
+  Inception = "INCEPTION",
+  /** 90 days (~3 months) lookback period */
+  NinetyDays = "NINETY_DAYS",
+  /** 1 day (24 hours) lookback period */
+  OneDay = "ONE_DAY",
+  /** 1 hour lookback period */
+  OneHour = "ONE_HOUR",
+  /** 1 year (365 days) lookback period */
+  OneYear = "ONE_YEAR",
+  /** 7 days (1 week) lookback period */
+  SevenDays = "SEVEN_DAYS",
+  /** 6 hours lookback period (default) */
+  SixHours = "SIX_HOURS",
+  /** 30 days (~1 month) lookback period */
+  ThirtyDays = "THIRTY_DAYS",
+}
+
 /** Vault V2 metadata */
 export type VaultV2Metadata = {
   __typename?: "VaultV2Metadata";
@@ -3981,11 +4068,75 @@ export type VaultV2Position = {
   /** Value of vault shares held, in USD. */
   assetsUsd: Maybe<Scalars["Float"]["output"]>;
   chain: Chain;
+  /** Timeseries history for each of this position's stats. */
+  history: VaultV2PositionHistory;
   id: Scalars["ID"]["output"];
+  /** Profit & Loss of the position (due to the interest) since its inception, in loan assets. */
+  pnl: Maybe<Scalars["BigInt"]["output"]>;
+  /** Profit & Loss of the position (due to the asset's price variation and interest) since its inception, in USD. */
+  pnlUsd: Maybe<Scalars["Float"]["output"]>;
+  /** Return Over Equity of the position since its inception. */
+  roe: Maybe<Scalars["Float"]["output"]>;
+  /** Return Over Equity of the position since its inception, taking into account the underlying asset's price variation. */
+  roeUsd: Maybe<Scalars["Float"]["output"]>;
   /** Amount of vault shares */
   shares: Scalars["BigInt"]["output"];
   user: User;
   vault: VaultV2;
+};
+
+/** Vault V2 position history */
+export type VaultV2PositionHistory = {
+  __typename?: "VaultV2PositionHistory";
+  /** Value of the position since its inception, in underlying assets. */
+  assets: Maybe<Array<BigIntDataPoint>>;
+  /** Value of the position since its inception, in USD. */
+  assetsUsd: Maybe<Array<FloatDataPoint>>;
+  /** Profit & Loss of the position (due to the interest) of the position since its inception, in underlying assets. */
+  pnl: Maybe<Array<BigIntDataPoint>>;
+  /** Profit & Loss of the position (due to the asset's price variation and interest) since its inception, in USD. */
+  pnlUsd: Maybe<Array<FloatDataPoint>>;
+  /** Return Over Equity of the position since its inception. */
+  roe: Maybe<Array<FloatDataPoint>>;
+  /** Return Over Equity of the position since its inception, taking into account the underlying asset's price variation. */
+  roeUsd: Maybe<Array<FloatDataPoint>>;
+  /** Value of the position since its inception, in vault shares. */
+  shares: Maybe<Array<BigIntDataPoint>>;
+};
+
+/** Vault V2 position history */
+export type VaultV2PositionHistoryAssetsArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 position history */
+export type VaultV2PositionHistoryAssetsUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 position history */
+export type VaultV2PositionHistoryPnlArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 position history */
+export type VaultV2PositionHistoryPnlUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 position history */
+export type VaultV2PositionHistoryRoeArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 position history */
+export type VaultV2PositionHistoryRoeUsdArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
+};
+
+/** Vault V2 position history */
+export type VaultV2PositionHistorySharesArgs = {
+  options?: InputMaybe<TimeseriesOptions>;
 };
 
 /** Vault V2 sentinel */
