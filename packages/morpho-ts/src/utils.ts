@@ -73,8 +73,10 @@ export const createGetValue =
 
 export const keys = <T>(o?: T) =>
   Object.keys(o ?? {}) as (T extends ArrayLike<unknown>
-    ? `${number}`
-    : `${Extract<keyof T, string | number>}`)[];
+    ? `${number}` // keyof Array == number | "length" | "toString" | ...
+    :
+        | `${Extract<keyof T, number>}` // number keys are converted to strings
+        | Extract<keyof T, string>)[];
 
 export const values = <T>(o?: T) =>
   Object.values(o ?? {}) as (T extends ArrayLike<infer U> ? U : T[keyof T])[];
