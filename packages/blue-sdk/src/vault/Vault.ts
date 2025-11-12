@@ -203,6 +203,13 @@ export interface IAccrualVault
 
 export class AccrualVault extends Vault implements IAccrualVault {
   /**
+   * @inheritdoc
+   * Reflects the sum of assets of the vault's allocations.
+   * Only includes virtually accrued interest if the vault's allocations include virtually accrued interest.
+   */
+  declare totalAssets: bigint;
+
+  /**
    * The allocation of the vault on each market enabled.
    */
   public readonly allocations: Map<MarketId, VaultMarketAllocation>;

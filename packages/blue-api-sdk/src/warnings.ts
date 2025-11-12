@@ -24,3 +24,8 @@ export enum VaultWarningType {
   UnrecognizedMarket = "unrecognized_market",
   NonWhitelisted = "not_whitelisted",
 }
+
+export enum VaultV2WarningType {
+  HighRiskAddress = "high_risk_address",
+  NotWhitelisted = "not_whitelisted",
+}
