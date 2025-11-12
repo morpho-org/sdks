@@ -544,6 +544,24 @@ const _addressesRegistry = {
     wNative: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
     usdc: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
   },
+  [ChainId.StableMainnet]: {
+    morpho: "0xa40103088A899514E3fe474cD3cc5bf811b1102e",
+    bundler3: {
+      bundler3: "0x36040142Cfeb4120E94825A0cbCD8d37B1F4431F",
+      generalAdapter1: "0x75263fC7B100e30e9D25673aF022939b9869eD66",
+    },
+    adaptiveCurveIrm: "0x41e846FC8108b8527C1D4EDB4c9564E56442940f",
+    publicAllocator: "0xbCB063D4B6D479b209C186e462828CBACaC82DbE",
+    metaMorphoFactory: "0xb4ae5673c48621189E2bEfBA96F31912032DD1AE",
+    vaultV2Factory: "0x7fc35488803D49D00a94b206A223f7661898BE3a",
+    morphoMarketV1AdapterFactory: "0x2A5F218FE4Dac3b1f4E096e8ae83074bB1713833",
+    morphoVaultV1AdapterFactory: "0x4EF83ACD552598a1196c1aBDD0bA2EdE6f2237B4",
+    registryList: "0xCe93fcB2849EB886F1e81d45D2747dF803f843C3",
+    chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
+    preLiquidationFactory: "0xDF51Ea2e4f7B434AA65B8CFAaDb7A285709477d1",
+
+    wNative: "0xDEd1660192d4d82e7c0B628ba556861EdBB5CAda",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -929,6 +947,22 @@ const _deployments = {
     preLiquidationFactory: 32321504n,
     usdc: 22909616n,
   },
+  [ChainId.StableMainnet]: {
+    morpho: 1504506n,
+    bundler3: {
+      bundler3: 1505753n,
+      generalAdapter1: 1505753n,
+    },
+    adaptiveCurveIrm: 1504506n,
+    publicAllocator: 1504506n,
+    metaMorphoFactory: 1504506n,
+    vaultV2Factory: 1504506n,
+    morphoMarketV1AdapterFactory: 1506182n,
+    morphoVaultV1AdapterFactory: 1506182n,
+    registryList: 1506182n,
+    chainlinkOracleFactory: 1505186n,
+    preLiquidationFactory: 1708413n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -1041,6 +1075,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
 
   [ChainId.MonadMainnet]: {
     [_addressesRegistry[ChainId.MonadMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.StableMainnet]: {
+    [_addressesRegistry[ChainId.StableMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
