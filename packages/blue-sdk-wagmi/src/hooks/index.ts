@@ -20,3 +20,7 @@ export * from "./usePositions.js";
 export * from "./useHoldings.js";
 export * from "./useVaultMarketConfigs.js";
 export * from "./useReadContracts.js";
+export * from "./useVaultV2.js";
+export * from "./useVaultV2s.js";
+export * from "./useVaultV2Adapter.js";
+export * from "./useVaultV2Adapters.js";

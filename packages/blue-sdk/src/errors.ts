@@ -1,5 +1,11 @@
-import { formatUnits } from "viem";
+import { type Hex, formatUnits } from "viem";
 import type { Address, MarketId } from "./types.js";
+
+export class InvalidMarketParamsError extends Error {
+  constructor(public readonly data: Hex) {
+    super(`cannot decode valid MarketParams from "${data}"`);
+  }
+}
 
 export class UnknownDataError extends Error {}
 
@@ -38,6 +44,12 @@ export class UnsupportedPreLiquidationParamsError extends Error {
     super(
       `unsupported pre liquidation params for lltv ${formatUnits(lltv, 16)}%`,
     );
+  }
+}
+
+export class UnsupportedVaultV2AdapterError extends Error {
+  constructor(public readonly address: Address) {
+    super(`vault v2 adapter "${address}" is not supported`);
   }
 }
 
@@ -105,6 +117,26 @@ export namespace BlueErrors {
   export class ExpiredSignature extends Error {
     constructor(public readonly deadline: bigint) {
       super(`expired signature deadline "${deadline}"`);
+    }
+  }
+}
+
+export namespace VaultV2Errors {
+  export class InvalidInterestAccrual extends Error {
+    constructor(
+      public readonly vault: Address,
+      public readonly timestamp: bigint,
+      public readonly lastUpdate: bigint,
+    ) {
+      super(
+        `invalid interest accrual on vault ${vault}: accrual timestamp ${timestamp} can't be prior to last update ${lastUpdate}`,
+      );
+    }
+  }
+
+  export class UnsupportedLiquidityAdapter extends Error {
+    constructor(public readonly address: Address) {
+      super(`unsupported liquidity adapter "${address}"`);
     }
   }
 }

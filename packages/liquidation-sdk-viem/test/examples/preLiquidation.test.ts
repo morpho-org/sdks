@@ -293,7 +293,7 @@ describe("pre liquidation", () => {
       });
 
       const preLiquidationAddress =
-        "0x0341b93dcb3b27fd4e2a6890cf06d67f64d9ac8e";
+        "0x0341B93DCB3b27FD4E2A6890cF06D67f64d9Ac8E";
 
       const [collateralToken, loanToken] = await Promise.all([
         fetchToken(market.params.collateralToken, client),

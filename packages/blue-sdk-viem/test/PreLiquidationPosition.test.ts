@@ -35,7 +35,7 @@ const preLiquidationParams = new PreLiquidationParams({
   preLiquidationOracle: "0x008bF4B1cDA0cc9f0e882E0697f036667652E1ef",
 });
 
-const preLiquidationAddress = "0x0341b93dcb3b27fd4e2a6890cf06d67f64d9ac8e";
+const preLiquidationAddress = "0x0341B93DCB3b27FD4E2A6890cF06D67f64d9Ac8E";
 
 describe("augment/Position", () => {
   preLiquidationTest("should fetch position", async ({ client }) => {

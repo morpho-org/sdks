@@ -1,6 +1,5 @@
 import { BlueErrors } from "../errors.js";
 import {
-  CapacityLimitReason,
   type IMarket,
   Market,
   type MaxBorrowOptions,
@@ -9,6 +8,7 @@ import {
 } from "../market/index.js";
 import { MathLib } from "../math/MathLib.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
+import { CapacityLimitReason } from "../utils.js";
 
 export interface IPosition {
   user: Address;
