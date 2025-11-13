@@ -53,7 +53,7 @@
     "hardhat": "^2.22.18",
     "nock": "^14.0.10",
     "typescript": "^5.7.2",
-    "viem": "^2.33.3",
+    "viem": "^2.39.0",
     "vitest": "^3.0.5"
   },
   "publishConfig": {
