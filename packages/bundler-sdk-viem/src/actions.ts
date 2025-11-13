@@ -607,7 +607,9 @@ export const encodeOperation = (
       actions.push({
         type: "morphoSupply",
         args: [
-          market.params,
+          // Avoid passing the reference of a revokable proxy that would fail
+          // accessing its underlying value when accessed after revocation.
+          getCurrent(market.params),
           assets,
           shares,
           maxSharePrice,
@@ -644,7 +646,9 @@ export const encodeOperation = (
       actions.push({
         type: "morphoWithdraw",
         args: [
-          market.params,
+          // Avoid passing the reference of a revokable proxy that would fail
+          // accessing its underlying value when accessed after revocation.
+          getCurrent(market.params),
           assets,
           shares,
           minSharePrice,
@@ -682,7 +686,9 @@ export const encodeOperation = (
       actions.push({
         type: "morphoBorrow",
         args: [
-          market.params,
+          // Avoid passing the reference of a revokable proxy that would fail
+          // accessing its underlying value when accessed after revocation.
+          getCurrent(market.params),
           assets,
           shares,
           minSharePrice,
@@ -723,7 +729,9 @@ export const encodeOperation = (
       actions.push({
         type: "morphoRepay",
         args: [
-          market.params,
+          // Avoid passing the reference of a revokable proxy that would fail
+          // accessing its underlying value when accessed after revocation.
+          getCurrent(market.params),
           assets,
           shares,
           maxSharePrice,
@@ -761,7 +769,9 @@ export const encodeOperation = (
       actions.push({
         type: "morphoSupplyCollateral",
         args: [
-          params,
+          // Avoid passing the reference of a revokable proxy that would fail
+          // accessing its underlying value when accessed after revocation.
+          getCurrent(params),
           assets,
           onBehalf,
           callbackBundle?.actions ?? [],
@@ -778,7 +788,14 @@ export const encodeOperation = (
 
       actions.push({
         type: "morphoWithdrawCollateral",
-        args: [params, assets, receiver, operation.skipRevert],
+        args: [
+          // Avoid passing the reference of a revokable proxy that would fail
+          // accessing its underlying value when accessed after revocation.
+          getCurrent(params),
+          assets,
+          receiver,
+          operation.skipRevert,
+        ],
       });
 
       break;
@@ -906,10 +923,14 @@ export const encodeOperation = (
           operation.address,
           fee,
           withdrawals.map(({ id, assets }) => ({
-            marketParams: dataBefore.getMarket(id).params,
+            // Avoid passing the reference of a revokable proxy that would fail
+            // accessing its underlying value when accessed after revocation.
+            marketParams: getCurrent(dataBefore.getMarket(id).params),
             amount: assets,
           })),
-          dataBefore.getMarket(supplyMarketId).params,
+          // Avoid passing the reference of a revokable proxy that would fail
+          // accessing its underlying value when accessed after revocation.
+          getCurrent(dataBefore.getMarket(supplyMarketId).params),
           operation.skipRevert,
         ],
       });
