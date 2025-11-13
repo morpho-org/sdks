@@ -1571,17 +1571,6 @@ export type MarketTransferTransactionData = {
   shares: Scalars["BigInt"]["output"];
 };
 
-/** Market V1 cap data */
-export type MarketV1CapData = {
-  __typename?: "MarketV1CapData";
-  /** The adapter to which this cap is associated to. Null if the adapter is not recognized. */
-  adapter: Maybe<VaultV2Adapter>;
-  adapterAddress: Scalars["Address"]["output"];
-  /** The market to which this cap is associated. Null if the market is not recognized. */
-  market: Maybe<Market>;
-  marketParams: MarketParams;
-};
-
 /** Market warning */
 export type MarketWarning = {
   __typename?: "MarketWarning";
@@ -1767,28 +1756,6 @@ export type MorphoChainlinkOracleV2Data = {
   quoteVault: Scalars["String"]["output"];
   quoteVaultConversionSample: Scalars["BigInt"]["output"];
   scaleFactor: Scalars["BigInt"]["output"];
-};
-
-export type MorphoMarketV1Adapter = VaultV2Adapter & {
-  __typename?: "MorphoMarketV1Adapter";
-  address: Scalars["Address"]["output"];
-  /** The assets managed by the adapter (includes virtually accrued interest). */
-  assets: Scalars["BigInt"]["output"];
-  /** The USD value of assets managed by the adapter (includes virtually accrued interest). */
-  assetsUsd: Maybe<Scalars["Float"]["output"]>;
-  chain: Chain;
-  creationBlockNumber: Scalars["BigInt"]["output"];
-  creationTimestamp: Scalars["BigInt"]["output"];
-  factory: VaultV2AdapterFactory;
-  id: Scalars["ID"]["output"];
-  positions: PaginatedMarketPositions;
-  type: VaultV2AdapterType;
-  vault: VaultV2;
-};
-
-export type MorphoMarketV1AdapterPositionsArgs = {
-  first?: InputMaybe<Scalars["Int"]["input"]>;
-  skip?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
 /** Oracle */
@@ -3872,7 +3839,6 @@ export type VaultV2AdapterFactory = {
 
 export enum VaultV2AdapterType {
   MetaMorpho = "MetaMorpho",
-  MorphoMarketV1 = "MorphoMarketV1",
 }
 
 /** Vault V2 allocator */
@@ -3886,15 +3852,11 @@ export type VaultV2Allocator = {
   timestamp: Scalars["BigInt"]["output"];
 };
 
-export type VaultV2CapData =
-  | AdapterCapData
-  | CollateralCapData
-  | MarketV1CapData;
+export type VaultV2CapData = AdapterCapData | CollateralCapData;
 
 export enum VaultV2CapType {
   Adapter = "Adapter",
   Collateral = "Collateral",
-  MarketV1 = "MarketV1",
   Unknown = "Unknown",
 }
 
