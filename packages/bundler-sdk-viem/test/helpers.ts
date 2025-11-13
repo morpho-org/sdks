@@ -184,7 +184,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
         expect(
           balance,
           `balance of "${adapter}" for token "${token}"`,
-        ).toBeLessThanOrEqual(50n);
+        ).toBeLessThanOrEqual(5n);
 
       for (const { adapter, erc20Allowance, permit2Allowance } of allowances) {
         if (token !== NATIVE_ADDRESS && adapter !== bundler3.generalAdapter1)
