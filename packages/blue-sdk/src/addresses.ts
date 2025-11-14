@@ -559,8 +559,6 @@ const _addressesRegistry = {
     registryList: "0xCe93fcB2849EB886F1e81d45D2747dF803f843C3",
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
     preLiquidationFactory: "0x741A6604e974FeAF35a5FBb1416B3e01c33e5C0e",
-
-    wNative: "0x0000000000000000000000000000000000000001",
   },
 } as const;
 
@@ -1075,9 +1073,6 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
 
   [ChainId.MonadMainnet]: {
     [_addressesRegistry[ChainId.MonadMainnet].wNative]: NATIVE_ADDRESS,
-  },
-  [ChainId.StableMainnet]: {
-    [_addressesRegistry[ChainId.StableMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
