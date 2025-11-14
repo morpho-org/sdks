@@ -116,6 +116,33 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
   );
   const users = new Set(keys(startData.users).filter(isDefined));
 
+  const { morpho, permit2, bundler3 } = getChainAddresses(startData.chainId);
+  const bundler3Adapters = values(bundler3).filter(isDefined);
+  const balancesBefore = new Map(
+    await Promise.all(
+      [...tokens].map(
+        async (token) =>
+          [
+            token,
+            new Map(
+              await Promise.all(
+                bundler3Adapters.map(
+                  async (adapter) =>
+                    [
+                      adapter,
+                      await client.balanceOf({
+                        erc20: token,
+                        owner: adapter,
+                      }),
+                    ] as const,
+                ),
+              ),
+            ),
+          ] as const,
+      ),
+    ),
+  );
+
   await onBundleTx?.(startData);
 
   await bundle.requirements.sign(client, account);
@@ -127,10 +154,6 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
     );
   }
 
-  const { morpho, permit2, bundler3 } = getChainAddresses(startData.chainId);
-
-  const bundler3Adapters = values(bundler3).filter(isDefined);
-
   await Promise.all(
     [...tokens].map(async (token) => {
       const [balances, allowances, authorizations] = await Promise.all([
@@ -138,6 +161,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
           bundler3Adapters.map(async (adapter) => ({
             adapter,
             balance: await client.balanceOf({ erc20: token, owner: adapter }),
+            balanceBefore: balancesBefore.get(token)!.get(adapter)!,
           })),
         ),
         Promise.all(
@@ -180,11 +204,11 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
         ),
       ]);
 
-      for (const { balance, adapter } of balances)
+      for (const { balance, balanceBefore, adapter } of balances)
         expect(
           balance,
           `balance of "${adapter}" for token "${token}"`,
-        ).toBeLessThanOrEqual(5n);
+        ).toBeLessThanOrEqual(balanceBefore + 5n);
 
       for (const { adapter, erc20Allowance, permit2Allowance } of allowances) {
         if (token !== NATIVE_ADDRESS && adapter !== bundler3.generalAdapter1)
