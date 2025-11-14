@@ -547,8 +547,8 @@ const _addressesRegistry = {
   [ChainId.StableMainnet]: {
     morpho: "0xa40103088A899514E3fe474cD3cc5bf811b1102e",
     bundler3: {
-      bundler3: "0x36040142Cfeb4120E94825A0cbCD8d37B1F4431F",
-      generalAdapter1: "0x75263fC7B100e30e9D25673aF022939b9869eD66",
+      bundler3: "0xA0bb114F927dF03d9a1a639b9c71F71B0FaFDf1B",
+      generalAdapter1: "0x59b1F4376a81e39c466A0A218447E4D36f39A96b",
     },
     adaptiveCurveIrm: "0x41e846FC8108b8527C1D4EDB4c9564E56442940f",
     publicAllocator: "0xbCB063D4B6D479b209C186e462828CBACaC82DbE",
@@ -558,9 +558,9 @@ const _addressesRegistry = {
     morphoVaultV1AdapterFactory: "0x4EF83ACD552598a1196c1aBDD0bA2EdE6f2237B4",
     registryList: "0xCe93fcB2849EB886F1e81d45D2747dF803f843C3",
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
-    preLiquidationFactory: "0xDF51Ea2e4f7B434AA65B8CFAaDb7A285709477d1",
+    preLiquidationFactory: "0x741A6604e974FeAF35a5FBb1416B3e01c33e5C0e",
 
-    wNative: "0xDEd1660192d4d82e7c0B628ba556861EdBB5CAda",
+    wNative: "0x0000000000000000000000000000000000000001",
   },
 } as const;
 
@@ -950,8 +950,8 @@ const _deployments = {
   [ChainId.StableMainnet]: {
     morpho: 1504506n,
     bundler3: {
-      bundler3: 1505753n,
-      generalAdapter1: 1505753n,
+      bundler3: 1748111n,
+      generalAdapter1: 1748122n,
     },
     adaptiveCurveIrm: 1504506n,
     publicAllocator: 1504506n,
@@ -961,7 +961,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 1506182n,
     registryList: 1506182n,
     chainlinkOracleFactory: 1505186n,
-    preLiquidationFactory: 1708413n,
+    preLiquidationFactory: 1748101n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
