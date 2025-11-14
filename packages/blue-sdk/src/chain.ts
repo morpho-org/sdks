@@ -30,7 +30,7 @@ export enum ChainId {
 export interface ChainMetadata {
   readonly name: string;
   readonly id: ChainId;
-  readonly explorerUrl: string | undefined;
+  readonly explorerUrl: string;
   readonly nativeCurrency: {
     readonly name: string;
     readonly symbol: string;
@@ -236,7 +236,7 @@ export namespace ChainUtils {
       name: "Stable",
       id: ChainId.StableMainnet,
       nativeCurrency: { name: "gUSDT", symbol: "gUSDT", decimals: 18 },
-      explorerUrl: undefined,
+      explorerUrl: "https://stablescan.xyz",
       identifier: "stable",
     },
   } satisfies Record<ChainId, ChainMetadata>;
