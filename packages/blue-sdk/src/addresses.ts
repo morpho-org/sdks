@@ -560,6 +560,10 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
     preLiquidationFactory: "0x741A6604e974FeAF35a5FBb1416B3e01c33e5C0e",
 
+    /**
+     * @deprecated This address is not the wrapped native address.
+     * It is a placeholder since native token wrapping is not supported by bundler3 on this chain
+     */
     wNative: "0x0000000000000000000000000000000000000001",
   },
 } as const;
