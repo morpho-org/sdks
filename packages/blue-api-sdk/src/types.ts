@@ -1571,6 +1571,7 @@ export type MarketTransferTransactionData = {
   shares: Scalars["BigInt"]["output"];
 };
 
+/** Market V1 cap data */
 export type MarketV1CapData = {
   __typename?: "MarketV1CapData";
   /** The adapter to which this cap is associated to. Null if the adapter is not recognized. */
