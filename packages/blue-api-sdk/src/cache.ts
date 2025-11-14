@@ -868,6 +868,19 @@ export const typePolicies = {
       },
     },
   },
+  MorphoMarketV1Adapter: {
+    fields: {
+      assets: {
+        read: readMaybeBigInt,
+      },
+      creationBlockNumber: {
+        read: readMaybeBigInt,
+      },
+      creationTimestamp: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
   MarketCollateralTransferTransactionData: {
     fields: {
       assets: {
