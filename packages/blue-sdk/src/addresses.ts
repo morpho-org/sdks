@@ -959,7 +959,7 @@ const _deployments = {
     morphoVaultV1AdapterFactory: 1506182n,
     registryList: 1506182n,
     chainlinkOracleFactory: 1505186n,
-    preLiquidationFactory: 1748101n,
+    preLiquidationFactory: 1951601n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
