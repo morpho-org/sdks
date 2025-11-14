@@ -559,6 +559,8 @@ const _addressesRegistry = {
     registryList: "0xCe93fcB2849EB886F1e81d45D2747dF803f843C3",
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
     preLiquidationFactory: "0x741A6604e974FeAF35a5FBb1416B3e01c33e5C0e",
+
+    wNative: "0xDEd1660192d4d82e7c0B628ba556861EdBB5CAda",
   },
 } as const;
 
