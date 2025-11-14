@@ -560,7 +560,7 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
     preLiquidationFactory: "0x741A6604e974FeAF35a5FBb1416B3e01c33e5C0e",
 
-    wNative: "0xDEd1660192d4d82e7c0B628ba556861EdBB5CAda",
+    wNative: "0x0000000000000000000000000000000000000001",
   },
 } as const;
 
@@ -950,18 +950,18 @@ const _deployments = {
   [ChainId.StableMainnet]: {
     morpho: 1504506n,
     bundler3: {
-      bundler3: 1748111n,
-      generalAdapter1: 1748122n,
+      bundler3: 1741861n,
+      generalAdapter1: 1741861n,
     },
     adaptiveCurveIrm: 1504506n,
     publicAllocator: 1504506n,
-    metaMorphoFactory: 1504506n,
-    vaultV2Factory: 1504506n,
+    metaMorphoFactory: 1504774n,
+    vaultV2Factory: 1506182n,
     morphoMarketV1AdapterFactory: 1506182n,
     morphoVaultV1AdapterFactory: 1506182n,
-    registryList: 1506182n,
-    chainlinkOracleFactory: 1505186n,
-    preLiquidationFactory: 1951601n,
+    registryList: 1506877n,
+    chainlinkOracleFactory: 1504774n,
+    preLiquidationFactory: 1741861n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 

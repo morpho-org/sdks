@@ -238,6 +238,6 @@ export const preLiquidationFactoryConfigs: Record<
   },
   [ChainId.StableMainnet]: {
     address: addressesRegistry[ChainId.StableMainnet].preLiquidationFactory,
-    startBlock: 1951601n,
+    startBlock: 1741861n,
   },
 };

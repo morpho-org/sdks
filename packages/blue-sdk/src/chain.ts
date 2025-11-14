@@ -30,7 +30,7 @@ export enum ChainId {
 export interface ChainMetadata {
   readonly name: string;
   readonly id: ChainId;
-  readonly explorerUrl: string;
+  readonly explorerUrl: string | undefined;
   readonly nativeCurrency: {
     readonly name: string;
     readonly symbol: string;
@@ -235,8 +235,8 @@ export namespace ChainUtils {
     [ChainId.StableMainnet]: {
       name: "Stable",
       id: ChainId.StableMainnet,
-      nativeCurrency: { name: "USDT", symbol: "USDT", decimals: 18 },
-      explorerUrl: "https://partners-explorer.stable.xyz",
+      nativeCurrency: { name: "gUSDT", symbol: "gUSDT", decimals: 18 },
+      explorerUrl: undefined,
       identifier: "stable",
     },
   } satisfies Record<ChainId, ChainMetadata>;
