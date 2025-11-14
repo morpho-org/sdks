@@ -979,6 +979,7 @@ export const typePolicies = {
     fields: {
       shares: { read: readMaybeBigInt },
       assets: { read: readMaybeBigInt },
+      pnl: { read: readMaybeBigInt },
     },
   },
   VaultV2Sentinel: {

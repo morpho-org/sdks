@@ -61,6 +61,9 @@ Add your chain's contract addresses to the `_addressesRegistry` mapping:
 },
 ```
 
+Remember to register the USDC address if it supports ERC-2612 permit version 2, otherwise the signature will default to permit version 1 (if `hasSimplePermit` is set to true).
+Also make sure to add the Permit2 contract (if available) to enable transactional flows using Permit2, otherwise the approval will default to the classic erc20 approval.
+
 ### 4. Add Deployment Blocks
 
 **File:** `packages/blue-sdk/src/addresses.ts`

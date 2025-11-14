@@ -1,4 +1,4 @@
-import { zeroAddress } from "viem";
+import { encodeAbiParameters, zeroAddress } from "viem";
 
 import {
   ChainId,
@@ -38,5 +38,47 @@ describe("augment/MarketParams", () => {
     );
 
     expect(market).toEqual(marketParams); // Not strict equal because not the same class.
+  });
+
+  test("should decode config from bytes", async () => {
+    const data = encodeAbiParameters(
+      [
+        { type: "address", name: "loanToken" },
+        { type: "address", name: "collateralToken" },
+        { type: "address", name: "oracle" },
+        { type: "address", name: "irm" },
+        { type: "uint256", name: "lltv" },
+      ],
+      [
+        usdc_wstEth.loanToken,
+        usdc_wstEth.collateralToken,
+        usdc_wstEth.oracle,
+        usdc_wstEth.irm,
+        usdc_wstEth.lltv,
+      ],
+    );
+
+    expect(MarketParams.fromHex(data)).toStrictEqual(usdc_wstEth);
+  });
+
+  test("should not decode invalid config from bytes", async () => {
+    const data = encodeAbiParameters(
+      [
+        { type: "address", name: "loanToken" },
+        { type: "address", name: "collateralToken" },
+        { type: "address", name: "oracle" },
+        { type: "uint256", name: "lltv" },
+      ],
+      [
+        usdc_wstEth.loanToken,
+        usdc_wstEth.collateralToken,
+        usdc_wstEth.oracle,
+        usdc_wstEth.lltv,
+      ],
+    );
+
+    expect(() => MarketParams.fromHex(data)).toThrow(
+      `cannot decode valid MarketParams from "${data}"`,
+    );
   });
 });

@@ -27,9 +27,10 @@ export const createWagmiTest = <chain extends Chain>(
             mock({
               accounts: [
                 testAccount().address,
-                ...new Array(parameters?.accounts ?? 9)
-                  .fill(null)
-                  .map((_, i) => testAccount(i + 1).address),
+                ...Array.from(
+                  { length: parameters?.accounts ?? 9 },
+                  (_, i) => testAccount(i + 1).address,
+                ),
               ],
             }),
           ],

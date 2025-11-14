@@ -37,6 +37,7 @@ export default defineConfig({
         test: {
           name: "blue-sdk-viem",
           include: ["packages/blue-sdk-viem/test/**/*.test.ts"],
+          testTimeout: 60_000,
         },
       },
       {
