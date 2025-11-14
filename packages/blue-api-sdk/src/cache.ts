@@ -716,6 +716,30 @@ export const typePolicies = {
       },
     },
   },
+  VaultPendingConfig: {
+    fields: {
+      validAt: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
+  VaultSetCapPendingData: {
+    fields: {
+      supplyCap: {
+        read: readMaybeBigInt,
+      },
+      market: {
+        merge: true,
+      },
+    },
+  },
+  VaultSetTimelockPendingData: {
+    fields: {
+      timelock: {
+        read: readMaybeBigInt,
+      },
+    },
+  },
   PublicAllocatorConfig: {
     fields: {
       fee: {
