@@ -6,8 +6,8 @@ import { paraswapContractMethodOffsets } from "@morpho-org/simulation-sdk";
 import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
 import { createWagmiTest, renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { configure } from "@testing-library/dom";
-import { maxUint160, maxUint256, parseUnits, zeroAddress } from "viem";
-import { mainnet } from "viem/chains";
+import { maxUint160, maxUint256, parseEther, parseUnits } from "viem";
+import { base, mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { donator, setupTestBundle } from "./helpers.js";
 
@@ -28,6 +28,11 @@ const testDeleverageCollateral = createWagmiTest(mainnet, {
   forkBlockNumber: 22_465_879,
 });
 
+const testDeleverageCollateral2 = createWagmiTest(base, {
+  forkUrl: process.env.BASE_RPC_URL,
+  forkBlockNumber: 38_118_781,
+});
+
 describe("paraswap", () => {
   describe("ethereum", () => {
     const {
@@ -37,7 +42,6 @@ describe("paraswap", () => {
       usdc,
     } = addressesRegistry[ChainId.EthMainnet];
     const { usdc_wbtc } = markets[ChainId.EthMainnet];
-    zeroAddress;
 
     testLeverage("should leverage WBTC/USDC", async ({ client, config }) => {
       const id = usdc_wbtc.id;
@@ -56,6 +60,8 @@ describe("paraswap", () => {
           users: [client.account.address, generalAdapter1],
           tokens: [usdc_wbtc.collateralToken, usdc],
           vaults: [],
+          vaultV2s: [],
+          vaultV2Adapters: [],
           block,
         }),
       );
@@ -232,6 +238,8 @@ describe("paraswap", () => {
             users: [client.account.address, generalAdapter1],
             tokens: [usdc_wbtc.collateralToken, usdc],
             vaults: [],
+            vaultV2s: [],
+            vaultV2Adapters: [],
             block,
           }),
         );
@@ -390,6 +398,8 @@ describe("paraswap", () => {
             users: [client.account.address, generalAdapter1],
             tokens: [usdc_wbtc.collateralToken, usdc],
             vaults: [],
+            vaultV2s: [],
+            vaultV2Adapters: [],
             block,
           }),
         );
@@ -498,6 +508,164 @@ describe("paraswap", () => {
         expect(
           await client.allowance({
             erc20: usdc_wbtc.collateralToken,
+            spender: morpho,
+          }),
+        ).toBe(0n);
+      },
+    );
+  });
+
+  describe("base", () => {
+    const {
+      morpho,
+      permit2,
+      bundler3: { generalAdapter1 },
+      usdc,
+    } = addressesRegistry[ChainId.BaseMainnet];
+    const { usdc_eth } = markets[ChainId.BaseMainnet];
+
+    testDeleverageCollateral2(
+      "should deleverage with collateral",
+      async ({ client, config }) => {
+        const id = usdc_eth.id;
+
+        const collateral = parseEther("431");
+        const debt = parseUnits("190000", 6);
+        await client.deal({
+          erc20: usdc_eth.collateralToken,
+          amount: collateral,
+        });
+        await client.approve({
+          address: usdc_eth.collateralToken,
+          args: [morpho, collateral],
+        });
+        await client.writeContract({
+          abi: blueAbi,
+          address: morpho,
+          functionName: "supplyCollateral",
+          args: [usdc_eth, collateral, client.account.address, "0x"],
+        });
+        await client.writeContract({
+          abi: blueAbi,
+          address: morpho,
+          functionName: "borrow",
+          args: [
+            { ...usdc_eth },
+            debt,
+            0n,
+            client.account.address,
+            donator.address,
+          ],
+        });
+
+        const block = await client.getBlock();
+
+        const { result } = await renderHook(config, () =>
+          useSimulationState({
+            marketIds: [id],
+            users: [client.account.address, generalAdapter1],
+            tokens: [usdc_eth.collateralToken, usdc],
+            vaults: [],
+            vaultV2s: [],
+            vaultV2Adapters: [],
+            block,
+          }),
+        );
+
+        await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+        const data = result.current.data!;
+
+        const { bundle, operations } = await setupTestBundle(client, data, [
+          {
+            type: "Blue_Repay",
+            sender: client.account.address,
+            args: {
+              id,
+              assets: debt / 2n,
+              onBehalf: client.account.address,
+              callback: [
+                {
+                  type: "Blue_WithdrawCollateral",
+                  args: {
+                    id,
+                    assets: collateral / 2n,
+                    onBehalf: client.account.address,
+                    receiver: generalAdapter1,
+                  },
+                },
+                {
+                  type: "Paraswap_Buy",
+                  address: usdc,
+                  args: {
+                    srcToken: usdc_eth.collateralToken,
+                    // https://api.paraswap.io/swap?network=8453&slippage=100&side=BUY&srcToken=0x4200000000000000000000000000000000000006&destToken=0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913&amount=95000000000&userAddress=0x03b5259Bd204BfD4A616E5B79b0B786d90c6C38f&version=6.2
+                    swap: {
+                      to: "0x6A000F20005980200259B80c5102003040001068",
+                      data: "0x7f4576750000000000000000000000000e5891850bb3f03090f03010000806f0800401000000000000000000000000004200000000000000000000000000000000000006000000000000000000000000833589fcd6edb6e08f4c7c32d4f71b54bda029130000000000000000000000000000000000000000000000017caedc6b7310750a000000000000000000000000000000000000000000000000000000161e70f60000000000000000000000000000000000000000000000000178e9f61e589418a1f3b399b8c99d4b799ce5045cb66ad2bd0000000000000000000000000245a57d0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000000000000000000000000001600000000000000000000000000000000000000000000000000000000000000180000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000009400000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000096000000160000000000000000000000120000000000000013700000000000003201b2b6ce813b99b840fe632c63bca5394938ef01e0140008400a400000000000300000000000000000000000000000000000000000000000000000000f28c0498000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000e5891850bb3f03090f03010000806f08004010000000000000000000000000000000000000000000000000000000000691ee25e00000000000000000000000000000000000000000000000000000001c4fecc000000000000000000000000000000000000000000000000001e25fba4503c59aa000000000000000000000000000000000000000000000000000000000000002b833589fcd6edb6e08f4c7c32d4f71b54bda02913000001420000000000000000000000000000000000000600000000000000000000000000000000000000000000000160000000000000000000000120000000000000013700000000000017701b2b6ce813b99b840fe632c63bca5394938ef01e0140008400a400000000000300000000000000000000000000000000000000000000000000000000f28c0498000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000e5891850bb3f03090f03010000806f08004010000000000000000000000000000000000000000000000000000000000691ee25e0000000000000000000000000000000000000000000000000000000d4576fa00000000000000000000000000000000000000000000000000e226e695e955d7ae000000000000000000000000000000000000000000000000000000000000002b833589fcd6edb6e08f4c7c32d4f71b54bda02913000064420000000000000000000000000000000000000600000000000000000000000000000000000000000000000160000000000000000000000120000000000000013700000000000000c81b81d678ffb9c0263b24a97847620c99d213eb140140008400a400000000000300000000000000000000000000000000000000000000000000000000f28c0498000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000e5891850bb3f03090f03010000806f08004010000000000000000000000000000000000000000000000000000000000691ee25e00000000000000000000000000000000000000000000000000000000713fb3000000000000000000000000000000000000000000000000000789ff677fd7a82e000000000000000000000000000000000000000000000000000000000000002b833589fcd6edb6e08f4c7c32d4f71b54bda029130001f4420000000000000000000000000000000000000600000000000000000000000000000000000000000000000160000000000000000000000120000000000000013700000000000005781b81d678ffb9c0263b24a97847620c99d213eb140140008400a400000000000300000000000000000000000000000000000000000000000000000000f28c0498000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000e5891850bb3f03090f03010000806f08004010000000000000000000000000000000000000000000000000000000000691ee25e0000000000000000000000000000000000000000000000000000000318bde50000000000000000000000000000000000000000000000000034c3ea5fc9605638000000000000000000000000000000000000000000000000000000000000002b833589fcd6edb6e08f4c7c32d4f71b54bda0291300006442000000000000000000000000000000000000060000000000000000000000000000000000000000000000016000000000000000000000012000000000000001370000000000000578aee2b8d4a154e36f479daece3fb3e6c3c03d396e0140008400a400000000000300000000000000000000000000000000000000000000000000000000f28c0498000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000e5891850bb3f03090f03010000806f08004010000000000000000000000000000000000000000000000000000000000691ee25e0000000000000000000000000000000000000000000000000000000318bde50000000000000000000000000000000000000000000000000034c550ba2d4901b1000000000000000000000000000000000000000000000000000000000000002b833589fcd6edb6e08f4c7c32d4f71b54bda029130001f4420000000000000000000000000000000000000600000000000000000000000000000000000000000000000160000000000000000000000120000000000000013700000000000000c8aee2b8d4a154e36f479daece3fb3e6c3c03d396e0140008400a400000000000300000000000000000000000000000000000000000000000000000000f28c0498000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000e5891850bb3f03090f03010000806f08004010000000000000000000000000000000000000000000000000000000000691ee25e00000000000000000000000000000000000000000000000000000000713fb3000000000000000000000000000000000000000000000000000789d962a880e732000000000000000000000000000000000000000000000000000000000000002b833589fcd6edb6e08f4c7c32d4f71b54bda029130000644200000000000000000000000000000000000006000000000000000000000000000000000000000000",
+                      offsets: paraswapContractMethodOffsets.swapExactAmountOut,
+                    },
+                    receiver: generalAdapter1,
+                  },
+                },
+              ],
+            },
+          },
+        ]);
+
+        expect(bundle.requirements.signatures).toStrictEqual([
+          {
+            action: {
+              type: "morphoSetAuthorizationWithSig",
+              args: [
+                {
+                  authorized: generalAdapter1,
+                  authorizer: client.account.address,
+                  deadline: expect.any(BigInt),
+                  isAuthorized: true,
+                  nonce: 0n,
+                },
+                expect.any(String),
+                undefined,
+              ],
+            },
+            sign: expect.any(Function),
+          },
+        ]);
+        expect(bundle.requirements.txs).toStrictEqual([]);
+        expect(operations).toContainEqual({
+          type: "Erc20_Transfer",
+          address: usdc_eth.collateralToken,
+          sender: generalAdapter1,
+          args: {
+            amount: maxUint256,
+            from: generalAdapter1,
+            to: client.account.address,
+          },
+        });
+
+        const position = await fetchPosition(
+          client.account.address,
+          id,
+          client,
+        );
+
+        expect(
+          await client.balanceOf({ erc20: usdc_eth.collateralToken }),
+        ).toBe(188340490361969960799n);
+        expect(position.collateral).toBe(collateral / 2n);
+        expect(position.supplyShares).toBe(0n);
+        expect(position.borrowShares).toBe(87447622361891959n);
+
+        expect(
+          await client.allowance({
+            erc20: usdc_eth.collateralToken,
+            spender: permit2,
+          }),
+        ).toBe(0n);
+        expect(
+          await client.allowance({
+            erc20: usdc_eth.collateralToken,
             spender: morpho,
           }),
         ).toBe(0n);

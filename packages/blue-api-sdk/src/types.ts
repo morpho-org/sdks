@@ -2007,6 +2007,12 @@ export type PaginatedVaultAdminEvent = {
   pageInfo: Maybe<PageInfo>;
 };
 
+export type PaginatedVaultPendingConfig = {
+  __typename?: "PaginatedVaultPendingConfig";
+  items: Maybe<Array<VaultPendingConfig>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
 export type PaginatedVaultReallocates = {
   __typename?: "PaginatedVaultReallocates";
   items: Maybe<Array<VaultReallocate>>;
@@ -3434,6 +3440,26 @@ export type VaultPendingCap = {
   validAt: Scalars["BigInt"]["output"];
 };
 
+/** MetaMorpho vault pending config */
+export type VaultPendingConfig = {
+  __typename?: "VaultPendingConfig";
+  decodedData: VaultPendingConfigDecodedData;
+  functionName: VaultPendingConfigFunctionName;
+  /** Timestamp at which the pending config can be applied */
+  validAt: Scalars["BigInt"]["output"];
+};
+
+export type VaultPendingConfigDecodedData =
+  | VaultSetCapPendingData
+  | VaultSetGuardianPendingData
+  | VaultSetTimelockPendingData;
+
+export enum VaultPendingConfigFunctionName {
+  SetCap = "SetCap",
+  SetGuardian = "SetGuardian",
+  SetTimelock = "SetTimelock",
+}
+
 /** MetaMorpho vault position */
 export type VaultPosition = {
   __typename?: "VaultPosition";
@@ -3617,6 +3643,28 @@ export enum VaultReallocateType {
   ReallocateWithdraw = "ReallocateWithdraw",
 }
 
+/** Vault pending cap */
+export type VaultSetCapPendingData = {
+  __typename?: "VaultSetCapPendingData";
+  market: Market;
+  /** Pending supply cap */
+  supplyCap: Scalars["BigInt"]["output"];
+};
+
+/** Vault pending guardian */
+export type VaultSetGuardianPendingData = {
+  __typename?: "VaultSetGuardianPendingData";
+  /** Pending guardian address */
+  guardian: Scalars["Address"]["output"];
+};
+
+/** Vault pending timelock */
+export type VaultSetTimelockPendingData = {
+  __typename?: "VaultSetTimelockPendingData";
+  /** Pending timelock duration */
+  timelock: Scalars["BigInt"]["output"];
+};
+
 /** MetaMorpho vault state */
 export type VaultState = {
   __typename?: "VaultState";
@@ -3673,15 +3721,29 @@ export type VaultState = {
   owner: Scalars["Address"]["output"];
   /** Additional information about the owner address. */
   ownerMetadata: Maybe<PaginatedAddressMetadata>;
-  /** Pending guardian address. */
+  /** Pending config */
+  pendingConfig: PaginatedVaultPendingConfig;
+  /**
+   * Pending guardian address.
+   * @deprecated Use `pendingTimelocks` instead.
+   */
   pendingGuardian: Maybe<Scalars["Address"]["output"]>;
-  /** Pending guardian apply timestamp. */
+  /**
+   * Pending guardian apply timestamp.
+   * @deprecated Use `pendingTimelocks` instead.
+   */
   pendingGuardianValidAt: Maybe<Scalars["BigInt"]["output"]>;
   /** Pending owner address. */
   pendingOwner: Maybe<Scalars["Address"]["output"]>;
-  /** Pending timelock in seconds. */
+  /**
+   * Pending timelock in seconds.
+   * @deprecated Use `pendingTimelocks` instead.
+   */
   pendingTimelock: Maybe<Scalars["BigInt"]["output"]>;
-  /** Pending timelock apply timestamp. */
+  /**
+   * Pending timelock apply timestamp.
+   * @deprecated Use `pendingTimelocks` instead.
+   */
   pendingTimelockValidAt: Maybe<Scalars["BigInt"]["output"]>;
   /** Quarterly Vault APY excluding rewards, before deducting the performance fee. */
   quarterlyApy: Maybe<Scalars["Float"]["output"]>;
@@ -3730,6 +3792,13 @@ export type VaultStateGuardianMetadataArgs = {
 /** MetaMorpho vault state */
 export type VaultStateOwnerMetadataArgs = {
   first?: InputMaybe<Scalars["Int"]["input"]>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
+/** MetaMorpho vault state */
+export type VaultStatePendingConfigArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  functionName_in?: InputMaybe<Array<VaultPendingConfigFunctionName>>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
@@ -3791,7 +3860,7 @@ export type VaultV2 = {
   managementFee: Scalars["Float"]["output"];
   managementFeeRecipient: Scalars["Address"]["output"];
   /** Max APY */
-  maxApy: Scalars["BigInt"]["output"];
+  maxApy: Scalars["Float"]["output"];
   /** Max rate per second */
   maxRate: Scalars["BigInt"]["output"];
   metadata: Maybe<VaultV2Metadata>;
