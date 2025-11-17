@@ -46,6 +46,27 @@
 
 Learn [how to add a new chain configuration](./docs/adding-new-chain.md) to the sdks.
 
+## Debugging
+
+Here's a tutorial on how to link a specific package to debug at runtime:
+
+1. From the repository in which you want to link the package: `pnpm link ../your/relative/path/to/sdks/packages/blue-sdk`
+
+```diff
+-    "@morpho-org/blue-sdk": "5.0.0",
++    "@morpho-org/blue-sdk": "link:../../../sdks/packages/blue-sdk",
+```
+
+2. Modify `blue-sdk` [package.json](./packages/blue-sdk/package.json) to use js main & js files:
+
+```diff
+-  "main": "src/index.ts",
++  "main": "lib/index.js",
++  "types": "lib/index.d.ts"
+```
+
+3. In a separate process, start: `pnpm --dir packages/blue-sdk build --watch`
+
 ## Authors
 
 - [@rubilmax](https://github.com/rubilmax) (rubilmax.eth, [Twitter](https://x.com/rubilmax))
