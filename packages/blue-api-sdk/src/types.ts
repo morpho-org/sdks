@@ -2043,6 +2043,12 @@ export type PaginatedVaultV2HistoricalCaps = {
   pageInfo: Maybe<PageInfo>;
 };
 
+export type PaginatedVaultV2PendingConfig = {
+  __typename?: "PaginatedVaultV2PendingConfig";
+  items: Maybe<Array<VaultV2PendingConfig>>;
+  pageInfo: Maybe<PageInfo>;
+};
+
 export type PaginatedVaultV2Positions = {
   __typename?: "PaginatedVaultV2Positions";
   items: Maybe<Array<VaultV2Position>>;
@@ -3444,7 +3450,7 @@ export type VaultPendingCap = {
 export type VaultPendingConfig = {
   __typename?: "VaultPendingConfig";
   decodedData: VaultPendingConfigDecodedData;
-  functionName: VaultPendingConfigFunctionName;
+  functionName: VaultTimelockedFunctionName;
   /** Timestamp at which the pending config can be applied */
   validAt: Scalars["BigInt"]["output"];
 };
@@ -3453,12 +3459,6 @@ export type VaultPendingConfigDecodedData =
   | VaultSetCapPendingData
   | VaultSetGuardianPendingData
   | VaultSetTimelockPendingData;
-
-export enum VaultPendingConfigFunctionName {
-  SetCap = "SetCap",
-  SetGuardian = "SetGuardian",
-  SetTimelock = "SetTimelock",
-}
 
 /** MetaMorpho vault position */
 export type VaultPosition = {
@@ -3654,8 +3654,8 @@ export type VaultSetCapPendingData = {
 /** Vault pending guardian */
 export type VaultSetGuardianPendingData = {
   __typename?: "VaultSetGuardianPendingData";
-  /** Pending guardian address */
-  guardian: Scalars["Address"]["output"];
+  /** Pending guardian */
+  guardian: Account;
 };
 
 /** Vault pending timelock */
@@ -3722,7 +3722,7 @@ export type VaultState = {
   /** Additional information about the owner address. */
   ownerMetadata: Maybe<PaginatedAddressMetadata>;
   /** Pending config */
-  pendingConfig: PaginatedVaultPendingConfig;
+  pendingConfigs: PaginatedVaultPendingConfig;
   /**
    * Pending guardian address.
    * @deprecated Use `pendingTimelocks` instead.
@@ -3796,9 +3796,9 @@ export type VaultStateOwnerMetadataArgs = {
 };
 
 /** MetaMorpho vault state */
-export type VaultStatePendingConfigArgs = {
+export type VaultStatePendingConfigsArgs = {
   first?: InputMaybe<Scalars["Int"]["input"]>;
-  functionName_in?: InputMaybe<Array<VaultPendingConfigFunctionName>>;
+  functionName_in?: InputMaybe<Array<VaultTimelockedFunctionName>>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
@@ -3813,6 +3813,12 @@ export type VaultStateReward = {
   /** Amount of reward tokens distributed to MetaMorpho vault suppliers (annualized). Scaled to reward asset decimals. */
   yearlySupplyTokens: Scalars["BigInt"]["output"];
 };
+
+export enum VaultTimelockedFunctionName {
+  SetCap = "SetCap",
+  SetGuardian = "SetGuardian",
+  SetTimelock = "SetTimelock",
+}
 
 /** Meta Morpho vault transaction data */
 export type VaultTransactionData = {
@@ -3866,6 +3872,7 @@ export type VaultV2 = {
   metadata: Maybe<VaultV2Metadata>;
   name: Scalars["String"]["output"];
   owner: Account;
+  pendingConfigs: PaginatedVaultV2PendingConfig;
   performanceFee: Scalars["Float"]["output"];
   performanceFeeRecipient: Scalars["Address"]["output"];
   positions: PaginatedVaultV2Positions;
@@ -3908,6 +3915,12 @@ export type VaultV2CuratorsArgs = {
   skip?: InputMaybe<Scalars["Int"]["input"]>;
 };
 
+export type VaultV2PendingConfigsArgs = {
+  first?: InputMaybe<Scalars["Int"]["input"]>;
+  functionName_in?: InputMaybe<Array<VaultV2TimelockedFunctionName>>;
+  skip?: InputMaybe<Scalars["Int"]["input"]>;
+};
+
 export type VaultV2PositionsArgs = {
   first?: InputMaybe<Scalars["Int"]["input"]>;
   skip?: InputMaybe<Scalars["Int"]["input"]>;
@@ -3915,6 +3928,14 @@ export type VaultV2PositionsArgs = {
 
 export type VaultV2WarningsArgs = {
   where?: InputMaybe<VaultV2WarningsFilters>;
+};
+
+export type VaultV2AbdicatePendingData = {
+  __typename?: "VaultV2AbdicatePendingData";
+  /** Function name */
+  functionName: Scalars["String"]["output"];
+  /** Function selector */
+  selector: Scalars["HexString"]["output"];
 };
 
 export type VaultV2Adapter = {
@@ -3937,6 +3958,14 @@ export type VaultV2AdapterFactory = {
   chain: Chain;
   creationBlockNumber: Scalars["BigInt"]["output"];
   id: Scalars["ID"]["output"];
+};
+
+export type VaultV2AdapterPendingData = {
+  __typename?: "VaultV2AdapterPendingData";
+  /** Pending adapter */
+  adapter: Maybe<VaultV2Adapter>;
+  /** Pending adapter address */
+  adapterAddress: Scalars["Address"]["output"];
 };
 
 export enum VaultV2AdapterType {
@@ -4098,6 +4127,20 @@ export type VaultV2HistoryTotalSupplyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
+export type VaultV2IncreaseAbsoluteCapPendingData = {
+  __typename?: "VaultV2IncreaseAbsoluteCapPendingData";
+  /** Pending absolute cap */
+  absoluteCap: Scalars["BigInt"]["output"];
+  capId: Scalars["HexString"]["output"];
+};
+
+export type VaultV2IncreaseRelativeCapPendingData = {
+  __typename?: "VaultV2IncreaseRelativeCapPendingData";
+  capId: Scalars["HexString"]["output"];
+  /** Pending relative cap */
+  relativeCap: Scalars["BigInt"]["output"];
+};
+
 /** Predefined lookback periods for vault APY calculations. Using these periods ensures better query performance through timestamp normalization and caching. */
 export enum VaultV2LookbackPeriod {
   /** Since vault inception (all-time) */
@@ -4129,6 +4172,36 @@ export type VaultV2Metadata = {
 export enum VaultV2OrderBy {
   Address = "Address",
 }
+
+export type VaultV2PendingConfig = {
+  __typename?: "VaultV2PendingConfig";
+  /** Raw timelocked function data */
+  data: Scalars["HexString"]["output"];
+  decodedData: VaultV2PendingConfigDecodedData;
+  functionName: VaultV2TimelockedFunctionName;
+  /** Transaction hash that submitted the pending action */
+  txHash: Scalars["HexString"]["output"];
+  /** Timestamp at which the pending config can be applied */
+  validAt: Scalars["BigInt"]["output"];
+};
+
+export type VaultV2PendingConfigDecodedData =
+  | VaultV2AbdicatePendingData
+  | VaultV2AdapterPendingData
+  | VaultV2IncreaseAbsoluteCapPendingData
+  | VaultV2IncreaseRelativeCapPendingData
+  | VaultV2SetAdapterRegistryPendingData
+  | VaultV2SetForceDeallocatePenaltyPendingData
+  | VaultV2SetIsAllocatorPendingData
+  | VaultV2SetManagementFeePendingData
+  | VaultV2SetManagementFeeRecipientPendingData
+  | VaultV2SetPerformanceFeePendingData
+  | VaultV2SetPerformanceFeeRecipientPendingData
+  | VaultV2SetReceiveAssetsGatePendingData
+  | VaultV2SetReceiveSharesGatePendingData
+  | VaultV2SetSendAssetsGatePendingData
+  | VaultV2SetSendSharesGatePendingData
+  | VaultV2TimelockPendingData;
 
 export type VaultV2Position = {
   __typename?: "VaultV2Position";
@@ -4219,6 +4292,78 @@ export type VaultV2Sentinel = {
   timestamp: Scalars["BigInt"]["output"];
 };
 
+export type VaultV2SetAdapterRegistryPendingData = {
+  __typename?: "VaultV2SetAdapterRegistryPendingData";
+  /** Pending adapter registry */
+  adapterRegistry: Scalars["Address"]["output"];
+};
+
+export type VaultV2SetForceDeallocatePenaltyPendingData = {
+  __typename?: "VaultV2SetForceDeallocatePenaltyPendingData";
+  /** Pending adapter */
+  adapter: Maybe<VaultV2Adapter>;
+  /** Pending adapter address */
+  adapterAddress: Scalars["Address"]["output"];
+  /** Pending force deallocate penalty */
+  forceDeallocatePenalty: Scalars["BigInt"]["output"];
+};
+
+export type VaultV2SetIsAllocatorPendingData = {
+  __typename?: "VaultV2SetIsAllocatorPendingData";
+  /** Allocator account. */
+  account: Account;
+  /** Pending allocator status */
+  isAllocator: Scalars["Boolean"]["output"];
+};
+
+export type VaultV2SetManagementFeePendingData = {
+  __typename?: "VaultV2SetManagementFeePendingData";
+  /** Pending management fee */
+  managementFee: Scalars["BigInt"]["output"];
+};
+
+export type VaultV2SetManagementFeeRecipientPendingData = {
+  __typename?: "VaultV2SetManagementFeeRecipientPendingData";
+  /** Management fee recipient */
+  managementFeeRecipient: Scalars["Address"]["output"];
+};
+
+export type VaultV2SetPerformanceFeePendingData = {
+  __typename?: "VaultV2SetPerformanceFeePendingData";
+  /** Pending performance fee */
+  performanceFee: Scalars["BigInt"]["output"];
+};
+
+export type VaultV2SetPerformanceFeeRecipientPendingData = {
+  __typename?: "VaultV2SetPerformanceFeeRecipientPendingData";
+  /** Pending performance fee recipient */
+  performanceFeeRecipient: Scalars["Address"]["output"];
+};
+
+export type VaultV2SetReceiveAssetsGatePendingData = {
+  __typename?: "VaultV2SetReceiveAssetsGatePendingData";
+  /** Pending receive assets gate */
+  receiveAssetsGate: Scalars["Address"]["output"];
+};
+
+export type VaultV2SetReceiveSharesGatePendingData = {
+  __typename?: "VaultV2SetReceiveSharesGatePendingData";
+  /** Pending receive shares gate */
+  receiveSharesGate: Scalars["Address"]["output"];
+};
+
+export type VaultV2SetSendAssetsGatePendingData = {
+  __typename?: "VaultV2SetSendAssetsGatePendingData";
+  /** Pending send assets gate */
+  sendAssetsGate: Scalars["Address"]["output"];
+};
+
+export type VaultV2SetSendSharesGatePendingData = {
+  __typename?: "VaultV2SetSendSharesGatePendingData";
+  /** Pending send shares gate */
+  sendSharesGate: Scalars["Address"]["output"];
+};
+
 /** Vault V2 allocator */
 export type VaultV2Timelock = {
   __typename?: "VaultV2Timelock";
@@ -4233,6 +4378,37 @@ export type VaultV2Timelock = {
   /** Last updated at timestamp */
   timestamp: Scalars["BigInt"]["output"];
 };
+
+export type VaultV2TimelockPendingData = {
+  __typename?: "VaultV2TimelockPendingData";
+  /** Function name */
+  functionName: Scalars["String"]["output"];
+  /** Function selector */
+  selector: Scalars["HexString"]["output"];
+  /** Pending timelock duration */
+  timelock: Scalars["BigInt"]["output"];
+};
+
+export enum VaultV2TimelockedFunctionName {
+  Abdicate = "Abdicate",
+  AddAdapter = "AddAdapter",
+  DecreaseTimelock = "DecreaseTimelock",
+  IncreaseAbsoluteCap = "IncreaseAbsoluteCap",
+  IncreaseRelativeCap = "IncreaseRelativeCap",
+  IncreaseTimelock = "IncreaseTimelock",
+  RemoveAdapter = "RemoveAdapter",
+  SetAdapterRegistry = "SetAdapterRegistry",
+  SetForceDeallocatePenalty = "SetForceDeallocatePenalty",
+  SetIsAllocator = "SetIsAllocator",
+  SetManagementFee = "SetManagementFee",
+  SetManagementFeeRecipient = "SetManagementFeeRecipient",
+  SetPerformanceFee = "SetPerformanceFee",
+  SetPerformanceFeeRecipient = "SetPerformanceFeeRecipient",
+  SetReceiveAssetsGate = "SetReceiveAssetsGate",
+  SetReceiveSharesGate = "SetReceiveSharesGate",
+  SetSendAssetsGate = "SetSendAssetsGate",
+  SetSendSharesGate = "SetSendSharesGate",
+}
 
 /** Vault V2 transaction */
 export type VaultV2Transaction = {
