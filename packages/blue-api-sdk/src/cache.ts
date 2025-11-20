@@ -1067,4 +1067,34 @@ export const typePolicies = {
       timestamp: { read: readMaybeBigInt },
     },
   },
+  BadDebtRealizedMarketWarningMetadata: {
+    fields: {
+      badDebtAssets: { read: readMaybeBigInt },
+      totalSupplyAssets: { read: readMaybeBigInt },
+    },
+  },
+  BadDebtUnrealizedMarketWarningMetadata: {
+    fields: {
+      badDebtAssets: { read: readMaybeBigInt },
+      totalSupplyAssets: { read: readMaybeBigInt },
+    },
+  },
+  IncorrectOracleConfigurationMarketWarningMetadata: {
+    fields: {
+      expectedScaleFactor: { read: readMaybeBigInt },
+      expectedScaleFactorExponent: { read: readMaybeBigInt },
+      scaleFactor: { read: readMaybeBigInt },
+    },
+  },
+  ShortTimelockVaultWarningMetadata: {
+    fields: {
+      timelock: { read: readMaybeBigInt },
+    },
+  },
+  TimelockFailedCheckVaultV2WarningMetadata: {
+    fields: {
+      currentTimelock: { read: readMaybeBigInt },
+      requiredTimelock: { read: readMaybeBigInt },
+    },
+  },
 };
