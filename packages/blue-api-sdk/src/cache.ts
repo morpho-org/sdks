@@ -962,6 +962,7 @@ export const typePolicies = {
       idleAssets: { read: readMaybeBigInt },
       liquidity: { read: readMaybeBigInt },
       maxRate: { read: readMaybeBigInt },
+      performanceFee: { read: readMaybeBigInt },
       totalAssets: { read: readMaybeBigInt },
       totalSupply: { read: readMaybeBigInt },
     },
