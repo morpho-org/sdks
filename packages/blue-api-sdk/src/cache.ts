@@ -962,7 +962,6 @@ export const typePolicies = {
       idleAssets: { read: readMaybeBigInt },
       liquidity: { read: readMaybeBigInt },
       maxRate: { read: readMaybeBigInt },
-      performanceFee: { read: readMaybeBigInt },
       totalAssets: { read: readMaybeBigInt },
       totalSupply: { read: readMaybeBigInt },
     },
@@ -1028,16 +1027,6 @@ export const typePolicies = {
   VaultV2SetForceDeallocatePenaltyPendingData: {
     fields: {
       forceDeallocatePenalty: { read: readMaybeBigInt },
-    },
-  },
-  VaultV2SetManagementFeePendingData: {
-    fields: {
-      managementFee: { read: readMaybeBigInt },
-    },
-  },
-  VaultV2SetPerformanceFeePendingData: {
-    fields: {
-      performanceFee: { read: readMaybeBigInt },
     },
   },
   VaultV2Transaction: {
