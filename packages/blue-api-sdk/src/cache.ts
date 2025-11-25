@@ -1029,6 +1029,16 @@ export const typePolicies = {
       forceDeallocatePenalty: { read: readMaybeBigInt },
     },
   },
+  VaultV2SetManagementFeePendingData: {
+    fields: {
+      managementFee: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2SetPerformanceFeePendingData: {
+    fields: {
+      performanceFee: { read: readMaybeBigInt },
+    },
+  },
   VaultV2Transaction: {
     fields: {
       blockNumber: { read: readMaybeBigInt },
