@@ -229,7 +229,7 @@ export namespace ChainUtils {
       name: "Monad",
       id: ChainId.MonadMainnet,
       nativeCurrency: { name: "Monad", symbol: "MON", decimals: 18 },
-      explorerUrl: "https://monad.socialscan.io",
+      explorerUrl: "https://monadscan.com",
       identifier: "monad",
     },
     [ChainId.StableMainnet]: {
