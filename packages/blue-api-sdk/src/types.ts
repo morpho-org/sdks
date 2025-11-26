@@ -4094,6 +4094,14 @@ export type VaultV2Allocator = {
   timestamp: Scalars["BigInt"]["output"];
 };
 
+export type VaultV2CapConfig = {
+  __typename?: "VaultV2CapConfig";
+  data: Maybe<VaultV2CapData>;
+  id: Scalars["HexString"]["output"];
+  idData: Scalars["HexString"]["output"];
+  type: VaultV2CapType;
+};
+
 export type VaultV2CapData =
   | AdapterCapData
   | CollateralCapData
@@ -4237,18 +4245,11 @@ export type VaultV2HistoryTotalSupplyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
-export type VaultV2IncreaseAbsoluteCapPendingData = {
-  __typename?: "VaultV2IncreaseAbsoluteCapPendingData";
-  /** Pending absolute cap */
-  absoluteCap: Scalars["BigInt"]["output"];
-  capId: Scalars["HexString"]["output"];
-};
-
-export type VaultV2IncreaseRelativeCapPendingData = {
-  __typename?: "VaultV2IncreaseRelativeCapPendingData";
-  capId: Scalars["HexString"]["output"];
-  /** Pending relative cap */
-  relativeCap: Scalars["BigInt"]["output"];
+export type VaultV2IncreaseCapPendingData = {
+  __typename?: "VaultV2IncreaseCapPendingData";
+  /** Pending absolute/relative cap */
+  cap: Scalars["BigInt"]["output"];
+  config: VaultV2CapConfig;
 };
 
 /** Predefined lookback periods for vault APY calculations. Using these periods ensures better query performance through timestamp normalization and caching. */
@@ -4298,8 +4299,7 @@ export type VaultV2PendingConfig = {
 export type VaultV2PendingConfigDecodedData =
   | VaultV2AbdicatePendingData
   | VaultV2AdapterPendingData
-  | VaultV2IncreaseAbsoluteCapPendingData
-  | VaultV2IncreaseRelativeCapPendingData
+  | VaultV2IncreaseCapPendingData
   | VaultV2SetAdapterRegistryPendingData
   | VaultV2SetForceDeallocatePenaltyPendingData
   | VaultV2SetIsAllocatorPendingData
@@ -4625,6 +4625,8 @@ export type VaultV2sFilters = {
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by chain id */
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+  /** [WIP] Filter by MetaMorpho curators ids */
+  curator_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
