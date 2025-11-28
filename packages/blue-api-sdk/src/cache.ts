@@ -966,6 +966,18 @@ export const typePolicies = {
       totalSupply: { read: readMaybeBigInt },
     },
   },
+  VaultV2Adapter: {
+    fields: {
+      assets: { read: readMaybeBigInt },
+      creationBlockNumber: { read: readMaybeBigInt },
+      creationTimestamp: { read: readMaybeBigInt },
+    },
+  },
+  VaultV2AdapterFactory: {
+    fields: {
+      creationBlockNumber: { read: readMaybeBigInt },
+    },
+  },
   VaultV2Allocator: {
     fields: {
       blockNumber: {
@@ -974,6 +986,11 @@ export const typePolicies = {
       timestamp: {
         read: readMaybeBigInt,
       },
+    },
+  },
+  VaultV2PendingConfig: {
+    fields: {
+      validAt: { read: readMaybeBigInt },
     },
   },
   VaultV2Caps: {
@@ -1039,6 +1056,11 @@ export const typePolicies = {
       performanceFee: { read: readMaybeBigInt },
     },
   },
+  VaultV2IncreaseCapPendingData: {
+    fields: {
+      cap: { read: readMaybeBigInt },
+    },
+  },
   VaultV2Transaction: {
     fields: {
       blockNumber: { read: readMaybeBigInt },
@@ -1065,6 +1087,36 @@ export const typePolicies = {
     fields: {
       blockNumber: { read: readMaybeBigInt },
       timestamp: { read: readMaybeBigInt },
+    },
+  },
+  BadDebtRealizedMarketWarningMetadata: {
+    fields: {
+      badDebtAssets: { read: readMaybeBigInt },
+      totalSupplyAssets: { read: readMaybeBigInt },
+    },
+  },
+  BadDebtUnrealizedMarketWarningMetadata: {
+    fields: {
+      badDebtAssets: { read: readMaybeBigInt },
+      totalSupplyAssets: { read: readMaybeBigInt },
+    },
+  },
+  IncorrectOracleConfigurationMarketWarningMetadata: {
+    fields: {
+      expectedScaleFactor: { read: readMaybeBigInt },
+      expectedScaleFactorExponent: { read: readMaybeBigInt },
+      scaleFactor: { read: readMaybeBigInt },
+    },
+  },
+  ShortTimelockVaultWarningMetadata: {
+    fields: {
+      timelock: { read: readMaybeBigInt },
+    },
+  },
+  TimelockFailedCheckVaultV2WarningMetadata: {
+    fields: {
+      currentTimelock: { read: readMaybeBigInt },
+      requiredTimelock: { read: readMaybeBigInt },
     },
   },
 };

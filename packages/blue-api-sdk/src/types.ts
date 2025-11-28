@@ -183,6 +183,8 @@ export type AssetsFilters = {
   isCollateralAsset?: InputMaybe<Scalars["Boolean"]["input"]>;
   /** Filter assets that are listed as loan on at least one market */
   isLoanAsset?: InputMaybe<Scalars["Boolean"]["input"]>;
+  /** Filter assets that are listed on at least one market (collateral or loan) */
+  isMarketAsset?: InputMaybe<Scalars["Boolean"]["input"]>;
   /** Filter assets that are listed by at least one vault */
   isVaultAsset?: InputMaybe<Scalars["Boolean"]["input"]>;
   search?: InputMaybe<Scalars["String"]["input"]>;
@@ -192,6 +194,22 @@ export type AssetsFilters = {
   tags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by whitelisted status */
   whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
+};
+
+export type BadDebtRealizedMarketWarningMetadata = {
+  __typename?: "BadDebtRealizedMarketWarningMetadata";
+  badDebtAssets: Scalars["BigInt"]["output"];
+  badDebtShare: Scalars["Float"]["output"];
+  badDebtUsd: Maybe<Scalars["Float"]["output"]>;
+  totalSupplyAssets: Scalars["BigInt"]["output"];
+};
+
+export type BadDebtUnrealizedMarketWarningMetadata = {
+  __typename?: "BadDebtUnrealizedMarketWarningMetadata";
+  badDebtAssets: Scalars["BigInt"]["output"];
+  badDebtShare: Scalars["Float"]["output"];
+  badDebtUsd: Maybe<Scalars["Float"]["output"]>;
+  totalSupplyAssets: Scalars["BigInt"]["output"];
 };
 
 export type BigIntDataPoint = {
@@ -328,7 +346,6 @@ export type CuratorState = {
   curatorId: Scalars["ID"]["output"];
 };
 
-/** Custom Warning Metadata */
 export type CustomMetadata = {
   __typename?: "CustomMetadata";
   content: Maybe<Scalars["String"]["output"]>;
@@ -340,11 +357,26 @@ export type FloatDataPoint = {
   y: Maybe<Scalars["Float"]["output"]>;
 };
 
-/** Hardcoded Price Metadata */
-export type HardcodedPriceMetadata = {
-  __typename?: "HardcodedPriceMetadata";
-  symbolFrom: Maybe<Scalars["String"]["output"]>;
-  symbolTo: Maybe<Scalars["String"]["output"]>;
+export type HighRiskAddressVaultV2WarningMetadata = {
+  __typename?: "HighRiskAddressVaultV2WarningMetadata";
+  blacklistedAddresses: Array<Scalars["Address"]["output"]>;
+  highRiskAddresses: Array<Scalars["Address"]["output"]>;
+};
+
+export type HighRiskAddressVaultWarningMetadata = {
+  __typename?: "HighRiskAddressVaultWarningMetadata";
+  blacklistedAddresses: Array<Scalars["Address"]["output"]>;
+  highRiskAddresses: Array<Scalars["Address"]["output"]>;
+};
+
+export type HighRiskAssetMarketWarningMetadata = {
+  __typename?: "HighRiskAssetMarketWarningMetadata";
+  highRiskAssets: Array<Asset>;
+};
+
+export type HighRiskAssetVaultWarningMetadata = {
+  __typename?: "HighRiskAssetVaultWarningMetadata";
+  highRiskAssets: Array<Asset>;
 };
 
 /** IRM curve data point */
@@ -358,10 +390,28 @@ export type IrmCurveDataPoint = {
   utilization: Scalars["Float"]["output"];
 };
 
+export type IncorrectOracleConfigurationMarketWarningMetadata = {
+  __typename?: "IncorrectOracleConfigurationMarketWarningMetadata";
+  expectedScaleFactor: Maybe<Scalars["BigInt"]["output"]>;
+  expectedScaleFactorExponent: Maybe<Scalars["BigInt"]["output"]>;
+  scaleFactor: Maybe<Scalars["BigInt"]["output"]>;
+  type: Scalars["String"]["output"];
+};
+
 export type IntDataPoint = {
   __typename?: "IntDataPoint";
   x: Scalars["Float"]["output"];
   y: Maybe<Scalars["Int"]["output"]>;
+};
+
+export type InvalidNameVaultWarningMetadata = {
+  __typename?: "InvalidNameVaultWarningMetadata";
+  reason: Scalars["String"]["output"];
+};
+
+export type InvalidSymbolVaultWarningMetadata = {
+  __typename?: "InvalidSymbolVaultWarningMetadata";
+  reason: Scalars["String"]["output"];
 };
 
 /** Morpho Blue market */
@@ -440,7 +490,6 @@ export type Market = {
   targetBorrowUtilization: Scalars["BigInt"]["output"];
   targetWithdrawUtilization: Scalars["BigInt"]["output"];
   uniqueKey: Scalars["MarketId"]["output"];
-  /** Market warnings */
   warnings: Array<MarketWarning>;
   /**
    * Weekly market APYs
@@ -1582,7 +1631,6 @@ export type MarketV1CapData = {
   marketParams: MarketParams;
 };
 
-/** Market warning */
 export type MarketWarning = {
   __typename?: "MarketWarning";
   level: WarningLevel;
@@ -1590,7 +1638,15 @@ export type MarketWarning = {
   type: Scalars["String"]["output"];
 };
 
-export type MarketWarningMetadata = CustomMetadata | HardcodedPriceMetadata;
+export type MarketWarningMetadata =
+  | BadDebtRealizedMarketWarningMetadata
+  | BadDebtUnrealizedMarketWarningMetadata
+  | CustomMetadata
+  | HighRiskAssetMarketWarningMetadata
+  | IncorrectOracleConfigurationMarketWarningMetadata
+  | UnrecognizedCollateralAssetMarketWarningMetadata
+  | UnrecognizedLoanAssetMarketWarningMetadata
+  | UnsafeVaultAsCollateralMarketWarningMetadata;
 
 export type MetaMorphoAdapter = VaultV2Adapter & {
   __typename?: "MetaMorphoAdapter";
@@ -2615,6 +2671,11 @@ export type SetWithdrawQueueEventData = {
   withdrawQueue: Array<Market>;
 };
 
+export type ShortTimelockVaultWarningMetadata = {
+  __typename?: "ShortTimelockVaultWarningMetadata";
+  timelock: Scalars["BigInt"]["output"];
+};
+
 /** Skim event data */
 export type SkimEventData = {
   __typename?: "SkimEventData";
@@ -2626,6 +2687,18 @@ export type SkimEventData = {
 export type TimelockEventData = {
   __typename?: "TimelockEventData";
   timelock: Scalars["BigInt"]["output"];
+};
+
+export type TimelockFailedCheckVaultV2WarningMetadata = {
+  __typename?: "TimelockFailedCheckVaultV2WarningMetadata";
+  currentTimelock: Scalars["BigInt"]["output"];
+  functionName: Scalars["String"]["output"];
+  requiredTimelock: Scalars["BigInt"]["output"];
+};
+
+export type TimelockVaultV2WarningMetadata = {
+  __typename?: "TimelockVaultV2WarningMetadata";
+  failedChecks: Array<TimelockFailedCheckVaultV2WarningMetadata>;
 };
 
 export enum TimeseriesInterval {
@@ -2783,6 +2856,31 @@ export enum TransactionsOrderBy {
   Shares = "Shares",
   Timestamp = "Timestamp",
 }
+
+export type UnrecognizedCollateralAssetMarketWarningMetadata = {
+  __typename?: "UnrecognizedCollateralAssetMarketWarningMetadata";
+  asset: Asset;
+};
+
+export type UnrecognizedDepositAssetVaultWarningMetadata = {
+  __typename?: "UnrecognizedDepositAssetVaultWarningMetadata";
+  asset: Asset;
+};
+
+export type UnrecognizedLoanAssetMarketWarningMetadata = {
+  __typename?: "UnrecognizedLoanAssetMarketWarningMetadata";
+  asset: Asset;
+};
+
+export type UnrecognizedMarketVaultWarningMetadata = {
+  __typename?: "UnrecognizedMarketVaultWarningMetadata";
+  marketWarnings: Array<MarketWarning>;
+};
+
+export type UnsafeVaultAsCollateralMarketWarningMetadata = {
+  __typename?: "UnsafeVaultAsCollateralMarketWarningMetadata";
+  vault: Vault;
+};
 
 /** User */
 export type User = {
@@ -2960,7 +3058,10 @@ export type Vault = {
    */
   monthlyApys: Maybe<VaultApyAggregates>;
   name: Scalars["String"]["output"];
-  /** Vault pending caps */
+  /**
+   * Vault pending caps
+   * @deprecated Use `vault.state.pendingConfigs` with `functionName_in: [SetCap]` instead.
+   */
   pendingCaps: Array<VaultPendingCap>;
   /** A vault V1 is promoted via internal, manual review. */
   promoted: Scalars["Boolean"]["output"];
@@ -2970,7 +3071,6 @@ export type Vault = {
   riskAnalysis: Array<RiskAnalysis>;
   state: Maybe<VaultState>;
   symbol: Scalars["String"]["output"];
-  /** Vault warnings */
   warnings: Array<VaultWarning>;
   /**
    * Weekly vault APY
@@ -3451,11 +3551,14 @@ export type VaultPendingConfig = {
   __typename?: "VaultPendingConfig";
   decodedData: VaultPendingConfigDecodedData;
   functionName: VaultTimelockedFunctionName;
+  /** Transaction hash that submitted the pending action */
+  txHash: Scalars["HexString"]["output"];
   /** Timestamp at which the pending config can be applied */
   validAt: Scalars["BigInt"]["output"];
 };
 
 export type VaultPendingConfigDecodedData =
+  | VaultRemoveMarketPendingData
   | VaultSetCapPendingData
   | VaultSetGuardianPendingData
   | VaultSetTimelockPendingData;
@@ -3643,10 +3746,17 @@ export enum VaultReallocateType {
   ReallocateWithdraw = "ReallocateWithdraw",
 }
 
+/** Vault pending market removal */
+export type VaultRemoveMarketPendingData = {
+  __typename?: "VaultRemoveMarketPendingData";
+  caller: Account;
+  market: Maybe<Market>;
+};
+
 /** Vault pending cap */
 export type VaultSetCapPendingData = {
   __typename?: "VaultSetCapPendingData";
-  market: Market;
+  market: Maybe<Market>;
   /** Pending supply cap */
   supplyCap: Scalars["BigInt"]["output"];
 };
@@ -3725,24 +3835,24 @@ export type VaultState = {
   pendingConfigs: PaginatedVaultPendingConfig;
   /**
    * Pending guardian address.
-   * @deprecated Use `pendingTimelocks` instead.
+   * @deprecated Use `pendingConfigs` with `functionName_in: [SetGuardian]` instead.
    */
   pendingGuardian: Maybe<Scalars["Address"]["output"]>;
   /**
    * Pending guardian apply timestamp.
-   * @deprecated Use `pendingTimelocks` instead.
+   * @deprecated Use `pendingConfigs` with `functionName_in: [SetGuardian]` instead.
    */
   pendingGuardianValidAt: Maybe<Scalars["BigInt"]["output"]>;
   /** Pending owner address. */
   pendingOwner: Maybe<Scalars["Address"]["output"]>;
   /**
    * Pending timelock in seconds.
-   * @deprecated Use `pendingTimelocks` instead.
+   * @deprecated Use `pendingConfigs` with `functionName_in: [SetTimelock]` instead.
    */
   pendingTimelock: Maybe<Scalars["BigInt"]["output"]>;
   /**
    * Pending timelock apply timestamp.
-   * @deprecated Use `pendingTimelocks` instead.
+   * @deprecated Use `pendingConfigs` with `functionName_in: [SetTimelock]` instead.
    */
   pendingTimelockValidAt: Maybe<Scalars["BigInt"]["output"]>;
   /** Quarterly Vault APY excluding rewards, before deducting the performance fee. */
@@ -3815,6 +3925,7 @@ export type VaultStateReward = {
 };
 
 export enum VaultTimelockedFunctionName {
+  RemoveMarket = "RemoveMarket",
   SetCap = "SetCap",
   SetGuardian = "SetGuardian",
   SetTimelock = "SetTimelock",
@@ -3886,7 +3997,6 @@ export type VaultV2 = {
   /** Total assets deposited to the vault. At the moment, interest is not virtually accrued */
   totalAssetsUsd: Maybe<Scalars["Float"]["output"]>;
   totalSupply: Scalars["BigInt"]["output"];
-  /** Vault V2 warnings */
   warnings: Array<VaultV2Warning>;
   /** A VaultV2 is whitelisted if the curator is whitelisted and the vault passes our sanity checks. */
   whitelisted: Scalars["Boolean"]["output"];
@@ -3982,6 +4092,14 @@ export type VaultV2Allocator = {
   blockNumber: Scalars["BigInt"]["output"];
   /** Allocator since timestamp */
   timestamp: Scalars["BigInt"]["output"];
+};
+
+export type VaultV2CapConfig = {
+  __typename?: "VaultV2CapConfig";
+  data: Maybe<VaultV2CapData>;
+  id: Scalars["HexString"]["output"];
+  idData: Scalars["HexString"]["output"];
+  type: VaultV2CapType;
 };
 
 export type VaultV2CapData =
@@ -4127,18 +4245,11 @@ export type VaultV2HistoryTotalSupplyArgs = {
   options?: InputMaybe<TimeseriesOptions>;
 };
 
-export type VaultV2IncreaseAbsoluteCapPendingData = {
-  __typename?: "VaultV2IncreaseAbsoluteCapPendingData";
-  /** Pending absolute cap */
-  absoluteCap: Scalars["BigInt"]["output"];
-  capId: Scalars["HexString"]["output"];
-};
-
-export type VaultV2IncreaseRelativeCapPendingData = {
-  __typename?: "VaultV2IncreaseRelativeCapPendingData";
-  capId: Scalars["HexString"]["output"];
-  /** Pending relative cap */
-  relativeCap: Scalars["BigInt"]["output"];
+export type VaultV2IncreaseCapPendingData = {
+  __typename?: "VaultV2IncreaseCapPendingData";
+  /** Pending absolute/relative cap */
+  cap: Scalars["BigInt"]["output"];
+  config: VaultV2CapConfig;
 };
 
 /** Predefined lookback periods for vault APY calculations. Using these periods ensures better query performance through timestamp normalization and caching. */
@@ -4188,8 +4299,7 @@ export type VaultV2PendingConfig = {
 export type VaultV2PendingConfigDecodedData =
   | VaultV2AbdicatePendingData
   | VaultV2AdapterPendingData
-  | VaultV2IncreaseAbsoluteCapPendingData
-  | VaultV2IncreaseRelativeCapPendingData
+  | VaultV2IncreaseCapPendingData
   | VaultV2SetAdapterRegistryPendingData
   | VaultV2SetForceDeallocatePenaltyPendingData
   | VaultV2SetIsAllocatorPendingData
@@ -4474,11 +4584,10 @@ export type VaultV2TransferData = {
   to: Scalars["String"]["output"];
 };
 
-/** Vault V2 warning */
 export type VaultV2Warning = {
   __typename?: "VaultV2Warning";
   level: VaultV2WarningLevel;
-  metadata: Maybe<CustomMetadata>;
+  metadata: Maybe<VaultV2WarningMetadata>;
   type: Scalars["String"]["output"];
 };
 
@@ -4488,6 +4597,11 @@ export enum VaultV2WarningLevel {
   Red = "RED",
   Yellow = "YELLOW",
 }
+
+export type VaultV2WarningMetadata =
+  | CustomMetadata
+  | HighRiskAddressVaultV2WarningMetadata
+  | TimelockVaultV2WarningMetadata;
 
 /** Filtering options for vault V2 warnings. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
 export type VaultV2WarningsFilters = {
@@ -4511,6 +4625,8 @@ export type VaultV2sFilters = {
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by chain id */
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
+  /** [WIP] Filter by MetaMorpho curators ids */
+  curator_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
 
@@ -4519,13 +4635,22 @@ export enum VaultVersion {
   V2 = "V2",
 }
 
-/** Vault warning */
 export type VaultWarning = {
   __typename?: "VaultWarning";
   level: WarningLevel;
-  metadata: Maybe<CustomMetadata>;
+  metadata: Maybe<VaultWarningMetadata>;
   type: Scalars["String"]["output"];
 };
+
+export type VaultWarningMetadata =
+  | CustomMetadata
+  | HighRiskAddressVaultWarningMetadata
+  | HighRiskAssetVaultWarningMetadata
+  | InvalidNameVaultWarningMetadata
+  | InvalidSymbolVaultWarningMetadata
+  | ShortTimelockVaultWarningMetadata
+  | UnrecognizedDepositAssetVaultWarningMetadata
+  | UnrecognizedMarketVaultWarningMetadata;
 
 export enum WarningLevel {
   Red = "RED",
