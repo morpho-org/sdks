@@ -159,7 +159,7 @@ export namespace ChainUtils {
       name: "Plume",
       id: ChainId.PlumeMainnet,
       nativeCurrency: { name: "Plume", symbol: "PLUME", decimals: 18 },
-      explorerUrl: "https://phoenix-explorer.plumenetwork.xyz",
+      explorerUrl: "https://explorer.plume.org",
       identifier: "plume",
     },
     [ChainId.CampMainnet]: {
