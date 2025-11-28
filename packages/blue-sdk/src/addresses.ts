@@ -808,7 +808,7 @@ const _deployments = {
     adaptiveCurveIrm: 765994n,
     publicAllocator: 765994n,
     metaMorphoFactory: 766078n,
-    vaultV2Factory: 766078n,
+    vaultV2Factory: 32235414n,
     morphoMarketV1AdapterFactory: 32235414n,
     morphoVaultV1AdapterFactory: 32235414n,
     registryList: 32235782n,
