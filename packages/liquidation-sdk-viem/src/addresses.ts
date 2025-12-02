@@ -3,6 +3,7 @@ import {
   ChainId,
   addresses,
   addressesRegistry,
+  deployments,
   registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
 import type { MidasConfig } from "./tokens/midas";
@@ -129,6 +130,7 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
   [ChainId.LineaMainnet]: {},
   [ChainId.MonadMainnet]: {},
   [ChainId.StableMainnet]: {},
+  [ChainId.CronosMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
@@ -137,107 +139,111 @@ export const preLiquidationFactoryConfigs: Record<
 > = {
   [ChainId.EthMainnet]: {
     address: addressesRegistry[ChainId.EthMainnet].preLiquidationFactory,
-    startBlock: 21429900n,
+    startBlock: deployments[ChainId.EthMainnet].preLiquidationFactory,
   },
   [ChainId.BaseMainnet]: {
     address: addressesRegistry[ChainId.BaseMainnet].preLiquidationFactory,
-    startBlock: 23779056n,
+    startBlock: deployments[ChainId.BaseMainnet].preLiquidationFactory,
   },
   [ChainId.PolygonMainnet]: {
     address: addressesRegistry[ChainId.PolygonMainnet].preLiquidationFactory,
-    startBlock: 68074185n,
+    startBlock: deployments[ChainId.PolygonMainnet].preLiquidationFactory,
   },
   [ChainId.ArbitrumMainnet]: {
     address: addressesRegistry[ChainId.ArbitrumMainnet].preLiquidationFactory,
-    startBlock: 307326238n,
+    startBlock: deployments[ChainId.ArbitrumMainnet].preLiquidationFactory,
   },
   [ChainId.OptimismMainnet]: {
     address: addressesRegistry[ChainId.OptimismMainnet].preLiquidationFactory,
-    startBlock: 132139369n,
+    startBlock: deployments[ChainId.OptimismMainnet].preLiquidationFactory,
   },
   [ChainId.WorldChainMainnet]: {
     address: addressesRegistry[ChainId.WorldChainMainnet].preLiquidationFactory,
-    startBlock: 10273494n,
+    startBlock: deployments[ChainId.WorldChainMainnet].preLiquidationFactory,
   },
   [ChainId.FraxtalMainnet]: {
     address: addressesRegistry[ChainId.FraxtalMainnet].preLiquidationFactory,
-    startBlock: 16536231n,
+    startBlock: deployments[ChainId.FraxtalMainnet].preLiquidationFactory,
   },
   [ChainId.ScrollMainnet]: {
     address: addressesRegistry[ChainId.ScrollMainnet].preLiquidationFactory,
-    startBlock: 13504587n,
+    startBlock: deployments[ChainId.ScrollMainnet].preLiquidationFactory,
   },
   [ChainId.InkMainnet]: {
     address: addressesRegistry[ChainId.InkMainnet].preLiquidationFactory,
-    startBlock: 6385077n,
+    startBlock: deployments[ChainId.InkMainnet].preLiquidationFactory,
   },
   [ChainId.Unichain]: {
     address: addressesRegistry[ChainId.Unichain].preLiquidationFactory,
-    startBlock: 9381237n,
+    startBlock: deployments[ChainId.Unichain].preLiquidationFactory,
   },
   [ChainId.SonicMainnet]: {
     address: addressesRegistry[ChainId.SonicMainnet].preLiquidationFactory,
-    startBlock: 9102286n,
+    startBlock: deployments[ChainId.SonicMainnet].preLiquidationFactory,
   },
   [ChainId.HemiMainnet]: {
     address: addressesRegistry[ChainId.HemiMainnet].preLiquidationFactory,
-    startBlock: 1188907n,
+    startBlock: deployments[ChainId.HemiMainnet].preLiquidationFactory,
   },
   [ChainId.ModeMainnet]: {
     address: addressesRegistry[ChainId.ModeMainnet].preLiquidationFactory,
-    startBlock: 19983599n,
+    startBlock: deployments[ChainId.ModeMainnet].preLiquidationFactory,
   },
   [ChainId.CornMainnet]: {
     address: addressesRegistry[ChainId.CornMainnet].preLiquidationFactory,
-    startBlock: 253107n,
+    startBlock: deployments[ChainId.CornMainnet].preLiquidationFactory,
   },
   [ChainId.PlumeMainnet]: {
-    address: addressesRegistry[ChainId.CornMainnet].preLiquidationFactory,
-    startBlock: 789925n,
+    address: addressesRegistry[ChainId.PlumeMainnet].preLiquidationFactory,
+    startBlock: deployments[ChainId.PlumeMainnet].preLiquidationFactory,
   },
   [ChainId.CampMainnet]: {
     address: addressesRegistry[ChainId.CampMainnet].preLiquidationFactory,
-    startBlock: 4804690n,
+    startBlock: deployments[ChainId.CampMainnet].preLiquidationFactory,
   },
   [ChainId.KatanaMainnet]: {
     address: addressesRegistry[ChainId.KatanaMainnet].preLiquidationFactory,
-    startBlock: 2741993n,
+    startBlock: deployments[ChainId.KatanaMainnet].preLiquidationFactory,
   },
   [ChainId.EtherlinkMainnet]: {
     address: addressesRegistry[ChainId.EtherlinkMainnet].preLiquidationFactory,
-    startBlock: 21050766n,
+    startBlock: deployments[ChainId.EtherlinkMainnet].preLiquidationFactory,
   },
   [ChainId.TacMainnet]: {
     address: addressesRegistry[ChainId.TacMainnet].preLiquidationFactory,
-    startBlock: 978967n,
+    startBlock: deployments[ChainId.TacMainnet].preLiquidationFactory,
   },
   [ChainId.LiskMainnet]: {
     address: addressesRegistry[ChainId.LiskMainnet].preLiquidationFactory,
-    startBlock: 15731595n,
+    startBlock: deployments[ChainId.LiskMainnet].preLiquidationFactory,
   },
   [ChainId.HyperliquidMainnet]: {
     address:
       addressesRegistry[ChainId.HyperliquidMainnet].preLiquidationFactory,
-    startBlock: 1988956n,
+    startBlock: deployments[ChainId.HyperliquidMainnet].preLiquidationFactory,
   },
   [ChainId.SeiMainnet]: {
     address: addressesRegistry[ChainId.SeiMainnet].preLiquidationFactory,
-    startBlock: 168897284n,
+    startBlock: deployments[ChainId.SeiMainnet].preLiquidationFactory,
   },
   [ChainId.ZeroGMainnet]: {
     address: addressesRegistry[ChainId.ZeroGMainnet].preLiquidationFactory,
-    startBlock: 7527649n,
+    startBlock: deployments[ChainId.ZeroGMainnet].preLiquidationFactory,
   },
   [ChainId.LineaMainnet]: {
     address: addressesRegistry[ChainId.LineaMainnet].preLiquidationFactory,
-    startBlock: 25072853n,
+    startBlock: deployments[ChainId.LineaMainnet].preLiquidationFactory,
   },
   [ChainId.MonadMainnet]: {
     address: addressesRegistry[ChainId.MonadMainnet].preLiquidationFactory,
-    startBlock: 32321504n,
+    startBlock: deployments[ChainId.MonadMainnet].preLiquidationFactory,
   },
   [ChainId.StableMainnet]: {
     address: addressesRegistry[ChainId.StableMainnet].preLiquidationFactory,
-    startBlock: 1741861n,
+    startBlock: deployments[ChainId.StableMainnet].preLiquidationFactory,
+  },
+  [ChainId.CronosMainnet]: {
+    address: addressesRegistry[ChainId.CronosMainnet].preLiquidationFactory,
+    startBlock: deployments[ChainId.CronosMainnet].preLiquidationFactory,
   },
 };

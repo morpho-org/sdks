@@ -565,6 +565,24 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
     preLiquidationFactory: "0x741A6604e974FeAF35a5FBb1416B3e01c33e5C0e",
   },
+  [ChainId.CronosMainnet]: {
+    morpho: "0xDF9a1DC07e5dEe5ccCCaBeC35e446C70fAF7434e",
+    bundler3: {
+      bundler3: "0xb1c59fE6A0DCE25b804F6113C441Bf4F3a4Ab6bC",
+      generalAdapter1: "0xCa470cBBc3de56FDe336466f2107cC969174d513",
+    },
+    adaptiveCurveIrm: "0x1Db002C086439d55B9f33E6c0693Eb850F7c0607",
+    publicAllocator: "0xFEAbEf95f3C937Ff4d5fD70005CF3392f8Ca02d5",
+    metaMorphoFactory: "0xEA67e5566Ca2c0176d9db172A7f9A1e1F22E9D3A",
+    vaultV2Factory: "0x05519a0835a1bFD90f110aA7ca46e9A5F81Ed3b4",
+    morphoMarketV1AdapterFactory: "0xaCFf4ad3B357F5A43A20570cF3eb9Ba0086d4e9a",
+    morphoVaultV1AdapterFactory: "0x8840F99Bb2D4f69fb02b2d019384C5c98a11746c",
+    registryList: "0x295e0aB80f8234398cd0E51C85D873ee69E5F0DD",
+    chainlinkOracleFactory: "0x44b2c8e4474751EF2BBC57B92928aFB99DA785De",
+    preLiquidationFactory: "0x8bedC738f5F0D54dF7E003297AAc6692b870F3Ed",
+
+    wNative: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -970,6 +988,22 @@ const _deployments = {
     chainlinkOracleFactory: 1504774n,
     preLiquidationFactory: 1741861n,
   },
+  [ChainId.CronosMainnet]: {
+    morpho: 38459435n,
+    bundler3: {
+      bundler3: 38460388n,
+      generalAdapter1: 38460388n,
+    },
+    adaptiveCurveIrm: 38459435n,
+    publicAllocator: 38459435n,
+    metaMorphoFactory: 38459727n,
+    vaultV2Factory: 38461643n,
+    morphoMarketV1AdapterFactory: 38461643n,
+    morphoVaultV1AdapterFactory: 38461643n,
+    registryList: 38461812n,
+    chainlinkOracleFactory: 38459727n,
+    preLiquidationFactory: 38460388n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -1079,9 +1113,11 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.LineaMainnet]: {
     [_addressesRegistry[ChainId.LineaMainnet].wNative]: NATIVE_ADDRESS,
   },
-
   [ChainId.MonadMainnet]: {
     [_addressesRegistry[ChainId.MonadMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.CronosMainnet]: {
+    [_addressesRegistry[ChainId.CronosMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 

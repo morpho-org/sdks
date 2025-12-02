@@ -1,5 +1,4 @@
 {
-  "editor.defaultFormatter": "biomejs.biome",
   "editor.codeActionsOnSave": {
     "quickfix.biome": "always",
     "source.organizeImports.biome": "always"
@@ -9,9 +8,6 @@
   },
   "[solidity]": {
     "editor.defaultFormatter": "JuanBlanco.solidity"
-  },
-  "[typescript]": {
-    "editor.defaultFormatter": "biomejs.biome"
   },
   "solidity.formatter": "forge"
 }
