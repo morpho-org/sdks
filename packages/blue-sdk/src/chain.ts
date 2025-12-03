@@ -25,6 +25,7 @@ export enum ChainId {
   LineaMainnet = 59144,
   MonadMainnet = 143,
   StableMainnet = 988,
+  CronosMainnet = 25,
 }
 
 export interface ChainMetadata {
@@ -238,6 +239,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "gUSDT", symbol: "gUSDT", decimals: 18 },
       explorerUrl: "https://stablescan.xyz",
       identifier: "stable",
+    },
+    [ChainId.CronosMainnet]: {
+      name: "Cronos",
+      id: ChainId.CronosMainnet,
+      nativeCurrency: { name: "Cronos", symbol: "CRO", decimals: 18 },
+      explorerUrl: "https://explorer.cronos.org",
+      identifier: "cronos",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
