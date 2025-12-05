@@ -4,7 +4,14 @@ import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
 
 const config: CodegenConfig = {
   overwrite: true,
-  schema: BLUE_API_GRAPHQL_URL,
+  // @ts-expect-error
+  // graphql-code-generator forwards this option to @graphql-tools/url-loader.
+  // The loader officially supports `inputValueDeprecation` to enable
+  // `inputFields(includeDeprecated: true)` in the introspection query.
+  // Tracking issue: https://github.com/dotansimha/graphql-code-generator/issues/5565
+  schema: {
+    [BLUE_API_GRAPHQL_URL]: { inputValueDeprecation: true },
+  },
   generates: {
     "./src/types.ts": {
       plugins: ["typescript"],

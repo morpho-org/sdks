@@ -114,7 +114,10 @@ export type Asset = {
   oraclePriceUsd: Maybe<Scalars["Float"]["output"]>;
   /** Current price in USD, for display purpose. */
   priceUsd: Maybe<Scalars["Float"]["output"]>;
-  /** Risk related data on the asset */
+  /**
+   * Risk related data on the asset
+   * @deprecated No longer maintained/updated.
+   */
   riskAnalysis: Array<RiskAnalysis>;
   /**
    * Current spot price in ETH.
@@ -156,6 +159,7 @@ export type AssetSpotPriceEthArgs = {
 
 export enum AssetOrderBy {
   Address = "Address",
+  /** @deprecated No longer maintained/updated. */
   CredoraRiskScore = "CredoraRiskScore",
 }
 
@@ -171,9 +175,15 @@ export type AssetsFilters = {
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by chain id */
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
-  /** Filter by credora risk score greater than or equal to given value */
+  /**
+   * Filter by credora risk score greater than or equal to given value
+   * @deprecated No longer maintained/updated.
+   */
   credoraRiskScore_gte?: InputMaybe<Scalars["Float"]["input"]>;
-  /** Filter by credora risk score lower than or equal to given value */
+  /**
+   * Filter by credora risk score lower than or equal to given value
+   * @deprecated No longer maintained/updated.
+   */
   credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter assets that are listed by specific curators */
   curator_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -194,14 +204,6 @@ export type AssetsFilters = {
   tags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by whitelisted status */
   whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
-};
-
-export type BadDebtRealizedMarketWarningMetadata = {
-  __typename?: "BadDebtRealizedMarketWarningMetadata";
-  badDebtAssets: Scalars["BigInt"]["output"];
-  badDebtShare: Scalars["Float"]["output"];
-  badDebtUsd: Maybe<Scalars["Float"]["output"]>;
-  totalSupplyAssets: Scalars["BigInt"]["output"];
 };
 
 export type BadDebtUnrealizedMarketWarningMetadata = {
@@ -325,6 +327,7 @@ export type CuratorAddressMetadataArgs = {
 /** Filtering options for curators. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
 export type CuratorFilters = {
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
+  /** @deprecated Use `chainId_in` instead */
   chainId?: InputMaybe<Scalars["Int"]["input"]>;
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
   ownerOnly?: InputMaybe<Scalars["Boolean"]["input"]>;
@@ -355,28 +358,6 @@ export type FloatDataPoint = {
   __typename?: "FloatDataPoint";
   x: Scalars["Float"]["output"];
   y: Maybe<Scalars["Float"]["output"]>;
-};
-
-export type HighRiskAddressVaultV2WarningMetadata = {
-  __typename?: "HighRiskAddressVaultV2WarningMetadata";
-  blacklistedAddresses: Array<Scalars["Address"]["output"]>;
-  highRiskAddresses: Array<Scalars["Address"]["output"]>;
-};
-
-export type HighRiskAddressVaultWarningMetadata = {
-  __typename?: "HighRiskAddressVaultWarningMetadata";
-  blacklistedAddresses: Array<Scalars["Address"]["output"]>;
-  highRiskAddresses: Array<Scalars["Address"]["output"]>;
-};
-
-export type HighRiskAssetMarketWarningMetadata = {
-  __typename?: "HighRiskAssetMarketWarningMetadata";
-  highRiskAssets: Array<Asset>;
-};
-
-export type HighRiskAssetVaultWarningMetadata = {
-  __typename?: "HighRiskAssetVaultWarningMetadata";
-  highRiskAssets: Array<Asset>;
 };
 
 /** IRM curve data point */
@@ -481,7 +462,10 @@ export type Market = {
   realizedBadDebt: Maybe<MarketBadDebt>;
   /** Underlying amount of assets that can be reallocated to this market */
   reallocatableLiquidityAssets: Maybe<Scalars["BigInt"]["output"]>;
-  /** Risk related data on the market */
+  /**
+   * Risk related data on the market
+   * @deprecated No longer maintained/updated.
+   */
   riskAnalysis: Array<RiskAnalysis>;
   /** Current state */
   state: Maybe<MarketState>;
@@ -593,9 +577,15 @@ export type MarketFilters = {
   /** Filter by collateral asset tags. */
   collateralAssetTags_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   countryCode?: InputMaybe<Scalars["String"]["input"]>;
-  /** Filter by credora risk score greater than or equal to given value */
+  /**
+   * Filter by credora risk score greater than or equal to given value
+   * @deprecated No longer maintained/updated.
+   */
   credoraRiskScore_gte?: InputMaybe<Scalars["Float"]["input"]>;
-  /** Filter by credora risk score lower than or equal to given value */
+  /**
+   * Filter by credora risk score lower than or equal to given value
+   * @deprecated No longer maintained/updated.
+   */
   credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by greater than or equal to given fee rate */
   fee_gte?: InputMaybe<Scalars["Float"]["input"]>;
@@ -1040,6 +1030,7 @@ export enum MarketOrderBy {
   BorrowAssetsUsd = "BorrowAssetsUsd",
   BorrowShares = "BorrowShares",
   CollateralAssetSymbol = "CollateralAssetSymbol",
+  /** @deprecated No longer maintained/updated. */
   CredoraRiskScore = "CredoraRiskScore",
   DailyBorrowApy = "DailyBorrowApy",
   DailyNetBorrowApy = "DailyNetBorrowApy",
@@ -1048,6 +1039,7 @@ export enum MarketOrderBy {
   LoanAssetSymbol = "LoanAssetSymbol",
   NetBorrowApy = "NetBorrowApy",
   NetSupplyApy = "NetSupplyApy",
+  /** @deprecated Use `ApyAtTarget` instead */
   RateAtUTarget = "RateAtUTarget",
   SizeUsd = "SizeUsd",
   SupplyApy = "SupplyApy",
@@ -1639,14 +1631,11 @@ export type MarketWarning = {
 };
 
 export type MarketWarningMetadata =
-  | BadDebtRealizedMarketWarningMetadata
   | BadDebtUnrealizedMarketWarningMetadata
   | CustomMetadata
-  | HighRiskAssetMarketWarningMetadata
   | IncorrectOracleConfigurationMarketWarningMetadata
   | UnrecognizedCollateralAssetMarketWarningMetadata
-  | UnrecognizedLoanAssetMarketWarningMetadata
-  | UnsafeVaultAsCollateralMarketWarningMetadata;
+  | UnrecognizedLoanAssetMarketWarningMetadata;
 
 export type MetaMorphoAdapter = VaultV2Adapter & {
   __typename?: "MetaMorphoAdapter";
@@ -2328,6 +2317,7 @@ export type QueryMarketArgs = {
 
 export type QueryMarketAverageApysArgs = {
   chainId?: InputMaybe<Scalars["Int"]["input"]>;
+  startTimestamp?: InputMaybe<Scalars["Float"]["input"]>;
   uniqueKey: Scalars["String"]["input"];
 };
 
@@ -2604,7 +2594,9 @@ export type RiskAnalysis = {
 export type RiskAnalysisData = CredoraRiskAnalysis;
 
 export enum RiskProvider {
+  /** @deprecated No longer maintained/updated. */
   Blockaid = "BLOCKAID",
+  /** @deprecated No longer maintained/updated. */
   Credora = "CREDORA",
 }
 
@@ -2857,6 +2849,11 @@ export enum TransactionsOrderBy {
   Timestamp = "Timestamp",
 }
 
+export type UnrecognizedAssetVaultWarningMetadata = {
+  __typename?: "UnrecognizedAssetVaultWarningMetadata";
+  asset: Asset;
+};
+
 export type UnrecognizedCollateralAssetMarketWarningMetadata = {
   __typename?: "UnrecognizedCollateralAssetMarketWarningMetadata";
   asset: Asset;
@@ -2870,16 +2867,6 @@ export type UnrecognizedDepositAssetVaultWarningMetadata = {
 export type UnrecognizedLoanAssetMarketWarningMetadata = {
   __typename?: "UnrecognizedLoanAssetMarketWarningMetadata";
   asset: Asset;
-};
-
-export type UnrecognizedMarketVaultWarningMetadata = {
-  __typename?: "UnrecognizedMarketVaultWarningMetadata";
-  marketWarnings: Array<MarketWarning>;
-};
-
-export type UnsafeVaultAsCollateralMarketWarningMetadata = {
-  __typename?: "UnsafeVaultAsCollateralMarketWarningMetadata";
-  vault: Vault;
 };
 
 /** User */
@@ -3067,7 +3054,10 @@ export type Vault = {
   promoted: Scalars["Boolean"]["output"];
   /** Public allocator configuration */
   publicAllocatorConfig: Maybe<PublicAllocatorConfig>;
-  /** Risk related data on the vault */
+  /**
+   * Risk related data on the vault
+   * @deprecated No longer maintained/updated.
+   */
   riskAnalysis: Array<RiskAnalysis>;
   state: Maybe<VaultState>;
   symbol: Scalars["String"]["output"];
@@ -3253,9 +3243,15 @@ export type VaultFilters = {
   countryCode?: InputMaybe<Scalars["String"]["input"]>;
   /** Filter by MetaMorpho creator address */
   creatorAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
-  /** Filter by credora risk score greater than or equal to given value */
+  /**
+   * Filter by credora risk score greater than or equal to given value
+   * @deprecated No longer maintained/updated.
+   */
   credoraRiskScore_gte?: InputMaybe<Scalars["Float"]["input"]>;
-  /** Filter by credora risk score lower than or equal to given value */
+  /**
+   * Filter by credora risk score lower than or equal to given value
+   * @deprecated No longer maintained/updated.
+   */
   credoraRiskScore_lte?: InputMaybe<Scalars["Float"]["input"]>;
   /** Filter by MetaMorpho current curator address */
   curatorAddress_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
@@ -3524,6 +3520,7 @@ export enum VaultOrderBy {
   Apy = "Apy",
   AvgApy = "AvgApy",
   AvgNetApy = "AvgNetApy",
+  /** @deprecated No longer maintained/updated. */
   CredoraRiskScore = "CredoraRiskScore",
   Curator = "Curator",
   DailyApy = "DailyApy",
@@ -4600,8 +4597,8 @@ export enum VaultV2WarningLevel {
 
 export type VaultV2WarningMetadata =
   | CustomMetadata
-  | HighRiskAddressVaultV2WarningMetadata
-  | TimelockVaultV2WarningMetadata;
+  | TimelockVaultV2WarningMetadata
+  | UnrecognizedAssetVaultWarningMetadata;
 
 /** Filtering options for vault V2 warnings. AND operator is used for multiple filters, while OR operator is used for multiple values in the same filter. */
 export type VaultV2WarningsFilters = {
@@ -4625,7 +4622,10 @@ export type VaultV2sFilters = {
   address_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   /** Filter by chain id */
   chainId_in?: InputMaybe<Array<Scalars["Int"]["input"]>>;
-  /** [WIP] Filter by MetaMorpho curators ids */
+  /**
+   * [WIP] Filter by MetaMorpho curators ids
+   * @deprecated This feature might be removed in the future
+   */
   curator_in?: InputMaybe<Array<Scalars["String"]["input"]>>;
   whitelisted?: InputMaybe<Scalars["Boolean"]["input"]>;
 };
@@ -4644,13 +4644,10 @@ export type VaultWarning = {
 
 export type VaultWarningMetadata =
   | CustomMetadata
-  | HighRiskAddressVaultWarningMetadata
-  | HighRiskAssetVaultWarningMetadata
   | InvalidNameVaultWarningMetadata
   | InvalidSymbolVaultWarningMetadata
   | ShortTimelockVaultWarningMetadata
-  | UnrecognizedDepositAssetVaultWarningMetadata
-  | UnrecognizedMarketVaultWarningMetadata;
+  | UnrecognizedDepositAssetVaultWarningMetadata;
 
 export enum WarningLevel {
   Red = "RED",
