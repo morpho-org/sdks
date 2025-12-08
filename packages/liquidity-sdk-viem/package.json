@@ -47,7 +47,7 @@
     "nock": "^14.0.10",
     "typescript": "^5.7.2",
     "viem": "^2.33.3",
-    "vitest": "^3.0.5"
+    "vitest": "^4.0.15"
   },
   "publishConfig": {
     "main": "lib/index.js",

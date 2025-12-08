@@ -32,7 +32,7 @@
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
     "viem": "^2.21.10",
-    "vitest": ">=2.0.0 <4.0.0"
+    "vitest": ">=2.0.0 <5.0.0"
   },
   "peerDependenciesMeta": {
     "@playwright/test": {
@@ -48,7 +48,7 @@
     "@types/node": "^22.13.1",
     "typescript": "^5.7.2",
     "viem": "^2.33.3",
-    "vitest": "^3.0.5",
+    "vitest": "^4.0.15",
     "wagmi": "^2.14.10"
   },
   "publishConfig": {
