@@ -51,7 +51,7 @@
     "graphql": "^16.10.0",
     "hardhat": "^2.27.1",
     "nock": "^14.0.10",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.3",
     "viem": "^2.33.3",
     "vitest": "^4.0.15"
   },

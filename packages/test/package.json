@@ -45,10 +45,9 @@
   "devDependencies": {
     "@playwright/test": "^1.48.1",
     "@types/lodash.kebabcase": "^4.1.9",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.3",
     "viem": "^2.33.3",
-    "vitest": "^4.0.15",
-    "wagmi": "^2.14.10"
+    "vitest": "^4.0.15"
   },
   "publishConfig": {
     "exports": {

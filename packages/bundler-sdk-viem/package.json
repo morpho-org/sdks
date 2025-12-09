@@ -39,7 +39,7 @@
     "@testing-library/react": "^16.1.0",
     "@types/lodash": "^4.17.12",
     "lodash": "^4.17.21",
-    "typescript": "^5.7.2",
+    "typescript": "^5.9.3",
     "viem": "^2.33.3",
     "vitest": "^4.0.15"
   },
