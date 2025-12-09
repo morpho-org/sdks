@@ -9,7 +9,7 @@ import {
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { format } from "@morpho-org/morpho-ts";
-import type { BuildTxInput } from "@paraswap/sdk";
+import type { BuildTxInput } from "@velora-dex/sdk";
 
 import { blueAbi, fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import {
