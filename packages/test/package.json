@@ -43,7 +43,7 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.1",
+    "@playwright/test": "^1.57.0",
     "@types/lodash.kebabcase": "^4.1.9",
     "typescript": "^5.9.3",
     "viem": "^2.41.2",
