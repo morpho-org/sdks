@@ -16,30 +16,10 @@ import {
 import { MigratableSupplyPosition_CompoundV3 } from "../../../src/positions/supply/compoundV3.supply.js";
 import { test } from "../setup.js";
 
-interface ChainConfig<C extends ChainId.EthMainnet | ChainId.BaseMainnet> {
-  chainId: C;
-  testFn: TestAPI<ViemTestContext>;
-  markets: {
-    [Ch in C]: {
-      [K in Exclude<
-        keyof (typeof migrationAddressesRegistry)[Ch][MigratableProtocol.compoundV3],
-        "comptroller"
-      >]: {
-        vault: Address;
-        underlying: Address;
-        underlyingDecimals: number;
-        comet: Address;
-      };
-    };
-  }[C];
-}
-
-const TEST_CONFIGS: {
-  [C in ChainId.EthMainnet | ChainId.BaseMainnet]: ChainConfig<C>;
-}[ChainId.EthMainnet | ChainId.BaseMainnet][] = [
+const TEST_CONFIGS = [
   {
     chainId: ChainId.EthMainnet,
-    testFn: test[ChainId.EthMainnet],
+    testFn: test[ChainId.EthMainnet] as TestAPI<ViemTestContext>,
     markets: {
       weth: {
         vault: vaults[ChainId.EthMainnet].steakEth.address,
@@ -63,8 +43,7 @@ const TEST_CONFIGS: {
   },
   {
     chainId: ChainId.BaseMainnet,
-    //@ts-expect-error
-    testFn: test[ChainId.BaseMainnet],
+    testFn: test[ChainId.BaseMainnet] as TestAPI<ViemTestContext>,
     markets: {
       weth: {
         vault: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1",
@@ -86,7 +65,7 @@ const TEST_CONFIGS: {
       },
     },
   },
-];
+] as const;
 
 describe("Supply position on COMPOUND V3", () => {
   for (const { chainId, testFn, markets } of TEST_CONFIGS) {

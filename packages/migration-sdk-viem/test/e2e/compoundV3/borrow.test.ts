@@ -9,7 +9,6 @@ import {
 import {
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  type MarketParams,
   MathLib,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
@@ -32,31 +31,10 @@ import { cometAbi, cometExtAbi } from "../../../src/abis/compoundV3.js";
 import { MigratableBorrowPosition_CompoundV3 } from "../../../src/positions/borrow/compoundV3.borrow.js";
 import { test } from "../setup.js";
 
-interface ChainConfig<C extends ChainId.EthMainnet | ChainId.BaseMainnet> {
-  chainId: C;
-  testFn: TestAPI<ViemTestContext>;
-  markets: {
-    [Ch in C]: {
-      [K in Exclude<
-        keyof (typeof migrationAddressesRegistry)[Ch][MigratableProtocol.compoundV3],
-        "comptroller"
-      >]: {
-        marketTo: MarketParams;
-        comet: Address;
-        collateralAmount: bigint;
-        borrowAmount: bigint;
-        extraCollateral: Address;
-      };
-    };
-  }[C];
-}
-
-const TEST_CONFIGS: {
-  [C in ChainId.EthMainnet | ChainId.BaseMainnet]: ChainConfig<C>;
-}[ChainId.EthMainnet | ChainId.BaseMainnet][] = [
+const TEST_CONFIGS = [
   {
     chainId: ChainId.EthMainnet,
-    testFn: test[ChainId.EthMainnet],
+    testFn: test[ChainId.EthMainnet] as TestAPI<ViemTestContext>,
     markets: {
       weth: {
         marketTo: markets[ChainId.EthMainnet].eth_wstEth_2,
@@ -82,8 +60,7 @@ const TEST_CONFIGS: {
   },
   {
     chainId: ChainId.BaseMainnet,
-    //@ts-expect-error
-    testFn: test[ChainId.BaseMainnet],
+    testFn: test[ChainId.BaseMainnet] as TestAPI<ViemTestContext>,
     markets: {
       weth: {
         marketTo: markets[ChainId.BaseMainnet].eth_wstEth,
@@ -107,7 +84,7 @@ const TEST_CONFIGS: {
       },
     },
   },
-];
+] as const;
 
 describe("Borrow position on COMPOUND V3", () => {
   for (const { chainId, testFn, markets } of TEST_CONFIGS) {

@@ -25,30 +25,10 @@ import {
 import { MigratableSupplyPosition_CompoundV2 } from "../../../src/positions/supply/compoundV2.supply.js";
 import { test } from "../setup.js";
 
-interface ChainConfig<C extends ChainId.EthMainnet> {
-  chainId: C;
-  testFn: TestAPI<ViemTestContext>;
-  markets: {
-    [Ch in C]: {
-      [K in Exclude<
-        keyof (typeof migrationAddressesRegistry)[Ch][MigratableProtocol.compoundV2],
-        "comptroller"
-      >]: {
-        vault: Address;
-        underlying: Address;
-        underlyingDecimals: number;
-        cToken: Address;
-      };
-    };
-  }[C];
-}
-
-const TEST_CONFIGS: {
-  [C in ChainId.EthMainnet]: ChainConfig<C>;
-}[ChainId.EthMainnet][] = [
+const TEST_CONFIGS = [
   {
     chainId: ChainId.EthMainnet,
-    testFn: test[ChainId.EthMainnet],
+    testFn: test[ChainId.EthMainnet] as TestAPI<ViemTestContext>,
     markets: {
       cEth: {
         vault: vaults[ChainId.EthMainnet].steakEth.address,
@@ -95,7 +75,7 @@ const TEST_CONFIGS: {
   //     },
   //   },
   // },
-];
+] as const;
 
 describe("Supply position on COMPOUND V2", () => {
   for (const { chainId, testFn, markets } of TEST_CONFIGS) {
