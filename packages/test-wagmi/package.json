@@ -25,7 +25,7 @@
     "@testing-library/react": "^16.0.0",
     "viem": "^2.21.10",
     "vitest": ">=2.0.0 <5.0.0",
-    "wagmi": "^2.12.0"
+    "wagmi": ">=2.12.10 <4.0.0"
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
