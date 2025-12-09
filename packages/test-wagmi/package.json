@@ -32,7 +32,6 @@
     "@tanstack/react-query": "^5.62.11",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.1.0",
-    "@types/node": "^22.13.1",
     "@types/react": "^19.0.7",
     "@types/react-dom": "^19.0.2",
     "@wagmi/core": "^2.16.3",

@@ -284,18 +284,7 @@ function toArgs(obj: AnvilArgs) {
 export const MAX_TEST_PER_WORKER = 512;
 
 const basePort =
-  10000 +
-  ("__tinypool_state__" in process
-    ? (
-        process.__tinypool_state__ as {
-          isChildProcess: boolean;
-          isTinypoolWorker: boolean;
-          workerData: null;
-          workerId: number;
-        }
-      ).workerId - 1
-    : 0) *
-    MAX_TEST_PER_WORKER;
+  10000 + Number(process.env.VITEST_WORKER_ID) * MAX_TEST_PER_WORKER;
 
 let workerInstances = 0;
 

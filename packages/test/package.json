@@ -45,7 +45,6 @@
   "devDependencies": {
     "@playwright/test": "^1.48.1",
     "@types/lodash.kebabcase": "^4.1.9",
-    "@types/node": "^22.13.1",
     "typescript": "^5.7.2",
     "viem": "^2.33.3",
     "vitest": "^4.0.15",
