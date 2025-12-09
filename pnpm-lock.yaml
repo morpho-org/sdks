@@ -45,8 +45,8 @@ importers:
         specifier: ^8.0.0
         version: 8.0.0
       happy-dom:
-        specifier: ^17.0.0
-        version: 17.0.0
+        specifier: ^20.0.11
+        version: 20.0.11
       husky:
         specifier: ^9.1.7
         version: 9.1.7
@@ -64,7 +64,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/blue-api-sdk:
     devDependencies:
@@ -119,7 +119,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/blue-sdk-viem:
     devDependencies:
@@ -146,7 +146,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/blue-sdk-wagmi:
     devDependencies:
@@ -200,7 +200,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
       wagmi:
         specifier: ^2.14.10
         version: 2.14.10(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
@@ -257,7 +257,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/liquidation-sdk-viem:
     dependencies:
@@ -333,7 +333,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/liquidity-sdk-viem:
     dependencies:
@@ -397,7 +397,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/migration-sdk-viem:
     dependencies:
@@ -443,7 +443,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/morpho-test:
     devDependencies:
@@ -470,7 +470,7 @@ importers:
         version: 5.7.2
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/simulation-sdk:
     dependencies:
@@ -504,7 +504,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   packages/simulation-sdk-wagmi:
     devDependencies:
@@ -573,7 +573,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
       wagmi:
         specifier: ^2.14.10
         version: 2.14.10(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
@@ -604,7 +604,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
       wagmi:
         specifier: ^2.14.10
         version: 2.14.10(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
@@ -646,7 +646,7 @@ importers:
         version: 2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76)
       vitest:
         specifier: ^4.0.15
-        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+        version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
       wagmi:
         specifier: ^2.14.10
         version: 2.14.10(@tanstack/query-core@5.62.16)(@tanstack/react-query@5.62.11(react@19.0.0))(@types/react@19.0.7)(bufferutil@4.0.8)(encoding@0.1.13)(react@19.0.0)(typescript@5.7.2)(utf-8-validate@5.0.10)(viem@2.33.3(bufferutil@4.0.8)(typescript@5.7.2)(utf-8-validate@5.0.10)(zod@3.25.76))(zod@3.25.76)
@@ -2375,6 +2375,9 @@ packages:
   '@types/ms@2.1.0':
     resolution: {integrity: sha512-GsCCIZDE/p3i96vtEqx+7dBUGXrc7zeSK3wwPHIaRThS+9OhWIXRqzs4d6k1SVU8g91DrNRWxWUGhp5KXQb2VA==}
 
+  '@types/node@20.19.26':
+    resolution: {integrity: sha512-0l6cjgF0XnihUpndDhk+nyD3exio3iKaYROSgvh/qSevPXax3L8p5DBRFjbvalnwatGgHEQn2R88y2fA3g4irg==}
+
   '@types/node@22.13.1':
     resolution: {integrity: sha512-jK8uzQlrvXqEU91UxiK5J7pKHyzgnI1Qnl0QDHIgVGuolJhRb9EEl28Cj9b3rGR8B2lhFCtvIm5os8lFnO/1Ew==}
 
@@ -2394,6 +2397,9 @@ packages:
 
   '@types/trusted-types@2.0.7':
     resolution: {integrity: sha512-ScaPdn1dQczgbl0QFTeTOmVHFULt394XJgOQNoyVhZ6r2vLnMLJfBPd53SB52T/3G36VI1/g2MZaX0cwDuXsfw==}
+
+  '@types/whatwg-mimetype@3.0.2':
+    resolution: {integrity: sha512-c2AKvDT8ToxLIOUlN51gTiHXflsfIFisS4pO7pDPoKouJCESkhZnEy623gwP9laCy5lnLDAw1vAzu2vM2YLOrA==}
 
   '@types/ws@8.5.12':
     resolution: {integrity: sha512-3tPRkv1EtkDpzlgyKyI8pGsGZAGPEaXeu0DOj5DI25Ja91bdAYddYHbADRYVrZMRbfW+1l5YwXVDKohDJNQxkQ==}
@@ -3611,9 +3617,9 @@ packages:
     engines: {node: '>=0.4.7'}
     hasBin: true
 
-  happy-dom@17.0.0:
-    resolution: {integrity: sha512-jGuUr3UrgMzt1Mopyof3RzD49/GudAp1suP5KFU+EvNXmqUAMXpxux2zEJbabE1YXs0APrY61iRZ0BKMMWCGTg==}
-    engines: {node: '>=18.0.0'}
+  happy-dom@20.0.11:
+    resolution: {integrity: sha512-QsCdAUHAmiDeKeaNojb1OHOPF7NjcWPBR7obdu3NwH2a/oyQaLg5d0aaCy/9My6CdPChYF07dvz5chaXBGaD4g==}
+    engines: {node: '>=20.0.0'}
 
   hardhat@2.27.1:
     resolution: {integrity: sha512-0+AWlXgXd0fbPUsAJwp9x6kgYwNxFdZtHVE40bVqPO1WIpCZeWldvubxZl2yOGSzbufa6d9s0n+gNj7JSlTYCQ==}
@@ -5100,6 +5106,9 @@ packages:
   undici-types@6.20.0:
     resolution: {integrity: sha512-Ny6QZ2Nju20vw1SRHe3d9jVu6gJ+4e3+MMpqu7pqE5HT6WsTSlce++GQmK5UXS8mzV8DSYHrQH+Xrf2jVcuKNg==}
 
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
 
@@ -5350,10 +5359,6 @@ packages:
 
   webidl-conversions@3.0.1:
     resolution: {integrity: sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==}
-
-  webidl-conversions@7.0.0:
-    resolution: {integrity: sha512-VwddBukDzu71offAQR975unBIGqfKZpM+8ZX6ySk8nYhVoo5CYaZyzt3YBvYtRtO+aoGlqxPg/B87NGVZ/fu6g==}
-    engines: {node: '>=12'}
 
   whatwg-mimetype@3.0.0:
     resolution: {integrity: sha512-nt+N2dzIutVRxARx1nghPKGv1xHikU7HKdfafKkLNLindmPU/ch3U31NOCGGA/dmPcmb1VlofO0vnKAcsm0o/Q==}
@@ -7732,6 +7737,10 @@ snapshots:
 
   '@types/ms@2.1.0': {}
 
+  '@types/node@20.19.26':
+    dependencies:
+      undici-types: 6.21.0
+
   '@types/node@22.13.1':
     dependencies:
       undici-types: 6.20.0
@@ -7755,6 +7764,8 @@ snapshots:
 
   '@types/trusted-types@2.0.7': {}
 
+  '@types/whatwg-mimetype@3.0.2': {}
+
   '@types/ws@8.5.12':
     dependencies:
       '@types/node': 22.13.1
@@ -7772,7 +7783,7 @@ snapshots:
       obug: 2.1.1
       std-env: 3.10.0
       tinyrainbow: 3.0.3
-      vitest: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+      vitest: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
     transitivePeerDependencies:
       - supports-color
 
@@ -7819,7 +7830,7 @@ snapshots:
       sirv: 3.0.2
       tinyglobby: 0.2.15
       tinyrainbow: 3.0.3
-      vitest: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
+      vitest: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
   '@vitest/utils@4.0.15':
     dependencies:
@@ -9417,9 +9428,10 @@ snapshots:
     optionalDependencies:
       uglify-js: 3.19.3
 
-  happy-dom@17.0.0:
+  happy-dom@20.0.11:
     dependencies:
-      webidl-conversions: 7.0.0
+      '@types/node': 20.19.26
+      '@types/whatwg-mimetype': 3.0.2
       whatwg-mimetype: 3.0.0
 
   hardhat@2.27.1(bufferutil@4.0.8)(ts-node@10.9.2(@types/node@24.10.2)(typescript@5.7.2))(typescript@5.7.2)(utf-8-validate@5.0.10):
@@ -10896,6 +10908,8 @@ snapshots:
 
   undici-types@6.20.0: {}
 
+  undici-types@6.21.0: {}
+
   undici-types@7.16.0: {}
 
   undici@5.28.4:
@@ -11039,7 +11053,7 @@ snapshots:
       terser: 5.36.0
       yaml: 2.7.0
 
-  vitest@4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@17.0.0)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0):
+  vitest@4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0):
     dependencies:
       '@vitest/expect': 4.0.15
       '@vitest/mocker': 4.0.15(vite@7.2.7(@types/node@24.10.2)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0))
@@ -11064,7 +11078,7 @@ snapshots:
     optionalDependencies:
       '@types/node': 24.10.2
       '@vitest/ui': 4.0.15(vitest@4.0.15)
-      happy-dom: 17.0.0
+      happy-dom: 20.0.11
     transitivePeerDependencies:
       - jiti
       - less
@@ -11151,8 +11165,6 @@ snapshots:
   webextension-polyfill@0.10.0: {}
 
   webidl-conversions@3.0.1: {}
-
-  webidl-conversions@7.0.0: {}
 
   whatwg-mimetype@3.0.0: {}
 
