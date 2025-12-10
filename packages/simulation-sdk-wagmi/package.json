@@ -29,7 +29,7 @@
     "react": "^18.0.0",
     "typescript": "^5.0.4",
     "viem": "^2.0.0",
-    "wagmi": "^2.12.10"
+    "wagmi": ">=2.12.10 <4.0.0"
   },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
@@ -51,10 +51,10 @@
     "mutative": "^1.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
-    "vitest": "^3.0.5",
-    "wagmi": "^2.14.10"
+    "typescript": "^5.9.3",
+    "viem": "^2.41.2",
+    "vitest": "^4.0.15",
+    "wagmi": "^3.1.0"
   },
   "publishConfig": {
     "main": "lib/index.js",

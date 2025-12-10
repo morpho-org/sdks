@@ -27,7 +27,7 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "graphql": "^16.10.0",
-    "typescript": "^5.7.2"
+    "typescript": "^5.9.3"
   },
   "publishConfig": {
     "main": "lib/index.js",

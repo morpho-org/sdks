@@ -42,12 +42,11 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "@types/node": "^22.13.1",
     "graphql": "^16.10.0",
     "nock": "^14.0.10",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
-    "vitest": "^3.0.5"
+    "typescript": "^5.9.3",
+    "viem": "^2.41.2",
+    "vitest": "^4.0.15"
   },
   "publishConfig": {
     "main": "lib/index.js",
