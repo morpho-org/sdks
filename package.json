@@ -42,8 +42,8 @@
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",
     "semver": "^7.7.1",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
+    "typescript": "^5.9.3",
+    "viem": "^2.41.2",
     "vitest": "^4.0.15"
   },
   "lint-staged": {

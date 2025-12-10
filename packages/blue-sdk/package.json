@@ -31,8 +31,8 @@
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
+    "typescript": "^5.9.3",
+    "viem": "^2.41.2",
     "vitest": "^4.0.15"
   },
   "publishConfig": {

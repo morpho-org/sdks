@@ -36,8 +36,8 @@
     "@morpho-org/test-wagmi": "workspace:^",
     "@types/lodash": "^4.17.12",
     "lodash": "^4.17.21",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
+    "typescript": "^5.9.3",
+    "viem": "^2.41.2",
     "vitest": "^4.0.15"
   },
   "publishConfig": {
