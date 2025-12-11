@@ -284,7 +284,9 @@ function toArgs(obj: AnvilArgs) {
 export const MAX_TEST_PER_WORKER = 512;
 
 const basePort =
-  10000 + Number(process.env.VITEST_WORKER_ID) * MAX_TEST_PER_WORKER;
+  10000 +
+  Number(process.env.ANVIL_WORKER_ID ?? process.env.VITEST_WORKER_ID ?? 0) *
+    MAX_TEST_PER_WORKER;
 
 let workerInstances = 0;
 
