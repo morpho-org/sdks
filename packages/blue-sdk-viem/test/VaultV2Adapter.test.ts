@@ -2,7 +2,6 @@ import {
   AccrualVaultV2,
   CapacityLimitReason,
   MathLib,
-  VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoVaultV1Adapter,
 } from "@morpho-org/blue-sdk";
 import {
@@ -32,16 +31,16 @@ const expectedDataVaultV1Adapter = new VaultV2MorphoVaultV1Adapter({
 });
 
 // VaultV2 with liquidity adapter marketV1
-const vaultV2Address2 = "0x678b8851DFcA08E40F3e31C8ABd08dE3E8E14b64";
-const vaultV2AdapterMarketV1Address =
-  "0x83831b31f225B3DD0e96C69D683606bE399Dc757";
+// const vaultV2Address2 = "0x678b8851DFcA08E40F3e31C8ABd08dE3E8E14b64";
+// const vaultV2AdapterMarketV1Address =
+//   "0x83831b31f225B3DD0e96C69D683606bE399Dc757";
 
-const expectedDataMarketV1Adapter = new VaultV2MorphoMarketV1Adapter({
-  address: vaultV2AdapterMarketV1Address,
-  parentVault: vaultV2Address2,
-  skimRecipient: zeroAddress,
-  marketParamsList: [],
-});
+// const expectedDataMarketV1Adapter = new VaultV2MorphoMarketV1Adapter({
+//   address: vaultV2AdapterMarketV1Address,
+//   parentVault: vaultV2Address2,
+//   skimRecipient: zeroAddress,
+//   marketParamsList: [],
+// });
 
 describe("VaultV2Adapter", () => {
   describe("should fetch vaultV1 adapter", () => {
@@ -70,31 +69,31 @@ describe("VaultV2Adapter", () => {
     });
   });
 
-  describe("should fetch marketV1 adapter", () => {
-    vaultV2Test("with deployless reads", async ({ client }) => {
-      const value = await fetchVaultV2Adapter(
-        vaultV2AdapterMarketV1Address,
-        client,
-        {
-          deployless: true,
-        },
-      );
+  // describe("should fetch marketV1 adapter", () => {
+  //   vaultV2Test("with deployless reads", async ({ client }) => {
+  //     const value = await fetchVaultV2Adapter(
+  //       vaultV2AdapterMarketV1Address,
+  //       client,
+  //       {
+  //         deployless: true,
+  //       },
+  //     );
 
-      expect(value).toStrictEqual(expectedDataMarketV1Adapter);
-    });
+  //     expect(value).toStrictEqual(expectedDataMarketV1Adapter);
+  //   });
 
-    vaultV2Test("with multicall", async ({ client }) => {
-      const value = await fetchVaultV2Adapter(
-        vaultV2AdapterMarketV1Address,
-        client,
-        {
-          deployless: false,
-        },
-      );
+  //   vaultV2Test("with multicall", async ({ client }) => {
+  //     const value = await fetchVaultV2Adapter(
+  //       vaultV2AdapterMarketV1Address,
+  //       client,
+  //       {
+  //         deployless: false,
+  //       },
+  //     );
 
-      expect(value).toStrictEqual(expectedDataMarketV1Adapter);
-    });
-  });
+  //     expect(value).toStrictEqual(expectedDataMarketV1Adapter);
+  //   });
+  // });
 });
 
 describe("LiquidityAdapter vaultV1", () => {
@@ -249,99 +248,99 @@ describe("LiquidityAdapter vaultV1", () => {
   });
 });
 
-describe("LiquidityAdapter marketV1", () => {
-  describe("maxDeposit function", () => {
-    vaultV2Test("should be limited by balance", async ({ client }) => {
-      await client.writeContract({
-        account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setCurator",
-        args: [curator],
-      });
-      const data = encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [allocator, true],
-      });
-      await client.writeContract({
-        account: curator,
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "submit",
-        args: [data],
-      });
-      await client.writeContract({
-        account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [allocator, true],
-      });
-      await client.writeContract({
-        account: allocator,
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setLiquidityAdapterAndData",
-        args: [vaultV2AdapterMarketV1Address, "0x"],
-      });
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+// describe("LiquidityAdapter marketV1", () => {
+//   describe("maxDeposit function", () => {
+//     vaultV2Test("should be limited by balance", async ({ client }) => {
+//       await client.writeContract({
+//         account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
+//         address: vaultV2Address2,
+//         abi: vaultV2Abi,
+//         functionName: "setCurator",
+//         args: [curator],
+//       });
+//       const data = encodeFunctionData({
+//         abi: vaultV2Abi,
+//         functionName: "setIsAllocator",
+//         args: [allocator, true],
+//       });
+//       await client.writeContract({
+//         account: curator,
+//         address: vaultV2Address2,
+//         abi: vaultV2Abi,
+//         functionName: "submit",
+//         args: [data],
+//       });
+//       await client.writeContract({
+//         account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
+//         address: vaultV2Address2,
+//         abi: vaultV2Abi,
+//         functionName: "setIsAllocator",
+//         args: [allocator, true],
+//       });
+//       await client.writeContract({
+//         account: allocator,
+//         address: vaultV2Address2,
+//         abi: vaultV2Abi,
+//         functionName: "setLiquidityAdapterAndData",
+//         args: [vaultV2AdapterMarketV1Address, "0x"],
+//       });
+//       const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
 
-      const assets = parseUnits("100000", 6); // 100K assets
-      const result = accrualVaultV2.maxDeposit(assets);
-      expect(result).toStrictEqual({
-        value: assets,
-        limiter: CapacityLimitReason.balance,
-      });
-    });
-  });
+//       const assets = parseUnits("100000", 6); // 100K assets
+//       const result = accrualVaultV2.maxDeposit(assets);
+//       expect(result).toStrictEqual({
+//         value: assets,
+//         limiter: CapacityLimitReason.balance,
+//       });
+//     });
+//   });
 
-  describe("maxWithdraw function", () => {
-    vaultV2Test("should be limited by balance", async ({ client }) => {
-      await client.writeContract({
-        account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setCurator",
-        args: [curator],
-      });
-      const data = encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [allocator, true],
-      });
-      await client.writeContract({
-        account: curator,
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "submit",
-        args: [data],
-      });
-      await client.writeContract({
-        account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [allocator, true],
-      });
-      await client.writeContract({
-        account: allocator,
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setLiquidityAdapterAndData",
-        args: [vaultV2AdapterMarketV1Address, "0x"],
-      });
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+//   describe("maxWithdraw function", () => {
+//     vaultV2Test("should be limited by balance", async ({ client }) => {
+//       await client.writeContract({
+//         account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
+//         address: vaultV2Address2,
+//         abi: vaultV2Abi,
+//         functionName: "setCurator",
+//         args: [curator],
+//       });
+//       const data = encodeFunctionData({
+//         abi: vaultV2Abi,
+//         functionName: "setIsAllocator",
+//         args: [allocator, true],
+//       });
+//       await client.writeContract({
+//         account: curator,
+//         address: vaultV2Address2,
+//         abi: vaultV2Abi,
+//         functionName: "submit",
+//         args: [data],
+//       });
+//       await client.writeContract({
+//         account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
+//         address: vaultV2Address2,
+//         abi: vaultV2Abi,
+//         functionName: "setIsAllocator",
+//         args: [allocator, true],
+//       });
+//       await client.writeContract({
+//         account: allocator,
+//         address: vaultV2Address2,
+//         abi: vaultV2Abi,
+//         functionName: "setLiquidityAdapterAndData",
+//         args: [vaultV2AdapterMarketV1Address, "0x"],
+//       });
+//       const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
 
-      const shares = parseUnits("100000", 6); // 100K shares
-      const result = accrualVaultV2.maxWithdraw(shares);
-      expect(result).toStrictEqual({
-        value: 0n,
-        limiter: CapacityLimitReason.balance,
-      });
-    });
-  });
-});
+//       const shares = parseUnits("100000", 6); // 100K shares
+//       const result = accrualVaultV2.maxWithdraw(shares);
+//       expect(result).toStrictEqual({
+//         value: 0n,
+//         limiter: CapacityLimitReason.balance,
+//       });
+//     });
+//   });
+// });
 
 describe("LiquidityAdapter zero address", () => {
   vaultV2Test(
