@@ -141,22 +141,22 @@ export namespace VaultV2Errors {
   }
 }
 
-export interface ErrorClass<E extends Error> {
+export interface ErrorClass<E extends Error = Error> {
   // biome-ignore lint/suspicious/noExplicitAny: match any type of arg
   new (...args: any[]): E;
 }
 
-export function _try<T, E extends Error>(
+export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
   accessor: () => Promise<T>,
-  ...errorClasses: ErrorClass<E>[]
+  ...errorClasses: ErrorClasses
 ): Promise<T | undefined>;
-export function _try<T, E extends Error>(
+export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
   accessor: () => T,
-  ...errorClasses: ErrorClass<E>[]
+  ...errorClasses: ErrorClasses
 ): T | undefined;
-export function _try<T, E extends Error>(
+export function _try<T, ErrorClasses extends readonly ErrorClass[] = []>(
   accessor: () => T | Promise<T>,
-  ...errorClasses: ErrorClass<E>[]
+  ...errorClasses: ErrorClasses
 ): T | undefined | Promise<T | undefined> {
   const maybeCatchError = (error: unknown): undefined => {
     if (
