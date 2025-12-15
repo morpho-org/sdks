@@ -30,7 +30,6 @@
     "@morpho-org/test": "workspace:^",
     "hardhat": "^2.27.1",
     "typescript": "^5.9.3",
-    "undici": ">=5.29.0",
     "viem": "^2.41.2",
     "vitest": "^4.0.15"
   },
