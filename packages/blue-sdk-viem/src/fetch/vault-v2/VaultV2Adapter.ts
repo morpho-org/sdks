@@ -107,7 +107,7 @@ export async function fetchAccrualVaultV2Adapter(
           abi: morphoVaultV1AdapterFactoryAbi,
           functionName: "isMorphoVaultV1Adapter",
           args: [address],
-        })
+        }).catch(() => false)
       : false,
     morphoMarketV1AdapterFactory
       ? readContract(client, {
@@ -116,7 +116,7 @@ export async function fetchAccrualVaultV2Adapter(
           abi: morphoMarketV1AdapterFactoryAbi,
           functionName: "isMorphoMarketV1Adapter",
           args: [address],
-        })
+        }).catch(() => false)
       : false,
     morphoMarketV1AdapterV2Factory
       ? readContract(client, {
@@ -125,7 +125,7 @@ export async function fetchAccrualVaultV2Adapter(
           abi: morphoMarketV1AdapterV2FactoryAbi,
           functionName: "isMorphoMarketV1AdapterV2",
           args: [address],
-        })
+        }).catch(() => false)
       : false,
   ]);
 
