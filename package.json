@@ -13,7 +13,7 @@
   "license": "MIT",
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@10.25.0+sha512.5e82639027af37cf832061bcc6d639c219634488e0f2baebe785028a793de7b525ffcd3f7ff574f5e9860654e098fe852ba8ac5dd5cefe1767d23a020a92f501",
+  "packageManager": "pnpm@10.26.0+sha512.3b3f6c725ebe712506c0ab1ad4133cf86b1f4b687effce62a9b38b4d72e3954242e643190fc51fa1642949c735f403debd44f5cb0edd657abe63a8b6a7e1e402",
   "engines": {
     "node": ">=22"
   },
@@ -28,8 +28,8 @@
   "devDependencies": {
     "@actions/core": "^1.11.1",
     "@biomejs/biome": "^1.9.4",
-    "@commitlint/cli": "^19.7.1",
-    "@commitlint/config-conventional": "^19.7.1",
+    "@commitlint/cli": "^20.2.0",
+    "@commitlint/config-conventional": "^20.2.0",
     "@conventional-changelog/git-client": "^2.0.0",
     "@types/node": "^24.10.2",
     "@vitest/coverage-v8": "^4.0.15",
@@ -43,8 +43,16 @@
     "lint-staged": "^15.4.3",
     "semver": "^7.7.1",
     "typescript": "^5.9.3",
+    "undici": ">=5.29.0",
     "viem": "^2.41.2",
     "vitest": "^4.0.15"
+  },
+  "pnpm": {
+    "overrides": {
+      "axios": ">=1.12.0",
+      "js-yaml": ">=4.1.1",
+      "undici": ">=5.29.0"
+    }
   },
   "lint-staged": {
     "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
