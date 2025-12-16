@@ -11994,7 +11994,7 @@ export const vaultV1AdapterFactoryAbi = morphoVaultV1AdapterFactoryAbi;
  */
 export const vaultV1AdapterAbi = morphoVaultV1AdapterAbi;
 
-export const morphoMarketV1AdapterAbiV2 = [
+export const morphoMarketV1AdapterV2Abi = [
   {
     inputs: [
       { internalType: "address", name: "_parentVault", type: "address" },
@@ -12467,7 +12467,7 @@ export const morphoMarketV1AdapterAbiV2 = [
   },
 ] as const;
 
-export const morphoMarketV1AdapterFactoryAbiV2 = [
+export const morphoMarketV1AdapterV2FactoryAbi = [
   {
     inputs: [
       { internalType: "address", name: "_morpho", type: "address" },
