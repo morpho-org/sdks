@@ -1,6 +1,7 @@
 import {
   AccrualVaultV2,
   CapacityLimitReason,
+  MarketParams,
   MathLib,
   VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoVaultV1Adapter,
@@ -40,7 +41,15 @@ const expectedDataMarketV1Adapter = new VaultV2MorphoMarketV1Adapter({
   address: vaultV2AdapterMarketV1Address,
   parentVault: vaultV2Address2,
   skimRecipient: zeroAddress,
-  marketParamsList: [],
+  marketParamsList: [
+    new MarketParams({
+      collateralToken: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+      irm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
+      lltv: 860000000000000000n,
+      loanToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+      oracle: "0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9",
+    }),
+  ],
 });
 
 describe("VaultV2Adapter", () => {
@@ -204,7 +213,7 @@ describe("LiquidityAdapter vaultV1", () => {
 
       const result = accrualVaultV2.maxDeposit(MathLib.MAX_UINT_256);
       expect(result).toStrictEqual({
-        value: 1000301472035887388n,
+        value: 1000725557277232788n,
         limiter: CapacityLimitReason.cap,
       });
     });
@@ -223,7 +232,7 @@ describe("LiquidityAdapter vaultV1", () => {
         const result = accrualVaultV2.maxWithdraw(shares);
 
         expect(result).toStrictEqual({
-          value: 17023088n,
+          value: 16667544n,
           limiter: CapacityLimitReason.liquidity,
         });
       },
