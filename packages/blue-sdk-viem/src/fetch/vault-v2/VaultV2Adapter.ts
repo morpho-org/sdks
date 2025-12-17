@@ -48,6 +48,8 @@ export async function fetchVaultV2Adapter(
           functionName: "isMorphoVaultV1Adapter",
           args: [address],
         })
+          // Factory may not have been deployed at requested block tag.
+          .catch(() => false)
       : false,
     morphoMarketV1AdapterFactory
       ? readContract(client, {
@@ -57,6 +59,8 @@ export async function fetchVaultV2Adapter(
           functionName: "isMorphoMarketV1Adapter",
           args: [address],
         })
+          // Factory may not have been deployed at requested block tag.
+          .catch(() => false)
       : false,
     morphoMarketV1AdapterV2Factory
       ? readContract(client, {
@@ -66,6 +70,8 @@ export async function fetchVaultV2Adapter(
           functionName: "isMorphoMarketV1AdapterV2",
           args: [address],
         })
+          // Factory may not have been deployed at requested block tag.
+          .catch(() => false)
       : false,
   ]);
 
@@ -107,7 +113,9 @@ export async function fetchAccrualVaultV2Adapter(
           abi: morphoVaultV1AdapterFactoryAbi,
           functionName: "isMorphoVaultV1Adapter",
           args: [address],
-        }).catch(() => false)
+        })
+          // Factory may not have been deployed at requested block tag.
+          .catch(() => false)
       : false,
     morphoMarketV1AdapterFactory
       ? readContract(client, {
@@ -116,7 +124,9 @@ export async function fetchAccrualVaultV2Adapter(
           abi: morphoMarketV1AdapterFactoryAbi,
           functionName: "isMorphoMarketV1Adapter",
           args: [address],
-        }).catch(() => false)
+        })
+          // Factory may not have been deployed at requested block tag.
+          .catch(() => false)
       : false,
     morphoMarketV1AdapterV2Factory
       ? readContract(client, {
@@ -125,7 +135,9 @@ export async function fetchAccrualVaultV2Adapter(
           abi: morphoMarketV1AdapterV2FactoryAbi,
           functionName: "isMorphoMarketV1AdapterV2",
           args: [address],
-        }).catch(() => false)
+        })
+          // Factory may not have been deployed at requested block tag.
+          .catch(() => false)
       : false,
   ]);
 
