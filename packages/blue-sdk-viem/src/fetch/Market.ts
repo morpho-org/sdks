@@ -58,7 +58,8 @@ export async function fetchMarket(
         rateAtTarget:
           marketParams.irm === adaptiveCurveIrm ? rateAtTarget : undefined,
       });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
     }
   }

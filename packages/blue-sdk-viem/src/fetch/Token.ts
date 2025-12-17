@@ -70,7 +70,8 @@ export async function fetchToken(
         );
 
       return new Token({ ...token, address, eip5267Domain });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
     }
   }

@@ -33,7 +33,8 @@ export async function fetchVaultUser(
         isAllocator,
         allowance,
       });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
     }
   }

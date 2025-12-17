@@ -48,7 +48,8 @@ export async function fetchVaultV2(
           ? [...liquidityAllocations]
           : undefined,
       });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
     }
   }

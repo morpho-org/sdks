@@ -35,7 +35,8 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
         marketParamsList: [...adapter.marketParamsList],
         address,
       });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
