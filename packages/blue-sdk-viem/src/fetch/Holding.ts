@@ -101,7 +101,8 @@ export async function fetchHolding(
         balance,
         canTransfer: optionalBoolean[canTransfer],
       });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
     }
   }

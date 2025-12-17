@@ -30,7 +30,8 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
       });
 
       return new VaultV2MorphoVaultV1Adapter({ ...adapter, address });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
