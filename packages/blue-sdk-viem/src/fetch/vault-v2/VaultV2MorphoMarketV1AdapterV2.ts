@@ -33,11 +33,15 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
 
       return new VaultV2MorphoMarketV1AdapterV2({
         ...adapter,
-        marketIds: [...adapter.marketIds] as MarketId[],
+        marketIds: [
+          ...adapter.marketSupplyShares.map(
+            ({ marketId }) => marketId as MarketId,
+          ),
+        ],
         supplyShares: fromEntries(
-          (adapter.marketIds as MarketId[]).map((marketId, i) => [
+          adapter.marketSupplyShares.map(({ marketId, supplyShares }) => [
             marketId,
-            adapter.supplyShares[i]!,
+            supplyShares,
           ]),
         ),
         address,

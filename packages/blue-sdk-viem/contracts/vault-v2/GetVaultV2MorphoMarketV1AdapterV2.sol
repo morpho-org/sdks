@@ -2,14 +2,18 @@
 pragma solidity ^0.8.0;
 
 import {IMorphoMarketV1AdapterV2} from "./interfaces/IMorphoMarketV1AdapterV2.sol";
-import {MarketParams} from "../interfaces/IMorpho.sol";
+
+
+struct MarketSupplyShares {
+    bytes32 marketId;
+    uint256 supplyShares;
+}
 
 struct VaultV2MorphoMarketV1AdapterV2Response {
     address parentVault;
     address skimRecipient;
     address adaptiveCurveIrm;
-    bytes32[] marketIds;
-    uint256[] supplyShares;
+    MarketSupplyShares[] marketSupplyShares;
 }
 
 contract GetVaultV2MorphoMarketV1AdapterV2 {
@@ -23,12 +27,10 @@ contract GetVaultV2MorphoMarketV1AdapterV2 {
         res.adaptiveCurveIrm = adapter.adaptiveCurveIrm();
 
         uint256 length = adapter.marketIdsLength();
-        res.marketIds = new bytes32[](length);
-        res.supplyShares = new uint256[](length);
+        res.marketSupplyShares = new MarketSupplyShares[](length);
         for (uint256 i = 0; i < length; i++) {
             bytes32 marketId = adapter.marketIds(i);
-            res.marketIds[i] = marketId;
-            res.supplyShares[i] = adapter.supplyShares(marketId);
+            res.marketSupplyShares[i] = MarketSupplyShares(marketId, adapter.supplyShares(marketId));
         }
     }
 }
