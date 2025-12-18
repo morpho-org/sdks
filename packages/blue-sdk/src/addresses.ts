@@ -1028,7 +1028,6 @@ const _deployments = {
     adaptiveCurveIrm: 40249329n,
     publicAllocator: 40249329n,
     metaMorphoFactory: 40259931n,
-    vaultV2Factory: 40259931n,
     chainlinkOracleFactory: 40259931n,
     preLiquidationFactory: 41808392n,
     usdc: 23412006n,
