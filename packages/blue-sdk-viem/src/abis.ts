@@ -11982,7 +11982,7 @@ export const morphoMarketV1AdapterFactoryAbi = [
     stateMutability: "view",
     type: "function",
   },
-];
+] as const;
 
 /**
  * @deprecated Use `morphoVaultV1AdapterFactoryAbi` instead.
