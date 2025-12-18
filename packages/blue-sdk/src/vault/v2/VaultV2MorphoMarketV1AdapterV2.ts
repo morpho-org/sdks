@@ -88,10 +88,6 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
     super(adapter);
   }
 
-  private _marketSupplyShares(marketId: MarketId) {
-    return this.supplyShares[marketId] ?? 0n;
-  }
-
   realAssets(timestamp?: BigIntish) {
     return this.markets.reduce(
       (total, market) =>
