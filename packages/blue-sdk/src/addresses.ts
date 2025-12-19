@@ -37,6 +37,7 @@ export interface ChainAddresses {
   metaMorphoFactory?: Address;
   vaultV2Factory?: Address;
   morphoMarketV1AdapterFactory?: Address;
+  morphoMarketV1AdapterV2Factory?: Address;
   morphoVaultV1AdapterFactory?: Address;
   registryList?: Address;
   chainlinkOracleFactory?: Address;
@@ -79,6 +80,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x1897A8997241C1cD4bD0698647e4EB7213535c24",
     vaultV2Factory: "0xA1D94F746dEfa1928926b84fB2596c06926C0405",
     morphoMarketV1AdapterFactory: "0xb049465969ac6355127cDf9E88deE63d25204d5D",
+    morphoMarketV1AdapterV2Factory:
+      "0x32BB1c0D48D8b1B3363e86eeB9A0300BAd61ccc1",
     morphoVaultV1AdapterFactory: "0xD1B8E2dee25c2b89DCD2f98448a7ce87d6F63394",
     registryList: "0x3696c5eAe4a7Ffd04Ea163564571E9CD8Ed9364e",
     chainlinkOracleFactory: "0x3A7bB36Ee3f3eE32A60e9f2b33c1e5f2E83ad766",
@@ -138,6 +141,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0xFf62A7c278C62eD665133147129245053Bbf5918",
     vaultV2Factory: "0x4501125508079A99ebBebCE205DeC9593C2b5857",
     morphoMarketV1AdapterFactory: "0x133baC94306B99f6dAD85c381a5be851d8DD717c",
+    morphoMarketV1AdapterV2Factory:
+      "0x9a1B378C43BA535cDB89934230F0D3890c51C0EB",
     morphoVaultV1AdapterFactory: "0xF42D9c36b34c9c2CF3Bc30eD2a52a90eEB604642",
     registryList: "0x5C2531Cbd2cf112Cf687da3Cd536708aDd7DB10a",
     chainlinkOracleFactory: "0x2DC205F24BCb6B311E5cdf0745B0741648Aebd3d",
@@ -165,6 +170,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0xa9c87daB340631C34BB738625C70499e29ddDC98",
     vaultV2Factory: "0xC11a53eE9B1eCc7a068D8e40F8F17926584F97Cf",
     morphoMarketV1AdapterFactory: "0xD1A0C86F28ecD1657Ad06415c2B230cC89D9b6dd",
+    morphoMarketV1AdapterV2Factory:
+      "0xc0006f52B38625C283dd2f972dD9B779A5851Dd0",
     morphoVaultV1AdapterFactory: "0xEb174FEA51Da241eB3B516959B216e013de2888a",
     registryList: "0xb70a43821d2707fA9d0EDd9511CC499F468Ba564",
     chainlinkOracleFactory: "0x1ff7895Eb842794c5d07C4c547b6730e61295215",
@@ -189,6 +196,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x878988f5f561081deEa117717052164ea1Ef0c82",
     vaultV2Factory: "0x6b46fa3cc9EBF8aB230aBAc664E37F2966Bf7971",
     morphoMarketV1AdapterFactory: "0x96456Bf888D4de607Bf3ca0b3C8e4DF9b0d0Ad47",
+    morphoMarketV1AdapterV2Factory:
+      "0xeF84b1ecEbe43283ec5AF95D7a5c4D7dE0a9859b",
     morphoVaultV1AdapterFactory: "0xD8Fc8a85779551e78B516da9f74061cb3b086793",
     registryList: "0xc00eb3c7aD1aE986A7f05F5A9d71aCa39c763C65",
     chainlinkOracleFactory: "0x98Ce5D183DC0c176f54D37162F87e7eD7f2E41b5",
@@ -211,6 +220,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x3Bb6A6A0Bc85b367EFE0A5bAc81c5E52C892839a",
     vaultV2Factory: "0x6128b680b277Bf4Df80DFE9D8c55A498660870ef",
     morphoMarketV1AdapterFactory: "0x65956d5Ba4974983ecCe111612FC0A0c22650A11",
+    morphoMarketV1AdapterV2Factory:
+      "0x71B299bDb52b6396429cd1E11c418324502CB434",
     morphoVaultV1AdapterFactory: "0xEe9F7C64dD827ED7b5CAA2272936366FAca00CF3",
     registryList: "0xD1346be260cd22Eab9E6163010b0D5CbfAAAD32b",
     chainlinkOracleFactory: "0x1ec408D4131686f727F3Fd6245CF85Bc5c9DAD70",
@@ -231,6 +242,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x4DBB3a642a2146d5413750Cca3647086D9ba5F12",
     vaultV2Factory: "0x6846EA318B6B987Ee6b28eBFd87c3409F1d13108",
     morphoMarketV1AdapterFactory: "0xAf93F2d8508053432659d509b0210fdF1472493D",
+    morphoMarketV1AdapterV2Factory:
+      "0xEd0b06fcdDB6dD0985e2de9D22ad034d313b7dBd",
     morphoVaultV1AdapterFactory: "0xbF7DEa3756668C7E396C655D646C039826ba8416",
     registryList: "0x06A47994B4890dcA28C076969cedE1151d86EFCF",
     chainlinkOracleFactory: "0xd706690BA1Fe26b70c4AD89e60ff62cEB3A2eD02",
@@ -298,6 +311,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0xe9EdE3929F43a7062a007C3e8652e4ACa610Bdc0",
     vaultV2Factory: "0xC9b34c108014B44e5a189A830e7e04c56704a0c9",
     morphoMarketV1AdapterFactory: "0x117b92Ab1C025B175ED38a0CDe5A067a745224a0",
+    morphoMarketV1AdapterV2Factory:
+      "0x9a13bdA35F98811fbAcf097966b2C838f3F9c58C",
     morphoVaultV1AdapterFactory: "0xf1Ab9e885C0faa0cbCEd407498BBA895537aD754",
     registryList: "0xB9130D2A87d7c60ED7E7e4b25bdA6e3E6841becB",
     chainlinkOracleFactory: "0x43269546e1D586a1f7200a0AC07e26f9631f7539",
@@ -378,6 +393,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x2525D453D9BA13921D5aB5D8c12F9202b0e19456",
     vaultV2Factory: "0x4f0a370bb367843CFd914c4d9972523aD2f8FCc9",
     morphoMarketV1AdapterFactory: "0x1675357fdA9e6784DdAD7AD5b3C3DF1fdD4dc4C9",
+    morphoMarketV1AdapterV2Factory:
+      "0xB7c243AfACb25870775ADFdAe9D0EAc2324dD152",
     morphoVaultV1AdapterFactory: "0x5935fFcD1C5D269840ae7c685bC957A73E04AEDB",
     registryList: "0x60d3184BDD31BAE7De973894B3bA0b3B6900B79a",
     chainlinkOracleFactory: "0x133F742c0D36864F37e15C33a18bA6fdc950ED0f",
@@ -411,6 +428,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x1c8De6889acee12257899BFeAa2b7e534de32E16",
     vaultV2Factory: "0xFcb8b57E56787bB29e130Fca67f3c5a1232975D1",
     morphoMarketV1AdapterFactory: "0x2e6BE3a3A27fb45c6AbA2D1833eeA48E8788538e",
+    morphoMarketV1AdapterV2Factory:
+      "0x6d6A3ba62836d6B40277767dCAc8fd390d4BcedC",
     morphoVaultV1AdapterFactory: "0xc8D22B1adD3D176600E9952e7876e9249254cAAF",
     registryList: "0xA9132a09838fD20304dF2B2892679d06A4cc6371",
     chainlinkOracleFactory: "0x7D047fB910Bc187C18C81a69E30Fa164f8c536eC",
@@ -473,6 +492,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0xec051b19d654C48c357dC974376DeB6272f24e53",
     vaultV2Factory: "0xD7217E5687FF1071356C780b5fe4803D9D967da7",
     morphoMarketV1AdapterFactory: "0xc6b8B565C715134b0Ca3D6fa3D29B25759D0b9e2",
+    morphoMarketV1AdapterV2Factory:
+      "0xaEff6Ef4B7bbfbAadB18b634A8F11392CBeB72Be",
     morphoVaultV1AdapterFactory: "0xdf5202e29654e02011611A086f15477880580CAc",
     registryList: "0x857B55cEb57dA0C2A83EE08a8dB529B931089aee",
     chainlinkOracleFactory: "0xeb476f124FaD625178759d13557A72394A6f9aF5",
@@ -613,6 +634,7 @@ const _deployments = {
     metaMorphoFactory: 21439510n,
     vaultV2Factory: 23375073n,
     morphoMarketV1AdapterFactory: 23375073n,
+    morphoMarketV1AdapterV2Factory: 23981459n,
     morphoVaultV1AdapterFactory: 23375073n,
     registryList: 23375119n,
     chainlinkOracleFactory: 19375066n,
@@ -634,6 +656,7 @@ const _deployments = {
     metaMorphoFactory: 23928808n,
     vaultV2Factory: 35615206n,
     morphoMarketV1AdapterFactory: 35615206n,
+    morphoMarketV1AdapterV2Factory: 39285528n,
     morphoVaultV1AdapterFactory: 35615206n,
     registryList: 35615358n,
     chainlinkOracleFactory: 13978286n,
@@ -655,6 +678,7 @@ const _deployments = {
     metaMorphoFactory: 66931042n,
     vaultV2Factory: 77371907n,
     morphoMarketV1AdapterFactory: 77371907n,
+    morphoMarketV1AdapterV2Factory: 80128162n,
     morphoVaultV1AdapterFactory: 77371907n,
     registryList: 77372020n,
     chainlinkOracleFactory: 66931042n,
@@ -675,6 +699,7 @@ const _deployments = {
     metaMorphoFactory: 296447195n,
     vaultV2Factory: 387016724n,
     morphoMarketV1AdapterFactory: 387016724n,
+    morphoMarketV1AdapterV2Factory: 409152917n,
     morphoVaultV1AdapterFactory: 387016724n,
     registryList: 387017701n,
     chainlinkOracleFactory: 296447195n,
@@ -693,6 +718,7 @@ const _deployments = {
     metaMorphoFactory: 130770189n,
     vaultV2Factory: 142122059n,
     morphoMarketV1AdapterFactory: 142122059n,
+    morphoMarketV1AdapterV2Factory: 144881071n,
     morphoVaultV1AdapterFactory: 142122059n,
     registryList: 142122170n,
     chainlinkOracleFactory: 130770189n,
@@ -709,6 +735,7 @@ const _deployments = {
     metaMorphoFactory: 9025733n,
     vaultV2Factory: 20253005n,
     morphoMarketV1AdapterFactory: 20253005n,
+    morphoMarketV1AdapterV2Factory: 23013012n,
     morphoVaultV1AdapterFactory: 20253005n,
     registryList: 20253132n,
     chainlinkOracleFactory: 9025733n,
@@ -764,6 +791,7 @@ const _deployments = {
     metaMorphoFactory: 9316789n,
     vaultV2Factory: 29092109n,
     morphoMarketV1AdapterFactory: 29092109n,
+    morphoMarketV1AdapterV2Factory: 34613548n,
     morphoVaultV1AdapterFactory: 29092109n,
     registryList: 29092328n,
     chainlinkOracleFactory: 9316789n,
@@ -828,6 +856,7 @@ const _deployments = {
     metaMorphoFactory: 766078n,
     vaultV2Factory: 32235414n,
     morphoMarketV1AdapterFactory: 32235414n,
+    morphoMarketV1AdapterV2Factory: 41965167n,
     morphoVaultV1AdapterFactory: 32235414n,
     registryList: 32235782n,
     chainlinkOracleFactory: 766078n,
@@ -856,6 +885,7 @@ const _deployments = {
     metaMorphoFactory: 2741420n,
     vaultV2Factory: 13096629n,
     morphoMarketV1AdapterFactory: 13096629n,
+    morphoMarketV1AdapterV2Factory: 18619527n,
     morphoVaultV1AdapterFactory: 13096629n,
     registryList: 13096853n,
     chainlinkOracleFactory: 2741420n,
@@ -908,6 +938,7 @@ const _deployments = {
     metaMorphoFactory: 1988677n,
     vaultV2Factory: 14188393n,
     morphoMarketV1AdapterFactory: 14188393n,
+    morphoMarketV1AdapterV2Factory: 21460330n,
     morphoVaultV1AdapterFactory: 14188393n,
     registryList: 14188698n,
     chainlinkOracleFactory: 1988677n,

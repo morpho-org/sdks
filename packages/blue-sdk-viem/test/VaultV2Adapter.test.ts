@@ -1,10 +1,14 @@
 import {
   AccrualVaultV2,
   CapacityLimitReason,
+  MarketParams,
   MathLib,
   VaultV2MorphoMarketV1Adapter,
+  VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
+  addressesRegistry,
 } from "@morpho-org/blue-sdk";
+import type { AnvilTestClient } from "@morpho-org/test";
 import {
   encodeAbiParameters,
   encodeFunctionData,
@@ -16,6 +20,7 @@ import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
 import { fetchAccrualVaultV2, fetchVaultV2Adapter, vaultV2Abi } from "../src";
 import { vaultV2Test } from "./setup";
+import { deployMorphoMarketV1Adapter, deployVaultV2 } from "./utils";
 
 // VaultV2 with liquidity adapter vaultV1
 const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
@@ -31,16 +36,12 @@ const expectedDataVaultV1Adapter = new VaultV2MorphoVaultV1Adapter({
   skimRecipient: zeroAddress,
 });
 
-// VaultV2 with liquidity adapter marketV1
-const vaultV2Address2 = "0x678b8851DFcA08E40F3e31C8ABd08dE3E8E14b64";
-const vaultV2AdapterMarketV1Address =
-  "0x83831b31f225B3DD0e96C69D683606bE399Dc757";
-
-const expectedDataMarketV1Adapter = new VaultV2MorphoMarketV1Adapter({
-  address: vaultV2AdapterMarketV1Address,
-  parentVault: vaultV2Address2,
-  skimRecipient: zeroAddress,
-  marketParamsList: [],
+const marketParams = new MarketParams({
+  collateralToken: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
+  irm: "0x46415998764C29aB2a25CbeA6254146D50D22687",
+  lltv: 860000000000000000n,
+  loanToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  oracle: "0x663BECd10daE6C4A3Dcd89F1d76c1174199639B9",
 });
 
 describe("VaultV2Adapter", () => {
@@ -72,27 +73,123 @@ describe("VaultV2Adapter", () => {
 
   describe("should fetch marketV1 adapter", () => {
     vaultV2Test("with deployless reads", async ({ client }) => {
-      const value = await fetchVaultV2Adapter(
-        vaultV2AdapterMarketV1Address,
-        client,
+      const { usdc } = addressesRegistry[client.chain.id];
+
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+      const { address: adapterAddress } = await deployMorphoMarketV1Adapter(
+        client as AnvilTestClient,
+        vaultAddress,
+        "1",
         {
-          deployless: true,
+          marketParams,
+          deposit: parseUnits("1000", 6),
         },
       );
 
-      expect(value).toStrictEqual(expectedDataMarketV1Adapter);
+      const value = await fetchVaultV2Adapter(adapterAddress, client, {
+        deployless: "force",
+      });
+      expect(value).toStrictEqual(
+        new VaultV2MorphoMarketV1Adapter({
+          address: adapterAddress,
+          parentVault: vaultAddress,
+          skimRecipient: zeroAddress,
+          marketParamsList: [marketParams],
+        }),
+      );
     });
 
     vaultV2Test("with multicall", async ({ client }) => {
-      const value = await fetchVaultV2Adapter(
-        vaultV2AdapterMarketV1Address,
-        client,
+      const { usdc } = addressesRegistry[client.chain.id];
+
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+      const { address: adapterAddress } = await deployMorphoMarketV1Adapter(
+        client as AnvilTestClient,
+        vaultAddress,
+        "1",
         {
-          deployless: false,
+          marketParams,
+          deposit: parseUnits("1000", 6),
         },
       );
 
-      expect(value).toStrictEqual(expectedDataMarketV1Adapter);
+      const value = await fetchVaultV2Adapter(adapterAddress, client, {
+        deployless: "force",
+      });
+      expect(value).toStrictEqual(
+        new VaultV2MorphoMarketV1Adapter({
+          address: adapterAddress,
+          parentVault: vaultAddress,
+          skimRecipient: zeroAddress,
+          marketParamsList: [marketParams],
+        }),
+      );
+    });
+  });
+
+  describe("should fetch marketV1 adapter V2", () => {
+    vaultV2Test("with deployless reads", async ({ client }) => {
+      const { usdc } = addressesRegistry[client.chain.id];
+
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+      const { address: adapterAddress, supplyShares } =
+        await deployMorphoMarketV1Adapter(
+          client as AnvilTestClient,
+          vaultAddress,
+          "2",
+          {
+            marketParams,
+            deposit: parseUnits("1000", 6),
+          },
+        );
+
+      const value = await fetchVaultV2Adapter(adapterAddress, client, {
+        deployless: "force",
+      });
+      expect(value).toStrictEqual(
+        new VaultV2MorphoMarketV1AdapterV2({
+          address: adapterAddress,
+          parentVault: vaultAddress,
+          skimRecipient: zeroAddress,
+          marketIds: [marketParams.id],
+          adaptiveCurveIrm: marketParams.irm,
+          supplyShares: {
+            [marketParams.id]: supplyShares,
+          },
+        }),
+      );
+    });
+
+    vaultV2Test("with multicall", async ({ client }) => {
+      const { usdc } = addressesRegistry[client.chain.id];
+
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+      const { address: adapterAddress, supplyShares } =
+        await deployMorphoMarketV1Adapter(
+          client as AnvilTestClient,
+          vaultAddress,
+          "2",
+          {
+            marketParams,
+            deposit: parseUnits("1000", 6),
+          },
+        );
+
+      const value = await fetchVaultV2Adapter(adapterAddress, client, {
+        deployless: false,
+      });
+      expect(value).toStrictEqual(
+        new VaultV2MorphoMarketV1AdapterV2({
+          address: adapterAddress,
+          parentVault: vaultAddress,
+          skimRecipient: zeroAddress,
+          marketIds: [marketParams.id],
+          adaptiveCurveIrm: marketParams.irm,
+          supplyShares: {
+            [marketParams.id]: supplyShares,
+          },
+        }),
+      );
     });
   });
 });
@@ -204,7 +301,7 @@ describe("LiquidityAdapter vaultV1", () => {
 
       const result = accrualVaultV2.maxDeposit(MathLib.MAX_UINT_256);
       expect(result).toStrictEqual({
-        value: 1000301472035887388n,
+        value: 1000725557277232788n,
         limiter: CapacityLimitReason.cap,
       });
     });
@@ -223,7 +320,7 @@ describe("LiquidityAdapter vaultV1", () => {
         const result = accrualVaultV2.maxWithdraw(shares);
 
         expect(result).toStrictEqual({
-          value: 17023088n,
+          value: 16667544n,
           limiter: CapacityLimitReason.liquidity,
         });
       },
@@ -252,40 +349,10 @@ describe("LiquidityAdapter vaultV1", () => {
 describe("LiquidityAdapter marketV1", () => {
   describe("maxDeposit function", () => {
     vaultV2Test("should be limited by balance", async ({ client }) => {
-      await client.writeContract({
-        account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setCurator",
-        args: [curator],
-      });
-      const data = encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [allocator, true],
-      });
-      await client.writeContract({
-        account: curator,
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "submit",
-        args: [data],
-      });
-      await client.writeContract({
-        account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [allocator, true],
-      });
-      await client.writeContract({
-        account: allocator,
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setLiquidityAdapterAndData",
-        args: [vaultV2AdapterMarketV1Address, "0x"],
-      });
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+      const { usdc } = addressesRegistry[client.chain.id];
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+
+      const accrualVaultV2 = await fetchAccrualVaultV2(vaultAddress, client);
 
       const assets = parseUnits("100000", 6); // 100K assets
       const result = accrualVaultV2.maxDeposit(assets);
@@ -298,40 +365,10 @@ describe("LiquidityAdapter marketV1", () => {
 
   describe("maxWithdraw function", () => {
     vaultV2Test("should be limited by balance", async ({ client }) => {
-      await client.writeContract({
-        account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setCurator",
-        args: [curator],
-      });
-      const data = encodeFunctionData({
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [allocator, true],
-      });
-      await client.writeContract({
-        account: curator,
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "submit",
-        args: [data],
-      });
-      await client.writeContract({
-        account: "0x707D44b65BA91C42f212e8bB61f71cc69fBf8fd7",
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setIsAllocator",
-        args: [allocator, true],
-      });
-      await client.writeContract({
-        account: allocator,
-        address: vaultV2Address2,
-        abi: vaultV2Abi,
-        functionName: "setLiquidityAdapterAndData",
-        args: [vaultV2AdapterMarketV1Address, "0x"],
-      });
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+      const { usdc } = addressesRegistry[client.chain.id];
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+
+      const accrualVaultV2 = await fetchAccrualVaultV2(vaultAddress, client);
 
       const shares = parseUnits("100000", 6); // 100K shares
       const result = accrualVaultV2.maxWithdraw(shares);
