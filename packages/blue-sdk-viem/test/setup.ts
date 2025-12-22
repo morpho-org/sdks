@@ -27,5 +27,5 @@ export const preLiquidationTest = createViemTest(mainnet, {
 
 export const vaultV2Test = createViemTest(base, {
   forkUrl: process.env.BASE_RPC_URL,
-  forkBlockNumber: 36_870_000,
+  forkBlockNumber: 39_586_444,
 });

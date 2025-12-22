@@ -103,7 +103,7 @@ describe("AccrualVaultV2", () => {
         address: vaultV2Address,
         asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         decimals: 18,
-        lastUpdate: 1758881557n,
+        lastUpdate: 1763994035n,
         liquidityAdapter: "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
         liquidityData: "0x",
         liquidityAllocations: [
@@ -113,7 +113,7 @@ describe("AccrualVaultV2", () => {
             ),
             absoluteCap: 1000000000000n,
             relativeCap: 1000000000000000000n,
-            allocation: 16980381n,
+            allocation: 16624313n,
           },
         ],
         managementFee: 0n,
@@ -123,9 +123,9 @@ describe("AccrualVaultV2", () => {
         performanceFee: 0n,
         performanceFeeRecipient: zeroAddress,
         symbol: "tvUSDC",
-        totalAssets: 16963835n,
-        _totalAssets: 16963835n,
-        totalSupply: 16963835000000000000n,
+        totalAssets: 16474000n,
+        _totalAssets: 16474000n,
+        totalSupply: 16474000000000000000n,
         virtualShares: 1000000000000n,
       });
 
@@ -142,7 +142,7 @@ describe("AccrualVaultV2", () => {
         address: vaultV2Address,
         asset: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
         decimals: 18,
-        lastUpdate: 1758881557n,
+        lastUpdate: 1763994035n,
         liquidityAdapter: "0x2C32fF5E1d976015AdbeA8cC73c7Da3A6677C25F",
         liquidityData: "0x",
         liquidityAllocations: [
@@ -152,7 +152,7 @@ describe("AccrualVaultV2", () => {
             ),
             absoluteCap: 1000000000000n,
             relativeCap: 1000000000000000000n,
-            allocation: 16980381n,
+            allocation: 16624313n,
           },
         ],
         managementFee: 0n,
@@ -162,9 +162,9 @@ describe("AccrualVaultV2", () => {
         performanceFee: 0n,
         performanceFeeRecipient: zeroAddress,
         symbol: "tvUSDC",
-        totalAssets: 16963835n,
-        _totalAssets: 16963835n,
-        totalSupply: 16963835000000000000n,
+        totalAssets: 16474000n,
+        _totalAssets: 16474000n,
+        totalSupply: 16474000000000000000n,
         virtualShares: 1000000000000n,
       });
 
