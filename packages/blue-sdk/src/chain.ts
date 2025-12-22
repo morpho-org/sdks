@@ -26,6 +26,7 @@ export enum ChainId {
   MonadMainnet = 143,
   StableMainnet = 988,
   CronosMainnet = 25,
+  CeloMainnet = 42220,
 }
 
 export interface ChainMetadata {
@@ -246,6 +247,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Cronos", symbol: "CRO", decimals: 18 },
       explorerUrl: "https://explorer.cronos.org",
       identifier: "cronos",
+    },
+    [ChainId.CeloMainnet]: {
+      name: "Celo",
+      id: ChainId.CeloMainnet,
+      nativeCurrency: { name: "Celo", symbol: "CELO", decimals: 18 },
+      explorerUrl: "https://celoscan.io/",
+      identifier: "celo",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
