@@ -907,6 +907,7 @@ const _deployments = {
   },
   [ChainId.TacMainnet]: {
     morpho: 853025n,
+    permit2: 553679n,
     bundler3: {
       bundler3: 978967n,
       generalAdapter1: 978967n,
