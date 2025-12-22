@@ -453,6 +453,7 @@ const _addressesRegistry = {
   },
   [ChainId.TacMainnet]: {
     morpho: "0x918B9F2E4B44E20c6423105BB6cCEB71473aD35c",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x84b189823D0f84c36728Bb3335dD8C833564e72f",
       generalAdapter1: "0x6D94E7dCA6d8FAE2CF954633C2Cf9c286258E0af",
