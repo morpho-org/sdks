@@ -338,6 +338,7 @@ const _addressesRegistry = {
   },
   [ChainId.HemiMainnet]: {
     morpho: "0xa4Ca2c2e25b97DA19879201bA49422bc6f181f42",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x8eDa6E01a20E3Cd90B3B2AF6F790cB8FADEf3Ea8",
       generalAdapter1: "0x9623090C3943ad63F7d794378273610Dd0deeFD4",
