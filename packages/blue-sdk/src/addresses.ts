@@ -616,7 +616,7 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x6870aA9f66C1e5Efe8Dbe8730e86E9e91f688275",
     chainlinkOracleFactory: "0x3a4849b5174Dc6828c6Dc9BBD87e61Ed1ebE9fFA",
     preLiquidationFactory: "0x717a3eF7D366F5ce4636011924D0Bd65ea5eCE2f",
-    wNative: "0x471EcE3750Da237f93B8E339c536989b8978a438",
+    // No wrapped native is provided as the native asset CELO is already an ERC20.
     usdc: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
   },
 } as const;
