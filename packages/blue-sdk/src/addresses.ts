@@ -606,6 +606,21 @@ const _addressesRegistry = {
 
     wNative: "0x5C7F8A570d578ED84E63fdFA7b1eE72dEae1AE23",
   },
+  [ChainId.CeloMainnet]: {
+    morpho: "0xd24ECdD8C1e0E57a4E26B1a7bbeAa3e95466A569",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundler3: {
+      bundler3: "0xbd142f98f847c170D51d8B23e5FEBc51FC9a67D9",
+      generalAdapter1: "0x3E7544a07157D03a49359eE89f2fCac9a6467230",
+    },
+    adaptiveCurveIrm: "0x683CAAADdfA2F42e24880E202676526d501a5dED",
+    publicAllocator: "0x3Fe12193D178B76BaF4e23a083A64e49ACDE3188",
+    metaMorphoFactory: "0x6870aA9f66C1e5Efe8Dbe8730e86E9e91f688275",
+    chainlinkOracleFactory: "0x3a4849b5174Dc6828c6Dc9BBD87e61Ed1ebE9fFA",
+    preLiquidationFactory: "0x717a3eF7D366F5ce4636011924D0Bd65ea5eCE2f",
+    // No wrapped native is provided as the native asset CELO is already an ERC20.
+    usdc: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -1038,6 +1053,19 @@ const _deployments = {
     chainlinkOracleFactory: 38459727n,
     preLiquidationFactory: 38460388n,
   },
+  [ChainId.CeloMainnet]: {
+    morpho: 40249329n,
+    bundler3: {
+      bundler3: 41808392n,
+      generalAdapter1: 41808392n,
+    },
+    adaptiveCurveIrm: 40249329n,
+    publicAllocator: 40249329n,
+    metaMorphoFactory: 40259931n,
+    chainlinkOracleFactory: 40259931n,
+    preLiquidationFactory: 41808392n,
+    usdc: 23412006n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -1152,6 +1180,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.CronosMainnet]: {
     [_addressesRegistry[ChainId.CronosMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.CeloMainnet]: {
+    [_addressesRegistry[ChainId.CeloMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
