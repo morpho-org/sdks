@@ -1181,9 +1181,6 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   [ChainId.CronosMainnet]: {
     [_addressesRegistry[ChainId.CronosMainnet].wNative]: NATIVE_ADDRESS,
   },
-  [ChainId.CeloMainnet]: {
-    [_addressesRegistry[ChainId.CeloMainnet].wNative]: NATIVE_ADDRESS,
-  },
 };
 
 export function getUnwrappedToken(wrappedToken: Address, chainId: number) {
