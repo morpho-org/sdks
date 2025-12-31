@@ -338,6 +338,7 @@ const _addressesRegistry = {
   },
   [ChainId.HemiMainnet]: {
     morpho: "0xa4Ca2c2e25b97DA19879201bA49422bc6f181f42",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x8eDa6E01a20E3Cd90B3B2AF6F790cB8FADEf3Ea8",
       generalAdapter1: "0x9623090C3943ad63F7d794378273610Dd0deeFD4",
@@ -453,6 +454,7 @@ const _addressesRegistry = {
   },
   [ChainId.TacMainnet]: {
     morpho: "0x918B9F2E4B44E20c6423105BB6cCEB71473aD35c",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x84b189823D0f84c36728Bb3335dD8C833564e72f",
       generalAdapter1: "0x6D94E7dCA6d8FAE2CF954633C2Cf9c286258E0af",
@@ -920,6 +922,7 @@ const _deployments = {
   },
   [ChainId.TacMainnet]: {
     morpho: 853025n,
+    permit2: 553679n,
     bundler3: {
       bundler3: 978967n,
       generalAdapter1: 978967n,
