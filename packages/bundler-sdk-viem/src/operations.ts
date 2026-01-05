@@ -12,13 +12,7 @@ import {
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
-import {
-  entries,
-  getLast,
-  getValue,
-  keys,
-  values,
-} from "@morpho-org/morpho-ts";
+import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
 import {
   APPROVE_ONLY_ONCE_TOKENS,
   type Erc20Operations,
@@ -1037,12 +1031,21 @@ export const finalizeBundle = (
     startData,
   );
 
-  for (const holding of values(
-    getLast(finalizedSteps).holdings[generalAdapter1],
-  )) {
-    if (!holding) continue;
-    if (holding.balance > 0n)
-      throw new BundlerErrors.UnskimedToken(holding.token);
+  const firstHoldings = finalizedSteps[0].holdings[generalAdapter1] ?? {};
+  const lastHoldings = getLast(finalizedSteps).holdings[generalAdapter1] ?? {};
+
+  for (const token of keys(lastHoldings)) {
+    const lastHolding = lastHoldings[token];
+    const firstHolding = firstHoldings[token];
+
+    if (!lastHolding) continue;
+
+    // compute delta balance between final and initial, default first holding to 0n
+    const delta = lastHolding.balance - (firstHolding?.balance ?? 0n);
+
+    if (delta > 0n) {
+      throw new BundlerErrors.UnskimedToken(lastHolding.token);
+    }
   }
 
   return finalizedOperations;
