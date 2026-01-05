@@ -15,7 +15,6 @@ jobs:
           - morpho-ts
           - morpho-test
 
-          - blue-api-sdk
           - blue-sdk
           - blue-sdk-viem
           - blue-sdk-wagmi

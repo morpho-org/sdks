@@ -36,13 +36,11 @@ export function nockBlueApi(
             address: collateralToken.address,
             decimals: collateralToken.decimals,
             priceUsd: collateralPriceUsd,
-            spotPriceEth: collateralPriceUsd / ethPriceUsd,
           },
           loanAsset: {
             address: loanToken.address,
             decimals: loanToken.decimals,
             priceUsd: loanPriceUsd,
-            spotPriceEth: loanPriceUsd / ethPriceUsd,
           },
         },
       ],
@@ -61,7 +59,6 @@ export function nockBlueApi(
       data: {
         assetByAddress: {
           priceUsd: ethPriceUsd,
-          spotPriceEth: 1,
         },
       },
     })

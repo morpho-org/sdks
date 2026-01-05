@@ -15,14 +15,12 @@ export const MarketPositionFragmentDoc = gql`
       decimals
       symbol
       priceUsd
-      spotPriceEth
     }
     loanAsset {
       address
       decimals
       symbol
       priceUsd
-      spotPriceEth
     }
   }
 }
@@ -88,14 +86,12 @@ export const GetMarketsAssetsDocument = gql`
         decimals
         symbol
         priceUsd
-        spotPriceEth
       }
       loanAsset {
         address
         decimals
         symbol
         priceUsd
-        spotPriceEth
       }
     }
   }
@@ -103,7 +99,7 @@ export const GetMarketsAssetsDocument = gql`
     `;
 export const GetWhitelistedMarketIdsDocument = gql`
     query getWhitelistedMarketIds($chainId: Int!) {
-  markets(where: {chainId_in: [$chainId], whitelisted: true}) {
+  markets(where: {chainId_in: [$chainId], listed: true}) {
     items {
       uniqueKey
     }

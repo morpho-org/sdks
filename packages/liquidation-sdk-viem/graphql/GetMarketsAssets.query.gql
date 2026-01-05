@@ -26,14 +26,12 @@ query getMarketsAssets(
         decimals
         symbol
         priceUsd
-        spotPriceEth
       }
       loanAsset {
         address
         decimals
         symbol
         priceUsd
-        spotPriceEth
       }
     }
   }
