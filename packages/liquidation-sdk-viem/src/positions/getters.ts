@@ -1,4 +1,3 @@
-import { OrderDirection, type PartialApiToken } from "@morpho-org/blue-api-sdk";
 import {
   AccrualPosition,
   type ChainId,
@@ -9,7 +8,13 @@ import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import { getPreLiquidablePositions } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
-import { apiSdk, paginatedQueryWithChunkedMarketIds } from "../api";
+import { ApiTypes, apiSdk, paginatedQueryWithChunkedMarketIds } from "../api";
+
+export interface PartialApiToken
+  extends Pick<
+    ApiTypes.Asset,
+    "address" | "decimals" | "symbol" | "priceUsd"
+  > {}
 
 export async function getPositions(
   client: Client<Transport, Chain, Account>,
@@ -61,7 +66,7 @@ async function getLiquidatablePositions(
     maxMarketIds: 20,
     pageSize: 100,
     orderBy: "BorrowShares" as const,
-    orderDirection: OrderDirection.Desc,
+    orderDirection: ApiTypes.OrderDirection.Desc,
   };
   const [
     {

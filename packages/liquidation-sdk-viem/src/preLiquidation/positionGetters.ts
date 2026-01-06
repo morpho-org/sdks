@@ -1,9 +1,9 @@
-import type { PartialApiToken } from "@morpho-org/blue-api-sdk";
 import { type MarketId, PreLiquidationPosition } from "@morpho-org/blue-sdk";
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
 import { apiSdk } from "../api";
+import type { PartialApiToken } from "../positions/getters";
 import { parseWithBigInt } from "./helpers";
 import type { PreLiquidationResponse } from "./types";
 

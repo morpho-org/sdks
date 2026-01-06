@@ -9,14 +9,12 @@ fragment MarketPosition on MarketPosition {
       decimals
       symbol
       priceUsd
-      spotPriceEth
     }
     loanAsset {
       address
       decimals
       symbol
       priceUsd
-      spotPriceEth
     }
   }
 }

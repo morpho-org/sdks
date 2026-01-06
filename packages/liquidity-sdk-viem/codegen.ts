@@ -8,11 +8,7 @@ const config: CodegenConfig = {
   documents: ["graphql/*.{query,fragment}.gql"],
   generates: {
     "src/api/types.ts": {
-      plugins: ["typescript-operations"],
-      preset: "import-types",
-      presetConfig: {
-        typesPath: "@morpho-org/blue-api-sdk",
-      },
+      plugins: ["typescript", "typescript-operations"],
       config: {
         avoidOptionals: {
           field: true,
@@ -21,20 +17,20 @@ const config: CodegenConfig = {
         },
         scalars: {
           BigInt: {
-            input: `Types.Scalars["BigInt"]["input"]`,
-            output: `Types.Scalars["BigInt"]["output"]`,
+            input: "string | number",
+            output: "bigint",
           },
           HexString: {
-            input: `Types.Scalars["HexString"]["input"]`,
-            output: `Types.Scalars["HexString"]["output"]`,
+            input: "string",
+            output: "`0x${string}`",
           },
           Address: {
-            input: `Types.Scalars["Address"]["input"]`,
-            output: `Types.Scalars["Address"]["output"]`,
+            input: "string",
+            output: "@morpho-org/blue-sdk#Address",
           },
           MarketId: {
-            input: `Types.Scalars["MarketId"]["input"]`,
-            output: `Types.Scalars["MarketId"]["output"]`,
+            input: "string",
+            output: "@morpho-org/blue-sdk#MarketId",
           },
         },
       },

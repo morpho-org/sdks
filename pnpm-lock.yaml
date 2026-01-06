@@ -74,27 +74,6 @@ importers:
         specifier: ^4.0.15
         version: 4.0.15(@types/node@24.10.2)(@vitest/ui@4.0.15)(happy-dom@20.0.11)(jiti@2.4.2)(terser@5.36.0)(yaml@2.7.0)
 
-  packages/blue-api-sdk:
-    devDependencies:
-      '@graphql-codegen/cli':
-        specifier: ^6.1.0
-        version: 6.1.0(@parcel/watcher@2.4.1)(@types/node@24.10.2)(bufferutil@4.0.8)(encoding@0.1.13)(graphql@16.10.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
-      '@graphql-codegen/typescript':
-        specifier: ^4.1.2
-        version: 4.1.2(encoding@0.1.13)(graphql@16.10.0)
-      '@morpho-org/blue-sdk':
-        specifier: workspace:^
-        version: link:../blue-sdk
-      '@morpho-org/morpho-ts':
-        specifier: workspace:^
-        version: link:../morpho-ts
-      graphql:
-        specifier: ^16.10.0
-        version: 16.10.0
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
   packages/blue-sdk:
     dependencies:
       '@noble/hashes':
@@ -297,9 +276,6 @@ importers:
       '@graphql-codegen/typescript-operations':
         specifier: ^4.4.0
         version: 4.4.0(encoding@0.1.13)(graphql@16.10.0)
-      '@morpho-org/blue-api-sdk':
-        specifier: workspace:^
-        version: link:../blue-api-sdk
       '@morpho-org/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
@@ -370,9 +346,6 @@ importers:
       '@graphql-codegen/typescript-operations':
         specifier: ^4.4.0
         version: 4.4.0(encoding@0.1.13)(graphql@16.10.0)
-      '@morpho-org/blue-api-sdk':
-        specifier: workspace:^
-        version: link:../blue-api-sdk
       '@morpho-org/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk

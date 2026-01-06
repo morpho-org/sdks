@@ -1,19 +1,18 @@
-import { BlueSdkConverter } from "@morpho-org/blue-api-sdk";
 import {
-  type Address,
   ChainId,
   type MarketId,
+  Token,
   UnknownTokenPriceError,
   erc20WrapperTokens,
   getChainAddresses,
   isMarketId,
 } from "@morpho-org/blue-sdk";
-
 import { safeGetAddress, safeParseNumber } from "@morpho-org/blue-sdk-viem";
 import {
   Flashbots,
   LiquidationEncoder,
   Midas,
+  type PartialApiToken,
   Pendle,
   Spectra,
   apiSdk,
@@ -24,6 +23,7 @@ import {
 } from "@morpho-org/liquidation-sdk-viem";
 import {
   type Account,
+  type Address,
   type Chain,
   type LocalAccount,
   type Transport,
@@ -44,10 +44,16 @@ import {
 
 const warn = process.env.IS_LOGGING_DISABLED ? () => {} : console.warn;
 
-const converter = new BlueSdkConverter({
-  parseAddress: safeGetAddress,
-  parseNumber: safeParseNumber,
-});
+export namespace BlueSdkConverter {
+  export function getToken(dto: PartialApiToken) {
+    return new Token({
+      ...dto,
+      address: safeGetAddress(dto.address),
+      price:
+        dto.priceUsd != null ? safeParseNumber(dto.priceUsd, 18) : undefined,
+    });
+  }
+}
 
 export const check = async <
   client extends WalletClient<Transport, Chain, Account>,
@@ -100,14 +106,11 @@ export const check = async <
       }
 
       try {
-        const collateralToken = converter.getToken(
-          d.collateralAsset,
-          wethPriceUsd,
-        );
+        const collateralToken = BlueSdkConverter.getToken(d.collateralAsset);
         if (collateralToken.price == null)
           throw new UnknownTokenPriceError(collateralToken.address);
 
-        const loanToken = converter.getToken(d.loanAsset, wethPriceUsd);
+        const loanToken = BlueSdkConverter.getToken(d.loanAsset);
         if (loanToken.price == null)
           throw new UnknownTokenPriceError(loanToken.address);
 
