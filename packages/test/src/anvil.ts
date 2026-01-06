@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import getPort from "get-port";
 import _kebabCase from "lodash.kebabcase";
 
 export interface AnvilArgs {
@@ -281,23 +282,13 @@ function toArgs(obj: AnvilArgs) {
   });
 }
 
-export const MAX_TEST_PER_WORKER = 512;
-
-const basePort =
-  10000 +
-  Number(process.env.ANVIL_WORKER_ID ?? process.env.VITEST_WORKER_ID ?? 0) *
-    MAX_TEST_PER_WORKER;
-
-let workerInstances = 0;
-
 export const spawnAnvil = async (
   args: AnvilArgs,
-  index = workerInstances++,
 ): Promise<{
   rpcUrl: `http://localhost:${number}`;
   stop: () => boolean;
 }> => {
-  const port = basePort + index;
+  const port = await getPort();
 
   let started = false;
 
