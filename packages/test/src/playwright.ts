@@ -23,10 +23,7 @@ export const createViemTest = <chain extends Chain>(
   return test.extend<PlaywrightTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by playwright at runtime
     client: async ({}, use) => {
-      const { rpcUrl, stop } = await spawnAnvil(
-        parameters,
-        test.info().workerIndex,
-      );
+      const { rpcUrl, stop } = await spawnAnvil(parameters);
 
       const client = createAnvilTestClient(http(rpcUrl), chain);
 
