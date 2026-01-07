@@ -296,10 +296,8 @@ export const spawnAnvil = async (
     subprocess.stdout.on("data", (data) => {
       const dataStr = data.toString();
 
-      const listenMatch = dataStr.match(
-        /Listening on (((?!25?[6-9])[12]\d|[1-9])?\d\.?\b){4}:(\d+)/,
-      );
-      if (listenMatch) port = Number.parseInt(listenMatch[3]);
+      const listenMatch = dataStr.match(/Listening on 127.0.0.1:(\d+)/);
+      if (listenMatch) port = Number.parseInt(listenMatch[1]);
 
       // console.debug(`[port ${port || "??"}] ${dataStr}`);
 
