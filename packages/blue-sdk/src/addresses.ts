@@ -621,6 +621,18 @@ const _addressesRegistry = {
     // No wrapped native is provided as the native asset CELO is already an ERC20.
     usdc: "0xcebA9300f2b948710d2653dD7B07f33A8B32118C",
   },
+  [ChainId.AbstractMainnet]: {
+    morpho: "0xc85CE8ffdA27b646D269516B8d0Fa6ec2E958B55",
+    bundler3: {
+      bundler3: "0xc13A3Ca3B0120EE6121d1E0ca9Da22fDD7ed28Cd",
+      generalAdapter1: "0x3716AA06304D1bC70f553Da44904d13086A4a791",
+    },
+    adaptiveCurveIrm: "0xd334eb112CfD1EB4a50FB871b7D9895EBB955C43",
+    publicAllocator: "0x609f3DF49806B5617A0Bd3301f04Ac3CB26d9e82",
+    metaMorphoFactory: "0x83A7f60c9fc57cEf1e8001bda98783AA1A53E4b1",
+    chainlinkOracleFactory: "0x3585E3fD72F8d1b02250E1F6496b706c6e092884",
+    preLiquidationFactory: "0x1058DA51242dF63bA3A61c838A61405ea6Edb083",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -1066,6 +1078,18 @@ const _deployments = {
     preLiquidationFactory: 41808392n,
     usdc: 23412006n,
   },
+  [ChainId.AbstractMainnet]: {
+    morpho: 13947713n,
+    bundler3: {
+      bundler3: 13949482n,
+      generalAdapter1: 13949482n,
+    },
+    adaptiveCurveIrm: 13947713n,
+    publicAllocator: 13947713n,
+    metaMorphoFactory: 13949369n,
+    chainlinkOracleFactory: 13949369n,
+    preLiquidationFactory: 13949482n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -1228,19 +1252,19 @@ export const getPermissionedCoinbaseTokens = (chainId: number) =>
 
 entries(permissionedBackedTokens).forEach(([chainId, tokens]) => {
   tokens.forEach((token) =>
-    (erc20WrapperTokens[chainId] ??= new Set()).add(token),
+    (erc20WrapperTokens[chainId] ??= new Set()).add(token)
   );
 });
 
 entries(permissionedCoinbaseTokens).forEach(([chainId, tokens]) => {
   tokens.forEach((token) =>
-    (permissionedWrapperTokens[chainId] ??= new Set()).add(token),
+    (permissionedWrapperTokens[chainId] ??= new Set()).add(token)
   );
 });
 
 entries(permissionedWrapperTokens).forEach(([chainId, tokens]) => {
   tokens.forEach((token) =>
-    (erc20WrapperTokens[chainId] ??= new Set()).add(token),
+    (erc20WrapperTokens[chainId] ??= new Set()).add(token)
   );
 });
 
@@ -1318,12 +1342,12 @@ export function registerCustomAddresses({
 
   if (customAddresses)
     addresses = addressesRegistry = deepFreeze(
-      mergeWith({}, addressesRegistry, customAddresses, customizer("address")),
+      mergeWith({}, addressesRegistry, customAddresses, customizer("address"))
     );
 
   if (customDeployments)
     deployments = deepFreeze(
-      mergeWith({}, deployments, customDeployments, customizer("deployment")),
+      mergeWith({}, deployments, customDeployments, customizer("deployment"))
     );
 
   if (unwrappedTokens)
@@ -1332,7 +1356,7 @@ export function registerCustomAddresses({
         {},
         unwrappedTokensMapping,
         unwrappedTokens,
-        customizer("unwrapped token"),
-      ),
+        customizer("unwrapped token")
+      )
     );
 }
