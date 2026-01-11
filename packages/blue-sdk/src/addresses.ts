@@ -632,6 +632,7 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x83A7f60c9fc57cEf1e8001bda98783AA1A53E4b1",
     chainlinkOracleFactory: "0x3585E3fD72F8d1b02250E1F6496b706c6e092884",
     preLiquidationFactory: "0x1058DA51242dF63bA3A61c838A61405ea6Edb083",
+    wNative: "0x3439153EB7AF838Ad19d56E1571FBD09333C2809",
   },
 } as const;
 
@@ -1204,6 +1205,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.CronosMainnet]: {
     [_addressesRegistry[ChainId.CronosMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.AbstractMainnet]: {
+    [_addressesRegistry[ChainId.AbstractMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
