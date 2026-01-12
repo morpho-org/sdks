@@ -633,6 +633,7 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0x3585E3fD72F8d1b02250E1F6496b706c6e092884",
     preLiquidationFactory: "0x1058DA51242dF63bA3A61c838A61405ea6Edb083",
     wNative: "0x3439153EB7AF838Ad19d56E1571FBD09333C2809",
+    usdc: "0x84A71ccD554Cc1b02749b35d22F684CC8ec987e1",
   },
 } as const;
 
@@ -1090,6 +1091,7 @@ const _deployments = {
     metaMorphoFactory: 13949369n,
     chainlinkOracleFactory: 13949369n,
     preLiquidationFactory: 13949482n,
+    usdc: 53247n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
@@ -1256,19 +1258,19 @@ export const getPermissionedCoinbaseTokens = (chainId: number) =>
 
 entries(permissionedBackedTokens).forEach(([chainId, tokens]) => {
   tokens.forEach((token) =>
-    (erc20WrapperTokens[chainId] ??= new Set()).add(token)
+    (erc20WrapperTokens[chainId] ??= new Set()).add(token),
   );
 });
 
 entries(permissionedCoinbaseTokens).forEach(([chainId, tokens]) => {
   tokens.forEach((token) =>
-    (permissionedWrapperTokens[chainId] ??= new Set()).add(token)
+    (permissionedWrapperTokens[chainId] ??= new Set()).add(token),
   );
 });
 
 entries(permissionedWrapperTokens).forEach(([chainId, tokens]) => {
   tokens.forEach((token) =>
-    (erc20WrapperTokens[chainId] ??= new Set()).add(token)
+    (erc20WrapperTokens[chainId] ??= new Set()).add(token),
   );
 });
 
@@ -1346,12 +1348,12 @@ export function registerCustomAddresses({
 
   if (customAddresses)
     addresses = addressesRegistry = deepFreeze(
-      mergeWith({}, addressesRegistry, customAddresses, customizer("address"))
+      mergeWith({}, addressesRegistry, customAddresses, customizer("address")),
     );
 
   if (customDeployments)
     deployments = deepFreeze(
-      mergeWith({}, deployments, customDeployments, customizer("deployment"))
+      mergeWith({}, deployments, customDeployments, customizer("deployment")),
     );
 
   if (unwrappedTokens)
@@ -1360,7 +1362,7 @@ export function registerCustomAddresses({
         {},
         unwrappedTokensMapping,
         unwrappedTokens,
-        customizer("unwrapped token")
-      )
+        customizer("unwrapped token"),
+      ),
     );
 }
