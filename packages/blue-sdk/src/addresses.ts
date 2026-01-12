@@ -633,6 +633,7 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0x3585E3fD72F8d1b02250E1F6496b706c6e092884",
     preLiquidationFactory: "0x1058DA51242dF63bA3A61c838A61405ea6Edb083",
     wNative: "0x3439153EB7AF838Ad19d56E1571FBD09333C2809",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x84A71ccD554Cc1b02749b35d22F684CC8ec987e1",
   },
 } as const;
