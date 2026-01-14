@@ -26,7 +26,8 @@ export async function fetchVaultV2(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
+  const { morphoVaultV1AdapterFactory, morphoMarketV1AdapterV2Factory } =
+    getChainAddresses(parameters.chainId);
 
   if (deployless) {
     try {
@@ -36,7 +37,11 @@ export async function fetchVaultV2(
           abi,
           code,
           functionName: "query",
-          args: [address, morphoVaultV1AdapterFactory ?? zeroAddress],
+          args: [
+            address,
+            morphoVaultV1AdapterFactory ?? zeroAddress,
+            morphoMarketV1AdapterV2Factory ?? zeroAddress,
+          ],
         });
 
       return new VaultV2({
