@@ -68,11 +68,18 @@ contract GetVaultV2 {
         }
 
         if (
-            morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter)
-                || morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter)
+            address(morphoVaultV1AdapterFactory) != address(0)
+                && morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter)
         ) {
             res.isLiquidityAdapterKnown = true;
+        } else if (
+            address(morphoMarketV1AdapterV2Factory) != address(0)
+                && morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter)
+        ) {
+            res.isLiquidityAdapterKnown = true;
+        }
 
+        if (res.isLiquidityAdapterKnown) {
             res.liquidityAllocations = new VaultV2Allocation[](1);
             res.liquidityAllocations[0] = VaultV2Allocation({
                 id: keccak256(abi.encode("this", res.liquidityAdapter)),

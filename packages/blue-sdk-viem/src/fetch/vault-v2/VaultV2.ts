@@ -2,6 +2,7 @@ import {
   AccrualVaultV2,
   type IVaultV2Allocation,
   VaultV2,
+  VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -13,7 +14,11 @@ import {
   zeroAddress,
 } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { morphoVaultV1AdapterFactoryAbi, vaultV2Abi } from "../../abis";
+import {
+  morphoMarketV1AdapterV2FactoryAbi,
+  morphoVaultV1AdapterFactoryAbi,
+  vaultV2Abi,
+} from "../../abis";
 import { abi, code } from "../../queries/vault-v2/GetVaultV2";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchToken } from "../Token";
@@ -163,12 +168,25 @@ export async function fetchVaultV2(
     }),
   ]);
 
-  const [hasMorphoVaultV1LiquidityAdapter, ...adapters] = await Promise.all([
+  const [
+    hasMorphoVaultV1LiquidityAdapter,
+    hasMorphoMarketV1AdapterV2LiquidityAdapter,
+    ...adapters
+  ] = await Promise.all([
     morphoVaultV1AdapterFactory != null && liquidityAdapter !== zeroAddress
       ? readContract(client, {
           address: morphoVaultV1AdapterFactory,
           abi: morphoVaultV1AdapterFactoryAbi,
           functionName: "isMorphoVaultV1Adapter",
+          args: [liquidityAdapter],
+          ...parameters,
+        })
+      : undefined,
+    morphoMarketV1AdapterV2Factory != null && liquidityAdapter !== zeroAddress
+      ? readContract(client, {
+          address: morphoMarketV1AdapterV2Factory,
+          abi: morphoMarketV1AdapterV2FactoryAbi,
+          functionName: "isMorphoMarketV1AdapterV2",
           args: [liquidityAdapter],
           ...parameters,
         })
@@ -188,6 +206,10 @@ export async function fetchVaultV2(
   if (hasMorphoVaultV1LiquidityAdapter)
     liquidityAdapterIds = [
       VaultV2MorphoVaultV1Adapter.adapterId(liquidityAdapter),
+    ];
+  if (hasMorphoMarketV1AdapterV2LiquidityAdapter)
+    liquidityAdapterIds = [
+      VaultV2MorphoMarketV1AdapterV2.adapterId(liquidityAdapter),
     ];
 
   let liquidityAllocations: IVaultV2Allocation[] | undefined;
