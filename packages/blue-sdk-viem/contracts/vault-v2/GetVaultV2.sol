@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import {IVaultV2, Caps} from "./interfaces/IVaultV2.sol";
 import {IMorphoVaultV1AdapterFactory} from "./interfaces/IMorphoVaultV1AdapterFactory.sol";
+import {IMorphoMarketV1AdapterV2Factory} from "./interfaces/IMorphoMarketV1AdapterV2Factory.sol";
 
 struct Token {
     address asset;
@@ -39,11 +40,11 @@ struct VaultV2Response {
 }
 
 contract GetVaultV2 {
-    function query(IVaultV2 vault, IMorphoVaultV1AdapterFactory morphoVaultV1AdapterFactory)
-        external
-        view
-        returns (VaultV2Response memory res)
-    {
+    function query(
+        IVaultV2 vault,
+        IMorphoVaultV1AdapterFactory morphoVaultV1AdapterFactory,
+        IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory
+    ) external view returns (VaultV2Response memory res) {
         res.token =
             Token({asset: vault.asset(), symbol: vault.symbol(), name: vault.name(), decimals: vault.decimals()});
         res.asset = vault.asset();
@@ -66,9 +67,19 @@ contract GetVaultV2 {
             res.adapters[i] = vault.adapters(i);
         }
 
-        if (morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter)) {
+        if (
+            address(morphoVaultV1AdapterFactory) != address(0)
+                && morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter)
+        ) {
             res.isLiquidityAdapterKnown = true;
+        } else if (
+            address(morphoMarketV1AdapterV2Factory) != address(0)
+                && morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter)
+        ) {
+            res.isLiquidityAdapterKnown = true;
+        }
 
+        if (res.isLiquidityAdapterKnown) {
             res.liquidityAllocations = new VaultV2Allocation[](1);
             res.liquidityAllocations[0] = VaultV2Allocation({
                 id: keccak256(abi.encode("this", res.liquidityAdapter)),
