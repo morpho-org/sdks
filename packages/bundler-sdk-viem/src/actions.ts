@@ -22,6 +22,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { Time, getValue } from "@morpho-org/morpho-ts";
 import {
+  APPROVE_ONLY_ONCE_TOKENS,
   MAX_TOKEN_APPROVALS,
   type MaybeDraft,
   type Operation,
@@ -52,6 +53,7 @@ const encodeErc20Approval = (
   token: Address,
   spender: Address,
   amount: bigint,
+  sender: Address,
   data: MaybeDraft<SimulationState>,
 ) => {
   const { chainId } = data;
@@ -62,6 +64,37 @@ const encodeErc20Approval = (
   );
 
   const txRequirements: TransactionRequirement[] = [];
+
+  // Handle USDT-like tokens that require reset to 0 before changing allowance.
+  if (APPROVE_ONLY_ONCE_TOKENS[chainId]?.includes(token) && amount > 0n) {
+    const holding = data.tryGetHolding(sender, token);
+    const addresses = getChainAddresses(chainId);
+    // Check if there's an existing allowance to the spender.
+    // We need to check the raw allowance since this is a direct ERC20 approval.
+    const existingAllowance =
+      spender === addresses.bundler3.generalAdapter1
+        ? holding?.erc20Allowances["bundler3.generalAdapter1"]
+        : spender === addresses.permit2
+          ? holding?.erc20Allowances.permit2
+          : spender === addresses.morpho
+            ? holding?.erc20Allowances.morpho
+            : undefined;
+
+    if (existingAllowance != null && existingAllowance > 0n) {
+      txRequirements.push({
+        type: "erc20Approve",
+        args: [token, spender, 0n],
+        tx: {
+          to: token,
+          data: encodeFunctionData({
+            abi: erc20Abi,
+            functionName: "approve",
+            args: [spender, 0n],
+          }),
+        },
+      });
+    }
+  }
 
   txRequirements.push({
     type: "erc20Approve",
@@ -218,7 +251,13 @@ export const encodeOperation = (
       if (!supportsSignature && spender === permit2) break;
 
       requirements.txs.push(
-        ...encodeErc20Approval(operation.address, spender, amount, dataBefore),
+        ...encodeErc20Approval(
+          operation.address,
+          spender,
+          amount,
+          sender,
+          dataBefore,
+        ),
       );
 
       break;
@@ -337,6 +376,7 @@ export const encodeOperation = (
             operation.address,
             spender,
             amount,
+            sender,
             dataBefore,
           ),
         );
@@ -421,6 +461,7 @@ export const encodeOperation = (
           operation.address,
           generalAdapter1,
           amount,
+          sender,
           dataBefore,
         ),
       );
