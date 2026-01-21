@@ -647,6 +647,7 @@ const _addressesRegistry = {
     metaMorphoFactory: "0xb95De4a9C81Ba6240378F383f88592d30937d048",
     chainlinkOracleFactory: "0xfDc69d06De855701731D142F28bD401802DA4daF",
     preLiquidationFactory: "0x4E28CAE07A008FF2D7D345992C969118eb253CD6",
+    wNative: "0xff204e2681a6fa0e2c3fade68a1b28fb90e4fc5f",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xf8c374ce88a3be3d374e8888349c7768b607c755",
   },
@@ -1144,7 +1145,7 @@ const _deployments = {
     },
     adaptiveCurveIrm: 54344680n,
     publicAllocator: 54344680n,
-    metaMorphoFactory: 54344680n,
+    metaMorphoFactory: 54344985n,
     chainlinkOracleFactory: 54344985n,
     preLiquidationFactory: 54346080n,
   },
@@ -1265,6 +1266,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.AbstractMainnet]: {
     [_addressesRegistry[ChainId.AbstractMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.BitlayerMainnet]: {
+    [_addressesRegistry[ChainId.BitlayerMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.BscMainnet]: {
     [_addressesRegistry[ChainId.BscMainnet].wNative]: NATIVE_ADDRESS,
