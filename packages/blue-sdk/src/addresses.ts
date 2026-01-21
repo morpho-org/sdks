@@ -1267,7 +1267,7 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
     [_addressesRegistry[ChainId.AbstractMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.BscMainnet]: {
-    [_addressesRegistry[ChainId.AbstractMainnet].wNative]: NATIVE_ADDRESS,
+    [_addressesRegistry[ChainId.BscMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
