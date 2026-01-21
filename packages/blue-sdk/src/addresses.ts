@@ -647,9 +647,9 @@ const _addressesRegistry = {
     metaMorphoFactory: "0xb95De4a9C81Ba6240378F383f88592d30937d048",
     chainlinkOracleFactory: "0xfDc69d06De855701731D142F28bD401802DA4daF",
     preLiquidationFactory: "0x4E28CAE07A008FF2D7D345992C969118eb253CD6",
-    wNative: "0xff204e2681a6fa0e2c3fade68a1b28fb90e4fc5f",
+    wNative: "0xfF204e2681A6fA0e2C3FaDe68a1B28fb90E4Fc5F",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
-    usdc: "0xf8c374ce88a3be3d374e8888349c7768b607c755",
+    usdc: "0xf8C374CE88A3BE3d374e8888349C7768B607c755",
   },
   [ChainId.BscMainnet]: {
     morpho: "0x01b0Bd309AA75547f7a37Ad7B1219A898E67a83a",
