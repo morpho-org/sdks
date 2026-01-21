@@ -268,7 +268,7 @@ export namespace ChainUtils {
     [ChainId.BitlayerMainnet]: {
       name: "Bitlayer",
       id: ChainId.BitlayerMainnet,
-      nativeCurrency: { name: "Btc", symbol: "BTC", decimals: 18 },
+      nativeCurrency: { name: "Bitcoin", symbol: "BTC", decimals: 18 },
       explorerUrl: "https://www.btrscan.com",
       identifier: "bitlayer",
     },
