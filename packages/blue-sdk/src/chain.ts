@@ -28,6 +28,7 @@ export enum ChainId {
   CronosMainnet = 25,
   CeloMainnet = 42220,
   AbstractMainnet = 2741,
+  BitlayerMainnet = 200901,
 }
 
 export interface ChainMetadata {
@@ -262,6 +263,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://abscan.org/",
       identifier: "abstract",
+    },
+    [ChainId.BitlayerMainnet]: {
+      name: "Bitlayer",
+      id: ChainId.BitlayerMainnet,
+      nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 },
+      explorerUrl: "https://www.btrscan.com",
+      identifier: "bitlayer",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }

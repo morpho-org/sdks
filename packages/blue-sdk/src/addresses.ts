@@ -636,6 +636,20 @@ const _addressesRegistry = {
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x84A71ccD554Cc1b02749b35d22F684CC8ec987e1",
   },
+  [ChainId.BitlayerMainnet]: {
+    morpho: "0xAeA7eFF1bD3c875c18ef50F0387892dF181431C6",
+    bundler3: {
+      bundler3: "0x82b3ea7558Fc383b949fa42Db7ee3eB101447B96",
+      generalAdapter1: "0xa87F1422Df88B5f490203D71e2f8e7244843E62F",
+    },
+    adaptiveCurveIrm: "0xefB565442B9Eb740B50Cf928C14d21c0111254F9",
+    publicAllocator: "0x3A1db0038361528756bED147abe3d41255c7128c",
+    metaMorphoFactory: "0xb95De4a9C81Ba6240378F383f88592d30937d048",
+    chainlinkOracleFactory: "0xfDc69d06De855701731D142F28bD401802DA4daF",
+    preLiquidationFactory: "0x4E28CAE07A008FF2D7D345992C969118eb253CD6",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0xf8c374ce88a3be3d374e8888349c7768b607c755",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -1093,6 +1107,19 @@ const _deployments = {
     chainlinkOracleFactory: 13949369n,
     preLiquidationFactory: 13949482n,
     usdc: 53247n,
+  },
+  [ChainId.BitlayerMainnet]: {
+    morpho: 13516997n,
+    bundler3: {
+      bundler3: 13638316n,
+      generalAdapter1: 13638316n,
+    },
+    adaptiveCurveIrm: 13516997n,
+    publicAllocator: 13516997n,
+    metaMorphoFactory: 13638155n,
+    chainlinkOracleFactory: 13638155n,
+    preLiquidationFactory: 13638316n,
+    usdc: 4041175n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
