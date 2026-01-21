@@ -652,6 +652,7 @@ const _addressesRegistry = {
   },
   [ChainId.BscMainnet]: {
     morpho: "0x01b0Bd309AA75547f7a37Ad7B1219A898E67a83a",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x16D40b9DF1497468195BFAfeb2718e486E15bF91",
       generalAdapter1: "0x87c93660ECe6E68C6492EabBbBdbaafA102ae3a3",
@@ -1136,6 +1137,7 @@ const _deployments = {
   },
   [ChainId.BscMainnet]: {
     morpho: 54344680n,
+    permit2: 25343783n,
     bundler3: {
       bundler3: 54346080n,
       generalAdapter1: 54346080n,

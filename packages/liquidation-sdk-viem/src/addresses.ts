@@ -260,7 +260,7 @@ export const preLiquidationFactoryConfigs: Record<
   },
   [ChainId.BitlayerMainnet]: {
     address: addressesRegistry[ChainId.BitlayerMainnet].preLiquidationFactory,
-    startBlock: deployments[ChainId.AbstractMainnet].preLiquidationFactory,
+    startBlock: deployments[ChainId.BitlayerMainnet].preLiquidationFactory,
   },
   [ChainId.BscMainnet]: {
     address: addressesRegistry[ChainId.BscMainnet].preLiquidationFactory,
