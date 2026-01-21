@@ -139,6 +139,15 @@ export namespace VaultV2Errors {
       super(`unsupported liquidity adapter "${address}"`);
     }
   }
+
+  export class UnknownFromFactory extends Error {
+    constructor(
+      public readonly factory: Address,
+      public readonly vault: Address,
+    ) {
+      super(`vault "${vault}" is not from the ${factory} factory`);
+    }
+  }
 }
 
 export interface ErrorClass<E extends Error = Error> {

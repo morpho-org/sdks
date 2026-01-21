@@ -4,6 +4,9 @@ pragma solidity ^0.8.0;
 import {IVaultV2, Caps} from "./interfaces/IVaultV2.sol";
 import {IMorphoVaultV1AdapterFactory} from "./interfaces/IMorphoVaultV1AdapterFactory.sol";
 import {IMorphoMarketV1AdapterV2Factory} from "./interfaces/IMorphoMarketV1AdapterV2Factory.sol";
+import {IVaultV2Factory} from "./interfaces/IVaultV2Factory.sol";
+
+error UnknownFromFactory(address factory, address vault);
 
 struct Token {
     address asset;
@@ -42,9 +45,14 @@ struct VaultV2Response {
 contract GetVaultV2 {
     function query(
         IVaultV2 vault,
+        IVaultV2Factory vaultV2Factory,
         IMorphoVaultV1AdapterFactory morphoVaultV1AdapterFactory,
         IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory
     ) external view returns (VaultV2Response memory res) {
+        if (!vaultV2Factory.isVaultV2(address(vault))) {
+            revert UnknownFromFactory(address(vaultV2Factory), address(vault));
+        }
+
         res.token =
             Token({asset: vault.asset(), symbol: vault.symbol(), name: vault.name(), decimals: vault.decimals()});
         res.asset = vault.asset();
