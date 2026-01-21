@@ -143,7 +143,6 @@ export function useSimulationState<
 
   const feeRecipient = useReadContract({
     ...parameters,
-    blockNumber: block?.number,
     address: morpho,
     abi: blueAbi,
     functionName: "feeRecipient",
@@ -194,7 +193,6 @@ export function useSimulationState<
 
   const tokens = useTokens({
     ...parameters,
-    blockNumber: block?.number,
     query: {
       ...parameters.query,
       enabled: block != null && parameters.query?.enabled,
