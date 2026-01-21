@@ -29,6 +29,7 @@ export enum ChainId {
   CeloMainnet = 42220,
   AbstractMainnet = 2741,
   BitlayerMainnet = 200901,
+  BscMainnet = 56,
 }
 
 export interface ChainMetadata {
@@ -267,9 +268,16 @@ export namespace ChainUtils {
     [ChainId.BitlayerMainnet]: {
       name: "Bitlayer",
       id: ChainId.BitlayerMainnet,
-      nativeCurrency: { name: "BTC", symbol: "BTC", decimals: 18 },
+      nativeCurrency: { name: "Btc", symbol: "BTC", decimals: 18 },
       explorerUrl: "https://www.btrscan.com",
       identifier: "bitlayer",
+    },
+    [ChainId.BscMainnet]: {
+      name: "Bnb Smart Chain",
+      id: ChainId.BscMainnet,
+      nativeCurrency: { name: "Bnb", symbol: "BNB", decimals: 18 },
+      explorerUrl: "https://bscscan.com",
+      identifier: "bsc",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }

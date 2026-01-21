@@ -650,6 +650,19 @@ const _addressesRegistry = {
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xf8c374ce88a3be3d374e8888349c7768b607c755",
   },
+  [ChainId.BscMainnet]: {
+    morpho: "0x01b0Bd309AA75547f7a37Ad7B1219A898E67a83a",
+    bundler3: {
+      bundler3: "0x16D40b9DF1497468195BFAfeb2718e486E15bF91",
+      generalAdapter1: "0x87c93660ECe6E68C6492EabBbBdbaafA102ae3a3",
+    },
+    adaptiveCurveIrm: "0x7112D95cB5f6b13bF5F5B94a373bB3b2B381F979",
+    publicAllocator: "0x842bEccF8eBC11006c4bE96DEfE09b60326D0495",
+    metaMorphoFactory: "0x92983687e672cA6d96530f9Dbe11a196cE905d72",
+    chainlinkOracleFactory: "0xDf2035fC15919588526dBb5560863C812F135236",
+    preLiquidationFactory: "0xEB8871F0FA8aB787AbCD28d1095f7B486d241D42",
+    wNative: "0x4DB5a66E937A9F4473fA95b1cAF1d1E1D62E29EA",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -1121,6 +1134,18 @@ const _deployments = {
     preLiquidationFactory: 13638316n,
     usdc: 4041175n,
   },
+  [ChainId.BscMainnet]: {
+    morpho: 54344680n,
+    bundler3: {
+      bundler3: 54346080n,
+      generalAdapter1: 54346080n,
+    },
+    adaptiveCurveIrm: 54344680n,
+    publicAllocator: 54344680n,
+    metaMorphoFactory: 54344680n,
+    chainlinkOracleFactory: 54344985n,
+    preLiquidationFactory: 54346080n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -1237,6 +1262,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
     [_addressesRegistry[ChainId.CronosMainnet].wNative]: NATIVE_ADDRESS,
   },
   [ChainId.AbstractMainnet]: {
+    [_addressesRegistry[ChainId.AbstractMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.BscMainnet]: {
     [_addressesRegistry[ChainId.AbstractMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
