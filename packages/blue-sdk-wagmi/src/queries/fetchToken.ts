@@ -44,6 +44,8 @@ export function fetchTokenQueryOptions<config extends Config>(
 export function fetchTokenQueryKey({
   token,
   chainId,
+  blockTag,
+  blockNumber,
   deployless,
   account,
   stateOverride,
@@ -54,6 +56,8 @@ export function fetchTokenQueryKey({
     {
       token,
       chainId,
+      blockTag,
+      blockNumber,
       deployless,
       account,
       stateOverride,
