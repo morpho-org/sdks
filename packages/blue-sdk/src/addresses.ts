@@ -663,7 +663,7 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x92983687e672cA6d96530f9Dbe11a196cE905d72",
     chainlinkOracleFactory: "0xDf2035fC15919588526dBb5560863C812F135236",
     preLiquidationFactory: "0xEB8871F0FA8aB787AbCD28d1095f7B486d241D42",
-    wNative: "0x4DB5a66E937A9F4473fA95b1cAF1d1E1D62E29EA",
+    wNative: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
   },
 } as const;
 
