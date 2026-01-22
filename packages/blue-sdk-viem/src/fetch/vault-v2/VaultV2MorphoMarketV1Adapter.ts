@@ -1,10 +1,15 @@
 import {
   AccrualVaultV2MorphoMarketV1Adapter,
+  VaultV2Errors,
   VaultV2MorphoMarketV1Adapter,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { morphoMarketV1AdapterAbi } from "../../abis";
+import {
+  morphoMarketV1AdapterAbi,
+  morphoMarketV1AdapterFactoryAbi,
+} from "../../abis";
 import {
   abi,
   code,
@@ -20,6 +25,14 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
 ) {
   parameters.chainId ??= await getChainId(client);
 
+  const { morphoMarketV1AdapterFactory } = getChainAddresses(
+    parameters.chainId,
+  );
+
+  if (!morphoMarketV1AdapterFactory) {
+    throw new VaultV2Errors.UnknownFactory();
+  }
+
   if (deployless) {
     try {
       const adapter = await readContract(client, {
@@ -27,7 +40,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
         abi,
         code,
         functionName: "query",
-        args: [address],
+        args: [address, morphoMarketV1AdapterFactory],
       });
 
       return new VaultV2MorphoMarketV1Adapter({
@@ -41,27 +54,45 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
     }
   }
 
-  const [parentVault, skimRecipient, marketParamsListLength] =
-    await Promise.all([
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoMarketV1AdapterAbi,
-        functionName: "parentVault",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoMarketV1AdapterAbi,
-        functionName: "skimRecipient",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoMarketV1AdapterAbi,
-        functionName: "marketParamsListLength",
-      }),
-    ]);
+  const [
+    isMorphoMarketV1Adapter,
+    parentVault,
+    skimRecipient,
+    marketParamsListLength,
+  ] = await Promise.all([
+    readContract(client, {
+      ...parameters,
+      address: morphoMarketV1AdapterFactory,
+      abi: morphoMarketV1AdapterFactoryAbi,
+      functionName: "isMorphoMarketV1Adapter",
+      args: [address],
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoMarketV1AdapterAbi,
+      functionName: "parentVault",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoMarketV1AdapterAbi,
+      functionName: "skimRecipient",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoMarketV1AdapterAbi,
+      functionName: "marketParamsListLength",
+    }),
+  ]);
+
+  if (!isMorphoMarketV1Adapter) {
+    throw new VaultV2Errors.UnknownFromFactory(
+      morphoMarketV1AdapterFactory,
+      address,
+    );
+  }
 
   const marketParamsList = await Promise.all(
     Array.from({ length: Number(marketParamsListLength) }, (_, i) =>

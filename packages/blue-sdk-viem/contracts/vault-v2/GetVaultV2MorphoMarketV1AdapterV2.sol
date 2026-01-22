@@ -2,7 +2,7 @@
 pragma solidity ^0.8.0;
 
 import {IMorphoMarketV1AdapterV2} from "./interfaces/IMorphoMarketV1AdapterV2.sol";
-
+import {IMorphoMarketV1AdapterV2Factory} from "./interfaces/IMorphoMarketV1AdapterV2Factory.sol";
 
 struct MarketSupplyShares {
     bytes32 marketId;
@@ -16,12 +16,18 @@ struct VaultV2MorphoMarketV1AdapterV2Response {
     MarketSupplyShares[] marketSupplyShares;
 }
 
+error UnknownFromFactory(address factory, address adapter);
+
 contract GetVaultV2MorphoMarketV1AdapterV2 {
-    function query(IMorphoMarketV1AdapterV2 adapter)
+    function query(IMorphoMarketV1AdapterV2 adapter, IMorphoMarketV1AdapterV2Factory factory)
         external
         view
         returns (VaultV2MorphoMarketV1AdapterV2Response memory res)
     {
+        if (!factory.isMorphoMarketV1AdapterV2(address(adapter))) {
+            revert UnknownFromFactory(address(factory), address(adapter));
+        }
+
         res.parentVault = adapter.parentVault();
         res.skimRecipient = adapter.skimRecipient();
         res.adaptiveCurveIrm = adapter.adaptiveCurveIrm();

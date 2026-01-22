@@ -149,9 +149,9 @@ export namespace VaultV2Errors {
   export class UnknownFromFactory extends Error {
     constructor(
       public readonly factory: Address,
-      public readonly vault: Address,
+      public readonly address: Address,
     ) {
-      super(`vault "${vault}" is not from the ${factory} factory`);
+      super(`address "${address}" is not from the ${factory} factory`);
     }
   }
 }
