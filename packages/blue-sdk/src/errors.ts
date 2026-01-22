@@ -122,6 +122,12 @@ export namespace BlueErrors {
 }
 
 export namespace VaultV2Errors {
+  export class UnknownFactory extends Error {
+    constructor() {
+      super(`unknown factory`);
+    }
+  }
+
   export class InvalidInterestAccrual extends Error {
     constructor(
       public readonly vault: Address,

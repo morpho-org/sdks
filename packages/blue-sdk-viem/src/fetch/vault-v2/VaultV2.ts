@@ -39,6 +39,10 @@ export async function fetchVaultV2(
     vaultV2Factory,
   } = getChainAddresses(parameters.chainId);
 
+  if (!vaultV2Factory) {
+    throw new VaultV2Errors.UnknownFactory();
+  }
+
   if (deployless) {
     try {
       const { token, isLiquidityAdapterKnown, liquidityAllocations, ...vault } =
@@ -49,7 +53,7 @@ export async function fetchVaultV2(
           functionName: "query",
           args: [
             address,
-            vaultV2Factory ?? zeroAddress,
+            vaultV2Factory,
             morphoVaultV1AdapterFactory ?? zeroAddress,
             morphoMarketV1AdapterV2Factory ?? zeroAddress,
           ],
@@ -89,15 +93,14 @@ export async function fetchVaultV2(
     managementFeeRecipient,
   ] = await Promise.all([
     fetchToken(address, client, parameters),
-    vaultV2Factory != null
-      ? readContract(client, {
-          ...parameters,
-          address: vaultV2Factory,
-          abi: vaultV2FactoryAbi,
-          functionName: "isVaultV2",
-          args: [address],
-        })
-      : undefined,
+
+    readContract(client, {
+      ...parameters,
+      address: vaultV2Factory,
+      abi: vaultV2FactoryAbi,
+      functionName: "isVaultV2",
+      args: [address],
+    }),
     readContract(client, {
       ...parameters,
       address,
@@ -185,10 +188,7 @@ export async function fetchVaultV2(
   ]);
 
   if (!isVaultV2) {
-    throw new VaultV2Errors.UnknownFromFactory(
-      vaultV2Factory ?? zeroAddress,
-      address,
-    );
+    throw new VaultV2Errors.UnknownFromFactory(vaultV2Factory, address);
   }
 
   const [
