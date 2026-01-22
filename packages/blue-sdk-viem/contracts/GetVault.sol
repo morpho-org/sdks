@@ -5,6 +5,7 @@ import {IMorpho, Id, MarketParams} from "./interfaces/IMorpho.sol";
 import {Eip5267Domain} from "./interfaces/IERC20Permit.sol";
 import {IMetaMorpho, PendingUint192, PendingAddress} from "./interfaces/IMetaMorpho.sol";
 import {IPublicAllocator} from "./interfaces/IPublicAllocator.sol";
+import {IMetaMorphoFactory} from "./interfaces/IMetaMorphoFactory.sol";
 
 struct VaultConfig {
     address asset;
@@ -41,12 +42,24 @@ struct VaultResponse {
     PublicAllocatorConfig publicAllocatorConfig;
 }
 
+error UnknownFromFactory(address factory, address vault);
+
 contract GetVault {
-    function query(IMetaMorpho vault, IPublicAllocator publicAllocator)
+    function query(IMetaMorpho vault, IPublicAllocator publicAllocator, IMetaMorphoFactory metaMorphoFactory)
         external
         view
         returns (VaultResponse memory res)
     {
+        if (!metaMorphoFactory.isMetaMorpho(address(vault))) {
+            // MetaMorpho factory V1.0 only exists on Ethereum (1) and Base (8453)
+            bool isV1_0Factory = (block.chainid == 1 || block.chainid == 8453)
+                && IMetaMorphoFactory(0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101).isMetaMorpho(address(vault));
+
+            if (!isV1_0Factory) {
+                revert UnknownFromFactory(address(metaMorphoFactory), address(vault));
+            }
+        }
+
         res.config = VaultConfig({
             asset: vault.asset(),
             symbol: vault.symbol(),

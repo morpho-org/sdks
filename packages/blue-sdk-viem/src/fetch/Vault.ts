@@ -4,6 +4,8 @@ import {
   AccrualVault,
   Eip5267Domain,
   type MarketId,
+  UnknownFactory,
+  UnknownFromFactory,
   Vault,
   VaultConfig,
   type VaultPublicAllocatorConfig,
@@ -11,7 +13,11 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
-import { metaMorphoAbi, publicAllocatorAbi } from "../abis";
+import {
+  metaMorphoAbi,
+  metaMorphoFactoryAbi,
+  publicAllocatorAbi,
+} from "../abis";
 import type { DeploylessFetchParameters } from "../types";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
@@ -30,6 +36,7 @@ export async function fetchVault(
   );
 
   if (!metaMorphoFactory) {
+    throw new UnknownFactory();
   }
 
   if (deployless) {
@@ -57,7 +64,7 @@ export async function fetchVault(
         abi,
         code,
         functionName: "query",
-        args: [address, publicAllocator ?? zeroAddress],
+        args: [address, publicAllocator ?? zeroAddress, metaMorphoFactory],
       });
 
       return new Vault({
@@ -109,6 +116,7 @@ export async function fetchVault(
     supplyQueueSize,
     withdrawQueueSize,
     hasPublicAllocator,
+    isMetaMorpho,
   ] = await Promise.all([
     fetchVaultConfig(address, client, parameters),
     readContract(client, {
@@ -215,7 +223,34 @@ export async function fetchVault(
         functionName: "isAllocator",
         args: [publicAllocator],
       }),
+    (async () => {
+      const isMetaMorpho = await readContract(client, {
+        ...parameters,
+        address: metaMorphoFactory,
+        abi: metaMorphoFactoryAbi,
+        functionName: "isMetaMorpho",
+        args: [address],
+      });
+
+      if (isMetaMorpho) return true;
+
+      // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
+      if (parameters.chainId === 1 || parameters.chainId === 8453) {
+        return await readContract(client, {
+          ...parameters,
+          address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
+          abi: metaMorphoFactoryAbi,
+          functionName: "isMetaMorpho",
+          args: [address],
+        });
+      }
+      return false;
+    })(),
   ]);
+
+  if (!isMetaMorpho) {
+    throw new UnknownFromFactory(metaMorphoFactory, address);
+  }
 
   let publicAllocatorConfigPromise:
     | Promise<VaultPublicAllocatorConfig>
