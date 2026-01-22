@@ -225,15 +225,13 @@ export async function fetchVault(
       }),
     (async () => {
       try {
-        const isMetaMorpho = await readContract(client, {
+        return await readContract(client, {
           ...parameters,
           address: metaMorphoFactory,
           abi: metaMorphoFactoryAbi,
           functionName: "isMetaMorpho",
           args: [address],
         });
-
-        if (isMetaMorpho) return true;
       } catch {
         // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
         if (parameters.chainId === 1 || parameters.chainId === 8453) {
@@ -245,7 +243,6 @@ export async function fetchVault(
             args: [address],
           });
         }
-        return false;
       }
     })(),
   ]);
