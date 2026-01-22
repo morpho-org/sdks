@@ -224,27 +224,29 @@ export async function fetchVault(
         args: [publicAllocator],
       }),
     (async () => {
-      const isMetaMorpho = await readContract(client, {
-        ...parameters,
-        address: metaMorphoFactory,
-        abi: metaMorphoFactoryAbi,
-        functionName: "isMetaMorpho",
-        args: [address],
-      });
-
-      if (isMetaMorpho) return true;
-
-      // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
-      if (parameters.chainId === 1 || parameters.chainId === 8453) {
-        return await readContract(client, {
+      try {
+        const isMetaMorpho = await readContract(client, {
           ...parameters,
-          address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
+          address: metaMorphoFactory,
           abi: metaMorphoFactoryAbi,
           functionName: "isMetaMorpho",
           args: [address],
         });
+
+        if (isMetaMorpho) return true;
+      } catch {
+        // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
+        if (parameters.chainId === 1 || parameters.chainId === 8453) {
+          return await readContract(client, {
+            ...parameters,
+            address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
+            abi: metaMorphoFactoryAbi,
+            functionName: "isMetaMorpho",
+            args: [address],
+          });
+        }
+        return false;
       }
-      return false;
     })(),
   ]);
 
