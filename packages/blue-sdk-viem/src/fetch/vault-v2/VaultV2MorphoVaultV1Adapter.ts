@@ -55,7 +55,8 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
         abi: morphoVaultV1AdapterFactoryAbi,
         functionName: "isMorphoVaultV1Adapter",
         args: [address],
-      }),
+      }) // Factory may not have been deployed at requested block tag.
+        .catch(() => false),
       readContract(client, {
         ...parameters,
         address,
