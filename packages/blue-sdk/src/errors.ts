@@ -122,12 +122,6 @@ export namespace BlueErrors {
 }
 
 export namespace VaultV2Errors {
-  export class UnknownFactory extends Error {
-    constructor() {
-      super(`unknown factory`);
-    }
-  }
-
   export class InvalidInterestAccrual extends Error {
     constructor(
       public readonly vault: Address,
@@ -145,14 +139,20 @@ export namespace VaultV2Errors {
       super(`unsupported liquidity adapter "${address}"`);
     }
   }
+}
 
-  export class UnknownFromFactory extends Error {
-    constructor(
-      public readonly factory: Address,
-      public readonly address: Address,
-    ) {
-      super(`address "${address}" is not from the ${factory} factory`);
-    }
+export class UnknownFactory extends Error {
+  constructor() {
+    super(`unknown factory`);
+  }
+}
+
+export class UnknownFromFactory extends Error {
+  constructor(
+    public readonly factory: Address,
+    public readonly address: Address,
+  ) {
+    super(`address "${address}" is not from the ${factory} factory`);
   }
 }
 

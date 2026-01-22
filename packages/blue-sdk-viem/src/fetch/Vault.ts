@@ -25,7 +25,12 @@ export async function fetchVault(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { publicAllocator } = getChainAddresses(parameters.chainId);
+  const { publicAllocator, metaMorphoFactory } = getChainAddresses(
+    parameters.chainId,
+  );
+
+  if (!metaMorphoFactory) {
+  }
 
   if (deployless) {
     try {

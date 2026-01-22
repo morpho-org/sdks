@@ -1,8 +1,9 @@
 import {
   AccrualVaultV2,
   type IVaultV2Allocation,
+  UnknownFactory,
+  UnknownFromFactory,
   VaultV2,
-  VaultV2Errors,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
   getChainAddresses,
@@ -40,7 +41,7 @@ export async function fetchVaultV2(
   } = getChainAddresses(parameters.chainId);
 
   if (!vaultV2Factory) {
-    throw new VaultV2Errors.UnknownFactory();
+    throw new UnknownFactory();
   }
 
   if (deployless) {
@@ -188,7 +189,7 @@ export async function fetchVaultV2(
   ]);
 
   if (!isVaultV2) {
-    throw new VaultV2Errors.UnknownFromFactory(vaultV2Factory, address);
+    throw new UnknownFromFactory(vaultV2Factory, address);
   }
 
   const [

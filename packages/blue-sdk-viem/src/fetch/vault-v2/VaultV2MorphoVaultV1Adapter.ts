@@ -1,6 +1,7 @@
 import {
   AccrualVaultV2MorphoVaultV1Adapter,
-  VaultV2Errors,
+  UnknownFactory,
+  UnknownFromFactory,
   VaultV2MorphoVaultV1Adapter,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -27,7 +28,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
   const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
 
   if (!morphoVaultV1AdapterFactory) {
-    throw new VaultV2Errors.UnknownFactory();
+    throw new UnknownFactory();
   }
 
   if (deployless) {
@@ -78,10 +79,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
     ]);
 
   if (!isMorphoVaultV1Adapter) {
-    throw new VaultV2Errors.UnknownFromFactory(
-      morphoVaultV1AdapterFactory,
-      address,
-    );
+    throw new UnknownFromFactory(morphoVaultV1AdapterFactory, address);
   }
 
   return new VaultV2MorphoVaultV1Adapter({

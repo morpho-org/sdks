@@ -1,6 +1,7 @@
 import {
   AccrualVaultV2MorphoMarketV1Adapter,
-  VaultV2Errors,
+  UnknownFactory,
+  UnknownFromFactory,
   VaultV2MorphoMarketV1Adapter,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
@@ -30,7 +31,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
   );
 
   if (!morphoMarketV1AdapterFactory) {
-    throw new VaultV2Errors.UnknownFactory();
+    throw new UnknownFactory();
   }
 
   if (deployless) {
@@ -89,10 +90,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
   ]);
 
   if (!isMorphoMarketV1Adapter) {
-    throw new VaultV2Errors.UnknownFromFactory(
-      morphoMarketV1AdapterFactory,
-      address,
-    );
+    throw new UnknownFromFactory(morphoMarketV1AdapterFactory, address);
   }
 
   const marketParamsList = await Promise.all(
