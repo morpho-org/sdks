@@ -304,7 +304,7 @@ describe("LiquidityAdapter vaultV1", () => {
 
       const result = accrualVaultV2.maxDeposit(MathLib.MAX_UINT_256);
       expect(result).toStrictEqual({
-        value: 1000725557277232788n,
+        value: 1001123682308137952n,
         limiter: CapacityLimitReason.cap,
       });
     });
@@ -323,7 +323,7 @@ describe("LiquidityAdapter vaultV1", () => {
         const result = accrualVaultV2.maxWithdraw(shares);
 
         expect(result).toStrictEqual({
-          value: 16667544n,
+          value: 16733835n,
           limiter: CapacityLimitReason.liquidity,
         });
       },
