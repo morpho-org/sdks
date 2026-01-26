@@ -71,8 +71,8 @@ export async function fetchAccrualPosition(
   parameters.chainId ??= await getChainId(client);
 
   const [position, market] = await Promise.all([
-    await fetchPosition(user, marketId, client, parameters),
-    await fetchMarket(marketId, client, parameters),
+    fetchPosition(user, marketId, client, parameters),
+    fetchMarket(marketId, client, parameters),
   ]);
 
   return new AccrualPosition(position, market);
