@@ -22,6 +22,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { Time, getValue } from "@morpho-org/morpho-ts";
 import {
+  APPROVE_ONLY_ONCE_TOKENS,
   MAX_TOKEN_APPROVALS,
   type MaybeDraft,
   type Operation,
@@ -415,6 +416,23 @@ export const encodeOperation = (
       }
 
       // Signatures are not supported, fallback to standard approval.
+
+      if (
+        APPROVE_ONLY_ONCE_TOKENS[dataBefore.chainId]?.includes(
+          operation.address,
+        ) &&
+        dataBefore.getHolding(sender, operation.address).erc20Allowances[
+          "bundler3.generalAdapter1"
+        ] > 0n
+      )
+        requirements.txs.push(
+          ...encodeErc20Approval(
+            operation.address,
+            generalAdapter1,
+            0n,
+            dataBefore,
+          ),
+        );
 
       requirements.txs.push(
         ...encodeErc20Approval(
