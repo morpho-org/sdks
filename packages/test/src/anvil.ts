@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import getPort from "get-port";
 import _kebabCase from "lodash.kebabcase";
 
 export interface AnvilArgs {
@@ -288,26 +287,28 @@ export const spawnAnvil = async (
   rpcUrl: `http://localhost:${number}`;
   stop: () => boolean;
 }> => {
-  const port = await getPort();
-
   let started = false;
+  let port = args.port ?? 0;
 
   const stop = await new Promise<() => boolean>((resolve, reject) => {
     const subprocess = spawn("anvil", toArgs({ ...args, port }));
 
     subprocess.stdout.on("data", (data) => {
-      const message = `[port ${port}] ${data.toString()}`;
+      const dataStr = data.toString();
 
-      // console.debug(message);
+      const listenMatch = dataStr.match(/Listening on 127.0.0.1:(\d+)/);
+      if (listenMatch) port = Number.parseInt(listenMatch[1]);
 
-      if (message.includes("Listening on")) {
+      // console.debug(`[port ${port || "??"}] ${dataStr}`);
+
+      if (listenMatch) {
         started = true;
         resolve(() => subprocess.kill("SIGINT"));
       }
     });
 
     subprocess.stderr.on("data", (data) => {
-      const message = `[port ${port}] ${data.toString()}`;
+      const message = `[port ${port || "??"}] ${data.toString()}`;
 
       if (!started) reject(message);
       else console.warn(message);
