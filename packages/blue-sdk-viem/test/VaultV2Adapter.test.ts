@@ -29,6 +29,9 @@ const vaultV2AdapterVaultV1Address =
 const allocator = "0xc0267A5Fa9aaaf1694283c013CBFA925BCdb5dE8";
 const curator = "0xc0267A5Fa9aaaf1694283c013CBFA925BCdb5dE8";
 
+// VaultV2 with liquidity adapter marketV1
+const vaultV2ClearstarEurc = "0x4C7b69b4a82e9E5D8ec60E96516f7A0E17CBC55C";
+
 const expectedDataVaultV1Adapter = new VaultV2MorphoVaultV1Adapter({
   morphoVaultV1: "0xbeeF010f9cb27031ad51e3333f9aF9C6B1228183",
   address: vaultV2AdapterVaultV1Address,
@@ -301,7 +304,7 @@ describe("LiquidityAdapter vaultV1", () => {
 
       const result = accrualVaultV2.maxDeposit(MathLib.MAX_UINT_256);
       expect(result).toStrictEqual({
-        value: 1000725557277232788n,
+        value: 1001123682308137952n,
         limiter: CapacityLimitReason.cap,
       });
     });
@@ -320,7 +323,7 @@ describe("LiquidityAdapter vaultV1", () => {
         const result = accrualVaultV2.maxWithdraw(shares);
 
         expect(result).toStrictEqual({
-          value: 16667544n,
+          value: 16733835n,
           limiter: CapacityLimitReason.liquidity,
         });
       },
@@ -377,6 +380,26 @@ describe("LiquidityAdapter marketV1", () => {
         limiter: CapacityLimitReason.balance,
       });
     });
+  });
+});
+
+describe("LiquidityAdapter marketV1 V2", () => {
+  describe("maxDeposit function", () => {
+    vaultV2Test(
+      "should be limited by absolute cap on marketV1",
+      async ({ client }) => {
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2ClearstarEurc,
+          client,
+        );
+
+        const assets = parseUnits("30000000", 6); // 30M assets
+
+        const result = accrualVaultV2.maxDeposit(assets);
+        expect(result.value).toBeLessThanOrEqual(parseUnits("20000000", 6)); // Should be inferior or equal to 20M
+        expect(result.limiter).toBe(CapacityLimitReason.vaultV2_absoluteCap);
+      },
+    );
   });
 });
 
