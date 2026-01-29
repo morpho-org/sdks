@@ -53,7 +53,7 @@ export interface ChainAddresses {
    */
   usdc?: Address;
   /**
-   * Must implement USDC permit version 2 (otherwise breaks permit signatures).
+   * Must implement EURC permit version 2 (otherwise breaks permit signatures).
    */
   eurc?: Address;
   stEth?: Address;
