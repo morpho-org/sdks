@@ -238,7 +238,7 @@ export namespace ChainUtils {
     [ChainId.StableMainnet]: {
       name: "Stable",
       id: ChainId.StableMainnet,
-      nativeCurrency: { name: "gUSDT", symbol: "gUSDT", decimals: 18 },
+      nativeCurrency: { name: "USDT0", symbol: "USDT0", decimals: 18 },
       explorerUrl: "https://stablescan.xyz",
       identifier: "stable",
     },

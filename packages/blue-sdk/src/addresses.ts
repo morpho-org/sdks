@@ -587,6 +587,8 @@ const _addressesRegistry = {
     registryList: "0xCe93fcB2849EB886F1e81d45D2747dF803f843C3",
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
     preLiquidationFactory: "0x741A6604e974FeAF35a5FBb1416B3e01c33e5C0e",
+
+    // There is no wrapped native token because the native token USDT0 is already an ERC20.
   },
   [ChainId.CronosMainnet]: {
     morpho: "0xDF9a1DC07e5dEe5ccCCaBeC35e446C70fAF7434e",
