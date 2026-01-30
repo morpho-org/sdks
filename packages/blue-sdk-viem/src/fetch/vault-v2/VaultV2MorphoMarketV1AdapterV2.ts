@@ -1,12 +1,23 @@
 import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
   type MarketId,
+  UnknownFactory,
+  UnknownOfFactory,
   VaultV2MorphoMarketV1AdapterV2,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { fromEntries } from "@morpho-org/morpho-ts";
-import type { Address, Client } from "viem";
+import {
+  type Address,
+  BaseError,
+  type Client,
+  ContractFunctionRevertedError,
+} from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { morphoMarketV1AdapterV2Abi } from "../../abis";
+import {
+  morphoMarketV1AdapterV2Abi,
+  morphoMarketV1AdapterV2FactoryAbi,
+} from "../../abis";
 import {
   abi,
   code,
@@ -21,6 +32,14 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
 ) {
   parameters.chainId ??= await getChainId(client);
 
+  const { morphoMarketV1AdapterV2Factory } = getChainAddresses(
+    parameters.chainId,
+  );
+
+  if (!morphoMarketV1AdapterV2Factory) {
+    throw new UnknownFactory();
+  }
+
   if (deployless) {
     try {
       const adapter = await readContract(client, {
@@ -28,7 +47,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
         abi,
         code,
         functionName: "query",
-        args: [address],
+        args: [address, morphoMarketV1AdapterV2Factory],
       });
 
       return new VaultV2MorphoMarketV1AdapterV2({
@@ -46,38 +65,67 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
         ),
         address,
       });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
+
+      if (error instanceof BaseError) {
+        const revertError = error.walk(
+          (err) => err instanceof ContractFunctionRevertedError,
+        );
+        if (
+          revertError instanceof ContractFunctionRevertedError &&
+          revertError.data?.errorName === "UnknownOfFactory"
+        )
+          throw error;
+      }
     }
   }
 
-  const [parentVault, skimRecipient, marketIdsLength, adaptiveCurveIrm] =
-    await Promise.all([
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoMarketV1AdapterV2Abi,
-        functionName: "parentVault",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoMarketV1AdapterV2Abi,
-        functionName: "skimRecipient",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoMarketV1AdapterV2Abi,
-        functionName: "marketIdsLength",
-      }),
-      readContract(client, {
-        ...parameters,
-        address,
-        abi: morphoMarketV1AdapterV2Abi,
-        functionName: "adaptiveCurveIrm",
-      }),
-    ]);
+  const [
+    isMorphoMarketV1AdapterV2,
+    parentVault,
+    skimRecipient,
+    marketIdsLength,
+    adaptiveCurveIrm,
+  ] = await Promise.all([
+    readContract(client, {
+      ...parameters,
+      address: morphoMarketV1AdapterV2Factory,
+      abi: morphoMarketV1AdapterV2FactoryAbi,
+      functionName: "isMorphoMarketV1AdapterV2",
+      args: [address],
+    }) // Factory may not have been deployed at requested block tag.
+      .catch(() => false),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoMarketV1AdapterV2Abi,
+      functionName: "parentVault",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoMarketV1AdapterV2Abi,
+      functionName: "skimRecipient",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoMarketV1AdapterV2Abi,
+      functionName: "marketIdsLength",
+    }),
+    readContract(client, {
+      ...parameters,
+      address,
+      abi: morphoMarketV1AdapterV2Abi,
+      functionName: "adaptiveCurveIrm",
+    }),
+  ]);
+
+  if (!isMorphoMarketV1AdapterV2) {
+    throw new UnknownOfFactory(morphoMarketV1AdapterV2Factory, address);
+  }
 
   const marketIds = await Promise.all(
     Array.from(
