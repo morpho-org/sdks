@@ -147,7 +147,7 @@ export class UnknownFactory extends Error {
   }
 }
 
-export class UnknownFromFactory extends Error {
+export class UnknownOfFactory extends Error {
   constructor(
     public readonly factory: Address,
     public readonly address: Address,
