@@ -43,7 +43,7 @@ export async function fetchPreLiquidationParams(
   client: Client,
   parameters: DeploylessFetchParameters = {},
 ): Promise<PreLiquidationParams> {
-  parameters.chainId = await getChainId(client);
+  parameters.chainId ??= await getChainId(client);
   const { preLltv, preLIF1, preLIF2, preLCF1, preLCF2, preLiquidationOracle } =
     await readContract(client, {
       ...parameters,
@@ -71,8 +71,8 @@ export async function fetchAccrualPosition(
   parameters.chainId ??= await getChainId(client);
 
   const [position, market] = await Promise.all([
-    await fetchPosition(user, marketId, client, parameters),
-    await fetchMarket(marketId, client, parameters),
+    fetchPosition(user, marketId, client, parameters),
+    fetchMarket(marketId, client, parameters),
   ]);
 
   return new AccrualPosition(position, market);

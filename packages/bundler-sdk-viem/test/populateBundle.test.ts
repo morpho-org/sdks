@@ -796,6 +796,80 @@ describe("populateBundle", () => {
       );
 
       test[ChainId.EthMainnet](
+        "should deposit bbUsdt with reset approval when existing allowance and supportsSignature is false",
+        async ({ client, config }) => {
+          const initialApproval = parseUnits("100", 6);
+          const amount = parseUnits("1000000", 6);
+
+          await client.deal({ erc20: usdt, amount });
+          // deal ETH for gas
+          await client.deal({ amount: parseEther("1") });
+
+          // Pre-approve a small amount to generalAdapter1
+          await client.approve({
+            address: usdt,
+            args: [generalAdapter1, initialApproval],
+          });
+
+          expect(
+            await client.allowance({ erc20: usdt, spender: generalAdapter1 }),
+          ).toBe(initialApproval);
+
+          const block = await client.getBlock();
+
+          const { result } = await renderHook(config, () =>
+            useSimulationState({
+              marketIds: [],
+              users: [client.account.address, generalAdapter1, bbUsdt.address],
+              tokens: [usdt, bbUsdt.address],
+              vaults: [bbUsdt.address],
+              vaultV2s: [],
+              vaultV2Adapters: [],
+              block,
+            }),
+          );
+
+          await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
+
+          const data = result.current.data!;
+
+          const { bundle } = await setupTestBundle(
+            client,
+            data,
+            [
+              {
+                type: "MetaMorpho_Deposit",
+                sender: client.account.address,
+                address: bbUsdt.address,
+                args: {
+                  assets: amount,
+                  owner: client.account.address,
+                  slippage: DEFAULT_SLIPPAGE_TOLERANCE,
+                },
+              },
+            ],
+            { supportsSignature: false },
+          );
+
+          expect(bundle.requirements.signatures).toStrictEqual([]);
+
+          // Should have reset approval (to 0) followed by new approval
+          expect(bundle.requirements.txs).toStrictEqual([
+            {
+              type: "erc20Approve",
+              tx: { to: usdt, data: expect.any(String) },
+              args: [usdt, generalAdapter1, 0n],
+            },
+            {
+              type: "erc20Approve",
+              tx: { to: usdt, data: expect.any(String) },
+              args: [usdt, generalAdapter1, amount],
+            },
+          ]);
+        },
+      );
+
+      test[ChainId.EthMainnet](
         "should simulate bbUSDT deposit into supply max collateral without skim",
         async ({ client, config }) => {
           const amount = parseUnits("1000000", 6);
