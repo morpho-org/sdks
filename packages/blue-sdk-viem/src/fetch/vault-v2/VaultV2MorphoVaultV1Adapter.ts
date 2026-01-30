@@ -1,11 +1,17 @@
 import {
   AccrualVaultV2MorphoVaultV1Adapter,
   UnknownFactory,
-  UnknownFromFactory,
+  UnknownOfFactory,
   VaultV2MorphoVaultV1Adapter,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import { type Address, type Client, erc20Abi } from "viem";
+import {
+  type Address,
+  BaseError,
+  type Client,
+  ContractFunctionRevertedError,
+  erc20Abi,
+} from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {
   morphoVaultV1AdapterAbi,
@@ -45,6 +51,17 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
     } catch (error) {
       if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
+
+      if (error instanceof BaseError) {
+        const revertError = error.walk(
+          (err) => err instanceof ContractFunctionRevertedError,
+        );
+        if (
+          revertError instanceof ContractFunctionRevertedError &&
+          revertError.data?.errorName === "UnknownOfFactory"
+        )
+          throw error;
+      }
     }
   }
 
@@ -79,7 +96,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
     ]);
 
   if (!isMorphoVaultV1Adapter) {
-    throw new UnknownFromFactory(morphoVaultV1AdapterFactory, address);
+    throw new UnknownOfFactory(morphoVaultV1AdapterFactory, address);
   }
 
   return new VaultV2MorphoVaultV1Adapter({

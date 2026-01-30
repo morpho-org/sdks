@@ -10,7 +10,7 @@ struct VaultV2MorphoVaultV1AdapterResponse {
     address skimRecipient;
 }
 
-error UnknownFromFactory(address factory, address adapter);
+error UnknownOfFactory(address factory, address adapter);
 
 contract GetVaultV2MorphoVaultV1Adapter {
     function query(IMorphoVaultV1Adapter adapter, IMorphoVaultV1AdapterFactory factory)
@@ -19,7 +19,7 @@ contract GetVaultV2MorphoVaultV1Adapter {
         returns (VaultV2MorphoVaultV1AdapterResponse memory res)
     {
         if (!factory.isMorphoVaultV1Adapter(address(adapter))) {
-            revert UnknownFromFactory(address(factory), address(adapter));
+            revert UnknownOfFactory(address(factory), address(adapter));
         }
 
         res.morphoVaultV1 = adapter.morphoVaultV1();

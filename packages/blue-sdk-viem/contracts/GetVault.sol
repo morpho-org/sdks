@@ -42,7 +42,7 @@ struct VaultResponse {
     PublicAllocatorConfig publicAllocatorConfig;
 }
 
-error UnknownFromFactory(address factory, address vault);
+error UnknownOfFactory(address factory, address vault);
 
 contract GetVault {
     function query(IMetaMorpho vault, IPublicAllocator publicAllocator, IMetaMorphoFactory metaMorphoFactory)
@@ -56,7 +56,7 @@ contract GetVault {
                 && IMetaMorphoFactory(0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101).isMetaMorpho(address(vault));
 
             if (!isV1_0Factory) {
-                revert UnknownFromFactory(address(metaMorphoFactory), address(vault));
+                revert UnknownOfFactory(address(metaMorphoFactory), address(vault));
             }
         }
 

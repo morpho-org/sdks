@@ -16,7 +16,7 @@ struct VaultV2MorphoMarketV1AdapterV2Response {
     MarketSupplyShares[] marketSupplyShares;
 }
 
-error UnknownFromFactory(address factory, address adapter);
+error UnknownOfFactory(address factory, address adapter);
 
 contract GetVaultV2MorphoMarketV1AdapterV2 {
     function query(IMorphoMarketV1AdapterV2 adapter, IMorphoMarketV1AdapterV2Factory factory)
@@ -25,7 +25,7 @@ contract GetVaultV2MorphoMarketV1AdapterV2 {
         returns (VaultV2MorphoMarketV1AdapterV2Response memory res)
     {
         if (!factory.isMorphoMarketV1AdapterV2(address(adapter))) {
-            revert UnknownFromFactory(address(factory), address(adapter));
+            revert UnknownOfFactory(address(factory), address(adapter));
         }
 
         res.parentVault = adapter.parentVault();

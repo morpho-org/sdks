@@ -2,7 +2,7 @@ import {
   AccrualVaultV2,
   type IVaultV2Allocation,
   UnknownFactory,
-  UnknownFromFactory,
+  UnknownOfFactory,
   VaultV2,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
@@ -10,7 +10,9 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   type Address,
+  BaseError,
   type Client,
+  ContractFunctionRevertedError,
   type Hash,
   erc20Abi,
   zeroAddress,
@@ -71,6 +73,17 @@ export async function fetchVaultV2(
       });
     } catch (error) {
       if (deployless === "force") throw error;
+
+      if (error instanceof BaseError) {
+        const revertError = error.walk(
+          (err) => err instanceof ContractFunctionRevertedError,
+        );
+        if (
+          revertError instanceof ContractFunctionRevertedError &&
+          revertError.data?.errorName === "UnknownOfFactory"
+        )
+          throw error;
+      }
       // Fallback to multicall if deployless call fails.
     }
   }
@@ -189,7 +202,7 @@ export async function fetchVaultV2(
   ]);
 
   if (!isVaultV2) {
-    throw new UnknownFromFactory(vaultV2Factory, address);
+    throw new UnknownOfFactory(vaultV2Factory, address);
   }
 
   const [

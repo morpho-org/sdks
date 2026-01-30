@@ -6,7 +6,7 @@ import {IMorphoVaultV1AdapterFactory} from "./interfaces/IMorphoVaultV1AdapterFa
 import {IMorphoMarketV1AdapterV2Factory} from "./interfaces/IMorphoMarketV1AdapterV2Factory.sol";
 import {IVaultV2Factory} from "./interfaces/IVaultV2Factory.sol";
 
-error UnknownFromFactory(address factory, address vault);
+error UnknownOfFactory(address factory, address vault);
 
 struct Token {
     address asset;
@@ -50,7 +50,7 @@ contract GetVaultV2 {
         IMorphoMarketV1AdapterV2Factory morphoMarketV1AdapterV2Factory
     ) external view returns (VaultV2Response memory res) {
         if (!vaultV2Factory.isVaultV2(address(vault))) {
-            revert UnknownFromFactory(address(vaultV2Factory), address(vault));
+            revert UnknownOfFactory(address(vaultV2Factory), address(vault));
         }
 
         res.token =

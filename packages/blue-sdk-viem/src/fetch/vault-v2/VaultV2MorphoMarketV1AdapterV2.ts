@@ -2,12 +2,17 @@ import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
   type MarketId,
   UnknownFactory,
-  UnknownFromFactory,
+  UnknownOfFactory,
   VaultV2MorphoMarketV1AdapterV2,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { fromEntries } from "@morpho-org/morpho-ts";
-import type { Address, Client } from "viem";
+import {
+  type Address,
+  BaseError,
+  type Client,
+  ContractFunctionRevertedError,
+} from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {
   morphoMarketV1AdapterV2Abi,
@@ -60,8 +65,20 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
         ),
         address,
       });
-    } catch {
+    } catch (error) {
+      if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
+
+      if (error instanceof BaseError) {
+        const revertError = error.walk(
+          (err) => err instanceof ContractFunctionRevertedError,
+        );
+        if (
+          revertError instanceof ContractFunctionRevertedError &&
+          revertError.data?.errorName === "UnknownOfFactory"
+        )
+          throw error;
+      }
     }
   }
 
@@ -107,7 +124,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
   ]);
 
   if (!isMorphoMarketV1AdapterV2) {
-    throw new UnknownFromFactory(morphoMarketV1AdapterV2Factory, address);
+    throw new UnknownOfFactory(morphoMarketV1AdapterV2Factory, address);
   }
 
   const marketIds = await Promise.all(

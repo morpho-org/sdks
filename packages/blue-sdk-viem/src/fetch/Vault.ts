@@ -5,7 +5,7 @@ import {
   Eip5267Domain,
   type MarketId,
   UnknownFactory,
-  UnknownFromFactory,
+  UnknownOfFactory,
   Vault,
   VaultConfig,
   type VaultPublicAllocatorConfig,
@@ -250,7 +250,7 @@ export async function fetchVault(
   ]);
 
   if (!isMetaMorpho) {
-    throw new UnknownFromFactory(metaMorphoFactory, address);
+    throw new UnknownOfFactory(metaMorphoFactory, address);
   }
 
   let publicAllocatorConfigPromise:
