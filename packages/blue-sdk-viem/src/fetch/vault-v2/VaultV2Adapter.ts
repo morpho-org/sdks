@@ -5,10 +5,10 @@ import {
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {
+  morphoMarketV1AdapterFactoryAbi,
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterFactoryAbi,
 } from "../../abis";
-import { morphoMarketV1AdapterFactoryAbi } from "../../abis";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter";
 import { fetchAccrualVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter";
