@@ -10,9 +10,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   type Address,
-  BaseError,
   type Client,
-  ContractFunctionRevertedError,
   type Hash,
   erc20Abi,
   zeroAddress,
@@ -24,6 +22,7 @@ import {
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "../../abis";
+import { isUnknownOfFactoryError } from "../../error";
 import { abi, code } from "../../queries/vault-v2/GetVaultV2";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchToken } from "../Token";
@@ -73,17 +72,7 @@ export async function fetchVaultV2(
       });
     } catch (error) {
       if (deployless === "force") throw error;
-
-      if (error instanceof BaseError) {
-        const revertError = error.walk(
-          (err) => err instanceof ContractFunctionRevertedError,
-        );
-        if (
-          revertError instanceof ContractFunctionRevertedError &&
-          revertError.data?.errorName === "UnknownOfFactory"
-        )
-          throw error;
-      }
+      if (isUnknownOfFactoryError(error)) throw error;
       // Fallback to multicall if deployless call fails.
     }
   }

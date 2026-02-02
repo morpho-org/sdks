@@ -5,18 +5,13 @@ import {
   VaultV2MorphoVaultV1Adapter,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import {
-  type Address,
-  BaseError,
-  type Client,
-  ContractFunctionRevertedError,
-  erc20Abi,
-} from "viem";
+import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {
   morphoVaultV1AdapterAbi,
   morphoVaultV1AdapterFactoryAbi,
 } from "../../abis";
+import { isUnknownOfFactoryError } from "../../error";
 import {
   abi,
   code,
@@ -50,18 +45,8 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
       return new VaultV2MorphoVaultV1Adapter({ ...adapter, address });
     } catch (error) {
       if (deployless === "force") throw error;
+      if (isUnknownOfFactoryError(error)) throw error;
       // Fallback to multicall if deployless call fails.
-
-      if (error instanceof BaseError) {
-        const revertError = error.walk(
-          (err) => err instanceof ContractFunctionRevertedError,
-        );
-        if (
-          revertError instanceof ContractFunctionRevertedError &&
-          revertError.data?.errorName === "UnknownOfFactory"
-        )
-          throw error;
-      }
     }
   }
 
