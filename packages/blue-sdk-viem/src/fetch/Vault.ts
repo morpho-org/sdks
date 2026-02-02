@@ -116,7 +116,7 @@ export async function fetchVault(
     supplyQueueSize,
     withdrawQueueSize,
     hasPublicAllocator,
-    isMetaMorpho,
+    isMetaMorphoV1_1,
   ] = await Promise.all([
     fetchVaultConfig(address, client, parameters),
     readContract(client, {
@@ -223,35 +223,27 @@ export async function fetchVault(
         functionName: "isAllocator",
         args: [publicAllocator],
       }),
-    (async () => {
-      try {
-        const isMetaMorphoV1_1 = await readContract(client, {
-          ...parameters,
-          address: metaMorphoFactory,
-          abi: metaMorphoFactoryAbi,
-          functionName: "isMetaMorpho",
-          args: [address],
-        });
-        if (isMetaMorphoV1_1) return true;
-      } catch {}
-      // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
-      if (parameters.chainId === 1 || parameters.chainId === 8453) {
-        const isMetaMorphoV1_0 = await readContract(client, {
+    readContract(client, {
+      ...parameters,
+      address: metaMorphoFactory,
+      abi: metaMorphoFactoryAbi,
+      functionName: "isMetaMorpho",
+      args: [address],
+    }).catch(() => false),
+  ]);
+
+  // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
+  const isMetaMorphoV1_0Promise =
+    !isMetaMorphoV1_1 &&
+    (parameters.chainId === 1 || parameters.chainId === 8453)
+      ? readContract(client, {
           ...parameters,
           address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
           abi: metaMorphoFactoryAbi,
           functionName: "isMetaMorpho",
           args: [address],
-        });
-        if (isMetaMorphoV1_0) return true;
-      }
-      return false;
-    })(),
-  ]);
-
-  if (!isMetaMorpho) {
-    throw new UnknownOfFactory(metaMorphoFactory, address);
-  }
+        })
+      : Promise.resolve(false);
 
   let publicAllocatorConfigPromise:
     | Promise<VaultPublicAllocatorConfig>
@@ -281,8 +273,8 @@ export async function fetchVault(
       }),
     ]).then(([admin, fee, accruedFee]) => ({ admin, fee, accruedFee }));
 
-  const [supplyQueue, withdrawQueue, publicAllocatorConfig] = await Promise.all(
-    [
+  const [supplyQueue, withdrawQueue, publicAllocatorConfig, isMetaMorphoV1_0] =
+    await Promise.all([
       Promise.all(
         Array.from(
           { length: Number(supplyQueueSize) },
@@ -310,8 +302,13 @@ export async function fetchVault(
         ),
       ),
       publicAllocatorConfigPromise,
-    ],
-  );
+      isMetaMorphoV1_0Promise,
+    ]);
+
+  const isMetaMorpho = isMetaMorphoV1_1 || isMetaMorphoV1_0;
+  if (!isMetaMorpho) {
+    throw new UnknownOfFactory(metaMorphoFactory, address);
+  }
 
   return new Vault({
     ...config,
