@@ -105,7 +105,7 @@ export async function fetchVault(
     withdrawQueueSize,
     hasPublicAllocator,
   ] = await Promise.all([
-    fetchVaultConfig(address, client, parameters),
+    fetchVaultConfig(address, client, { ...parameters, deployless }),
     readContract(client, {
       ...parameters,
       address,

@@ -81,7 +81,7 @@ export async function fetchVaultV2(
     performanceFeeRecipient,
     managementFeeRecipient,
   ] = await Promise.all([
-    fetchToken(address, client, parameters),
+    fetchToken(address, client, { ...parameters, deployless }),
     readContract(client, {
       ...parameters,
       address,

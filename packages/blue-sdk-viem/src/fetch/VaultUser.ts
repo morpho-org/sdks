@@ -39,7 +39,10 @@ export async function fetchVaultUser(
     }
   }
 
-  const config = await fetchVaultConfig(vault, client, parameters);
+  const config = await fetchVaultConfig(vault, client, {
+    ...parameters,
+    deployless,
+  });
 
   const [allowance, isAllocator] = await Promise.all([
     readContract(client, {
