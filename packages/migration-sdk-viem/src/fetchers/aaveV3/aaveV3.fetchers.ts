@@ -2,7 +2,7 @@ import { type Address, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 import { isDefined, values } from "@morpho-org/morpho-ts";
 
 import {
-  type FetchParameters,
+  type DeploylessFetchParameters,
   blueAbi,
   fetchToken,
 } from "@morpho-org/blue-sdk-viem";
@@ -29,7 +29,7 @@ import { rateToApy } from "../../utils/rates.js";
 export async function fetchAaveV3Positions(
   user: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId ??= await getChainId(client);
 
@@ -128,7 +128,7 @@ export async function fetchAaveV3Positions(
               functionName: "nonces",
               args: [user],
             }),
-            fetchToken(tokenAddress, client, parameters),
+            fetchToken(tokenAddress, client, { deployless, ...parameters }),
           ]);
 
         const userReserveConfig = userConfigByToken[underlyingAddress];
@@ -183,7 +183,7 @@ export async function fetchAaveV3Positions(
             functionName: "getReserveEModeCategory",
             args: [underlyingAddress],
           }).catch(() => null),
-          fetchToken(underlyingAddress, client, parameters),
+          fetchToken(underlyingAddress, client, { deployless, ...parameters }),
         ]);
 
         const [totalBorrow, eModeCategoryData, morphoNonce, isBundlerManaging] =

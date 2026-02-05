@@ -2,7 +2,7 @@ import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { isDefined, values } from "@morpho-org/morpho-ts";
 
 import {
-  type FetchParameters,
+  type DeploylessFetchParameters,
   blueAbi,
   fetchToken,
 } from "@morpho-org/blue-sdk-viem";
@@ -24,7 +24,7 @@ async function fetchCompoundV3InstancePosition(
   user: Address,
   cometAddress: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 
@@ -226,8 +226,8 @@ async function fetchCompoundV3InstancePosition(
         functionName: "isSupplyPaused",
         args: [],
       }),
-      fetchToken(baseToken, client, parameters),
-      fetchToken(assetInInfo.asset, client, parameters),
+      fetchToken(baseToken, client, { deployless, ...parameters }),
+      fetchToken(assetInInfo.asset, client, { deployless, ...parameters }),
     ]);
 
     /* MAX */
@@ -316,7 +316,7 @@ async function fetchCompoundV3InstancePosition(
 export async function fetchCompoundV3Positions(
   user: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId ??= await getChainId(client);
 
@@ -330,12 +330,10 @@ export async function fetchCompoundV3Positions(
   return (
     await Promise.all(
       values(migrationContracts).map(({ address: cometAddress }) =>
-        fetchCompoundV3InstancePosition(
-          user,
-          cometAddress,
-          client,
-          parameters,
-        ).catch(() => null),
+        fetchCompoundV3InstancePosition(user, cometAddress, client, {
+          deployless,
+          ...parameters,
+        }).catch(() => null),
       ),
     )
   ).filter(isDefined);
