@@ -133,6 +133,8 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
   [ChainId.CronosMainnet]: {},
   [ChainId.CeloMainnet]: {},
   [ChainId.AbstractMainnet]: {},
+  [ChainId.BitlayerMainnet]: {},
+  [ChainId.BscMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
@@ -255,5 +257,13 @@ export const preLiquidationFactoryConfigs: Record<
   [ChainId.AbstractMainnet]: {
     address: addressesRegistry[ChainId.AbstractMainnet].preLiquidationFactory,
     startBlock: deployments[ChainId.AbstractMainnet].preLiquidationFactory,
+  },
+  [ChainId.BitlayerMainnet]: {
+    address: addressesRegistry[ChainId.BitlayerMainnet].preLiquidationFactory,
+    startBlock: deployments[ChainId.BitlayerMainnet].preLiquidationFactory,
+  },
+  [ChainId.BscMainnet]: {
+    address: addressesRegistry[ChainId.BscMainnet].preLiquidationFactory,
+    startBlock: deployments[ChainId.BscMainnet].preLiquidationFactory,
   },
 };
