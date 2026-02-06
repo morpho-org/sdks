@@ -5,8 +5,10 @@ import {IVaultV2, Caps} from "./interfaces/IVaultV2.sol";
 import {IMorphoVaultV1AdapterFactory} from "./interfaces/IMorphoVaultV1AdapterFactory.sol";
 import {IMorphoMarketV1AdapterV2Factory} from "./interfaces/IMorphoMarketV1AdapterV2Factory.sol";
 import {IVaultV2Factory} from "./interfaces/IVaultV2Factory.sol";
-
 error UnknownOfFactory(address factory, address vault);
+import {IMorphoMarketV1AdapterV2} from "./interfaces/IMorphoMarketV1AdapterV2.sol";
+import {MarketParams} from "../interfaces/IMorpho.sol";
+
 
 struct Token {
     address asset;
@@ -75,19 +77,14 @@ contract GetVaultV2 {
             res.adapters[i] = vault.adapters(i);
         }
 
-        if (
-            address(morphoVaultV1AdapterFactory) != address(0)
-                && morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter)
-        ) {
-            res.isLiquidityAdapterKnown = true;
-        } else if (
-            address(morphoMarketV1AdapterV2Factory) != address(0)
-                && morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter)
-        ) {
-            res.isLiquidityAdapterKnown = true;
-        }
+        bool isMorphoVaultV1Adapter = address(morphoVaultV1AdapterFactory) != address(0)
+            && morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter);
+        bool isMorphoMarketV1AdapterV2 = address(morphoMarketV1AdapterV2Factory) != address(0)
+            && morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter);
 
-        if (res.isLiquidityAdapterKnown) {
+        res.isLiquidityAdapterKnown = isMorphoVaultV1Adapter || isMorphoMarketV1AdapterV2;
+
+        if (isMorphoVaultV1Adapter) {
             res.liquidityAllocations = new VaultV2Allocation[](1);
             res.liquidityAllocations[0] = VaultV2Allocation({
                 id: keccak256(abi.encode("this", res.liquidityAdapter)),
@@ -95,6 +92,15 @@ contract GetVaultV2 {
                 relativeCap: 0,
                 allocation: 0
             });
+        } else if (isMorphoMarketV1AdapterV2) {
+            MarketParams memory marketParams = abi.decode(res.liquidityData, (MarketParams));
+            bytes32[] memory ids = IMorphoMarketV1AdapterV2(res.liquidityAdapter).ids(marketParams);
+
+            res.liquidityAllocations = new VaultV2Allocation[](ids.length);
+            for (uint256 i; i < ids.length; ++i) {
+                res.liquidityAllocations[i] =
+                    VaultV2Allocation({id: ids[i], absoluteCap: 0, relativeCap: 0, allocation: 0});
+            }
         }
 
         uint256 liquidityAllocationsLength = res.liquidityAllocations.length;

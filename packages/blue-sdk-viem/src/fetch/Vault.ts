@@ -118,7 +118,7 @@ export async function fetchVault(
     hasPublicAllocator,
     isMetaMorphoV1_1,
   ] = await Promise.all([
-    fetchVaultConfig(address, client, parameters),
+    fetchVaultConfig(address, client, { ...parameters, deployless }),
     readContract(client, {
       ...parameters,
       address,

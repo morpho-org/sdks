@@ -469,6 +469,7 @@ const _addressesRegistry = {
   },
   [ChainId.LiskMainnet]: {
     morpho: "0x00cD58DEEbd7A2F1C55dAec715faF8aed5b27BF8",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0xD96E5e02580C4EAfE15B5537b25eE3dEe5861e00",
       generalAdapter1: "0x76cFE4BF840C7b461772fE7CDE399f58c4173584",

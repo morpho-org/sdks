@@ -3,6 +3,7 @@ import {
   type IVaultV2Allocation,
   UnknownFactory,
   UnknownOfFactory,
+  MarketParams,
   VaultV2,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
@@ -95,7 +96,7 @@ export async function fetchVaultV2(
     performanceFeeRecipient,
     managementFeeRecipient,
   ] = await Promise.all([
-    fetchToken(address, client, parameters),
+    fetchToken(address, client, { ...parameters, deployless }),
 
     readContract(client, {
       ...parameters,
@@ -233,10 +234,17 @@ export async function fetchVaultV2(
     liquidityAdapterIds = [
       VaultV2MorphoVaultV1Adapter.adapterId(liquidityAdapter),
     ];
-  if (hasMorphoMarketV1AdapterV2LiquidityAdapter)
+  if (hasMorphoMarketV1AdapterV2LiquidityAdapter) {
+    const marketParams = MarketParams.fromHex(liquidityData);
     liquidityAdapterIds = [
       VaultV2MorphoMarketV1AdapterV2.adapterId(liquidityAdapter),
+      VaultV2MorphoMarketV1AdapterV2.collateralId(marketParams.collateralToken),
+      VaultV2MorphoMarketV1AdapterV2.marketParamsId(
+        liquidityAdapter,
+        marketParams,
+      ),
     ];
+  }
 
   let liquidityAllocations: IVaultV2Allocation[] | undefined;
   if (liquidityAdapterIds != null)
