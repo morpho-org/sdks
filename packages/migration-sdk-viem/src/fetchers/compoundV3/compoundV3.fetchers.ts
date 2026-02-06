@@ -2,7 +2,7 @@ import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { isDefined, values } from "@morpho-org/morpho-ts";
 
 import {
-  type FetchParameters,
+  type DeploylessFetchParameters,
   blueAbi,
   fetchToken,
 } from "@morpho-org/blue-sdk-viem";
@@ -24,7 +24,7 @@ async function fetchCompoundV3InstancePosition(
   user: Address,
   cometAddress: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 
@@ -316,7 +316,7 @@ async function fetchCompoundV3InstancePosition(
 export async function fetchCompoundV3Positions(
   user: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId ??= await getChainId(client);
 
