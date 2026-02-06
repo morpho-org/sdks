@@ -91,7 +91,7 @@ export async function fetchMarket(
         }).catch(() => undefined)
       : undefined,
     params.irm === adaptiveCurveIrm
-      ? await readContract(client, {
+      ? readContract(client, {
           ...parameters,
           address: adaptiveCurveIrm,
           abi: adaptiveCurveIrmAbi,
