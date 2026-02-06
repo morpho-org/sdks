@@ -24,7 +24,7 @@ async function fetchCompoundV3InstancePosition(
   user: Address,
   cometAddress: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
   parameters.chainId ??= await getChainId(client);
 
@@ -226,8 +226,8 @@ async function fetchCompoundV3InstancePosition(
         functionName: "isSupplyPaused",
         args: [],
       }),
-      fetchToken(baseToken, client, { deployless, ...parameters }),
-      fetchToken(assetInInfo.asset, client, { deployless, ...parameters }),
+      fetchToken(baseToken, client, parameters),
+      fetchToken(assetInInfo.asset, client, parameters),
     ]);
 
     /* MAX */
@@ -316,7 +316,7 @@ async function fetchCompoundV3InstancePosition(
 export async function fetchCompoundV3Positions(
   user: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId ??= await getChainId(client);
 
@@ -330,10 +330,12 @@ export async function fetchCompoundV3Positions(
   return (
     await Promise.all(
       values(migrationContracts).map(({ address: cometAddress }) =>
-        fetchCompoundV3InstancePosition(user, cometAddress, client, {
-          deployless,
-          ...parameters,
-        }).catch(() => null),
+        fetchCompoundV3InstancePosition(
+          user,
+          cometAddress,
+          client,
+          parameters,
+        ).catch(() => null),
       ),
     )
   ).filter(isDefined);

@@ -29,7 +29,7 @@ import { rateToApy } from "../../utils/rates.js";
 export async function fetchAaveV3Positions(
   user: Address,
   client: Client,
-  { deployless = true, ...parameters }: DeploylessFetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId ??= await getChainId(client);
 
@@ -128,7 +128,7 @@ export async function fetchAaveV3Positions(
               functionName: "nonces",
               args: [user],
             }),
-            fetchToken(tokenAddress, client, { deployless, ...parameters }),
+            fetchToken(tokenAddress, client, parameters),
           ]);
 
         const userReserveConfig = userConfigByToken[underlyingAddress];
@@ -183,7 +183,7 @@ export async function fetchAaveV3Positions(
             functionName: "getReserveEModeCategory",
             args: [underlyingAddress],
           }).catch(() => null),
-          fetchToken(underlyingAddress, client, { deployless, ...parameters }),
+          fetchToken(underlyingAddress, client, parameters),
         ]);
 
         const [totalBorrow, eModeCategoryData, morphoNonce, isBundlerManaging] =
