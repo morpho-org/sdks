@@ -1,9 +1,9 @@
 import {
   AccrualVaultV2,
   type IVaultV2Allocation,
+  MarketParams,
   UnknownFactory,
   UnknownOfFactory,
-  MarketParams,
   VaultV2,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
