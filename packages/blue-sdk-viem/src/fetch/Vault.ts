@@ -4,6 +4,8 @@ import {
   AccrualVault,
   Eip5267Domain,
   type MarketId,
+  UnknownFactory,
+  UnknownOfFactory,
   Vault,
   VaultConfig,
   type VaultPublicAllocatorConfig,
@@ -11,7 +13,11 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
-import { metaMorphoAbi, publicAllocatorAbi } from "../abis";
+import {
+  metaMorphoAbi,
+  metaMorphoFactoryAbi,
+  publicAllocatorAbi,
+} from "../abis";
 import type { DeploylessFetchParameters } from "../types";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
@@ -25,7 +31,13 @@ export async function fetchVault(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { publicAllocator } = getChainAddresses(parameters.chainId);
+  const { publicAllocator, metaMorphoFactory } = getChainAddresses(
+    parameters.chainId,
+  );
+
+  if (!metaMorphoFactory) {
+    throw new UnknownFactory();
+  }
 
   if (deployless) {
     try {
@@ -52,7 +64,7 @@ export async function fetchVault(
         abi,
         code,
         functionName: "query",
-        args: [address, publicAllocator ?? zeroAddress],
+        args: [address, publicAllocator ?? zeroAddress, metaMorphoFactory],
       });
 
       return new Vault({
@@ -104,6 +116,7 @@ export async function fetchVault(
     supplyQueueSize,
     withdrawQueueSize,
     hasPublicAllocator,
+    isMetaMorphoV1_1,
   ] = await Promise.all([
     fetchVaultConfig(address, client, { ...parameters, deployless }),
     readContract(client, {
@@ -210,7 +223,27 @@ export async function fetchVault(
         functionName: "isAllocator",
         args: [publicAllocator],
       }),
+    readContract(client, {
+      ...parameters,
+      address: metaMorphoFactory,
+      abi: metaMorphoFactoryAbi,
+      functionName: "isMetaMorpho",
+      args: [address],
+    }).catch(() => false),
   ]);
+
+  // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
+  const isMetaMorphoV1_0Promise =
+    !isMetaMorphoV1_1 &&
+    (parameters.chainId === 1 || parameters.chainId === 8453)
+      ? readContract(client, {
+          ...parameters,
+          address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
+          abi: metaMorphoFactoryAbi,
+          functionName: "isMetaMorpho",
+          args: [address],
+        })
+      : Promise.resolve(false);
 
   let publicAllocatorConfigPromise:
     | Promise<VaultPublicAllocatorConfig>
@@ -240,8 +273,8 @@ export async function fetchVault(
       }),
     ]).then(([admin, fee, accruedFee]) => ({ admin, fee, accruedFee }));
 
-  const [supplyQueue, withdrawQueue, publicAllocatorConfig] = await Promise.all(
-    [
+  const [supplyQueue, withdrawQueue, publicAllocatorConfig, isMetaMorphoV1_0] =
+    await Promise.all([
       Promise.all(
         Array.from(
           { length: Number(supplyQueueSize) },
@@ -269,8 +302,13 @@ export async function fetchVault(
         ),
       ),
       publicAllocatorConfigPromise,
-    ],
-  );
+      isMetaMorphoV1_0Promise,
+    ]);
+
+  const isMetaMorpho = isMetaMorphoV1_1 || isMetaMorphoV1_0;
+  if (!isMetaMorpho) {
+    throw new UnknownOfFactory(metaMorphoFactory, address);
+  }
 
   return new Vault({
     ...config,

@@ -1,10 +1,17 @@
 import {
   AccrualVaultV2MorphoVaultV1Adapter,
+  UnknownFactory,
+  UnknownOfFactory,
   VaultV2MorphoVaultV1Adapter,
+  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { morphoVaultV1AdapterAbi } from "../../abis";
+import {
+  morphoVaultV1AdapterAbi,
+  morphoVaultV1AdapterFactoryAbi,
+} from "../../abis";
+import { isUnknownOfFactoryError } from "../../error";
 import {
   abi,
   code,
@@ -19,6 +26,12 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
 ) {
   parameters.chainId ??= await getChainId(client);
 
+  const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
+
+  if (!morphoVaultV1AdapterFactory) {
+    throw new UnknownFactory();
+  }
+
   if (deployless) {
     try {
       const adapter = await readContract(client, {
@@ -26,36 +39,50 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
         abi,
         code,
         functionName: "query",
-        args: [address],
+        args: [address, morphoVaultV1AdapterFactory],
       });
 
       return new VaultV2MorphoVaultV1Adapter({ ...adapter, address });
     } catch (error) {
       if (deployless === "force") throw error;
+      if (isUnknownOfFactoryError(error)) throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
 
-  const [parentVault, skimRecipient, morphoVaultV1] = await Promise.all([
-    readContract(client, {
-      ...parameters,
-      address,
-      abi: morphoVaultV1AdapterAbi,
-      functionName: "parentVault",
-    }),
-    readContract(client, {
-      ...parameters,
-      address,
-      abi: morphoVaultV1AdapterAbi,
-      functionName: "skimRecipient",
-    }),
-    readContract(client, {
-      ...parameters,
-      address,
-      abi: morphoVaultV1AdapterAbi,
-      functionName: "morphoVaultV1",
-    }),
-  ]);
+  const [isMorphoVaultV1Adapter, parentVault, skimRecipient, morphoVaultV1] =
+    await Promise.all([
+      readContract(client, {
+        ...parameters,
+        address: morphoVaultV1AdapterFactory,
+        abi: morphoVaultV1AdapterFactoryAbi,
+        functionName: "isMorphoVaultV1Adapter",
+        args: [address],
+      }) // Factory may not have been deployed at requested block tag.
+        .catch(() => false),
+      readContract(client, {
+        ...parameters,
+        address,
+        abi: morphoVaultV1AdapterAbi,
+        functionName: "parentVault",
+      }),
+      readContract(client, {
+        ...parameters,
+        address,
+        abi: morphoVaultV1AdapterAbi,
+        functionName: "skimRecipient",
+      }),
+      readContract(client, {
+        ...parameters,
+        address,
+        abi: morphoVaultV1AdapterAbi,
+        functionName: "morphoVaultV1",
+      }),
+    ]);
+
+  if (!isMorphoVaultV1Adapter) {
+    throw new UnknownOfFactory(morphoVaultV1AdapterFactory, address);
+  }
 
   return new VaultV2MorphoVaultV1Adapter({
     morphoVaultV1,
