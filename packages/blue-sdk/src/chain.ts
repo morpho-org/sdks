@@ -30,6 +30,7 @@ export enum ChainId {
   AbstractMainnet = 2741,
   BitlayerMainnet = 200901,
   BscMainnet = 56,
+  SoneiumMainnet = 1868,
 }
 
 export interface ChainMetadata {
@@ -278,6 +279,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Bnb", symbol: "BNB", decimals: 18 },
       explorerUrl: "https://bscscan.com",
       identifier: "bsc",
+    },
+    [ChainId.SoneiumMainnet]: {
+      name: "Soneium",
+      id: ChainId.SoneiumMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://soneium.blockscout.com/",
+      identifier: "soneium",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
