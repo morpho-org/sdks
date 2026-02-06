@@ -43,21 +43,36 @@ export type FetchSimulationStateParameters = FetchMarketsParameters &
     includeVaultQueues?: boolean;
   };
 
+export type QueryParameters = {
+  enabled?: boolean;
+  staleTime?: number;
+  refetchInterval?: number | false;
+  refetchIntervalInBackground?: boolean;
+  refetchOnWindowFocus?: boolean | "always";
+  refetchOnReconnect?: boolean | "always";
+  refetchOnMount?: boolean | "always";
+  retryOnMount?: boolean;
+};
+
 export type UseSimulationStateParameters<config extends Config = Config> =
   FetchSimulationStateParameters &
     UnionOmit<DeploylessFetchParameters, "blockTag" | "blockNumber"> &
     ConfigParameter<config> & {
       block?: MinimalBlock;
       accrueInterest?: boolean;
-      query?: {
-        enabled?: boolean;
-        staleTime?: number;
-        refetchInterval?: number | false;
-        refetchIntervalInBackground?: boolean;
-        refetchOnWindowFocus?: boolean | "always";
-        refetchOnReconnect?: boolean | "always";
-        refetchOnMount?: boolean | "always";
-        retryOnMount?: boolean;
+      query?: QueryParameters;
+      entityQuery?: {
+        feeRecipient?: QueryParameters;
+        markets?: QueryParameters;
+        users?: QueryParameters;
+        tokens?: QueryParameters;
+        vaults?: QueryParameters;
+        positions?: QueryParameters;
+        holdings?: QueryParameters;
+        vaultMarketConfigs?: QueryParameters;
+        vaultUsers?: QueryParameters;
+        vaultV2s?: QueryParameters;
+        vaultV2Adapters?: QueryParameters;
       };
     };
 
@@ -149,7 +164,11 @@ export function useSimulationState<
     functionName: "feeRecipient",
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.feeRecipient,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.feeRecipient?.enabled ??
+          parameters.query?.enabled),
       staleTime,
     },
   });
@@ -159,7 +178,10 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.vaults,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.vaults?.enabled ?? parameters.query?.enabled),
     },
   });
 
@@ -176,7 +198,10 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.markets,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.markets?.enabled ?? parameters.query?.enabled),
       select: accrueInterest
         ? (market) => market.accrueInterest(block?.timestamp)
         : undefined,
@@ -188,7 +213,10 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.users,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.users?.enabled ?? parameters.query?.enabled),
     },
   });
 
@@ -197,7 +225,10 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.tokens,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.tokens?.enabled ?? parameters.query?.enabled),
     },
   });
 
@@ -213,7 +244,11 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.positions,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.positions?.enabled ??
+          parameters.query?.enabled),
     },
   });
   const holdings = useHoldings({
@@ -228,7 +263,11 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.holdings,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.holdings?.enabled ??
+          parameters.query?.enabled),
     },
   });
   const vaultMarketConfigs = useVaultMarketConfigs({
@@ -243,7 +282,11 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.vaultMarketConfigs,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.vaultMarketConfigs?.enabled ??
+          parameters.query?.enabled),
     },
   });
   const vaultUsers = useVaultUsers({
@@ -258,7 +301,11 @@ export function useSimulationState<
     ),
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.vaultUsers,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.vaultUsers?.enabled ??
+          parameters.query?.enabled),
     },
   });
 
@@ -267,7 +314,11 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.vaultV2s,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.vaultV2s?.enabled ??
+          parameters.query?.enabled),
     },
   });
 
@@ -276,7 +327,11 @@ export function useSimulationState<
     blockNumber: block?.number,
     query: {
       ...parameters.query,
-      enabled: block != null && parameters.query?.enabled,
+      ...parameters.entityQuery?.vaultV2Adapters,
+      enabled:
+        block != null &&
+        (parameters.entityQuery?.vaultV2Adapters?.enabled ??
+          parameters.query?.enabled),
     },
   });
 
