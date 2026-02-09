@@ -2,6 +2,8 @@ import {
   AccrualVaultV2,
   type IVaultV2Allocation,
   MarketParams,
+  UnknownFactory,
+  UnknownOfFactory,
   VaultV2,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
@@ -19,7 +21,9 @@ import {
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterFactoryAbi,
   vaultV2Abi,
+  vaultV2FactoryAbi,
 } from "../../abis";
+import { isUnknownOfFactoryError } from "../../error";
 import { abi, code } from "../../queries/vault-v2/GetVaultV2";
 import type { DeploylessFetchParameters } from "../../types";
 import { fetchToken } from "../Token";
@@ -32,8 +36,15 @@ export async function fetchVaultV2(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { morphoVaultV1AdapterFactory, morphoMarketV1AdapterV2Factory } =
-    getChainAddresses(parameters.chainId);
+  const {
+    morphoVaultV1AdapterFactory,
+    morphoMarketV1AdapterV2Factory,
+    vaultV2Factory,
+  } = getChainAddresses(parameters.chainId);
+
+  if (!vaultV2Factory) {
+    throw new UnknownFactory();
+  }
 
   if (deployless) {
     try {
@@ -45,6 +56,7 @@ export async function fetchVaultV2(
           functionName: "query",
           args: [
             address,
+            vaultV2Factory,
             morphoVaultV1AdapterFactory ?? zeroAddress,
             morphoMarketV1AdapterV2Factory ?? zeroAddress,
           ],
@@ -61,12 +73,14 @@ export async function fetchVaultV2(
       });
     } catch (error) {
       if (deployless === "force") throw error;
+      if (isUnknownOfFactoryError(error)) throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
 
   const [
     token,
+    isVaultV2,
     asset,
     totalSupply,
     totalAssets,
@@ -83,6 +97,14 @@ export async function fetchVaultV2(
     managementFeeRecipient,
   ] = await Promise.all([
     fetchToken(address, client, { ...parameters, deployless }),
+
+    readContract(client, {
+      ...parameters,
+      address: vaultV2Factory,
+      abi: vaultV2FactoryAbi,
+      functionName: "isVaultV2",
+      args: [address],
+    }),
     readContract(client, {
       ...parameters,
       address,
@@ -168,6 +190,10 @@ export async function fetchVaultV2(
       functionName: "managementFeeRecipient",
     }),
   ]);
+
+  if (!isVaultV2) {
+    throw new UnknownOfFactory(vaultV2Factory, address);
+  }
 
   const [
     hasMorphoVaultV1LiquidityAdapter,

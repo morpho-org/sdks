@@ -141,6 +141,21 @@ export namespace VaultV2Errors {
   }
 }
 
+export class UnknownFactory extends Error {
+  constructor() {
+    super(`unknown factory`);
+  }
+}
+
+export class UnknownOfFactory extends Error {
+  constructor(
+    public readonly factory: Address,
+    public readonly address: Address,
+  ) {
+    super(`address "${address}" is not from the ${factory} factory`);
+  }
+}
+
 export interface ErrorClass<E extends Error = Error> {
   // biome-ignore lint/suspicious/noExplicitAny: match any type of arg
   new (...args: any[]): E;
