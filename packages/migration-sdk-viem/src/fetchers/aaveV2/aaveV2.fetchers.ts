@@ -11,7 +11,7 @@ import {
 } from "../../types/index.js";
 
 import {
-  type FetchParameters,
+  type DeploylessFetchParameters,
   blueAbi,
   fetchToken,
 } from "@morpho-org/blue-sdk-viem";
@@ -29,7 +29,7 @@ import { rateToApy } from "../../utils/rates.js";
 export async function fetchAaveV2Positions(
   user: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId ??= await getChainId(client);
 

@@ -2,7 +2,7 @@ import { type Address, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 import { isDefined, values } from "@morpho-org/morpho-ts";
 
 import {
-  type FetchParameters,
+  type DeploylessFetchParameters,
   blueAbi,
   fetchToken,
 } from "@morpho-org/blue-sdk-viem";
@@ -29,7 +29,7 @@ import { rateToApy } from "../../utils/rates.js";
 export async function fetchAaveV3Positions(
   user: Address,
   client: Client,
-  parameters: FetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ): Promise<MigratablePosition[]> {
   parameters.chainId ??= await getChainId(client);
 
