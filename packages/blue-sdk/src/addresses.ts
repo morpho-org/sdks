@@ -668,6 +668,22 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xEB8871F0FA8aB787AbCD28d1095f7B486d241D42",
     wNative: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
   },
+  [ChainId.SoneiumMainnet]: {
+    morpho: "0xE75Fc5eA6e74B824954349Ca351eb4e671ADA53a",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundler3: {
+      bundler3: "0x461378B79d400c963F48F57b3a99416bc3C5c6a6",
+      generalAdapter1: "0xA47EeDE3Aac741B830E394B2e291f6774BD8bb48",
+    },
+    adaptiveCurveIrm: "0x68F9b666b984527A7c145Db4103Cc6d3171C797F",
+    publicAllocator: "0x76f93A21573014Ab7d634D3204818922A234249e",
+    metaMorphoFactory: "0x7026b436f294e560b3C26E731f5cac5992cA2B33",
+    chainlinkOracleFactory: "0x669F1A4cE3127740eCdB3E36adFC5Df6Db1EA74b",
+    preLiquidationFactory: "0xcBD0710425613d666C5Ffb4dE2eE73554F21c34B",
+    wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement USDC permit version 2 (otherwise breaks permit signatures).
+    usdc: "0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -1152,6 +1168,18 @@ const _deployments = {
     chainlinkOracleFactory: 54344985n,
     preLiquidationFactory: 54346080n,
   },
+  [ChainId.SoneiumMainnet]: {
+    morpho: 6440817n,
+    bundler3: {
+      bundler3: 6443359n,
+      generalAdapter1: 6443359n,
+    },
+    adaptiveCurveIrm: 6440817n,
+    publicAllocator: 6440817n,
+    metaMorphoFactory: 6440899n,
+    chainlinkOracleFactory: 6440899n,
+    preLiquidationFactory: 6443359n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -1275,6 +1303,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.BscMainnet]: {
     [_addressesRegistry[ChainId.BscMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.SoneiumMainnet]: {
+    [_addressesRegistry[ChainId.SoneiumMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
