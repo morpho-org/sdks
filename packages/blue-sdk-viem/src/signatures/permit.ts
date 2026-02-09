@@ -33,11 +33,11 @@ export const getPermitTypedData = (
   { deadline, owner, nonce, spender, erc20, allowance }: PermitArgs,
   chainId: ChainId,
 ): TypedDataDefinition<typeof permitTypes, "Permit"> => {
-  const { usdc } = getChainAddresses(chainId);
+  const { usdc, eurc } = getChainAddresses(chainId);
 
   const domain = erc20.eip5267Domain?.eip712Domain ?? {
     name: erc20.name,
-    version: erc20.address === usdc ? "2" : "1",
+    version: erc20.address === usdc || erc20.address === eurc ? "2" : "1",
     chainId,
     verifyingContract: erc20.address,
   };

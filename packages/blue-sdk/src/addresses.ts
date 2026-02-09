@@ -52,6 +52,10 @@ export interface ChainAddresses {
    * Must implement USDC permit version 2 (otherwise breaks permit signatures).
    */
   usdc?: Address;
+  /**
+   * Must implement EURC permit version 2 (otherwise breaks permit signatures).
+   */
+  eurc?: Address;
   stEth?: Address;
   wstEth?: Address;
 }
@@ -106,6 +110,8 @@ const _addressesRegistry = {
     wbC3M: "0x95D7337d43340E2721960Dc402D9b9117f0d81a2",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+    // Must implement EURC permit version 2 (otherwise breaks permit signatures).
+    eurc: "0x1aBaEA1f7C830bD89Acc67eC4af516284b1bC33c",
     usdt: "0xdAC17F958D2ee523a2206206994597C13D831ec7",
     crvUsd: "0xf939E0A03FB07F59A73314E73794Be0E57ac1b4E",
 
@@ -151,6 +157,8 @@ const _addressesRegistry = {
     wNative: "0x4200000000000000000000000000000000000006",
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    // Must implement EURC permit version 2 (otherwise breaks permit signatures).
+    eurc: "0x60a3E35Cc302bFA44Cb288Bc5a4F316Fdb1adb42",
     verUsdc: "0x59aaF835D34b1E3dF2170e4872B785f11E2a964b",
     testUsdc: "0xBC77067f829979812d795d516E523C4033b66409",
   },
@@ -250,6 +258,8 @@ const _addressesRegistry = {
     preLiquidationFactory: "0xe3cE2051a24e58DBFC0eFBe4c2d9e89c5eAe4695",
 
     wNative: "0x4200000000000000000000000000000000000006",
+    // Must implement EURC permit version 2 (otherwise breaks permit signatures).
+    eurc: "0x1C60ba0A0eD1019e8Eb035E6daF4155A5cE2380B",
   },
   [ChainId.FraxtalMainnet]: {
     morpho: "0xa6030627d724bA78a59aCf43Be7550b4C5a0653b",
