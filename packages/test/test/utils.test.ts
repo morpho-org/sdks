@@ -1,7 +1,7 @@
 import { erc20Abi, parseUnits } from "viem";
 import { describe, expect } from "vitest";
-import { testAccount } from "../src";
-import { test } from "./setup";
+import { testAccount } from "../src/index.js";
+import { test } from "./setup.js";
 
 describe("getFunctionCalls", () => {
   test("should return call count", async ({ client }) => {

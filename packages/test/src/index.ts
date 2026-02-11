@@ -1,5 +1,5 @@
-export * from "./client";
-export * from "./fixtures";
-export * from "./anvil";
+export * from "./client.js";
+export * from "./fixtures.js";
+export * from "./anvil.js";
 
-export * from "./utils/getFunctionCalls";
+export * from "./utils/getFunctionCalls.js";
