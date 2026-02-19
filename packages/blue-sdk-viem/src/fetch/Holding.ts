@@ -199,3 +199,23 @@ export async function fetchHolding(
 
   return holding;
 }
+
+export async function fetchHoldings(
+  user: Address,
+  tokens: readonly Address[],
+  client: Client,
+  { chainId, ...parameters }: DeploylessFetchParameters = {},
+) {
+  chainId ??= await getChainId(client);
+
+  const holdings = await Promise.all(
+    tokens.map((token) =>
+      fetchHolding(user, token, client, { ...parameters, chainId }),
+    ),
+  );
+
+  return tokens.reduce<Record<Address, Holding>>((acc, token, i) => {
+    acc[token] = holdings[i]!;
+    return acc;
+  }, {});
+}
