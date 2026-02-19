@@ -1,4 +1,5 @@
 export * from "./Holding";
+export * from "./Holdings";
 export * from "./Position";
 export * from "./MarketParams";
 export * from "./Market";
