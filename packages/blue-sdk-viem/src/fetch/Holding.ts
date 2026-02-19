@@ -204,13 +204,16 @@ export async function fetchHoldings(
   user: Address,
   tokens: readonly Address[],
   client: Client,
-  { chainId, ...parameters }: DeploylessFetchParameters = {},
+  parameters: DeploylessFetchParameters = {},
 ) {
-  chainId ??= await getChainId(client);
+  const resolvedParameters = {
+    ...parameters,
+    chainId: parameters.chainId ?? (await getChainId(client)),
+  };
 
   const holdings = await Promise.all(
     tokens.map((token) =>
-      fetchHolding(user, token, client, { ...parameters, chainId }),
+      fetchHolding(user, token, client, resolvedParameters),
     ),
   );
 
