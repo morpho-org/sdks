@@ -16,7 +16,9 @@
   "scripts": {
     "prepublish": "$npm_execpath build",
     "compile": "hardhat compile",
-    "build": "tsc --noEmit && tsc --build tsconfig.build.json"
+    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
+    "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
@@ -34,7 +36,12 @@
     "vitest": "^4.0.15"
   },
   "publishConfig": {
-    "main": "lib/index.js",
-    "types": "lib/index.d.ts"
+    "exports": {
+      ".": {
+        "types": "./lib/esm/index.d.ts",
+        "import": "./lib/esm/index.js",
+        "require": "./lib/cjs/index.js"
+      }
+    }
   }
 }
