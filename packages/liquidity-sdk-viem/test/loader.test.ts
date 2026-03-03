@@ -4,9 +4,9 @@ import nock from "nock";
 import { markets } from "@morpho-org/morpho-test";
 import { BLUE_API_BASE_URL } from "@morpho-org/morpho-ts";
 import { describe, expect } from "vitest";
-import { LiquidityLoader } from "../src";
-import apiMock0 from "./mocks/dataloader.0.json";
-import apiMock1 from "./mocks/dataloader.1.json";
+import { LiquidityLoader } from "../src/index.js";
+import apiMock0 from "./mocks/dataloader.0.json" with { type: "json" };
+import apiMock1 from "./mocks/dataloader.1.json" with { type: "json" };
 import { test } from "./setup.js";
 
 const { usdc_wstEth, eth_wstEth, usdc_wbtc } = markets[ChainId.EthMainnet];

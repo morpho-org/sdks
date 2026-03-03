@@ -1,9 +1,16 @@
 import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
-import { type Market, MarketParams, marketParamsAbi } from "../../market";
-import type { BigIntish, MarketId } from "../../types";
-import { CapacityLimitReason } from "../../utils";
-import { VaultV2Adapter } from "./VaultV2Adapter";
-import type { IAccrualVaultV2Adapter, IVaultV2Adapter } from "./VaultV2Adapter";
+import {
+  type Market,
+  MarketParams,
+  marketParamsAbi,
+} from "../../market/index.js";
+import type { BigIntish, MarketId } from "../../types.js";
+import { CapacityLimitReason } from "../../utils.js";
+import { VaultV2Adapter } from "./VaultV2Adapter.js";
+import type {
+  IAccrualVaultV2Adapter,
+  IVaultV2Adapter,
+} from "./VaultV2Adapter.js";
 
 export interface IVaultV2MorphoMarketV1AdapterV2
   extends Omit<IVaultV2Adapter, "adapterId"> {

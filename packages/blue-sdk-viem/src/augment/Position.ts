@@ -8,7 +8,7 @@ import {
   fetchAccrualPosition,
   fetchPosition,
   fetchPreLiquidationPosition,
-} from "../fetch";
+} from "../fetch/index.js";
 
 declare module "@morpho-org/blue-sdk" {
   namespace Position {

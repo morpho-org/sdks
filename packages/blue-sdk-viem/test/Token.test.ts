@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup";
+import { test } from "./setup.js";
 
 import {
   ChainId,
@@ -9,7 +9,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { zeroHash } from "viem";
-import { Token } from "../src/augment/Token";
+import { Token } from "../src/augment/Token.js";
 
 const { mkr, usdc, stEth, wstEth } = addressesRegistry[ChainId.EthMainnet];
 

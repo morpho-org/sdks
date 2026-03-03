@@ -1,6 +1,6 @@
 import type { InputMarketParams, MarketId } from "@morpho-org/blue-sdk";
 import { type Address, type Hex, encodeFunctionData } from "viem";
-import { metaMorphoAbi } from "./abis";
+import { metaMorphoAbi } from "./abis.js";
 
 export type MetaMorphoCall = Hex;
 

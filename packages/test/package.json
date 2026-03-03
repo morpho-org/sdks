@@ -11,6 +11,7 @@
     "email": "contact@morpho.org"
   },
   "license": "MIT",
+  "type": "module",
   "files": ["lib"],
   "main": "src/index.ts",
   "exports": {

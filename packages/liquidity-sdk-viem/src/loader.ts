@@ -15,7 +15,7 @@ import {
 import DataLoader from "dataloader";
 import type { Chain, Client, Transport } from "viem";
 import { getBlock } from "viem/actions";
-import { apiSdk } from "./api";
+import { apiSdk } from "./api/index.js";
 
 export interface LiquidityParameters {
   /**

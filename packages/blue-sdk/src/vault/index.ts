@@ -5,4 +5,4 @@ export * from "./VaultMarketConfig.js";
 export * from "./VaultMarketPublicAllocatorConfig.js";
 export * from "./VaultUser.js";
 export * from "./Vault.js";
-export * from "./v2";
+export * from "./v2/index.js";

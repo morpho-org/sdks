@@ -1,15 +1,18 @@
 import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
 
-import { VaultV2Adapter } from "./VaultV2Adapter";
+import { VaultV2Adapter } from "./VaultV2Adapter.js";
 
 export interface IVaultV2MorphoVaultV1Adapter
   extends Omit<IVaultV2Adapter, "adapterId"> {
   morphoVaultV1: Address;
 }
 
-import type { BigIntish } from "../../types";
-import type { AccrualVault } from "../Vault";
-import type { IAccrualVaultV2Adapter, IVaultV2Adapter } from "./VaultV2Adapter";
+import type { BigIntish } from "../../types.js";
+import type { AccrualVault } from "../Vault.js";
+import type {
+  IAccrualVaultV2Adapter,
+  IVaultV2Adapter,
+} from "./VaultV2Adapter.js";
 
 export class VaultV2MorphoVaultV1Adapter
   extends VaultV2Adapter

@@ -13,6 +13,7 @@
   "main": "src/index.ts",
   "files": ["lib"],
   "license": "MIT",
+  "type": "module",
   "scripts": {
     "prepublish": "$npm_execpath build",
     "build": "$npm_execpath build:cjs && $npm_execpath build:esm",

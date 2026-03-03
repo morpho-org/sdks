@@ -1,3 +1,3 @@
-export * from "./manager";
-export * from "./permit";
-export * from "./permit2";
+export * from "./manager.js";
+export * from "./permit.js";
+export * from "./permit2.js";

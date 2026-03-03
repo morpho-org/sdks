@@ -1,4 +1,4 @@
-import { Time } from "../src";
+import { Time } from "../src/index.js";
 
 import { describe, expect, test } from "vitest";
 

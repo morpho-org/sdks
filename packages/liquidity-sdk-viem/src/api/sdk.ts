@@ -1,7 +1,7 @@
 import * as Types from './types.js';
 
 import { GraphQLClient, RequestOptions } from 'graphql-request';
-import gql from 'graphql-tag';
+import { gql } from 'graphql-tag';
 type GraphQLClientRequestHeaders = RequestOptions['requestHeaders'];
 
 export const GetMarketsDocument = gql`

@@ -1,5 +1,5 @@
-import { Time } from "./time";
-import type { FieldType, PartialDottedKeys } from "./types";
+import { Time } from "./time/index.js";
+import type { FieldType, PartialDottedKeys } from "./types.js";
 
 export const ZERO_ADDRESS =
   "0x0000000000000000000000000000000000000000" as const;

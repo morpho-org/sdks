@@ -40,12 +40,12 @@ import {
   writeContract as viem_writeContract,
 } from "viem/actions";
 import type { Chain } from "viem/chains";
-import { testAccount } from "./fixtures";
+import { testAccount } from "./fixtures.js";
 import {
   type FunctionCall,
   type GetFunctionCallsArgs,
   getFunctionCalls,
-} from "./utils/getFunctionCalls";
+} from "./utils/getFunctionCalls.js";
 
 export type AnvilTestClient<chain extends Chain = Chain> = Client<
   TracedTransport<HttpTransport>,

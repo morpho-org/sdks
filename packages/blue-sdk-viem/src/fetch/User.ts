@@ -2,8 +2,8 @@ import type { Address, Client } from "viem";
 
 import { User, getChainAddresses } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi } from "../abis";
-import type { FetchParameters } from "../types";
+import { blueAbi } from "../abis.js";
+import type { FetchParameters } from "../types.js";
 
 export async function fetchUser(
   address: Address,

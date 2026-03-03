@@ -1,4 +1,4 @@
-import { Format, createFormat, format } from "../src";
+import { Format, createFormat, format } from "../src/index.js";
 
 import { describe, expect, test } from "vitest";
 

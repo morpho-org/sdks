@@ -1,6 +1,6 @@
 import { VaultMarketAllocation } from "@morpho-org/blue-sdk";
 
-import { fetchVaultMarketAllocation } from "../fetch";
+import { fetchVaultMarketAllocation } from "../fetch/index.js";
 
 declare module "@morpho-org/blue-sdk" {
   namespace VaultMarketAllocation {
