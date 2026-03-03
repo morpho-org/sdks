@@ -1,5 +1,5 @@
 import { type Address, type ChainId, MathLib } from "@morpho-org/blue-sdk";
-import { midasConfigs } from "../addresses";
+import { midasConfigs } from "../addresses.js";
 
 const ONE_HUNDRED_PERCENT = 100n * 100n;
 

@@ -22,12 +22,12 @@ import {
   morphoVaultV1AdapterFactoryAbi,
   vaultV2Abi,
   vaultV2FactoryAbi,
-} from "../../abis";
-import { isUnknownOfFactoryError } from "../../error";
-import { abi, code } from "../../queries/vault-v2/GetVaultV2";
-import type { DeploylessFetchParameters } from "../../types";
-import { fetchToken } from "../Token";
-import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter";
+} from "../../abis.js";
+import { isUnknownOfFactoryError } from "../../error.js";
+import { abi, code } from "../../queries/vault-v2/GetVaultV2.js";
+import type { DeploylessFetchParameters } from "../../types.js";
+import { fetchToken } from "../Token.js";
+import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
 export async function fetchVaultV2(
   address: Address,

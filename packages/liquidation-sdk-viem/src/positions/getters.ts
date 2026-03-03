@@ -8,7 +8,11 @@ import { fetchMarket } from "@morpho-org/blue-sdk-viem";
 import { getPreLiquidablePositions } from "@morpho-org/liquidation-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
-import { ApiTypes, apiSdk, paginatedQueryWithChunkedMarketIds } from "../api";
+import {
+  ApiTypes,
+  apiSdk,
+  paginatedQueryWithChunkedMarketIds,
+} from "../api/index.js";
 
 export interface PartialApiToken
   extends Pick<

@@ -6,7 +6,7 @@ import {
   deployments,
   registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
-import type { MidasConfig } from "./tokens/midas";
+import type { MidasConfig } from "./tokens/midas.js";
 
 declare module "@morpho-org/blue-sdk" {
   interface ChainAddresses {

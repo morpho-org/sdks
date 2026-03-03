@@ -22,9 +22,9 @@ import {
   permit2Abi,
   whitelistControllerAggregatorV2Abi,
   wrappedBackedTokenAbi,
-} from "../abis";
-import { abi, code } from "../queries/GetHolding";
-import type { DeploylessFetchParameters } from "../types";
+} from "../abis.js";
+import { abi, code } from "../queries/GetHolding.js";
+import type { DeploylessFetchParameters } from "../types.js";
 
 export const optionalBoolean = [undefined, false, true] as const;
 

@@ -8,18 +8,18 @@ import {
   morphoMarketV1AdapterFactoryAbi,
   morphoMarketV1AdapterV2FactoryAbi,
   morphoVaultV1AdapterFactoryAbi,
-} from "../../abis";
-import type { DeploylessFetchParameters } from "../../types";
-import { fetchVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter";
-import { fetchAccrualVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter";
+} from "../../abis.js";
+import type { DeploylessFetchParameters } from "../../types.js";
+import { fetchVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter.js";
+import { fetchAccrualVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter.js";
 import {
   fetchAccrualVaultV2MorphoMarketV1AdapterV2,
   fetchVaultV2MorphoMarketV1AdapterV2,
-} from "./VaultV2MorphoMarketV1AdapterV2";
+} from "./VaultV2MorphoMarketV1AdapterV2.js";
 import {
   fetchAccrualVaultV2MorphoVaultV1Adapter,
   fetchVaultV2MorphoVaultV1Adapter,
-} from "./VaultV2MorphoVaultV1Adapter";
+} from "./VaultV2MorphoVaultV1Adapter.js";
 
 export async function fetchVaultV2Adapter(
   address: Address,

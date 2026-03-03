@@ -8,11 +8,11 @@ import {
 } from "@morpho-org/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
-import type { DeploylessFetchParameters } from "../types";
+import type { DeploylessFetchParameters } from "../types.js";
 
-import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
-import { abi, code } from "../queries/GetMarket";
-import { readContractRestructured } from "../utils";
+import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
+import { abi, code } from "../queries/GetMarket.js";
+import { readContractRestructured } from "../utils.js";
 
 export async function fetchMarket(
   id: MarketId,

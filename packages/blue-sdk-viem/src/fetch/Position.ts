@@ -9,10 +9,10 @@ import {
 
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { blueAbi, blueOracleAbi, preLiquidationAbi } from "../abis";
-import type { DeploylessFetchParameters, FetchParameters } from "../types";
-import { readContractRestructured } from "../utils";
-import { fetchMarket } from "./Market";
+import { blueAbi, blueOracleAbi, preLiquidationAbi } from "../abis.js";
+import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
+import { readContractRestructured } from "../utils.js";
+import { fetchMarket } from "./Market.js";
 
 export async function fetchPosition(
   user: Address,

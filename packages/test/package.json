@@ -11,18 +11,27 @@
     "email": "contact@morpho.org"
   },
   "license": "MIT",
+  "type": "module",
   "files": ["lib"],
+  "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
     "./vitest": "./src/vitest.ts",
     "./fixtures": "./src/fixtures.ts",
     "./playwright": "./src/playwright.ts"
   },
+  "typesVersions": {
+    "*": {
+      "vitest": ["src/vitest.ts"],
+      "fixtures": ["src/fixtures.ts"],
+      "playwright": ["src/playwright.ts"]
+    }
+  },
   "scripts": {
     "prepublish": "$npm_execpath build",
     "build": "$npm_execpath build:cjs && $npm_execpath build:esm",
-    "build:cjs": "tsc --build tsconfig.build.cjs.json",
-    "build:esm": "tsc --build tsconfig.build.esm.json"
+    "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
+    "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "dependencies": {
     "lodash.kebabcase": "^4.1.1",

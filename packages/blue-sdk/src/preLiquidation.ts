@@ -1,6 +1,6 @@
 import { parseEther } from "viem";
-import { UnsupportedPreLiquidationParamsError } from "./errors";
-import type { BigIntish } from "./types";
+import { UnsupportedPreLiquidationParamsError } from "./errors.js";
+import type { BigIntish } from "./types.js";
 
 export const defaultPreLiquidationParamsRegistry = new Map([
   [
