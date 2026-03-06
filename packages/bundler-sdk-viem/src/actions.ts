@@ -1060,17 +1060,16 @@ export const encodeOperation = (
         },
       );
 
-      if (!sellEntireBalance)
-        actions.push({
-          type: "erc20Transfer",
-          args: [
-            operation.address,
-            generalAdapter1,
-            maxUint256,
-            paraswapAdapter,
-            false,
-          ],
-        });
+      actions.push({
+        type: "erc20Transfer",
+        args: [
+          operation.address,
+          generalAdapter1,
+          maxUint256,
+          paraswapAdapter,
+          false,
+        ],
+      });
 
       break;
     }
