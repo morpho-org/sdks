@@ -1009,13 +1009,7 @@ export const encodeOperation = (
         },
         {
           type: "erc20Transfer",
-          args: [
-            srcToken,
-            generalAdapter1,
-            maxUint256,
-            paraswapAdapter,
-            operation.skipRevert,
-          ],
+          args: [srcToken, generalAdapter1, maxUint256, paraswapAdapter, false],
         },
       );
 
@@ -1074,7 +1068,7 @@ export const encodeOperation = (
             generalAdapter1,
             maxUint256,
             paraswapAdapter,
-            operation.skipRevert,
+            false,
           ],
         });
 
@@ -1117,13 +1111,7 @@ export const encodeOperation = (
         },
         {
           type: "erc20Transfer",
-          args: [
-            srcToken,
-            generalAdapter1,
-            maxUint256,
-            paraswapAdapter,
-            operation.skipRevert,
-          ],
+          args: [srcToken, generalAdapter1, maxUint256, paraswapAdapter, false],
         },
       );
 
