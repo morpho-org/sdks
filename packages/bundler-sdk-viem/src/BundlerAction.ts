@@ -828,7 +828,7 @@ export namespace BundlerAction {
           args: [underlying, generalAdapter1, maxUint256],
         }),
         value: 0n,
-        skipRevert,
+        skipRevert: false,
         callbackHash: zeroHash,
       },
     ];
@@ -890,7 +890,7 @@ export namespace BundlerAction {
           args: [wrapper, generalAdapter1, maxUint256],
         }),
         value: 0n,
-        skipRevert,
+        skipRevert: false,
         callbackHash: zeroHash,
       },
     ];
