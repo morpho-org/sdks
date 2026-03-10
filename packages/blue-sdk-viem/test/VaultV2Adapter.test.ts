@@ -466,6 +466,7 @@ describe("LiquidityAdapter undefined", () => {
         undefined,
         accrualVaultV2.accrualAdapters,
         accrualVaultV2.assetBalance,
+        accrualVaultV2.forceDeallocatePenalties,
       );
 
       const depositAmount = parseUnits("1000", 6);
@@ -488,6 +489,7 @@ describe("LiquidityAdapter undefined", () => {
         accrualVaultV2.accrualLiquidityAdapter,
         accrualVaultV2.accrualAdapters,
         accrualVaultV2.assetBalance,
+        accrualVaultV2.forceDeallocatePenalties,
       );
 
       const depositAmount = parseUnits("1000", 6);
