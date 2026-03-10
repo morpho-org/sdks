@@ -134,9 +134,9 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     public accrualAdapters: IAccrualVaultV2Adapter[],
     public assetBalance: bigint,
     /**
-     * The force deallocate penalty for each adapter, parallel to `accrualAdapters`.
+     * The force deallocate penalty for each adapter, keyed by adapter address.
      */
-    public forceDeallocatePenalties: bigint[],
+    public forceDeallocatePenalties: Record<Address, bigint>,
   ) {
     super({ ...vault, adapters: accrualAdapters.map((a) => a.address) });
   }

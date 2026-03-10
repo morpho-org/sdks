@@ -345,8 +345,11 @@ export async function fetchAccrualVaultV2(
   );
 
   const adapters = adapterResults.map((r) => r.accrualAdapter);
-  const forceDeallocatePenalties = adapterResults.map(
-    (r) => r.forceDeallocatePenalty,
+  const forceDeallocatePenalties = Object.fromEntries(
+    adapterResults.map((r) => [
+      r.accrualAdapter.address,
+      r.forceDeallocatePenalty,
+    ]),
   );
 
   return new AccrualVaultV2(

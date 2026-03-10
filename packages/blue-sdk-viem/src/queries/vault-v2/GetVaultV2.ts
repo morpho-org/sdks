@@ -90,11 +90,6 @@ export const abi = [
             type: "address[]",
           },
           {
-            internalType: "uint256[]",
-            name: "forceDeallocatePenalties",
-            type: "uint256[]",
-          },
-          {
             internalType: "address",
             name: "liquidityAdapter",
             type: "address",
