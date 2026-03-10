@@ -1091,7 +1091,7 @@ export namespace BundlerAction {
    * @param market The market params to supply to.
    * @param assets The amount of assets to supply.
    * @param shares The amount of supply shares to mint.
-   * @param slippageAmount The maximum (resp. minimum) amount of assets (resp. supply shares) to supply (resp. mint) (protects the sender from unexpected slippage).
+   * @param slippageAmount The minimum share price (assets per share, scaled by 1e27) to accept when supplying (protects the sender from unexpected slippage).
    * @param onBehalf The address to supply on behalf of.
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
@@ -1177,7 +1177,7 @@ export namespace BundlerAction {
    * @param market The market params to borrow from.
    * @param assets The amount of assets to borrow.
    * @param shares The amount of borrow shares to mint.
-   * @param slippageAmount The minimum (resp. maximum) amount of assets (resp. borrow shares) to borrow (resp. mint) (protects the sender from unexpected slippage).
+   * @param slippageAmount The minimum share price (assets per share, scaled by 1e27) to accept when borrowing (protects the sender from unexpected slippage).
    * @param receiver The address to send borrowed tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
