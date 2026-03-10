@@ -133,6 +133,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     public accrualLiquidityAdapter: IAccrualVaultV2Adapter | undefined,
     public accrualAdapters: IAccrualVaultV2Adapter[],
     public assetBalance: bigint,
+    /**
+     * The force deallocate penalty for each adapter, parallel to `accrualAdapters`.
+     */
+    public forceDeallocatePenalties: bigint[],
   ) {
     super({ ...vault, adapters: accrualAdapters.map((a) => a.address) });
   }
@@ -223,6 +227,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       this.accrualLiquidityAdapter,
       this.accrualAdapters,
       this.assetBalance,
+      this.forceDeallocatePenalties,
     );
 
     timestamp = BigInt(timestamp);

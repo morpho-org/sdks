@@ -34,6 +34,7 @@ struct VaultV2Response {
     uint64 maxRate;
     uint64 lastUpdate;
     address[] adapters;
+    uint256[] forceDeallocatePenalties;
     address liquidityAdapter;
     bytes liquidityData;
     bool isLiquidityAdapterKnown;
@@ -73,8 +74,10 @@ contract GetVaultV2 {
 
         uint256 adaptersLength = vault.adaptersLength();
         res.adapters = new address[](adaptersLength);
+        res.forceDeallocatePenalties = new uint256[](adaptersLength);
         for (uint256 i; i < adaptersLength; ++i) {
             res.adapters[i] = vault.adapters(i);
+            res.forceDeallocatePenalties[i] = vault.forceDeallocatePenalty(res.adapters[i]);
         }
 
         bool isMorphoVaultV1Adapter = address(morphoVaultV1AdapterFactory) != address(0)
