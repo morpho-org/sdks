@@ -403,6 +403,7 @@ export class SimulationState implements InputSimulationState {
       this.getAccrualVaultV2Adapter(vaultV2.liquidityAdapter),
       vaultV2.adapters.map(this.getAccrualVaultV2Adapter.bind(this)),
       this.getHolding(vaultV2.address, vaultV2.asset).balance,
+      {},
     );
   }
 

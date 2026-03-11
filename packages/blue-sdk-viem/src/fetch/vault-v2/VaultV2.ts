@@ -312,21 +312,51 @@ export async function fetchAccrualVaultV2(
 
   const vaultV2 = await fetchVaultV2(address, client, parameters);
 
-  const [assetBalance, liquidityAdapter, ...adapters] = await Promise.all([
-    readContract(client, {
-      ...parameters,
-      address: vaultV2.asset,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [vaultV2.address],
-    }),
-    vaultV2.liquidityAdapter !== zeroAddress
-      ? fetchAccrualVaultV2Adapter(vaultV2.liquidityAdapter, client, parameters)
-      : undefined,
-    ...vaultV2.adapters.map(async (adapter) =>
-      fetchAccrualVaultV2Adapter(adapter, client, parameters),
-    ),
-  ]);
+  const [assetBalance, liquidityAdapter, ...adapterResults] = await Promise.all(
+    [
+      readContract(client, {
+        ...parameters,
+        address: vaultV2.asset,
+        abi: erc20Abi,
+        functionName: "balanceOf",
+        args: [vaultV2.address],
+      }),
+      vaultV2.liquidityAdapter !== zeroAddress
+        ? fetchAccrualVaultV2Adapter(
+            vaultV2.liquidityAdapter,
+            client,
+            parameters,
+          )
+        : undefined,
+      ...vaultV2.adapters.map(async (adapter) => {
+        const [accrualAdapter, forceDeallocatePenalty] = await Promise.all([
+          fetchAccrualVaultV2Adapter(adapter, client, parameters),
+          readContract(client, {
+            ...parameters,
+            address,
+            abi: vaultV2Abi,
+            functionName: "forceDeallocatePenalty",
+            args: [adapter],
+          }),
+        ]);
+        return { accrualAdapter, forceDeallocatePenalty };
+      }),
+    ],
+  );
 
-  return new AccrualVaultV2(vaultV2, liquidityAdapter, adapters, assetBalance);
+  const adapters = adapterResults.map((r) => r.accrualAdapter);
+  const forceDeallocatePenalties = Object.fromEntries(
+    adapterResults.map((r) => [
+      r.accrualAdapter.address,
+      r.forceDeallocatePenalty,
+    ]),
+  );
+
+  return new AccrualVaultV2(
+    vaultV2,
+    liquidityAdapter,
+    adapters,
+    assetBalance,
+    forceDeallocatePenalties,
+  );
 }
