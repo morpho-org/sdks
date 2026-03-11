@@ -595,6 +595,8 @@ const _addressesRegistry = {
     metaMorphoFactory: "0xb4ae5673c48621189E2bEfBA96F31912032DD1AE",
     vaultV2Factory: "0x7fc35488803D49D00a94b206A223f7661898BE3a",
     morphoMarketV1AdapterFactory: "0x2A5F218FE4Dac3b1f4E096e8ae83074bB1713833",
+    morphoMarketV1AdapterV2Factory:
+      "0x9282DBa3d1788f4f02B5DdFc4fc5985e70197620",
     morphoVaultV1AdapterFactory: "0x4EF83ACD552598a1196c1aBDD0bA2EdE6f2237B4",
     registryList: "0xCe93fcB2849EB886F1e81d45D2747dF803f843C3",
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
