@@ -1115,7 +1115,7 @@ const _deployments = {
     morphoMarketV1AdapterV2Factory: 5110812n,
     registryList: 1506877n,
     chainlinkOracleFactory: 1504774n,
-    preLiquidationFactory: 1741_861n,
+    preLiquidationFactory: 1741861n,
   },
   [ChainId.CronosMainnet]: {
     morpho: 38459435n,
