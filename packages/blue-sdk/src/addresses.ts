@@ -575,11 +575,12 @@ const _addressesRegistry = {
     metaMorphoFactory: "0x33f20973275B2F574488b18929cd7DCBf1AbF275",
     vaultV2Factory: "0x8B2F922162FBb60A6a072cC784A2E4168fB0bb0c",
     morphoMarketV1AdapterFactory: "0x8Da54fbF89B3D6fC6DCC92F31CF75a211ACF3d46",
+    morphoMarketV1AdapterV2Factory:
+      "0xa00666E86C7e2FA8d2c78d9481E687e098340180",
     morphoVaultV1AdapterFactory: "0x9f3c0999425656fD189C69a8aD68cB64986D644A",
     registryList: "0x6a42f8b46224baA4DbBBc2F860F4675eeA7bd52B",
     chainlinkOracleFactory: "0xC8659Bcd5279DB664Be973aEFd752a5326653739",
     preLiquidationFactory: "0xB5b3e541abD19799E0c65905a5a42BD37d6c94c0",
-
     wNative: "0x3bd359C1119dA7Da1D913D1C4D2B7c461115433A",
     usdc: "0x754704Bc059F8C67012fEd69BC8A327a5aafb603",
   },
@@ -594,8 +595,6 @@ const _addressesRegistry = {
     metaMorphoFactory: "0xb4ae5673c48621189E2bEfBA96F31912032DD1AE",
     vaultV2Factory: "0x7fc35488803D49D00a94b206A223f7661898BE3a",
     morphoMarketV1AdapterFactory: "0x2A5F218FE4Dac3b1f4E096e8ae83074bB1713833",
-    morphoMarketV1AdapterV2Factory:
-      "0xa00666E86C7e2FA8d2c78d9481E687e098340180",
     morphoVaultV1AdapterFactory: "0x4EF83ACD552598a1196c1aBDD0bA2EdE6f2237B4",
     registryList: "0xCe93fcB2849EB886F1e81d45D2747dF803f843C3",
     chainlinkOracleFactory: "0xF24C6eAB91e43EacE18a4e893a48565C09132505",
