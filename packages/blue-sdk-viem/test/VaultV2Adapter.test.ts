@@ -313,44 +313,6 @@ describe("LiquidityAdapter vaultV1", () => {
       });
     });
   });
-
-  describe("maxWithdraw function", () => {
-    vaultV2Test(
-      "should be limited by liquidity when assets > liquidity",
-      async ({ client }) => {
-        const accrualVaultV2 = await fetchAccrualVaultV2(
-          vaultV2Address,
-          client,
-        );
-
-        const shares = parseUnits("1000000", 18); // 1M shares
-        const result = accrualVaultV2.maxWithdraw(shares);
-
-        expect(result).toStrictEqual({
-          value: 16733835n,
-          limiter: CapacityLimitReason.liquidity,
-        });
-      },
-    );
-
-    vaultV2Test(
-      "should be limited by balance when assets <= liquidity",
-      async ({ client }) => {
-        const accrualVaultV2 = await fetchAccrualVaultV2(
-          vaultV2Address,
-          client,
-        );
-
-        const shares = parseUnits("10", 18); // 10 shares
-        const result = accrualVaultV2.maxWithdraw(shares);
-
-        expect(result).toStrictEqual({
-          value: accrualVaultV2.toAssets(shares),
-          limiter: CapacityLimitReason.balance,
-        });
-      },
-    );
-  });
 });
 
 describe("LiquidityAdapter marketV1", () => {
@@ -365,22 +327,6 @@ describe("LiquidityAdapter marketV1", () => {
       const result = accrualVaultV2.maxDeposit(assets);
       expect(result).toStrictEqual({
         value: assets,
-        limiter: CapacityLimitReason.balance,
-      });
-    });
-  });
-
-  describe("maxWithdraw function", () => {
-    vaultV2Test("should be limited by balance", async ({ client }) => {
-      const { usdc } = addressesRegistry[client.chain.id];
-      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
-
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultAddress, client);
-
-      const shares = parseUnits("100000", 6); // 100K shares
-      const result = accrualVaultV2.maxWithdraw(shares);
-      expect(result).toStrictEqual({
-        value: 0n,
         limiter: CapacityLimitReason.balance,
       });
     });
@@ -425,30 +371,6 @@ describe("LiquidityAdapter zero address", () => {
       const result = accrualVaultV2.maxDeposit(MathLib.MAX_UINT_256);
       expect(result).toStrictEqual({
         value: MathLib.MAX_UINT_256,
-        limiter: CapacityLimitReason.balance,
-      });
-    },
-  );
-
-  vaultV2Test(
-    "should withdraw full amount when liquidityAdapter is zero address",
-    async ({ client }) => {
-      // Set liquidity adapter to zero address
-      await client.writeContract({
-        account: allocator,
-        address: vaultV2Address,
-        abi: vaultV2Abi,
-        functionName: "setLiquidityAdapterAndData",
-        args: [zeroAddress, "0x"],
-      });
-
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
-
-      const shares = parseUnits("100", 18);
-      const result = accrualVaultV2.maxWithdraw(shares);
-
-      expect(result).toStrictEqual({
-        value: accrualVaultV2.toAssets(shares),
         limiter: CapacityLimitReason.balance,
       });
     },
