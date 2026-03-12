@@ -417,8 +417,8 @@ const _addressesRegistry = {
   [ChainId.CampMainnet]: {
     morpho: "0xc7CAd9B1377Eb8103397Cb07Cb5c4f03eb2eBEa8",
     bundler3: {
-      bundler3: "0xc1A86b3a552C5a34e1ecc910341A64Cc89b2CB01",
-      generalAdapter1: "0x86eaf48Fd73c1Aa30E801D01d0efFd731c3E5E85",
+      bundler3: "0x88A4038BB4A14ecD7301c8Fb1f1e8732c4355D53",
+      generalAdapter1: "0x29dcA26F9862CFb8064163ddc3401aaB4D4D05c6",
     },
     adaptiveCurveIrm: "0xeEccdD33c0C06d7DDa31E3C4a1Cdb35a2A756246",
     publicAllocator: "0x1e145648DA9aC9d831B4F7931C06e9828083BD40",
