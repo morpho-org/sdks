@@ -218,6 +218,39 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   }
 
   /**
+   * Returns the maximum amount of assets that can be withdrawn from the vault,
+   * taking into account the liquidity freed by force-deallocating adapters only with zero penalty.
+   * @param shares The maximum amount of shares to redeem.
+   */
+  public maxForceWithdraw(shares: BigIntish): CapacityLimit {
+    const { value, limiter } = this.maxWithdraw(shares);
+
+    if (limiter !== CapacityLimitReason.liquidity) return { value, limiter };
+
+    let liquidity = value;
+
+    for (const adapter of this.accrualAdapters) {
+      if (adapter.address === this.liquidityAdapter) continue;
+      if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
+
+      liquidity += adapter.maxDeallocatableAssets();
+    }
+
+    const assets = this.toAssets(shares);
+
+    if (assets > liquidity)
+      return {
+        value: liquidity,
+        limiter: CapacityLimitReason.VaultV2_ForceLiquidity,
+      };
+
+    return {
+      value: assets,
+      limiter: CapacityLimitReason.VaultV2_ForceBalance,
+    };
+  }
+
+  /**
    * Returns a new vault derived from this vault, whose interest has been accrued up to the given timestamp.
    * @param timestamp The timestamp at which to accrue interest. Must be greater than or equal to the vault's `lastUpdate`.
    */

@@ -1,5 +1,12 @@
-import { VaultV2, VaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";
+import {
+  CapacityLimitReason,
+  MathLib,
+  VaultV2,
+  VaultV2MorphoVaultV1Adapter,
+  addressesRegistry,
+} from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
+import type { AnvilTestClient } from "@morpho-org/test";
 import { encodeFunctionData, parseUnits, zeroAddress } from "viem";
 import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
@@ -9,8 +16,10 @@ import {
 } from "../src/fetch/vault-v2/VaultV2.js";
 import { vaultV2Abi } from "../src/index.js";
 import { vaultV2Test } from "./setup.js";
+import { deployVaultV2 } from "./utils.js";
 
 const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
+const allocator = "0xc0267A5Fa9aaaf1694283c013CBFA925BCdb5dE8";
 
 describe("AccrualVaultV2", () => {
   vaultV2Test("should accrue interest", async ({ client }) => {
@@ -175,4 +184,119 @@ describe("AccrualVaultV2", () => {
       expect(value).toStrictEqual(expectedData);
     });
   });
+});
+
+describe("maxWithdraw", () => {
+  describe("vaultV1 adapter", () => {
+    vaultV2Test(
+      "should be limited by liquidity when assets > liquidity",
+      async ({ client }) => {
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
+
+        const shares = parseUnits("1000000", 18);
+        const result = accrualVaultV2.maxWithdraw(shares);
+
+        expect(result).toStrictEqual({
+          value: 16733835n,
+          limiter: CapacityLimitReason.liquidity,
+        });
+      },
+    );
+
+    vaultV2Test(
+      "should be limited by balance when assets <= liquidity",
+      async ({ client }) => {
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
+
+        const shares = parseUnits("10", 18);
+        const result = accrualVaultV2.maxWithdraw(shares);
+
+        expect(result).toStrictEqual({
+          value: accrualVaultV2.toAssets(shares),
+          limiter: CapacityLimitReason.balance,
+        });
+      },
+    );
+  });
+
+  describe("marketV1 adapter", () => {
+    vaultV2Test("should be limited by balance", async ({ client }) => {
+      const { usdc } = addressesRegistry[client.chain.id];
+      const vaultAddress = await deployVaultV2(client as AnvilTestClient, usdc);
+
+      const accrualVaultV2 = await fetchAccrualVaultV2(vaultAddress, client);
+
+      const shares = parseUnits("100000", 6);
+      const result = accrualVaultV2.maxWithdraw(shares);
+      expect(result).toStrictEqual({
+        value: 0n,
+        limiter: CapacityLimitReason.balance,
+      });
+    });
+  });
+
+  describe("zero address adapter", () => {
+    vaultV2Test(
+      "should withdraw full amount when liquidityAdapter is zero address",
+      async ({ client }) => {
+        await client.writeContract({
+          account: allocator,
+          address: vaultV2Address,
+          abi: vaultV2Abi,
+          functionName: "setLiquidityAdapterAndData",
+          args: [zeroAddress, "0x"],
+        });
+
+        const accrualVaultV2 = await fetchAccrualVaultV2(
+          vaultV2Address,
+          client,
+        );
+
+        const shares = parseUnits("100", 18);
+        const result = accrualVaultV2.maxWithdraw(shares);
+
+        expect(result).toStrictEqual({
+          value: accrualVaultV2.toAssets(shares),
+          limiter: CapacityLimitReason.balance,
+        });
+      },
+    );
+  });
+});
+
+describe("maxForceWithdraw", () => {
+  vaultV2Test(
+    "should be limited by balance when assets <= liquidity",
+    async ({ client }) => {
+      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+
+      const shares = parseUnits("10", 18);
+      const result = accrualVaultV2.maxForceWithdraw(shares);
+
+      expect(result).toStrictEqual({
+        value: accrualVaultV2.toAssets(shares),
+        limiter: CapacityLimitReason.balance,
+      });
+    },
+  );
+
+  vaultV2Test(
+    "should be limited by VaultV2_ForceLiquidity on max uint256",
+    async ({ client }) => {
+      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+
+      const result = accrualVaultV2.maxForceWithdraw(MathLib.MAX_UINT_256);
+
+      expect(result).toStrictEqual({
+        value: 16733835n,
+        limiter: CapacityLimitReason.VaultV2_ForceLiquidity,
+      });
+    },
+  );
 });
