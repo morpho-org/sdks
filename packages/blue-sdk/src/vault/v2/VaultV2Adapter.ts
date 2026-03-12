@@ -41,4 +41,10 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
    * @param shares The maximum amount of shares to redeem.
    */
   maxWithdraw(data: Hex): CapacityLimit;
+
+  /**
+   * Returns the total amount of assets available for withdrawal from this adapter,
+   * summed across all underlying positions/markets.
+   */
+  maxWithdrawAvailable(): bigint;
 }

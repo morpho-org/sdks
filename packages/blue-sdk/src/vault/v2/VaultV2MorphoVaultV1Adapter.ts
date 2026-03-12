@@ -72,4 +72,8 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   maxWithdraw(_data: Hex) {
     return this.accrualVaultV1.maxWithdraw(this.shares);
   }
+
+  maxWithdrawAvailable(): bigint {
+    return this.accrualVaultV1.maxWithdraw(this.shares).value;
+  }
 }

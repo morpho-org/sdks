@@ -126,4 +126,15 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
       }
     );
   }
+
+  maxWithdrawAvailable(): bigint {
+    return this.markets.reduce(
+      (total, market) =>
+        total +
+        (market.getWithdrawCapacityLimit({
+          supplyShares: this.supplyShares[market.id] ?? 0n,
+        })?.value ?? 0n),
+      0n,
+    );
+  }
 }
