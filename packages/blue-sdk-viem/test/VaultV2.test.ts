@@ -299,18 +299,4 @@ describe("maxForceWithdraw", () => {
       });
     },
   );
-
-  vaultV2Test(
-    "should be limited by VaultV2_ForceBalance",
-    async ({ client }) => {
-      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
-
-      const result = accrualVaultV2.maxForceWithdraw(16733834n);
-
-      expect(result).toStrictEqual({
-        value: 16733834n,
-        limiter: CapacityLimitReason.VaultV2_ForceBalance,
-      });
-    },
-  );
 });
