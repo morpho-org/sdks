@@ -241,12 +241,12 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     if (assets > liquidity)
       return {
         value: liquidity,
-        limiter: CapacityLimitReason.VaultV2_ForceDeallocateLiquidity,
+        limiter: CapacityLimitReason.VaultV2_ForceLiquidity,
       };
 
     return {
       value: assets,
-      limiter: CapacityLimitReason.VaultV2_ForceDeallocateBalance,
+      limiter: CapacityLimitReason.VaultV2_ForceBalance,
     };
   }
 
