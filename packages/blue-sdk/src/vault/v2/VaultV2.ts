@@ -247,7 +247,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     return {
       value: assets,
-      limiter: CapacityLimitReason.balance,
+      limiter: CapacityLimitReason.VaultV2_ForceDeallocateBalance,
     };
   }
 
