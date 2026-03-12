@@ -233,7 +233,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       if (adapter.address === this.liquidityAdapter) continue;
       if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
 
-      liquidity += adapter.maxWithdrawAvailable();
+      liquidity += adapter.maxDeallocatableAssets();
     }
 
     const assets = this.toAssets(shares);

@@ -127,7 +127,7 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
     );
   }
 
-  maxWithdrawAvailable(): bigint {
+  maxDeallocatableAssets(): bigint {
     return this.markets.reduce(
       (total, market) =>
         total +
