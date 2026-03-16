@@ -3,7 +3,7 @@ import { type Address, type Hash, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, MarketId } from "../../types.js";
 import { type CapacityLimit, CapacityLimitReason } from "../../utils.js";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
@@ -229,31 +229,54 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     if (limiter !== CapacityLimitReason.liquidity) return { value, limiter };
 
-    let liquidity = value;
+    const marketData = new Map<
+      MarketId,
+      { supplyAssets: bigint; liquidity: bigint }
+    >();
+    let liquidityAdapterIncluded = false;
 
     for (const adapter of this.accrualAdapters) {
       const penalty = this.forceDeallocatePenalties[adapter.address];
       if (!isDefined(penalty)) continue;
       if (penalty > maxPenalty) continue;
 
-      let deallocatable = adapter.maxDeallocatableAssets();
-
-      // The liquidity adapter's `liquidityData` route was already counted
-      // by `maxWithdraw`; subtract it to avoid double-counting.
       if (adapter.address === this.liquidityAdapter)
-        deallocatable = MathLib.zeroFloorSub(
-          deallocatable,
-          adapter.maxWithdraw(this.liquidityData).value,
-        );
+        liquidityAdapterIncluded = true;
 
-      liquidity += deallocatable;
+      for (const [marketId, { supplyAssets, liquidity }] of adapter
+        .maxDeallocatableAssets()
+        .entries()) {
+        const existing = marketData.get(marketId);
+        if (existing) {
+          existing.supplyAssets += supplyAssets;
+        } else {
+          marketData.set(marketId, { supplyAssets, liquidity });
+        }
+      }
     }
 
+    let forceDeallocatable = 0n;
+    for (const {
+      supplyAssets,
+      liquidity: marketLiquidity,
+    } of marketData.values()) {
+      forceDeallocatable += MathLib.min(marketLiquidity, supplyAssets);
+    }
+
+    // The liquidity adapter's `liquidityData` route was already counted
+    // by `maxWithdraw`; subtract it to avoid double-counting.
+    if (liquidityAdapterIncluded && this.accrualLiquidityAdapter != null)
+      forceDeallocatable = MathLib.zeroFloorSub(
+        forceDeallocatable,
+        this.accrualLiquidityAdapter.maxWithdraw(this.liquidityData).value,
+      );
+
+    const totalLiquidity = value + forceDeallocatable;
     const assets = this.toAssets(shares);
 
-    if (assets > liquidity)
+    if (assets > totalLiquidity)
       return {
-        value: liquidity,
+        value: totalLiquidity,
         limiter: CapacityLimitReason.vaultV2_forceDeallocateLiquidity,
       };
 

@@ -5,12 +5,13 @@ import {
   marketParamsAbi,
 } from "../../market/index.js";
 import type { AccrualPosition } from "../../position/index.js";
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, MarketId } from "../../types.js";
 import { CapacityLimitReason } from "../../utils.js";
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
 import type {
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
+  MarketDeallocatableData,
 } from "./VaultV2Adapter.js";
 
 export interface IVaultV2MorphoMarketV1Adapter
@@ -117,12 +118,20 @@ export class AccrualVaultV2MorphoMarketV1Adapter
     );
   }
 
-  maxDeallocatableAssets(): bigint {
-    return this.positions.reduce(
-      (total, position) =>
-        total +
-        (position?.market?.getWithdrawCapacityLimit(position)?.value ?? 0n),
-      0n,
-    );
+  maxDeallocatableAssets(): Map<MarketId, MarketDeallocatableData> {
+    const result = new Map<MarketId, MarketDeallocatableData>();
+    for (const position of this.positions) {
+      const supplyAssets = position.market.toSupplyAssets(
+        position.supplyShares,
+      );
+      const { liquidity } = position.market;
+      const existing = result.get(position.marketId);
+      if (existing) {
+        existing.supplyAssets += supplyAssets;
+      } else {
+        result.set(position.marketId, { supplyAssets, liquidity });
+      }
+    }
+    return result;
   }
 }

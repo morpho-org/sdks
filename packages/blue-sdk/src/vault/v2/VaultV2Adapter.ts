@@ -1,6 +1,11 @@
 import type { Address, Hash, Hex } from "viem";
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, MarketId } from "../../types.js";
 import type { CapacityLimit } from "../../utils.js";
+
+export interface MarketDeallocatableData {
+  supplyAssets: bigint;
+  liquidity: bigint;
+}
 
 export interface IVaultV2Adapter {
   address: Address;
@@ -43,7 +48,7 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
   maxWithdraw(data: Hex): CapacityLimit;
 
   /**
-   * Returns the total amount of assets available for withdrawal from this adapter across all its underlying positions.
+   * Returns per-market supply assets and liquidity available for withdrawal from this adapter.
    */
-  maxDeallocatableAssets(): bigint;
+  maxDeallocatableAssets(): Map<MarketId, MarketDeallocatableData>;
 }

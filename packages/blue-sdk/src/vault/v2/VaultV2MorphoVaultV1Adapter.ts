@@ -1,4 +1,5 @@
 import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
+import { MathLib } from "../../math/index.js";
 
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
 
@@ -7,11 +8,12 @@ export interface IVaultV2MorphoVaultV1Adapter
   morphoVaultV1: Address;
 }
 
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, MarketId } from "../../types.js";
 import type { AccrualVault } from "../Vault.js";
 import type {
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
+  MarketDeallocatableData,
 } from "./VaultV2Adapter.js";
 
 export class VaultV2MorphoVaultV1Adapter
@@ -73,7 +75,21 @@ export class AccrualVaultV2MorphoVaultV1Adapter
     return this.accrualVaultV1.maxWithdraw(this.shares);
   }
 
-  maxDeallocatableAssets(): bigint {
-    return this.accrualVaultV1.maxWithdraw(this.shares).value;
+  maxDeallocatableAssets(): Map<MarketId, MarketDeallocatableData> {
+    const result = new Map<MarketId, MarketDeallocatableData>();
+    const adapterAssets = this.accrualVaultV1.toAssets(this.shares);
+    const { totalAssets } = this.accrualVaultV1;
+    if (totalAssets === 0n) return result;
+
+    for (const [marketId, allocation] of this.accrualVaultV1.allocations) {
+      const supplyAssets = MathLib.mulDivDown(
+        allocation.position.supplyAssets,
+        adapterAssets,
+        totalAssets,
+      );
+      const { liquidity } = allocation.position.market;
+      result.set(marketId, { supplyAssets, liquidity });
+    }
+    return result;
   }
 }

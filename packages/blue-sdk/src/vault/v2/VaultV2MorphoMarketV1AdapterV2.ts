@@ -10,6 +10,7 @@ import { VaultV2Adapter } from "./VaultV2Adapter.js";
 import type {
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
+  MarketDeallocatableData,
 } from "./VaultV2Adapter.js";
 
 export interface IVaultV2MorphoMarketV1AdapterV2
@@ -127,14 +128,15 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
     );
   }
 
-  maxDeallocatableAssets(): bigint {
-    return this.markets.reduce(
-      (total, market) =>
-        total +
-        (market.getWithdrawCapacityLimit({
-          supplyShares: this.supplyShares[market.id] ?? 0n,
-        })?.value ?? 0n),
-      0n,
-    );
+  maxDeallocatableAssets(): Map<MarketId, MarketDeallocatableData> {
+    const result = new Map<MarketId, MarketDeallocatableData>();
+    for (const market of this.markets) {
+      const supplyAssets = market.toSupplyAssets(
+        this.supplyShares[market.id] ?? 0n,
+      );
+      const { liquidity } = market;
+      result.set(market.id, { supplyAssets, liquidity });
+    }
+    return result;
   }
 }
