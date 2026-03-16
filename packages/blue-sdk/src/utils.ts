@@ -6,8 +6,8 @@ export enum CapacityLimitReason {
   cap = "Cap",
   vaultV2_absoluteCap = "VaultV2_AbsoluteCap",
   vaultV2_relativeCap = "VaultV2_RelativeCap",
-  VaultV2_ForceLiquidity = "VaultV2_ForceLiquidity",
-  VaultV2_ForceBalance = "VaultV2_ForceBalance",
+  vaultV2_forceDeallocateLiquidity = "vaultV2_forceDeallocateLiquidity",
+  vaultV2_forceDeallocateBalance = "vaultV2_forceDeallocateBalance",
 }
 
 export interface CapacityLimit {

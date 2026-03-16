@@ -232,13 +232,21 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     let liquidity = value;
 
     for (const adapter of this.accrualAdapters) {
-      if (adapter.address === this.liquidityAdapter) continue;
-
       const penalty = this.forceDeallocatePenalties[adapter.address];
       if (!isDefined(penalty)) continue;
       if (penalty > maxPenalty) continue;
 
-      liquidity += adapter.maxDeallocatableAssets();
+      let deallocatable = adapter.maxDeallocatableAssets();
+
+      // The liquidity adapter's `liquidityData` route was already counted
+      // by `maxWithdraw`; subtract it to avoid double-counting.
+      if (adapter.address === this.liquidityAdapter)
+        deallocatable = MathLib.zeroFloorSub(
+          deallocatable,
+          adapter.maxWithdraw(this.liquidityData).value,
+        );
+
+      liquidity += deallocatable;
     }
 
     const assets = this.toAssets(shares);
@@ -246,12 +254,12 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     if (assets > liquidity)
       return {
         value: liquidity,
-        limiter: CapacityLimitReason.VaultV2_ForceLiquidity,
+        limiter: CapacityLimitReason.vaultV2_forceDeallocateLiquidity,
       };
 
     return {
       value: assets,
-      limiter: CapacityLimitReason.VaultV2_ForceBalance,
+      limiter: CapacityLimitReason.vaultV2_forceDeallocateBalance,
     };
   }
 

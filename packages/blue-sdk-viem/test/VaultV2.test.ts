@@ -287,7 +287,7 @@ describe("maxForceWithdraw", () => {
   );
 
   vaultV2Test(
-    "should be limited by VaultV2_ForceLiquidity on max uint256",
+    "should be limited by vaultV2_forceDeallocateLiquidity on max uint256",
     async ({ client }) => {
       const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
 
@@ -295,7 +295,7 @@ describe("maxForceWithdraw", () => {
 
       expect(result).toStrictEqual({
         value: 16733835n,
-        limiter: CapacityLimitReason.VaultV2_ForceLiquidity,
+        limiter: CapacityLimitReason.vaultV2_forceDeallocateLiquidity,
       });
     },
   );
