@@ -1,3 +1,4 @@
+import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
@@ -221,8 +222,9 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * Returns the maximum amount of assets that can be withdrawn from the vault,
    * taking into account the liquidity freed by force-deallocating adapters only with zero penalty.
    * @param shares The maximum amount of shares to redeem.
+   * @param maxPenalty The maximum penalty to consider for force-deallocating adapters.
    */
-  public maxForceWithdraw(shares: BigIntish): CapacityLimit {
+  public maxForceWithdraw(shares: BigIntish, maxPenalty = 0n): CapacityLimit {
     const { value, limiter } = this.maxWithdraw(shares);
 
     if (limiter !== CapacityLimitReason.liquidity) return { value, limiter };
@@ -231,7 +233,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     for (const adapter of this.accrualAdapters) {
       if (adapter.address === this.liquidityAdapter) continue;
-      if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
+
+      const penalty = this.forceDeallocatePenalties[adapter.address];
+      if (!isDefined(penalty)) continue;
+      if (penalty > maxPenalty) continue;
 
       liquidity += adapter.maxDeallocatableAssets();
     }
