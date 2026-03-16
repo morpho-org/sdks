@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup.js";
+import { test, testTreehouseEth } from "./setup.js";
 
 import {
   ChainId,
@@ -65,7 +65,9 @@ describe("augment/Token", () => {
     expect(value).toStrictEqual(expectedData);
   });
 
-  test("should fetch token data with eip5267Domain", async ({ client }) => {
+  test("should fetch token data with eip5267Domain using deployless reads", async ({
+    client,
+  }) => {
     const steakUSDC = "0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB";
     const expectedData = new Token({
       address: steakUSDC,
@@ -83,8 +85,38 @@ describe("augment/Token", () => {
       }),
     });
 
-    const value = await Token.fetch(expectedData.address, client);
+    const value = await Token.fetch(expectedData.address, client, {
+      deployless: "force",
+    });
 
     expect(value).toStrictEqual(expectedData);
   });
+
+  testTreehouseEth(
+    "should fetch Treehouse ETH data with eip5267Domain using deployless reads",
+    async ({ client }) => {
+      const treehouseEth = "0xD11c452fc99cF405034ee446803b6F6c1F6d5ED8";
+      const expectedData = new Token({
+        address: treehouseEth,
+        decimals: 18,
+        symbol: "tETH",
+        name: "Treehouse ETH",
+        eip5267Domain: new Eip5267Domain({
+          fields: "0x0f",
+          name: "Treehouse ETH",
+          version: "1",
+          chainId: 1n,
+          verifyingContract: treehouseEth,
+          salt: zeroHash,
+          extensions: [],
+        }),
+      });
+
+      const value = await Token.fetch(expectedData.address, client, {
+        deployless: "force",
+      });
+
+      expect(value).toStrictEqual(expectedData);
+    },
+  );
 });
