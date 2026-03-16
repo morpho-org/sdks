@@ -34,9 +34,31 @@ contract GetToken {
 
         if (isWstEth) res.stEthPerWstEth = IWstEth(address(token)).stEthPerToken();
 
-        try IERC20Permit(address(token)).eip712Domain() returns (Eip5267Domain memory eip5267Domain) {
+        // Work around a Solidity via-IR decoding regression hit by valid EIP-5267 domains
+        // such as Treehouse ETH (tETH) on mainnet. Decoding the raw returndata locally avoids
+        // the deployless helper revert while preserving the same returned shape.
+        (bool success, bytes memory returnData) = address(token).staticcall(abi.encodeCall(IERC20Permit.eip712Domain, ()));
+        if (success) {
+            (
+                bytes1 fields,
+                string memory name,
+                string memory version,
+                uint256 chainId,
+                address verifyingContract,
+                bytes32 salt,
+                uint256[] memory extensions
+            ) = abi.decode(returnData, (bytes1, string, string, uint256, address, bytes32, uint256[]));
+
             res.hasEip5267Domain = true;
-            res.eip5267Domain = eip5267Domain;
-        } catch {}
+            res.eip5267Domain = Eip5267Domain({
+                fields: fields,
+                name: name,
+                version: version,
+                chainId: chainId,
+                verifyingContract: verifyingContract,
+                salt: salt,
+                extensions: extensions
+            });
+        }
     }
 }
