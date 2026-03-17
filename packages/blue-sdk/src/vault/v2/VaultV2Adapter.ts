@@ -42,7 +42,7 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
    */
   maxDeposit(data: Hex, assets: BigIntish): CapacityLimit;
   /**
-   * Returns the maximum amount of assets that can be withdrawn from this adapter and this specific data.
+   * Returns the maximum amount of assets that can be withdrawn from this adapter with the given liquidity data.
    * @param shares The maximum amount of shares to redeem.
    */
   maxWithdraw(data: Hex): CapacityLimit;
