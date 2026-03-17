@@ -4,10 +4,12 @@ import {
   MarketParams,
   marketParamsAbi,
 } from "../../market/index.js";
+import { MathLib } from "../../math/index.js";
 import type { BigIntish, MarketId } from "../../types.js";
 import { CapacityLimitReason } from "../../utils.js";
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
 import type {
+  AdapterDeallocatableResult,
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
   MarketDeallocatableData,
@@ -138,5 +140,19 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
       result.set(market.id, { supplyAssets, liquidity });
     }
     return result;
+  }
+
+  computeActualDeallocatable(
+    remainingLiquidity: ReadonlyMap<MarketId, bigint>,
+  ): AdapterDeallocatableResult {
+    const consumed = new Map<MarketId, bigint>();
+    let total = 0n;
+    for (const [marketId, { supplyAssets }] of this.maxDeallocatableAssets()) {
+      const remaining = remainingLiquidity.get(marketId) ?? 0n;
+      const c = MathLib.min(supplyAssets, remaining);
+      consumed.set(marketId, c);
+      total += c;
+    }
+    return { consumed, total };
   }
 }

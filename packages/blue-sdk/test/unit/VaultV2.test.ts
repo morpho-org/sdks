@@ -1,10 +1,12 @@
 import { randomAddress } from "@morpho-org/test/fixtures";
 import { type Address, type Hash, type Hex, zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
+import { MathLib } from "../../src/math/index.js";
 import type { BigIntish, MarketId } from "../../src/types.js";
 import { CapacityLimitReason } from "../../src/utils.js";
 import { AccrualVaultV2 } from "../../src/vault/v2/VaultV2.js";
 import type {
+  AdapterDeallocatableResult,
   IAccrualVaultV2Adapter,
   MarketDeallocatableData,
 } from "../../src/vault/v2/VaultV2Adapter.js";
@@ -48,6 +50,20 @@ class MockAdapter implements IAccrualVaultV2Adapter {
 
   maxDeallocatableAssets() {
     return new Map(this._deallocatable);
+  }
+
+  computeActualDeallocatable(
+    remainingLiquidity: ReadonlyMap<MarketId, bigint>,
+  ): AdapterDeallocatableResult {
+    const consumed = new Map<MarketId, bigint>();
+    let total = 0n;
+    for (const [marketId, { supplyAssets }] of this._deallocatable) {
+      const remaining = remainingLiquidity.get(marketId) ?? 0n;
+      const c = MathLib.min(supplyAssets, remaining);
+      consumed.set(marketId, c);
+      total += c;
+    }
+    return { consumed, total };
   }
 }
 

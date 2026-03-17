@@ -1,10 +1,26 @@
 import type { Address, Hash, Hex } from "viem";
 import type { BigIntish, MarketId } from "../../types.js";
-import type { CapacityLimit } from "../../utils.js";
+import type { CapacityLimit, CapacityLimitReason } from "../../utils.js";
 
 export interface MarketDeallocatableData {
   supplyAssets: bigint;
   liquidity: bigint;
+}
+
+export interface AdapterDeallocation {
+  adapter: Address;
+  assets: bigint;
+}
+
+export interface ForceWithdrawResult {
+  value: bigint;
+  limiter: CapacityLimitReason;
+  deallocations: AdapterDeallocation[];
+}
+
+export interface AdapterDeallocatableResult {
+  consumed: Map<MarketId, bigint>;
+  total: bigint;
 }
 
 export interface IVaultV2Adapter {
@@ -49,6 +65,17 @@ export interface IAccrualVaultV2Adapter extends IVaultV2Adapter {
 
   /**
    * Returns per-market supply assets and liquidity available for withdrawal from this adapter.
+   * - supplyAssets: the adapter's allocation in that market.
+   * - liquidity: the total available liquidity on that market.
    */
   maxDeallocatableAssets(): Map<MarketId, MarketDeallocatableData>;
+
+  /**
+   * Computes the actual deallocatable amount given remaining per-market liquidity.
+   * Handles adapter-specific withdrawal semantics (e.g., VaultV1 withdraw queue ordering).
+   * Returns per-market consumed amounts and the total deallocatable.
+   */
+  computeActualDeallocatable(
+    remainingLiquidity: ReadonlyMap<MarketId, bigint>,
+  ): AdapterDeallocatableResult;
 }

@@ -11,6 +11,7 @@ export interface IVaultV2MorphoVaultV1Adapter
 import type { BigIntish, MarketId } from "../../types.js";
 import type { AccrualVault } from "../Vault.js";
 import type {
+  AdapterDeallocatableResult,
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
   MarketDeallocatableData,
@@ -77,33 +78,49 @@ export class AccrualVaultV2MorphoVaultV1Adapter
 
   maxDeallocatableAssets(): Map<MarketId, MarketDeallocatableData> {
     const result = new Map<MarketId, MarketDeallocatableData>();
-
-    const marketWithdrawable: Array<
-      [MarketId, { withdrawable: bigint; liquidity: bigint }]
-    > = [];
-    let vaultLiquidity = 0n;
-
-    for (const [marketId, allocation] of this.accrualVaultV1.allocations) {
-      const withdrawable = allocation.position.withdrawCapacityLimit.value;
-      const { liquidity } = allocation.position.market;
-      vaultLiquidity += withdrawable;
-      marketWithdrawable.push([marketId, { withdrawable, liquidity }]);
-    }
-
-    if (vaultLiquidity === 0n) return result;
-
     const adapterAssets = this.realAssets();
+    if (adapterAssets === 0n) return result;
 
-    const effectiveAssets = MathLib.min(adapterAssets, vaultLiquidity);
+    const { totalAssets, allocations } = this.accrualVaultV1;
+    if (totalAssets === 0n) return result;
 
-    for (const [marketId, { withdrawable, liquidity }] of marketWithdrawable) {
+    for (const [marketId, allocation] of allocations) {
       const supplyAssets = MathLib.mulDivDown(
-        withdrawable,
-        effectiveAssets,
-        vaultLiquidity,
+        adapterAssets,
+        allocation.position.supplyAssets,
+        totalAssets,
       );
+      const { liquidity } = allocation.position.market;
       result.set(marketId, { supplyAssets, liquidity });
     }
     return result;
+  }
+
+  /**
+   * Simulates the MetaMorpho V1 withdraw queue to compute actual per-market
+   * consumption given remaining liquidity across markets.
+   */
+  computeActualDeallocatable(
+    remainingLiquidity: ReadonlyMap<MarketId, bigint>,
+  ): AdapterDeallocatableResult {
+    const consumed = new Map<MarketId, bigint>();
+    let total = 0n;
+    let remaining = this.realAssets();
+    if (remaining === 0n) return { consumed, total };
+
+    for (const marketId of this.accrualVaultV1.withdrawQueue) {
+      const allocation = this.accrualVaultV1.allocations.get(marketId);
+      if (!allocation) continue;
+
+      const vaultSupply = allocation.position.supplyAssets;
+      const mktLiquidity = remainingLiquidity.get(marketId) ?? 0n;
+      const c = MathLib.min(vaultSupply, mktLiquidity, remaining);
+      consumed.set(marketId, c);
+      total += c;
+      remaining -= c;
+      if (remaining === 0n) break;
+    }
+
+    return { consumed, total };
   }
 }

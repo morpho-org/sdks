@@ -5,7 +5,10 @@ import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
 import type { BigIntish, MarketId } from "../../types.js";
 import { type CapacityLimit, CapacityLimitReason } from "../../utils.js";
-import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
+import type {
+  ForceWithdrawResult,
+  IAccrualVaultV2Adapter,
+} from "./VaultV2Adapter.js";
 
 export interface IVaultV2Allocation {
   id: Hash;
@@ -220,69 +223,139 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
   /**
    * Returns the maximum amount of assets that can be withdrawn from the vault,
-   * taking into account the liquidity freed by force-deallocating adapters only with zero penalty.
+   * taking into account the liquidity freed by force-deallocating adapters.
+   *
+   * Returns the deallocation path sorted from largest to smallest contribution,
+   * covering exactly the needed deallocation amount.
+   * Returns an empty deallocations array if normal withdraw suffices or if
+   * total liquidity (including force deallocation) is insufficient.
+   *
    * @param shares The maximum amount of shares to redeem.
    * @param maxPenalty The maximum penalty to consider for force-deallocating adapters.
    */
-  public maxForceWithdraw(shares: BigIntish, maxPenalty = 0n): CapacityLimit {
+  public maxForceWithdraw(
+    shares: BigIntish,
+    maxPenalty = 0n,
+  ): ForceWithdrawResult {
     const { value, limiter } = this.maxWithdraw(shares);
 
-    if (limiter !== CapacityLimitReason.liquidity) return { value, limiter };
+    if (limiter !== CapacityLimitReason.liquidity)
+      return { value, limiter, deallocations: [] };
 
-    const marketData = new Map<
-      MarketId,
-      { supplyAssets: bigint; liquidity: bigint }
-    >();
-    let liquidityAdapterIncluded = false;
+    const assets = this.toAssets(shares);
+
+    // Collect eligible adapters with their per-market data.
+    const eligibleAdapters: {
+      adapter: IAccrualVaultV2Adapter;
+      isLiquidityAdapter: boolean;
+    }[] = [];
+
+    const remainingLiquidity = new Map<MarketId, bigint>();
 
     for (const adapter of this.accrualAdapters) {
       const penalty = this.forceDeallocatePenalties[adapter.address];
       if (!isDefined(penalty)) continue;
       if (penalty > maxPenalty) continue;
 
-      if (adapter.address === this.liquidityAdapter)
-        liquidityAdapterIncluded = true;
+      const isLiquidityAdapter = adapter.address === this.liquidityAdapter;
+      eligibleAdapters.push({ adapter, isLiquidityAdapter });
 
-      for (const [marketId, { supplyAssets, liquidity }] of adapter
+      for (const [marketId, { liquidity }] of adapter
         .maxDeallocatableAssets()
         .entries()) {
-        const existing = marketData.get(marketId);
-        if (existing) {
-          existing.supplyAssets += supplyAssets;
-        } else {
-          marketData.set(marketId, { supplyAssets, liquidity });
-        }
+        const existing = remainingLiquidity.get(marketId);
+        if (!isDefined(existing) || liquidity > existing)
+          remainingLiquidity.set(marketId, liquidity);
       }
     }
 
-    let forceDeallocatable = 0n;
-    for (const {
-      supplyAssets,
-      liquidity: marketLiquidity,
-    } of marketData.values()) {
-      forceDeallocatable += MathLib.min(marketLiquidity, supplyAssets);
+    // Amount already counted by maxWithdraw via the liquidity adapter's
+    // normal route; must not be double-counted.
+    const liquidityAdapterNormal =
+      this.accrualLiquidityAdapter != null
+        ? this.accrualLiquidityAdapter.maxWithdraw(this.liquidityData).value
+        : 0n;
+
+    // Sort adapters by naive deallocatable estimate (sum of
+    // min(supplyAssets, liquidity) per market) so the largest contributors
+    // are processed first.
+    const adapterEntries = eligibleAdapters.map((entry) => {
+      let estimate = 0n;
+      for (const { supplyAssets, liquidity } of entry.adapter
+        .maxDeallocatableAssets()
+        .values()) {
+        estimate += MathLib.min(supplyAssets, liquidity);
+      }
+
+      if (entry.isLiquidityAdapter)
+        estimate = MathLib.zeroFloorSub(estimate, liquidityAdapterNormal);
+
+      return { ...entry, estimate };
+    });
+
+    adapterEntries.sort((a, b) =>
+      a.estimate > b.estimate ? -1 : a.estimate < b.estimate ? 1 : 0,
+    );
+
+    // Process adapters in sorted order, tracking remaining per-market
+    // liquidity to avoid double-counting shared markets.
+    const deallocations: { adapter: Address; assets: bigint }[] = [];
+    let totalForceDeallocatable = 0n;
+
+    for (const { adapter, isLiquidityAdapter } of adapterEntries) {
+      const { consumed, total: rawTotal } =
+        adapter.computeActualDeallocatable(remainingLiquidity);
+
+      // Deduct the liquidity adapter's normal-route contribution which was
+      // already included in maxWithdraw's result.
+      let effectiveTotal = rawTotal;
+      if (isLiquidityAdapter)
+        effectiveTotal = MathLib.zeroFloorSub(rawTotal, liquidityAdapterNormal);
+
+      // Update remaining liquidity for subsequent adapters.
+      for (const [marketId, c] of consumed) {
+        const prev = remainingLiquidity.get(marketId) ?? 0n;
+        remainingLiquidity.set(marketId, MathLib.zeroFloorSub(prev, c));
+      }
+
+      if (effectiveTotal > 0n) {
+        totalForceDeallocatable += effectiveTotal;
+        deallocations.push({
+          adapter: adapter.address,
+          assets: effectiveTotal,
+        });
+      }
     }
 
-    // The liquidity adapter's `liquidityData` route was already counted
-    // by `maxWithdraw`; subtract it to avoid double-counting.
-    if (liquidityAdapterIncluded && this.accrualLiquidityAdapter != null)
-      forceDeallocatable = MathLib.zeroFloorSub(
-        forceDeallocatable,
-        this.accrualLiquidityAdapter.maxWithdraw(this.liquidityData).value,
-      );
-
-    const totalLiquidity = value + forceDeallocatable;
-    const assets = this.toAssets(shares);
+    const totalLiquidity = value + totalForceDeallocatable;
 
     if (assets > totalLiquidity)
       return {
         value: totalLiquidity,
         limiter: CapacityLimitReason.vaultV2_forceDeallocateLiquidity,
+        deallocations: [],
       };
+
+    // Trim deallocations to cover exactly the needed amount.
+    const needed = assets - value;
+    const trimmedDeallocations: { adapter: Address; assets: bigint }[] = [];
+    let remaining = needed;
+
+    for (const dealloc of deallocations) {
+      if (remaining <= 0n) break;
+
+      const effective = MathLib.min(dealloc.assets, remaining);
+      trimmedDeallocations.push({
+        adapter: dealloc.adapter,
+        assets: effective,
+      });
+      remaining -= effective;
+    }
 
     return {
       value: assets,
       limiter: CapacityLimitReason.vaultV2_forceDeallocateBalance,
+      deallocations: trimmedDeallocations,
     };
   }
 
