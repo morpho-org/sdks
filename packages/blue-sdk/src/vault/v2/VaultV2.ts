@@ -1,6 +1,7 @@
 import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
+import { MarketParams } from "../../market/index.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
 import type { BigIntish, MarketId } from "../../types.js";
@@ -275,6 +276,18 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       this.accrualLiquidityAdapter != null
         ? this.accrualLiquidityAdapter.maxWithdraw(this.liquidityData).value
         : 0n;
+
+    // Reserve the normal-path consumption on its specific market so that
+    // force-path adapters sharing that market cannot double-count it.
+    if (liquidityAdapterNormal > 0n) {
+      const normalMarketId = MarketParams.fromHex(this.liquidityData).id;
+      const prev = remainingLiquidity.get(normalMarketId);
+      if (prev != null)
+        remainingLiquidity.set(
+          normalMarketId,
+          MathLib.zeroFloorSub(prev, liquidityAdapterNormal),
+        );
+    }
 
     // Sort adapters by naive deallocatable estimate (sum of
     // min(supplyAssets, liquidity) per market) so the largest contributors
