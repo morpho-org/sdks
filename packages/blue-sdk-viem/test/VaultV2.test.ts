@@ -280,6 +280,7 @@ describe("maxForceWithdraw", () => {
       const result = accrualVaultV2.maxForceWithdraw(shares);
 
       expect(result).toStrictEqual({
+        deallocations: [],
         value: accrualVaultV2.toAssets(shares),
         limiter: CapacityLimitReason.balance,
       });
@@ -294,6 +295,7 @@ describe("maxForceWithdraw", () => {
       const result = accrualVaultV2.maxForceWithdraw(MathLib.MAX_UINT_256);
 
       expect(result).toStrictEqual({
+        deallocations: [],
         value: 16733835n,
         limiter: CapacityLimitReason.vaultV2_forceDeallocateLiquidity,
       });
