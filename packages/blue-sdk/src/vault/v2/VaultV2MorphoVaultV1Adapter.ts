@@ -78,20 +78,20 @@ export class AccrualVaultV2MorphoVaultV1Adapter
 
   maxDeallocatableAssets(): Map<MarketId, MarketDeallocatableData> {
     const result = new Map<MarketId, MarketDeallocatableData>();
-    const adapterAssets = this.realAssets();
-    if (adapterAssets === 0n) return result;
+    let remaining = this.realAssets();
+    if (remaining === 0n) return result;
 
-    const { totalAssets, allocations } = this.accrualVaultV1;
-    if (totalAssets === 0n) return result;
+    for (const marketId of this.accrualVaultV1.withdrawQueue) {
+      const allocation = this.accrualVaultV1.allocations.get(marketId);
+      if (!allocation) continue;
 
-    for (const [marketId, allocation] of allocations) {
-      const supplyAssets = MathLib.mulDivDown(
-        adapterAssets,
-        allocation.position.supplyAssets,
-        totalAssets,
-      );
+      const vaultSupply = allocation.position.supplyAssets;
       const { liquidity } = allocation.position.market;
+      const supplyAssets = MathLib.min(vaultSupply, liquidity, remaining);
+
       result.set(marketId, { supplyAssets, liquidity });
+      remaining -= supplyAssets;
+      if (remaining === 0n) break;
     }
     return result;
   }
