@@ -10,6 +10,7 @@ import type {
   ForceWithdrawResult,
   IAccrualVaultV2Adapter,
 } from "./VaultV2Adapter.js";
+import { AccrualVaultV2MorphoVaultV1Adapter } from "./VaultV2MorphoVaultV1Adapter.js";
 
 export interface IVaultV2Allocation {
   id: Hash;
@@ -279,7 +280,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
     // Reserve the normal-path consumption on its specific market so that
     // force-path adapters sharing that market cannot double-count it.
-    if (liquidityAdapterNormal > 0n) {
+    if (liquidityAdapterNormal > 0n && this.liquidityData !== "0x") {
       const normalMarketId = MarketParams.fromHex(this.liquidityData).id;
       const prev = remainingLiquidity.get(normalMarketId);
       if (prev != null)
@@ -306,9 +307,17 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       return { ...entry, estimate };
     });
 
-    adapterEntries.sort((a, b) =>
-      a.estimate > b.estimate ? -1 : a.estimate < b.estimate ? 1 : 0,
-    );
+    // Process queue-based adapters (VaultV1) last: their fixed withdraw queue
+    // and budget cap can waste shared liquidity that order-independent adapters
+    // (MarketV1) could have used, leading to under-reported totals.
+    adapterEntries.sort((a, b) => {
+      const aPrio =
+        a.adapter instanceof AccrualVaultV2MorphoVaultV1Adapter ? 1 : 0;
+      const bPrio =
+        b.adapter instanceof AccrualVaultV2MorphoVaultV1Adapter ? 1 : 0;
+      if (aPrio !== bPrio) return aPrio - bPrio;
+      return a.estimate > b.estimate ? -1 : a.estimate < b.estimate ? 1 : 0;
+    });
 
     // Process adapters in sorted order, tracking remaining per-market
     // liquidity to avoid double-counting shared markets.
