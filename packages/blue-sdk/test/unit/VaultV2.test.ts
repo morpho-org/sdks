@@ -169,7 +169,7 @@ describe("VaultV2 maxForceWithdraw – same market across multiple adapters", ()
     );
   });
 
-  test("should only include adapters whose penalty <= maxPenalty", () => {
+  test("should only include adapters whose penalty === 0n", () => {
     const addrA = randomAddress();
     const addrB = randomAddress();
     const adapterA = new MockAdapter(
@@ -187,31 +187,20 @@ describe("VaultV2 maxForceWithdraw – same market across multiple adapters", ()
       penalties: { [addrA]: 0n, [addrB]: 1n },
     });
 
-    // maxPenalty = 0 → only adapterA eligible
     // forceDeallocatable = min(1000, 200) = 200
     // totalLiquidity = 100 + 200 = 300
     // shares = 250 → assets = 250 <= 300
-    const result = vault.maxForceWithdraw(250n, 0n);
+    const result = vault.maxForceWithdraw(250n);
     expect(result.value).toBe(250n);
     expect(result.limiter).toBe(
       CapacityLimitReason.vaultV2_forceDeallocateBalance,
     );
 
     // shares = 400 → assets = 400 > 300
-    const result2 = vault.maxForceWithdraw(400n, 0n);
+    const result2 = vault.maxForceWithdraw(400n);
     expect(result2.value).toBe(300n);
     expect(result2.limiter).toBe(
       CapacityLimitReason.vaultV2_forceDeallocateLiquidity,
-    );
-
-    // maxPenalty = 1 → both adapters eligible
-    // forceDeallocatable = min(1000, 500) = 500
-    // totalLiquidity = 100 + 500 = 600
-    // shares = 400 → assets = 400 <= 600
-    const result3 = vault.maxForceWithdraw(400n, 1n);
-    expect(result3.value).toBe(400n);
-    expect(result3.limiter).toBe(
-      CapacityLimitReason.vaultV2_forceDeallocateBalance,
     );
   });
 
