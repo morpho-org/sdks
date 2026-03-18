@@ -233,12 +233,8 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    * total liquidity (including force deallocation) is insufficient.
    *
    * @param shares The maximum amount of shares to redeem.
-   * @param maxPenalty The maximum penalty to consider for force-deallocating adapters.
    */
-  public maxForceWithdraw(
-    shares: BigIntish,
-    maxPenalty = 0n,
-  ): ForceWithdrawResult {
+  public maxForceWithdraw(shares: BigIntish): ForceWithdrawResult {
     const { value, limiter } = this.maxWithdraw(shares);
 
     if (limiter !== CapacityLimitReason.liquidity)
@@ -264,7 +260,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     for (const adapter of this.accrualAdapters) {
       const penalty = this.forceDeallocatePenalties[adapter.address];
       if (!isDefined(penalty)) continue;
-      if (penalty > maxPenalty) continue;
+      if (penalty !== 0n) continue;
 
       const isLiquidityAdapter = adapter.address === this.liquidityAdapter;
       eligibleAdapters.push({ adapter, isLiquidityAdapter });
