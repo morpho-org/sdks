@@ -1,4 +1,4 @@
-import { keys } from "../src";
+import { keys } from "../src/index.js";
 
 import { describe, expect, test } from "vitest";
 

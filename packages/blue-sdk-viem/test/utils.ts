@@ -25,7 +25,7 @@ import {
   readContractRestructured,
   vaultV2Abi,
   vaultV2FactoryAbi,
-} from "../src";
+} from "../src/index.js";
 
 export const submitAndAccept = async <
   const abi extends Abi | readonly unknown[],

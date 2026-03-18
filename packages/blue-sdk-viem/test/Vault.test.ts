@@ -1,5 +1,5 @@
 import { describe, expect } from "vitest";
-import { test, test2 } from "./setup";
+import { test, test2 } from "./setup.js";
 
 import {
   ChainId,
@@ -10,8 +10,8 @@ import {
 
 import { vaults } from "@morpho-org/morpho-test";
 import { zeroAddress, zeroHash } from "viem";
-import { metaMorphoAbi, publicAllocatorAbi } from "../src";
-import { Vault } from "../src/augment/Vault";
+import { Vault } from "../src/augment/Vault.js";
+import { metaMorphoAbi, publicAllocatorAbi } from "../src/index.js";
 
 const { steakUsdc, steakPaxg } = vaults[ChainId.EthMainnet];
 

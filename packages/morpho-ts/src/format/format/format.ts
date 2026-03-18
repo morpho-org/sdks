@@ -1,4 +1,4 @@
-import { getEnUSNumberToLocalParts } from "../locale";
+import { getEnUSNumberToLocalParts } from "../locale.js";
 
 /**
  * Enum representing the available formatter types.

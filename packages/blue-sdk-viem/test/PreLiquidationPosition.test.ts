@@ -14,8 +14,8 @@ import {
   fetchMarket,
   fetchPreLiquidationPosition,
   preLiquidationFactoryAbi,
-} from "../src";
-import { preLiquidationTest } from "./setup";
+} from "../src/index.js";
+import { preLiquidationTest } from "./setup.js";
 
 const { morpho } = getChainAddresses(ChainId.EthMainnet);
 const { usdt_wbtc } = markets[ChainId.EthMainnet];

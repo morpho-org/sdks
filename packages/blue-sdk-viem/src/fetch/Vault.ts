@@ -17,12 +17,12 @@ import {
   metaMorphoAbi,
   metaMorphoFactoryAbi,
   publicAllocatorAbi,
-} from "../abis";
-import type { DeploylessFetchParameters } from "../types";
-import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
+} from "../abis.js";
+import type { DeploylessFetchParameters } from "../types.js";
+import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
-import { abi, code } from "../queries/GetVault";
-import { fetchVaultConfig } from "./VaultConfig";
+import { abi, code } from "../queries/GetVault.js";
+import { fetchVaultConfig } from "./VaultConfig.js";
 
 export async function fetchVault(
   address: Address,

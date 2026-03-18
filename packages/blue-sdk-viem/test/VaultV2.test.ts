@@ -3,12 +3,12 @@ import { Time } from "@morpho-org/morpho-ts";
 import { encodeFunctionData, parseUnits, zeroAddress } from "viem";
 import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
-import { vaultV2Abi } from "../src";
 import {
   fetchAccrualVaultV2,
   fetchVaultV2,
-} from "../src/fetch/vault-v2/VaultV2";
-import { vaultV2Test } from "./setup";
+} from "../src/fetch/vault-v2/VaultV2.js";
+import { vaultV2Abi } from "../src/index.js";
+import { vaultV2Test } from "./setup.js";
 
 const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
 

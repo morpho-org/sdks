@@ -18,9 +18,13 @@ import {
 } from "viem";
 import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";
-import { fetchAccrualVaultV2, fetchVaultV2Adapter, vaultV2Abi } from "../src";
-import { vaultV2Test } from "./setup";
-import { deployMorphoMarketV1Adapter, deployVaultV2 } from "./utils";
+import {
+  fetchAccrualVaultV2,
+  fetchVaultV2Adapter,
+  vaultV2Abi,
+} from "../src/index.js";
+import { vaultV2Test } from "./setup.js";
+import { deployMorphoMarketV1Adapter, deployVaultV2 } from "./utils.js";
 
 // VaultV2 with liquidity adapter vaultV1
 const vaultV2Address = "0xfDE48B9B8568189f629Bc5209bf5FA826336557a";
@@ -462,6 +466,7 @@ describe("LiquidityAdapter undefined", () => {
         undefined,
         accrualVaultV2.accrualAdapters,
         accrualVaultV2.assetBalance,
+        accrualVaultV2.forceDeallocatePenalties,
       );
 
       const depositAmount = parseUnits("1000", 6);
@@ -484,6 +489,7 @@ describe("LiquidityAdapter undefined", () => {
         accrualVaultV2.accrualLiquidityAdapter,
         accrualVaultV2.accrualAdapters,
         accrualVaultV2.assetBalance,
+        accrualVaultV2.forceDeallocatePenalties,
       );
 
       const depositAmount = parseUnits("1000", 6);

@@ -1,10 +1,10 @@
 import { type Address, type Hash, type Hex, zeroAddress } from "viem";
-import { VaultV2Errors } from "../../errors";
-import { MathLib, type RoundingDirection } from "../../math";
-import { type IToken, WrappedToken } from "../../token";
-import type { BigIntish } from "../../types";
-import { type CapacityLimit, CapacityLimitReason } from "../../utils";
-import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter";
+import { VaultV2Errors } from "../../errors.js";
+import { MathLib, type RoundingDirection } from "../../math/index.js";
+import { type IToken, WrappedToken } from "../../token/index.js";
+import type { BigIntish } from "../../types.js";
+import { type CapacityLimit, CapacityLimitReason } from "../../utils.js";
+import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
 export interface IVaultV2Allocation {
   id: Hash;
@@ -133,6 +133,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     public accrualLiquidityAdapter: IAccrualVaultV2Adapter | undefined,
     public accrualAdapters: IAccrualVaultV2Adapter[],
     public assetBalance: bigint,
+    /**
+     * The force deallocate penalty for each adapter, keyed by adapter address.
+     */
+    public forceDeallocatePenalties: Record<Address, bigint>,
   ) {
     super({ ...vault, adapters: accrualAdapters.map((a) => a.address) });
   }
@@ -223,6 +227,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       this.accrualLiquidityAdapter,
       this.accrualAdapters,
       this.assetBalance,
+      this.forceDeallocatePenalties,
     );
 
     timestamp = BigInt(timestamp);

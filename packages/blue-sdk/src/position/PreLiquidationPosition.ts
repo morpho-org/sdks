@@ -1,9 +1,9 @@
 import type { Address } from "viem";
-import { ORACLE_PRICE_SCALE } from "../constants";
-import { type IMarket, Market } from "../market";
-import { MathLib, SharesMath } from "../math";
-import type { BigIntish } from "../types";
-import { AccrualPosition, type IAccrualPosition } from "./Position";
+import { ORACLE_PRICE_SCALE } from "../constants.js";
+import { type IMarket, Market } from "../market/index.js";
+import { MathLib, SharesMath } from "../math/index.js";
+import type { BigIntish } from "../types.js";
+import { AccrualPosition, type IAccrualPosition } from "./Position.js";
 
 export interface IPreLiquidationParams {
   preLltv: BigIntish;

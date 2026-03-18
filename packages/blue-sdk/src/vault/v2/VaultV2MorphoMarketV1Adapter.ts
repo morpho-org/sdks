@@ -3,12 +3,15 @@ import {
   type IMarketParams,
   MarketParams,
   marketParamsAbi,
-} from "../../market";
-import type { AccrualPosition } from "../../position";
-import type { BigIntish } from "../../types";
-import { CapacityLimitReason } from "../../utils";
-import { VaultV2Adapter } from "./VaultV2Adapter";
-import type { IAccrualVaultV2Adapter, IVaultV2Adapter } from "./VaultV2Adapter";
+} from "../../market/index.js";
+import type { AccrualPosition } from "../../position/index.js";
+import type { BigIntish } from "../../types.js";
+import { CapacityLimitReason } from "../../utils.js";
+import { VaultV2Adapter } from "./VaultV2Adapter.js";
+import type {
+  IAccrualVaultV2Adapter,
+  IVaultV2Adapter,
+} from "./VaultV2Adapter.js";
 
 export interface IVaultV2MorphoMarketV1Adapter
   extends Omit<IVaultV2Adapter, "adapterId"> {

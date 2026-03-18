@@ -23,7 +23,9 @@ import { afterEach, beforeEach, describe, expect, vi } from "vitest";
 import { check } from "../../examples/whitelistedMarkets.js";
 import { OneInch, Paraswap, Spectra } from "../../src/index.js";
 import * as swapMock from "../contracts/SwapMock.js";
-import spectraTokens from "../mockData/spectraTokens.json";
+import spectraTokens from "../mockData/spectraTokens.json" with {
+  type: "json",
+};
 import { type LiquidationTestContext, spectraTest } from "../setup.js";
 import { nockBlueApi } from "./helpers.js";
 

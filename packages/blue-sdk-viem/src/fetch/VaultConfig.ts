@@ -2,9 +2,9 @@ import type { Address, Client } from "viem";
 
 import { VaultConfig } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
-import { metaMorphoAbi } from "../abis";
-import type { DeploylessFetchParameters } from "../types";
-import { fetchToken } from "./Token";
+import { metaMorphoAbi } from "../abis.js";
+import type { DeploylessFetchParameters } from "../types.js";
+import { fetchToken } from "./Token.js";
 
 export async function fetchVaultConfig(
   address: Address,

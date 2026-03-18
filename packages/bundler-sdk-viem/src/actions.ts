@@ -1009,13 +1009,7 @@ export const encodeOperation = (
         },
         {
           type: "erc20Transfer",
-          args: [
-            srcToken,
-            generalAdapter1,
-            maxUint256,
-            paraswapAdapter,
-            operation.skipRevert,
-          ],
+          args: [srcToken, generalAdapter1, maxUint256, paraswapAdapter, false],
         },
       );
 
@@ -1066,17 +1060,16 @@ export const encodeOperation = (
         },
       );
 
-      if (!sellEntireBalance)
-        actions.push({
-          type: "erc20Transfer",
-          args: [
-            operation.address,
-            generalAdapter1,
-            maxUint256,
-            paraswapAdapter,
-            operation.skipRevert,
-          ],
-        });
+      actions.push({
+        type: "erc20Transfer",
+        args: [
+          operation.address,
+          generalAdapter1,
+          maxUint256,
+          paraswapAdapter,
+          false,
+        ],
+      });
 
       break;
     }
@@ -1117,13 +1110,7 @@ export const encodeOperation = (
         },
         {
           type: "erc20Transfer",
-          args: [
-            srcToken,
-            generalAdapter1,
-            maxUint256,
-            paraswapAdapter,
-            operation.skipRevert,
-          ],
+          args: [srcToken, generalAdapter1, maxUint256, paraswapAdapter, false],
         },
       );
 

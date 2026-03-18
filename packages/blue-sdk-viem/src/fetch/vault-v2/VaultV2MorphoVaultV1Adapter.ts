@@ -10,14 +10,14 @@ import { getChainId, readContract } from "viem/actions";
 import {
   morphoVaultV1AdapterAbi,
   morphoVaultV1AdapterFactoryAbi,
-} from "../../abis";
-import { isUnknownOfFactoryError } from "../../error";
+} from "../../abis.js";
+import { isUnknownOfFactoryError } from "../../error.js";
 import {
   abi,
   code,
-} from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter";
-import type { DeploylessFetchParameters } from "../../types";
-import { fetchAccrualVault } from "../Vault";
+} from "../../queries/vault-v2/GetVaultV2MorphoVaultV1Adapter.js";
+import type { DeploylessFetchParameters } from "../../types.js";
+import { fetchAccrualVault } from "../Vault.js";
 
 export async function fetchVaultV2MorphoVaultV1Adapter(
   address: Address,

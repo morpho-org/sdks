@@ -1,4 +1,4 @@
-import type { ParaswapOffsets } from "../operations";
+import type { ParaswapOffsets } from "../operations.js";
 
 export const augustusV6_2Address = "0x6A000F20005980200259B80c5102003040001068";
 

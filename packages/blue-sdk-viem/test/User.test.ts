@@ -1,9 +1,9 @@
 import { describe, expect } from "vitest";
-import { test } from "./setup";
+import { test } from "./setup.js";
 
 import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
-import { blueAbi } from "../src";
-import { User } from "../src/augment/User";
+import { User } from "../src/augment/User.js";
+import { blueAbi } from "../src/index.js";
 
 const {
   morpho,

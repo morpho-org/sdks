@@ -6,8 +6,8 @@ import {
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
-import { MarketParams } from "../src/augment/MarketParams";
-import { test } from "./setup";
+import { MarketParams } from "../src/augment/MarketParams.js";
+import { test } from "./setup.js";
 
 import { markets } from "@morpho-org/morpho-test";
 import { describe, expect } from "vitest";
