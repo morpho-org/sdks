@@ -1,7 +1,7 @@
 import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, type Hash, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
-import { MarketParams } from "../../market/index.js";
+import { MarketParams } from "../../market/MarketParams.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
 import type { BigIntish, MarketId } from "../../types.js";
@@ -252,6 +252,13 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       isLiquidityAdapter: boolean;
     }[] = [];
 
+    // Amount already counted by maxWithdraw via the liquidity adapter's
+    // normal route; must not be double-counted.
+    const liquidityAdapterNormal =
+      this.accrualLiquidityAdapter != null
+        ? this.accrualLiquidityAdapter.maxWithdraw(this.liquidityData).value
+        : 0n;
+
     const remainingLiquidity = new Map<MarketId, bigint>();
 
     for (const adapter of this.accrualAdapters) {
@@ -262,47 +269,44 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       const isLiquidityAdapter = adapter.address === this.liquidityAdapter;
       eligibleAdapters.push({ adapter, isLiquidityAdapter });
 
-      for (const [marketId, { liquidity }] of adapter
+      for (const [marketId, { supplyAssets, liquidity: _liquidity }] of adapter
         .maxDeallocatableAssets()
         .entries()) {
-        const existing = remainingLiquidity.get(marketId);
-        if (!isDefined(existing) || liquidity > existing)
+        let liquidity = _liquidity;
+        if (isLiquidityAdapter) {
+          // Remove the liquidity adapter from the market liquidity.
+          if (this.liquidityData === "0x") {
+            // Adapter vault V1
+            liquidity = MathLib.zeroFloorSub(liquidity, supplyAssets);
+          } else {
+            // Adapter market V1
+            const liquidityAdapterMarketId = MarketParams.fromHex(
+              this.liquidityData,
+            ).id;
+            if (marketId === liquidityAdapterMarketId) {
+              liquidity = MathLib.zeroFloorSub(
+                liquidity,
+                liquidityAdapterNormal,
+              );
+            }
+          }
           remainingLiquidity.set(marketId, liquidity);
+        }
+
+        if (remainingLiquidity.get(marketId) == null) {
+          remainingLiquidity.set(marketId, liquidity);
+        }
       }
     }
 
-    // Amount already counted by maxWithdraw via the liquidity adapter's
-    // normal route; must not be double-counted.
-    const liquidityAdapterNormal =
-      this.accrualLiquidityAdapter != null
-        ? this.accrualLiquidityAdapter.maxWithdraw(this.liquidityData).value
-        : 0n;
-
-    // Reserve the normal-path consumption on its specific market so that
-    // force-path adapters sharing that market cannot double-count it.
-    if (liquidityAdapterNormal > 0n && this.liquidityData !== "0x") {
-      const normalMarketId = MarketParams.fromHex(this.liquidityData).id;
-      const prev = remainingLiquidity.get(normalMarketId);
-      if (prev != null)
-        remainingLiquidity.set(
-          normalMarketId,
-          MathLib.zeroFloorSub(prev, liquidityAdapterNormal),
-        );
-    }
-
-    // Sort adapters by naive deallocatable estimate (sum of
-    // min(supplyAssets, liquidity) per market) so the largest contributors
-    // are processed first.
     const adapterEntries = eligibleAdapters.map((entry) => {
       let estimate = 0n;
-      for (const { supplyAssets, liquidity } of entry.adapter
+      for (const [marketId, { supplyAssets }] of entry.adapter
         .maxDeallocatableAssets()
-        .values()) {
+        .entries()) {
+        const liquidity = remainingLiquidity.get(marketId) ?? 0n;
         estimate += MathLib.min(supplyAssets, liquidity);
       }
-
-      if (entry.isLiquidityAdapter)
-        estimate = MathLib.zeroFloorSub(estimate, liquidityAdapterNormal);
 
       return { ...entry, estimate };
     });
@@ -324,15 +328,9 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     const deallocations: { adapter: Address; assets: bigint }[] = [];
     let totalForceDeallocatable = 0n;
 
-    for (const { adapter, isLiquidityAdapter } of adapterEntries) {
-      const { consumed, total: rawTotal } =
+    for (const { adapter } of adapterEntries) {
+      const { consumed, total } =
         adapter.computeActualDeallocatable(remainingLiquidity);
-
-      // Deduct the liquidity adapter's normal-route contribution which was
-      // already included in maxWithdraw's result.
-      let effectiveTotal = rawTotal;
-      if (isLiquidityAdapter)
-        effectiveTotal = MathLib.zeroFloorSub(rawTotal, liquidityAdapterNormal);
 
       // Update remaining liquidity for subsequent adapters.
       for (const [marketId, c] of consumed) {
@@ -340,11 +338,11 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         remainingLiquidity.set(marketId, MathLib.zeroFloorSub(prev, c));
       }
 
-      if (effectiveTotal > 0n) {
-        totalForceDeallocatable += effectiveTotal;
+      if (total > 0n) {
+        totalForceDeallocatable += total;
         deallocations.push({
           adapter: adapter.address,
-          assets: effectiveTotal,
+          assets: total,
         });
       }
     }
