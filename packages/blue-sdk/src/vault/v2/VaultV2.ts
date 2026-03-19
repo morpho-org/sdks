@@ -27,10 +27,12 @@ export interface ForceDeallocateAction {
 }
 
 export interface MaxForceDeallocateResult {
-  /** The total maximum value that can be force-deallocated. */
-  totalValue: bigint;
+  /** The total maximum amount that can be force-deallocated. */
+  totalDeallocatable: bigint;
   /** The individual deallocation actions. */
   actions: ForceDeallocateAction[];
+  /** The maximum amount of assets withdrawable from the liquidity adapter + idle assets after executing all force-deallocation actions. */
+  maxWithdraw: bigint;
 }
 
 export interface IVaultV2 extends IToken {
@@ -282,55 +284,9 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       }
     }
 
-    // Step 2: Subtract the liquidity adapter's supply to preserve normal withdrawal capacity.
-    if (this.accrualLiquidityAdapter != null) {
-      const liqAdapter = this.accrualLiquidityAdapter;
-
-      if (liqAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
-        const vaultV1 = liqAdapter.accrualVaultV1;
-        let remaining = vaultV1.toAssets(liqAdapter.shares);
-
-        for (const marketId of vaultV1.withdrawQueue) {
-          if (remaining === 0n) break;
-
-          const allocation = vaultV1.allocations.get(marketId);
-          if (allocation == null) continue;
-
-          const { position } = allocation;
-          const canWithdraw = MathLib.min(
-            MathLib.min(position.supplyAssets, position.market.liquidity),
-            remaining,
-          );
-
-          if (canWithdraw > 0n) {
-            const current = availableLiquidity.get(marketId);
-            if (current != null)
-              availableLiquidity.set(
-                marketId,
-                MathLib.zeroFloorSub(current, canWithdraw),
-              );
-            remaining -= canWithdraw;
-          }
-        }
-      } else if (
-        liqAdapter instanceof AccrualVaultV2MorphoMarketV1Adapter ||
-        liqAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2
-      ) {
-        const liqMarketId = MarketParams.fromHex(this.liquidityData).id;
-        const current = availableLiquidity.get(liqMarketId);
-        if (current != null) {
-          const reserved = liqAdapter.maxWithdraw(this.liquidityData).value;
-          availableLiquidity.set(
-            liqMarketId,
-            MathLib.zeroFloorSub(current, reserved),
-          );
-        }
-      }
-    }
-
-    // Step 3: Process adapters.
+    // Step 2: Process adapters.
     const actions: ForceDeallocateAction[] = [];
-    let totalValue = 0n;
+    let totalDeallocatable = 0n;
 
     // MarketV1 adapters first (flexible withdrawal order).
     for (const adapter of this.accrualAdapters) {
@@ -352,7 +308,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
               amount,
               marketParams: position.market.params,
             });
-            totalValue += amount;
+            totalDeallocatable += amount;
             availableLiquidity.set(position.marketId, available - amount);
           }
         }
@@ -374,7 +330,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
               amount,
               marketParams: market.params,
             });
-            totalValue += amount;
+            totalDeallocatable += amount;
             availableLiquidity.set(market.id, available - amount);
           }
         }
@@ -413,11 +369,75 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       const amount = targetAssets - remaining;
       if (amount > 0n) {
         actions.push({ adapter: adapter.address, amount });
-        totalValue += amount;
+        totalDeallocatable += amount;
       }
     }
 
-    return { totalValue, actions };
+    // Step 3: Compute maxWithdraw with the remaining availableLiquidity.
+    let maxWithdraw = this.assetBalance;
+
+    if (this.accrualLiquidityAdapter != null) {
+      if (
+        this.accrualLiquidityAdapter instanceof
+        AccrualVaultV2MorphoMarketV1Adapter
+      ) {
+        const liqMarketId = MarketParams.fromHex(this.liquidityData).id;
+        const position = this.accrualLiquidityAdapter.positions.find(
+          (p) => p.marketId === liqMarketId,
+        );
+        if (position != null) {
+          const remaining = availableLiquidity.get(liqMarketId);
+          maxWithdraw +=
+            remaining != null
+              ? MathLib.min(position.supplyAssets, remaining)
+              : position.withdrawCapacityLimit.value;
+        }
+      } else if (
+        this.accrualLiquidityAdapter instanceof
+        AccrualVaultV2MorphoMarketV1AdapterV2
+      ) {
+        const liqMarketId = MarketParams.fromHex(this.liquidityData).id;
+        const market = this.accrualLiquidityAdapter.markets.find(
+          (m) => m.id === liqMarketId,
+        );
+        if (market != null) {
+          const supplyAssets = market.toSupplyAssets(
+            this.accrualLiquidityAdapter.supplyShares[liqMarketId] ?? 0n,
+          );
+          const remaining = availableLiquidity.get(liqMarketId);
+          maxWithdraw +=
+            remaining != null
+              ? MathLib.min(supplyAssets, remaining)
+              : MathLib.min(supplyAssets, market.liquidity);
+        }
+      } else if (
+        this.accrualLiquidityAdapter instanceof
+        AccrualVaultV2MorphoVaultV1Adapter
+      ) {
+        const vaultV1 = this.accrualLiquidityAdapter.accrualVaultV1;
+        const adapterAssets = vaultV1.toAssets(
+          this.accrualLiquidityAdapter.shares,
+        );
+
+        let adjustedLiquidity = 0n;
+        for (const marketId of vaultV1.withdrawQueue) {
+          const allocation = vaultV1.allocations.get(marketId);
+          if (allocation == null) continue;
+
+          const { position } = allocation;
+          const marketLiquidity =
+            availableLiquidity.get(marketId) ?? position.market.liquidity;
+          adjustedLiquidity += MathLib.min(
+            position.supplyAssets,
+            marketLiquidity,
+          );
+        }
+
+        maxWithdraw += MathLib.min(adapterAssets, adjustedLiquidity);
+      }
+    }
+
+    return { totalDeallocatable, actions, maxWithdraw };
   }
 
   /**
