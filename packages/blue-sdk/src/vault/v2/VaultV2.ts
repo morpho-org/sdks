@@ -335,11 +335,15 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     // MarketV1 adapters first (flexible withdrawal order).
     for (const adapter of this.accrualAdapters) {
       if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
-      if (adapter.address === this.accrualLiquidityAdapter?.address) continue;
 
       if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
         for (const position of adapter.positions) {
+          if (position.marketId === this.accrualLiquidityAdapter?.address) {
+            const liqMarketId = MarketParams.fromHex(this.liquidityData).id;
+            if (liqMarketId === position.marketId) continue;
+          }
           const available = availableLiquidity.get(position.marketId) ?? 0n;
+
           const amount = MathLib.min(position.supplyAssets, available);
 
           if (amount > 0n) {
@@ -354,6 +358,10 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         }
       } else if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
         for (const market of adapter.markets) {
+          if (market.id === this.accrualLiquidityAdapter?.address) {
+            const liqMarketId = MarketParams.fromHex(this.liquidityData).id;
+            if (liqMarketId === market.id) continue;
+          }
           const supplyAssets = market.toSupplyAssets(
             adapter.supplyShares[market.id] ?? 0n,
           );
@@ -377,6 +385,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     for (const adapter of this.accrualAdapters) {
       if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
       if (!(adapter instanceof AccrualVaultV2MorphoVaultV1Adapter)) continue;
+      if (adapter.address === this.accrualLiquidityAdapter?.address) continue;
 
       const vaultV1 = adapter.accrualVaultV1;
       const targetAssets = vaultV1.toAssets(adapter.shares);
