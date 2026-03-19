@@ -1,6 +1,6 @@
 import { type Address, type Hash, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
-import type { MarketParams } from "../../market/index.js";
+import { MarketParams } from "../../market/index.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
 import type { BigIntish, MarketId } from "../../types.js";
@@ -312,27 +312,18 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
             remaining -= canWithdraw;
           }
         }
-      } else if (liqAdapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
-        for (const position of liqAdapter.positions) {
-          const current = availableLiquidity.get(position.marketId);
-          if (current != null)
-            availableLiquidity.set(
-              position.marketId,
-              MathLib.zeroFloorSub(current, position.supplyAssets),
-            );
-        }
-      } else if (liqAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
-        for (const market of liqAdapter.markets) {
-          const current = availableLiquidity.get(market.id);
-          if (current != null) {
-            const supplyAssets = market.toSupplyAssets(
-              liqAdapter.supplyShares[market.id] ?? 0n,
-            );
-            availableLiquidity.set(
-              market.id,
-              MathLib.zeroFloorSub(current, supplyAssets),
-            );
-          }
+      } else if (
+        liqAdapter instanceof AccrualVaultV2MorphoMarketV1Adapter ||
+        liqAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2
+      ) {
+        const liqMarketId = MarketParams.fromHex(this.liquidityData).id;
+        const current = availableLiquidity.get(liqMarketId);
+        if (current != null) {
+          const reserved = liqAdapter.maxWithdraw(this.liquidityData).value;
+          availableLiquidity.set(
+            liqMarketId,
+            MathLib.zeroFloorSub(current, reserved),
+          );
         }
       }
     }

@@ -1,6 +1,6 @@
 import { Time } from "@morpho-org/morpho-ts";
 import { randomAddress } from "@morpho-org/test/fixtures";
-import { type Address, zeroAddress } from "viem";
+import { type Address, type Hex, encodeAbiParameters, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   AccrualPosition,
@@ -13,6 +13,7 @@ import {
   Market,
   type MarketId,
   MathLib,
+  marketParamsAbi,
 } from "../../src/index.js";
 
 const timestamp = Time.timestamp();
@@ -153,9 +154,14 @@ function makeVaultV1Adapter(
   );
 }
 
+function encodeLiquidityData(market: Market): Hex {
+  return encodeAbiParameters([marketParamsAbi], [market.params]);
+}
+
 function makeVaultV2(opts: {
   adapters: IAccrualVaultV2Adapter[];
   liqAdapter?: IAccrualVaultV2Adapter;
+  liquidityData?: Hex;
   penalties: Record<Address, bigint>;
   assetBalance?: bigint;
 }) {
@@ -170,7 +176,7 @@ function makeVaultV2(opts: {
       maxRate: 0n,
       lastUpdate: timestamp,
       liquidityAdapter: opts.liqAdapter?.address ?? zeroAddress,
-      liquidityData: "0x",
+      liquidityData: opts.liquidityData ?? "0x",
       liquidityAllocations: undefined,
       performanceFee: 0n,
       managementFee: 0n,
@@ -255,6 +261,7 @@ describe("VaultV2 maxForceDeallocate", () => {
     const vault = makeVaultV2({
       adapters: [adapter1],
       liqAdapter,
+      liquidityData: encodeLiquidityData(marketA),
       penalties: {
         [adapter1.address]: 0n,
       },
@@ -283,6 +290,7 @@ describe("VaultV2 maxForceDeallocate", () => {
     const vault = makeVaultV2({
       adapters: [adapter1],
       liqAdapter,
+      liquidityData: encodeLiquidityData(marketA),
       penalties: {
         [adapter1.address]: 0n,
       },
@@ -297,6 +305,78 @@ describe("VaultV2 maxForceDeallocate", () => {
       adapter: adapter1.address,
       amount: 2_000n,
       marketParams: marketA.params,
+    });
+  });
+
+  test("should only subtract the liquidityData market from a multi-market MarketV1 liquidity adapter", () => {
+    const marketA = createMarket(10_000n, 2_000n); // liquidity = 8_000
+    const marketB = createMarket(20_000n, 5_000n); // liquidity = 15_000
+
+    const vaultAddr = randomAddress();
+    const adapter1 = makeMarketV1Adapter(vaultAddr, [marketB], [4_000n]);
+    // Liquidity adapter holds positions in both A and B, but liquidityData targets only A.
+    const liqAdapter = makeMarketV1Adapter(
+      vaultAddr,
+      [marketA, marketB],
+      [6_000n, 3_000n],
+    );
+
+    const vault = makeVaultV2({
+      adapters: [adapter1],
+      liqAdapter,
+      liquidityData: encodeLiquidityData(marketA),
+      penalties: {
+        [adapter1.address]: 0n,
+      },
+    });
+
+    const result = vault.maxForceDeallocate();
+
+    // Only marketA's supply (6_000) is reserved; marketB is untouched.
+    // Available B: 15_000
+    // Deallocatable: min(adapter1 supply=4_000, available=15_000) = 4_000
+    expect(result.totalValue).toBe(4_000n);
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0]).toStrictEqual({
+      adapter: adapter1.address,
+      amount: 4_000n,
+      marketParams: marketB.params,
+    });
+  });
+
+  test("should only subtract the liquidityData market from a multi-market MarketV1V2 liquidity adapter", () => {
+    const marketA = createMarket(10_000n, 2_000n); // liquidity = 8_000
+    const marketB = createMarket(20_000n, 5_000n); // liquidity = 15_000
+
+    const vaultAddr = randomAddress();
+    const adapter1 = makeMarketV1V2Adapter(vaultAddr, [marketB], [4_000n]);
+    // Liquidity adapter holds markets A and B, but liquidityData targets only A.
+    const liqAdapter = makeMarketV1V2Adapter(
+      vaultAddr,
+      [marketA, marketB],
+      [6_000n, 3_000n],
+    );
+
+    const vault = makeVaultV2({
+      adapters: [adapter1],
+      liqAdapter,
+      liquidityData: encodeLiquidityData(marketA),
+      penalties: {
+        [adapter1.address]: 0n,
+      },
+    });
+
+    const result = vault.maxForceDeallocate();
+
+    // Only marketA's supply (6_000) is reserved; marketB is untouched.
+    // Available B: 15_000
+    // Deallocatable: min(adapter1 supply=4_000, available=15_000) = 4_000
+    expect(result.totalValue).toBe(4_000n);
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0]).toStrictEqual({
+      adapter: adapter1.address,
+      amount: 4_000n,
+      marketParams: marketB.params,
     });
   });
 
@@ -587,6 +667,7 @@ describe("VaultV2 maxForceDeallocate", () => {
     const vault = makeVaultV2({
       adapters: [adapter],
       liqAdapter,
+      liquidityData: encodeLiquidityData(market),
       penalties: {
         [adapter.address]: 0n,
       },
