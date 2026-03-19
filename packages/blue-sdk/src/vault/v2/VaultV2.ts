@@ -1,16 +1,36 @@
 import { type Address, type Hash, type Hex, zeroAddress } from "viem";
 import { VaultV2Errors } from "../../errors.js";
+import type { MarketParams } from "../../market/index.js";
 import { MathLib, type RoundingDirection } from "../../math/index.js";
 import { type IToken, WrappedToken } from "../../token/index.js";
-import type { BigIntish } from "../../types.js";
+import type { BigIntish, MarketId } from "../../types.js";
 import { type CapacityLimit, CapacityLimitReason } from "../../utils.js";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
+import { AccrualVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter.js";
+import { AccrualVaultV2MorphoMarketV1AdapterV2 } from "./VaultV2MorphoMarketV1AdapterV2.js";
+import { AccrualVaultV2MorphoVaultV1Adapter } from "./VaultV2MorphoVaultV1Adapter.js";
 
 export interface IVaultV2Allocation {
   id: Hash;
   absoluteCap: bigint;
   relativeCap: bigint;
   allocation: bigint;
+}
+
+export interface ForceDeallocateAction {
+  /** The adapter address to force-deallocate from. */
+  adapter: Address;
+  /** The amount of assets to deallocate. */
+  amount: bigint;
+  /** The market params, required for market-level adapter deallocations. */
+  marketParams?: MarketParams;
+}
+
+export interface MaxForceDeallocateResult {
+  /** The total maximum value that can be force-deallocated. */
+  totalValue: bigint;
+  /** The individual deallocation actions. */
+  actions: ForceDeallocateAction[];
 }
 
 export interface IVaultV2 extends IToken {
@@ -215,6 +235,173 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       value: assets,
       limiter: CapacityLimitReason.balance,
     };
+  }
+
+  /**
+   * Returns the maximum amount of assets that can be force-deallocated from adapters
+   * with zero force-deallocate penalty, along with the individual deallocation actions.
+   *
+   * Constraints:
+   * - Only considers adapters with `forceDeallocatePenalties === 0`.
+   * - Tracks shared market liquidity across adapters to avoid exceeding per-market limits.
+   * - Excludes the liquidity adapter's market supply from available liquidity
+   *   (VaultV1: all its markets, MarketV1: its specific markets).
+   * - VaultV1 adapters follow their fixed withdraw queue order.
+   * - MarketV1 adapters can withdraw from markets in any order.
+   */
+  public maxForceDeallocate(): MaxForceDeallocateResult {
+    const availableLiquidity = new Map<MarketId, bigint>();
+
+    // Step 1: Collect all unique markets and their liquidity from zero-penalty adapters.
+    for (const adapter of this.accrualAdapters) {
+      if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
+
+      if (adapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
+        for (const {
+          position,
+        } of adapter.accrualVaultV1.allocations.values()) {
+          if (!availableLiquidity.has(position.marketId))
+            availableLiquidity.set(
+              position.marketId,
+              position.market.liquidity,
+            );
+        }
+      } else if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
+        for (const position of adapter.positions) {
+          if (!availableLiquidity.has(position.marketId))
+            availableLiquidity.set(
+              position.marketId,
+              position.market.liquidity,
+            );
+        }
+      } else if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
+        for (const market of adapter.markets) {
+          if (!availableLiquidity.has(market.id))
+            availableLiquidity.set(market.id, market.liquidity);
+        }
+      }
+    }
+
+    // Step 2: Subtract the liquidity adapter's supply to preserve normal withdrawal capacity.
+    if (this.accrualLiquidityAdapter != null) {
+      const liqAdapter = this.accrualLiquidityAdapter;
+
+      if (liqAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
+        for (const {
+          position,
+        } of liqAdapter.accrualVaultV1.allocations.values()) {
+          const current = availableLiquidity.get(position.marketId);
+          if (current != null)
+            availableLiquidity.set(
+              position.marketId,
+              MathLib.zeroFloorSub(current, position.supplyAssets),
+            );
+        }
+      } else if (liqAdapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
+        for (const position of liqAdapter.positions) {
+          const current = availableLiquidity.get(position.marketId);
+          if (current != null)
+            availableLiquidity.set(
+              position.marketId,
+              MathLib.zeroFloorSub(current, position.supplyAssets),
+            );
+        }
+      } else if (liqAdapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
+        for (const market of liqAdapter.markets) {
+          const current = availableLiquidity.get(market.id);
+          if (current != null) {
+            const supplyAssets = market.toSupplyAssets(
+              liqAdapter.supplyShares[market.id] ?? 0n,
+            );
+            availableLiquidity.set(
+              market.id,
+              MathLib.zeroFloorSub(current, supplyAssets),
+            );
+          }
+        }
+      }
+    }
+
+    // Step 3: Process adapters.
+    const actions: ForceDeallocateAction[] = [];
+    let totalValue = 0n;
+
+    // VaultV1 adapters first (constrained by fixed withdraw queue order).
+    for (const adapter of this.accrualAdapters) {
+      if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
+      if (!(adapter instanceof AccrualVaultV2MorphoVaultV1Adapter)) continue;
+
+      const vaultV1 = adapter.accrualVaultV1;
+      const targetAssets = vaultV1.toAssets(adapter.shares);
+      let remaining = targetAssets;
+
+      for (const marketId of vaultV1.withdrawQueue) {
+        if (remaining === 0n) break;
+
+        const allocation = vaultV1.allocations.get(marketId);
+        if (allocation == null) continue;
+
+        const positionSupply = allocation.position.supplyAssets;
+        const marketLiq = availableLiquidity.get(marketId) ?? 0n;
+        const canWithdraw = MathLib.min(
+          MathLib.min(positionSupply, marketLiq),
+          remaining,
+        );
+
+        if (canWithdraw > 0n) {
+          remaining -= canWithdraw;
+          availableLiquidity.set(marketId, marketLiq - canWithdraw);
+        }
+      }
+
+      const amount = targetAssets - remaining;
+      if (amount > 0n) {
+        actions.push({ adapter: adapter.address, amount });
+        totalValue += amount;
+      }
+    }
+
+    // MarketV1 adapters (flexible withdrawal order).
+    for (const adapter of this.accrualAdapters) {
+      if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
+
+      if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
+        for (const position of adapter.positions) {
+          const available = availableLiquidity.get(position.marketId) ?? 0n;
+          const amount = MathLib.min(position.supplyAssets, available);
+
+          if (amount > 0n) {
+            actions.push({
+              adapter: adapter.address,
+              amount,
+              marketParams: position.market.params,
+            });
+            totalValue += amount;
+            availableLiquidity.set(position.marketId, available - amount);
+          }
+        }
+      } else if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
+        for (const market of adapter.markets) {
+          const supplyAssets = market.toSupplyAssets(
+            adapter.supplyShares[market.id] ?? 0n,
+          );
+          const available = availableLiquidity.get(market.id) ?? 0n;
+          const amount = MathLib.min(supplyAssets, available);
+
+          if (amount > 0n) {
+            actions.push({
+              adapter: adapter.address,
+              amount,
+              marketParams: market.params,
+            });
+            totalValue += amount;
+            availableLiquidity.set(market.id, available - amount);
+          }
+        }
+      }
+    }
+
+    return { totalValue, actions };
   }
 
   /**
