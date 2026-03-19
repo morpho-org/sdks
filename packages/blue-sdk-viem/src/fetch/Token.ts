@@ -53,23 +53,26 @@ export async function fetchToken(
       const eip5267Domain = token.hasEip5267Domain
         ? new Eip5267Domain(token.eip5267Domain)
         : undefined;
+      const metadata = {
+        address,
+        decimals: token.decimals,
+        symbol: token.hasSymbol ? token.symbol : undefined,
+        name: token.hasName ? token.name : undefined,
+        eip5267Domain,
+      };
 
       if (isWstEth && stEth != null)
         return new ExchangeRateWrappedToken(
-          { ...token, address, eip5267Domain },
+          metadata,
           stEth,
           token.stEthPerWstEth,
         );
 
       const unwrapToken = getUnwrappedToken(address, parameters.chainId);
       if (unwrapToken)
-        return new ConstantWrappedToken(
-          { ...token, address, eip5267Domain },
-          unwrapToken,
-          token.decimals,
-        );
+        return new ConstantWrappedToken(metadata, unwrapToken, token.decimals);
 
-      return new Token({ ...token, address, eip5267Domain });
+      return new Token(metadata);
     } catch (error) {
       if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
