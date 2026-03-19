@@ -335,6 +335,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     // MarketV1 adapters first (flexible withdrawal order).
     for (const adapter of this.accrualAdapters) {
       if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
+      if (adapter.address === this.accrualLiquidityAdapter?.address) continue;
 
       if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
         for (const position of adapter.positions) {
