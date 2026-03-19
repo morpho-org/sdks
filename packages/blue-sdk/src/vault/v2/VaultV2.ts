@@ -338,7 +338,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
 
       if (adapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
         for (const position of adapter.positions) {
-          if (position.marketId === this.accrualLiquidityAdapter?.address) {
+          if (adapter.address === this.accrualLiquidityAdapter?.address) {
             const liqMarketId = MarketParams.fromHex(this.liquidityData).id;
             if (liqMarketId === position.marketId) continue;
           }
@@ -358,7 +358,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         }
       } else if (adapter instanceof AccrualVaultV2MorphoMarketV1AdapterV2) {
         for (const market of adapter.markets) {
-          if (market.id === this.accrualLiquidityAdapter?.address) {
+          if (adapter.address === this.accrualLiquidityAdapter?.address) {
             const liqMarketId = MarketParams.fromHex(this.liquidityData).id;
             if (liqMarketId === market.id) continue;
           }
