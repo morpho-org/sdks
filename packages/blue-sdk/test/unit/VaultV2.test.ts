@@ -370,7 +370,7 @@ describe("VaultV2 maxForceDeallocate", () => {
     });
   });
 
-  test("should track shared market liquidity across VaultV1 and MarketV1 adapters", () => {
+  test("should track shared market liquidity across MarketV1 and VaultV1 adapters", () => {
     const marketF = createMarket(10_000n, 5_000n); // liquidity = 5_000
 
     const vaultAddr = randomAddress();
@@ -401,13 +401,13 @@ describe("VaultV2 maxForceDeallocate", () => {
     expect(result.totalValue).toBe(5_000n);
     expect(result.actions).toHaveLength(2);
     expect(result.actions[0]).toStrictEqual({
-      adapter: vaultV1Adapter.address,
-      amount: 3_000n,
+      adapter: marketV1Adapter.address,
+      amount: 4_000n,
+      marketParams: marketF.params,
     });
     expect(result.actions[1]).toStrictEqual({
-      adapter: marketV1Adapter.address,
-      amount: 2_000n,
-      marketParams: marketF.params,
+      adapter: vaultV1Adapter.address,
+      amount: 1_000n,
     });
   });
 
