@@ -113,6 +113,8 @@ export class AccrualVaultV2MorphoMarketV1AdapterV2
     };
   }
 
+  // NOTE FOR DEVELOPERS:
+  // If you modify the logic here, don't forget to also update the corresponding logic in VaultV2.maxForceDeallocate().
   maxWithdraw(data: Hex) {
     const marketId = MarketParams.fromHex(data).id;
     const market = this.markets.find((market) => market.id === marketId);

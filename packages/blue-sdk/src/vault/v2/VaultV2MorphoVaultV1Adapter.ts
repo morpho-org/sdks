@@ -69,6 +69,8 @@ export class AccrualVaultV2MorphoVaultV1Adapter
     return this.accrualVaultV1.maxDeposit(assets);
   }
 
+  // NOTE FOR DEVELOPERS:
+  // If you modify the logic here, don't forget to also update the corresponding logic in VaultV2.maxForceDeallocate().
   maxWithdraw(_data: Hex) {
     return this.accrualVaultV1.maxWithdraw(this.shares);
   }
