@@ -329,6 +329,85 @@ describe("VaultV2 maxForceDeallocate", () => {
     });
   });
 
+  test("should only reserve VaultV1 liquidity adapter's pro-rata share, not the full MetaMorpho position", () => {
+    const marketA = createMarket(10_000n, 2_000n); // liquidity = 8_000
+
+    const vaultAddr = randomAddress();
+    const adapter1 = makeMarketV1Adapter(vaultAddr, [marketA], [3_000n]);
+
+    // MetaMorpho has 6_000 on marketA, but the liquidity adapter holds only half
+    const liqVaultV1 = makeAccrualVaultV1([marketA], [6_000n]);
+    const liqAdapter = new AccrualVaultV2MorphoVaultV1Adapter(
+      {
+        address: randomAddress(),
+        parentVault: vaultAddr,
+        skimRecipient: zeroAddress,
+        morphoVaultV1: liqVaultV1.address,
+      },
+      liqVaultV1,
+      liqVaultV1.totalSupply / 2n, // half the shares → claim = 3_000
+    );
+
+    const vault = makeVaultV2({
+      adapters: [adapter1],
+      liqAdapter,
+      penalties: {
+        [adapter1.address]: 0n,
+      },
+    });
+
+    const result = vault.maxForceDeallocate();
+
+    // Adapter holds half the MetaMorpho shares → claim = 3_000
+    // Reserved from marketA: min(6_000, 8_000, 3_000) = 3_000
+    // Available: 8_000 - 3_000 = 5_000
+    // Deallocatable: min(adapter1 supply=3_000, available=5_000) = 3_000
+    expect(result.totalValue).toBe(3_000n);
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0]).toStrictEqual({
+      adapter: adapter1.address,
+      amount: 3_000n,
+      marketParams: marketA.params,
+    });
+  });
+
+  test("should not over-reserve later-queue markets when early-queue markets cover the VaultV1 liquidity adapter withdrawal", () => {
+    const marketA = createMarket(10_000n, 2_000n); // liquidity = 8_000
+    const marketB = createMarket(20_000n, 5_000n); // liquidity = 15_000
+
+    const vaultAddr = randomAddress();
+    const adapter1 = makeMarketV1Adapter(vaultAddr, [marketB], [4_000n]);
+
+    // MetaMorpho has positions on both markets, withdraw queue [A, B].
+    // Adapter holds all shares, total claim = 5_000.
+    // Market A alone (supply=3_000) covers only part, so 2_000 reserved from B.
+    const liqVaultV1 = makeAccrualVaultV1([marketA, marketB], [3_000n, 2_000n]);
+    const liqAdapter = makeVaultV1Adapter(vaultAddr, liqVaultV1);
+
+    const vault = makeVaultV2({
+      adapters: [adapter1],
+      liqAdapter,
+      penalties: {
+        [adapter1.address]: 0n,
+      },
+    });
+
+    const result = vault.maxForceDeallocate();
+
+    // Walk queue: remaining = 5_000
+    //   A: min(3_000, 8_000, 5_000) = 3_000, remaining = 2_000
+    //   B: min(2_000, 15_000, 2_000) = 2_000, remaining = 0
+    // Available B: 15_000 - 2_000 = 13_000
+    // Deallocatable: min(adapter1 supply=4_000, available=13_000) = 4_000
+    expect(result.totalValue).toBe(4_000n);
+    expect(result.actions).toHaveLength(1);
+    expect(result.actions[0]).toStrictEqual({
+      adapter: adapter1.address,
+      amount: 4_000n,
+      marketParams: marketB.params,
+    });
+  });
+
   test("should handle VaultV1 adapter respecting withdraw queue order", () => {
     const marketD = createMarket(10_000n, 7_000n); // liquidity = 3_000
     const marketE = createMarket(20_000n, 10_000n); // liquidity = 10_000

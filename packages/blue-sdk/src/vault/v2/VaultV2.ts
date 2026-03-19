@@ -287,15 +287,30 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       const liqAdapter = this.accrualLiquidityAdapter;
 
       if (liqAdapter instanceof AccrualVaultV2MorphoVaultV1Adapter) {
-        for (const {
-          position,
-        } of liqAdapter.accrualVaultV1.allocations.values()) {
-          const current = availableLiquidity.get(position.marketId);
-          if (current != null)
-            availableLiquidity.set(
-              position.marketId,
-              MathLib.zeroFloorSub(current, position.supplyAssets),
-            );
+        const vaultV1 = liqAdapter.accrualVaultV1;
+        let remaining = vaultV1.toAssets(liqAdapter.shares);
+
+        for (const marketId of vaultV1.withdrawQueue) {
+          if (remaining === 0n) break;
+
+          const allocation = vaultV1.allocations.get(marketId);
+          if (allocation == null) continue;
+
+          const { position } = allocation;
+          const canWithdraw = MathLib.min(
+            MathLib.min(position.supplyAssets, position.market.liquidity),
+            remaining,
+          );
+
+          if (canWithdraw > 0n) {
+            const current = availableLiquidity.get(marketId);
+            if (current != null)
+              availableLiquidity.set(
+                marketId,
+                MathLib.zeroFloorSub(current, canWithdraw),
+              );
+            remaining -= canWithdraw;
+          }
         }
       } else if (liqAdapter instanceof AccrualVaultV2MorphoMarketV1Adapter) {
         for (const position of liqAdapter.positions) {
