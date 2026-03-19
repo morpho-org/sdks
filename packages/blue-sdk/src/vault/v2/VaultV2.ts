@@ -326,42 +326,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
     const actions: ForceDeallocateAction[] = [];
     let totalValue = 0n;
 
-    // VaultV1 adapters first (constrained by fixed withdraw queue order).
-    for (const adapter of this.accrualAdapters) {
-      if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
-      if (!(adapter instanceof AccrualVaultV2MorphoVaultV1Adapter)) continue;
-
-      const vaultV1 = adapter.accrualVaultV1;
-      const targetAssets = vaultV1.toAssets(adapter.shares);
-      let remaining = targetAssets;
-
-      for (const marketId of vaultV1.withdrawQueue) {
-        if (remaining === 0n) break;
-
-        const allocation = vaultV1.allocations.get(marketId);
-        if (allocation == null) continue;
-
-        const positionSupply = allocation.position.supplyAssets;
-        const marketLiq = availableLiquidity.get(marketId) ?? 0n;
-        const canWithdraw = MathLib.min(
-          MathLib.min(positionSupply, marketLiq),
-          remaining,
-        );
-
-        if (canWithdraw > 0n) {
-          remaining -= canWithdraw;
-          availableLiquidity.set(marketId, marketLiq - canWithdraw);
-        }
-      }
-
-      const amount = targetAssets - remaining;
-      if (amount > 0n) {
-        actions.push({ adapter: adapter.address, amount });
-        totalValue += amount;
-      }
-    }
-
-    // MarketV1 adapters (flexible withdrawal order).
+    // MarketV1 adapters first (flexible withdrawal order).
     for (const adapter of this.accrualAdapters) {
       if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
 
@@ -398,6 +363,41 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
             availableLiquidity.set(market.id, available - amount);
           }
         }
+      }
+    }
+
+    // VaultV1 adapters (constrained by fixed withdraw queue order).
+    for (const adapter of this.accrualAdapters) {
+      if (this.forceDeallocatePenalties[adapter.address] !== 0n) continue;
+      if (!(adapter instanceof AccrualVaultV2MorphoVaultV1Adapter)) continue;
+
+      const vaultV1 = adapter.accrualVaultV1;
+      const targetAssets = vaultV1.toAssets(adapter.shares);
+      let remaining = targetAssets;
+
+      for (const marketId of vaultV1.withdrawQueue) {
+        if (remaining === 0n) break;
+
+        const allocation = vaultV1.allocations.get(marketId);
+        if (allocation == null) continue;
+
+        const positionSupply = allocation.position.supplyAssets;
+        const marketLiq = availableLiquidity.get(marketId) ?? 0n;
+        const canWithdraw = MathLib.min(
+          MathLib.min(positionSupply, marketLiq),
+          remaining,
+        );
+
+        if (canWithdraw > 0n) {
+          remaining -= canWithdraw;
+          availableLiquidity.set(marketId, marketLiq - canWithdraw);
+        }
+      }
+
+      const amount = targetAssets - remaining;
+      if (amount > 0n) {
+        actions.push({ adapter: adapter.address, amount });
+        totalValue += amount;
       }
     }
 
