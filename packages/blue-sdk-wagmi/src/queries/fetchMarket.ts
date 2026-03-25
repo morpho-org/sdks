@@ -19,6 +19,8 @@ export function fetchMarketQueryOptions<config extends Config>(
   config: config,
   parameters: FetchMarketParameters,
 ) {
+  const { blockNumber, blockTag } = parameters;
+
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
@@ -29,6 +31,8 @@ export function fetchMarketQueryOptions<config extends Config>(
       return fetchMarket(marketId, config.getClient({ chainId }), {
         chainId,
         ...parameters,
+        blockNumber,
+        blockTag,
       });
     },
     queryKey: fetchMarketQueryKey(parameters),
@@ -44,8 +48,6 @@ export function fetchMarketQueryOptions<config extends Config>(
 export function fetchMarketQueryKey({
   marketId,
   chainId,
-  blockTag,
-  blockNumber,
   deployless,
   account,
   stateOverride,
@@ -56,8 +58,6 @@ export function fetchMarketQueryKey({
     {
       marketId,
       chainId,
-      blockTag,
-      blockNumber,
       deployless,
       account,
       stateOverride,

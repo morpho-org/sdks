@@ -16,6 +16,8 @@ export function fetchPositionQueryOptions<config extends Config>(
   config: config,
   parameters: FetchPositionParameters,
 ) {
+  const { blockNumber, blockTag } = parameters;
+
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
@@ -27,6 +29,8 @@ export function fetchPositionQueryOptions<config extends Config>(
       return fetchPosition(user, marketId, config.getClient({ chainId }), {
         chainId,
         ...parameters,
+        blockNumber,
+        blockTag,
       });
     },
     queryKey: fetchPositionQueryKey(parameters),
@@ -43,8 +47,6 @@ export function fetchPositionQueryKey({
   user,
   marketId,
   chainId,
-  blockTag,
-  blockNumber,
   account,
   stateOverride,
 }: FetchPositionParameters) {
@@ -55,8 +57,6 @@ export function fetchPositionQueryKey({
       user,
       marketId,
       chainId,
-      blockTag,
-      blockNumber,
       account,
       stateOverride,
     } as FetchPositionParameters,

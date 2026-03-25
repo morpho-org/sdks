@@ -19,6 +19,8 @@ export function fetchVaultUserQueryOptions<config extends Config>(
   config: config,
   parameters: FetchVaultUserParameters,
 ) {
+  const { blockNumber, blockTag } = parameters;
+
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
@@ -30,6 +32,8 @@ export function fetchVaultUserQueryOptions<config extends Config>(
       return fetchVaultUser(vault, user, config.getClient({ chainId }), {
         chainId,
         ...parameters,
+        blockNumber,
+        blockTag,
       });
     },
     queryKey: fetchVaultUserQueryKey(parameters),
@@ -46,8 +50,6 @@ export function fetchVaultUserQueryKey({
   vault,
   user,
   chainId,
-  blockTag,
-  blockNumber,
   deployless,
   account,
   stateOverride,
@@ -58,8 +60,6 @@ export function fetchVaultUserQueryKey({
       vault,
       user,
       chainId,
-      blockTag,
-      blockNumber,
       deployless,
       account,
       stateOverride,
