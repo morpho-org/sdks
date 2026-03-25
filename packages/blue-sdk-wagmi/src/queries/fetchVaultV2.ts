@@ -27,11 +27,7 @@ export function fetchVaultV2QueryOptions<config extends Config>(
 
       if (!vaultV2) throw Error("vaultV2 is required");
 
-      return fetchVaultV2(
-        vaultV2,
-        config.getClient({ chainId }),
-        parameters,
-      );
+      return fetchVaultV2(vaultV2, config.getClient({ chainId }), parameters);
     },
     queryKey: fetchVaultV2QueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support

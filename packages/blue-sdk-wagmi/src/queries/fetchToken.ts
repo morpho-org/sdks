@@ -27,11 +27,7 @@ export function fetchTokenQueryOptions<config extends Config>(
 
       if (token == null) throw Error("token is required");
 
-      return fetchToken(
-        token,
-        config.getClient({ chainId }),
-        parameters,
-      );
+      return fetchToken(token, config.getClient({ chainId }), parameters);
     },
     queryKey: fetchTokenQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support

@@ -27,11 +27,7 @@ export function fetchMarketQueryOptions<config extends Config>(
 
       if (!marketId) throw Error("marketId is required");
 
-      return fetchMarket(
-        marketId,
-        config.getClient({ chainId }),
-        parameters,
-      );
+      return fetchMarket(marketId, config.getClient({ chainId }), parameters);
     },
     queryKey: fetchMarketQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support

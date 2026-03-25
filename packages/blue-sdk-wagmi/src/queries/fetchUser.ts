@@ -23,11 +23,7 @@ export function fetchUserQueryOptions<config extends Config>(
 
       if (user == null) throw Error("user is required");
 
-      return fetchUser(
-        user,
-        config.getClient({ chainId }),
-        parameters,
-      );
+      return fetchUser(user, config.getClient({ chainId }), parameters);
     },
     queryKey: fetchUserQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support
