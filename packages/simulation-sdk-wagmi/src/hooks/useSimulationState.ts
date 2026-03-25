@@ -31,14 +31,10 @@ import {
 } from "@morpho-org/blue-sdk-wagmi";
 import { values } from "@morpho-org/morpho-ts";
 import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
+import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import type { Address, ReadContractErrorType, UnionOmit } from "viem";
-import {
-  type Config,
-  type ResolvedRegister,
-  useQueryClient,
-  useReadContract,
-} from "wagmi";
+import { type Config, type ResolvedRegister, useReadContract } from "wagmi";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
   FetchUsersParameters &
