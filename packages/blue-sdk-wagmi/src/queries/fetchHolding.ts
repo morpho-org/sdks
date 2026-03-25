@@ -19,6 +19,8 @@ export function fetchHoldingQueryOptions<config extends Config>(
   config: config,
   parameters: FetchHoldingParameters,
 ) {
+  const { blockNumber, blockTag } = parameters;
+
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
@@ -30,6 +32,8 @@ export function fetchHoldingQueryOptions<config extends Config>(
       return fetchHolding(user, token, config.getClient({ chainId }), {
         chainId,
         ...parameters,
+        blockNumber,
+        blockTag,
       });
     },
     queryKey: fetchHoldingQueryKey(parameters),
@@ -46,8 +50,6 @@ export function fetchHoldingQueryKey({
   user,
   token,
   chainId,
-  blockTag,
-  blockNumber,
   deployless,
   account,
   stateOverride,
@@ -59,8 +61,6 @@ export function fetchHoldingQueryKey({
       user,
       token,
       chainId,
-      blockTag,
-      blockNumber,
       deployless,
       account,
       stateOverride,

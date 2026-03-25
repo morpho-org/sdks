@@ -19,6 +19,8 @@ export function fetchVaultV2AdapterQueryOptions<config extends Config>(
   config: config,
   parameters: FetchVaultV2AdapterParameters,
 ) {
+  const { blockNumber, blockTag } = parameters;
+
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
@@ -32,6 +34,8 @@ export function fetchVaultV2AdapterQueryOptions<config extends Config>(
         {
           chainId,
           ...parameters,
+          blockNumber,
+          blockTag,
         },
       );
     },
@@ -48,8 +52,6 @@ export function fetchVaultV2AdapterQueryOptions<config extends Config>(
 export function fetchVaultV2AdapterQueryKey({
   vaultV2Adapter,
   chainId,
-  blockTag,
-  blockNumber,
   deployless,
   account,
   stateOverride,
@@ -59,8 +61,6 @@ export function fetchVaultV2AdapterQueryKey({
     {
       vaultV2Adapter,
       chainId,
-      blockTag,
-      blockNumber,
       deployless,
       account,
       stateOverride,

@@ -19,6 +19,8 @@ export function fetchTokenQueryOptions<config extends Config>(
   config: config,
   parameters: FetchTokenParameters,
 ) {
+  const { blockNumber, blockTag } = parameters;
+
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
@@ -29,6 +31,8 @@ export function fetchTokenQueryOptions<config extends Config>(
       return fetchToken(token, config.getClient({ chainId }), {
         chainId,
         ...parameters,
+        blockNumber,
+        blockTag,
       });
     },
     queryKey: fetchTokenQueryKey(parameters),
@@ -44,8 +48,6 @@ export function fetchTokenQueryOptions<config extends Config>(
 export function fetchTokenQueryKey({
   token,
   chainId,
-  blockTag,
-  blockNumber,
   deployless,
   account,
   stateOverride,
@@ -56,8 +58,6 @@ export function fetchTokenQueryKey({
     {
       token,
       chainId,
-      blockTag,
-      blockNumber,
       deployless,
       account,
       stateOverride,

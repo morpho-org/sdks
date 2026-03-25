@@ -19,6 +19,8 @@ export function fetchVaultMarketConfigQueryOptions<config extends Config>(
   config: config,
   parameters: FetchVaultMarketConfigParameters,
 ) {
+  const { blockNumber, blockTag } = parameters;
+
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
@@ -30,12 +32,14 @@ export function fetchVaultMarketConfigQueryOptions<config extends Config>(
       return fetchVaultMarketConfig(
         vault,
         marketId,
-        config.getClient({ chainId }),
-        {
-          chainId,
-          ...parameters,
-        },
-      );
+
+
+
+
+
+
+
+
     },
     queryKey: fetchVaultMarketConfigQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support
@@ -51,8 +55,6 @@ export function fetchVaultMarketConfigQueryKey({
   vault,
   marketId,
   chainId,
-  blockTag,
-  blockNumber,
   account,
   stateOverride,
 }: FetchVaultMarketConfigParameters) {
@@ -63,8 +65,6 @@ export function fetchVaultMarketConfigQueryKey({
       vault,
       marketId,
       chainId,
-      blockTag,
-      blockNumber,
       account,
       stateOverride,
     } as FetchVaultMarketConfigParameters,

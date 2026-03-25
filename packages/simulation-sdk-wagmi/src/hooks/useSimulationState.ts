@@ -147,10 +147,7 @@ export function useSimulationState<
   includeVaultQueues = true,
   ...parameters
 }: UseSimulationStateParameters<config>): UseSimulationStateReturnType {
-  const staleTime =
-    (parameters.query?.staleTime ?? block?.number != null)
-      ? Number.POSITIVE_INFINITY
-      : undefined;
+  const staleTime = parameters.query?.staleTime;
 
   const chainId = useChainId(parameters);
 
