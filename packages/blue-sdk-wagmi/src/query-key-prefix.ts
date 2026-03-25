@@ -1,5 +1,3 @@
-import type { QueryClient } from "@tanstack/query-core";
-
 /**
  * Shared prefix for all `@morpho-org/blue-sdk-wagmi` query keys.
  *
@@ -26,6 +24,14 @@ export const BLUE_SDK_QUERY_NAMES = [
 
 export type BlueSdkQueryName = (typeof BLUE_SDK_QUERY_NAMES)[number];
 
+/** Minimal interface for a TanStack QueryClient (avoids version coupling). */
+interface InvalidatableQueryClient {
+  invalidateQueries(options: {
+    queryKey: readonly unknown[];
+    cancelRefetch?: boolean;
+  }): Promise<void>;
+}
+
 /**
  * Invalidate all SDK queries so they re-fetch in-place.
  *
@@ -41,7 +47,7 @@ export type BlueSdkQueryName = (typeof BLUE_SDK_QUERY_NAMES)[number];
  * ```
  */
 export function invalidateAllBlueSdkQueries(
-  queryClient: QueryClient,
+  queryClient: InvalidatableQueryClient,
   options?: { cancelRefetch?: boolean },
 ) {
   const cancelRefetch = options?.cancelRefetch ?? true;
