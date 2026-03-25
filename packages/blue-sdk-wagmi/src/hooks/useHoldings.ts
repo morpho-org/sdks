@@ -54,7 +54,6 @@ export function useHoldings<
       }),
       enabled: holding.user != null && holding.token != null && query.enabled,
       structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-      staleTime: query.staleTime,
     })),
   });
 

@@ -55,7 +55,6 @@ export function usePositions<
       enabled:
         position.user != null && position.marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-      staleTime: query.staleTime,
     })),
   });
 

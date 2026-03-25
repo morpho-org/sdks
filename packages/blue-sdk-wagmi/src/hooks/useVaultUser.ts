@@ -53,6 +53,5 @@ export function useVaultUser<
     enabled:
       parameters.vault != null && parameters.user != null && query.enabled,
     structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-    staleTime: query.staleTime,
   });
 }

@@ -43,6 +43,5 @@ export function useUser<
     ...options,
     enabled: parameters.user != null && query.enabled,
     structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-    staleTime: query.staleTime,
   });
 }

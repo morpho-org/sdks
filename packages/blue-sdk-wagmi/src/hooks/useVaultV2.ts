@@ -48,6 +48,5 @@ export function useVaultV2<
     ...options,
     enabled: parameters.vaultV2 != null && query.enabled,
     structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-    staleTime: query.staleTime,
   });
 }

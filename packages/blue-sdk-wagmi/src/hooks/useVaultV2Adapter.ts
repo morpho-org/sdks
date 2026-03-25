@@ -49,6 +49,5 @@ export function useVaultV2Adapter<
     ...options,
     enabled: parameters.vaultV2Adapter != null && query.enabled,
     structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-    staleTime: query.staleTime,
   });
 }

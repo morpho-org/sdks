@@ -147,7 +147,6 @@ export function useSimulationState<
   includeVaultQueues = true,
   ...parameters
 }: UseSimulationStateParameters<config>): UseSimulationStateReturnType {
-  const staleTime = parameters.query?.staleTime;
 
   const chainId = useChainId(parameters);
 
@@ -166,7 +165,6 @@ export function useSimulationState<
         block != null &&
         (parameters.entityQuery?.feeRecipient?.enabled ??
           parameters.query?.enabled),
-      staleTime,
     },
   });
 

@@ -45,7 +45,6 @@ export function useVaults<config extends Config = ResolvedRegister["config"]>({
       }),
       enabled: vault != null && query.enabled,
       structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-      staleTime: query.staleTime,
     })),
   });
 

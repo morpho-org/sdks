@@ -46,7 +46,6 @@ export function useMarkets<config extends Config = ResolvedRegister["config"]>({
       }),
       enabled: marketId != null && query.enabled,
       structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-      staleTime: query.staleTime,
     })),
   });
 
