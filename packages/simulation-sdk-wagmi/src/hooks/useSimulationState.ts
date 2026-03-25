@@ -16,6 +16,7 @@ import {
   type FetchVaultV2AdaptersParameters,
   type FetchVaultV2sParameters,
   type FetchVaultsParameters,
+  invalidateAllBlueSdkQueries,
   useChainId,
   useHoldings,
   useMarkets,
@@ -30,9 +31,14 @@ import {
 } from "@morpho-org/blue-sdk-wagmi";
 import { values } from "@morpho-org/morpho-ts";
 import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Address, ReadContractErrorType, UnionOmit } from "viem";
-import { type Config, type ResolvedRegister, useReadContract } from "wagmi";
+import {
+  type Config,
+  type ResolvedRegister,
+  useQueryClient,
+  useReadContract,
+} from "wagmi";
 
 export type FetchSimulationStateParameters = FetchMarketsParameters &
   FetchUsersParameters &
@@ -147,8 +153,19 @@ export function useSimulationState<
   includeVaultQueues = true,
   ...parameters
 }: UseSimulationStateParameters<config>): UseSimulationStateReturnType {
-
   const chainId = useChainId(parameters);
+
+  const queryClient = useQueryClient();
+
+  // Invalidate all SDK queries when the block changes so that queryFn
+  // closures re-execute with the updated blockNumber.
+  const blockNumberRef = useRef(block?.number);
+  useEffect(() => {
+    if (block?.number != null && block.number !== blockNumberRef.current) {
+      blockNumberRef.current = block.number;
+      invalidateAllBlueSdkQueries(queryClient);
+    }
+  }, [block?.number, queryClient]);
 
   const { morpho } = addresses[chainId];
 
