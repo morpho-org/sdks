@@ -1,4 +1,6 @@
+import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect } from "vitest";
 
 import { ChainId } from "@morpho-org/blue-sdk";
@@ -22,6 +24,11 @@ describe("MetaMorpho_AccrueInterest", () => {
     config,
     client,
   }) => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Number.POSITIVE_INFINITY },
+      },
+    });
     const assets = parseUnits("100", 6);
 
     await client.deal({
@@ -61,7 +68,7 @@ describe("MetaMorpho_AccrueInterest", () => {
           block,
           accrueInterest: false,
         }),
-      { initialProps: block },
+      { initialProps: block, queryClient },
     );
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
@@ -100,6 +107,7 @@ describe("MetaMorpho_AccrueInterest", () => {
     });
 
     await rerender(await client.getBlock());
+    invalidateAllBlueSdkQueries(queryClient);
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     expect(result.current.data).toStrictEqual(getLast(steps));
