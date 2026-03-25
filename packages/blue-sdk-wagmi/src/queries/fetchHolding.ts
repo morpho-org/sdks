@@ -19,22 +19,21 @@ export function fetchHoldingQueryOptions<config extends Config>(
   config: config,
   parameters: FetchHoldingParameters,
 ) {
-  const { blockNumber, blockTag } = parameters;
-
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { user, token, chainId, ...parameters } = queryKey[1];
+    async queryFn() {
+      const { user, token, chainId } = parameters;
+
       if (user == null) throw Error("user is required");
       if (token == null) throw Error("token is required");
 
-      return fetchHolding(user, token, config.getClient({ chainId }), {
-        chainId,
-        ...parameters,
-        blockNumber,
-        blockTag,
-      });
+      return fetchHolding(
+        user,
+        token,
+        config.getClient({ chainId }),
+        parameters,
+      );
     },
     queryKey: fetchHoldingQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support

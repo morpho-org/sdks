@@ -19,21 +19,19 @@ export function fetchTokenQueryOptions<config extends Config>(
   config: config,
   parameters: FetchTokenParameters,
 ) {
-  const { blockNumber, blockTag } = parameters;
-
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { token, chainId, ...parameters } = queryKey[1];
+    async queryFn() {
+      const { token, chainId } = parameters;
+
       if (token == null) throw Error("token is required");
 
-      return fetchToken(token, config.getClient({ chainId }), {
-        chainId,
-        ...parameters,
-        blockNumber,
-        blockTag,
-      });
+      return fetchToken(
+        token,
+        config.getClient({ chainId }),
+        parameters,
+      );
     },
     queryKey: fetchTokenQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support

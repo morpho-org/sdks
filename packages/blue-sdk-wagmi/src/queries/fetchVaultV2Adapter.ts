@@ -19,24 +19,18 @@ export function fetchVaultV2AdapterQueryOptions<config extends Config>(
   config: config,
   parameters: FetchVaultV2AdapterParameters,
 ) {
-  const { blockNumber, blockTag } = parameters;
-
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { vaultV2Adapter, chainId, ...parameters } = queryKey[1];
+    async queryFn() {
+      const { vaultV2Adapter, chainId } = parameters;
+
       if (!vaultV2Adapter) throw Error("vaultV2Adapter is required");
 
       return fetchVaultV2Adapter(
         vaultV2Adapter,
         config.getClient({ chainId }),
-        {
-          chainId,
-          ...parameters,
-          blockNumber,
-          blockTag,
-        },
+        parameters,
       );
     },
     queryKey: fetchVaultV2AdapterQueryKey(parameters),

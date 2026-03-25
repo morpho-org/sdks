@@ -15,21 +15,19 @@ export function fetchUserQueryOptions<config extends Config>(
   config: config,
   parameters: FetchUserParameters,
 ) {
-  const { blockNumber, blockTag } = parameters;
-
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { user, chainId, ...parameters } = queryKey[1];
-      if (!user) throw Error("user is required");
+    async queryFn() {
+      const { user, chainId } = parameters;
 
-      return fetchUser(user, config.getClient({ chainId }), {
-        chainId,
-        ...parameters,
-        blockNumber,
-        blockTag,
-      });
+      if (user == null) throw Error("user is required");
+
+      return fetchUser(
+        user,
+        config.getClient({ chainId }),
+        parameters,
+      );
     },
     queryKey: fetchUserQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support

@@ -19,22 +19,21 @@ export function fetchVaultUserQueryOptions<config extends Config>(
   config: config,
   parameters: FetchVaultUserParameters,
 ) {
-  const { blockNumber, blockTag } = parameters;
-
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { vault, user, chainId, ...parameters } = queryKey[1];
-      if (!vault) throw Error("vault is required");
-      if (!user) throw Error("user is required");
+    async queryFn() {
+      const { vault, user, chainId } = parameters;
 
-      return fetchVaultUser(vault, user, config.getClient({ chainId }), {
-        chainId,
-        ...parameters,
-        blockNumber,
-        blockTag,
-      });
+      if (!vault) throw Error("vault is required");
+      if (user == null) throw Error("user is required");
+
+      return fetchVaultUser(
+        vault,
+        user,
+        config.getClient({ chainId }),
+        parameters,
+      );
     },
     queryKey: fetchVaultUserQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support

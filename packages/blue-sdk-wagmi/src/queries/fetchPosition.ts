@@ -16,22 +16,21 @@ export function fetchPositionQueryOptions<config extends Config>(
   config: config,
   parameters: FetchPositionParameters,
 ) {
-  const { blockNumber, blockTag } = parameters;
-
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { user, marketId, chainId, ...parameters } = queryKey[1];
-      if (!user) throw Error("user is required");
+    async queryFn() {
+      const { user, marketId, chainId } = parameters;
+
+      if (user == null) throw Error("user is required");
       if (!marketId) throw Error("marketId is required");
 
-      return fetchPosition(user, marketId, config.getClient({ chainId }), {
-        chainId,
-        ...parameters,
-        blockNumber,
-        blockTag,
-      });
+      return fetchPosition(
+        user,
+        marketId,
+        config.getClient({ chainId }),
+        parameters,
+      );
     },
     queryKey: fetchPositionQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support

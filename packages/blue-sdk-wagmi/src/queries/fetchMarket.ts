@@ -19,21 +19,19 @@ export function fetchMarketQueryOptions<config extends Config>(
   config: config,
   parameters: FetchMarketParameters,
 ) {
-  const { blockNumber, blockTag } = parameters;
-
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { marketId, chainId, ...parameters } = queryKey[1];
+    async queryFn() {
+      const { marketId, chainId } = parameters;
+
       if (!marketId) throw Error("marketId is required");
 
-      return fetchMarket(marketId, config.getClient({ chainId }), {
-        chainId,
-        ...parameters,
-        blockNumber,
-        blockTag,
-      });
+      return fetchMarket(
+        marketId,
+        config.getClient({ chainId }),
+        parameters,
+      );
     },
     queryKey: fetchMarketQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support
