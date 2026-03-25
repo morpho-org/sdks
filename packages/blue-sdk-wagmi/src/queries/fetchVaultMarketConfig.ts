@@ -32,14 +32,14 @@ export function fetchVaultMarketConfigQueryOptions<config extends Config>(
       return fetchVaultMarketConfig(
         vault,
         marketId,
-
-
-
-
-
-
-
-
+        config.getClient({ chainId }),
+        {
+          chainId,
+          ...parameters,
+          blockNumber,
+          blockTag,
+        },
+      );
     },
     queryKey: fetchVaultMarketConfigQueryKey(parameters),
     queryKeyHashFn: hashFn, // for bigint support
