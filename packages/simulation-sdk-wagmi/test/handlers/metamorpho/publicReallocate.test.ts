@@ -139,6 +139,10 @@ describe("MetaMorpho_PublicReallocate", () => {
     });
 
     await rerender(await client.getBlock());
+    // Wait for useEffect block-change invalidation to trigger refetch, then for completion.
+    await waitFor(() => expect(result.current.isFetchingAny).toBeTruthy(), {
+      timeout: 5000,
+    }).catch(() => {});
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     // Hotfix: anvil's effective gas price is not zero for some reason.

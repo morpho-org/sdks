@@ -498,6 +498,10 @@ describe("useSimulationState", () => {
     const step1 = _.cloneDeep(steps[1]!);
 
     await rerender(await client.getBlock());
+    // Wait for useEffect block-change invalidation to trigger refetch, then for completion.
+    await waitFor(() => expect(result.current.isFetchingAny).toBeTruthy(), {
+      timeout: 5000,
+    }).catch(() => {});
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     step1.block.number += 1n;
@@ -519,6 +523,10 @@ describe("useSimulationState", () => {
     const step2 = _.cloneDeep(steps[2]!);
 
     await rerender(await client.getBlock());
+    // Wait for useEffect block-change invalidation to trigger refetch, then for completion.
+    await waitFor(() => expect(result.current.isFetchingAny).toBeTruthy(), {
+      timeout: 5000,
+    }).catch(() => {});
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     step2.block.number += 2n;
