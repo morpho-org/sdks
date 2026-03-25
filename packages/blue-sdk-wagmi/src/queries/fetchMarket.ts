@@ -39,6 +39,15 @@ export function fetchMarketQueryOptions<config extends Config>(
   >;
 }
 
+// blockNumber and blockTag are intentionally excluded from the query key so that
+// TanStack Query reuses a single cache entry per entity instead of creating new
+// entries every block (which causes OOM at scale on heavy pages).
+//
+// For consumers that do need multi-block views (e.g. comparing state across blocks),
+// placeholderData: keepPreviousData gives instant-serve UX without multiplying cache entries.
+// If hitting cache directly is some day more relevant, include blockNumber and blockTag to the query key
+// BUT think of a way to mitigate cache creation/eviction at scale (multiple queries created
+// simultaneously at each block when tracking latest).
 export function fetchMarketQueryKey({
   marketId,
   chainId,
