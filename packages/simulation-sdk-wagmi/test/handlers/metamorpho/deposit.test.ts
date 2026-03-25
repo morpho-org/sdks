@@ -13,6 +13,9 @@ import { parseUnits } from "viem";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
 
+import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
+import { QueryClient } from "@tanstack/react-query";
+
 const { usdc_wstEth, usdc_idle, usdc_wbtc, usdc_wbIB01 } =
   markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];
@@ -22,6 +25,11 @@ describe("MetaMorpho_AccrueInterest", () => {
     config,
     client,
   }) => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Number.POSITIVE_INFINITY },
+      },
+    });
     const assets = parseUnits("100", 6);
 
     await client.deal({
@@ -54,7 +62,7 @@ describe("MetaMorpho_AccrueInterest", () => {
           block,
           accrueInterest: false,
         }),
-      { initialProps: block },
+      { initialProps: block, queryClient },
     );
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
@@ -92,10 +100,7 @@ describe("MetaMorpho_AccrueInterest", () => {
     });
 
     await rerender(await client.getBlock());
-    // Wait for useEffect block-change invalidation to trigger refetch, then for completion.
-    await waitFor(() => expect(result.current.isFetchingAny).toBeTruthy(), {
-      timeout: 5000,
-    }).catch(() => {});
+    invalidateAllBlueSdkQueries(queryClient);
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     expect(result.current.data).toStrictEqual(getLast(steps));

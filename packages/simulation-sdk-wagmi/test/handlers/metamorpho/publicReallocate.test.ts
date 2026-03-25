@@ -17,6 +17,9 @@ import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
 
+import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
+import { QueryClient } from "@tanstack/react-query";
+
 const { publicAllocator } = addressesRegistry[ChainId.EthMainnet];
 const { usdc_wstEth, usdc_idle, usdc_wbtc, usdc_wbIB01 } =
   markets[ChainId.EthMainnet];
@@ -27,6 +30,11 @@ describe("MetaMorpho_PublicReallocate", () => {
     config,
     client,
   }) => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Number.POSITIVE_INFINITY },
+      },
+    });
     const owner = await client.readContract({
       address: steakUsdc.address,
       abi: metaMorphoAbi,
@@ -91,7 +99,7 @@ describe("MetaMorpho_PublicReallocate", () => {
           block,
           accrueInterest: false,
         }),
-      { initialProps: block },
+      { initialProps: block, queryClient },
     );
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
@@ -139,10 +147,7 @@ describe("MetaMorpho_PublicReallocate", () => {
     });
 
     await rerender(await client.getBlock());
-    // Wait for useEffect block-change invalidation to trigger refetch, then for completion.
-    await waitFor(() => expect(result.current.isFetchingAny).toBeTruthy(), {
-      timeout: 5000,
-    }).catch(() => {});
+    invalidateAllBlueSdkQueries(queryClient);
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     // Hotfix: anvil's effective gas price is not zero for some reason.

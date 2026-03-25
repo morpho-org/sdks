@@ -4,6 +4,7 @@ import {
   MathLib,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
+import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import {
   type MinimalBlock,
@@ -11,6 +12,7 @@ import {
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { QueryClient } from "@tanstack/react-query";
 import _ from "lodash";
 import { erc20Abi, parseEther, zeroAddress } from "viem";
 import { describe, expect } from "vitest";
@@ -433,6 +435,11 @@ describe("useSimulationState", () => {
   });
 
   test("should simulate transfer", async ({ config, client }) => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Number.POSITIVE_INFINITY },
+      },
+    });
     const amount = 1_000000n;
 
     await client.deal({
@@ -454,7 +461,7 @@ describe("useSimulationState", () => {
           vaultV2s: [],
           block,
         }),
-      { initialProps: block },
+      { initialProps: block, queryClient },
     );
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
@@ -498,10 +505,7 @@ describe("useSimulationState", () => {
     const step1 = _.cloneDeep(steps[1]!);
 
     await rerender(await client.getBlock());
-    // Wait for useEffect block-change invalidation to trigger refetch, then for completion.
-    await waitFor(() => expect(result.current.isFetchingAny).toBeTruthy(), {
-      timeout: 5000,
-    }).catch(() => {});
+    invalidateAllBlueSdkQueries(queryClient);
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     step1.block.number += 1n;
@@ -523,10 +527,7 @@ describe("useSimulationState", () => {
     const step2 = _.cloneDeep(steps[2]!);
 
     await rerender(await client.getBlock());
-    // Wait for useEffect block-change invalidation to trigger refetch, then for completion.
-    await waitFor(() => expect(result.current.isFetchingAny).toBeTruthy(), {
-      timeout: 5000,
-    }).catch(() => {});
+    invalidateAllBlueSdkQueries(queryClient);
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     step2.block.number += 2n;
