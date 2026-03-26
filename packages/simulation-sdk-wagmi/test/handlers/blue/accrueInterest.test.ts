@@ -3,6 +3,8 @@ import {
   type InputMarketParams,
   addressesRegistry,
 } from "@morpho-org/blue-sdk";
+import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
+import { QueryClient } from "@tanstack/react-query";
 
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";
@@ -21,6 +23,11 @@ const { usdc_wstEth } = markets[ChainId.EthMainnet];
 
 describe("Blue_AccrueInterest", () => {
   test("should accrue interest accurately", async ({ config, client }) => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Number.POSITIVE_INFINITY },
+      },
+    });
     const block = await client.getBlock();
 
     const { result, rerender } = await renderHook(
@@ -36,7 +43,7 @@ describe("Blue_AccrueInterest", () => {
           block,
           accrueInterest: false,
         }),
-      { initialProps: block },
+      { initialProps: block, queryClient },
     );
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
@@ -73,6 +80,7 @@ describe("Blue_AccrueInterest", () => {
     });
 
     await rerender(await client.getBlock());
+    invalidateAllBlueSdkQueries(queryClient);
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     expect(result.current.data).toStrictEqual(getLast(steps));

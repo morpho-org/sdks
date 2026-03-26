@@ -53,9 +53,6 @@ export function useVaultV2Adapters<
       }),
       enabled: vaultV2Adapter != null && query.enabled,
       structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-      staleTime:
-        query.staleTime ??
-        (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),
     })),
   });
 

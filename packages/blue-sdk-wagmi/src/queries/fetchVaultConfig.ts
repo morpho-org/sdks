@@ -7,6 +7,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 import type { VaultParameters } from "./fetchVault.js";
 
 export type VaultConfigParameters = VaultParameters;
@@ -21,13 +22,12 @@ export function fetchVaultConfigQueryOptions<config extends Config>(
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { vault, chainId, ...parameters } = queryKey[1];
+    async queryFn() {
+      const { vault, chainId } = parameters;
       if (!vault) throw Error("vault is required");
 
       return fetchVaultConfig(vault, config.getClient({ chainId }), {
         chainId,
-        ...parameters,
       });
     },
     queryKey: fetchVaultConfigQueryKey(parameters),
@@ -45,6 +45,7 @@ export function fetchVaultConfigQueryKey({
   chainId,
 }: FetchVaultConfigParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchVaultConfig",
     // Ignore all other irrelevant parameters.
     {

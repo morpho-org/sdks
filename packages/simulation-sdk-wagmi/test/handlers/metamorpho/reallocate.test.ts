@@ -1,5 +1,6 @@
 import { ChainId, type InputMarketParams } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
+import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import { getLast } from "@morpho-org/morpho-ts";
 import {
@@ -7,6 +8,7 @@ import {
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { QueryClient } from "@tanstack/react-query";
 import { maxUint256, parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
@@ -21,6 +23,11 @@ describe("MetaMorpho_Reallocate", () => {
     config,
     client,
   }) => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: Number.POSITIVE_INFINITY },
+      },
+    });
     const block = await client.getBlock();
 
     const { result, rerender } = await renderHook(
@@ -41,7 +48,7 @@ describe("MetaMorpho_Reallocate", () => {
           block,
           accrueInterest: false,
         }),
-      { initialProps: block },
+      { initialProps: block, queryClient },
     );
 
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
@@ -103,6 +110,7 @@ describe("MetaMorpho_Reallocate", () => {
     });
 
     await rerender(await client.getBlock());
+    invalidateAllBlueSdkQueries(queryClient);
     await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
     expect(result.current.data).toStrictEqual(getLast(steps));

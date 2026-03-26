@@ -45,9 +45,6 @@ export function useUsers<config extends Config = ResolvedRegister["config"]>({
       }),
       enabled: user != null && query.enabled,
       structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-      staleTime:
-        query.staleTime ??
-        (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),
     })),
   });
 

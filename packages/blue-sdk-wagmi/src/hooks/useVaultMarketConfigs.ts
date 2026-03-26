@@ -60,9 +60,6 @@ export function useVaultMarketConfigs<
         vaultMarketConfig.marketId != null &&
         query.enabled,
       structuralSharing: query.structuralSharing ?? replaceDeepEqual,
-      staleTime:
-        query.staleTime ??
-        (parameters.blockNumber != null ? Number.POSITIVE_INFINITY : undefined),
     })),
   });
 

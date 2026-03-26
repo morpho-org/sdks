@@ -7,6 +7,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 
 export type VaultV2AdapterParameters = {
   vaultV2Adapter: Address;
@@ -22,17 +23,15 @@ export function fetchVaultV2AdapterQueryOptions<config extends Config>(
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { vaultV2Adapter, chainId, ...parameters } = queryKey[1];
+    async queryFn() {
+      const { vaultV2Adapter, chainId } = parameters;
+
       if (!vaultV2Adapter) throw Error("vaultV2Adapter is required");
 
       return fetchVaultV2Adapter(
         vaultV2Adapter,
         config.getClient({ chainId }),
-        {
-          chainId,
-          ...parameters,
-        },
+        parameters,
       );
     },
     queryKey: fetchVaultV2AdapterQueryKey(parameters),
@@ -45,22 +44,28 @@ export function fetchVaultV2AdapterQueryOptions<config extends Config>(
   >;
 }
 
+// blockNumber and blockTag are intentionally excluded from the query key so that
+// TanStack Query reuses a single cache entry per entity instead of creating new
+// entries every block (which causes OOM at scale on heavy pages).
+//
+// For consumers that do need multi-block views (e.g. comparing state across blocks),
+// placeholderData: keepPreviousData gives instant-serve UX without multiplying cache entries.
+// If hitting cache directly is some day more relevant, include blockNumber and blockTag to the query key
+// BUT think of a way to mitigate cache creation/eviction at scale (multiple queries created
+// simultaneously at each block when tracking latest).
 export function fetchVaultV2AdapterQueryKey({
   vaultV2Adapter,
   chainId,
-  blockTag,
-  blockNumber,
   deployless,
   account,
   stateOverride,
 }: FetchVaultV2AdapterParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchVaultV2Adapter",
     {
       vaultV2Adapter,
       chainId,
-      blockTag,
-      blockNumber,
       deployless,
       account,
       stateOverride,
