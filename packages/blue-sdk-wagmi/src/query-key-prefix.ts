@@ -1,28 +1,14 @@
 /**
  * Shared prefix for all `@morpho-org/blue-sdk-wagmi` query keys.
  *
- * Can be used with `queryClient.invalidateQueries({ queryKey: [BLUE_SDK_QUERY_KEY_PREFIX] })`
- * to invalidate every SDK query at once (e.g. on a new block).
+ * Every SDK query key starts with this prefix, so you can use it to
+ * invalidate or filter all SDK queries at once:
+ *
+ * ```ts
+ * queryClient.invalidateQueries({ queryKey: [BLUE_SDK_QUERY_KEY_PREFIX] })
+ * ```
  */
 export const BLUE_SDK_QUERY_KEY_PREFIX = "@morpho-org/blue-sdk" as const;
-
-/** All fetch-* query key names exported by the SDK. */
-export const BLUE_SDK_QUERY_NAMES = [
-  "fetchMarket",
-  "fetchMarketParams",
-  "fetchToken",
-  "fetchUser",
-  "fetchVault",
-  "fetchVaultConfig",
-  "fetchVaultUser",
-  "fetchPosition",
-  "fetchHolding",
-  "fetchVaultMarketConfig",
-  "fetchVaultV2",
-  "fetchVaultV2Adapter",
-] as const;
-
-export type BlueSdkQueryName = (typeof BLUE_SDK_QUERY_NAMES)[number];
 
 /** Minimal interface for a TanStack QueryClient (avoids version coupling). */
 interface InvalidatableQueryClient {
@@ -52,10 +38,8 @@ export function invalidateAllBlueSdkQueries(
 ) {
   const cancelRefetch = options?.cancelRefetch ?? true;
 
-  for (const name of BLUE_SDK_QUERY_NAMES) {
-    queryClient.invalidateQueries({
-      queryKey: [name],
-      cancelRefetch,
-    });
-  }
+  queryClient.invalidateQueries({
+    queryKey: [BLUE_SDK_QUERY_KEY_PREFIX],
+    cancelRefetch,
+  });
 }

@@ -7,6 +7,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 import type { MarketParameters } from "./fetchMarket.js";
 
 export type MarketParamsParameters = MarketParameters;
@@ -21,8 +22,8 @@ export function fetchMarketParamsQueryOptions<config extends Config>(
   return {
     // TODO: Support `signal` once Viem actions allow passthrough
     // https://tkdodo.eu/blog/why-you-want-react-query#bonus-cancellation
-    async queryFn({ queryKey }) {
-      const { marketId, chainId } = queryKey[1];
+    async queryFn() {
+      const { marketId, chainId } = parameters;
       if (!marketId) throw Error("marketId is required");
 
       return fetchMarketParams(marketId, config.getClient({ chainId }), {
@@ -44,6 +45,7 @@ export function fetchMarketParamsQueryKey({
   chainId,
 }: FetchMarketParamsParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchMarketParams",
     // Ignore all other irrelevant parameters.
     {

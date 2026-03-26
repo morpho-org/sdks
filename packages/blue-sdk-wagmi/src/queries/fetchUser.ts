@@ -4,6 +4,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 
 export type UserParameters = {
   user: Address;
@@ -51,6 +52,7 @@ export function fetchUserQueryKey({
   stateOverride,
 }: FetchUserParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchUser",
     // Ignore all other irrelevant parameters.
     {

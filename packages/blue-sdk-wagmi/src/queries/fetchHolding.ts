@@ -7,6 +7,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 import type { TokenParameters } from "./fetchToken.js";
 import type { UserParameters } from "./fetchUser.js";
 
@@ -63,6 +64,7 @@ export function fetchHoldingQueryKey({
   stateOverride,
 }: FetchHoldingParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchHolding",
     // Ignore all other irrelevant parameters.
     {

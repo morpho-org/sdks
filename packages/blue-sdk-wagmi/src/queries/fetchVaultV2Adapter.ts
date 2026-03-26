@@ -7,6 +7,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 
 export type VaultV2AdapterParameters = {
   vaultV2Adapter: Address;
@@ -60,6 +61,7 @@ export function fetchVaultV2AdapterQueryKey({
   stateOverride,
 }: FetchVaultV2AdapterParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchVaultV2Adapter",
     {
       vaultV2Adapter,

@@ -7,6 +7,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 import type { MarketParameters } from "./fetchMarket.js";
 import type { VaultParameters } from "./fetchVault.js";
 
@@ -62,6 +63,7 @@ export function fetchVaultMarketConfigQueryKey({
   stateOverride,
 }: FetchVaultMarketConfigParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchVaultMarketConfig",
     // Ignore all other irrelevant parameters.
     {

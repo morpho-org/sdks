@@ -7,6 +7,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 import type { UserParameters } from "./fetchUser.js";
 import type { VaultParameters } from "./fetchVault.js";
 
@@ -63,6 +64,7 @@ export function fetchVaultUserQueryKey({
   stateOverride,
 }: FetchVaultUserParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchVaultUser",
     {
       vault,

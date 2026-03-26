@@ -4,6 +4,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 import type { MarketParameters } from "./fetchMarket.js";
 import type { UserParameters } from "./fetchUser.js";
 
@@ -59,6 +60,7 @@ export function fetchPositionQueryKey({
   stateOverride,
 }: FetchPositionParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchPosition",
     // Ignore all other irrelevant parameters.
     {

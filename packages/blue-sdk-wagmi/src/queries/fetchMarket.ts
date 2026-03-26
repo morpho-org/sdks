@@ -7,6 +7,7 @@ import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";
 import { hashFn } from "wagmi/query";
+import { BLUE_SDK_QUERY_KEY_PREFIX } from "../query-key-prefix.js";
 
 export type MarketParameters = {
   marketId: MarketId;
@@ -56,6 +57,7 @@ export function fetchMarketQueryKey({
   stateOverride,
 }: FetchMarketParameters) {
   return [
+    BLUE_SDK_QUERY_KEY_PREFIX,
     "fetchMarket",
     // Ignore all other irrelevant parameters.
     {
