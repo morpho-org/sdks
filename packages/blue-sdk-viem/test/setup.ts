@@ -18,6 +18,14 @@ export const test2 = createViemTest(mainnet, {
 });
 
 /**
+ * This test will run on `mainnet` forked at block `24,671,815`.
+ */
+export const testTreehouseEth = createViemTest(mainnet, {
+  forkUrl: process.env.MAINNET_RPC_URL,
+  forkBlockNumber: 24_671_815,
+});
+
+/**
  * This test will run on `mainnet` forked at block `21,950,00`.
  */
 export const preLiquidationTest = createViemTest(mainnet, {
