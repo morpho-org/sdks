@@ -3,7 +3,8 @@ import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
 
 export interface IVaultV2MorphoVaultV1Adapter
-  extends Omit<IVaultV2Adapter, "adapterId"> {
+  extends Omit<IVaultV2Adapter, "adapterId" | "type"> {
+  type?: "VaultV2MorphoVaultV1Adapter";
   morphoVaultV1: Address;
 }
 
@@ -18,6 +19,8 @@ export class VaultV2MorphoVaultV1Adapter
   extends VaultV2Adapter
   implements IVaultV2MorphoVaultV1Adapter
 {
+  public declare readonly type: "VaultV2MorphoVaultV1Adapter";
+
   static adapterId(address: Address) {
     return keccak256(
       encodeAbiParameters(
@@ -35,6 +38,7 @@ export class VaultV2MorphoVaultV1Adapter
   }: IVaultV2MorphoVaultV1Adapter) {
     super({
       ...vaultV2Adapter,
+      type: "VaultV2MorphoVaultV1Adapter",
       adapterId: VaultV2MorphoVaultV1Adapter.adapterId(vaultV2Adapter.address),
     });
 

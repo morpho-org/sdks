@@ -3,6 +3,7 @@ import type { BigIntish } from "../../types.js";
 import type { CapacityLimit } from "../../utils.js";
 
 export interface IVaultV2Adapter {
+  type: string;
   address: Address;
   parentVault: Address;
   adapterId: Hash;
@@ -10,17 +11,20 @@ export interface IVaultV2Adapter {
 }
 
 export abstract class VaultV2Adapter implements IVaultV2Adapter {
+  public readonly type: string;
   public readonly address: Address;
   public readonly parentVault: Address;
   public readonly adapterId: Hash;
   public skimRecipient: Address;
 
   constructor({
+    type,
     address,
     parentVault,
     adapterId,
     skimRecipient,
   }: IVaultV2Adapter) {
+    this.type = type;
     this.address = address;
     this.parentVault = parentVault;
     this.adapterId = adapterId;
