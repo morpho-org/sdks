@@ -11,7 +11,8 @@ import { VaultV2Adapter } from "./VaultV2Adapter";
 import type { IAccrualVaultV2Adapter, IVaultV2Adapter } from "./VaultV2Adapter";
 
 export interface IVaultV2MorphoMarketV1Adapter
-  extends Omit<IVaultV2Adapter, "adapterId"> {
+  extends Omit<IVaultV2Adapter, "adapterId" | "type"> {
+  type?: "VaultV2MorphoMarketV1Adapter";
   marketParamsList: IMarketParams[];
 }
 
@@ -19,6 +20,8 @@ export class VaultV2MorphoMarketV1Adapter
   extends VaultV2Adapter
   implements IVaultV2MorphoMarketV1Adapter
 {
+  public declare readonly type: "VaultV2MorphoMarketV1Adapter";
+
   static adapterId(address: Address) {
     return keccak256(
       encodeAbiParameters(
@@ -54,6 +57,7 @@ export class VaultV2MorphoMarketV1Adapter
   }: IVaultV2MorphoMarketV1Adapter) {
     super({
       ...vaultV2Adapter,
+      type: "VaultV2MorphoMarketV1Adapter",
       adapterId: VaultV2MorphoMarketV1Adapter.adapterId(vaultV2Adapter.address),
     });
 
