@@ -13,7 +13,8 @@ import type {
 } from "./VaultV2Adapter.js";
 
 export interface IVaultV2MorphoMarketV1AdapterV2
-  extends Omit<IVaultV2Adapter, "adapterId"> {
+  extends Omit<IVaultV2Adapter, "adapterId" | "type"> {
+  type?: "VaultV2MorphoMarketV1AdapterV2";
   marketIds: MarketId[];
   adaptiveCurveIrm: Address;
   supplyShares: Record<MarketId, bigint>;
@@ -23,6 +24,8 @@ export class VaultV2MorphoMarketV1AdapterV2
   extends VaultV2Adapter
   implements IVaultV2MorphoMarketV1AdapterV2
 {
+  public declare readonly type: "VaultV2MorphoMarketV1AdapterV2";
+
   static adapterId(address: Address) {
     return keccak256(
       encodeAbiParameters(
@@ -62,6 +65,7 @@ export class VaultV2MorphoMarketV1AdapterV2
   }: IVaultV2MorphoMarketV1AdapterV2) {
     super({
       ...vaultV2Adapter,
+      type: "VaultV2MorphoMarketV1AdapterV2",
       adapterId: VaultV2MorphoMarketV1AdapterV2.adapterId(
         vaultV2Adapter.address,
       ),
