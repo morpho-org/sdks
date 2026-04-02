@@ -52,7 +52,7 @@ export namespace ChainUtils {
   export const hasReliableNativeBalance = (chainId: number): boolean => {
     return (
       (CHAIN_METADATA as Record<number, ChainMetadata | undefined>)[chainId]
-        ?.hasReliableNativeBalance !== false
+        ?.hasReliableNativeBalance ?? true
     );
   };
 
