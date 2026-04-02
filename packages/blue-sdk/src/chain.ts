@@ -44,9 +44,18 @@ export interface ChainMetadata {
     readonly decimals: number;
   };
   readonly identifier: string;
+  /** Whether eth_getBalance returns a reliable value. Defaults to true. */
+  readonly hasReliableNativeBalance?: boolean;
 }
 
 export namespace ChainUtils {
+  export const hasReliableNativeBalance = (chainId: number): boolean => {
+    return (
+      (CHAIN_METADATA as Record<number, ChainMetadata | undefined>)[chainId]
+        ?.hasReliableNativeBalance ?? true
+    );
+  };
+
   export const toHexChainId = (chainId: ChainId) => {
     return `0x${chainId.toString(16)}`;
   };
@@ -294,6 +303,7 @@ export namespace ChainUtils {
       nativeCurrency: { name: "USD", symbol: "USD", decimals: 18 },
       explorerUrl: "https://explore.tempo.xyz",
       identifier: "tempo",
+      hasReliableNativeBalance: false,
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
