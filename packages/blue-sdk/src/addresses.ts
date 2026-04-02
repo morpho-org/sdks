@@ -701,6 +701,21 @@ const _addressesRegistry = {
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369",
   },
+  [ChainId.TempoMainnet]: {
+    morpho: "0x10EE9AAC980A180dd4DcFc96C746d60B0EA88f97",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundler3: {
+      bundler3: "0x5A3B829dcDBE1979cdD9F648Afb6D39dCF805E33",
+      generalAdapter1: "0x3a2A86bD16629B054f7f3d87F0a7570F3881a43c",
+    },
+    adaptiveCurveIrm: "0x112fd4042E442C3C12C67AD23587b0afe36eB74E",
+    vaultV2Factory: "0x3DE400E3F79113194fa5AF6Ae5C474947E0C82Db",
+    morphoMarketV1AdapterV2Factory:
+      "0xF85aD5f14cC903533FC409B8098B58b4C2f36697",
+    registryList: "0xB118227C728b5ce52445a5aAee48C8a281C429E0",
+    chainlinkOracleFactory: "0xc2c167BC5cBD833ce58239e85073258F10aD4DF6",
+    preLiquidationFactory: "0xB83d2D5CAE5Fc64a408cA82447445442Fe249fe3",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -1199,6 +1214,19 @@ const _deployments = {
     metaMorphoFactory: 6440899n,
     chainlinkOracleFactory: 6440899n,
     preLiquidationFactory: 6443359n,
+  },
+  [ChainId.TempoMainnet]: {
+    morpho: 2375189n,
+    bundler3: {
+      bundler3: 2375313n,
+      generalAdapter1: 2375301n,
+    },
+    adaptiveCurveIrm: 2375313n,
+    vaultV2Factory: 2375650n,
+    morphoMarketV1AdapterV2Factory: 2375701n,
+    registryList: 2375601n,
+    chainlinkOracleFactory: 2375626n,
+    preLiquidationFactory: 2375010n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
