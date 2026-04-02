@@ -272,4 +272,8 @@ export const preLiquidationFactoryConfigs: Record<
     address: addressesRegistry[ChainId.SoneiumMainnet].preLiquidationFactory,
     startBlock: deployments[ChainId.SoneiumMainnet].preLiquidationFactory,
   },
+  [ChainId.TempoMainnet]: {
+    address: addressesRegistry[ChainId.TempoMainnet].preLiquidationFactory,
+    startBlock: deployments[ChainId.TempoMainnet].preLiquidationFactory,
+  },
 };
