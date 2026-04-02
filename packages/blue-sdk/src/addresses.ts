@@ -701,6 +701,19 @@ const _addressesRegistry = {
     // Must implement USDC permit version 2 (otherwise breaks permit signatures).
     usdc: "0xbA9986D2381edf1DA03B0B9c1f8b00dc4AacC369",
   },
+  // TODO(tempo): fill with actual deployed addresses from Jean
+  [ChainId.TempoMainnet]: {
+    morpho: "0x0000000000000000000000000000000000000000",
+    bundler3: {
+      bundler3: "0x0000000000000000000000000000000000000000",
+      generalAdapter1: "0x0000000000000000000000000000000000000000",
+    },
+    adaptiveCurveIrm: "0x0000000000000000000000000000000000000000",
+    publicAllocator: "0x0000000000000000000000000000000000000000",
+    metaMorphoFactory: "0x0000000000000000000000000000000000000000",
+    chainlinkOracleFactory: "0x0000000000000000000000000000000000000000",
+    preLiquidationFactory: "0x0000000000000000000000000000000000000000",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -1199,6 +1212,19 @@ const _deployments = {
     metaMorphoFactory: 6440899n,
     chainlinkOracleFactory: 6440899n,
     preLiquidationFactory: 6443359n,
+  },
+  // TODO(tempo): fill with actual deployment block numbers from Milan
+  [ChainId.TempoMainnet]: {
+    morpho: 0n,
+    bundler3: {
+      bundler3: 0n,
+      generalAdapter1: 0n,
+    },
+    adaptiveCurveIrm: 0n,
+    publicAllocator: 0n,
+    metaMorphoFactory: 0n,
+    chainlinkOracleFactory: 0n,
+    preLiquidationFactory: 0n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 

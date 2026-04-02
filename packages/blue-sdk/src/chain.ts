@@ -31,6 +31,7 @@ export enum ChainId {
   BitlayerMainnet = 200901,
   BscMainnet = 56,
   SoneiumMainnet = 1868,
+  TempoMainnet = 4217,
 }
 
 export interface ChainMetadata {
@@ -286,6 +287,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://soneium.blockscout.com/",
       identifier: "soneium",
+    },
+    [ChainId.TempoMainnet]: {
+      name: "Tempo",
+      id: ChainId.TempoMainnet,
+      nativeCurrency: { name: "USD", symbol: "USD", decimals: 18 },
+      explorerUrl: "https://explore.tempo.xyz",
+      identifier: "tempo",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
