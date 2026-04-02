@@ -703,6 +703,7 @@ const _addressesRegistry = {
   },
   [ChainId.TempoMainnet]: {
     morpho: "0x10EE9AAC980A180dd4DcFc96C746d60B0EA88f97",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
     bundler3: {
       bundler3: "0x5A3B829dcDBE1979cdD9F648Afb6D39dCF805E33",
       generalAdapter1: "0x3a2A86bD16629B054f7f3d87F0a7570F3881a43c",
