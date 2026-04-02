@@ -51,8 +51,10 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: '@morpho-org'
 
-      # Required to use OIDC trusted publishing.
-      - run: npm install -g npm@latest
+      # Trusted publishing requires npm >= 11.5.1, but Node 22.22.2's bundled npm 10.9.7
+      # currently fails to self-upgrade directly to npm@latest with MODULE_NOT_FOUND
+      # (missing promise-retry). Pin a known-good npm 11 release instead.
+      - run: npm install -g npm@11.11.0
 
       - run: pnpm install --frozen-lockfile
 
