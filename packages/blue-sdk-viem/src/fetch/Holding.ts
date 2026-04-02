@@ -1,4 +1,5 @@
 import {
+  ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
   Holding,
   NATIVE_ADDRESS,
@@ -48,11 +49,13 @@ export async function fetchHolding(
         expiration: 0n,
         nonce: 0n,
       },
-      balance: await getBalance(client, {
-        // biome-ignore lint/suspicious/noExplicitAny: flattened union type
-        ...(parameters as any),
-        address: user,
-      }),
+      balance: ChainUtils.hasReliableNativeBalance(parameters.chainId!)
+        ? await getBalance(client, {
+            // biome-ignore lint/suspicious/noExplicitAny: flattened union type
+            ...(parameters as any),
+            address: user,
+          })
+        : 0n,
     });
 
   if (deployless) {
