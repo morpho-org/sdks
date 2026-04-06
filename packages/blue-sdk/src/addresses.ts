@@ -1264,7 +1264,7 @@ const _deployments = {
   },
   [ChainId.GensynMainnet]: {
     morpho: 7520470n,
-    permit2: 0n,
+    permit2: 1n,
     bundler3: {
       bundler3: 7520470n,
       generalAdapter1: 7520470n,
