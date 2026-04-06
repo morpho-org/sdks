@@ -32,6 +32,8 @@ export enum ChainId {
   BscMainnet = 56,
   SoneiumMainnet = 1868,
   TempoMainnet = 4217,
+  GensynMainnet = 685689,
+  PharosMainnet = 1672,
 }
 
 export interface ChainMetadata {
@@ -304,6 +306,20 @@ export namespace ChainUtils {
       explorerUrl: "https://explore.tempo.xyz",
       identifier: "tempo",
       hasReliableNativeBalance: false,
+    },
+    [ChainId.GensynMainnet]: {
+      name: "Gensyn",
+      id: ChainId.GensynMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://gensyn-mainnet.explorer.alchemy.com",
+      identifier: "gensyn",
+    },
+    [ChainId.PharosMainnet]: {
+      name: "Pharos",
+      id: ChainId.PharosMainnet,
+      nativeCurrency: { name: "Pharos", symbol: "PROS", decimals: 18 },
+      explorerUrl: "https://pharos.socialscan.io",
+      identifier: "pharos",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
