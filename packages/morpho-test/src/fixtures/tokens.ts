@@ -1,4 +1,4 @@
-import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@gfxlabs/blue-sdk";
 import type { Address } from "viem";
 
 export const withSimplePermit: Record<number, Set<Address>> = {

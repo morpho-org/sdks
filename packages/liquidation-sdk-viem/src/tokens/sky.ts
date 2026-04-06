@@ -1,4 +1,4 @@
-import { mainnetAddresses } from "@morpho-org/liquidation-sdk-viem";
+import { mainnetAddresses } from "@gfxlabs/liquidation-sdk-viem";
 import type { Address } from "viem";
 
 export namespace Sky {

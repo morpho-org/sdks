@@ -3,8 +3,8 @@ import {
   NATIVE_ADDRESS,
   getChainAddresses,
   getUnwrappedToken,
-} from "@morpho-org/blue-sdk";
-import { isDefined, keys, values } from "@morpho-org/morpho-ts";
+} from "@gfxlabs/blue-sdk";
+import { isDefined, keys, values } from "@gfxlabs/morpho-ts";
 
 import {
   type BundlingOptions,
@@ -12,10 +12,10 @@ import {
   setupBundle,
 } from "../src/index.js";
 
-import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { withSimplePermit } from "@morpho-org/morpho-test";
-import type { SimulationState } from "@morpho-org/simulation-sdk";
-import { type AnvilTestClient, testAccount } from "@morpho-org/test";
+import { blueAbi, permit2Abi } from "@gfxlabs/blue-sdk-viem";
+import { withSimplePermit } from "@gfxlabs/morpho-test";
+import type { SimulationState } from "@gfxlabs/simulation-sdk";
+import { type AnvilTestClient, testAccount } from "@gfxlabs/test";
 import { type Account, type Chain, zeroAddress } from "viem";
 import { parseAccount } from "viem/accounts";
 import { expect } from "vitest";

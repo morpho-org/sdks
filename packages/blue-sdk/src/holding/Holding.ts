@@ -1,4 +1,4 @@
-import { entries, fromEntries } from "@morpho-org/morpho-ts";
+import { entries, fromEntries } from "@gfxlabs/morpho-ts";
 
 import type { AddressLabel } from "../addresses.js";
 import type { Address, BigIntish } from "../types.js";

@@ -5,10 +5,10 @@ import {
   addressesRegistry,
   deployments,
   registerCustomAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 import type { MidasConfig } from "./tokens/midas.js";
 
-declare module "@morpho-org/blue-sdk" {
+declare module "@gfxlabs/blue-sdk" {
   interface ChainAddresses {
     timeBoundedUrd?: Address;
     marketRewardsProgramRegistry?: Address;

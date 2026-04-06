@@ -3,7 +3,7 @@ import {
   type DottedKeys,
   deepFreeze,
   entries,
-} from "@morpho-org/morpho-ts";
+} from "@gfxlabs/morpho-ts";
 import isPlainObject from "lodash.isplainobject";
 import mergeWith from "lodash.mergewith";
 import { ChainId } from "./chain.js";

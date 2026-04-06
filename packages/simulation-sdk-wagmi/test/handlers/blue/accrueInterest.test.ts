@@ -2,18 +2,15 @@ import {
   ChainId,
   type InputMarketParams,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
-import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
+} from "@gfxlabs/blue-sdk";
+import { invalidateAllBlueSdkQueries } from "@gfxlabs/blue-sdk-wagmi";
 import { QueryClient } from "@tanstack/react-query";
 
-import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import { markets } from "@morpho-org/morpho-test";
-import { getLast } from "@morpho-org/morpho-ts";
-import {
-  type MinimalBlock,
-  simulateOperations,
-} from "@morpho-org/simulation-sdk";
-import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { blueAbi } from "@gfxlabs/blue-sdk-viem";
+import { markets } from "@gfxlabs/morpho-test";
+import { getLast } from "@gfxlabs/morpho-ts";
+import { type MinimalBlock, simulateOperations } from "@gfxlabs/simulation-sdk";
+import { renderHook, waitFor } from "@gfxlabs/test-wagmi";
 import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";

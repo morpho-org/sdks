@@ -1,5 +1,5 @@
-import { Time } from "@morpho-org/morpho-ts";
-import { randomAddress } from "@morpho-org/test/fixtures";
+import { Time } from "@gfxlabs/morpho-ts";
+import { randomAddress } from "@gfxlabs/test/fixtures";
 import { describe, expect, test } from "vitest";
 import { Market, MarketParams } from "../../src/index.js";
 

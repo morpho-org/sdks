@@ -1,7 +1,7 @@
 {
-  "name": "@morpho-org/blue-sdk",
+  "name": "@gfxlabs/blue-sdk",
   "description": "Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`).",
-  "version": "2.0.0",
+  "version": "2.0.0-1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",
@@ -29,11 +29,11 @@
     "lodash.mergewith": "^4.6.2"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@gfxlabs/morpho-ts": "workspace:^"
   },
   "devDependencies": {
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/test": "workspace:^",
+    "@gfxlabs/morpho-ts": "workspace:^",
+    "@gfxlabs/test": "workspace:^",
     "typescript": "^5.9.3",
     "viem": "^2.41.2",
     "vitest": "^4.0.15"

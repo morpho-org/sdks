@@ -1,6 +1,6 @@
-import { type MarketId, PreLiquidationPosition } from "@morpho-org/blue-sdk";
-import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
+import { type MarketId, PreLiquidationPosition } from "@gfxlabs/blue-sdk";
+import { fetchAccrualPosition } from "@gfxlabs/blue-sdk-viem";
+import { Time } from "@gfxlabs/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
 import { apiSdk } from "../api/index.js";
 import type { PartialApiToken } from "../positions/getters.js";

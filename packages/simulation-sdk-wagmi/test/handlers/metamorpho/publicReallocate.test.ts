@@ -3,21 +3,18 @@ import {
   type InputMarketParams,
   NATIVE_ADDRESS,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
-import { metaMorphoAbi, publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
-import { markets, vaults } from "@morpho-org/morpho-test";
-import { getLast } from "@morpho-org/morpho-ts";
-import {
-  type MinimalBlock,
-  simulateOperations,
-} from "@morpho-org/simulation-sdk";
-import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+} from "@gfxlabs/blue-sdk";
+import { metaMorphoAbi, publicAllocatorAbi } from "@gfxlabs/blue-sdk-viem";
+import { markets, vaults } from "@gfxlabs/morpho-test";
+import { getLast } from "@gfxlabs/morpho-ts";
+import { type MinimalBlock, simulateOperations } from "@gfxlabs/simulation-sdk";
+import { renderHook, waitFor } from "@gfxlabs/test-wagmi";
 import { parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
 
-import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
+import { invalidateAllBlueSdkQueries } from "@gfxlabs/blue-sdk-wagmi";
 import { QueryClient } from "@tanstack/react-query";
 
 const { publicAllocator } = addressesRegistry[ChainId.EthMainnet];

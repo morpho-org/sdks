@@ -1,4 +1,4 @@
-import type { BigIntish } from "@morpho-org/blue-sdk";
+import type { BigIntish } from "@gfxlabs/blue-sdk";
 import type { Address, Hex } from "viem";
 
 export interface SwapParams {

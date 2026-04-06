@@ -92,10 +92,10 @@ importers:
         specifier: ^4.6.2
         version: 4.6.2
     devDependencies:
-      '@morpho-org/morpho-ts':
+      '@gfxlabs/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
       typescript:
@@ -110,16 +110,16 @@ importers:
 
   packages/blue-sdk-viem:
     devDependencies:
-      '@morpho-org/blue-sdk':
+      '@gfxlabs/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
-      '@morpho-org/morpho-test':
+      '@gfxlabs/morpho-test':
         specifier: workspace:^
         version: link:../morpho-test
-      '@morpho-org/morpho-ts':
+      '@gfxlabs/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
       hardhat:
@@ -137,22 +137,22 @@ importers:
 
   packages/blue-sdk-wagmi:
     devDependencies:
-      '@morpho-org/blue-sdk':
+      '@gfxlabs/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
-      '@morpho-org/blue-sdk-viem':
+      '@gfxlabs/blue-sdk-viem':
         specifier: workspace:^
         version: link:../blue-sdk-viem
-      '@morpho-org/morpho-test':
+      '@gfxlabs/morpho-test':
         specifier: workspace:^
         version: link:../morpho-test
-      '@morpho-org/morpho-ts':
+      '@gfxlabs/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
-      '@morpho-org/test-wagmi':
+      '@gfxlabs/test-wagmi':
         specifier: workspace:^
         version: link:../test-wagmi
       '@tanstack/query-core':
@@ -194,28 +194,28 @@ importers:
 
   packages/bundler-sdk-viem:
     devDependencies:
-      '@morpho-org/blue-sdk':
+      '@gfxlabs/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
-      '@morpho-org/blue-sdk-viem':
+      '@gfxlabs/blue-sdk-viem':
         specifier: workspace:^
         version: link:../blue-sdk-viem
-      '@morpho-org/morpho-test':
+      '@gfxlabs/morpho-test':
         specifier: workspace:^
         version: link:../morpho-test
-      '@morpho-org/morpho-ts':
+      '@gfxlabs/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/simulation-sdk':
+      '@gfxlabs/simulation-sdk':
         specifier: workspace:^
         version: link:../simulation-sdk
-      '@morpho-org/simulation-sdk-wagmi':
+      '@gfxlabs/simulation-sdk-wagmi':
         specifier: workspace:^
         version: link:../simulation-sdk-wagmi
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
-      '@morpho-org/test-wagmi':
+      '@gfxlabs/test-wagmi':
         specifier: workspace:^
         version: link:../test-wagmi
       '@tanstack/query-core':
@@ -261,6 +261,24 @@ importers:
         specifier: ^2.12.6
         version: 2.12.6(graphql@16.10.0)
     devDependencies:
+      '@gfxlabs/blue-sdk':
+        specifier: workspace:^
+        version: link:../blue-sdk
+      '@gfxlabs/blue-sdk-viem':
+        specifier: workspace:^
+        version: link:../blue-sdk-viem
+      '@gfxlabs/liquidation-sdk-viem':
+        specifier: workspace:^
+        version: 'link:'
+      '@gfxlabs/morpho-test':
+        specifier: workspace:^
+        version: link:../morpho-test
+      '@gfxlabs/morpho-ts':
+        specifier: workspace:^
+        version: link:../morpho-ts
+      '@gfxlabs/test':
+        specifier: workspace:^
+        version: link:../test
       '@graphql-codegen/cli':
         specifier: ^6.1.0
         version: 6.1.0(@parcel/watcher@2.4.1)(@types/node@24.10.2)(bufferutil@4.0.8)(encoding@0.1.13)(graphql@16.10.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
@@ -276,24 +294,6 @@ importers:
       '@graphql-codegen/typescript-operations':
         specifier: ^4.4.0
         version: 4.4.0(encoding@0.1.13)(graphql@16.10.0)
-      '@morpho-org/blue-sdk':
-        specifier: workspace:^
-        version: link:../blue-sdk
-      '@morpho-org/blue-sdk-viem':
-        specifier: workspace:^
-        version: link:../blue-sdk-viem
-      '@morpho-org/liquidation-sdk-viem':
-        specifier: workspace:^
-        version: 'link:'
-      '@morpho-org/morpho-test':
-        specifier: workspace:^
-        version: link:../morpho-test
-      '@morpho-org/morpho-ts':
-        specifier: workspace:^
-        version: link:../morpho-ts
-      '@morpho-org/test':
-        specifier: workspace:^
-        version: link:../test
       evm-maths:
         specifier: ^7.0.1
         version: 7.0.1
@@ -331,6 +331,24 @@ importers:
         specifier: ^2.12.6
         version: 2.12.6(graphql@16.10.0)
     devDependencies:
+      '@gfxlabs/blue-sdk':
+        specifier: workspace:^
+        version: link:../blue-sdk
+      '@gfxlabs/blue-sdk-viem':
+        specifier: workspace:^
+        version: link:../blue-sdk-viem
+      '@gfxlabs/morpho-test':
+        specifier: workspace:^
+        version: link:../morpho-test
+      '@gfxlabs/morpho-ts':
+        specifier: workspace:^
+        version: link:../morpho-ts
+      '@gfxlabs/simulation-sdk':
+        specifier: workspace:^
+        version: link:../simulation-sdk
+      '@gfxlabs/test':
+        specifier: workspace:^
+        version: link:../test
       '@graphql-codegen/cli':
         specifier: ^6.1.0
         version: 6.1.0(@parcel/watcher@2.4.1)(@types/node@24.10.2)(bufferutil@4.0.8)(encoding@0.1.13)(graphql@16.10.0)(typescript@5.9.3)(utf-8-validate@5.0.10)
@@ -346,24 +364,6 @@ importers:
       '@graphql-codegen/typescript-operations':
         specifier: ^4.4.0
         version: 4.4.0(encoding@0.1.13)(graphql@16.10.0)
-      '@morpho-org/blue-sdk':
-        specifier: workspace:^
-        version: link:../blue-sdk
-      '@morpho-org/blue-sdk-viem':
-        specifier: workspace:^
-        version: link:../blue-sdk-viem
-      '@morpho-org/morpho-test':
-        specifier: workspace:^
-        version: link:../morpho-test
-      '@morpho-org/morpho-ts':
-        specifier: workspace:^
-        version: link:../morpho-ts
-      '@morpho-org/simulation-sdk':
-        specifier: workspace:^
-        version: link:../simulation-sdk
-      '@morpho-org/test':
-        specifier: workspace:^
-        version: link:../test
       graphql:
         specifier: ^16.10.0
         version: 16.10.0
@@ -382,32 +382,32 @@ importers:
 
   packages/migration-sdk-viem:
     dependencies:
-      '@morpho-org/bundler-sdk-viem':
+      '@gfxlabs/bundler-sdk-viem':
         specifier: workspace:^
         version: link:../bundler-sdk-viem
     devDependencies:
-      '@morpho-org/blue-sdk':
+      '@gfxlabs/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
-      '@morpho-org/blue-sdk-viem':
+      '@gfxlabs/blue-sdk-viem':
         specifier: workspace:^
         version: link:../blue-sdk-viem
-      '@morpho-org/morpho-test':
+      '@gfxlabs/morpho-test':
         specifier: workspace:^
         version: link:../morpho-test
-      '@morpho-org/morpho-ts':
+      '@gfxlabs/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/simulation-sdk':
+      '@gfxlabs/simulation-sdk':
         specifier: workspace:^
         version: link:../simulation-sdk
-      '@morpho-org/simulation-sdk-wagmi':
+      '@gfxlabs/simulation-sdk-wagmi':
         specifier: workspace:^
         version: link:../simulation-sdk-wagmi
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
-      '@morpho-org/test-wagmi':
+      '@gfxlabs/test-wagmi':
         specifier: workspace:^
         version: link:../test-wagmi
       '@types/lodash':
@@ -428,13 +428,13 @@ importers:
 
   packages/morpho-test:
     devDependencies:
-      '@morpho-org/blue-sdk':
+      '@gfxlabs/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
-      '@morpho-org/morpho-ts':
+      '@gfxlabs/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
       typescript:
@@ -459,16 +459,16 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
     devDependencies:
-      '@morpho-org/blue-sdk':
+      '@gfxlabs/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
-      '@morpho-org/morpho-test':
+      '@gfxlabs/morpho-test':
         specifier: workspace:^
         version: link:../morpho-test
-      '@morpho-org/morpho-ts':
+      '@gfxlabs/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
       '@types/lodash':
@@ -489,28 +489,28 @@ importers:
 
   packages/simulation-sdk-wagmi:
     devDependencies:
-      '@morpho-org/blue-sdk':
+      '@gfxlabs/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
-      '@morpho-org/blue-sdk-viem':
+      '@gfxlabs/blue-sdk-viem':
         specifier: workspace:^
         version: link:../blue-sdk-viem
-      '@morpho-org/blue-sdk-wagmi':
+      '@gfxlabs/blue-sdk-wagmi':
         specifier: workspace:^
         version: link:../blue-sdk-wagmi
-      '@morpho-org/morpho-test':
+      '@gfxlabs/morpho-test':
         specifier: workspace:^
         version: link:../morpho-test
-      '@morpho-org/morpho-ts':
+      '@gfxlabs/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
-      '@morpho-org/simulation-sdk':
+      '@gfxlabs/simulation-sdk':
         specifier: workspace:^
         version: link:../simulation-sdk
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
-      '@morpho-org/test-wagmi':
+      '@gfxlabs/test-wagmi':
         specifier: workspace:^
         version: link:../test-wagmi
       '@tanstack/query-core':
@@ -589,7 +589,7 @@ importers:
 
   packages/test-wagmi:
     devDependencies:
-      '@morpho-org/test':
+      '@gfxlabs/test':
         specifier: workspace:^
         version: link:../test
       '@tanstack/react-query':

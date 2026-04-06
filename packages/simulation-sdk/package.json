@@ -1,7 +1,7 @@
 {
-  "name": "@morpho-org/simulation-sdk",
+  "name": "@gfxlabs/simulation-sdk",
   "description": "Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`).",
-  "version": "2.0.0",
+  "version": "2.0.0-1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",
@@ -24,14 +24,14 @@
     "mutative": "^1.1.0"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@gfxlabs/blue-sdk": "workspace:^",
+    "@gfxlabs/morpho-ts": "workspace:^"
   },
   "devDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-test": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/test": "workspace:^",
+    "@gfxlabs/blue-sdk": "workspace:^",
+    "@gfxlabs/morpho-test": "workspace:^",
+    "@gfxlabs/morpho-ts": "workspace:^",
+    "@gfxlabs/test": "workspace:^",
     "@types/lodash": "^4.17.12",
     "lodash": "^4.17.21",
     "typescript": "^5.9.3",

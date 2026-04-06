@@ -3,7 +3,7 @@ import {
   MathLib,
   NATIVE_ADDRESS,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 import { maxUint256 } from "viem";
 import { describe, expect } from "vitest";

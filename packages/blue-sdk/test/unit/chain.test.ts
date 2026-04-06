@@ -1,4 +1,4 @@
-import { entries } from "@morpho-org/morpho-ts";
+import { entries } from "@gfxlabs/morpho-ts";
 
 import { describe, expect, test } from "vitest";
 import { ChainId, ChainUtils } from "../../src/index.js";

@@ -1,4 +1,4 @@
-import type { InputMarketParams, MarketId } from "@morpho-org/blue-sdk";
+import type { InputMarketParams, MarketId } from "@gfxlabs/blue-sdk";
 import { type Address, type Hex, encodeFunctionData } from "viem";
 import { metaMorphoAbi } from "./abis.js";
 

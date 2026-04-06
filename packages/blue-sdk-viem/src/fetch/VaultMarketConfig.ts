@@ -1,6 +1,6 @@
 import type { Address, Client } from "viem";
 
-import { type MarketId, VaultMarketConfig } from "@morpho-org/blue-sdk";
+import { type MarketId, VaultMarketConfig } from "@gfxlabs/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis.js";

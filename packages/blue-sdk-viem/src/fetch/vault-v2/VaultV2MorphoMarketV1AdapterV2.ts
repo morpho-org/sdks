@@ -5,8 +5,8 @@ import {
   UnknownOfFactory,
   VaultV2MorphoMarketV1AdapterV2,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
-import { fromEntries } from "@morpho-org/morpho-ts";
+} from "@gfxlabs/blue-sdk";
+import { fromEntries } from "@gfxlabs/morpho-ts";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {

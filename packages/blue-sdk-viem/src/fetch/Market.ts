@@ -5,7 +5,7 @@ import {
   type MarketId,
   MarketParams,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
 import type { DeploylessFetchParameters } from "../types.js";

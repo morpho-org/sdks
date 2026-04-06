@@ -1,6 +1,6 @@
 import { GraphQLClient } from "graphql-request";
 
-import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
+import { BLUE_API_GRAPHQL_URL } from "@gfxlabs/morpho-ts";
 
 import { getSdk } from "./sdk.js";
 

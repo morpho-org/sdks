@@ -1,5 +1,5 @@
-import { ChainId, MathLib } from "@morpho-org/blue-sdk";
-import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
+import { ChainId, MathLib } from "@gfxlabs/blue-sdk";
+import type { FetchParameters } from "@gfxlabs/blue-sdk-viem";
 import type { Address, Client } from "viem";
 import { getBlock, getChainId, readContract } from "viem/actions";
 import { cErc20Abi, mErc20Abi } from "../../abis/compoundV2.js";

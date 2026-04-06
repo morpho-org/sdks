@@ -1,5 +1,5 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
-import { isDefined } from "@morpho-org/morpho-ts";
+import type { MarketId } from "@gfxlabs/blue-sdk";
+import { isDefined } from "@gfxlabs/morpho-ts";
 import { useQueries } from "@tanstack/react-query";
 import { useRef } from "react";
 import type { UnionOmit } from "viem";

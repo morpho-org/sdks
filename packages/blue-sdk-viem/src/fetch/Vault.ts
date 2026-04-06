@@ -10,7 +10,7 @@ import {
   VaultConfig,
   type VaultPublicAllocatorConfig,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
 import {

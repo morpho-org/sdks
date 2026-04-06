@@ -33,7 +33,7 @@ jobs:
 
           - migration-sdk-viem
 
-    name: "@morpho-org/${{ matrix.package }}"
+    name: "@gfxlabs/${{ matrix.package }}"
     runs-on: ubuntu-latest
 
     steps:
@@ -49,7 +49,7 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
           registry-url: https://registry.npmjs.org
-          scope: '@morpho-org'
+          scope: '@gfxlabs'
 
       # Trusted publishing requires npm >= 11.5.1, but Node 22.22.2's bundled npm 10.9.7
       # currently fails to self-upgrade directly to npm@latest with MODULE_NOT_FOUND

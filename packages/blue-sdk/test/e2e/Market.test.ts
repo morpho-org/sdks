@@ -1,4 +1,4 @@
-import { Time } from "@morpho-org/morpho-ts";
+import { Time } from "@gfxlabs/morpho-ts";
 import { parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import {

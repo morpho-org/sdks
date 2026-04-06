@@ -1,5 +1,5 @@
-import { ChainId } from "@morpho-org/blue-sdk";
-import { createWagmiTest } from "@morpho-org/test-wagmi";
+import { ChainId } from "@gfxlabs/blue-sdk";
+import { createWagmiTest } from "@gfxlabs/test-wagmi";
 import { base, mainnet } from "viem/chains";
 
 export const test = {

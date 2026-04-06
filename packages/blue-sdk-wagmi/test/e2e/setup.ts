@@ -1,4 +1,4 @@
-import { createWagmiTest } from "@morpho-org/test-wagmi";
+import { createWagmiTest } from "@gfxlabs/test-wagmi";
 import { mainnet } from "viem/chains";
 
 export const test = createWagmiTest(mainnet, {

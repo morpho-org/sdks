@@ -1,7 +1,7 @@
-import { User } from "@morpho-org/blue-sdk";
+import { User } from "@gfxlabs/blue-sdk";
 import { fetchUser } from "../fetch/index.js";
 
-declare module "@morpho-org/blue-sdk" {
+declare module "@gfxlabs/blue-sdk" {
   namespace User {
     let fetch: typeof fetchUser;
   }

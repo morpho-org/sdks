@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { parseEther, parseUnits } from "viem";
 
-import { NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
+import { NATIVE_ADDRESS } from "@gfxlabs/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";

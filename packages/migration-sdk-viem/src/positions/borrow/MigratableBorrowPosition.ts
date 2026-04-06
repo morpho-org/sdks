@@ -1,11 +1,6 @@
-import type {
-  Address,
-  ChainId,
-  MarketParams,
-  Token,
-} from "@morpho-org/blue-sdk";
+import type { Address, ChainId, MarketParams, Token } from "@gfxlabs/blue-sdk";
 
-import type { ActionBundle } from "@morpho-org/bundler-sdk-viem";
+import type { ActionBundle } from "@gfxlabs/bundler-sdk-viem";
 import type {
   BorrowMigrationLimiter,
   MigratableProtocol,

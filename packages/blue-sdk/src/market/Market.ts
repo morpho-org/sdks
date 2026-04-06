@@ -1,4 +1,4 @@
-import { Time, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { Time, ZERO_ADDRESS } from "@gfxlabs/morpho-ts";
 import { BlueErrors } from "../errors.js";
 import {
   AdaptiveCurveIrmLib,

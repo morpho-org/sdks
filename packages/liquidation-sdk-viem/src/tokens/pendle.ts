@@ -1,4 +1,4 @@
-import type { Address, BigIntish, ChainId } from "@morpho-org/blue-sdk";
+import type { Address, BigIntish, ChainId } from "@gfxlabs/blue-sdk";
 import type { Hex } from "viem";
 
 export namespace Pendle {

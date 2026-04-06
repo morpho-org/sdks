@@ -1,17 +1,17 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
+import type { MarketId } from "@gfxlabs/blue-sdk";
 import {
   fetchHolding,
   fetchMarket,
   fetchPosition,
   fetchVault,
   fetchVaultMarketConfig,
-} from "@morpho-org/blue-sdk-viem";
-import { entries, fromEntries, isDefined } from "@morpho-org/morpho-ts";
+} from "@gfxlabs/blue-sdk-viem";
+import { entries, fromEntries, isDefined } from "@gfxlabs/morpho-ts";
 import {
   type MaybeDraft,
   type PublicReallocation,
   SimulationState,
-} from "@morpho-org/simulation-sdk";
+} from "@gfxlabs/simulation-sdk";
 import DataLoader from "dataloader";
 import type { Chain, Client, Transport } from "viem";
 import { getBlock } from "viem/actions";

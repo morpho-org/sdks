@@ -1,8 +1,5 @@
-import type { VaultConfig } from "@morpho-org/blue-sdk";
-import {
-  type FetchParameters,
-  fetchVaultConfig,
-} from "@morpho-org/blue-sdk-viem";
+import type { VaultConfig } from "@gfxlabs/blue-sdk";
+import { type FetchParameters, fetchVaultConfig } from "@gfxlabs/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";

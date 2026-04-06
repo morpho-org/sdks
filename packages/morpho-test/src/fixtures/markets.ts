@@ -3,8 +3,8 @@ import {
   type IMarketParams,
   MarketParams,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
-import { randomAddress } from "@morpho-org/test";
+} from "@gfxlabs/blue-sdk";
+import { randomAddress } from "@gfxlabs/test";
 import { parseEther, parseUnits } from "viem";
 
 const { adaptiveCurveIrm, wNative, sDai, usdc, wstEth, wbIB01, usdt, dai } =

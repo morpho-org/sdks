@@ -4,7 +4,7 @@ import {
   UnknownOfFactory,
   VaultV2MorphoVaultV1Adapter,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {

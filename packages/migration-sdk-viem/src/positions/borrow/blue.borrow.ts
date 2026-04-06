@@ -6,9 +6,9 @@ import {
   MathLib,
   type Position,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
-import type { BlueInputBundlerOperations } from "@morpho-org/bundler-sdk-viem";
-import { BlueSimulationErrors } from "@morpho-org/simulation-sdk";
+} from "@gfxlabs/blue-sdk";
+import type { BlueInputBundlerOperations } from "@gfxlabs/bundler-sdk-viem";
+import { BlueSimulationErrors } from "@gfxlabs/simulation-sdk";
 
 export namespace MigratableBorrowPosition_Blue {
   /**

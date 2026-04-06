@@ -1,7 +1,7 @@
-import { Token } from "@morpho-org/blue-sdk";
+import { Token } from "@gfxlabs/blue-sdk";
 import { fetchToken } from "../fetch/index.js";
 
-declare module "@morpho-org/blue-sdk" {
+declare module "@gfxlabs/blue-sdk" {
   namespace Token {
     let fetch: typeof fetchToken;
   }

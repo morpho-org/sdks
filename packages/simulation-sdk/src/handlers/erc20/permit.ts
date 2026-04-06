@@ -7,7 +7,7 @@ import {
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
-import { getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses } from "@gfxlabs/blue-sdk";
 import { handleErc20ApproveOperation } from "./approve.js";
 
 export const handleErc20PermitOperation: OperationHandler<

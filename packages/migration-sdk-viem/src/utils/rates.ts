@@ -1,5 +1,5 @@
-import type { BigIntish } from "@morpho-org/blue-sdk";
-import { Time } from "@morpho-org/morpho-ts";
+import type { BigIntish } from "@gfxlabs/blue-sdk";
+import { Time } from "@gfxlabs/morpho-ts";
 import { formatUnits } from "viem";
 
 export function rateToApy(

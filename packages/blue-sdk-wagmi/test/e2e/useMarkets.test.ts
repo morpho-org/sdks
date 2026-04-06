@@ -1,8 +1,8 @@
 import { describe, expect } from "vitest";
 
-import { ChainId, Market } from "@morpho-org/blue-sdk";
-import { markets } from "@morpho-org/morpho-test";
-import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { ChainId, Market } from "@gfxlabs/blue-sdk";
+import { markets } from "@gfxlabs/morpho-test";
+import { renderHook, waitFor } from "@gfxlabs/test-wagmi";
 import { useMarkets } from "../../src/index.js";
 import { test } from "./setup.js";
 

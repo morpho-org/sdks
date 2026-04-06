@@ -1,7 +1,4 @@
-import type {
-  OperationType,
-  SimulationResult,
-} from "@morpho-org/simulation-sdk";
+import type { OperationType, SimulationResult } from "@gfxlabs/simulation-sdk";
 
 import type { Address } from "viem";
 import type { ActionType, InputBundlerOperation } from "./types/index.js";

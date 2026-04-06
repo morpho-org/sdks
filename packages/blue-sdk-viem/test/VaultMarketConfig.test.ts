@@ -5,9 +5,9 @@ import {
   ChainId,
   VaultMarketPublicAllocatorConfig,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
-import { markets, vaults } from "@morpho-org/morpho-test";
+import { markets, vaults } from "@gfxlabs/morpho-test";
 import { VaultMarketConfig } from "../src/augment/VaultMarketConfig.js";
 import { metaMorphoAbi, publicAllocatorAbi } from "../src/index.js";
 

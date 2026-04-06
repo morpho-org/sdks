@@ -1,5 +1,5 @@
 /**
- * Shared prefix for all `@morpho-org/blue-sdk-wagmi` query keys.
+ * Shared prefix for all `@gfxlabs/blue-sdk-wagmi` query keys.
  *
  * Every SDK query key starts with this prefix, so you can use it to
  * invalidate or filter all SDK queries at once:
@@ -8,7 +8,7 @@
  * queryClient.invalidateQueries({ queryKey: [BLUE_SDK_QUERY_KEY_PREFIX] })
  * ```
  */
-export const BLUE_SDK_QUERY_KEY_PREFIX = "@morpho-org/blue-sdk" as const;
+export const BLUE_SDK_QUERY_KEY_PREFIX = "@gfxlabs/blue-sdk" as const;
 
 /** Minimal interface for a TanStack QueryClient (avoids version coupling). */
 interface InvalidatableQueryClient {

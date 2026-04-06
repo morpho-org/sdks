@@ -11,11 +11,11 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
-import { markets } from "@morpho-org/morpho-test";
-import { entries } from "@morpho-org/morpho-ts";
-import type { ViemTestContext } from "@morpho-org/test/vitest";
+import { markets } from "@gfxlabs/morpho-test";
+import { entries } from "@gfxlabs/morpho-ts";
+import type { ViemTestContext } from "@gfxlabs/test/vitest";
 import {
   type Address,
   erc20Abi,
@@ -25,7 +25,7 @@ import {
 } from "viem";
 import { type TestAPI, describe, expect } from "vitest";
 
-import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
+import { fetchAccrualPosition } from "@gfxlabs/blue-sdk-viem";
 import { sendTransaction } from "viem/actions";
 import { cometAbi, cometExtAbi } from "../../../src/abis/compoundV3.js";
 import { MigratableBorrowPosition_CompoundV3 } from "../../../src/positions/borrow/compoundV3.borrow.js";

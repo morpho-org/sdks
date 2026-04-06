@@ -3,10 +3,10 @@ import {
   type ChainId,
   type MarketId,
   type PreLiquidationPosition,
-} from "@morpho-org/blue-sdk";
-import { fetchMarket } from "@morpho-org/blue-sdk-viem";
-import { getPreLiquidablePositions } from "@morpho-org/liquidation-sdk-viem";
-import { Time } from "@morpho-org/morpho-ts";
+} from "@gfxlabs/blue-sdk";
+import { fetchMarket } from "@gfxlabs/blue-sdk-viem";
+import { getPreLiquidablePositions } from "@gfxlabs/liquidation-sdk-viem";
+import { Time } from "@gfxlabs/morpho-ts";
 import type { Account, Chain, Client, Transport } from "viem";
 import {
   ApiTypes,

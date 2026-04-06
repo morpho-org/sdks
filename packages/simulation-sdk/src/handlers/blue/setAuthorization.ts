@@ -1,4 +1,4 @@
-import { BlueErrors, getChainAddresses } from "@morpho-org/blue-sdk";
+import { BlueErrors, getChainAddresses } from "@gfxlabs/blue-sdk";
 import { SimulationErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";

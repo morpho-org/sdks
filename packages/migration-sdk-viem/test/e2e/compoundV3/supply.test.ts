@@ -1,8 +1,8 @@
-import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
-import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
-import { vaults } from "@morpho-org/morpho-test";
-import { entries } from "@morpho-org/morpho-ts";
-import type { ViemTestContext } from "@morpho-org/test/vitest";
+import { ChainId, MathLib, addressesRegistry } from "@gfxlabs/blue-sdk";
+import { metaMorphoAbi } from "@gfxlabs/blue-sdk-viem";
+import { vaults } from "@gfxlabs/morpho-test";
+import { entries } from "@gfxlabs/morpho-ts";
+import type { ViemTestContext } from "@gfxlabs/test/vitest";
 import { type Address, maxUint256, parseUnits } from "viem";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";

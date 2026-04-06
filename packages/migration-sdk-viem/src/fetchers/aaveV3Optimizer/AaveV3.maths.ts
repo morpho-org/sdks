@@ -1,4 +1,4 @@
-import { type BigIntish, MathLib } from "@morpho-org/blue-sdk";
+import { type BigIntish, MathLib } from "@gfxlabs/blue-sdk";
 import { parseUnits } from "viem";
 import { rateToApy } from "../../utils/rates.js";
 

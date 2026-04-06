@@ -2,9 +2,9 @@ import {
   type Address,
   ChainId,
   registerCustomAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
-import { deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze } from "@gfxlabs/morpho-ts";
 import type { Abi } from "viem";
 import {
   addressesProviderAbi as addressesProviderAbi_v2,
@@ -27,7 +27,7 @@ import {
 import { cometAbi } from "./abis/compoundV3.js";
 import { MigratableProtocol } from "./types/index.js";
 
-declare module "@morpho-org/blue-sdk" {
+declare module "@gfxlabs/blue-sdk" {
   interface ChainAddresses {
     aaveV3Optimizer?: Address;
     cEth?: Address;

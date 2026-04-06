@@ -1,13 +1,10 @@
-import { ChainId, type InputMarketParams } from "@morpho-org/blue-sdk";
-import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
-import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
-import { markets, vaults } from "@morpho-org/morpho-test";
-import { getLast } from "@morpho-org/morpho-ts";
-import {
-  type MinimalBlock,
-  simulateOperations,
-} from "@morpho-org/simulation-sdk";
-import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { ChainId, type InputMarketParams } from "@gfxlabs/blue-sdk";
+import { metaMorphoAbi } from "@gfxlabs/blue-sdk-viem";
+import { invalidateAllBlueSdkQueries } from "@gfxlabs/blue-sdk-wagmi";
+import { markets, vaults } from "@gfxlabs/morpho-test";
+import { getLast } from "@gfxlabs/morpho-ts";
+import { type MinimalBlock, simulateOperations } from "@gfxlabs/simulation-sdk";
+import { renderHook, waitFor } from "@gfxlabs/test-wagmi";
 import { QueryClient } from "@tanstack/react-query";
 import { maxUint256, parseEther, parseUnits } from "viem";
 import { describe, expect } from "vitest";

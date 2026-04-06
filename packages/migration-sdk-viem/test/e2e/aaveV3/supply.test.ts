@@ -5,13 +5,13 @@ import {
   migrationAddressesRegistry,
 } from "../../../src/index.js";
 
-import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { ChainId, MathLib, addressesRegistry } from "@gfxlabs/blue-sdk";
 
 import { type Address, maxUint256, parseEther, parseUnits } from "viem";
 
-import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
-import { vaults } from "@morpho-org/morpho-test";
-import type { ViemTestContext } from "@morpho-org/test/vitest";
+import { metaMorphoAbi } from "@gfxlabs/blue-sdk-viem";
+import { vaults } from "@gfxlabs/morpho-test";
+import type { ViemTestContext } from "@gfxlabs/test/vitest";
 import { sendTransaction } from "viem/actions";
 import { type TestAPI, describe, expect } from "vitest";
 import { MigratableBorrowPosition_AaveV3 } from "../../../src/positions/borrow/aaveV3.borrow.js";

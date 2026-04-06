@@ -2,7 +2,7 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
   type PreLiquidationPosition,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 export function parseWithBigInt<T = unknown>(jsonText: string): T {
   return JSON.parse(jsonText, (_key, value) => {

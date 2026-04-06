@@ -1,8 +1,8 @@
-import type { VaultV2 } from "@morpho-org/blue-sdk";
+import type { VaultV2 } from "@gfxlabs/blue-sdk";
 import {
   type DeploylessFetchParameters,
   fetchVaultV2,
-} from "@morpho-org/blue-sdk-viem";
+} from "@gfxlabs/blue-sdk-viem";
 import type { QueryOptions } from "@tanstack/query-core";
 import type { Address, ReadContractErrorType } from "viem";
 import type { Config } from "wagmi";

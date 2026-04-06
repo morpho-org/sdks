@@ -5,10 +5,10 @@ import {
   fetchMigratablePositions,
 } from "../../../src/index.js";
 
-import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
-import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
-import { vaults } from "@morpho-org/morpho-test";
-import type { AnvilTestClient } from "@morpho-org/test";
+import { ChainId, MathLib, addressesRegistry } from "@gfxlabs/blue-sdk";
+import { metaMorphoAbi } from "@gfxlabs/blue-sdk-viem";
+import { vaults } from "@gfxlabs/morpho-test";
+import type { AnvilTestClient } from "@gfxlabs/test";
 import { sendTransaction, writeContract } from "viem/actions";
 import { describe, expect } from "vitest";
 import { migrationAddressesRegistry } from "../../../src/config.js";

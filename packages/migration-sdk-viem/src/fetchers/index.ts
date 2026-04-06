@@ -1,10 +1,10 @@
-import type { Address } from "@morpho-org/blue-sdk";
+import type { Address } from "@gfxlabs/blue-sdk";
 
 import type { MigratablePosition } from "../positions/index.js";
 import { MigratableProtocol } from "../types/index.js";
 
-import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
-import { fromEntries } from "@morpho-org/morpho-ts";
+import type { DeploylessFetchParameters } from "@gfxlabs/blue-sdk-viem";
+import { fromEntries } from "@gfxlabs/morpho-ts";
 import type { Client } from "viem";
 import { fetchAaveV2Positions } from "./aaveV2/aaveV2.fetchers.js";
 import { fetchAaveV3Positions } from "./aaveV3/aaveV3.fetchers.js";
@@ -34,7 +34,7 @@ const FETCHERS = {
  *
  * @example
  * ```typescript
- * import { fetchMigratablePositions, MigratableProtocol } from "@morpho-org/migration-sdk-viem";
+ * import { fetchMigratablePositions, MigratableProtocol } from "@gfxlabs/migration-sdk-viem";
  * import { Client } from "viem";
  *
  * const user = "0x123...abc"; // Replace with the user's address

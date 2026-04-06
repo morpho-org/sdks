@@ -1,4 +1,4 @@
-import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
+import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@gfxlabs/blue-sdk";
 import _ from "lodash";
 import { concat, padHex, parseEther, parseUnits, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";

@@ -1,6 +1,6 @@
 import { type Address, type Client, erc20Abi } from "viem";
 
-import { VaultUser } from "@morpho-org/blue-sdk";
+import { VaultUser } from "@gfxlabs/blue-sdk";
 
 import { getChainId, readContract } from "viem/actions";
 import type { DeploylessFetchParameters } from "../types.js";

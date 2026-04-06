@@ -1,4 +1,4 @@
-import { Time } from "@morpho-org/morpho-ts";
+import { Time } from "@gfxlabs/morpho-ts";
 import { MarketUtils } from "../market/index.js";
 import { MathLib, type RoundingDirection } from "../math/index.js";
 import { VaultToken } from "../token/index.js";

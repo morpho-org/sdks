@@ -1,5 +1,5 @@
-import { VaultV2, VaultV2MorphoVaultV1Adapter } from "@morpho-org/blue-sdk";
-import { Time } from "@morpho-org/morpho-ts";
+import { VaultV2, VaultV2MorphoVaultV1Adapter } from "@gfxlabs/blue-sdk";
+import { Time } from "@gfxlabs/morpho-ts";
 import { encodeFunctionData, parseUnits, zeroAddress } from "viem";
 import { readContract } from "viem/actions";
 import { describe, expect } from "vitest";

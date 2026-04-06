@@ -28,10 +28,10 @@ if (releaseType) {
         version:
           lastTag == null
             ? tag
-            : `[${tag}](https://github.com/morpho-org/sdks/compare/${lastTag}...${tag})`,
+            : `[${tag}](https://github.com/oku-trade/morpho-sdks/compare/${lastTag}...${tag})`,
         host: "https://github.com",
-        owner: "morpho-org",
-        repository: "sdks",
+        owner: "oku-trade",
+        repository: "morpho-sdks",
         commit: "commit",
       },
       writer,

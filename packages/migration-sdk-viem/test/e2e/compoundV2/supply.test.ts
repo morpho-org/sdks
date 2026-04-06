@@ -5,11 +5,11 @@ import {
   MathLib,
   NATIVE_ADDRESS,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
-import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
-import { vaults } from "@morpho-org/morpho-test";
-import { isDefined } from "@morpho-org/morpho-ts";
-import type { ViemTestContext } from "@morpho-org/test/vitest";
+} from "@gfxlabs/blue-sdk";
+import { metaMorphoAbi } from "@gfxlabs/blue-sdk-viem";
+import { vaults } from "@gfxlabs/morpho-test";
+import { isDefined } from "@gfxlabs/morpho-ts";
+import type { ViemTestContext } from "@gfxlabs/test/vitest";
 import { entries } from "lodash";
 import { maxUint256, parseUnits } from "viem";
 import { sendTransaction, writeContract } from "viem/actions";

@@ -1,4 +1,4 @@
-import type { SimulationState } from "@morpho-org/simulation-sdk";
+import type { SimulationState } from "@gfxlabs/simulation-sdk";
 import type { Address } from "viem";
 import { encodeBundle } from "./actions.js";
 import {

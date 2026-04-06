@@ -3,7 +3,7 @@ import {
   type ChainId,
   type Token,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 import type { TypedDataDefinition } from "viem";
 
 export interface PermitArgs {

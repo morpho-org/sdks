@@ -1,14 +1,14 @@
-import { type Token, getChainAddresses } from "@morpho-org/blue-sdk";
+import { type Token, getChainAddresses } from "@gfxlabs/blue-sdk";
 
-import { Time } from "@morpho-org/morpho-ts";
+import { Time } from "@gfxlabs/morpho-ts";
 import {
   MigratableProtocol,
   type MigrationTransactionRequirement,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 
-import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
-import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
+import { getPermitTypedData } from "@gfxlabs/blue-sdk-viem";
+import { type Action, ActionBundle } from "@gfxlabs/bundler-sdk-viem";
 import {
   type Account,
   type Client,

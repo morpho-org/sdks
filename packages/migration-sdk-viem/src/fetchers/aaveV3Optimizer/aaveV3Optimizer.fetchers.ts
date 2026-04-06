@@ -3,8 +3,8 @@ import {
   ChainId,
   MathLib,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
-import { isDefined } from "@morpho-org/morpho-ts";
+} from "@gfxlabs/blue-sdk";
+import { isDefined } from "@gfxlabs/morpho-ts";
 
 import { migrationAddresses } from "../../config.js";
 import type { MigratablePosition } from "../../positions/index.js";
@@ -12,7 +12,7 @@ import { MigratableSupplyPosition_AaveV3Optimizer } from "../../positions/supply
 import { MigratableProtocol } from "../../types/index.js";
 import { SupplyMigrationLimiter } from "../../types/positions.js";
 
-import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@gfxlabs/blue-sdk-viem";
 import {
   type Client,
   erc20Abi,

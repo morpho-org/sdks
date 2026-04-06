@@ -2,12 +2,12 @@ import {
   MathLib,
   erc20WrapperTokens,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
 
-import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { ZERO_ADDRESS } from "@gfxlabs/morpho-ts";
 import { handleErc20TransferOperation } from "./transfer.js";
 
 export const handleErc20UnwrapOperation: OperationHandler<

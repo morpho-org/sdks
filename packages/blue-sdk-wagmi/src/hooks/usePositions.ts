@@ -1,4 +1,4 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
+import type { MarketId } from "@gfxlabs/blue-sdk";
 import { useQueries } from "@tanstack/react-query";
 import { useRef } from "react";
 import type { Address, UnionOmit } from "viem";

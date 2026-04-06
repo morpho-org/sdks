@@ -1,6 +1,6 @@
-import { Vault } from "@morpho-org/blue-sdk";
+import { Vault } from "@gfxlabs/blue-sdk";
 
-import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { ZERO_ADDRESS } from "@gfxlabs/morpho-ts";
 import type { MetaMorphoOperations } from "../../operations.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";

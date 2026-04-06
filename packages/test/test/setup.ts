@@ -1,4 +1,4 @@
-import { createViemTest } from "@morpho-org/test/vitest";
+import { createViemTest } from "@gfxlabs/test/vitest";
 import { mainnet } from "viem/chains";
 
 /**

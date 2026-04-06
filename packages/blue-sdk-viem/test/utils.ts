@@ -3,9 +3,9 @@ import {
   MathLib,
   getChainAddresses,
   marketParamsAbi,
-} from "@morpho-org/blue-sdk";
-import { isDefined } from "@morpho-org/morpho-ts";
-import type { AnvilTestClient } from "@morpho-org/test";
+} from "@gfxlabs/blue-sdk";
+import { isDefined } from "@gfxlabs/morpho-ts";
+import type { AnvilTestClient } from "@gfxlabs/test";
 import {
   type Abi,
   type Address,

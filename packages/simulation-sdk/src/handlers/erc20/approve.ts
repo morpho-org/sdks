@@ -1,4 +1,4 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses } from "@gfxlabs/blue-sdk";
 
 import { APPROVE_ONLY_ONCE_TOKENS } from "../../constants.js";
 import { NonZeroAllowanceError, UnknownAllowanceError } from "../../errors.js";

@@ -4,7 +4,7 @@ import {
   UnknownMarketParamsError,
   _try,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
 import { blueAbi } from "../abis.js";

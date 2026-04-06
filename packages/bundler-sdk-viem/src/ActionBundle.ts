@@ -1,4 +1,4 @@
-import type { SimulationResult } from "@morpho-org/simulation-sdk";
+import type { SimulationResult } from "@gfxlabs/simulation-sdk";
 import type { Account, Address, Chain, Client, Hex, Transport } from "viem";
 import { BundlerAction } from "./BundlerAction.js";
 import type {

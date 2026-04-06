@@ -1,4 +1,4 @@
-import type { Address, ChainId } from "@morpho-org/blue-sdk";
+import type { Address, ChainId } from "@gfxlabs/blue-sdk";
 
 import type { TypedDataDefinition } from "viem";
 

@@ -1,5 +1,5 @@
-import { ChainId, Holding, addressesRegistry } from "@morpho-org/blue-sdk";
-import { SimulationState } from "@morpho-org/simulation-sdk";
+import { ChainId, Holding, addressesRegistry } from "@gfxlabs/blue-sdk";
+import { SimulationState } from "@gfxlabs/simulation-sdk";
 import { concat, maxUint256, padHex, parseUnits, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { encodeOperation } from "../src/actions.js";

@@ -1,7 +1,7 @@
 import {
   UnsupportedVaultV2AdapterError,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import {

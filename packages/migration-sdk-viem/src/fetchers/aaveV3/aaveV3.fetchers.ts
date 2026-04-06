@@ -1,11 +1,11 @@
-import { type Address, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
-import { isDefined, values } from "@morpho-org/morpho-ts";
+import { type Address, MathLib, getChainAddresses } from "@gfxlabs/blue-sdk";
+import { isDefined, values } from "@gfxlabs/morpho-ts";
 
 import {
   type DeploylessFetchParameters,
   blueAbi,
   fetchToken,
-} from "@morpho-org/blue-sdk-viem";
+} from "@gfxlabs/blue-sdk-viem";
 
 import { type Client, erc20Abi, parseUnits, zeroAddress } from "viem";
 import { getChainId, readContract } from "viem/actions";

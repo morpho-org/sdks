@@ -4,7 +4,7 @@ import {
   type MarketId,
   VaultMarketPublicAllocatorConfig,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { publicAllocatorAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";

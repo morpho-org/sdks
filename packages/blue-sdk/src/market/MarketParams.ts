@@ -1,4 +1,4 @@
-import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { ZERO_ADDRESS } from "@gfxlabs/morpho-ts";
 import {
   InvalidMarketParamsError,
   UnknownMarketParamsError,

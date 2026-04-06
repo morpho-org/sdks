@@ -6,9 +6,9 @@ import {
   Eip5267Domain,
   type MarketId,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
-import { vaults } from "@morpho-org/morpho-test";
+import { vaults } from "@gfxlabs/morpho-test";
 import { zeroAddress, zeroHash } from "viem";
 import { Vault } from "../src/augment/Vault.js";
 import { metaMorphoAbi, publicAllocatorAbi } from "../src/index.js";

@@ -1,6 +1,6 @@
 import type { Address, Client } from "viem";
 
-import { type MarketId, VaultMarketAllocation } from "@morpho-org/blue-sdk";
+import { type MarketId, VaultMarketAllocation } from "@gfxlabs/blue-sdk";
 
 import { getChainId } from "viem/actions";
 import type { DeploylessFetchParameters } from "../types.js";

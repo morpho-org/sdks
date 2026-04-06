@@ -1,4 +1,4 @@
-import { ChainId } from "@morpho-org/blue-sdk";
+import { ChainId } from "@gfxlabs/blue-sdk";
 import { getAddress } from "viem";
 
 export namespace Spectra {

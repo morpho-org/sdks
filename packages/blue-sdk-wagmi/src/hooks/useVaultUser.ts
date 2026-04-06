@@ -1,4 +1,4 @@
-import type { VaultUser } from "@morpho-org/blue-sdk";
+import type { VaultUser } from "@gfxlabs/blue-sdk";
 import type { ReadContractErrorType } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 import { type UseQueryReturnType, useQuery } from "wagmi/query";

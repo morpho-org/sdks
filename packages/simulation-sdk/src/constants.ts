@@ -1,4 +1,4 @@
-import { ChainId } from "@morpho-org/blue-sdk";
+import { ChainId } from "@gfxlabs/blue-sdk";
 import { type Address, maxUint96 } from "viem";
 
 export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<number, Address[]>> = {

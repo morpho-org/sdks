@@ -1,10 +1,10 @@
-import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@gfxlabs/blue-sdk";
 
-import { blueAbi, fetchPosition } from "@morpho-org/blue-sdk-viem";
-import { markets } from "@morpho-org/morpho-test";
-import { paraswapContractMethodOffsets } from "@morpho-org/simulation-sdk";
-import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
-import { createWagmiTest, renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { blueAbi, fetchPosition } from "@gfxlabs/blue-sdk-viem";
+import { markets } from "@gfxlabs/morpho-test";
+import { paraswapContractMethodOffsets } from "@gfxlabs/simulation-sdk";
+import { useSimulationState } from "@gfxlabs/simulation-sdk-wagmi";
+import { createWagmiTest, renderHook, waitFor } from "@gfxlabs/test-wagmi";
 import { configure } from "@testing-library/dom";
 import { maxUint160, maxUint256, parseEther, parseUnits } from "viem";
 import { base, mainnet } from "viem/chains";

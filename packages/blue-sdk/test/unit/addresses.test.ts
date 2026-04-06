@@ -1,4 +1,4 @@
-import { randomAddress } from "@morpho-org/test/fixtures";
+import { randomAddress } from "@gfxlabs/test/fixtures";
 import { describe, expect, test } from "vitest";
 import {
   type ChainAddresses,

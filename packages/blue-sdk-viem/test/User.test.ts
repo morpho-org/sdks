@@ -1,7 +1,7 @@
 import { describe, expect } from "vitest";
 import { test } from "./setup.js";
 
-import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@gfxlabs/blue-sdk";
 import { User } from "../src/augment/User.js";
 import { blueAbi } from "../src/index.js";
 

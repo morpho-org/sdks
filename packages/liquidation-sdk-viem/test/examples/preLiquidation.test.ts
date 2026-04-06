@@ -8,8 +8,8 @@ import {
   type MarketId,
   PreLiquidationPosition,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
-import { format } from "@morpho-org/morpho-ts";
+} from "@gfxlabs/blue-sdk";
+import { format } from "@gfxlabs/morpho-ts";
 import type { BuildTxInput } from "@velora-dex/sdk";
 
 import {
@@ -17,13 +17,13 @@ import {
   fetchAccrualPosition,
   fetchMarket,
   fetchToken,
-} from "@morpho-org/blue-sdk-viem";
+} from "@gfxlabs/blue-sdk-viem";
 import {
   Flashbots,
   type LiquidationEncoder,
   preLiquidationFactoryAbi,
-} from "@morpho-org/liquidation-sdk-viem";
-import { type AnvilTestClient, testAccount } from "@morpho-org/test";
+} from "@gfxlabs/liquidation-sdk-viem";
+import { type AnvilTestClient, testAccount } from "@gfxlabs/test";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";

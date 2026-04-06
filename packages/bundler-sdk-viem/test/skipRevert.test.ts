@@ -1,10 +1,5 @@
-import {
-  ChainId,
-  Holding,
-  Token,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
-import { SimulationState } from "@morpho-org/simulation-sdk";
+import { ChainId, Holding, Token, getChainAddresses } from "@gfxlabs/blue-sdk";
+import { SimulationState } from "@gfxlabs/simulation-sdk";
 import {
   concat,
   maxUint256,

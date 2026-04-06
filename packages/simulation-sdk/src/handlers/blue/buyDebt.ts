@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/blue-sdk";
+import { MathLib } from "@gfxlabs/blue-sdk";
 import { hexToBigInt, size, slice } from "viem";
 import { ParaswapErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";

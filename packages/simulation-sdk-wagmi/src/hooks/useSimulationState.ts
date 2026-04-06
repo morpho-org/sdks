@@ -3,11 +3,11 @@ import {
   type MarketId,
   Token,
   addresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 import {
   type DeploylessFetchParameters,
   blueAbi,
-} from "@morpho-org/blue-sdk-viem";
+} from "@gfxlabs/blue-sdk-viem";
 import {
   type ConfigParameter,
   type FetchMarketsParameters,
@@ -28,9 +28,9 @@ import {
   useVaultV2Adapters,
   useVaultV2s,
   useVaults,
-} from "@morpho-org/blue-sdk-wagmi";
-import { values } from "@morpho-org/morpho-ts";
-import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
+} from "@gfxlabs/blue-sdk-wagmi";
+import { values } from "@gfxlabs/morpho-ts";
+import { type MinimalBlock, SimulationState } from "@gfxlabs/simulation-sdk";
 import { useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import type { Address, ReadContractErrorType, UnionOmit } from "viem";

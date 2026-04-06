@@ -1,4 +1,4 @@
-import { ChainId } from "@morpho-org/blue-sdk";
+import { ChainId } from "@gfxlabs/blue-sdk";
 import { parseEther } from "viem";
 
 export const collateralUsdThreshold: Record<number, bigint> = {

@@ -5,7 +5,7 @@ import {
   MathLib,
   NATIVE_ADDRESS,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 import {
   blueAbi,
@@ -13,10 +13,10 @@ import {
   fetchPosition,
   metaMorphoAbi,
   publicAllocatorAbi,
-} from "@morpho-org/blue-sdk-viem";
-import { markets, vaults } from "@morpho-org/morpho-test";
-import { useSimulationState } from "@morpho-org/simulation-sdk-wagmi";
-import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+} from "@gfxlabs/blue-sdk-viem";
+import { markets, vaults } from "@gfxlabs/morpho-test";
+import { useSimulationState } from "@gfxlabs/simulation-sdk-wagmi";
+import { renderHook, waitFor } from "@gfxlabs/test-wagmi";
 import { configure } from "@testing-library/dom";
 import {
   formatUnits,

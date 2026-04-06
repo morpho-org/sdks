@@ -2,7 +2,7 @@ import {
   type Address,
   type ChainId,
   UnsupportedChainIdError,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 import type { TypedDataDefinition } from "viem";
 import { migrationAddresses } from "../../config.js";

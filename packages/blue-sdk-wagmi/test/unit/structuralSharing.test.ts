@@ -1,4 +1,4 @@
-import { Market, MarketParams } from "@morpho-org/blue-sdk";
+import { Market, MarketParams } from "@gfxlabs/blue-sdk";
 import { replaceEqualDeep } from "@tanstack/query-core";
 import { describe, expect } from "vitest";
 import { replaceDeepEqual } from "../../src/index.js";

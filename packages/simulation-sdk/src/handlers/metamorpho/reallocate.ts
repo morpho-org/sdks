@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/blue-sdk";
+import { MathLib } from "@gfxlabs/blue-sdk";
 
 import { MetaMorphoErrors } from "../../errors.js";
 import type { MetaMorphoOperations } from "../../operations.js";

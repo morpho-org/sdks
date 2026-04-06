@@ -1,7 +1,7 @@
-import { ChainId, MarketParams, addressesRegistry } from "@morpho-org/blue-sdk";
+import { ChainId, MarketParams, addressesRegistry } from "@gfxlabs/blue-sdk";
 
-import { markets } from "@morpho-org/morpho-test";
-import { randomAddress } from "@morpho-org/test";
+import { markets } from "@gfxlabs/morpho-test";
+import { randomAddress } from "@gfxlabs/test";
 import { describe, expect } from "vitest";
 import { Market } from "../src/augment/Market.js";
 import { blueAbi } from "../src/index.js";

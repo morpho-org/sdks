@@ -1,8 +1,8 @@
+import { readFileSync } from "node:fs";
 import { basename } from "node:path";
 import { ConventionalGitClient } from "@conventional-changelog/git-client";
 import createPreset from "conventional-changelog-conventionalcommits";
 import { Bumper } from "conventional-recommended-bump";
-import { gt, inc } from "semver";
 
 export const { commits: commitOpts, parser, writer } = createPreset();
 
@@ -31,53 +31,83 @@ export const git = new ConventionalGitClient();
 export const branch = await git.getCurrentBranch();
 export const channel = branch !== "main" ? branch : "latest";
 
-export const packageName = `@morpho-org/${basename(process.cwd())}`;
+const shortName = basename(process.cwd());
+export const packageName = `@gfxlabs/${shortName}`;
+
 export const tagParams = {
   prefix: `${packageName}-`,
   skipUnstable: branch === "main",
 };
 
-let [{ version }, { version: channelVersion }] = await Promise.all([
-  fetch(`https://registry.npmjs.org/${packageName}/latest`)
-    .then((res) => res.json())
-    .catch(() => ({})),
-  fetch(`https://registry.npmjs.org/${packageName}/${channel}`)
-    .then((res) => res.json())
-    .catch(() => ({})),
-]);
+// Read the base version from the local package.json.
+// This is manually bumped when syncing with upstream.
+const pkgJson = JSON.parse(readFileSync("package.json", "utf8"));
+const localVersion = pkgJson.version; // e.g. "2.0.0-1"
+
+// Parse local version: "<base>-<N>" e.g. "2.0.0-1" -> base "2.0.0", suffix 1
+const match = localVersion.match(/^(.+)-(\d+)$/);
+const base = match ? match[1] : localVersion;
+const currentSuffix = match ? Number.parseInt(match[2], 10) : 0;
+
+// Fetch our fork's latest published version for this channel.
+const forkChannelVersion = await fetch(
+  `https://registry.npmjs.org/${packageName}/${channel}`,
+)
+  .then((res) => res.json())
+  .then((data) => data.version)
+  .catch(() => null);
 
 export const lastTag =
-  channelVersion != null ? `${tagParams.prefix}v${channelVersion}` : null;
+  forkChannelVersion != null
+    ? `${tagParams.prefix}v${forkChannelVersion}`
+    : null;
 
+// Check if there are new commits to release.
 const bumper = new Bumper(git)
   .tag(tagParams)
   .commits({ ...commitOpts, path: "." }, parser);
 
 let { releaseType } = await bumper.bump(whatBump);
 
-if (channelVersion == null)
-  version = branch === "main" ? "1.0.0" : `1.0.0-${channel}.0`;
-else if (releaseType != null) {
-  if (branch === "main") version = inc(version, releaseType);
-  else {
-    const { releaseType: mainReleaseType } = await bumper
-      .tag({ ...tagParams, skipUnstable: true })
-      .bump(whatBump);
+/**
+ * Fork versioning scheme: <base>-<N>
+ *
+ * The base version (e.g. "2.0.0") is set manually in package.json when
+ * syncing with upstream. The suffix N is auto-incremented on each release.
+ *
+ * - If we have never published, use the version from package.json as-is.
+ * - If the base in package.json differs from what's published, the base
+ *   was bumped manually after an upstream sync -- reset to <base>-1.
+ * - Otherwise increment the fork suffix: <base>-<N+1>.
+ * - Only publish when there are new commits (releaseType != null) OR
+ *   when there is no prior fork release at all.
+ */
 
-    releaseType = `pre${mainReleaseType}`;
-    version = inc(version, releaseType, branch, "0");
+let version;
 
-    const newChannelVersion = inc(channelVersion, "prerelease", branch, "0");
-    if (gt(newChannelVersion, version)) {
-      releaseType = "prerelease";
-      version = newChannelVersion;
-    }
+if (forkChannelVersion == null) {
+  // First ever release -- use local version as-is.
+  version = localVersion;
+  releaseType = releaseType ?? "patch"; // Ensure we trigger a release.
+} else if (releaseType != null) {
+  // Parse the published fork version.
+  const pubMatch = forkChannelVersion.match(/^(.+)-(\d+)$/);
+  const publishedBase = pubMatch ? pubMatch[1] : forkChannelVersion;
+  const publishedSuffix = pubMatch ? Number.parseInt(pubMatch[2], 10) : 0;
+
+  if (base !== publishedBase) {
+    // Base was bumped (upstream sync) -- reset suffix.
+    version = `${base}-1`;
+  } else {
+    // Same base -- increment suffix from the higher of local or published.
+    const nextSuffix = Math.max(currentSuffix, publishedSuffix) + 1;
+    version = `${base}-${nextSuffix}`;
   }
 }
 
 if (!version) {
-  console.error(`Cannot determine version for ${packageName}`);
-  process.exit(1);
+  console.error(`No new release needed for ${packageName}`);
+  process.exit(0);
 }
 
 export { releaseType, version };

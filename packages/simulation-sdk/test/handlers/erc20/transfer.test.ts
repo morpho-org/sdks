@@ -1,7 +1,7 @@
 import _ from "lodash";
 import { parseUnits, zeroAddress } from "viem";
 
-import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
+import { ChainId, addressesRegistry } from "@gfxlabs/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";

@@ -4,8 +4,8 @@ import {
   ExchangeRateWrappedToken,
   NATIVE_ADDRESS,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
-import { type Time, isDefined, values } from "@morpho-org/morpho-ts";
+} from "@gfxlabs/blue-sdk";
+import { type Time, isDefined, values } from "@gfxlabs/morpho-ts";
 
 import {
   migrationAddresses,
@@ -19,7 +19,7 @@ import {
 } from "../../types/index.js";
 import { rateToApy } from "../../utils/rates.js";
 
-import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
+import type { FetchParameters } from "@gfxlabs/blue-sdk-viem";
 import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.js";

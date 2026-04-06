@@ -6,8 +6,8 @@ import {
   Eip5267Domain,
   ExchangeRateWrappedToken,
   addressesRegistry,
-} from "@morpho-org/blue-sdk";
-import { randomAddress } from "@morpho-org/test";
+} from "@gfxlabs/blue-sdk";
+import { randomAddress } from "@gfxlabs/test";
 import { zeroHash } from "viem";
 import { Token } from "../src/augment/Token.js";
 

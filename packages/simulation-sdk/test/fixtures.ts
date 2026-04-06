@@ -21,9 +21,9 @@ import {
   VaultV2,
   VaultV2MorphoVaultV1Adapter,
   registerCustomAddresses,
-} from "@morpho-org/blue-sdk";
-import { randomMarket, randomVault } from "@morpho-org/morpho-test";
-import { randomAddress } from "@morpho-org/test";
+} from "@gfxlabs/blue-sdk";
+import { randomMarket, randomVault } from "@gfxlabs/morpho-test";
+import { randomAddress } from "@gfxlabs/test";
 import _merge from "lodash/merge.js";
 
 import { SimulationState } from "../src/index.js";

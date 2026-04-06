@@ -30,7 +30,7 @@ import {
   WrappedToken,
   _try,
   getChainAddresses,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 import {
   Time,
@@ -39,7 +39,7 @@ import {
   isDefined,
   keys,
   values,
-} from "@morpho-org/morpho-ts";
+} from "@gfxlabs/morpho-ts";
 import {
   UnknownHoldingError,
   UnknownMarketError,

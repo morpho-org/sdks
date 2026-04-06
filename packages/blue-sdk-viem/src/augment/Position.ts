@@ -2,7 +2,7 @@ import {
   AccrualPosition,
   Position,
   PreLiquidationPosition,
-} from "@morpho-org/blue-sdk";
+} from "@gfxlabs/blue-sdk";
 
 import {
   fetchAccrualPosition,
@@ -10,7 +10,7 @@ import {
   fetchPreLiquidationPosition,
 } from "../fetch/index.js";
 
-declare module "@morpho-org/blue-sdk" {
+declare module "@gfxlabs/blue-sdk" {
   namespace Position {
     let fetch: typeof fetchPosition;
   }

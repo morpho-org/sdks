@@ -1,7 +1,7 @@
 {
-  "name": "@morpho-org/test-wagmi",
-  "description": "Wagmi-based extension of `@morpho-org/test` that injects a test Wagmi config as a test fixture alongside viem's anvil client.",
-  "version": "2.0.0",
+  "name": "@gfxlabs/test-wagmi",
+  "description": "Wagmi-based extension of `@gfxlabs/test` that injects a test Wagmi config as a test fixture alongside viem's anvil client.",
+  "version": "2.0.0-1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",
@@ -21,7 +21,7 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/test": "workspace:^",
+    "@gfxlabs/test": "workspace:^",
     "@tanstack/react-query": "^5.59.0",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.0.0",
@@ -30,7 +30,7 @@
     "wagmi": ">=2.12.10 <4.0.0"
   },
   "devDependencies": {
-    "@morpho-org/test": "workspace:^",
+    "@gfxlabs/test": "workspace:^",
     "@tanstack/react-query": "^5.62.11",
     "@testing-library/dom": "^10.4.0",
     "@testing-library/react": "^16.1.0",

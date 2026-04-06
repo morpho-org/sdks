@@ -1,5 +1,5 @@
-import { ChainId } from "@morpho-org/blue-sdk";
-import { createViemTest } from "@morpho-org/test/vitest";
+import { ChainId } from "@gfxlabs/blue-sdk";
+import { createViemTest } from "@gfxlabs/test/vitest";
 import { arbitrum, base, mainnet } from "viem/chains";
 
 export const test = {

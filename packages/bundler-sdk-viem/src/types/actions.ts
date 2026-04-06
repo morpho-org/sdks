@@ -7,8 +7,8 @@ import type {
   Transport,
 } from "viem";
 
-import type { Address, InputMarketParams } from "@morpho-org/blue-sdk";
-import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
+import type { Address, InputMarketParams } from "@gfxlabs/blue-sdk";
+import type { ParaswapOffsets } from "@gfxlabs/simulation-sdk";
 
 export interface Authorization {
   authorizer: Address;
