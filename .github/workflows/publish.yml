@@ -39,6 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           # Fetch all history so that we can determine the version to release.
           fetch-depth: 0
 
@@ -78,4 +79,3 @@ jobs:
 
       - run: echo "- [RELEASE] ${{ steps.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
         if: steps.release.outputs.version
-
