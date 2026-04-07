@@ -51,10 +51,27 @@ jobs:
           registry-url: https://registry.npmjs.org
           scope: '@morpho-org'
 
-      # Trusted publishing requires npm >= 11.5.1, but Node 22.22.2's bundled npm 10.9.7
-      # currently fails to self-upgrade directly to npm@latest with MODULE_NOT_FOUND
-      # (missing promise-retry). Pin a known-good npm 11 release instead.
-      - run: npm install -g npm@11.11.0
+      - name: Select npm version for trusted publishing
+        id: npm-version
+        run: |
+          case "$(node -p "process.versions.node.split('.')[0]")" in
+            22)
+              echo 'version=11.11.1' >> "$GITHUB_OUTPUT"
+              ;;
+            24)
+              echo 'version=latest' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "Unsupported Node.js version for trusted publishing: $(node -v)" >&2
+              exit 1
+              ;;
+          esac
+
+      # Trusted publishing requires npm >= 11.5.1.
+      # Node 22.22.2's bundled npm 10.9.7 currently fails to self-upgrade to npm 11.12.x
+      # with MODULE_NOT_FOUND (missing promise-retry), so keep Node 22 on the newest
+      # working npm (11.11.1). Node 24's bundled npm 11.11.0 can upgrade to npm@latest.
+      - run: npm install -g npm@${{ steps.npm-version.outputs.version }}
 
       - run: pnpm install --frozen-lockfile
 
