@@ -55,4 +55,12 @@ export namespace BundlerErrors {
       super(`missing final skim for token "${token}"`);
     }
   }
+
+  export class UnknownAccount extends Error {
+    constructor() {
+      super(
+        "Account must be provided either as argument or on client",
+      );
+    }
+  }
 }

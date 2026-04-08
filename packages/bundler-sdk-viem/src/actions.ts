@@ -169,7 +169,13 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client: Client, account: Account = client.account!) {
+          async sign(client: Client, account?: Account) {
+            if (account == null) {
+              if (client.account == null) {
+                throw new BundlerErrors.UnknownAccount();
+              }
+              account = client.account;
+            }
             let signature = action.args[1];
             if (signature != null) return signature;
 
@@ -272,7 +278,13 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client: Client, account: Account = client.account!) {
+          async sign(client: Client, account?: Account) {
+            if (account == null) {
+              if (client.account == null) {
+                throw new BundlerErrors.UnknownAccount();
+              }
+              account = client.account;
+            }
             let signature = action.args[4];
             if (signature != null) return signature; // action is already signed
 
@@ -378,7 +390,13 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client: Client, account: Account = client.account!) {
+          async sign(client: Client, account?: Account) {
+            if (account == null) {
+              if (client.account == null) {
+                throw new BundlerErrors.UnknownAccount();
+              }
+              account = client.account;
+            }
             const { details, sigDeadline } = action.args[1];
 
             let signature = action.args[2];
