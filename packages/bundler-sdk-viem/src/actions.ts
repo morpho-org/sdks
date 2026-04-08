@@ -172,9 +172,7 @@ export const encodeOperation = (
           async sign(client: Client, account?: Account) {
             if (account == null) {
               if (client.account == null) {
-                throw new Error(
-                  "Account must be provided either as argument or on client",
-                );
+                throw new BundlerErrors.UnknownAccount();
               }
               account = client.account;
             }
@@ -283,9 +281,7 @@ export const encodeOperation = (
           async sign(client: Client, account?: Account) {
             if (account == null) {
               if (client.account == null) {
-                throw new Error(
-                  "Account must be provided either as argument or on client",
-                );
+                throw new BundlerErrors.UnknownAccount();
               }
               account = client.account;
             }
@@ -397,9 +393,7 @@ export const encodeOperation = (
           async sign(client: Client, account?: Account) {
             if (account == null) {
               if (client.account == null) {
-                throw new Error(
-                  "Account must be provided either as argument or on client",
-                );
+                throw new BundlerErrors.UnknownAccount();
               }
               account = client.account;
             }
