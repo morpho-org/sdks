@@ -53,8 +53,7 @@ describe("populateBundle", () => {
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
-        async (context) => {
-          const { client, config, expect } = context;
+        async ({ client, config, expect }) => {
           const id = eth_wstEth.id;
 
           const wBalance = parseEther("5000");
@@ -2743,8 +2742,7 @@ describe("populateBundle", () => {
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
-        async (context) => {
-          const { client, config, expect } = context;
+        async ({ client, config, expect }) => {
           const id = eth_wstEth.id;
 
           const wBalance = parseEther("5000");
