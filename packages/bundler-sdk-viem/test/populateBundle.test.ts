@@ -31,6 +31,22 @@ import { test } from "./setup.js";
 
 configure({ asyncUtilTimeout: 10_000 });
 
+const expectRejectToThrowErrorMatchingInlineSnapshot = async (
+  fn: () => Promise<unknown>,
+  snapshot: string,
+) => {
+  await fn().then(
+    () => {
+      throw new Error("Expected promise to reject");
+    },
+    (error) => {
+      expect(() => {
+        throw error;
+      }).toThrowErrorMatchingInlineSnapshot(snapshot);
+    },
+  );
+};
+
 describe("populateBundle", () => {
   describe("with signatures", () => {
     describe("ethereum", () => {
@@ -81,19 +97,19 @@ describe("populateBundle", () => {
 
           const assets = balance + wBalance + 1n;
 
-          await expect(
-            setupTestBundle(client, result.current.data!, [
-              {
-                type: "Blue_Supply",
-                sender: client.account.address,
-                args: {
-                  id,
-                  assets,
-                  onBehalf: client.account.address,
+          await expectRejectToThrowErrorMatchingInlineSnapshot(
+            () =>
+              setupTestBundle(client, result.current.data!, [
+                {
+                  type: "Blue_Supply",
+                  sender: client.account.address,
+                  args: {
+                    id,
+                    assets,
+                    onBehalf: client.account.address,
+                  },
                 },
-              },
-            ]),
-          ).rejects.toThrowErrorMatchingInlineSnapshot(
+              ]),
             `
             [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
@@ -2770,24 +2786,24 @@ describe("populateBundle", () => {
 
           const assets = balance + wBalance + 1n;
 
-          await expect(
-            setupTestBundle(
-              client,
-              result.current.data!,
-              [
-                {
-                  type: "Blue_Supply",
-                  sender: client.account.address,
-                  args: {
-                    id,
-                    assets,
-                    onBehalf: client.account.address,
+          await expectRejectToThrowErrorMatchingInlineSnapshot(
+            () =>
+              setupTestBundle(
+                client,
+                result.current.data!,
+                [
+                  {
+                    type: "Blue_Supply",
+                    sender: client.account.address,
+                    args: {
+                      id,
+                      assets,
+                      onBehalf: client.account.address,
+                    },
                   },
-                },
-              ],
-              { supportsSignature: false },
-            ),
-          ).rejects.toThrowErrorMatchingInlineSnapshot(
+                ],
+                { supportsSignature: false },
+              ),
             `
             [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
