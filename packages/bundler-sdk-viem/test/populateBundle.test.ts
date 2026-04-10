@@ -25,27 +25,11 @@ import {
   parseUnits,
   zeroAddress,
 } from "viem";
-import { describe, expect } from "vitest";
+import { createExpect, describe, expect } from "vitest";
 import { donate, donator, setupTestBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
 configure({ asyncUtilTimeout: 10_000 });
-
-const expectRejectToThrowErrorMatchingInlineSnapshot = async (
-  fn: () => Promise<unknown>,
-  snapshot: string,
-) => {
-  await fn().then(
-    () => {
-      throw new Error("Expected promise to reject");
-    },
-    (error) => {
-      expect(() => {
-        throw error;
-      }).toThrowErrorMatchingInlineSnapshot(snapshot);
-    },
-  );
-};
 
 describe("populateBundle", () => {
   describe("with signatures", () => {
@@ -69,7 +53,7 @@ describe("populateBundle", () => {
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
-        async ({ client, config }) => {
+        async ({ client, config, task }) => {
           const id = eth_wstEth.id;
 
           const wBalance = parseEther("5000");
@@ -96,20 +80,21 @@ describe("populateBundle", () => {
           await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
           const assets = balance + wBalance + 1n;
+          const contextualExpect = createExpect(task);
 
-          await expectRejectToThrowErrorMatchingInlineSnapshot(
-            () =>
-              setupTestBundle(client, result.current.data!, [
-                {
-                  type: "Blue_Supply",
-                  sender: client.account.address,
-                  args: {
-                    id,
-                    assets,
-                    onBehalf: client.account.address,
-                  },
+          await contextualExpect(
+            setupTestBundle(client, result.current.data!, [
+              {
+                type: "Blue_Supply",
+                sender: client.account.address,
+                args: {
+                  id,
+                  assets,
+                  onBehalf: client.account.address,
                 },
-              ]),
+              },
+            ]),
+          ).rejects.toThrowErrorMatchingInlineSnapshot(
             `
             [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
@@ -2758,7 +2743,7 @@ describe("populateBundle", () => {
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
-        async ({ client, config }) => {
+        async ({ client, config, task }) => {
           const id = eth_wstEth.id;
 
           const wBalance = parseEther("5000");
@@ -2785,25 +2770,26 @@ describe("populateBundle", () => {
           await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
           const assets = balance + wBalance + 1n;
+          const contextualExpect = createExpect(task);
 
-          await expectRejectToThrowErrorMatchingInlineSnapshot(
-            () =>
-              setupTestBundle(
-                client,
-                result.current.data!,
-                [
-                  {
-                    type: "Blue_Supply",
-                    sender: client.account.address,
-                    args: {
-                      id,
-                      assets,
-                      onBehalf: client.account.address,
-                    },
+          await contextualExpect(
+            setupTestBundle(
+              client,
+              result.current.data!,
+              [
+                {
+                  type: "Blue_Supply",
+                  sender: client.account.address,
+                  args: {
+                    id,
+                    assets,
+                    onBehalf: client.account.address,
                   },
-                ],
-                { supportsSignature: false },
-              ),
+                },
+              ],
+              { supportsSignature: false },
+            ),
+          ).rejects.toThrowErrorMatchingInlineSnapshot(
             `
             [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
