@@ -25,7 +25,7 @@ import {
   parseUnits,
   zeroAddress,
 } from "viem";
-import { type ExpectStatic, describe, expect } from "vitest";
+import { describe, expect } from "vitest";
 import { donate, donator, setupTestBundle } from "./helpers.js";
 import { test } from "./setup.js";
 
@@ -54,7 +54,7 @@ describe("populateBundle", () => {
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
         async (context) => {
-          const { client, config } = context;
+          const { client, config, expect } = context;
           const id = eth_wstEth.id;
 
           const wBalance = parseEther("5000");
@@ -81,25 +81,21 @@ describe("populateBundle", () => {
           await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
           const assets = balance + wBalance + 1n;
-          {
-            const { expect } = context as typeof context & {
-              expect: ExpectStatic;
-            };
 
-            await expect(
-              setupTestBundle(client, result.current.data!, [
-                {
-                  type: "Blue_Supply",
-                  sender: client.account.address,
-                  args: {
-                    id,
-                    assets,
-                    onBehalf: client.account.address,
-                  },
+          await expect(
+            setupTestBundle(client, result.current.data!, [
+              {
+                type: "Blue_Supply",
+                sender: client.account.address,
+                args: {
+                  id,
+                  assets,
+                  onBehalf: client.account.address,
                 },
-              ]),
-            ).rejects.toThrowErrorMatchingInlineSnapshot(
-              `
+              },
+            ]),
+          ).rejects.toThrowErrorMatchingInlineSnapshot(
+            `
             [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
             when simulating operation:
@@ -114,8 +110,7 @@ describe("populateBundle", () => {
               }
             }]
           `,
-            );
-          }
+          );
         },
       );
 
@@ -2749,7 +2744,7 @@ describe("populateBundle", () => {
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
         async (context) => {
-          const { client, config } = context;
+          const { client, config, expect } = context;
           const id = eth_wstEth.id;
 
           const wBalance = parseEther("5000");
@@ -2776,30 +2771,25 @@ describe("populateBundle", () => {
           await waitFor(() => expect(result.current.isFetchingAny).toBeFalsy());
 
           const assets = balance + wBalance + 1n;
-          {
-            const { expect } = context as typeof context & {
-              expect: ExpectStatic;
-            };
-
-            await expect(
-              setupTestBundle(
-                client,
-                result.current.data!,
-                [
-                  {
-                    type: "Blue_Supply",
-                    sender: client.account.address,
-                    args: {
-                      id,
-                      assets,
-                      onBehalf: client.account.address,
-                    },
+          await expect(
+            setupTestBundle(
+              client,
+              result.current.data!,
+              [
+                {
+                  type: "Blue_Supply",
+                  sender: client.account.address,
+                  args: {
+                    id,
+                    assets,
+                    onBehalf: client.account.address,
                   },
-                ],
-                { supportsSignature: false },
-              ),
-            ).rejects.toThrowErrorMatchingInlineSnapshot(
-              `
+                },
+              ],
+              { supportsSignature: false },
+            ),
+          ).rejects.toThrowErrorMatchingInlineSnapshot(
+            `
             [Error: insufficient balance of user "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266" for token "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
 
             when simulating operation:
@@ -2814,8 +2804,7 @@ describe("populateBundle", () => {
               }
             }]
           `,
-            );
-          }
+          );
         },
       );
 
