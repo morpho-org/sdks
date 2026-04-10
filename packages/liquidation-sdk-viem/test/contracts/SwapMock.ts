@@ -3,8 +3,16 @@ export const abi = [
     inputs: [
       {
         components: [
-          { internalType: "address", name: "token", type: "address" },
-          { internalType: "uint256", name: "amount", type: "uint256" },
+          {
+            internalType: "address",
+            name: "token",
+            type: "address",
+          },
+          {
+            internalType: "uint256",
+            name: "amount",
+            type: "uint256",
+          },
         ],
         internalType: "struct TokenAmount",
         name: "input",
@@ -12,8 +20,16 @@ export const abi = [
       },
       {
         components: [
-          { internalType: "address", name: "token", type: "address" },
-          { internalType: "uint256", name: "amount", type: "uint256" },
+          {
+            internalType: "address",
+            name: "token",
+            type: "address",
+          },
+          {
+            internalType: "uint256",
+            name: "amount",
+            type: "uint256",
+          },
         ],
         internalType: "struct TokenAmount",
         name: "output",

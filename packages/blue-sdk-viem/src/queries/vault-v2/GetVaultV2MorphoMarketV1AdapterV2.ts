@@ -1,8 +1,16 @@
 export const abi = [
   {
     inputs: [
-      { internalType: "address", name: "factory", type: "address" },
-      { internalType: "address", name: "adapter", type: "address" },
+      {
+        internalType: "address",
+        name: "factory",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "adapter",
+        type: "address",
+      },
     ],
     name: "UnknownOfFactory",
     type: "error",

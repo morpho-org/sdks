@@ -1,8 +1,16 @@
 export const abi = [
   {
     inputs: [
-      { internalType: "address", name: "factory", type: "address" },
-      { internalType: "address", name: "vault", type: "address" },
+      {
+        internalType: "address",
+        name: "factory",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
     ],
     name: "UnknownOfFactory",
     type: "error",
@@ -41,7 +49,11 @@ export const abi = [
                 name: "symbol",
                 type: "string",
               },
-              { internalType: "string", name: "name", type: "string" },
+              {
+                internalType: "string",
+                name: "name",
+                type: "string",
+              },
               {
                 internalType: "uint256",
                 name: "decimals",
@@ -99,8 +111,16 @@ export const abi = [
             name: "config",
             type: "tuple",
           },
-          { internalType: "address", name: "owner", type: "address" },
-          { internalType: "address", name: "curator", type: "address" },
+          {
+            internalType: "address",
+            name: "owner",
+            type: "address",
+          },
+          {
+            internalType: "address",
+            name: "curator",
+            type: "address",
+          },
           {
             internalType: "address",
             name: "guardian",
@@ -150,7 +170,11 @@ export const abi = [
             name: "pendingOwner",
             type: "address",
           },
-          { internalType: "uint256", name: "fee", type: "uint256" },
+          {
+            internalType: "uint256",
+            name: "fee",
+            type: "uint256",
+          },
           {
             internalType: "address",
             name: "feeRecipient",
@@ -193,7 +217,11 @@ export const abi = [
                 name: "admin",
                 type: "address",
               },
-              { internalType: "uint256", name: "fee", type: "uint256" },
+              {
+                internalType: "uint256",
+                name: "fee",
+                type: "uint256",
+              },
               {
                 internalType: "uint256",
                 name: "accruedFee",

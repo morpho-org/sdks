@@ -1,8 +1,16 @@
 export const abi = [
   {
     inputs: [
-      { internalType: "address", name: "factory", type: "address" },
-      { internalType: "address", name: "vault", type: "address" },
+      {
+        internalType: "address",
+        name: "factory",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "vault",
+        type: "address",
+      },
     ],
     name: "UnknownOfFactory",
     type: "error",
@@ -46,7 +54,11 @@ export const abi = [
                 name: "symbol",
                 type: "string",
               },
-              { internalType: "string", name: "name", type: "string" },
+              {
+                internalType: "string",
+                name: "name",
+                type: "string",
+              },
               {
                 internalType: "uint256",
                 name: "decimals",
@@ -57,7 +69,11 @@ export const abi = [
             name: "token",
             type: "tuple",
           },
-          { internalType: "address", name: "asset", type: "address" },
+          {
+            internalType: "address",
+            name: "asset",
+            type: "address",
+          },
           {
             internalType: "uint256",
             name: "totalAssets",
@@ -78,7 +94,11 @@ export const abi = [
             name: "virtualShares",
             type: "uint256",
           },
-          { internalType: "uint64", name: "maxRate", type: "uint64" },
+          {
+            internalType: "uint64",
+            name: "maxRate",
+            type: "uint64",
+          },
           {
             internalType: "uint64",
             name: "lastUpdate",
@@ -106,7 +126,11 @@ export const abi = [
           },
           {
             components: [
-              { internalType: "bytes32", name: "id", type: "bytes32" },
+              {
+                internalType: "bytes32",
+                name: "id",
+                type: "bytes32",
+              },
               {
                 internalType: "uint256",
                 name: "absoluteCap",

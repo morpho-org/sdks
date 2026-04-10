@@ -16,7 +16,7 @@
   "files": ["lib"],
   "scripts": {
     "prepublish": "$npm_execpath build",
-    "compile": "hardhat compile",
+    "compile": "node ../../scripts/compile-solidity.js blue-sdk-viem",
     "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
     "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
@@ -31,10 +31,9 @@
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "hardhat": "^2.27.1",
     "typescript": "^5.9.3",
     "viem": "^2.41.2",
-    "vitest": "^4.0.15"
+    "vitest": "^4.1.4"
   },
   "publishConfig": {
     "exports": {

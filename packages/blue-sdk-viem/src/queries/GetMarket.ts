@@ -6,7 +6,11 @@ export const abi = [
         name: "morpho",
         type: "address",
       },
-      { internalType: "Id", name: "id", type: "bytes32" },
+      {
+        internalType: "Id",
+        name: "id",
+        type: "bytes32",
+      },
       {
         internalType: "contract IAdaptiveCurveIrm",
         name: "adaptiveCurveIrm",
@@ -34,7 +38,11 @@ export const abi = [
                 name: "oracle",
                 type: "address",
               },
-              { internalType: "address", name: "irm", type: "address" },
+              {
+                internalType: "address",
+                name: "irm",
+                type: "address",
+              },
               {
                 internalType: "uint256",
                 name: "lltv",
@@ -72,14 +80,26 @@ export const abi = [
                 name: "lastUpdate",
                 type: "uint128",
               },
-              { internalType: "uint128", name: "fee", type: "uint128" },
+              {
+                internalType: "uint128",
+                name: "fee",
+                type: "uint128",
+              },
             ],
             internalType: "struct Market",
             name: "market",
             type: "tuple",
           },
-          { internalType: "bool", name: "hasPrice", type: "bool" },
-          { internalType: "uint256", name: "price", type: "uint256" },
+          {
+            internalType: "bool",
+            name: "hasPrice",
+            type: "bool",
+          },
+          {
+            internalType: "uint256",
+            name: "price",
+            type: "uint256",
+          },
           {
             internalType: "uint256",
             name: "rateAtTarget",

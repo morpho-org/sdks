@@ -38,10 +38,10 @@
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
     "@types/lodash": "^4.17.12",
-    "lodash": "^4.17.21",
+    "lodash": "^4.18.1",
     "typescript": "^5.9.3",
     "viem": "^2.41.2",
-    "vitest": "^4.0.15"
+    "vitest": "^4.1.4"
   },
   "publishConfig": {
     "exports": {

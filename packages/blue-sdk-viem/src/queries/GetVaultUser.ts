@@ -6,13 +6,21 @@ export const abi = [
         name: "vault",
         type: "address",
       },
-      { internalType: "address", name: "user", type: "address" },
+      {
+        internalType: "address",
+        name: "user",
+        type: "address",
+      },
     ],
     name: "query",
     outputs: [
       {
         components: [
-          { internalType: "bool", name: "isAllocator", type: "bool" },
+          {
+            internalType: "bool",
+            name: "isAllocator",
+            type: "bool",
+          },
           {
             internalType: "uint256",
             name: "allowance",
