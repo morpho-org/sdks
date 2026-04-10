@@ -6,8 +6,16 @@ export const abi = [
         name: "token",
         type: "address",
       },
-      { internalType: "address", name: "account", type: "address" },
-      { internalType: "address", name: "morpho", type: "address" },
+      {
+        internalType: "address",
+        name: "account",
+        type: "address",
+      },
+      {
+        internalType: "address",
+        name: "morpho",
+        type: "address",
+      },
       {
         internalType: "contract IPermit2",
         name: "permit2",
@@ -33,7 +41,11 @@ export const abi = [
     outputs: [
       {
         components: [
-          { internalType: "uint256", name: "balance", type: "uint256" },
+          {
+            internalType: "uint256",
+            name: "balance",
+            type: "uint256",
+          },
           {
             components: [
               {
@@ -68,13 +80,21 @@ export const abi = [
                 name: "expiration",
                 type: "uint48",
               },
-              { internalType: "uint48", name: "nonce", type: "uint48" },
+              {
+                internalType: "uint48",
+                name: "nonce",
+                type: "uint48",
+              },
             ],
             internalType: "struct Permit2Allowance",
             name: "permit2BundlerAllowance",
             type: "tuple",
           },
-          { internalType: "bool", name: "isErc2612", type: "bool" },
+          {
+            internalType: "bool",
+            name: "isErc2612",
+            type: "bool",
+          },
           {
             internalType: "uint256",
             name: "erc2612Nonce",

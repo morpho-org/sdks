@@ -6,7 +6,11 @@ export const abi = [
         name: "token",
         type: "address",
       },
-      { internalType: "bool", name: "isWstEth", type: "bool" },
+      {
+        internalType: "bool",
+        name: "isWstEth",
+        type: "bool",
+      },
     ],
     name: "query",
     outputs: [
@@ -17,10 +21,26 @@ export const abi = [
             name: "decimals",
             type: "uint256",
           },
-          { internalType: "bool", name: "hasSymbol", type: "bool" },
-          { internalType: "string", name: "symbol", type: "string" },
-          { internalType: "bool", name: "hasName", type: "bool" },
-          { internalType: "string", name: "name", type: "string" },
+          {
+            internalType: "bool",
+            name: "hasSymbol",
+            type: "bool",
+          },
+          {
+            internalType: "string",
+            name: "symbol",
+            type: "string",
+          },
+          {
+            internalType: "bool",
+            name: "hasName",
+            type: "bool",
+          },
+          {
+            internalType: "string",
+            name: "name",
+            type: "string",
+          },
           {
             internalType: "uint256",
             name: "stEthPerWstEth",
@@ -33,7 +53,11 @@ export const abi = [
                 name: "fields",
                 type: "bytes1",
               },
-              { internalType: "string", name: "name", type: "string" },
+              {
+                internalType: "string",
+                name: "name",
+                type: "string",
+              },
               {
                 internalType: "string",
                 name: "version",
