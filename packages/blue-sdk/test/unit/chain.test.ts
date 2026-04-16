@@ -27,4 +27,41 @@ describe("ChainUtils", () => {
   test("should default to reliable native balance for unknown chains", () => {
     expect(ChainUtils.hasReliableNativeBalance(99999)).toBe(true);
   });
+
+  test.each([
+    [
+      685689,
+      {
+        name: "Gensyn",
+        explorerUrl: "https://gensyn-mainnet.explorer.alchemy.com",
+        identifier: "gensyn",
+        nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      },
+    ],
+    [
+      1672,
+      {
+        name: "Pharos",
+        explorerUrl: "https://pharosscan.xyz",
+        identifier: "pharos",
+        nativeCurrency: { name: "PharosCoin", symbol: "PROS", decimals: 18 },
+      },
+    ],
+    [
+      714,
+      {
+        name: "Eden",
+        explorerUrl: "https://eden.blockscout.com",
+        identifier: "eden",
+        nativeCurrency: { name: "TIA", symbol: "TIA", decimals: 18 },
+      },
+    ],
+  ])("should expose metadata for chain %i", (chainId, expectedMetadata) => {
+    expect(
+      (ChainUtils.CHAIN_METADATA as Record<number, unknown>)[chainId],
+    ).toMatchObject({
+      id: chainId,
+      ...expectedMetadata,
+    });
+  });
 });
