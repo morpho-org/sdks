@@ -431,7 +431,7 @@ describe("LiquidityAdapter zero address", () => {
   );
 
   vaultV2Test(
-    "should withdraw full amount when liquidityAdapter is zero address",
+    "should withdraw capped at idle when liquidityAdapter is zero address",
     async ({ client }) => {
       // Set liquidity adapter to zero address
       await client.writeContract({
@@ -445,11 +445,45 @@ describe("LiquidityAdapter zero address", () => {
       const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
 
       const shares = parseUnits("100", 18);
+      const assets = accrualVaultV2.toAssets(shares);
+      const idle = accrualVaultV2.assetBalance;
       const result = accrualVaultV2.maxWithdraw(shares);
 
+      if (assets > idle) {
+        // Withdraw is capped at idle because no liquidity adapter is set.
+        expect(result).toStrictEqual({
+          value: idle,
+          limiter: CapacityLimitReason.liquidity,
+        });
+      } else {
+        expect(result).toStrictEqual({
+          value: assets,
+          limiter: CapacityLimitReason.balance,
+        });
+      }
+    },
+  );
+
+  vaultV2Test(
+    "should cap withdraw at idle when shares > idle and liquidityAdapter is zero address",
+    async ({ client }) => {
+      // Set liquidity adapter to zero address
+      await client.writeContract({
+        account: allocator,
+        address: vaultV2Address,
+        abi: vaultV2Abi,
+        functionName: "setLiquidityAdapterAndData",
+        args: [zeroAddress, "0x"],
+      });
+
+      const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
+
+      // Request far more than idle can service.
+      const result = accrualVaultV2.maxWithdraw(MathLib.MAX_UINT_256);
+
       expect(result).toStrictEqual({
-        value: accrualVaultV2.toAssets(shares),
-        limiter: CapacityLimitReason.balance,
+        value: accrualVaultV2.assetBalance,
+        limiter: CapacityLimitReason.liquidity,
       });
     },
   );
