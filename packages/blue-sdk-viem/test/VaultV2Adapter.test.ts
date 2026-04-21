@@ -444,21 +444,13 @@ describe("LiquidityAdapter zero address", () => {
 
       const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
 
-      const shares = parseUnits("100", 18);
-      const assets = accrualVaultV2.toAssets(shares);
+      const shares = parseUnits("10000000000", 18);
       const result = accrualVaultV2.maxWithdraw(shares);
 
-      if (assets > accrualVaultV2.assetBalance) {
-        expect(result).toStrictEqual({
-          value: accrualVaultV2.assetBalance,
-          limiter: CapacityLimitReason.liquidity,
-        });
-      } else {
-        expect(result).toStrictEqual({
-          value: assets,
-          limiter: CapacityLimitReason.balance,
-        });
-      }
+      expect(result).toStrictEqual({
+        value: accrualVaultV2.assetBalance,
+        limiter: CapacityLimitReason.liquidity,
+      });
     },
   );
 });
