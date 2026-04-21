@@ -425,14 +425,21 @@ export class AccrualVault extends Vault implements IAccrualVault {
     const vault = new AccrualVault(
       this,
       // Keep withdraw queue order.
-      this.withdrawQueue.map((marketId) => {
-        const { config, position } = this.allocations.get(marketId)!;
+      this.withdrawQueue
+        .map((marketId) => {
+          const allocation = this.allocations.get(marketId);
+          if (!allocation) return null;
 
-        return {
-          config,
-          position: position.accrueInterest(timestamp),
-        };
-      }),
+          const { config, position } = allocation;
+          return {
+            config,
+            position: position.accrueInterest(timestamp),
+          };
+        })
+        .filter(
+          (allocation): allocation is NonNullable<typeof allocation> =>
+            allocation != null,
+        ),
     );
 
     if (vault.lostAssets != null) {
