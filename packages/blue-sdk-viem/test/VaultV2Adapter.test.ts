@@ -431,7 +431,7 @@ describe("LiquidityAdapter zero address", () => {
   );
 
   vaultV2Test(
-    "should withdraw full amount when liquidityAdapter is zero address",
+    "should be bounded by assetBalance when liquidityAdapter is zero address",
     async ({ client }) => {
       // Set liquidity adapter to zero address
       await client.writeContract({
@@ -445,12 +445,20 @@ describe("LiquidityAdapter zero address", () => {
       const accrualVaultV2 = await fetchAccrualVaultV2(vaultV2Address, client);
 
       const shares = parseUnits("100", 18);
+      const assets = accrualVaultV2.toAssets(shares);
       const result = accrualVaultV2.maxWithdraw(shares);
 
-      expect(result).toStrictEqual({
-        value: accrualVaultV2.toAssets(shares),
-        limiter: CapacityLimitReason.balance,
-      });
+      if (assets > accrualVaultV2.assetBalance) {
+        expect(result).toStrictEqual({
+          value: accrualVaultV2.assetBalance,
+          limiter: CapacityLimitReason.liquidity,
+        });
+      } else {
+        expect(result).toStrictEqual({
+          value: assets,
+          limiter: CapacityLimitReason.balance,
+        });
+      }
     },
   );
 });
