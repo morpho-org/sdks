@@ -196,11 +196,12 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
    */
   public maxWithdraw(shares: BigIntish): CapacityLimit {
     const assets = this.toAssets(shares);
-    if (this.liquidityAdapter === zeroAddress)
-      return { value: BigInt(assets), limiter: CapacityLimitReason.balance };
 
     let liquidity = this.assetBalance;
-    if (this.accrualLiquidityAdapter != null)
+    if (
+      this.liquidityAdapter !== zeroAddress &&
+      this.accrualLiquidityAdapter != null
+    )
       liquidity += this.accrualLiquidityAdapter.maxWithdraw(
         this.liquidityData,
       ).value;
