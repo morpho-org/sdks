@@ -268,12 +268,14 @@ export class MigratableBorrowPosition_CompoundV3
                 false,
               ],
             },
-            {
-              type: "morphoRepay",
-              args: [marketTo, maxUint256, 0n, maxUint256, user, [], false],
-            },
           ]
         : [];
+
+    if (migrateMaxBorrow && slippageFrom > 0n)
+      borrowActions.push({
+        type: "morphoRepay",
+        args: [marketTo, maxUint256, 0n, maxUint256, user, []],
+      });
 
     if (collateralAmount > 0n) {
       const callbackActions = borrowActions.concat({

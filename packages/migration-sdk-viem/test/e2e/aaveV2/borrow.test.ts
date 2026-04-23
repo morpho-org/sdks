@@ -364,18 +364,6 @@ describe("Borrow position on AAVE V2", () => {
               ],
             },
             {
-              type: "morphoRepay",
-              args: [
-                marketTo,
-                maxUint256,
-                0n,
-                maxUint256,
-                client.account.address,
-                [],
-                false,
-              ],
-            },
-            {
               type: "erc20TransferFrom",
               args: [aWEth, migratedCollateral, aaveV2MigrationAdapter],
             },
@@ -565,7 +553,6 @@ describe("Borrow position on AAVE V2", () => {
                 maxUint256,
                 client.account.address,
                 [],
-                false,
               ],
             },
             {
@@ -743,18 +730,6 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
-                  false,
-                ],
-              },
-              {
-                type: "morphoRepay",
-                args: [
-                  marketTo,
-                  maxUint256,
-                  0n,
-                  maxUint256,
-                  client.account.address,
-                  [],
                   false,
                 ],
               },
@@ -953,7 +928,6 @@ describe("Borrow position on AAVE V2", () => {
                   maxUint256,
                   client.account.address,
                   [],
-                  false,
                 ],
               },
               {
@@ -1139,18 +1113,6 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
-                  false,
-                ],
-              },
-              {
-                type: "morphoRepay",
-                args: [
-                  marketTo,
-                  maxUint256,
-                  0n,
-                  maxUint256,
-                  client.account.address,
-                  [],
                   false,
                 ],
               },
