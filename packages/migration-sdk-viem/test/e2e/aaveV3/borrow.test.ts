@@ -421,6 +421,18 @@ describe("Borrow position on AAVE V3", () => {
                   ],
                 },
                 {
+                  type: "morphoRepay",
+                  args: [
+                    marketTo,
+                    maxUint256,
+                    0n,
+                    maxUint256,
+                    client.account.address,
+                    [],
+                    false,
+                  ],
+                },
+                {
                   type: "erc20TransferFrom",
                   args: [
                     aCollateralToken,
@@ -618,6 +630,7 @@ describe("Borrow position on AAVE V3", () => {
                     maxUint256,
                     client.account.address,
                     [],
+                    false,
                   ],
                 },
                 {
@@ -966,6 +979,18 @@ describe("Borrow position on AAVE V3", () => {
                     ],
                   },
                   {
+                    type: "morphoRepay",
+                    args: [
+                      marketTo,
+                      maxUint256,
+                      0n,
+                      maxUint256,
+                      client.account.address,
+                      [],
+                      false,
+                    ],
+                  },
+                  {
                     type: "erc20TransferFrom",
                     args: [
                       aCollateralToken,
@@ -1183,6 +1208,7 @@ describe("Borrow position on AAVE V3", () => {
                       maxUint256,
                       client.account.address,
                       [],
+                      false,
                     ],
                   },
                   {
@@ -1391,6 +1417,18 @@ describe("Borrow position on AAVE V3", () => {
                       generalAdapter1,
                       maxUint256,
                       aaveV3CoreMigrationAdapter,
+                      false,
+                    ],
+                  },
+                  {
+                    type: "morphoRepay",
+                    args: [
+                      marketTo,
+                      maxUint256,
+                      0n,
+                      maxUint256,
+                      client.account.address,
+                      [],
                       false,
                     ],
                   },
