@@ -196,7 +196,7 @@ export namespace BundlerAction {
           market,
           assets,
           shares,
-          slippageAmount,
+          maxSharePriceE27,
           onBehalf,
           onMorphoSupply,
           skipRevert,
@@ -207,7 +207,7 @@ export namespace BundlerAction {
           market,
           assets,
           shares,
-          slippageAmount,
+          maxSharePriceE27,
           onBehalf,
           onMorphoSupply.flatMap(BundlerAction.encode.bind(null, chainId)),
           skipRevert,
@@ -236,7 +236,7 @@ export namespace BundlerAction {
           market,
           assets,
           shares,
-          slippageAmount,
+          maxSharePriceE27,
           onBehalf,
           onMorphoRepay,
           skipRevert,
@@ -247,7 +247,7 @@ export namespace BundlerAction {
           market,
           assets,
           shares,
-          slippageAmount,
+          maxSharePriceE27,
           onBehalf,
           onMorphoRepay.flatMap(BundlerAction.encode.bind(null, chainId)),
           skipRevert,
@@ -1091,7 +1091,7 @@ export namespace BundlerAction {
    * @param market The market params to supply to.
    * @param assets The amount of assets to supply.
    * @param shares The amount of supply shares to mint.
-   * @param slippageAmount The maximum (resp. minimum) amount of assets (resp. supply shares) to supply (resp. mint) (protects the sender from unexpected slippage).
+   * @param maxSharePriceE27 The maximum amount of assets supplied per minted supply share, scaled by 1e27 (protects the sender from unexpected slippage).
    * @param onBehalf The address to supply on behalf of.
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
@@ -1101,7 +1101,7 @@ export namespace BundlerAction {
     market: InputMarketParams,
     assets: bigint,
     shares: bigint,
-    slippageAmount: bigint,
+    maxSharePriceE27: bigint,
     onBehalf: Address,
     callbackCalls: BundlerCall[],
     skipRevert = false,
@@ -1121,7 +1121,14 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoSupply",
-          args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
+          args: [
+            market,
+            assets,
+            shares,
+            maxSharePriceE27,
+            onBehalf,
+            reenterData,
+          ],
         }),
         value: 0n,
         skipRevert,
@@ -1177,7 +1184,7 @@ export namespace BundlerAction {
    * @param market The market params to borrow from.
    * @param assets The amount of assets to borrow.
    * @param shares The amount of borrow shares to mint.
-   * @param slippageAmount The minimum (resp. maximum) amount of assets (resp. borrow shares) to borrow (resp. mint) (protects the sender from unexpected slippage).
+   * @param minSharePriceE27 The minimum amount of assets borrowed per minted borrow share, scaled by 1e27 (protects the sender from unexpected slippage).
    * @param receiver The address to send borrowed tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
@@ -1186,7 +1193,7 @@ export namespace BundlerAction {
     market: InputMarketParams,
     assets: bigint,
     shares: bigint,
-    slippageAmount: bigint,
+    minSharePriceE27: bigint,
     receiver: Address,
     skipRevert = false,
   ): BundlerCall[] {
@@ -1200,7 +1207,7 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoBorrow",
-          args: [market, assets, shares, slippageAmount, receiver],
+          args: [market, assets, shares, minSharePriceE27, receiver],
         }),
         value: 0n,
         skipRevert,
@@ -1215,9 +1222,9 @@ export namespace BundlerAction {
    * @param market The market params to repay to.
    * @param assets The amount of assets to repay.
    * @param shares The amount of borrow shares to redeem.
-   * @param slippageAmount The maximum (resp. minimum) amount of assets (resp. borrow shares) to repay (resp. redeem) (protects the sender from unexpected slippage).
+   * @param maxSharePriceE27 The maximum amount of assets repaid per burned borrow share, scaled by 1e27 (protects the sender from unexpected slippage).
    * @param onBehalf The address to repay on behalf of.
-   * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
+   * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoRepay` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
   export function morphoRepay(
@@ -1225,7 +1232,7 @@ export namespace BundlerAction {
     market: InputMarketParams,
     assets: bigint,
     shares: bigint,
-    slippageAmount: bigint,
+    maxSharePriceE27: bigint,
     onBehalf: Address,
     callbackCalls: BundlerCall[],
     skipRevert = false,
@@ -1245,7 +1252,14 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoRepay",
-          args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
+          args: [
+            market,
+            assets,
+            shares,
+            maxSharePriceE27,
+            onBehalf,
+            reenterData,
+          ],
         }),
         value: 0n,
         skipRevert,
@@ -1260,7 +1274,7 @@ export namespace BundlerAction {
    * @param market The market params to withdraw from.
    * @param assets The amount of assets to withdraw.
    * @param shares The amount of supply shares to redeem.
-   * @param slippageAmount The minimum (resp. maximum) amount of assets (resp. supply shares) to withdraw (resp. redeem) (protects the sender from unexpected slippage).
+   * @param minSharePriceE27 The minimum amount of assets withdrawn per burned supply share, scaled by 1e27 (protects the sender from unexpected slippage).
    * @param receiver The address to send withdrawn tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
@@ -1269,7 +1283,7 @@ export namespace BundlerAction {
     market: InputMarketParams,
     assets: bigint,
     shares: bigint,
-    slippageAmount: bigint,
+    minSharePriceE27: bigint,
     receiver: Address,
     skipRevert = false,
   ): BundlerCall[] {
@@ -1283,7 +1297,7 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoWithdraw",
-          args: [market, assets, shares, slippageAmount, receiver],
+          args: [market, assets, shares, minSharePriceE27, receiver],
         }),
         value: 0n,
         skipRevert,
