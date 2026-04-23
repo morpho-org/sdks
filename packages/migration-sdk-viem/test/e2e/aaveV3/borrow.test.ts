@@ -433,6 +433,16 @@ describe("Borrow position on AAVE V3", () => {
                   ],
                 },
                 {
+                  type: "erc20Transfer",
+                  args: [
+                    marketTo.loanToken,
+                    client.account.address,
+                    maxUint256,
+                    generalAdapter1,
+                    false,
+                  ],
+                },
+                {
                   type: "erc20TransferFrom",
                   args: [
                     aCollateralToken,
@@ -631,6 +641,16 @@ describe("Borrow position on AAVE V3", () => {
                     client.account.address,
                     [],
                     true,
+                  ],
+                },
+                {
+                  type: "erc20Transfer",
+                  args: [
+                    marketTo.loanToken,
+                    client.account.address,
+                    maxUint256,
+                    generalAdapter1,
+                    false,
                   ],
                 },
                 {
@@ -991,6 +1011,16 @@ describe("Borrow position on AAVE V3", () => {
                     ],
                   },
                   {
+                    type: "erc20Transfer",
+                    args: [
+                      marketTo.loanToken,
+                      client.account.address,
+                      maxUint256,
+                      generalAdapter1,
+                      false,
+                    ],
+                  },
+                  {
                     type: "erc20TransferFrom",
                     args: [
                       aCollateralToken,
@@ -1212,6 +1242,16 @@ describe("Borrow position on AAVE V3", () => {
                     ],
                   },
                   {
+                    type: "erc20Transfer",
+                    args: [
+                      marketTo.loanToken,
+                      client.account.address,
+                      maxUint256,
+                      generalAdapter1,
+                      false,
+                    ],
+                  },
+                  {
                     type: "erc20TransferFrom",
                     args: [
                       aCollateralToken,
@@ -1430,6 +1470,16 @@ describe("Borrow position on AAVE V3", () => {
                       client.account.address,
                       [],
                       true,
+                    ],
+                  },
+                  {
+                    type: "erc20Transfer",
+                    args: [
+                      marketTo.loanToken,
+                      client.account.address,
+                      maxUint256,
+                      generalAdapter1,
+                      false,
                     ],
                   },
                   {

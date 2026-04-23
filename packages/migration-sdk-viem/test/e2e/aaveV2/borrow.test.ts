@@ -376,6 +376,16 @@ describe("Borrow position on AAVE V2", () => {
               ],
             },
             {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                client.account.address,
+                maxUint256,
+                generalAdapter1,
+                false,
+              ],
+            },
+            {
               type: "erc20TransferFrom",
               args: [aWEth, migratedCollateral, aaveV2MigrationAdapter],
             },
@@ -569,6 +579,16 @@ describe("Borrow position on AAVE V2", () => {
               ],
             },
             {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                client.account.address,
+                maxUint256,
+                generalAdapter1,
+                false,
+              ],
+            },
+            {
               type: "erc20TransferFrom",
               args: [aWEth, maxUint256, aaveV2MigrationAdapter],
             },
@@ -756,6 +776,16 @@ describe("Borrow position on AAVE V2", () => {
                   client.account.address,
                   [],
                   true,
+                ],
+              },
+              {
+                type: "erc20Transfer",
+                args: [
+                  marketTo.loanToken,
+                  client.account.address,
+                  maxUint256,
+                  generalAdapter1,
+                  false,
                 ],
               },
               {
@@ -957,6 +987,16 @@ describe("Borrow position on AAVE V2", () => {
                 ],
               },
               {
+                type: "erc20Transfer",
+                args: [
+                  marketTo.loanToken,
+                  client.account.address,
+                  maxUint256,
+                  generalAdapter1,
+                  false,
+                ],
+              },
+              {
                 type: "erc20TransferFrom",
                 args: [aWEth, maxUint256, aaveV2MigrationAdapter],
               },
@@ -1152,6 +1192,16 @@ describe("Borrow position on AAVE V2", () => {
                   client.account.address,
                   [],
                   true,
+                ],
+              },
+              {
+                type: "erc20Transfer",
+                args: [
+                  marketTo.loanToken,
+                  client.account.address,
+                  maxUint256,
+                  generalAdapter1,
+                  false,
                 ],
               },
               {

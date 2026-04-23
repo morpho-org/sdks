@@ -335,6 +335,16 @@ describe("Borrow position on COMPOUND V3", () => {
                         ],
                       },
                       {
+                        type: "erc20Transfer",
+                        args: [
+                          marketTo.loanToken,
+                          client.account.address,
+                          maxUint256,
+                          generalAdapter1,
+                          false,
+                        ],
+                      },
+                      {
                         type: "compoundV3WithdrawFrom",
                         args: [
                           comet,
@@ -532,6 +542,16 @@ describe("Borrow position on COMPOUND V3", () => {
                       ],
                     },
                     {
+                      type: "erc20Transfer",
+                      args: [
+                        marketTo.loanToken,
+                        client.account.address,
+                        maxUint256,
+                        generalAdapter1,
+                        false,
+                      ],
+                    },
+                    {
                       type: "compoundV3WithdrawFrom",
                       args: [
                         comet,
@@ -695,6 +715,16 @@ describe("Borrow position on COMPOUND V3", () => {
                           client.account.address,
                           [],
                           true,
+                        ],
+                      },
+                      {
+                        type: "erc20Transfer",
+                        args: [
+                          marketTo.loanToken,
+                          client.account.address,
+                          maxUint256,
+                          generalAdapter1,
+                          false,
                         ],
                       },
                       {
@@ -868,6 +898,16 @@ describe("Borrow position on COMPOUND V3", () => {
                           client.account.address,
                           [],
                           true,
+                        ],
+                      },
+                      {
+                        type: "erc20Transfer",
+                        args: [
+                          marketTo.loanToken,
+                          client.account.address,
+                          maxUint256,
+                          generalAdapter1,
+                          false,
                         ],
                       },
                       {
