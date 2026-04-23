@@ -246,9 +246,14 @@ export class MigratableBorrowPosition_CompoundV3
               type: "morphoBorrow",
               args: [
                 marketTo,
+                // Overborrow by `slippageFrom` on both the max-borrow and the
+                // partial-borrow paths. The overborrow is what gives the
+                // post-source-repay sweep below something non-zero to
+                // consume, which is what lets us keep the cleanup flow
+                // strictly `skipRevert: false`.
                 migrateMaxBorrow
                   ? MathLib.wMulUp(this.borrow, MathLib.WAD + slippageFrom)
-                  : migratedBorrow,
+                  : MathLib.wMulUp(migratedBorrow, MathLib.WAD + slippageFrom),
                 0n,
                 minSharePrice,
                 compoundV3MigrationAdapter,
@@ -256,42 +261,61 @@ export class MigratableBorrowPosition_CompoundV3
             },
             {
               type: "compoundV3Repay",
-              args: [cometAddress, maxUint256, user],
-            },
-            // The source `compoundV3Repay` above only consumes as many
-            // destination loan tokens as there is live source debt at
-            // execution time. If the source debt shrank between quote and
-            // execution (e.g. the user partially repaid manually, or a third
-            // party repaid on their behalf on the Comet), the residual
-            // destination loan tokens would otherwise stay stranded on the
-            // public migration adapter, where any later Bundler3 caller could
-            // sweep them out via the inherited `erc20Transfer` entrypoint. We
-            // therefore always route any residual balance through
-            // `generalAdapter1` and apply it back to the destination market
-            // as a cleanup repay on behalf of the user, so the migration
-            // adapter never retains destination loan tokens after the source
-            // repay leg finishes. Both actions are flagged `skipRevert: true`
-            // to no-op cleanly when there is no excess (the happy path, where
-            // the source debt at execution matches the quoted amount and the
-            // adapter balance is already zero — which would otherwise trip
-            // CoreAdapter's `ZeroAmount` guard and Morpho's
-            // `INCONSISTENT_INPUT` check respectively).
-            {
-              type: "erc20Transfer",
+              // For the partial-borrow path, cap the source repay at the
+              // user-quoted `migratedBorrow`. The CompoundV3MigrationAdapter
+              // itself caps the amount at `min(adapter_balance,
+              // ICompoundV3.borrowBalanceOf(onBehalf))`, so this effectively
+              // does `min(migratedBorrow, live_source_debt)` and never
+              // creates a supply position on the Comet. The cap guarantees
+              // the migration adapter keeps at least `migratedBorrow *
+              // slippageFrom` of residual destination loan tokens after
+              // this action — without the cap, a partial migration where
+              // `live_source_debt >= migratedBorrow * (1 + slippageFrom)`
+              // would drain the adapter to zero and trip CoreAdapter's
+              // `ZeroAmount` guard on the subsequent sweep (see
+              // bundler3/src/adapters/migration/CompoundV3MigrationAdapter.sol).
+              //
+              // On the max-borrow path we keep `maxUint256` so a debt
+              // that accrued more interest than `slippageFrom` is still
+              // cleared to the maximum extent the borrowed amount allows.
               args: [
-                marketTo.loanToken,
-                generalAdapter1,
-                maxUint256,
-                compoundV3MigrationAdapter,
-                true,
+                cometAddress,
+                migrateMaxBorrow ? maxUint256 : migratedBorrow,
+                user,
               ],
-            },
-            {
-              type: "morphoRepay",
-              args: [marketTo, maxUint256, 0n, maxUint256, user, [], true],
             },
           ]
         : [];
+
+    // Always route any residual destination loan tokens on the migration
+    // adapter through `generalAdapter1` and apply them back to the
+    // destination market as a cleanup repay on behalf of the user, so the
+    // public migration adapter never retains destination loan tokens after
+    // the source repay leg finishes. See SDK-155 / MORP2-4.
+    //
+    // We only append the pair when `slippageFrom > 0n`, because that is the
+    // only regime where the overborrow above guarantees a non-zero residual
+    // on the migration adapter (and therefore a non-zero balance on
+    // `generalAdapter1` after the sweep). When `slippageFrom == 0n`, the
+    // caller has explicitly opted out of slippage protection and we preserve
+    // the pre-fix behaviour instead of injecting a cleanup that could revert
+    // the whole bundle with `CoreAdapter.ZeroAmount` on the happy path.
+    if (slippageFrom > 0n)
+      borrowActions.push(
+        {
+          type: "erc20Transfer",
+          args: [
+            marketTo.loanToken,
+            generalAdapter1,
+            maxUint256,
+            compoundV3MigrationAdapter,
+          ],
+        },
+        {
+          type: "morphoRepay",
+          args: [marketTo, maxUint256, 0n, maxUint256, user, []],
+        },
+      );
 
     if (collateralAmount > 0n) {
       const callbackActions = borrowActions.concat({

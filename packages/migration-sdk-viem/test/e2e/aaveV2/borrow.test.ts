@@ -343,7 +343,10 @@ describe("Borrow position on AAVE V2", () => {
               type: "morphoBorrow",
               args: [
                 marketTo,
-                migratedBorrow,
+                MathLib.wMulUp(
+                  migratedBorrow,
+                  MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+                ),
                 0n,
                 minSharePrice,
                 aaveV2MigrationAdapter,
@@ -351,7 +354,7 @@ describe("Borrow position on AAVE V2", () => {
             },
             {
               type: "aaveV2Repay",
-              args: [usdt, maxUint256, client.account.address, 2n],
+              args: [usdt, migratedBorrow, client.account.address, 2n],
             },
             {
               type: "erc20Transfer",
@@ -360,7 +363,6 @@ describe("Borrow position on AAVE V2", () => {
                 generalAdapter1,
                 maxUint256,
                 aaveV2MigrationAdapter,
-                true,
               ],
             },
             {
@@ -372,7 +374,6 @@ describe("Borrow position on AAVE V2", () => {
                 maxUint256,
                 client.account.address,
                 [],
-                true,
               ],
             },
             {
@@ -553,7 +554,6 @@ describe("Borrow position on AAVE V2", () => {
                 generalAdapter1,
                 maxUint256,
                 aaveV2MigrationAdapter,
-                true,
               ],
             },
             {
@@ -565,7 +565,6 @@ describe("Borrow position on AAVE V2", () => {
                 maxUint256,
                 client.account.address,
                 [],
-                true,
               ],
             },
             {
@@ -726,7 +725,10 @@ describe("Borrow position on AAVE V2", () => {
                 type: "morphoBorrow",
                 args: [
                   marketTo,
-                  migratedBorrow,
+                  MathLib.wMulUp(
+                    migratedBorrow,
+                    MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+                  ),
                   0n,
                   minSharePrice,
                   aaveV2MigrationAdapter,
@@ -734,7 +736,7 @@ describe("Borrow position on AAVE V2", () => {
               },
               {
                 type: "aaveV2Repay",
-                args: [usdt, maxUint256, client.account.address, 2n],
+                args: [usdt, migratedBorrow, client.account.address, 2n],
               },
               {
                 type: "erc20Transfer",
@@ -743,7 +745,6 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
-                  true,
                 ],
               },
               {
@@ -755,7 +756,6 @@ describe("Borrow position on AAVE V2", () => {
                   maxUint256,
                   client.account.address,
                   [],
-                  true,
                 ],
               },
               {
@@ -941,7 +941,6 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
-                  true,
                 ],
               },
               {
@@ -953,7 +952,6 @@ describe("Borrow position on AAVE V2", () => {
                   maxUint256,
                   client.account.address,
                   [],
-                  true,
                 ],
               },
               {
@@ -1122,7 +1120,10 @@ describe("Borrow position on AAVE V2", () => {
                 type: "morphoBorrow",
                 args: [
                   marketTo,
-                  migratedBorrow,
+                  MathLib.wMulUp(
+                    migratedBorrow,
+                    MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+                  ),
                   0n,
                   minSharePrice,
                   aaveV2MigrationAdapter,
@@ -1130,7 +1131,7 @@ describe("Borrow position on AAVE V2", () => {
               },
               {
                 type: "aaveV2Repay",
-                args: [usdt, maxUint256, client.account.address, 2n],
+                args: [usdt, migratedBorrow, client.account.address, 2n],
               },
               {
                 type: "erc20Transfer",
@@ -1139,7 +1140,6 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
-                  true,
                 ],
               },
               {
@@ -1151,7 +1151,6 @@ describe("Borrow position on AAVE V2", () => {
                   maxUint256,
                   client.account.address,
                   [],
-                  true,
                 ],
               },
               {

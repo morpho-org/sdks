@@ -302,7 +302,10 @@ describe("Borrow position on COMPOUND V3", () => {
                         type: "morphoBorrow",
                         args: [
                           marketTo,
-                          migratedBorrow,
+                          MathLib.wMulUp(
+                            migratedBorrow,
+                            MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+                          ),
                           0n,
                           minSharePrice,
                           compoundV3MigrationAdapter,
@@ -310,7 +313,7 @@ describe("Borrow position on COMPOUND V3", () => {
                       },
                       {
                         type: "compoundV3Repay",
-                        args: [comet, maxUint256, client.account.address],
+                        args: [comet, migratedBorrow, client.account.address],
                       },
                       {
                         type: "erc20Transfer",
@@ -319,7 +322,6 @@ describe("Borrow position on COMPOUND V3", () => {
                           generalAdapter1,
                           maxUint256,
                           compoundV3MigrationAdapter,
-                          true,
                         ],
                       },
                       {
@@ -331,7 +333,6 @@ describe("Borrow position on COMPOUND V3", () => {
                           maxUint256,
                           client.account.address,
                           [],
-                          true,
                         ],
                       },
                       {
@@ -516,7 +517,6 @@ describe("Borrow position on COMPOUND V3", () => {
                         generalAdapter1,
                         maxUint256,
                         compoundV3MigrationAdapter,
-                        true,
                       ],
                     },
                     {
@@ -528,7 +528,6 @@ describe("Borrow position on COMPOUND V3", () => {
                         maxUint256,
                         client.account.address,
                         [],
-                        true,
                       ],
                     },
                     {
@@ -665,7 +664,10 @@ describe("Borrow position on COMPOUND V3", () => {
                         type: "morphoBorrow",
                         args: [
                           marketTo,
-                          migratedBorrow,
+                          MathLib.wMulUp(
+                            migratedBorrow,
+                            MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
+                          ),
                           0n,
                           minSharePrice,
                           compoundV3MigrationAdapter,
@@ -673,7 +675,7 @@ describe("Borrow position on COMPOUND V3", () => {
                       },
                       {
                         type: "compoundV3Repay",
-                        args: [comet, maxUint256, client.account.address],
+                        args: [comet, migratedBorrow, client.account.address],
                       },
                       {
                         type: "erc20Transfer",
@@ -682,7 +684,6 @@ describe("Borrow position on COMPOUND V3", () => {
                           generalAdapter1,
                           maxUint256,
                           compoundV3MigrationAdapter,
-                          true,
                         ],
                       },
                       {
@@ -694,7 +695,6 @@ describe("Borrow position on COMPOUND V3", () => {
                           maxUint256,
                           client.account.address,
                           [],
-                          true,
                         ],
                       },
                       {
@@ -855,7 +855,6 @@ describe("Borrow position on COMPOUND V3", () => {
                           generalAdapter1,
                           maxUint256,
                           compoundV3MigrationAdapter,
-                          true,
                         ],
                       },
                       {
@@ -867,7 +866,6 @@ describe("Borrow position on COMPOUND V3", () => {
                           maxUint256,
                           client.account.address,
                           [],
-                          true,
                         ],
                       },
                       {
