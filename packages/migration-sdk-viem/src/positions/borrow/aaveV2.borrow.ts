@@ -255,21 +255,6 @@ export class MigratableBorrowPosition_AaveV2
               type: "aaveV2Repay",
               args: [this.loanToken.address, maxUint256, user, 2n],
             },
-            // The source `aaveV2Repay` above only consumes as many destination
-            // loan tokens as there is live source debt at execution time. If
-            // the source debt shrank between quote and execution (e.g. the user
-            // partially repaid manually, or a third party repaid on their
-            // behalf on Aave V2), the residual destination loan tokens would
-            // otherwise stay stranded on the public migration adapter, where
-            // any later Bundler3 caller could sweep them out via the inherited
-            // `erc20Transfer` entrypoint. We therefore always route any
-            // residual balance through `generalAdapter1` and apply it back to
-            // the destination market as a cleanup repay on behalf of the user,
-            // so the migration adapter never retains destination loan tokens
-            // after the source repay leg finishes. Both actions use
-            // `skipRevert: false` so any revert (paused/blocked token on the
-            // sweep, or a Morpho-side revert on the cleanup repay) propagates
-            // and cannot silently mask a real issue.
             {
               type: "erc20Transfer",
               args: [
