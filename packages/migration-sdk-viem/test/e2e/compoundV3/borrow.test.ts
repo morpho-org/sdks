@@ -313,6 +313,28 @@ describe("Borrow position on COMPOUND V3", () => {
                         args: [comet, maxUint256, client.account.address],
                       },
                       {
+                        type: "erc20Transfer",
+                        args: [
+                          marketTo.loanToken,
+                          generalAdapter1,
+                          maxUint256,
+                          compoundV3MigrationAdapter,
+                          true,
+                        ],
+                      },
+                      {
+                        type: "morphoRepay",
+                        args: [
+                          marketTo,
+                          maxUint256,
+                          0n,
+                          maxUint256,
+                          client.account.address,
+                          [],
+                          true,
+                        ],
+                      },
+                      {
                         type: "compoundV3WithdrawFrom",
                         args: [
                           comet,
@@ -494,6 +516,7 @@ describe("Borrow position on COMPOUND V3", () => {
                         generalAdapter1,
                         maxUint256,
                         compoundV3MigrationAdapter,
+                        true,
                       ],
                     },
                     {
@@ -505,6 +528,7 @@ describe("Borrow position on COMPOUND V3", () => {
                         maxUint256,
                         client.account.address,
                         [],
+                        true,
                       ],
                     },
                     {
@@ -650,6 +674,28 @@ describe("Borrow position on COMPOUND V3", () => {
                       {
                         type: "compoundV3Repay",
                         args: [comet, maxUint256, client.account.address],
+                      },
+                      {
+                        type: "erc20Transfer",
+                        args: [
+                          marketTo.loanToken,
+                          generalAdapter1,
+                          maxUint256,
+                          compoundV3MigrationAdapter,
+                          true,
+                        ],
+                      },
+                      {
+                        type: "morphoRepay",
+                        args: [
+                          marketTo,
+                          maxUint256,
+                          0n,
+                          maxUint256,
+                          client.account.address,
+                          [],
+                          true,
+                        ],
                       },
                       {
                         type: "compoundV3WithdrawFrom",
@@ -809,6 +855,7 @@ describe("Borrow position on COMPOUND V3", () => {
                           generalAdapter1,
                           maxUint256,
                           compoundV3MigrationAdapter,
+                          true,
                         ],
                       },
                       {
@@ -820,6 +867,7 @@ describe("Borrow position on COMPOUND V3", () => {
                           maxUint256,
                           client.account.address,
                           [],
+                          true,
                         ],
                       },
                       {

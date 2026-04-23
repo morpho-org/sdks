@@ -256,25 +256,39 @@ export class MigratableBorrowPosition_AaveV3
               type: "aaveV3Repay",
               args: [this.loanToken.address, maxUint256, user, 2n],
             },
+            // The source `aaveV3Repay` above only consumes as many destination
+            // loan tokens as there is live source debt at execution time. If
+            // the source debt shrank between quote and execution (e.g. the user
+            // partially repaid manually, or a third party repaid on their
+            // behalf on Aave V3), the residual destination loan tokens would
+            // otherwise stay stranded on the public migration adapter, where
+            // any later Bundler3 caller could sweep them out via the inherited
+            // `erc20Transfer` entrypoint. We therefore always route any
+            // residual balance through `generalAdapter1` and apply it back to
+            // the destination market as a cleanup repay on behalf of the user,
+            // so the migration adapter never retains destination loan tokens
+            // after the source repay leg finishes. Both actions are flagged
+            // `skipRevert: true` to no-op cleanly when there is no excess (the
+            // happy path, where the source debt at execution matches the
+            // quoted amount and the adapter balance is already zero — which
+            // would otherwise trip CoreAdapter's `ZeroAmount` guard and
+            // Morpho's `INCONSISTENT_INPUT` check respectively).
+            {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                generalAdapter1,
+                maxUint256,
+                aaveV3CoreMigrationAdapter,
+                true,
+              ],
+            },
+            {
+              type: "morphoRepay",
+              args: [marketTo, maxUint256, 0n, maxUint256, user, [], true],
+            },
           ]
         : [];
-
-    if (migrateMaxBorrow && slippageFrom > 0n)
-      borrowActions.push(
-        {
-          type: "erc20Transfer",
-          args: [
-            marketTo.loanToken,
-            generalAdapter1,
-            maxUint256,
-            aaveV3CoreMigrationAdapter,
-          ],
-        },
-        {
-          type: "morphoRepay",
-          args: [marketTo, maxUint256, 0n, maxUint256, user, []],
-        },
-      );
 
     if (migratedCollateral > 0n) {
       const callbackActions = borrowActions.concat(
