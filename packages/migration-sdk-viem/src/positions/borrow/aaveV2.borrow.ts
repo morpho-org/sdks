@@ -267,7 +267,7 @@ export class MigratableBorrowPosition_AaveV2
             },
             {
               type: "morphoRepay",
-              args: [marketTo, maxUint256, 0n, maxUint256, user, [], false],
+              args: [marketTo, maxUint256, 0n, maxUint256, user, [], true],
             },
           ]
         : [];

@@ -331,7 +331,7 @@ describe("Borrow position on COMPOUND V3", () => {
                           maxUint256,
                           client.account.address,
                           [],
-                          false,
+                          true,
                         ],
                       },
                       {
@@ -528,7 +528,7 @@ describe("Borrow position on COMPOUND V3", () => {
                         maxUint256,
                         client.account.address,
                         [],
-                        false,
+                        true,
                       ],
                     },
                     {
@@ -694,7 +694,7 @@ describe("Borrow position on COMPOUND V3", () => {
                           maxUint256,
                           client.account.address,
                           [],
-                          false,
+                          true,
                         ],
                       },
                       {
@@ -867,7 +867,7 @@ describe("Borrow position on COMPOUND V3", () => {
                           maxUint256,
                           client.account.address,
                           [],
-                          false,
+                          true,
                         ],
                       },
                       {

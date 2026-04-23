@@ -429,7 +429,7 @@ describe("Borrow position on AAVE V3", () => {
                     maxUint256,
                     client.account.address,
                     [],
-                    false,
+                    true,
                   ],
                 },
                 {
@@ -630,7 +630,7 @@ describe("Borrow position on AAVE V3", () => {
                     maxUint256,
                     client.account.address,
                     [],
-                    false,
+                    true,
                   ],
                 },
                 {
@@ -987,7 +987,7 @@ describe("Borrow position on AAVE V3", () => {
                       maxUint256,
                       client.account.address,
                       [],
-                      false,
+                      true,
                     ],
                   },
                   {
@@ -1208,7 +1208,7 @@ describe("Borrow position on AAVE V3", () => {
                       maxUint256,
                       client.account.address,
                       [],
-                      false,
+                      true,
                     ],
                   },
                   {
@@ -1429,7 +1429,7 @@ describe("Borrow position on AAVE V3", () => {
                       maxUint256,
                       client.account.address,
                       [],
-                      false,
+                      true,
                     ],
                   },
                   {
