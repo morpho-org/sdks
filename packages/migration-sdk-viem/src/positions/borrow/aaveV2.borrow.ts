@@ -266,12 +266,10 @@ export class MigratableBorrowPosition_AaveV2
             // residual balance through `generalAdapter1` and apply it back to
             // the destination market as a cleanup repay on behalf of the user,
             // so the migration adapter never retains destination loan tokens
-            // after the source repay leg finishes. Both actions are flagged
-            // `skipRevert: true` to no-op cleanly when there is no excess (the
-            // happy path, where the source debt at execution matches the
-            // quoted amount and the adapter balance is already zero — which
-            // would otherwise trip CoreAdapter's `ZeroAmount` guard and
-            // Morpho's `INCONSISTENT_INPUT` check respectively).
+            // after the source repay leg finishes. Both actions use
+            // `skipRevert: false` so any revert (paused/blocked token on the
+            // sweep, or a Morpho-side revert on the cleanup repay) propagates
+            // and cannot silently mask a real issue.
             {
               type: "erc20Transfer",
               args: [
@@ -279,12 +277,12 @@ export class MigratableBorrowPosition_AaveV2
                 generalAdapter1,
                 maxUint256,
                 aaveV2MigrationAdapter,
-                true,
+                false,
               ],
             },
             {
               type: "morphoRepay",
-              args: [marketTo, maxUint256, 0n, maxUint256, user, [], true],
+              args: [marketTo, maxUint256, 0n, maxUint256, user, [], false],
             },
           ]
         : [];

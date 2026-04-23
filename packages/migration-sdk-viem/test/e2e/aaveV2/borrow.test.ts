@@ -360,7 +360,7 @@ describe("Borrow position on AAVE V2", () => {
                 generalAdapter1,
                 maxUint256,
                 aaveV2MigrationAdapter,
-                true,
+                false,
               ],
             },
             {
@@ -372,7 +372,7 @@ describe("Borrow position on AAVE V2", () => {
                 maxUint256,
                 client.account.address,
                 [],
-                true,
+                false,
               ],
             },
             {
@@ -553,7 +553,7 @@ describe("Borrow position on AAVE V2", () => {
                 generalAdapter1,
                 maxUint256,
                 aaveV2MigrationAdapter,
-                true,
+                false,
               ],
             },
             {
@@ -565,7 +565,7 @@ describe("Borrow position on AAVE V2", () => {
                 maxUint256,
                 client.account.address,
                 [],
-                true,
+                false,
               ],
             },
             {
@@ -743,7 +743,7 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
-                  true,
+                  false,
                 ],
               },
               {
@@ -755,7 +755,7 @@ describe("Borrow position on AAVE V2", () => {
                   maxUint256,
                   client.account.address,
                   [],
-                  true,
+                  false,
                 ],
               },
               {
@@ -941,7 +941,7 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
-                  true,
+                  false,
                 ],
               },
               {
@@ -953,7 +953,7 @@ describe("Borrow position on AAVE V2", () => {
                   maxUint256,
                   client.account.address,
                   [],
-                  true,
+                  false,
                 ],
               },
               {
@@ -1139,7 +1139,7 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
-                  true,
+                  false,
                 ],
               },
               {
@@ -1151,7 +1151,7 @@ describe("Borrow position on AAVE V2", () => {
                   maxUint256,
                   client.account.address,
                   [],
-                  true,
+                  false,
                 ],
               },
               {
