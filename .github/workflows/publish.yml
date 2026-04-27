@@ -4,44 +4,30 @@ on:
   workflow_call:
 
 permissions:
-  id-token: write
   contents: write
+  id-token: write
 
 jobs:
   publish:
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - test
-          - test-wagmi
-
-          - morpho-ts
-          - morpho-test
-
-          - blue-sdk
-          - blue-sdk-viem
-          - blue-sdk-wagmi
-
-          - simulation-sdk
-          - simulation-sdk-wagmi
-
-          - bundler-sdk-viem
-
-          - liquidation-sdk-viem
-          - liquidity-sdk-viem
-
-          - migration-sdk-viem
-
-    name: "@morpho-org/${{ matrix.package }}"
+    name: Publish
     runs-on: ubuntu-latest
+    env:
+      CI: true
+      HUSKY: 0
 
     steps:
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: main
-          # Fetch all history so that we can determine the version to release.
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
+          token: ${{ steps.app-token.outputs.token }}
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
@@ -59,23 +45,165 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - id: release
-        run: node ../../scripts/release/release.js
-        working-directory: packages/${{ matrix.package }}
+      - name: Detect pending changesets
+        id: pending-changesets
+        shell: bash
+        run: |
+          shopt -s nullglob
 
-      # Set version of each package to the most recent so they are referenced correctly in dependencies.
-      - run: |
-          pnpm -r -c exec 'node ../../scripts/release/version.js'
-        if: steps.release.outputs.version
+          pending=()
+          for changeset in .changeset/*.md; do
+            if [ "$(basename "$changeset")" != "README.md" ]; then
+              pending+=("$changeset")
+            fi
+          done
 
-      - run: pnpm publish --no-git-checks --access public --tag ${{ steps.release.outputs.channel }}
-        working-directory: packages/${{ matrix.package }}
-        if: steps.release.outputs.version
+          if [ "${#pending[@]}" -gt 0 ]; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+            echo "Pending changesets:"
+            printf '%s\n' "${pending[@]}"
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - run: gh release create ${{ steps.release.outputs.tag }} --target ${{ steps.release.outputs.branch }} --notes-file packages/${{ matrix.package }}/CHANGELOG.md --title '${{ steps.release.outputs.tag }}' ${{ steps.release.outputs.channel == 'latest' && '--latest' || '--prerelease' }}
-        if: steps.release.outputs.version
+      - name: Enter next prerelease mode
+        if: github.ref_name == 'next' && steps.pending-changesets.outputs.has_changesets == 'true' && hashFiles('.changeset/pre.json') == ''
+        run: pnpm changeset pre enter next
+
+      - name: Version packages
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        run: pnpm run version
+
+      - name: Commit version changes
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: ${{ github.ref_name }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          node <<'NODE'
+          const { execFileSync } = require("node:child_process");
+          const { readFileSync } = require("node:fs");
 
-      - run: echo "- [RELEASE] ${{ steps.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        if: steps.release.outputs.version
+          const main = async () => {
+            const exec = (command, args) =>
+              execFileSync(command, args, { encoding: "utf8" }).trim();
+
+            execFileSync("git", ["add", "."]);
+
+            const diff = execFileSync("git", [
+              "diff",
+              "--cached",
+              "--name-status",
+              "-z",
+            ]);
+
+            if (diff.length === 0) {
+              console.log("No version changes to commit.");
+              return;
+            }
+
+            const fields = diff.toString("utf8").split("\0").filter(Boolean);
+            const additions = [];
+            const deletions = [];
+
+            for (let i = 0; i < fields.length; ) {
+              const status = fields[i++];
+
+              if (status.startsWith("R")) {
+                const oldPath = fields[i++];
+                const newPath = fields[i++];
+
+                deletions.push({ path: oldPath });
+                additions.push({
+                  path: newPath,
+                  contents: readFileSync(newPath, "base64"),
+                });
+                continue;
+              }
+
+              const path = fields[i++];
+              if (status === "D") {
+                deletions.push({ path });
+              } else {
+                additions.push({
+                  path,
+                  contents: readFileSync(path, "base64"),
+                });
+              }
+            }
+
+            const expectedHeadOid = exec("git", ["rev-parse", "HEAD"]);
+            const query = `
+              mutation CreateVersionCommit($input: CreateCommitOnBranchInput!) {
+                createCommitOnBranch(input: $input) {
+                  commit {
+                    oid
+                    url
+                  }
+                }
+              }
+            `;
+
+            const response = await fetch("https://api.github.com/graphql", {
+              method: "POST",
+              headers: {
+                authorization: `Bearer ${process.env.GH_TOKEN}`,
+                "content-type": "application/json",
+                "x-github-api-version": "2022-11-28",
+              },
+              body: JSON.stringify({
+                query,
+                variables: {
+                  input: {
+                    branch: {
+                      repositoryNameWithOwner: process.env.GITHUB_REPOSITORY,
+                      branchName: process.env.BRANCH,
+                    },
+                    expectedHeadOid,
+                    message: {
+                      headline: "chore: version packages",
+                    },
+                    fileChanges: {
+                      additions,
+                      deletions,
+                    },
+                  },
+                },
+              }),
+            });
+
+            const result = await response.json();
+            if (!response.ok || result.errors) {
+              console.error(JSON.stringify(result, null, 2));
+              process.exit(1);
+            }
+
+            const commit = result.data.createCommitOnBranch.commit;
+            console.log(`Created ${commit.url}`);
+          };
+
+          main().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+
+      - name: Publish packages
+        if: steps.pending-changesets.outputs.has_changesets == 'false'
+        shell: bash
+        run: |
+          publish_tag="latest"
+          if [ "${GITHUB_REF_NAME}" = "next" ]; then
+            publish_tag="next"
+          fi
+
+          git tag --list | sort > /tmp/tags-before
+          pnpm release --access public --provenance --tag "$publish_tag"
+          git tag --list | sort > /tmp/tags-after
+
+          comm -13 /tmp/tags-before /tmp/tags-after > /tmp/new-tags
+          if [ -s /tmp/new-tags ]; then
+            while IFS= read -r tag; do
+              git push origin "refs/tags/${tag}"
+            done < /tmp/new-tags
+          fi
