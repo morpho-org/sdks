@@ -44,6 +44,34 @@
 
 Learn [how to add a new chain configuration](./docs/adding-new-chain.md) to the sdks.
 
+## Developer
+
+### Changesets
+
+This repository uses [Changesets](https://github.com/changesets/changesets) to decide which packages are released and how their versions are bumped.
+
+When a PR changes a package in a way that should be released, run:
+
+```sh
+pnpm changeset
+```
+
+Select every package affected by the change and choose the smallest semver bump that describes the public impact:
+
+- `patch`: bug fixes and backwards-compatible maintenance changes
+- `minor`: new backwards-compatible APIs or behavior
+- `major`: breaking changes
+
+Commit the generated `.changeset/*.md` file with the source change. Do not update package versions or changelogs manually; the release workflow does that after the change is merged.
+
+If a package changes but no release is needed, add an empty changeset instead:
+
+```sh
+pnpm changeset --empty
+```
+
+After changes land on `main` or `next`, CI runs `pnpm version` and commits the generated version/changelog changes directly to that branch. The next CI run publishes only package versions that have not already been published. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag.
+
 ## Debugging
 
 Here's a tutorial on how to link a specific package to debug at runtime:
