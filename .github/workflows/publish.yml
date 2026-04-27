@@ -198,7 +198,7 @@ jobs:
           fi
 
           git tag --list | sort > /tmp/tags-before
-          pnpm release --access public --provenance --tag "$publish_tag"
+          pnpm release --tag "$publish_tag"
           git tag --list | sort > /tmp/tags-after
 
           comm -13 /tmp/tags-before /tmp/tags-after > /tmp/new-tags
