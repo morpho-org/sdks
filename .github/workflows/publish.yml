@@ -9,6 +9,7 @@ permissions:
 
 jobs:
   publish:
+    if: github.ref_name == 'main' || github.ref_name == 'next'
     name: Publish
     runs-on: ubuntu-latest
     env:
