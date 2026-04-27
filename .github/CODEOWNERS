@@ -1,2 +1,3 @@
 /.github/CODEOWNERS @morpho-org/security
 /.github/workflows/publish.yml @morpho-org/security
+/.github/workflows/ @morpho-org/security
