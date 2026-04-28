@@ -75,6 +75,12 @@ jobs:
         if: github.ref_name == 'next' && steps.pending-changesets.outputs.has_changesets == 'true' && hashFiles('.changeset/pre.json') == ''
         run: pnpm changeset pre enter next
 
+      - name: Refuse prerelease mode on main
+        if: github.ref_name == 'main' && hashFiles('.changeset/pre.json') != ''
+        run: |
+          echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
+          exit 1
+
       - name: Version packages
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         run: pnpm run version
@@ -114,11 +120,13 @@ jobs:
             for (let i = 0; i < fields.length; ) {
               const status = fields[i++];
 
-              if (status.startsWith("R")) {
+              if (status.startsWith("R") || status.startsWith("C")) {
                 const oldPath = fields[i++];
                 const newPath = fields[i++];
 
-                deletions.push({ path: oldPath });
+                if (status.startsWith("R")) {
+                  deletions.push({ path: oldPath });
+                }
                 additions.push({
                   path: newPath,
                   contents: readFileSync(newPath, "base64"),
@@ -183,6 +191,11 @@ jobs:
               process.exit(1);
             }
 
+            if (!result.data?.createCommitOnBranch?.commit) {
+              console.error(JSON.stringify(result, null, 2));
+              process.exit(1);
+            }
+
             const commit = result.data.createCommitOnBranch.commit;
             console.log(`Created ${commit.url}`);
           };
@@ -202,13 +215,23 @@ jobs:
             publish_tag="next"
           fi
 
-          git tag --list | sort > /tmp/tags-before
-          pnpm release --tag "$publish_tag"
-          git tag --list | sort > /tmp/tags-after
+          before_tags="$(mktemp)"
+          after_tags="$(mktemp)"
+          new_tags="$(mktemp)"
+          trap 'rm -f "$before_tags" "$after_tags" "$new_tags"' EXIT
 
-          comm -13 /tmp/tags-before /tmp/tags-after > /tmp/new-tags
-          if [ -s /tmp/new-tags ]; then
-            while IFS= read -r tag; do
-              git push origin "refs/tags/${tag}"
-            done < /tmp/new-tags
+          git tag --list | sort > "$before_tags"
+          pnpm release --tag "$publish_tag"
+          git tag --list | sort > "$after_tags"
+
+          comm -13 "$before_tags" "$after_tags" > "$new_tags"
+          if [ -s "$new_tags" ]; then
+            mapfile -t tags < "$new_tags"
+            refs=()
+
+            for tag in "${tags[@]}"; do
+              refs+=("refs/tags/${tag}")
+            done
+
+            git push --atomic origin "${refs[@]}"
           fi

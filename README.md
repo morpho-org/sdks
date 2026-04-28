@@ -70,7 +70,9 @@ If a package changes but no release is needed, add an empty changeset instead:
 pnpm changeset --empty
 ```
 
-After changes land on `main` or `next`, CI runs `pnpm version` and commits the generated version/changelog changes directly to that branch. The next CI run publishes only package versions that have not already been published. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag.
+After changes land on `main` or `next`, CI runs `pnpm run version` (the repository script for `changeset version`) and commits the generated version/changelog changes directly to that branch. The next CI run publishes only package versions that have not already been published. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag.
+
+Before merging `next` back into `main`, maintainers must run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change so stable releases on `main` cannot inherit prerelease mode.
 
 ## Debugging
 

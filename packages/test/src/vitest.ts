@@ -57,9 +57,7 @@ export const createViemTest = <chain extends Chain>(
   return test.extend<ViemTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
     client: async ({}, use) => {
-      let stop: (() => boolean) | undefined;
-      const { rpcUrl, stop: stopAnvil } = await spawnAnvilWithRetry(parameters);
-      stop = stopAnvil;
+      const { rpcUrl, stop } = await spawnAnvilWithRetry(parameters);
 
       try {
         const client = createAnvilTestClient(
@@ -105,7 +103,7 @@ export const createViemTest = <chain extends Chain>(
 
         await use(client);
       } finally {
-        stop?.();
+        stop();
       }
     },
   });
