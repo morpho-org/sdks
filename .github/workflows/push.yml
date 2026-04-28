@@ -22,6 +22,17 @@ jobs:
     uses: ./.github/workflows/test.yml
     secrets: inherit
 
+  version-pr:
+    if: github.ref_name == 'main' || github.ref_name == 'next'
+
+    needs:
+      - lint
+      - build
+      - test
+
+    uses: ./.github/workflows/version-pr.yml
+    secrets: inherit
+
   publish:
     if: github.ref_name == 'main' || github.ref_name == 'next'
 
@@ -29,6 +40,7 @@ jobs:
       - lint
       - build
       - test
+      - version-pr
 
     uses: ./.github/workflows/publish.yml
     secrets: inherit
