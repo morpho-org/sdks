@@ -35,6 +35,9 @@ export enum ChainId {
   EdenMainnet = 714,
   PharosMainnet = 1672,
   GensynMainnet = 685689,
+  FlareMainnet = 14,
+  XdcMainnet = 50,
+  KaiaMainnet = 8217,
 }
 
 export interface ChainMetadata {
@@ -328,6 +331,27 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://gensyn-mainnet.explorer.alchemy.com",
       identifier: "gensyn",
+    },
+    [ChainId.FlareMainnet]: {
+      name: "Flare",
+      id: ChainId.FlareMainnet,
+      nativeCurrency: { name: "Flare", symbol: "FLR", decimals: 18 },
+      explorerUrl: "https://mainnet.flarescan.com",
+      identifier: "flare",
+    },
+    [ChainId.XdcMainnet]: {
+      name: "XDC",
+      id: ChainId.XdcMainnet,
+      nativeCurrency: { name: "XDC", symbol: "XDC", decimals: 18 },
+      explorerUrl: "https://xdcscan.com",
+      identifier: "xdc",
+    },
+    [ChainId.KaiaMainnet]: {
+      name: "Kaia",
+      id: ChainId.KaiaMainnet,
+      nativeCurrency: { name: "Kaia", symbol: "KAIA", decimals: 18 },
+      explorerUrl: "https://kaiascan.io",
+      identifier: "kaia",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }

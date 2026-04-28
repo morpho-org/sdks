@@ -187,6 +187,108 @@ describe("addresses", () => {
         wNative: 0n,
       },
     },
+    {
+      chainId: 14,
+      expectedAddresses: {
+        morpho: "0xF4346F5132e810f80a28487a79c7559d9797E8B0",
+        permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+        bundler3: {
+          bundler3: "0xb371CFee69984D1F3447D49217889C7388bA2027",
+          generalAdapter1: "0x43F4861c9E7f584cFDc9B6BA3F0c2462895BDd67",
+        },
+        adaptiveCurveIrm: "0xE5B5627C5973AfAE1928a6b8e5c1D6AABFEC8a7a",
+        vaultV2Factory: "0x6FC83ECc0e8142635D77200e5052be8A0a9D2f42",
+        morphoMarketV1AdapterV2Factory:
+          "0xd8237ea1b5974c83C6b0c8942dc2a16F42f789dd",
+        registryList: "0x9730d0B30d9145B66a8e09D26295e36cb84F64a9",
+        chainlinkOracleFactory: "0x95cB3625598F9abf6cb8B874AA1EfEEbE7822642",
+        preLiquidationFactory: "0xf215D05a04b97f98Bb1bF4E0E5Cb97Ef38fa8895",
+        wNative: "0x1D80c49BbBCd1C0911346656B529DF9E5c2F783d",
+      },
+      expectedDeployments: {
+        morpho: 52378788n,
+        permit2: 58377404n,
+        bundler3: {
+          bundler3: 52378788n,
+          generalAdapter1: 52378788n,
+        },
+        adaptiveCurveIrm: 52378788n,
+        vaultV2Factory: 52383002n,
+        morphoMarketV1AdapterV2Factory: 52383110n,
+        registryList: 52383110n,
+        chainlinkOracleFactory: 52378931n,
+        preLiquidationFactory: 52378931n,
+        wNative: 39n,
+      },
+    },
+    {
+      chainId: 50,
+      expectedAddresses: {
+        morpho: "0xEa49B0fE898aF913A3826F9f462eE2cDcb854fD9",
+        permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+        bundler3: {
+          bundler3: "0xed9bdc3E6081db528b6D5CDDf47EcB05337c62A7",
+          generalAdapter1: "0xAB2Ab6A8bb1082C5d8400D6206c6A13cE413e0c0",
+        },
+        adaptiveCurveIrm: "0x15c7312B0f26aa0AA70B24a0D2AF87B9e7D614A0",
+        vaultV2Factory: "0x227544d6989cD15c05AAB6dde4F29523dcfdbe2B",
+        morphoMarketV1AdapterV2Factory:
+          "0x5C00c99F2235439725417E9f037B7D38FfF35d31",
+        registryList: "0x79A8C4e9E502C1867cAf2E7202f0C6b89aaCd5c1",
+        chainlinkOracleFactory: "0x6Ad93a3aA829514473D3DF67382894A76c7283B4",
+        preLiquidationFactory: "0xe3845262d726a827817C7196143CDa9a4404218d",
+        wNative: "0x951857744785E80e2De051c32EE7b25f9c458C42",
+      },
+      expectedDeployments: {
+        morpho: 101757515n,
+        permit2: 92945178n,
+        bundler3: {
+          bundler3: 101757515n,
+          generalAdapter1: 101757515n,
+        },
+        adaptiveCurveIrm: 101757515n,
+        vaultV2Factory: 101757669n,
+        morphoMarketV1AdapterV2Factory: 101757823n,
+        registryList: 101757823n,
+        chainlinkOracleFactory: 101757578n,
+        preLiquidationFactory: 101757578n,
+        wNative: 42776215n,
+      },
+    },
+    {
+      chainId: 8217,
+      expectedAddresses: {
+        morpho: "0xA8BEebdca34d83C697c302A0594f3c41f3994cd2",
+        permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+        bundler3: {
+          bundler3: "0x27880B18ae04a05F1D603B87AEb2a27491FfaBA9",
+          generalAdapter1: "0x8e36C2c6d7771820BF14a75f725f3cf0374a7823",
+        },
+        adaptiveCurveIrm: "0xA4E2bA20Fc64D721D95BD5a28FF71844C5bb5cF2",
+        vaultV2Factory: "0xf2Aecd4a4d4C21d08770e34F392C4C271aBD9144",
+        morphoMarketV1AdapterV2Factory:
+          "0x4d04C39ca604b560c50F4045c558378FD9AEBCF4",
+        registryList: "0xfCA12228DA5fba6E9c0B57a8e8322d0eBaCa03Bc",
+        chainlinkOracleFactory: "0x3e89C1071814b2c4170c90260Fcb60B903AD4602",
+        preLiquidationFactory: "0xe8eCe452F04117e5Fe1Ea4403097215443225440",
+        wNative: "0x19Aac5f612f524B754CA7e7c41cbFa2E981A4432",
+      },
+      expectedDeployments: {
+        morpho: 208021118n,
+        permit2: 188994815n,
+        bundler3: {
+          bundler3: 208021118n,
+          generalAdapter1: 208021118n,
+        },
+        adaptiveCurveIrm: 208021118n,
+        vaultV2Factory: 213463014n,
+        morphoMarketV1AdapterV2Factory: 213463079n,
+        registryList: 213463079n,
+        chainlinkOracleFactory: 213462907n,
+        preLiquidationFactory: 213462907n,
+        wNative: 104802159n,
+      },
+    },
   ])(
     "should expose era-2 addresses for chain $chainId",
     ({ chainId, expectedAddresses, expectedDeployments }) => {

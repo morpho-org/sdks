@@ -56,6 +56,33 @@ describe("ChainUtils", () => {
         nativeCurrency: { name: "TIA", symbol: "TIA", decimals: 18 },
       },
     ],
+    [
+      14,
+      {
+        name: "Flare",
+        explorerUrl: "https://mainnet.flarescan.com",
+        identifier: "flare",
+        nativeCurrency: { name: "Flare", symbol: "FLR", decimals: 18 },
+      },
+    ],
+    [
+      50,
+      {
+        name: "XDC",
+        explorerUrl: "https://xdcscan.com",
+        identifier: "xdc",
+        nativeCurrency: { name: "XDC", symbol: "XDC", decimals: 18 },
+      },
+    ],
+    [
+      8217,
+      {
+        name: "Kaia",
+        explorerUrl: "https://kaiascan.io",
+        identifier: "kaia",
+        nativeCurrency: { name: "Kaia", symbol: "KAIA", decimals: 18 },
+      },
+    ],
   ])("should expose metadata for chain %i", (chainId, expectedMetadata) => {
     expect(
       (ChainUtils.CHAIN_METADATA as Record<number, unknown>)[chainId],
