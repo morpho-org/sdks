@@ -40,6 +40,7 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import { signTypedData } from "viem/actions";
 import { ActionBundle, ActionBundleRequirements } from "./ActionBundle.js";
+import { getSigningAccount } from "./account.js";
 import { BundlerErrors } from "./errors.js";
 import type {
   Action,
@@ -169,7 +170,8 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client: Client, account: Account = client.account!) {
+          async sign(client: Client, account?: Account) {
+            account = await getSigningAccount(client, account);
             let signature = action.args[1];
             if (signature != null) return signature;
 
@@ -272,7 +274,8 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client: Client, account: Account = client.account!) {
+          async sign(client: Client, account?: Account) {
+            account = await getSigningAccount(client, account);
             let signature = action.args[4];
             if (signature != null) return signature; // action is already signed
 
@@ -378,7 +381,8 @@ export const encodeOperation = (
 
         requirements.signatures.push({
           action,
-          async sign(client: Client, account: Account = client.account!) {
+          async sign(client: Client, account?: Account) {
+            account = await getSigningAccount(client, account);
             const { details, sigDeadline } = action.args[1];
 
             let signature = action.args[2];

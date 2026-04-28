@@ -1,6 +1,7 @@
 import type { SimulationResult } from "@morpho-org/simulation-sdk";
 import type { Account, Address, Chain, Client, Hex, Transport } from "viem";
 import { BundlerAction } from "./BundlerAction.js";
+import { getSigningAccount } from "./account.js";
 import type {
   Action,
   SignatureRequirement,
@@ -18,9 +19,13 @@ export class ActionBundleRequirements<
 
   sign(client: Client<Transport, Chain | undefined, Account>): Promise<Hex[]>;
   sign(client: Client, account: Account): Promise<Hex[]>;
-  sign(client: Client, account: Account = client.account!) {
+  async sign(client: Client, account?: Account) {
+    const signingAccount = await getSigningAccount(client, account);
+
     return Promise.all(
-      this.signatures.map((requirement) => requirement.sign(client, account)),
+      this.signatures.map((requirement) =>
+        requirement.sign(client, signingAccount),
+      ),
     );
   }
 }
