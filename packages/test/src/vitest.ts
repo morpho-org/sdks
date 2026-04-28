@@ -1,3 +1,4 @@
+import { setTimeout } from "node:timers/promises";
 import {
   http,
   type Chain,
@@ -19,6 +20,24 @@ export interface ViemTestContext<chain extends Chain = Chain> {
   client: AnvilTestClient<chain>;
 }
 
+const spawnAnvilWithRetry = async (parameters: AnvilArgs) => {
+  const maxAttempts = process.env.CI ? 3 : 1;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await spawnAnvil(parameters);
+    } catch (error) {
+      lastError = error;
+
+      if (attempt === maxAttempts) break;
+      await setTimeout(attempt * 1_000);
+    }
+  }
+
+  throw lastError;
+};
+
 export const createViemTest = <chain extends Chain>(
   chain: chain,
   parameters: AnvilArgs = {},
@@ -29,6 +48,8 @@ export const createViemTest = <chain extends Chain>(
   parameters.order ??= "fifo";
   parameters.stepsTracing ??= true;
   parameters.pruneHistory ??= true;
+  parameters.retries ??= process.env.CI ? 10 : undefined;
+  parameters.forkRetryBackoff ??= process.env.CI ? 500 : undefined;
 
   parameters.gasPrice ??= 0n;
   parameters.blockBaseFeePerGas ??= 0n;
@@ -36,52 +57,56 @@ export const createViemTest = <chain extends Chain>(
   return test.extend<ViemTestContext<chain>>({
     // biome-ignore lint/correctness/noEmptyPattern: required by vitest at runtime
     client: async ({}, use) => {
-      const { rpcUrl, stop } = await spawnAnvil(parameters);
+      let stop: (() => boolean) | undefined;
+      const { rpcUrl, stop: stopAnvil } = await spawnAnvilWithRetry(parameters);
+      stop = stopAnvil;
 
-      const client = createAnvilTestClient(
-        http(rpcUrl, {
-          fetchOptions: {
-            cache: "force-cache",
-          },
-          timeout: 30_000,
-        }),
-        chain,
-      );
+      try {
+        const client = createAnvilTestClient(
+          http(rpcUrl, {
+            fetchOptions: {
+              cache: "force-cache",
+            },
+            timeout: 30_000,
+          }),
+          chain,
+        );
 
-      // Make block timestamp 100% predictable.
-      await client.setBlockTimestampInterval({ interval: 1 });
+        // Make block timestamp 100% predictable.
+        await client.setBlockTimestampInterval({ interval: 1 });
 
-      // Remove code from contract
-      // cf. https://eips.ethereum.org/EIPS/eip-7702
-      const code = await client.getCode({ address: client.account.address });
+        // Remove code from contract
+        // cf. https://eips.ethereum.org/EIPS/eip-7702
+        const code = await client.getCode({ address: client.account.address });
 
-      if (code != null) {
-        const auth = await client.signAuthorization({
-          account: client.account,
-          contractAddress: zeroAddress,
-          executor: "self",
-        });
-
-        await client
-          .sendTransaction({
-            authorizationList: [auth],
-            to: client.account.address,
-            data: "0x",
+        if (code != null) {
+          const auth = await client.signAuthorization({
             account: client.account,
-          } as SendTransactionParameters<chain>)
-          .catch(async (e) => {
-            if (
-              e.cause.details ===
-              "EIP-7702 authorization lists are not supported before the Prague hardfork"
-            )
-              return;
-            throw e;
+            contractAddress: zeroAddress,
+            executor: "self",
           });
+
+          await client
+            .sendTransaction({
+              authorizationList: [auth],
+              to: client.account.address,
+              data: "0x",
+              account: client.account,
+            } as SendTransactionParameters<chain>)
+            .catch(async (e) => {
+              if (
+                e.cause.details ===
+                "EIP-7702 authorization lists are not supported before the Prague hardfork"
+              )
+                return;
+              throw e;
+            });
+        }
+
+        await use(client);
+      } finally {
+        stop?.();
       }
-
-      await use(client);
-
-      await stop();
     },
   });
 };
