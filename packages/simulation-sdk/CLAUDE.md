@@ -6,3 +6,6 @@
 - Store state in `SimulationState`; getters throw `Unknown*Error`, while `tryGet*` returns nullish.
 - Mutating simulation handlers should operate on drafts; exported APIs return immutable results.
 - Keep operation strings protocol-scoped, e.g. `Blue_Borrow` and `MetaMorpho_Deposit`.
+- Wrap handler failures in `SimulationErrors.Simulation(error, index, operation)`.
+- Use `produceImmutable` for public simulation, and `handleOperation` for in-place draft updates.
+- Encode slippage as WAD-scaled `bigint`, e.g. `MathLib.WAD + slippage`.

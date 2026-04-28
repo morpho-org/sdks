@@ -6,3 +6,5 @@
 - Use getters for derived state, e.g. `get utilization()`, and methods for parameterized math.
 - Keep all protocol amounts as `bigint`; accept `BigIntish` only at API edges.
 - Address registries are immutable and additive; custom addresses must not override existing values.
+- Use `MathLib` rounding helpers; spell rounding as `"Up"` or `"Down"`.
+- Use `_try(accessor, UnknownError)` for optional domain lookups, not broad `catch`.
