@@ -7,6 +7,10 @@ permissions:
   contents: write
   id-token: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-publish
+  cancel-in-progress: false
+
 jobs:
   publish:
     if: github.ref_name == 'main' || github.ref_name == 'next'
