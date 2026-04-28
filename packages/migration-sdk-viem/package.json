@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/migration-sdk-viem",
   "description": "Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to build migration bundles to migrate lending positions (on aave, compound, morpho-aaveV3-optimizer, ...) to the morpho protocol.",
-  "version": "1.0.0",
+  "version": "2.3.1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["oumar-fall"],
   "repository": "github:morpho-org/sdks",

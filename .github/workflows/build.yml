@@ -5,31 +5,7 @@ on:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - test
-          - test-wagmi
-
-          - morpho-ts
-          - morpho-test
-
-          - blue-sdk
-          - blue-sdk-viem
-          - blue-sdk-wagmi
-
-          - simulation-sdk
-          - simulation-sdk-wagmi
-
-          - bundler-sdk-viem
-
-          - liquidation-sdk-viem
-          - liquidity-sdk-viem
-
-          - migration-sdk-viem
-
-    name: "@morpho-org/${{ matrix.package }}"
+    name: Build
     runs-on: ubuntu-latest
 
     steps:
@@ -44,4 +20,4 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm --filter @morpho-org/${{ matrix.package }} build
+      - run: pnpm build
