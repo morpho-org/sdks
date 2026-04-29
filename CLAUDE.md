@@ -11,3 +11,13 @@
 - Prefer `as const` and `satisfies` for protocol lists and ABI literals, e.g. `BLUE_OPERATIONS as const`.
 - Change generated inputs, not generated files, e.g. edit `graphql/*.gql` before `src/api/sdk.ts`.
 - Domain failures are typed `Error` classes with readonly inputs, e.g. `new UnknownTokenError(address)`.
+- Keep package responsibilities narrow; a package should have one clear reason to exist.
+- Prefer deleting unclear helpers, constants, exports, or duplicated logic before adding abstractions.
+- Add dependencies only when they directly reduce integrator risk or complexity in the owning package.
+- Codify security-sensitive behavior as tests, especially routing, authorization, chain, and accounting invariants.
+
+## Continuous Improvement
+
+- Existing packages may predate these conventions; do not widen divergence when touching them.
+- Move touched code toward the nearest applicable `CLAUDE.md` guidance, even when a full cleanup is out of scope.
+- If a package cannot yet meet an applicable convention, keep the exception local and document why in the nearest `CLAUDE.md`.

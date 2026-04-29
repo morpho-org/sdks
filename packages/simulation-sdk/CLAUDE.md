@@ -9,3 +9,10 @@
 - Wrap handler failures in `SimulationErrors.Simulation(error, index, operation)`.
 - Use `produceImmutable` for public simulation, and `handleOperation` for in-place draft updates.
 - Encode slippage as WAD-scaled `bigint`, e.g. `MathLib.WAD + slippage`.
+
+## Continuous Improvement
+
+- Keep this package deterministic, framework-free, and focused on protocol simulation state transitions.
+- Existing code may predate current conventions; do not widen divergence when touching it.
+- Prefer deleting unclear helpers, dependencies, exports, or duplicated logic before adding abstractions.
+- If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.

@@ -8,3 +8,10 @@
 - Preserve numeric input kind in time converters, e.g. `Time.s.from.h(2n)` returns `bigint`.
 - Match fixed time assumptions: `mo` is 31 days and `y` is 365 days.
 - Formatters stay chainable and end with `.of(...)` or `.createOf()`.
+
+## Continuous Improvement
+
+- Keep this package generic, dependency-free where possible, and unrelated to protocol or framework state.
+- Existing code may predate current conventions; do not widen divergence when touching it.
+- Prefer deleting unclear helpers, dependencies, exports, or duplicated logic before adding abstractions.
+- If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.

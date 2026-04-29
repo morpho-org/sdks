@@ -9,3 +9,10 @@
 - Validate signatures after signing with `verifyTypedData` before caching them on actions.
 - Never sign for independent consumers; only adapters like `generalAdapter1` should receive permits.
 - Recursive callbacks force `sender: generalAdapter1` before encoding nested operations.
+
+## Continuous Improvement
+
+- Keep I/O and signing explicit at the viem boundary; action encoding should remain pure where possible.
+- Existing code may predate current conventions; do not widen divergence when touching it.
+- Prefer typed errors, explicit protocol routes, and fewer exported helpers over generic bundling abstractions.
+- If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.

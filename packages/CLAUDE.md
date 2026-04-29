@@ -9,3 +9,13 @@
 - Keep publish exports in `publishConfig.exports`; mirror `types`, `import`, and `require`.
 - Put host libraries in `peerDependencies`, with local test versions in `devDependencies`.
 - Subpath exports need both package exports and TS path support, e.g. `./vitest`.
+- Each package should own one responsibility; split framework adapters from protocol/core logic.
+- Framework coupling belongs in explicitly named adapter packages such as `*-wagmi`, never in core SDK packages.
+- Change generated inputs, not generated files; keep generated artifacts out of hand-written design decisions.
+- New runtime dependencies need a package-level reason and should not replace a small local type or helper.
+
+## Continuous Improvement
+
+- Existing packages may predate these conventions; do not widen divergence when touching them.
+- Prefer deleting unclear helpers, dependencies, exports, or duplicated logic before adding abstractions.
+- If a package cannot yet meet an applicable convention, keep the exception local and make the touched surface closer to the target design.

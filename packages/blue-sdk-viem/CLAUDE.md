@@ -9,3 +9,10 @@
 - Fetch params pass through viem call fields: `account`, `blockNumber`, `blockTag`, `stateOverride`.
 - Normalize unsafe user addresses with `safeGetAddress`, not lowercasing alone.
 - Typed-data helpers return `TypedDataDefinition`, e.g. `getPermitTypedData(...)`.
+
+## Continuous Improvement
+
+- Keep viem/RPC I/O explicit at this package boundary; core entity classes stay in `blue-sdk`.
+- Existing code may predate current conventions; do not widen divergence when touching it.
+- Prefer typed errors and protocol-faithful return types over generic failures or broad abstractions.
+- If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
