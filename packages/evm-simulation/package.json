@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/evm-simulation",
   "description": "EVM simulation engine for Morpho transactions.",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": ["Rubilmax <rmilon@gmail.com>"],
   "repository": "github:morpho-org/sdks",
