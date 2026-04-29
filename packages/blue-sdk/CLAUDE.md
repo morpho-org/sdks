@@ -8,6 +8,8 @@
 - Address registries are immutable and additive; custom addresses must not override existing values.
 - Use `MathLib` rounding helpers; spell rounding as `"Up"` or `"Down"`.
 - Use `_try(accessor, UnknownError)` for optional domain lookups, not broad `catch`.
+- Protocol entity folders (`market/`, `vault/`, `token/`, `position/`, `holding/`, `user/`) own their classes and folder barrels.
+- Getters may throw typed `Unknown*Error`; nullable lookup paths should use `_try` or `tryGet*`-style helpers deliberately.
 
 ## Continuous Improvement
 

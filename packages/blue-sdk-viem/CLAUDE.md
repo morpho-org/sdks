@@ -5,6 +5,7 @@
 - Set missing chain IDs from the client: `parameters.chainId ??= await getChainId(client)`.
 - Keep generated deployless query artifacts as `abi` and `code` constants under `src/queries`.
 - Augment classes only in `src/augment`, e.g. `Market.fetch = fetchMarket`.
+- Keep `fetch/`, `queries/`, and `augment/` names aligned with the matching `blue-sdk` entity names.
 - Use `readContractRestructured` when tuple fields should map to named object properties.
 - Fetch params pass through viem call fields: `account`, `blockNumber`, `blockTag`, `stateOverride`.
 - Normalize unsafe user addresses with `safeGetAddress`, not lowercasing alone.

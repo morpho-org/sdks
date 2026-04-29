@@ -1,6 +1,7 @@
 # bundler-sdk-viem Conventions
 
-- Convert simulation operations into bundler actions before encoding transactions.
+- Convert simulation operations (input language) into bundler actions (output language) before encoding transactions.
+- `ActionBundle` and bundle helpers own action ordering and nested bundle sequencing.
 - Keep action encoders pure where possible: `BundlerAction.encode(chainId, action)`.
 - Throw `BundlerErrors.MissingSignature` when a signature-required action lacks a signature.
 - Track native value only for transfers into bundler adapter addresses.
@@ -9,6 +10,7 @@
 - Validate signatures after signing with `verifyTypedData` before caching them on actions.
 - Never sign for independent consumers; only adapters like `generalAdapter1` should receive permits.
 - Recursive callbacks force `sender: generalAdapter1` before encoding nested operations.
+- Callback simulation must preserve sender and authorization semantics before actions are encoded.
 
 ## Continuous Improvement
 

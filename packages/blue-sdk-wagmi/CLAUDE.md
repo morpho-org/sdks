@@ -7,6 +7,7 @@
 - Gate queries on required inputs, e.g. `enabled: parameters.marketId != null && query.enabled`.
 - Use `replaceDeepEqual` as the default structural sharing for entity hooks.
 - Multi-entity hooks dedupe inputs before `useQueries`, e.g. `new Set(marketIds)`.
+- Multi-entity hooks preserve caller order in returned records even when fetch inputs are deduped.
 - Return indexed records with `data`, `error`, `isFetching`, and `isFetchingAny`.
 - Keep `throwOnError`, `queryFn`, and query key fields owned by query option helpers.
 

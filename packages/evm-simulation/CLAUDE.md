@@ -1,6 +1,7 @@
 # evm-simulation Conventions
 
 - Simulate EVM bundles through Tenderly REST first when configured and supported; fall back to `eth_simulateV1` only for `ExternalServiceError`.
+- Keep the simulation pipeline staged as validation, authorization resolution, backend execution, parsing, and retention checks.
 - Let `SimulationRevertedError` propagate; a revert belongs to the bundle, not the backend.
 - Keep backend outputs normalized to `RawSimulationResult`; add new backends under `src/simulate/backends/` with colocated parity specs.
 - Treat `shareable` as the only Tenderly persistence knob; translate it to `save` / `save_if_fails` only in the Tenderly REST adapter.

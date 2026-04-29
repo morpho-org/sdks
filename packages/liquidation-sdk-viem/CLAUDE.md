@@ -2,8 +2,9 @@
 
 - GraphQL queries live in `graphql/*.gql`; regenerate API types with this package's `codegen` script.
 - Do not hand-edit generated `src/api/sdk.ts`; update queries or `codegen.ts` instead.
-- Keep liquidation execution helpers on `LiquidationEncoder`, extending `ExecutorEncoder`.
+- `LiquidationEncoder` extends `ExecutorEncoder` and owns liquidation execution assembly from typed position, token, and swap inputs.
 - Token integrations are grouped under `src/tokens`, e.g. `Pendle`, `Spectra`, `Usual`.
+- Swap adapters stay under `src/swap`; normalize generated API output before passing data into token or swap encoders.
 - Fetch market and position data in parallel, then build `AccrualPosition` or `PreLiquidationPosition`.
 - External swap integrations return typed swap data; validate ambiguous results before encoding calls.
 - Use shared pagination helpers for API lists; first page gives `countTotal`.
