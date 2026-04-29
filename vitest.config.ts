@@ -35,6 +35,32 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "morpho-sdk",
+          include: [
+            "packages/morpho-sdk/src/**/*.test.ts",
+            "packages/morpho-sdk/test/**/*.test.ts",
+          ],
+          testTimeout: 60_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "evm-simulation",
+          include: [
+            "packages/evm-simulation/src/**/*.spec.ts",
+            "packages/evm-simulation/src/**/*.test.ts",
+          ],
+          globals: true,
+          environment: "node",
+          sequence: {
+            concurrent: false,
+          },
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "blue-sdk-viem",
           include: ["packages/blue-sdk-viem/test/**/*.test.ts"],
           testTimeout: 60_000,
