@@ -40,39 +40,15 @@
 2. Generate coverage info: `pnpm test:coverage`
 3. Generate hierarchical coverage report: `pnpm coverage:report`
 
-## Getting involved
-
-Learn [how to add a new chain configuration](./docs/adding-new-chain.md) to the sdks.
-
 ## Developer
 
-### Changesets
+### Contributing
 
-This repository uses [Changesets](https://github.com/changesets/changesets) to decide which packages are released and how their versions are bumped.
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for setup, contribution workflow, and the inline checklist for listing a new chain to support.
 
-When a PR changes a package in a way that should be released, run:
+### Security
 
-```sh
-pnpm changeset
-```
-
-Select every package affected by the change and choose the smallest semver bump that describes the public impact:
-
-- `patch`: bug fixes and backwards-compatible maintenance changes
-- `minor`: new backwards-compatible APIs or behavior
-- `major`: breaking changes
-
-Commit the generated `.changeset/*.md` file with the source change. Do not update package versions or changelogs manually; the release workflow does that after the change is merged.
-
-If a package changes but no release is needed, add an empty changeset instead:
-
-```sh
-pnpm changeset --empty
-```
-
-After changes land on `main` or `next`, CI runs `pnpm run version` (the repository script for `changeset version`) and commits the generated version/changelog changes directly to that branch. The next CI run publishes only package versions that have not already been published. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag.
-
-Before merging `next` back into `main`, maintainers must run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change so stable releases on `main` cannot inherit prerelease mode.
+See [SECURITY.md](./SECURITY.md) for vulnerability reporting and supported security scope.
 
 ## Debugging
 
@@ -100,6 +76,7 @@ Here's a tutorial on how to link a specific package to debug at runtime:
 - [@rubilmax](https://github.com/rubilmax) (rubilmax.eth, [Twitter](https://x.com/rubilmax))
 - [@oumar-fall](https://github.com/oumar-fall) (oumix.eth)
 - [@julien-devatom](https://github.com/oumar-fall) ([Twitter](https://x.com/julien_devatom))
+- [Foulks-Plb](https://x.com/FoulkPlb)
 
 ## License
 

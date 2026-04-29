@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities.
 
 ## Installation
@@ -33,7 +35,7 @@ npm install @morpho-org/blue-sdk-wagmi
 yarn add @morpho-org/blue-sdk-wagmi
 ```
 
-## Getting Started
+## Usage
 
 ```tsx
 import { MarketId } from "@morpho-org/blue-sdk";
@@ -49,3 +51,11 @@ export function Component({ marketId }: { marketId?: MarketId }) {
   );
 }
 ```
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
