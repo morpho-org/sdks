@@ -1,0 +1,51 @@
+{
+  "name": "@morpho-org/morpho-sdk",
+  "description": "Abstraction layer for Morpho's complexity.",
+  "version": "1.1.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "contributors": ["Foulks-Plb <https://x.com/FoulkPlb>"],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "files": ["lib"],
+  "scripts": {
+    "prepublish": "$npm_execpath build",
+    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
+    "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
+    "test": "vitest --root ../.. --project morpho-sdk"
+  },
+  "dependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/bundler-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/simulation-sdk": "workspace:^",
+    "zod": "^4.1.12"
+  },
+  "peerDependencies": {
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@morpho-org/test": "workspace:^",
+    "dotenv": "^17.2.3",
+    "typescript": "^5.9.3",
+    "viem": "^2.41.2",
+    "vitest": "^4.1.4"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./lib/esm/index.d.ts",
+        "import": "./lib/esm/index.js",
+        "require": "./lib/cjs/index.js"
+      }
+    }
+  }
+}
