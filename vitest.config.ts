@@ -4,11 +4,12 @@ export default defineConfig({
   test: {
     coverage: {
       reporter: ["text-summary", "lcov"],
-      include: ["packages/**/src/**"],
+      include: ["packages/**/src/**/*.{ts,tsx}"],
       exclude: [
         "packages/test/**",
         "packages/test-wagmi/**",
         "packages/morpho-test/**",
+        "packages/**/*.md",
       ],
     },
     sequence: {
