@@ -8,5 +8,5 @@
     "tsBuildInfoFile": "tsconfig.esm.tsbuildinfo"
   },
   "include": ["src"],
-  "exclude": ["**/*.spec.ts", "**/*.test.ts"]
+  "exclude": ["**/*.spec.ts", "**/*.test.ts", "src/test-helpers/**"]
 }

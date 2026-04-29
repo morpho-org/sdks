@@ -252,16 +252,16 @@ importers:
 
   packages/evm-simulation:
     dependencies:
-      zod:
-        specifier: ^4.1.12
-        version: 4.3.6
-    devDependencies:
       '@morpho-org/blue-sdk':
         specifier: workspace:^
         version: link:../blue-sdk
       '@morpho-org/morpho-ts':
         specifier: workspace:^
         version: link:../morpho-ts
+      zod:
+        specifier: ^4.1.12
+        version: 4.3.6
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -474,8 +474,8 @@ importers:
         specifier: workspace:^
         version: link:../test
       dotenv:
-        specifier: ^17.2.3
-        version: 17.4.2
+        specifier: ^16.4.5
+        version: 16.4.5
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
@@ -2272,10 +2272,6 @@ packages:
 
   dotenv@16.4.5:
     resolution: {integrity: sha512-ZmdL2rui+eB2YwhsWzjInR8LldtZHGDoQ1ugH85ppHKwpUHL7j7rN0Ti9NCnGiQbhaZ11FpR+7ao1dNsmduNUg==}
-    engines: {node: '>=12'}
-
-  dotenv@17.4.2:
-    resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
 
   electron-to-chromium@1.5.42:
@@ -5612,8 +5608,6 @@ snapshots:
   dotenv-expand@10.0.0: {}
 
   dotenv@16.4.5: {}
-
-  dotenv@17.4.2: {}
 
   electron-to-chromium@1.5.42: {}
 

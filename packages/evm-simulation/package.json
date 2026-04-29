@@ -23,16 +23,14 @@
     "test": "vitest --root ../.. --project evm-simulation"
   },
   "dependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/morpho-ts": "workspace:^",
     "zod": "^4.1.12"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
     "typescript": "^5.9.3",
     "viem": "^2.41.2",
     "vitest": "^4.1.4"
