@@ -10,7 +10,5 @@
 - Preserve `repayWithdrawCollateral` ordering: repay first, then withdraw collateral; it mixes explicit `onBehalf` with implicit initiator flows.
 - Route shared-liquidity `reallocations` through `PublicAllocator.reallocateTo()` before borrow execution and accumulate fees in `tx.value`.
 - Requirements code resolves approval, permit, permit2, and Morpho authorization needs; do not duplicate that logic in actions.
-- Use strict TypeScript with no `any`, type-only imports, readonly properties, and dedicated error classes in `src/types/error.ts`.
 - Re-export public API through barrel `index.ts` files; avoid accidental deep-file public surfaces.
 - Add JSDoc for exported functions and interfaces, and follow neighboring action/entity patterns before introducing abstractions.
-- Verify package changes with `pnpm --filter @morpho-org/morpho-sdk build` and `pnpm --filter @morpho-org/morpho-sdk test`.

@@ -11,4 +11,3 @@
 - Keep all thrown domain errors under `SimulationPackageError`; only `ExternalServiceError` is bypassable by callers.
 - Add chains through caller `SimulationConfig.chains`; set `simulateV1Url`, optional Tenderly support, and confirm blue-sdk bundler addresses intentionally.
 - Keep tests colocated as `{module}.spec.ts`; put shared fixtures in `src/test-helpers/`, which must stay out of published builds.
-- Verify package changes with `pnpm --filter @morpho-org/evm-simulation build` and `pnpm --filter @morpho-org/evm-simulation test`.
