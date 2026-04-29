@@ -76,7 +76,7 @@ Here's a tutorial on how to link a specific package to debug at runtime:
 - [@rubilmax](https://github.com/rubilmax) (rubilmax.eth, [Twitter](https://x.com/rubilmax))
 - [@oumar-fall](https://github.com/oumar-fall) (oumix.eth)
 - [@julien-devatom](https://github.com/oumar-fall) ([Twitter](https://x.com/julien_devatom))
-- [Foulks-Plb](https://x.com/FoulkPlb)
+- [@Foulks-Plb](https://github.com/Foulks-Plb) ([Twitter](https://x.com/FoulkPlb))
 
 ## License
 
