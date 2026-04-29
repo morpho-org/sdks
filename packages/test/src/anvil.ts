@@ -271,7 +271,7 @@ function toArgs(obj: AnvilArgs) {
 
     const flag = `--${_kebabCase(key)}`;
 
-    if (value === false) return [flag, "false"];
+    if (value === false) return [];
     if (value === true) return [flag];
 
     const stringified = value.toString();

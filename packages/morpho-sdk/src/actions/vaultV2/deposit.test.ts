@@ -2,7 +2,7 @@ import { addressesRegistry } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   KeyrockUsdcVaultV2,
   KpkWETHVaultV2,
@@ -21,8 +21,12 @@ import * as getRequirementsActionModule from "../requirements/getRequirementsAct
 import { getRequirements } from "../requirements/index.js";
 import { vaultV2Deposit } from "./deposit.js";
 
-describe("depositVaultV2 unit tests", () => {
+describe.sequential("depositVaultV2 unit tests", () => {
   const { dai, usdc, wNative } = addressesRegistry[mainnet.id];
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   test("should create deposit bundle with DAI via permit2", async ({
     client,
