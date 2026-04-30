@@ -398,7 +398,26 @@ export const populateSubBundle = (
         );
       }
 
-      for (const { vault, ...withdrawal } of withdrawals) {
+      // Public allocator fees are charged per vault call, so finalizing a new
+      // vault before scanning the rest of the flat sequence can charge an
+      // avoidable extra fee when an already-selected vault reappears later
+      // with enough remaining liquidity to cover the residual shortfall.
+      for (let i = 0; i < withdrawals.length; i++) {
+        if (requiredAssets === 0n) break;
+
+        const { vault, ...withdrawal } = withdrawals[i]!;
+
+        if (!(vault in reallocations)) {
+          let availableFromSelected = 0n;
+          for (let j = i + 1; j < withdrawals.length; j++) {
+            if (withdrawals[j]!.vault in reallocations) {
+              availableFromSelected += withdrawals[j]!.assets;
+              if (availableFromSelected >= requiredAssets) break;
+            }
+          }
+          if (availableFromSelected >= requiredAssets) continue;
+        }
+
         const vaultReallocations = (reallocations[vault] ??= []);
         const vaultMarketReallocation = vaultReallocations.find(
           (item) => item.id === withdrawal.id,
@@ -418,8 +437,6 @@ export const populateSubBundle = (
           });
 
         requiredAssets -= reallocatedAssets;
-
-        if (requiredAssets === 0n) break;
       }
 
       // TODO: we know there are no unwrap native in the middle

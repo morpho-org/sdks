@@ -434,6 +434,57 @@ describe("computeReallocations", () => {
       expect(result[0]!.withdrawals[0]!.amount).toBe(200n * MathLib.WAD);
     });
 
+    test("should not introduce a new vault when a later same-vault withdrawal can cover the residual (SDK-123)", () => {
+      // Phase 2 produces an interleaved flat sequence [A:150, B:60, A:50] with
+      // requiredAssets = 200. A naive greedy capping commits A:150, then B:50,
+      // and exits before reaching the later A:50 — paying a redundant vault
+      // fee on B even though A alone (150 + 50) covers the shortfall.
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: 800n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const borrowAmount = 500n * MathLib.WAD;
+
+      // friendlyTargetMarket: enough supply post-reallocation → phase 2 not triggered.
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        targetMarket: tm,
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: 150n * MathLib.WAD },
+          { id: sourceB.id, vault: VAULT_B, assets: 60n * MathLib.WAD },
+          { id: sourceC.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 1000n, [VAULT_B]: 2000n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        borrowAmount,
+        // 100% target → requiredAssets = newBorrow - newSupply = 1000 - 800 = 200 WAD.
+        options: {
+          enabled: true,
+          supplyTargetUtilization: { [targetParams.id]: MathLib.WAD },
+        },
+      });
+
+      // Only VAULT_A should be touched — VAULT_B is unnecessary.
+      expect(result).toHaveLength(1);
+      expect(result[0]!.vault).toBe(VAULT_A);
+      expect(result[0]!.withdrawals).toHaveLength(2);
+
+      const totalAmount = result[0]!.withdrawals.reduce(
+        (sum, w) => sum + w.amount,
+        0n,
+      );
+      expect(totalAmount).toBe(200n * MathLib.WAD);
+    });
+
     test("should cap second withdrawal mid-iteration when requiredAssets is exhausted", () => {
       const borrowAmount = 500n * MathLib.WAD;
 
