@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Viem-based package that provides utilities to build viem-based liquidation bots on Morpho and examples using Flashbots and Morpho's GraphQL API.
 
 ## Installation
@@ -33,7 +35,7 @@ npm install @morpho-org/liquidation-sdk-viem
 yarn add @morpho-org/liquidation-sdk-viem
 ```
 
-## Getting Started
+## Usage
 
 An example liquidation bot currently used in production is available under [examples/](./examples/).
 
@@ -43,3 +45,11 @@ This bot, provided a list of whitelisted markets to monitor, automatically:
 2. Finds the largest available liquidity for a swap of the collateral for the debt via 1inch
 3. Redeems collateral MetaMorpho shares for the underlying assets when applicable
 4. Only submit profitable liquidations (wrt to the gas cost & the swap's slippage)
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
