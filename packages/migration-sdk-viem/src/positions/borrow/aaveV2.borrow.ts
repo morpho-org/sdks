@@ -255,25 +255,32 @@ export class MigratableBorrowPosition_AaveV2
               type: "aaveV2Repay",
               args: [this.loanToken.address, maxUint256, user, 2n],
             },
+            {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                generalAdapter1,
+                maxUint256,
+                aaveV2MigrationAdapter,
+                false,
+              ],
+            },
+            {
+              type: "morphoRepay",
+              args: [marketTo, maxUint256, 0n, maxUint256, user, [], true],
+            },
+            {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                user,
+                maxUint256,
+                generalAdapter1,
+                false,
+              ],
+            },
           ]
         : [];
-
-    if (migrateMaxBorrow && slippageFrom > 0n)
-      borrowActions.push(
-        {
-          type: "erc20Transfer",
-          args: [
-            marketTo.loanToken,
-            generalAdapter1,
-            maxUint256,
-            aaveV2MigrationAdapter,
-          ],
-        },
-        {
-          type: "morphoRepay",
-          args: [marketTo, maxUint256, 0n, maxUint256, user, []],
-        },
-      );
 
     if (migratedCollateral > 0n) {
       const callbackActions = borrowActions.concat(

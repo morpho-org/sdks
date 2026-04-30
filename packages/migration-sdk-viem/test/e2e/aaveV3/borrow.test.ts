@@ -411,6 +411,38 @@ describe("Borrow position on AAVE V3", () => {
                   args: [wNative, maxUint256, client.account.address, 2n],
                 },
                 {
+                  type: "erc20Transfer",
+                  args: [
+                    marketTo.loanToken,
+                    generalAdapter1,
+                    maxUint256,
+                    aaveV3CoreMigrationAdapter,
+                    false,
+                  ],
+                },
+                {
+                  type: "morphoRepay",
+                  args: [
+                    marketTo,
+                    maxUint256,
+                    0n,
+                    maxUint256,
+                    client.account.address,
+                    [],
+                    true,
+                  ],
+                },
+                {
+                  type: "erc20Transfer",
+                  args: [
+                    marketTo.loanToken,
+                    client.account.address,
+                    maxUint256,
+                    generalAdapter1,
+                    false,
+                  ],
+                },
+                {
                   type: "erc20TransferFrom",
                   args: [
                     aCollateralToken,
@@ -596,6 +628,7 @@ describe("Borrow position on AAVE V3", () => {
                     generalAdapter1,
                     maxUint256,
                     aaveV3CoreMigrationAdapter,
+                    false,
                   ],
                 },
                 {
@@ -607,6 +640,17 @@ describe("Borrow position on AAVE V3", () => {
                     maxUint256,
                     client.account.address,
                     [],
+                    true,
+                  ],
+                },
+                {
+                  type: "erc20Transfer",
+                  args: [
+                    marketTo.loanToken,
+                    client.account.address,
+                    maxUint256,
+                    generalAdapter1,
+                    false,
                   ],
                 },
                 {
@@ -699,6 +743,160 @@ describe("Borrow position on AAVE V3", () => {
         }
       });
 
+      // Regression test for SDK-155 / MORP2-4.
+      //
+      // The Aave V3 borrow migration builder borrows the destination-market
+      // loan token straight into the public aaveV3CoreMigrationAdapter and
+      // then asks that adapter to repay the source debt with `maxUint256`.
+      // The source repay only consumes as many destination loan tokens as
+      // there is live source debt at execution time. If the source debt
+      // shrinks between quote and execution (e.g. a third party repays on
+      // behalf of the user on Aave V3), any residual destination loan tokens
+      // would otherwise stay on the public migration adapter, where any
+      // later Bundler3 caller could sweep them out through the inherited
+      // `erc20Transfer` entrypoint. The fix always sweeps the residual
+      // balance back through `generalAdapter1` and applies it to the
+      // destination market as a cleanup repay on behalf of the user. This
+      // test exercises that exact path: it builds a bundle, then
+      // unprivilegedly partially repays the user's source debt, then
+      // executes the bundle, and asserts that neither migration adapter
+      // retains the migrated loan token afterwards.
+      testFn(
+        "should not strand destination loan tokens when source debt decreases between quote and execution",
+        async ({ client }) => {
+          const collateralAmountStr = "10";
+          const collateralAmount = parseEther(collateralAmountStr);
+          const borrowAmount = parseEther(
+            (+collateralAmountStr / (2 * maxLoanPrice)).toString(),
+          );
+
+          await writeSupply(client, collateralToken, collateralAmount, true);
+          await writeBorrow(client, wNative, borrowAmount);
+          await addBlueLiquidity(client, marketTo, borrowAmount);
+
+          const allPositions = await fetchMigratablePositions(
+            client.account.address,
+            client,
+            { protocols: [MigratableProtocol.aaveV3] },
+          );
+
+          const aaveV3Positions = allPositions[MigratableProtocol.aaveV3]!;
+          expect(aaveV3Positions).toHaveLength(1);
+
+          const position =
+            aaveV3Positions[0]! as MigratableBorrowPosition_AaveV3;
+
+          // initial share price is 10^-6 because of virtual shares
+          const minSharePrice = parseUnits("1", 21);
+
+          // Quote: migrate the full observed source debt on a non-max path
+          // (explicit borrowAmount), so the morphoBorrow amount is locked to
+          // the quoted debt and cannot adapt to a later drop in source debt.
+          const quotedBorrow = position.borrow;
+          const migrationBundle = position.getMigrationTx(
+            {
+              marketTo,
+              borrowAmount: quotedBorrow,
+              collateralAmount: position.collateral,
+              minSharePrice,
+            },
+            true,
+          );
+
+          await migrationBundle.requirements.signatures[0]!.sign(client);
+          await migrationBundle.requirements.signatures[1]!.sign(client);
+
+          // Between quote and execution, an unprivileged third party repays
+          // part of the user's Aave V3 debt on their behalf. This is exactly
+          // the attacker-controllable precondition described in MORP2-4: it
+          // is permissionless on Aave V3 and does not require any signature
+          // or approval from the migrating user.
+          const stranger = testAccount(9);
+          const externalRepay = quotedBorrow / 4n;
+          await client.deal({
+            account: stranger,
+            amount: externalRepay,
+            erc20: wNative,
+          });
+          await client.approve({
+            account: stranger,
+            address: wNative,
+            args: [pool.address, externalRepay],
+          });
+          await client.writeContract({
+            account: stranger,
+            ...pool,
+            functionName: "repay",
+            args: [wNative, externalRepay, 2n, client.account.address],
+          });
+
+          // Execute the bundle that was quoted against the original debt.
+          await sendTransaction(client, migrationBundle.tx());
+
+          const transferredAssets = [
+            wNative,
+            collateralToken,
+            aCollateralToken,
+          ];
+          const adapters = [generalAdapter1, aaveV3CoreMigrationAdapter];
+
+          const [finalPositionTo, finalDebtFrom, adaptersBalances] =
+            await Promise.all([
+              fetchAccrualPosition(client.account.address, marketTo.id, client),
+              readContract(client, {
+                abi: variableDebtTokenV3Abi,
+                address: variableDebtToken,
+                functionName: "balanceOf",
+                args: [client.account.address],
+              }),
+              Promise.all(
+                transferredAssets.flatMap((asset) =>
+                  adapters.map(async (adapter) => ({
+                    balance: await readContract(client, {
+                      abi: erc20Abi,
+                      address: asset,
+                      functionName: "balanceOf",
+                      args: [adapter],
+                    }),
+                    asset,
+                    adapter,
+                  })),
+                ),
+              ),
+            ]);
+
+          // The source debt on Aave V3 is fully cleared — the
+          // `aaveV3Repay(..., maxUint256, user, 2n)` call absorbed the
+          // decreased remaining debt rather than reverting.
+          expect(finalDebtFrom).toBe(0n);
+
+          // The destination Morpho debt is the borrowed amount minus the
+          // excess that our cleanup repay pushed back to `marketTo`. The
+          // cleanup repay converts `excess = quotedBorrow - (quotedBorrow -
+          // externalRepay) = externalRepay` (modulo Aave V3 interest
+          // accrued between quote and execution), so the final destination
+          // debt sits around `quotedBorrow - externalRepay`. We bound the
+          // window to allow for 1-block's worth of destination borrow
+          // interest and a few wei of Morpho share-rounding.
+          expect(finalPositionTo.borrowAssets).toBeLessThanOrEqual(
+            quotedBorrow - externalRepay + 10n ** 14n,
+          );
+          expect(finalPositionTo.borrowAssets).toBeGreaterThanOrEqual(
+            quotedBorrow - externalRepay - 10n ** 14n,
+          );
+
+          // Most importantly: neither public migration adapter retains any
+          // of the migrated loan token (the stranding that MORP2-4
+          // described). This is the actual security-regression assertion.
+          for (const { balance, asset, adapter } of adaptersBalances) {
+            expect(balance).to.equal(
+              0n,
+              `Adapter ${adapter} shouldn't hold ${asset}.`,
+            );
+          }
+        },
+      );
+
       testFn(
         "should partially migrate user position without signature",
         async ({ client }) => {
@@ -789,6 +987,38 @@ describe("Borrow position on AAVE V3", () => {
                   {
                     type: "aaveV3Repay",
                     args: [wNative, maxUint256, client.account.address, 2n],
+                  },
+                  {
+                    type: "erc20Transfer",
+                    args: [
+                      marketTo.loanToken,
+                      generalAdapter1,
+                      maxUint256,
+                      aaveV3CoreMigrationAdapter,
+                      false,
+                    ],
+                  },
+                  {
+                    type: "morphoRepay",
+                    args: [
+                      marketTo,
+                      maxUint256,
+                      0n,
+                      maxUint256,
+                      client.account.address,
+                      [],
+                      true,
+                    ],
+                  },
+                  {
+                    type: "erc20Transfer",
+                    args: [
+                      marketTo.loanToken,
+                      client.account.address,
+                      maxUint256,
+                      generalAdapter1,
+                      false,
+                    ],
                   },
                   {
                     type: "erc20TransferFrom",
@@ -996,6 +1226,7 @@ describe("Borrow position on AAVE V3", () => {
                       generalAdapter1,
                       maxUint256,
                       aaveV3CoreMigrationAdapter,
+                      false,
                     ],
                   },
                   {
@@ -1007,6 +1238,17 @@ describe("Borrow position on AAVE V3", () => {
                       maxUint256,
                       client.account.address,
                       [],
+                      true,
+                    ],
+                  },
+                  {
+                    type: "erc20Transfer",
+                    args: [
+                      marketTo.loanToken,
+                      client.account.address,
+                      maxUint256,
+                      generalAdapter1,
+                      false,
                     ],
                   },
                   {
@@ -1207,6 +1449,38 @@ describe("Borrow position on AAVE V3", () => {
                   {
                     type: "aaveV3Repay",
                     args: [wNative, maxUint256, client.account.address, 2n],
+                  },
+                  {
+                    type: "erc20Transfer",
+                    args: [
+                      marketTo.loanToken,
+                      generalAdapter1,
+                      maxUint256,
+                      aaveV3CoreMigrationAdapter,
+                      false,
+                    ],
+                  },
+                  {
+                    type: "morphoRepay",
+                    args: [
+                      marketTo,
+                      maxUint256,
+                      0n,
+                      maxUint256,
+                      client.account.address,
+                      [],
+                      true,
+                    ],
+                  },
+                  {
+                    type: "erc20Transfer",
+                    args: [
+                      marketTo.loanToken,
+                      client.account.address,
+                      maxUint256,
+                      generalAdapter1,
+                      false,
+                    ],
                   },
                   {
                     type: "erc20TransferFrom",

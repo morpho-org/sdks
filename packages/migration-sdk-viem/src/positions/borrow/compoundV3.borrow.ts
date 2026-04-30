@@ -258,25 +258,32 @@ export class MigratableBorrowPosition_CompoundV3
               type: "compoundV3Repay",
               args: [cometAddress, maxUint256, user],
             },
+            {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                generalAdapter1,
+                maxUint256,
+                compoundV3MigrationAdapter,
+                false,
+              ],
+            },
+            {
+              type: "morphoRepay",
+              args: [marketTo, maxUint256, 0n, maxUint256, user, [], true],
+            },
+            {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                user,
+                maxUint256,
+                generalAdapter1,
+                false,
+              ],
+            },
           ]
         : [];
-
-    if (migrateMaxBorrow && slippageFrom > 0n)
-      borrowActions.push(
-        {
-          type: "erc20Transfer",
-          args: [
-            marketTo.loanToken,
-            generalAdapter1,
-            maxUint256,
-            compoundV3MigrationAdapter,
-          ],
-        },
-        {
-          type: "morphoRepay",
-          args: [marketTo, maxUint256, 0n, maxUint256, user, []],
-        },
-      );
 
     if (collateralAmount > 0n) {
       const callbackActions = borrowActions.concat({

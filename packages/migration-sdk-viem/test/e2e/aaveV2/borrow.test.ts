@@ -354,6 +354,38 @@ describe("Borrow position on AAVE V2", () => {
               args: [usdt, maxUint256, client.account.address, 2n],
             },
             {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                generalAdapter1,
+                maxUint256,
+                aaveV2MigrationAdapter,
+                false,
+              ],
+            },
+            {
+              type: "morphoRepay",
+              args: [
+                marketTo,
+                maxUint256,
+                0n,
+                maxUint256,
+                client.account.address,
+                [],
+                true,
+              ],
+            },
+            {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                client.account.address,
+                maxUint256,
+                generalAdapter1,
+                false,
+              ],
+            },
+            {
               type: "erc20TransferFrom",
               args: [aWEth, migratedCollateral, aaveV2MigrationAdapter],
             },
@@ -531,6 +563,7 @@ describe("Borrow position on AAVE V2", () => {
                 generalAdapter1,
                 maxUint256,
                 aaveV2MigrationAdapter,
+                false,
               ],
             },
             {
@@ -542,6 +575,17 @@ describe("Borrow position on AAVE V2", () => {
                 maxUint256,
                 client.account.address,
                 [],
+                true,
+              ],
+            },
+            {
+              type: "erc20Transfer",
+              args: [
+                marketTo.loanToken,
+                client.account.address,
+                maxUint256,
+                generalAdapter1,
+                false,
               ],
             },
             {
@@ -711,6 +755,38 @@ describe("Borrow position on AAVE V2", () => {
               {
                 type: "aaveV2Repay",
                 args: [usdt, maxUint256, client.account.address, 2n],
+              },
+              {
+                type: "erc20Transfer",
+                args: [
+                  marketTo.loanToken,
+                  generalAdapter1,
+                  maxUint256,
+                  aaveV2MigrationAdapter,
+                  false,
+                ],
+              },
+              {
+                type: "morphoRepay",
+                args: [
+                  marketTo,
+                  maxUint256,
+                  0n,
+                  maxUint256,
+                  client.account.address,
+                  [],
+                  true,
+                ],
+              },
+              {
+                type: "erc20Transfer",
+                args: [
+                  marketTo.loanToken,
+                  client.account.address,
+                  maxUint256,
+                  generalAdapter1,
+                  false,
+                ],
               },
               {
                 type: "erc20TransferFrom",
@@ -895,6 +971,7 @@ describe("Borrow position on AAVE V2", () => {
                   generalAdapter1,
                   maxUint256,
                   aaveV2MigrationAdapter,
+                  false,
                 ],
               },
               {
@@ -906,6 +983,17 @@ describe("Borrow position on AAVE V2", () => {
                   maxUint256,
                   client.account.address,
                   [],
+                  true,
+                ],
+              },
+              {
+                type: "erc20Transfer",
+                args: [
+                  marketTo.loanToken,
+                  client.account.address,
+                  maxUint256,
+                  generalAdapter1,
+                  false,
                 ],
               },
               {
@@ -1083,6 +1171,38 @@ describe("Borrow position on AAVE V2", () => {
               {
                 type: "aaveV2Repay",
                 args: [usdt, maxUint256, client.account.address, 2n],
+              },
+              {
+                type: "erc20Transfer",
+                args: [
+                  marketTo.loanToken,
+                  generalAdapter1,
+                  maxUint256,
+                  aaveV2MigrationAdapter,
+                  false,
+                ],
+              },
+              {
+                type: "morphoRepay",
+                args: [
+                  marketTo,
+                  maxUint256,
+                  0n,
+                  maxUint256,
+                  client.account.address,
+                  [],
+                  true,
+                ],
+              },
+              {
+                type: "erc20Transfer",
+                args: [
+                  marketTo.loanToken,
+                  client.account.address,
+                  maxUint256,
+                  generalAdapter1,
+                  false,
+                ],
               },
               {
                 type: "erc20TransferFrom",
