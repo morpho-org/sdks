@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Framework-agnostic package that defines Morpho-related entity classes:
 
 - [**`MarketParams`**](./src/market/MarketParams.ts): represents the immutable configuration of a market on Morpho
@@ -42,7 +44,7 @@ npm install @morpho-org/blue-sdk
 yarn add @morpho-org/blue-sdk
 ```
 
-## Getting Started
+## Usage
 
 ### Instance of the immutable configuration of a specific market
 
@@ -198,3 +200,10 @@ registerCustomAddresses({
   }
 });
 ```
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

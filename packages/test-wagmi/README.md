@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Wagmi-based extension of [`@morpho-org/test`](../test/) that injects a test Wagmi config as a test fixture alongside viem's anvil client.
 
 ## Installation
@@ -33,7 +35,7 @@ npm install @morpho-org/test-wagmi
 yarn add @morpho-org/test-wagmi
 ```
 
-## Getting Started
+## Usage
 
 Export an extended vitest `test`:
 
@@ -48,3 +50,11 @@ export const test = createWagmiTest(mainnet, {
 ```
 
 See more on its internal usage for [wagmi-based tests here](../blue-sdk-wagmi/test/e2e/).
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).
