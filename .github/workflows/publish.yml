@@ -38,7 +38,10 @@ jobs:
       # Trusted publishing requires npm >= 11.5.1, but Node 22.22.2's bundled npm 10.9.7
       # currently fails to self-upgrade directly to npm@latest with MODULE_NOT_FOUND
       # (missing promise-retry). Pin a known-good npm 11 release instead.
-      - run: npm install -g npm@11.11.0
+      # `--ignore-scripts` ensures a compromised npm package cannot execute
+      # arbitrary code inside this release job (which holds id-token:write
+      # and contents:write).
+      - run: npm install -g npm@11.11.0 --ignore-scripts
 
       - run: pnpm install --frozen-lockfile
 
