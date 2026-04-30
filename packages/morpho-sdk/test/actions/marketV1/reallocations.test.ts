@@ -649,7 +649,6 @@ describe("getReallocationData and getReallocations", () => {
 
         const reallocationData = await market.getReallocationData({
           vaultAddresses: [SteakhouseUsdcVaultV1.address],
-          market: positionData.market,
           block,
         });
 
@@ -728,7 +727,6 @@ describe("getReallocationData and getReallocations", () => {
 
         const reallocationData = await market.getReallocationData({
           vaultAddresses: [SteakhouseUsdcVaultV1.address],
-          market: positionData.market,
           block,
         });
 
@@ -783,13 +781,11 @@ describe("getReallocationData and getReallocations", () => {
 
     const morphoClient = new MorphoClient(client);
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
 
     const block = await client.getBlock();
 
     const reallocationData = await market.getReallocationData({
       vaultAddresses: [SteakhouseUsdcVaultV1.address],
-      market: positionData.market,
       block,
     });
 
