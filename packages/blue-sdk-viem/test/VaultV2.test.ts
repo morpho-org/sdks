@@ -76,7 +76,11 @@ describe("AccrualVaultV2", () => {
     expect(vaultV2.managementFee).toEqual(managementFee);
     expect(vaultV2.performanceFee).toEqual(performanceFee);
 
-    await client.mine({ blocks: 1_000_000 });
+    const currentBlock = await client.getBlock({ blockTag: "latest" });
+    await client.setNextBlockTimestamp({
+      timestamp: currentBlock.timestamp + 1_000_000n,
+    });
+    await client.mine({ blocks: 1 });
 
     const block = await client.getBlock({ blockTag: "latest" });
 

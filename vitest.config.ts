@@ -4,11 +4,12 @@ export default defineConfig({
   test: {
     coverage: {
       reporter: ["text-summary", "lcov"],
-      include: ["packages/**/src/**"],
+      include: ["packages/**/src/**/*.{ts,tsx}"],
       exclude: [
         "packages/test/**",
         "packages/test-wagmi/**",
         "packages/morpho-test/**",
+        "packages/**/*.md",
       ],
     },
     sequence: {
@@ -30,6 +31,32 @@ export default defineConfig({
         test: {
           name: "blue-sdk",
           include: ["packages/blue-sdk/test/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "morpho-sdk",
+          include: [
+            "packages/morpho-sdk/src/**/*.test.ts",
+            "packages/morpho-sdk/test/**/*.test.ts",
+          ],
+          testTimeout: 60_000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "evm-simulation",
+          include: [
+            "packages/evm-simulation/src/**/*.spec.ts",
+            "packages/evm-simulation/src/**/*.test.ts",
+          ],
+          globals: true,
+          environment: "node",
+          sequence: {
+            concurrent: false,
+          },
         },
       },
       {
