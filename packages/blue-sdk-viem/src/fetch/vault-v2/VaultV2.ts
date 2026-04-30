@@ -4,6 +4,7 @@ import {
   MarketParams,
   UnknownFactory,
   UnknownOfFactory,
+  UnsupportedVaultV2AdapterError,
   VaultV2,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
@@ -62,6 +63,20 @@ export async function fetchVaultV2(
           ],
         });
 
+      if (
+        vault.liquidityData !== "0x" &&
+        morphoVaultV1AdapterFactory != null &&
+        vault.liquidityAdapter !== zeroAddress &&
+        (await readContract(client, {
+          ...parameters,
+          address: morphoVaultV1AdapterFactory,
+          abi: morphoVaultV1AdapterFactoryAbi,
+          functionName: "isMorphoVaultV1Adapter",
+          args: [vault.liquidityAdapter],
+        }))
+      )
+        throw new UnsupportedVaultV2AdapterError(vault.liquidityAdapter);
+
       return new VaultV2({
         ...token,
         ...vault,
@@ -74,6 +89,7 @@ export async function fetchVaultV2(
     } catch (error) {
       if (deployless === "force") throw error;
       if (isUnknownOfFactoryError(error)) throw error;
+      if (error instanceof UnsupportedVaultV2AdapterError) throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
@@ -228,6 +244,9 @@ export async function fetchVaultV2(
       }),
     ),
   ]);
+
+  if (hasMorphoVaultV1LiquidityAdapter && liquidityData !== "0x")
+    throw new UnsupportedVaultV2AdapterError(liquidityAdapter);
 
   let liquidityAdapterIds: Hash[] | undefined;
   if (hasMorphoVaultV1LiquidityAdapter)
