@@ -6,7 +6,7 @@ with milestones and implementation issues from it.
 ## Arguments
 
 - `$ARGUMENTS` should contain: `<doc-file-path> [linear-project-name-or-id]`
-- Example: `/extract-plan docs/tibs/TIB-2026-03-11-observability-package.md "Observability Package"`
+- Example: `/extract-plan TIB/TIB-2026-04-30-blue-sdk-observability.md "Blue SDK Observability"`
 
 ## Instructions
 
@@ -16,9 +16,6 @@ implementation work.
 
 The input document may be a TIB, RFC, design doc, or any structured technical document that
 describes a decision, approach, and/or implementation plan.
-
-Refer to `/create-issue` for how to structure issue descriptions and titles. Refer to `/plan` for how to
-structure project descriptions and workstream breakdowns.
 
 ---
 
@@ -55,17 +52,16 @@ present — the following are common patterns, not requirements:
 If the document doesn't follow any of these patterns, use your judgment to identify the decision,
 approach, and actionable work items.
 
-**Scope detection:** Use the document's scope field (if present) and file path to determine the
-target team:
+**Scope detection:** Use the document's scope field (if present) and file path to suggest a target
+team:
 
-- `apps/curator-*` or Scope mentions Curator → **Curator** team
-  (`c07ff95f-03b7-4bee-aa17-c7e04fda8845`)
-- `apps/markets-v2-app` or Scope mentions Markets → **Markets v2** team
-  (`f9764a7e-c555-4979-b386-c21a1cabba6a`)
-- `packages/*`, `@repo/*`, repo-wide, or cross-cutting → **Apps** team
-  (`cc8fe27e-f516-45e8-921e-69b0562c7792`)
+- `packages/blue-sdk*`, `packages/morpho-sdk`, `packages/simulation-sdk*` → core SDK
+- `packages/*-viem` or `packages/*-wagmi` → integration packages
+- `scripts/`, root configs, `tsconfig.json`, `pnpm-workspace.yaml`, cross-package → repo-wide
 
-If ambiguous, ask the user.
+If `CLAUDE.md` contains a Team IDs table, use that to resolve to a Linear team ID. Otherwise ask
+the user which Linear team to file under, and offer to record the answer in `CLAUDE.md` for future
+runs.
 
 ### Step 3: Generate the Plan
 
@@ -77,7 +73,7 @@ If the document contains explicit phases (e.g., "Implementation Phases", "Rollou
 "Milestones"):
 
 - Each phase becomes a **Linear milestone** within the project.
-- Milestone name: `Phase N: <phase title>` (e.g., `Phase 1: Foundation + Next.js pilot`)
+- Milestone name: `Phase N: <phase title>` (e.g., `Phase 1: Foundation + first SDK package`)
 - Milestone description: The phase's description from the document, verbatim or lightly cleaned up.
 - Milestones are ordered sequentially.
 
@@ -103,7 +99,7 @@ one issue.
 For each issue, determine:
 
 - **Title**: Follow the title convention
-- **Description**: Follow the `/create-issue` 3-section template:
+- **Description**: Use the 3-section template below:
 
   ```markdown
   ## Context
@@ -160,15 +156,15 @@ Before creating anything in Linear, present the full plan to the user:
 ---
 
 ### Milestone 1: <name>
-| #  | Title                                           | Priority | Estimate | Blocked By | Blocks |
-| -- | ----------------------------------------------- | -------- | -------- | ---------- | ------ |
-| 1  | feat(observability): scaffold package structure  | High     | 2        | —          | #2, #3 |
-| 2  | feat(observability): implement logger factory    | High     | 2        | #1         | #4     |
+| #  | Title                                              | Priority | Estimate | Blocked By | Blocks |
+| -- | -------------------------------------------------- | -------- | -------- | ---------- | ------ |
+| 1  | feat(blue-sdk): scaffold observability hooks       | High     | 2        | —          | #2, #3 |
+| 2  | feat(blue-sdk): implement logger factory           | High     | 2        | #1         | #4     |
 
 ### Milestone 2: <name>
-| #  | Title                                            | Priority | Estimate | Blocked By | Blocks |
-| -- | ------------------------------------------------ | -------- | -------- | ---------- | ------ |
-| 5  | feat(cv2): migrate to @repo/observability         | Normal   | 2        | #4         | #6     |
+| #  | Title                                              | Priority | Estimate | Blocked By | Blocks |
+| -- | -------------------------------------------------- | -------- | -------- | ---------- | ------ |
+| 5  | feat(simulation-sdk): adopt @morpho-org/observability | Normal   | 2        | #4         | #6     |
 
 ### Dependency Graph
 #1 → #2 → #4 → #5 → ...
@@ -252,13 +248,13 @@ Present a summary:
 2. Phase 2: <title> — N issues
 
 ### Issues Created (N total)
-| ID        | Title                                            | Milestone | Blocked By |
-| --------- | ------------------------------------------------ | --------- | ---------- |
-| APPS-101 | feat(observability): scaffold package structure  | Phase 1   | —          |
-| APPS-102 | feat(observability): implement logger factory    | Phase 1   | APPS-101  |
+| ID            | Title                                            | Milestone | Blocked By  |
+| ------------- | ------------------------------------------------ | --------- | ----------- |
+| <TEAM>-101    | feat(blue-sdk): scaffold observability hooks     | Phase 1   | —           |
+| <TEAM>-102    | feat(blue-sdk): implement logger factory         | Phase 1   | <TEAM>-101  |
 
 ### Dependency Chain
-APPS-101 → APPS-102 → APPS-104 → APPS-105 → ...
+<TEAM>-101 → <TEAM>-102 → <TEAM>-104 → <TEAM>-105 → ...
 ```
 
 ---
@@ -267,10 +263,10 @@ APPS-101 → APPS-102 → APPS-104 → APPS-105 → ...
 
 - Always resolve project names to IDs before creating artifacts — use `mcp__linear__list_projects`
   to find the ID if only a name is provided
-- Issue descriptions must follow the `/create-issue` 3-section template (Context / References / Possible
-  solution)
+- Issue descriptions must follow the 3-section template (Context / References / Possible solution)
 - Issue titles must follow the title convention
-- Refer to the Team IDs table in CLAUDE.md to select the appropriate team based on scope
+- If team IDs are not listed in `CLAUDE.md`, ask the user which Linear team to use and offer to
+  record the answer in `CLAUDE.md` for future runs
 - Create issues in dependency order so that `blockedBy` references are valid
 - If the document has no explicit phases, derive milestones from logical groupings and confirm with
   the user

@@ -82,7 +82,7 @@ The merge will report conflicting files. For each conflicting file:
    - If both sides changed the same code for different reasons, merge both changes logically
    - Read surrounding files if needed to understand the intent of each side
 4. **Edit the file** using the Edit tool to remove conflict markers and produce the correct merged result
-5. **Validate the resolved file**: `pnpm oxlint -c .oxlintrc.json <file>`
+5. **Validate the resolved file**: `pnpm exec biome check <file>`
 
 After resolving all conflicts:
 
@@ -98,7 +98,7 @@ Resolved merge conflicts in:
 - <file1>
 - <file2>
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 
@@ -220,7 +220,7 @@ Use the Edit tool to make the change. Follow the suggestion in the review commen
 After each file is modified, run the project linter:
 
 ```bash
-pnpm oxlint -c .oxlintrc.json <file>
+pnpm exec biome check <file>
 ```
 
 ## Step 7: Quality Gate
@@ -228,11 +228,11 @@ pnpm oxlint -c .oxlintrc.json <file>
 After all fixes are applied, run broader quality checks:
 
 ```bash
-# Typecheck
-pnpm typecheck:interface
+# Lint (biome check + checksum-address)
+pnpm lint
 
-# Lint all modified files
-pnpm oxlint -c .oxlintrc.json <file1> <file2> ...
+# Build (exercises tsc per package — there is no separate typecheck script)
+pnpm -r --if-present build
 ```
 
 If errors are found, fix them before proceeding.
@@ -264,7 +264,7 @@ fix: address PR review findings
 Applied fixes for <N> review comments:
 - <brief summary of key fixes>
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -486,12 +486,12 @@ CYCLE START:
 
 7. APPLY FIXES for unresolved comments:
    a. Group by file. For each file: read with Read tool, apply fix with Edit tool per the comment suggestion.
-   b. Run pnpm oxlint -c .oxlintrc.json on modified files.
+   b. Run pnpm exec biome check on modified files (or pnpm lint for the project-wide check).
    c. Stage: `git add <changed files>`
    d. Commit: `git commit -m "$(cat <<'INNEREOF'
 fix: address PR review findings
 
-Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 INNEREOF
 )"`
    e. Push: `git push origin <HEAD_BRANCH>`
@@ -528,7 +528,7 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 - **Handles all reviewers**: Picks up unresolved comments from Claude, Codex, Copilot, and human reviewers. Normalizes severity across different comment formats.
 - **CI-aware**: Monitors CI after pushing fixes. Automatically diagnoses and fixes CI failures caused by the fix commit (up to 2 retries). Pre-existing CI failures are reported but not touched.
 - **Conflict-aware**: Detects merge conflicts with the base branch before applying review fixes. Resolves conflicts intelligently by reading both sides and merging logically. Conflicts that can't be safely resolved are reported for human intervention.
-- **Quality gates**: Runs `pnpm oxlint` after each file fix and `pnpm typecheck:interface` after all fixes. Ensures fixes don't introduce new issues.
+- **Quality gates**: Runs `pnpm exec biome check` after each file fix and `pnpm lint && pnpm -r --if-present build` after all fixes. Ensures fixes don't introduce new issues.
 - **Self-contained watcher**: The cron watcher does actual work inline (resolves conflicts, applies fixes, replies to threads, resolves threads) rather than re-invoking the skill. This avoids recursive watcher creation and ensures each cron tick is a complete fix cycle.
 - **Pairs with `/pr-review`**: `/pr-review` posts findings (from parallel Claude agents + optional Codex), `/pr-fix` applies fixes. With both using `--watch`, they form a fully autonomous review-fix loop.
 - Fixes are applied to the PR branch, not main/dev

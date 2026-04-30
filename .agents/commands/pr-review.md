@@ -22,26 +22,12 @@ Reviews a GitHub Pull Request using parallel specialized agents, posts findings 
 
 When reviewing, refer to these project docs as needed:
 
-| Document              | Path                                                | Use For                         |
-| --------------------- | --------------------------------------------------- | ------------------------------- |
-| **Project Context**   | `CLAUDE.md`                                         | Tech stack, commands, structure |
-| **Coding Guidelines** | `.agents/guidelines.md`                             | All code changes                |
-| **Chain Integration** | `docs/chains.md`                                    | New chain support PRs           |
-| **Deployment**        | `docs/deployment.md`                                | Build/Docker/CI changes         |
-| **Rewards**           | `apps/vvrm-app/src/contexts/Reward/rewards.md`      | Rewards feature changes         |
-| **Consumer API**      | `apps/vvrm-app/src/services/consumer-api/README.md` | API client changes              |
-
-## Skills Reference
-
-Consult these skills for in-depth best practices:
-
-| Skill                      | Path                                          | Use For                                |
-| -------------------------- | --------------------------------------------- | -------------------------------------- |
-| **React Best Practices**   | `.agents/skills/vercel-react-best-practices/` | Performance, rendering, async patterns |
-| **Composition Patterns**   | `.agents/skills/vercel-composition-patterns/` | Component architecture, props design   |
-| **Web Design Guidelines**  | `.agents/skills/web-design-guidelines/`       | UI/UX review, accessibility            |
-| **Next.js Best Practices** | `.agents/skills/next-best-practices/`         | App Router, RSC, data fetching         |
-| **React Doctor**           | `.agents/skills/react-doctor/`                | Common React issues                    |
+| Document            | Path                  | Use For                                                |
+| ------------------- | --------------------- | ------------------------------------------------------ |
+| **Project Context** | `CLAUDE.md`           | Monorepo conventions, naming, type/import discipline   |
+| **Contributing**    | `CONTRIBUTING.md`     | Dev setup, package layout, release/changesets flow     |
+| **TIB Template**    | `TIB/TIB-template.md` | Format for design docs referenced from PRs             |
+| **Biome config**    | `biome.json`          | Style/lint rules enforced on PRs (`pnpm lint`)         |
 
 > **TWO-PHASE SKILL**: Phase 1 (Steps 1-8) does the initial review. Phase 2 (Step 9) creates a continuous watcher via CronCreate if `--watch` was passed. If `--watch` is used, the skill is NOT complete until Step 9's CronCreate call succeeds and you report the job ID to the user.
 
@@ -108,8 +94,8 @@ Also read the actual changed files from the local filesystem using the Read tool
 
 Before launching review agents, read the key reference documents so you can include relevant criteria in each agent's prompt:
 
-1. Read `.agents/guidelines.md` for coding standards
-2. Read relevant sections of the skills referenced above based on what files changed
+1. Read `CLAUDE.md` and `CONTRIBUTING.md` for monorepo conventions.
+2. Read `biome.json` if style/lint findings are likely relevant to the diff.
 
 ## Step 5: Launch Parallel Review Agents
 
@@ -128,28 +114,29 @@ Focus: TypeScript strict mode, type safety, early returns, `as` assertions, dupl
 
 Prompt must include:
 
-- Type safety issues (any types, type assertions, missing generics)
+- Type safety issues (`any`, unsafe `as` assertions, missing generics)
 - Error handling and edge cases
 - Code smells (duplicated logic, overly complex functions, magic numbers)
 - Early returns preferred over nested conditionals
-- Naming conventions per guidelines (PascalCase for components, camelCase for hooks, etc.)
-- Reference `.agents/guidelines.md` rules
+- Naming conventions per `CLAUDE.md`
+- Reference `CLAUDE.md` and `CONTRIBUTING.md`
 
-### Agent 2: React & Architecture
+### Agent 2: Module & API Architecture
 
-Focus: Component patterns, hooks rules, React Compiler, re-render optimization, Suspense/error boundaries, Next.js App Router patterns.
+Focus: package boundaries, public surface, type/import discipline, NodeNext compatibility.
 
 Prompt must include:
 
-- React best practices (hooks rules, effect dependencies, unnecessary re-renders)
-- Component patterns (prop drilling, component composition, separation of concerns)
-- Performance issues (check for manual memoization — should use React Compiler with `"use memo";` instead)
-- Re-render optimization (derived state, lazy init, functional setState)
-- Avoid boolean prop proliferation (use variants or compound components)
-- Prefer children over render props
-- App Router patterns (server vs client components, data fetching)
-- Client/server boundary violations
-- Reference `.agents/skills/vercel-react-best-practices/` and `.agents/skills/vercel-composition-patterns/`
+- Public exports come from `packages/<pkg>/src/index.ts` only — no deep imports into other packages
+- Relative imports include `.js` suffix (NodeNext) — e.g. `export * from "./market/index.js"`
+- Prefer type-only imports where possible (`import type { Address } from "viem"`)
+- Reuse SDK types for protocol values: `Address`, `MarketId`, `ChainId`, `BigIntish`
+- `bigint` for onchain quantities and WAD-scaled rates (e.g. `92_0000000000000000n`)
+- `as const` and `satisfies` for protocol lists and ABI literals (e.g. `BLUE_OPERATIONS as const`)
+- Domain failures are typed `Error` subclasses with readonly inputs
+- Edits to generated **inputs** (e.g. `graphql/*.gql`), not generated files (e.g. `src/api/sdk.ts`)
+- No edits to build output under `lib/`
+- Reference `CLAUDE.md` and the package's own `package.json` `exports` field
 
 ### Agent 3: Web3 Security
 
@@ -181,18 +168,19 @@ Prompt must include:
 - Silently ignored return values from critical operations
 - Dead code paths that can never execute
 
-### Agent 5: Style & Guidelines Compliance
+### Agent 5: Style & Conventions Compliance
 
-Focus: Tailwind vs Emotion enforcement, import ordering, naming conventions, colocation, guidelines checklist.
+Focus: Biome compliance, import discipline, monorepo conventions.
 
 Prompt must include:
 
-- New components should use Tailwind (not Emotion)
-- No mixing Tailwind and Emotion in the same component
-- UI Kit V6 components for new unopinionated components
-- Import ordering per guidelines
-- Colocation: related code should be together, not in centralized folders
-- Reference `.agents/guidelines.md` and `.agents/skills/web-design-guidelines/`
+- Biome clean: 2-space indentation, organized imports, no unused imports/variables (`pnpm lint`)
+- Type-only imports where possible (`import type { ... }`)
+- Relative imports use `.js` suffix in source files (NodeNext)
+- No edits to generated files (e.g. `src/api/sdk.ts`) — change generated **inputs** instead
+- No edits to build output under `lib/`
+- Reuse of SDK types (`Address`, `MarketId`, `ChainId`, `BigIntish`) over local re-declarations
+- Reference `CLAUDE.md` and `biome.json`
 
 ## Step 6: Aggregate and Deduplicate Findings
 
@@ -262,13 +250,13 @@ See inline comments for details.
 ### Guidelines Compliance
 - [ ] Follows TypeScript strict mode
 - [ ] Uses early returns over nested conditionals
-- [ ] React Compiler (\`\"use memo\";\`) instead of manual memoization
-- [ ] Tailwind for new components (not Emotion)
-- [ ] Proper error handling with logger service
-- [ ] Naming conventions followed
-- [ ] Component composition patterns (no boolean prop proliferation)
-- [ ] Proper async/Suspense boundaries
-- [ ] No unnecessary re-renders
+- [ ] \`bigint\` for onchain quantities; WAD-scaled where appropriate
+- [ ] Reuses SDK types (\`Address\`, \`MarketId\`, \`ChainId\`, \`BigIntish\`)
+- [ ] Type-only imports where possible
+- [ ] Relative imports use \`.js\` suffix (NodeNext)
+- [ ] Public APIs explicitly re-exported from \`src/index.ts\`
+- [ ] Domain failures are typed \`Error\` subclasses
+- [ ] Biome clean (\`pnpm lint\`)
 
 ### Verdict
 ✅ **Approved** - Code looks good!
@@ -410,14 +398,14 @@ CYCLE START:
    Also read each changed file from the local filesystem using the Read tool for full context.
 
 5. READ GUIDELINES:
-   Read .agents/guidelines.md for coding standards.
+   Read CLAUDE.md and CONTRIBUTING.md for monorepo conventions.
 
 6. LAUNCH REVIEW AGENTS in parallel using the Agent tool (subagent_type: "general-purpose"):
    a. code-quality — TypeScript strict mode, type safety, early returns, assertions, duplication, naming, code smells
-   b. react-architecture — component patterns, hooks, React Compiler ("use memo;"), re-render optimization, Next.js App Router
+   b. module-architecture — package boundaries, public exports from src/index.ts, type-only imports, .js suffix (NodeNext), reuse of SDK types (Address, MarketId, ChainId, BigIntish), bigint for onchain quantities, as const / satisfies for ABIs
    c. web3-security — contract interactions, tx params, wallets, permits, race conditions (CRITICAL)
    d. silent-failure-hunter — swallowed errors, empty catch blocks, missing error boundaries, unhandled rejections
-   e. style-guidelines — Tailwind vs Emotion, import ordering, naming conventions, colocation
+   e. style-conventions — Biome clean (pnpm lint), import ordering, type-only imports, no edits to lib/ output, edits to generated *inputs* (graphql/*.gql), not generated files
    Each agent receives the full diff AND changed file contents, and returns findings as JSON: [{severity, file, line, description}]
 
 7. Collect and deduplicate all agent findings. Keep highest severity for same file+line.
