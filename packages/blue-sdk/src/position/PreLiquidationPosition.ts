@@ -115,6 +115,18 @@ export class PreLiquidationPosition
     return this._baseMarket.params.lltv;
   }
 
+  public override accrueInterest(timestamp?: BigIntish) {
+    return new PreLiquidationPosition(
+      {
+        ...this,
+        preLiquidationParams: this.preLiquidationParams,
+        preLiquidation: this.preLiquidation,
+        preLiquidationOraclePrice: this.preLiquidationOraclePrice,
+      },
+      this._baseMarket.accrueInterest(timestamp),
+    );
+  }
+
   /**
    * @inheritdoc `undefined` if the pre-liquidation's oracle reverts.
    * `undefined` if it may be liquidatable on Morpho.
