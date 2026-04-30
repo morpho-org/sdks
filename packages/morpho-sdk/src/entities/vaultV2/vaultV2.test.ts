@@ -9,6 +9,7 @@ import { test } from "../../../test/setup.js";
 import { MorphoClient } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
+  AddressMismatchError,
   ExcessiveSlippageToleranceError,
   NativeAmountOnNonWNativeVaultError,
   NegativeNativeAmountError,
@@ -156,6 +157,99 @@ describe("MorphoVaultV2 entity tests", () => {
           accrualVault,
         }),
       ).toThrow(NativeAmountOnNonWNativeVaultError);
+    });
+  });
+
+  describe("userAddress validation", () => {
+    const ATTACKER_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+
+    test("deposit throws AddressMismatchError when userAddress differs from client", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client);
+      const vault = morphoClient.vaultV2(
+        KeyrockUsdcVaultV2.address,
+        mainnet.id,
+      );
+      const accrualVault = await vault.getData();
+
+      expect(() =>
+        vault.deposit({
+          amount: parseUnits("100", 6),
+          userAddress: ATTACKER_ADDRESS,
+          accrualVault,
+        }),
+      ).toThrow(AddressMismatchError);
+    });
+
+    test("withdraw throws AddressMismatchError when userAddress differs from client", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client);
+      const vault = morphoClient.vaultV2(
+        KeyrockUsdcVaultV2.address,
+        mainnet.id,
+      );
+
+      expect(() =>
+        vault.withdraw({
+          amount: parseUnits("100", 6),
+          userAddress: ATTACKER_ADDRESS,
+        }),
+      ).toThrow(AddressMismatchError);
+    });
+
+    test("redeem throws AddressMismatchError when userAddress differs from client", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client);
+      const vault = morphoClient.vaultV2(
+        KeyrockUsdcVaultV2.address,
+        mainnet.id,
+      );
+
+      expect(() =>
+        vault.redeem({
+          shares: parseUnits("100", 18),
+          userAddress: ATTACKER_ADDRESS,
+        }),
+      ).toThrow(AddressMismatchError);
+    });
+
+    test("forceWithdraw throws AddressMismatchError when userAddress differs from client", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client);
+      const vault = morphoClient.vaultV2(
+        KeyrockUsdcVaultV2.address,
+        mainnet.id,
+      );
+
+      expect(() =>
+        vault.forceWithdraw({
+          deallocations: [],
+          withdraw: { amount: parseUnits("100", 6) },
+          userAddress: ATTACKER_ADDRESS,
+        }),
+      ).toThrow(AddressMismatchError);
+    });
+
+    test("forceRedeem throws AddressMismatchError when userAddress differs from client", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client);
+      const vault = morphoClient.vaultV2(
+        KeyrockUsdcVaultV2.address,
+        mainnet.id,
+      );
+
+      expect(() =>
+        vault.forceRedeem({
+          deallocations: [],
+          redeem: { shares: parseUnits("100", 18) },
+          userAddress: ATTACKER_ADDRESS,
+        }),
+      ).toThrow(AddressMismatchError);
     });
   });
 });
