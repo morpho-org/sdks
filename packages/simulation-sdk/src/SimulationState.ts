@@ -651,6 +651,7 @@ export class SimulationState implements InputSimulationState {
       configuredVaults.map((k) => [k.toLowerCase(), k]),
     );
 
+    // Filter the vaults that have the market enabled and configured on the PublicAllocator.
     reallocatableVaults = Array.from(
       new Set(
         (reallocatableVaults ?? configuredVaults)
