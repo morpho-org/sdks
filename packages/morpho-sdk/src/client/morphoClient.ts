@@ -43,6 +43,7 @@ export class MorphoClient implements MorphoClientType {
 
   public marketV1(marketParams: MarketParams, chainId: number) {
     const derivedId = MarketUtils.getMarketId(marketParams);
+    // Can happen with one-time/hardcoded/agent-written possibly inconsistent input market params.
     if (marketParams.id !== derivedId) {
       throw new MarketIdMismatchError(marketParams.id, derivedId);
     }
