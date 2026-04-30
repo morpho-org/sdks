@@ -4,48 +4,31 @@ on:
   workflow_call:
 
 permissions:
-  id-token: write
   contents: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-publish
+  cancel-in-progress: false
 
 jobs:
   publish:
-    strategy:
-      fail-fast: false
-      matrix:
-        package:
-          - test
-          - test-wagmi
-
-          - morpho-ts
-          - morpho-test
-
-          - blue-sdk
-          - blue-sdk-viem
-          - blue-sdk-wagmi
-
-          - simulation-sdk
-          - simulation-sdk-wagmi
-
-          - bundler-sdk-viem
-
-          - liquidation-sdk-viem
-          - liquidity-sdk-viem
-
-          - migration-sdk-viem
-
-    name: "@morpho-org/${{ matrix.package }}"
+    if: github.ref_name == 'main' || github.ref_name == 'next'
+    name: Publish
     runs-on: ubuntu-latest
+    env:
+      CI: true
+      HUSKY: 0
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: main
-          # Fetch all history so that we can determine the version to release.
+          ref: ${{ github.ref_name }}
           fetch-depth: 0
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -59,23 +42,64 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - id: release
-        run: node ../../scripts/release/release.js
-        working-directory: packages/${{ matrix.package }}
+      - name: Detect pending changesets
+        id: pending-changesets
+        shell: bash
+        run: |
+          shopt -s nullglob
 
-      # Set version of each package to the most recent so they are referenced correctly in dependencies.
-      - run: |
-          pnpm -r -c exec 'node ../../scripts/release/version.js'
-        if: steps.release.outputs.version
+          pending=()
+          for changeset in .changeset/*.md; do
+            if [ "$(basename "$changeset")" != "README.md" ]; then
+              pending+=("$changeset")
+            fi
+          done
 
-      - run: pnpm publish --no-git-checks --access public --tag ${{ steps.release.outputs.channel }}
-        working-directory: packages/${{ matrix.package }}
-        if: steps.release.outputs.version
+          if [ "${#pending[@]}" -gt 0 ]; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+            echo "Pending changesets:"
+            printf '%s\n' "${pending[@]}"
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - run: gh release create ${{ steps.release.outputs.tag }} --target ${{ steps.release.outputs.branch }} --notes-file packages/${{ matrix.package }}/CHANGELOG.md --title '${{ steps.release.outputs.tag }}' ${{ steps.release.outputs.channel == 'latest' && '--latest' || '--prerelease' }}
-        if: steps.release.outputs.version
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Skip until version PR is merged
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        run: |
+          echo "Pending changesets are present. The version PR workflow will prepare a release branch; skipping publish."
 
-      - run: echo "- [RELEASE] ${{ steps.release.outputs.version }}" >> $GITHUB_STEP_SUMMARY
-        if: steps.release.outputs.version
+      - name: Refuse prerelease mode on main
+        if: github.ref_name == 'main' && hashFiles('.changeset/pre.json') != ''
+        run: |
+          echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
+          exit 1
+
+      - name: Publish packages
+        if: steps.pending-changesets.outputs.has_changesets == 'false'
+        shell: bash
+        run: |
+          publish_tag="latest"
+          if [ "${GITHUB_REF_NAME}" = "next" ]; then
+            publish_tag="next"
+          fi
+
+          before_tags="$(mktemp)"
+          after_tags="$(mktemp)"
+          new_tags="$(mktemp)"
+          trap 'rm -f "$before_tags" "$after_tags" "$new_tags"' EXIT
+
+          git tag --list | sort > "$before_tags"
+          pnpm release --tag "$publish_tag"
+          git tag --list | sort > "$after_tags"
+
+          comm -13 "$before_tags" "$after_tags" > "$new_tags"
+          if [ -s "$new_tags" ]; then
+            mapfile -t tags < "$new_tags"
+            refs=()
+
+            for tag in "${tags[@]}"; do
+              refs+=("refs/tags/${tag}")
+            done
+
+            git push --atomic origin "${refs[@]}"
+          fi

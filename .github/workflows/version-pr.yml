@@ -1,0 +1,138 @@
+name: Version PR
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-version-pr
+  cancel-in-progress: false
+
+jobs:
+  version-pr:
+    if: github.ref_name == 'main' || github.ref_name == 'next'
+    name: Version PR
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      HUSKY: 0
+      RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Detect pending changesets
+        id: pending-changesets
+        shell: bash
+        run: |
+          shopt -s nullglob
+
+          pending=()
+          for changeset in .changeset/*.md; do
+            if [ "$(basename "$changeset")" != "README.md" ]; then
+              pending+=("$changeset")
+            fi
+          done
+
+          if [ "${#pending[@]}" -gt 0 ]; then
+            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
+            echo "Pending changesets:"
+            printf '%s\n' "${pending[@]}"
+          else
+            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Stop if there is nothing to version
+        if: steps.pending-changesets.outputs.has_changesets == 'false'
+        run: echo "No pending changesets; no version PR needed."
+
+      - name: Enter next prerelease mode
+        if: github.ref_name == 'next' && steps.pending-changesets.outputs.has_changesets == 'true' && hashFiles('.changeset/pre.json') == ''
+        run: pnpm changeset pre enter next
+
+      - name: Refuse prerelease mode on main
+        if: github.ref_name == 'main' && hashFiles('.changeset/pre.json') != ''
+        run: |
+          echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
+          exit 1
+
+      - name: Version packages
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        run: pnpm run version
+
+      - name: Generate GitHub App Token
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        id: app-token
+        uses: actions/create-github-app-token@d72941d797fd3113feb6b93fd0dec494b13a2547 # v1
+        with:
+          app-id: ${{ secrets.VERSION_APP_ID }}
+          private-key: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Push release branch
+        id: version-commit
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git add .
+
+          if git diff --cached --quiet; then
+            echo "No version changes to commit."
+            echo "has_version_changes=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -m "chore: version packages"
+          git push --force origin "HEAD:refs/heads/${RELEASE_BRANCH}"
+          echo "has_version_changes=true" >> "$GITHUB_OUTPUT"
+
+      - name: Open or update release PR
+        if: steps.version-commit.outputs.has_version_changes == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          BASE_BRANCH: ${{ github.ref_name }}
+        run: |
+          title="chore: version packages (${BASE_BRANCH})"
+          body="$(cat <<BODY
+          This PR applies the pending changesets for ${BASE_BRANCH}.
+
+          Merging it clears the consumed changesets and lets the publish workflow publish the already-versioned packages.
+          BODY
+          )"
+
+          pr_number="$(gh pr list \
+            --base "${BASE_BRANCH}" \
+            --head "${RELEASE_BRANCH}" \
+            --state open \
+            --json number \
+            --jq '.[0].number')"
+
+          if [ -n "${pr_number}" ]; then
+            gh pr edit "${pr_number}" --title "${title}" --body "${body}"
+          else
+            gh pr create \
+              --base "${BASE_BRANCH}" \
+              --head "${RELEASE_BRANCH}" \
+              --title "${title}" \
+              --body "${body}"
+          fi
