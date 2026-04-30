@@ -637,7 +637,7 @@ export class SimulationState implements InputSimulationState {
     marketId: MarketId,
     {
       enabled = true,
-      reallocatableVaults = keys(this.vaultMarketConfigs),
+      reallocatableVaults,
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
       delay = Time.s.from.h(1n),
@@ -645,8 +645,19 @@ export class SimulationState implements InputSimulationState {
   ) {
     if (!enabled) return { withdrawals: [], data: this };
 
-    // Filter the vaults that have the market enabled and configured on the PublicAllocator.
-    reallocatableVaults = reallocatableVaults.filter((vault) => {
+    const configuredVaults = keys(this.vaultMarketConfigs);
+    // EVM addresses are case-insensitive; resolve caller casing back to the stored key.
+    const vaultKeyByLower = new Map<string, Address>(
+      configuredVaults.map((k) => [k.toLowerCase(), k]),
+    );
+
+    reallocatableVaults = Array.from(
+      new Set(
+        (reallocatableVaults ?? configuredVaults)
+          .map((v) => vaultKeyByLower.get(v.toLowerCase()))
+          .filter(isDefined),
+      ),
+    ).filter((vault) => {
       const vaultMarketConfig = this.vaultMarketConfigs[vault]?.[marketId];
 
       return (
