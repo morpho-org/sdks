@@ -46,11 +46,6 @@ export const handleBlueBorrowOperation: OperationHandler<
   const market = data.getMarket(id);
   if (market.price == null) throw new BlueErrors.UnknownOraclePrice(id);
 
-  // Mirrors the `minSharePrice = (WAD - slippage)` floor encoded by
-  // `GeneralAdapter1.morphoBorrow`: the simulator must book the worst-case
-  // borrow that the onchain slippage guard still permits, i.e. up to
-  // `expectedShares / (WAD - slippage)` shares in asset-mode and down to
-  // `expectedAssets * (WAD - slippage)` assets in share-mode.
   if (shares === 0n)
     shares = MathLib.wDivUp(
       market.toBorrowShares(assets, "Up"),
