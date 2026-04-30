@@ -14,6 +14,7 @@ import {
   NegativeMinSharePriceError,
   NonPositiveMaxSharePriceError,
   NonPositiveSharesAmountError,
+  VaultAssetMismatchError,
   isRequirementApproval,
   isRequirementSignature,
 } from "../../types/index.js";
@@ -33,9 +34,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args: {
         targetVault: KeyrockUsdcVaultV2.address,
+        targetAsset: KeyrockUsdcVaultV2.asset,
         shares,
         minSharePriceVaultV1,
         maxSharePriceVaultV2,
@@ -66,9 +69,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: GauntletWethVaultV1.address,
+        asset: GauntletWethVaultV1.asset,
       },
       args: {
         targetVault: KpkWETHVaultV2.address,
+        targetAsset: KpkWETHVaultV2.asset,
         shares,
         minSharePriceVaultV1,
         maxSharePriceVaultV2,
@@ -96,9 +101,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args: {
         targetVault: KeyrockUsdcVaultV2.address,
+        targetAsset: KeyrockUsdcVaultV2.asset,
         shares: 1000000000000000000n,
         minSharePriceVaultV1: 1000000000000000000000000000n,
         maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -148,9 +155,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args: {
         targetVault: KeyrockUsdcVaultV2.address,
+        targetAsset: KeyrockUsdcVaultV2.asset,
         shares,
         minSharePriceVaultV1: 1000000000000000000000000000n,
         maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -208,9 +217,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: GauntletWethVaultV1.address,
+        asset: GauntletWethVaultV1.asset,
       },
       args: {
         targetVault: KpkWETHVaultV2.address,
+        targetAsset: KpkWETHVaultV2.asset,
         shares,
         minSharePriceVaultV1: 1000000000000000000000000000n,
         maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -241,9 +252,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args: {
         targetVault: KeyrockUsdcVaultV2.address,
+        targetAsset: KeyrockUsdcVaultV2.asset,
         shares: 1000000000000000000n,
         minSharePriceVaultV1: 1000000000000000000000000000n,
         maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -289,9 +302,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
         vault: {
           chainId: mainnet.id,
           address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
         },
         args: {
           targetVault: KeyrockUsdcVaultV2.address,
+          targetAsset: KeyrockUsdcVaultV2.asset,
           shares,
           minSharePriceVaultV1: 1000000000000000000000000000n,
           maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -302,6 +317,28 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     ).toThrow(DepositAssetMismatchError);
   });
 
+  test("should throw VaultAssetMismatchError when source and target assets differ", async ({
+    client,
+  }) => {
+    expect(() =>
+      vaultV1MigrateToV2({
+        vault: {
+          chainId: mainnet.id,
+          address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
+        },
+        args: {
+          targetVault: KpkWETHVaultV2.address,
+          targetAsset: KpkWETHVaultV2.asset,
+          shares: 1000000000000000000n,
+          minSharePriceVaultV1: 1000000000000000000000000000n,
+          maxSharePriceVaultV2: 1000000000000000000000000000n,
+          recipient: client.account.address,
+        },
+      }),
+    ).toThrow(VaultAssetMismatchError);
+  });
+
   test("should throw NonPositiveSharesAmountError when shares is zero", async ({
     client,
   }) => {
@@ -310,9 +347,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
         vault: {
           chainId: mainnet.id,
           address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
         },
         args: {
           targetVault: KeyrockUsdcVaultV2.address,
+          targetAsset: KeyrockUsdcVaultV2.asset,
           shares: 0n,
           minSharePriceVaultV1: 1000000000000000000000000000n,
           maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -330,9 +369,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
         vault: {
           chainId: mainnet.id,
           address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
         },
         args: {
           targetVault: KeyrockUsdcVaultV2.address,
+          targetAsset: KeyrockUsdcVaultV2.asset,
           shares: -1n,
           minSharePriceVaultV1: 1000000000000000000000000000n,
           maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -350,9 +391,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
         vault: {
           chainId: mainnet.id,
           address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
         },
         args: {
           targetVault: KeyrockUsdcVaultV2.address,
+          targetAsset: KeyrockUsdcVaultV2.asset,
           shares: 1000000000000000000n,
           minSharePriceVaultV1: 1000000000000000000000000000n,
           maxSharePriceVaultV2: 0n,
@@ -370,9 +413,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
         vault: {
           chainId: mainnet.id,
           address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
         },
         args: {
           targetVault: KeyrockUsdcVaultV2.address,
+          targetAsset: KeyrockUsdcVaultV2.asset,
           shares: 1000000000000000000n,
           minSharePriceVaultV1: 1000000000000000000000000000n,
           maxSharePriceVaultV2: -1n,
@@ -390,9 +435,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
         vault: {
           chainId: mainnet.id,
           address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
         },
         args: {
           targetVault: KeyrockUsdcVaultV2.address,
+          targetAsset: KeyrockUsdcVaultV2.asset,
           shares: 1000000000000000000n,
           minSharePriceVaultV1: 0n,
           maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -410,9 +457,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
         vault: {
           chainId: mainnet.id,
           address: SteakhouseUsdcVaultV1.address,
+          asset: SteakhouseUsdcVaultV1.asset,
         },
         args: {
           targetVault: KeyrockUsdcVaultV2.address,
+          targetAsset: KeyrockUsdcVaultV2.asset,
           shares: 1000000000000000000n,
           minSharePriceVaultV1: -1n,
           maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -427,9 +476,11 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args: {
         targetVault: KeyrockUsdcVaultV2.address,
+        targetAsset: KeyrockUsdcVaultV2.asset,
         shares: 1000000000000000000n,
         minSharePriceVaultV1: 1000000000000000000000000000n,
         maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -447,6 +498,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const args = {
       targetVault: KeyrockUsdcVaultV2.address,
+      targetAsset: KeyrockUsdcVaultV2.asset,
       shares: 1000000000000000000n,
       minSharePriceVaultV1: 1000000000000000000000000000n,
       maxSharePriceVaultV2: 1000000000000000000000000000n,
@@ -457,6 +509,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args,
     });
@@ -465,6 +518,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args,
       metadata: { origin: "a1b2c3d4" },

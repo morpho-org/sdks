@@ -1,7 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, maxUint256 } from "viem";
+import { type Address, isAddressEqual, maxUint256 } from "viem";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type Metadata,
@@ -10,6 +10,7 @@ import {
   NonPositiveSharesAmountError,
   type RequirementSignature,
   type Transaction,
+  VaultAssetMismatchError,
   type VaultV1MigrateToV2Action,
 } from "../../types/index.js";
 import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
@@ -19,9 +20,13 @@ export interface VaultV1MigrateToV2Params {
   vault: {
     chainId: number;
     address: Address;
+    /** Underlying asset of the source V1 vault. */
+    asset: Address;
   };
   args: {
     targetVault: Address;
+    /** Underlying asset of the target V2 vault. */
+    targetAsset: Address;
     /** Number of V1 shares to migrate. */
     shares: bigint;
     /** Minimum acceptable share price for V1 redeem (slippage protection, in RAY). */
@@ -53,7 +58,9 @@ export interface VaultV1MigrateToV2Params {
  * @param params - The migration parameters.
  * @param params.vault.chainId - The chain ID (used to resolve bundler addresses).
  * @param params.vault.address - The VaultV1 (MetaMorpho) address.
+ * @param params.vault.asset - The underlying asset of the source V1 vault.
  * @param params.args.targetVault - The VaultV2 address to deposit into.
+ * @param params.args.targetAsset - The underlying asset of the target V2 vault. Must equal `vault.asset`.
  * @param params.args.shares - Number of V1 shares to migrate.
  * @param params.args.minSharePriceVaultV1 - Minimum V1 share price in RAY (slippage protection for redeem).
  * @param params.args.maxSharePriceVaultV2 - Maximum V2 share price in RAY (inflation protection for deposit).
@@ -63,9 +70,10 @@ export interface VaultV1MigrateToV2Params {
  * @returns Deep-frozen transaction.
  */
 export const vaultV1MigrateToV2 = ({
-  vault: { chainId, address: sourceVault },
+  vault: { chainId, address: sourceVault, asset: sourceAsset },
   args: {
     targetVault,
+    targetAsset,
     shares,
     minSharePriceVaultV1,
     maxSharePriceVaultV2,
@@ -76,6 +84,12 @@ export const vaultV1MigrateToV2 = ({
 }: VaultV1MigrateToV2Params): Readonly<
   Transaction<VaultV1MigrateToV2Action>
 > => {
+  // Both bundle legs use maxUint256: an asset mismatch leaves the redeemed
+  // source asset stranded on GA1 while the user receives only dust shares.
+  if (!isAddressEqual(sourceAsset, targetAsset)) {
+    throw new VaultAssetMismatchError(sourceAsset, targetAsset);
+  }
+
   if (shares <= 0n) {
     throw new NonPositiveSharesAmountError(sourceVault);
   }
