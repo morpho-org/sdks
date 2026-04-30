@@ -536,6 +536,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     let assets: bigint;
     let shares: bigint;
     let transferAmount: bigint;
+    let marketForRepay: Market;
 
     if (isSharesMode) {
       validateRepayShares({
@@ -545,12 +546,15 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
       assets = 0n;
       shares = params.shares;
-      // Add slippage buffer to cover interest accrued between tx construction and execution.
-      // Without this, the on-chain repay amount may exceed the pre-transferred ERC20 amount.
-      const baseTransferAmount = positionData.market.toBorrowAssets(
-        shares,
-        "Up",
-      );
+      // Accrue interest forward so the transfer amount and share-price cap
+      // reflect the assets actually owed at inclusion, not the stale
+      // `lastUpdate` snapshot. Without this, share-mode full-repay can
+      // revert on dormant markets even when slippage is at its default.
+      const accrualTimestamp =
+        MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+        Time.s.from.min(10n);
+      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
+      const baseTransferAmount = marketForRepay.toBorrowAssets(shares, "Up");
       transferAmount = MathLib.wMulUp(
         baseTransferAmount,
         MathLib.WAD + slippageTolerance,
@@ -564,12 +568,13 @@ export class MorphoMarketV1 implements MarketV1Actions {
       assets = params.assets;
       shares = 0n;
       transferAmount = params.assets;
+      marketForRepay = positionData.market;
     }
 
     const maxSharePrice = computeMaxRepaySharePrice({
       repayAssets: assets,
       repayShares: shares,
-      market: positionData.market,
+      market: marketForRepay,
       slippageTolerance,
     });
 
@@ -718,6 +723,15 @@ export class MorphoMarketV1 implements MarketV1Actions {
     let assets: bigint;
     let shares: bigint;
     let transferAmount: bigint;
+    let marketForRepay: Market;
+
+    // +10 min accrual buffer: residual debt grows between build and execute.
+    // Reused below for transferAmount sizing (shares mode), the share-price
+    // cap and the post-repay health check, so all three reflect the same
+    // forward-looking debt state instead of the stale `lastUpdate` snapshot.
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      Time.s.from.min(10n);
 
     if (isSharesMode) {
       validateRepayShares({
@@ -727,10 +741,8 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
       assets = 0n;
       shares = params.shares;
-      const baseTransferAmount = positionData.market.toBorrowAssets(
-        shares,
-        "Up",
-      );
+      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
+      const baseTransferAmount = marketForRepay.toBorrowAssets(shares, "Up");
       transferAmount = MathLib.wMulUp(
         baseTransferAmount,
         MathLib.WAD + slippageTolerance,
@@ -744,6 +756,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
       assets = params.assets;
       shares = 0n;
       transferAmount = params.assets;
+      marketForRepay = positionData.market;
     }
 
     if (withdrawAmount > positionData.collateral) {
@@ -754,10 +767,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
     }
 
-    // +10 min accrual buffer: residual debt grows between build and execute.
-    const accrualTimestamp =
-      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
-      Time.s.from.min(10n);
     const { position: positionAfterRepay } = positionData.repay(
       assets,
       shares,
@@ -773,7 +782,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     const maxSharePrice = computeMaxRepaySharePrice({
       repayAssets: assets,
       repayShares: shares,
-      market: positionData.market,
+      market: marketForRepay,
       slippageTolerance,
     });
 
