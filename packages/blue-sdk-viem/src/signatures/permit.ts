@@ -35,12 +35,17 @@ export const getPermitTypedData = (
 ): TypedDataDefinition<typeof permitTypes, "Permit"> => {
   const { usdc, eurc } = getChainAddresses(chainId);
 
-  const domain = erc20.eip5267Domain?.eip712Domain ?? {
-    name: erc20.name,
-    version: erc20.address === usdc || erc20.address === eurc ? "2" : "1",
-    chainId,
-    verifyingContract: erc20.address,
-  };
+  // EIP-5267: ignore foreign-chain domains (https://eips.ethereum.org/EIPS/eip-5267#security-considerations).
+  const eip712Domain = erc20.eip5267Domain?.eip712Domain;
+  const domain =
+    eip712Domain?.chainId === chainId
+      ? eip712Domain
+      : {
+          name: erc20.name,
+          version: erc20.address === usdc || erc20.address === eurc ? "2" : "1",
+          chainId,
+          verifyingContract: erc20.address,
+        };
 
   return {
     domain,
