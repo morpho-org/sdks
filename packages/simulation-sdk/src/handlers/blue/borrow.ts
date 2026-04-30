@@ -1,6 +1,6 @@
 import { BlueErrors, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
 
-import { BlueSimulationErrors } from "../../errors.js";
+import { BlueSimulationErrors, SimulationErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
@@ -31,6 +31,9 @@ export const handleBlueBorrowOperation: OperationHandler<
   if ((assets === 0n) === (shares === 0n))
     throw new BlueErrors.InconsistentInput(assets, shares);
 
+  if (slippage >= MathLib.WAD)
+    throw new SimulationErrors.InvalidInput({ slippage });
+
   handleBlueAccrueInterestOperation(
     {
       type: "Blue_AccrueInterest",
@@ -43,14 +46,19 @@ export const handleBlueBorrowOperation: OperationHandler<
   const market = data.getMarket(id);
   if (market.price == null) throw new BlueErrors.UnknownOraclePrice(id);
 
+  // Mirrors the `minSharePrice = (WAD - slippage)` floor encoded by
+  // `GeneralAdapter1.morphoBorrow`: the simulator must book the worst-case
+  // borrow that the onchain slippage guard still permits, i.e. up to
+  // `expectedShares / (WAD - slippage)` shares in asset-mode and down to
+  // `expectedAssets * (WAD - slippage)` assets in share-mode.
   if (shares === 0n)
-    shares = MathLib.wMulUp(
+    shares = MathLib.wDivUp(
       market.toBorrowShares(assets, "Up"),
-      MathLib.WAD + slippage,
+      MathLib.WAD - slippage,
     );
   else
     assets = market.toBorrowAssets(
-      MathLib.wDivDown(shares, MathLib.WAD + slippage),
+      MathLib.wMulDown(shares, MathLib.WAD - slippage),
       "Down",
     );
 
