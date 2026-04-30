@@ -5,6 +5,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 [![CI](https://github.com/morpho-org/morpho-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/morpho-org/morpho-sdk/actions/workflows/ci.yml)
 
+## Overview
+
 > **The abstraction layer that simplifies Morpho protocol**
 
 Build transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **MarketV1** (Morpho Blue) on EVM-compatible chains.
@@ -15,7 +17,9 @@ Build transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **MarketV1** (
 pnpm add @morpho-org/morpho-sdk
 ```
 
-## Entities & Actions
+## Usage
+
+### Entities & Actions
 
 | Entity       | Action                    | Route                     | Why                                                                                                 |
 | ------------ | ------------------------- | ------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -34,7 +38,7 @@ pnpm add @morpho-org/morpho-sdk
 |              | `withdrawCollateral`      | Direct Morpho call        | No bundler overhead. Validates position health after withdrawal.                                    |
 |              | `repayWithdrawCollateral` | Bundler (general adapter) | Atomic repay + withdraw. Bundle order matters: repay first, then withdraw.                          |
 
-## The `getRequirements` flow
+### The `getRequirements` flow
 
 Every action that touches a user's tokens or positions returns two things:
 
@@ -62,7 +66,7 @@ const requirements = await getRequirements();
 const tx = buildTx(permitSignature);
 ```
 
-## Integration invariant — builder = signer
+### Integration invariant — builder = signer
 
 **`userAddress` MUST equal the connected account on the viem client used to build the tx, and that same client MUST sign it.** Enforced by `validateUserAddress` (throws `MissingClientPropertyError` / `AddressMismatchError`); critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls).
 
@@ -81,7 +85,7 @@ const tx = buildTx(permitSignature);
 |              | `borrow`                 | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `supplyCollateralBorrow` | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
 
-## VaultV2
+### VaultV2
 
 ```typescript
 import { MorphoClient } from "@morpho-org/morpho-sdk";
@@ -94,7 +98,7 @@ const morpho = new MorphoClient(viemClient);
 const vault = morpho.vaultV2("0xVault...", 1);
 ```
 
-### Deposit
+#### Deposit
 
 ```typescript
 const { buildTx, getRequirements } = await vault.deposit({
@@ -106,7 +110,7 @@ const requirements = await getRequirements();
 const tx = buildTx(requirementSignature);
 ```
 
-#### Deposit with native token wrapping
+##### Deposit with native token wrapping
 
 For vaults whose underlying asset is wNative, you can deposit native token that will be automatically wrapped:
 
@@ -127,7 +131,7 @@ const { buildTx, getRequirements } = await vault.deposit({
 
 The bundler atomically transfers native token, wraps it to wNative, and deposits alongside any ERC-20 amount. The transaction's `value` field is set to `nativeAmount`.
 
-### Withdraw
+#### Withdraw
 
 ```typescript
 const { buildTx } = vault.withdraw({
@@ -138,7 +142,7 @@ const { buildTx } = vault.withdraw({
 const tx = buildTx();
 ```
 
-### Redeem
+#### Redeem
 
 ```typescript
 const { buildTx } = vault.redeem({
@@ -149,7 +153,7 @@ const { buildTx } = vault.redeem({
 const tx = buildTx();
 ```
 
-### Force Withdraw
+#### Force Withdraw
 
 ```typescript
 const { buildTx } = vault.forceWithdraw({
@@ -161,7 +165,7 @@ const { buildTx } = vault.forceWithdraw({
 const tx = buildTx();
 ```
 
-### Force Redeem
+#### Force Redeem
 
 ```typescript
 const { buildTx } = vault.forceRedeem({
@@ -173,13 +177,13 @@ const { buildTx } = vault.forceRedeem({
 const tx = buildTx();
 ```
 
-## VaultV1
+### VaultV1
 
 ```typescript
 const vault = morpho.vaultV1("0xVault...", 1);
 ```
 
-### Deposit
+#### Deposit
 
 ```typescript
 const { buildTx, getRequirements } = await vault.deposit({
@@ -191,7 +195,7 @@ const requirements = await getRequirements();
 const tx = buildTx(requirementSignature);
 ```
 
-### Withdraw
+#### Withdraw
 
 ```typescript
 const { buildTx } = vault.withdraw({
@@ -202,7 +206,7 @@ const { buildTx } = vault.withdraw({
 const tx = buildTx();
 ```
 
-### Redeem
+#### Redeem
 
 ```typescript
 const { buildTx } = vault.redeem({
@@ -213,7 +217,7 @@ const { buildTx } = vault.redeem({
 const tx = buildTx();
 ```
 
-### Migrate to V2
+#### Migrate to V2
 
 Atomically migrate a full position from a VaultV1 (MetaMorpho) vault into a VaultV2 vault. The bundler redeems the V1 shares and deposits the resulting assets into V2 in a single transaction. Both vaults must share the same underlying asset.
 
@@ -232,7 +236,7 @@ const requirements = await getRequirements();
 const tx = buildTx(requirementSignature);
 ```
 
-## MarketV1
+### MarketV1
 
 ```typescript
 const market = morpho.marketV1(
@@ -247,7 +251,7 @@ const market = morpho.marketV1(
 );
 ```
 
-### Supply Collateral
+#### Supply Collateral
 
 ```typescript
 const { buildTx, getRequirements } = market.supplyCollateral({
@@ -259,7 +263,7 @@ const requirements = await getRequirements();
 const tx = buildTx(requirementSignature);
 ```
 
-### Borrow
+#### Borrow
 
 ```typescript
 const positionData = await market.getPositionData("0xUser...");
@@ -274,7 +278,7 @@ const requirements = await getRequirements();
 const tx = buildTx();
 ```
 
-### Supply Collateral & Borrow
+#### Supply Collateral & Borrow
 
 ```typescript
 const positionData = await market.getPositionData("0xUser...");
@@ -290,7 +294,7 @@ const requirements = await getRequirements();
 const tx = buildTx(requirementSignature);
 ```
 
-### Repay
+#### Repay
 
 Two modes depending on whether the caller specifies `assets` (partial repay) or `shares` (full repay, immune to interest accrual between quote and inclusion):
 
@@ -317,7 +321,7 @@ const tx = buildTx(requirementSignature);
 
 Repay does **not** require Morpho authorization (it only requires a loan token approval for `GeneralAdapter1`).
 
-### Withdraw Collateral
+#### Withdraw Collateral
 
 ```typescript
 const positionData = await market.getPositionData("0xUser...");
@@ -333,7 +337,7 @@ const tx = buildTx();
 
 Direct call to `morpho.withdrawCollateral()` — no bundler, no `GeneralAdapter1` authorization needed. The SDK validates position health after withdrawal against the LLTV buffer to prevent instant liquidation.
 
-### Repay & Withdraw Collateral
+#### Repay & Withdraw Collateral
 
 ```typescript
 const positionData = await market.getPositionData("0xUser...");
@@ -351,7 +355,7 @@ const tx = buildTx(requirementSignature);
 
 Atomically bundles repay → withdraw collateral via bundler3. Bundle order is critical: repay runs first to reduce debt, then withdraw. Requires both a loan token approval (for repay) and a Morpho authorization (for withdraw). The SDK validates combined position health by simulating the repay before checking withdrawal safety.
 
-### Borrow with Shared Liquidity (Reallocations)
+#### Borrow with Shared Liquidity (Reallocations)
 
 When a market lacks sufficient liquidity, you can reallocate liquidity from other markets managed by MetaMorpho Vaults via the **PublicAllocator** contract:
 
@@ -398,7 +402,7 @@ const { buildTx, getRequirements } = market.supplyCollateralBorrow({
 });
 ```
 
-## Architecture
+### Architecture
 
 ```mermaid
 graph LR
@@ -467,7 +471,7 @@ graph LR
     style PA fill:#fff9c4,stroke:#f9a825
 ```
 
-## Local Development
+## Development
 
 Link this package to your app for local debugging:
 
@@ -483,14 +487,8 @@ In your other project:
 pnpm link @morpho-org/morpho-sdk
 ```
 
-## Contributing
-
-Contributions are welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, code style, and the PR workflow.
-
-## Security
-
-To report a vulnerability, see [SECURITY.md](./SECURITY.md). **Please do not open a public issue for security reports.**
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT. See [LICENSE](./LICENSE).

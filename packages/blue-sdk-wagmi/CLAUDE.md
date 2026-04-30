@@ -7,5 +7,13 @@
 - Gate queries on required inputs, e.g. `enabled: parameters.marketId != null && query.enabled`.
 - Use `replaceDeepEqual` as the default structural sharing for entity hooks.
 - Multi-entity hooks dedupe inputs before `useQueries`, e.g. `new Set(marketIds)`.
+- Multi-entity hooks preserve caller order in returned records even when fetch inputs are deduped.
 - Return indexed records with `data`, `error`, `isFetching`, and `isFetchingAny`.
 - Keep `throwOnError`, `queryFn`, and query key fields owned by query option helpers.
+
+## Continuous Improvement
+
+- This package is the React/Wagmi boundary for Blue SDK data; do not move hook or query coupling into core packages.
+- Existing code may predate current conventions; do not widen divergence when touching it.
+- Prefer composing core fetch/query helpers over duplicating protocol logic in hooks.
+- If a convention cannot yet be met, keep the exception local and make the touched surface closer to the target design.
