@@ -31,6 +31,22 @@ When reviewing, refer to these project docs as needed:
 
 > **TWO-PHASE SKILL**: Phase 1 (Steps 1-8) does the initial review. Phase 2 (Step 9) creates a continuous watcher via CronCreate if `--watch` was passed. If `--watch` is used, the skill is NOT complete until Step 9's CronCreate call succeeds and you report the job ID to the user.
 
+## Placeholder convention
+
+Throughout this skill, the following placeholders are used consistently:
+
+| Placeholder | Source | Description |
+|---|---|---|
+| `<owner>` | parsed from git remote | GitHub repo owner |
+| `<repo>` | parsed from git remote | GitHub repo name |
+| `<PR_NUMBER>` | user argument | Pull request number |
+| `<BASE_BRANCH>` | `gh pr view` → `baseRefName` | PR base branch |
+| `<HEAD_BRANCH>` | `gh pr view` → `headRefName` | PR head branch |
+| `<HEAD_SHA>` | `gh pr view` → `headRefOid` | Head commit full SHA |
+| `<HEAD_SHA_SHORT>` | first 7 chars of `<HEAD_SHA>` | Head commit short SHA |
+| `<REPO_PATH>` | `git rev-parse --show-toplevel` | Absolute path to repo root |
+| `<BOT_LOGIN>` | `gh api user --jq '.login'` | Current GitHub user's login |
+
 ## Step 1: Detect Environment and Repository
 
 ### Environment Detection
@@ -48,7 +64,17 @@ Extract owner and repo from the git remote:
 git remote get-url origin
 ```
 
-Parse `owner` and `repo` from the URL (handles both `git@github.com:owner/repo.git` and `https://github.com/owner/repo.git` formats). Strip the `.git` suffix.
+Parse `<owner>` and `<repo>` from the URL (handles both `git@github.com:owner/repo.git` and `https://github.com/owner/repo.git` formats). Strip the `.git` suffix.
+
+### Current User Detection
+
+Determine the current GitHub user (needed for watcher SHA tracking):
+
+```bash
+BOT_LOGIN=$(gh api user --jq '.login')
+```
+
+Store this as `<BOT_LOGIN>` for use in Step 9.
 
 ## Step 2: Fetch PR Details
 
@@ -60,9 +86,9 @@ gh pr view <PR_NUMBER> --json title,body,baseRefName,headRefName,headRefOid,stat
 
 Extract:
 
-- `baseRefName` — the base branch
-- `headRefName` — the head/PR branch
-- `headRefOid` — the head commit SHA (this is your **last_reviewed_sha**)
+- `<BASE_BRANCH>` — the base branch (`baseRefName`)
+- `<HEAD_BRANCH>` — the head/PR branch (`headRefName`)
+- `<HEAD_SHA>` — the head commit SHA (`headRefOid`)
 - `state` — must be `OPEN`
 
 Then fetch the latest remote state:
@@ -79,13 +105,13 @@ If the PR is not open, inform the user and stop.
 
 ```bash
 # Get the merge base between PR head and base branch
-MERGE_BASE=$(git merge-base origin/<base_branch> origin/<head_branch>)
+MERGE_BASE=$(git merge-base origin/<BASE_BRANCH> origin/<HEAD_BRANCH>)
 
 # Full diff of the PR
-git diff $MERGE_BASE..origin/<head_branch>
+git diff $MERGE_BASE..origin/<HEAD_BRANCH>
 
 # List of changed files
-git diff --name-only $MERGE_BASE..origin/<head_branch>
+git diff --name-only $MERGE_BASE..origin/<HEAD_BRANCH>
 ```
 
 Also read the actual changed files from the local filesystem using the Read tool so agents have full file context (not just diff hunks).
@@ -99,7 +125,7 @@ Before launching review agents, read the key reference documents so you can incl
 
 ## Step 5: Launch Parallel Review Agents
 
-Launch ALL 5 review agents **in parallel** using the Agent tool (subagent_type: `"general-purpose"`). Each agent should:
+Launch ALL 7 review agents **in parallel** using the Agent tool (subagent_type: `"general-purpose"`). Each agent should:
 
 - Receive the full diff AND the full content of changed files (read from local filesystem)
 - Be told the repo path, owner, repo name, PR number, base branch, and head branch
@@ -120,6 +146,19 @@ Prompt must include:
 - Early returns preferred over nested conditionals
 - Naming conventions per `CLAUDE.md`
 - Reference `CLAUDE.md` and `CONTRIBUTING.md`
+
+**Cross-file impact (critical for an SDK):**
+- Changed exports from `packages/<pkg>/src/index.ts` — could break consumer code
+- Function signature changes on public APIs (parameter add/remove/reorder/type-narrow)
+- Renamed or removed exports
+- API contract changes (return type, thrown error type, async-vs-sync)
+- New deep imports into other packages (should go through `src/index.ts`)
+
+**Security:**
+- Hardcoded secrets, tokens, private keys, RPC URLs with credentials
+- Injection risks in any string-templated input (SQL-like queries, shell commands)
+- Authentication bypass / authorization checks missing on entry points
+- `eval`, `Function(...)` constructors, dynamic `import(<userInput>)` — flag any
 
 ### Agent 2: Module & API Architecture
 
@@ -182,9 +221,44 @@ Prompt must include:
 - Reuse of SDK types (`Address`, `MarketId`, `ChainId`, `BigIntish`) over local re-declarations
 - Reference `CLAUDE.md` and `biome.json`
 
+### Agent 6: Documentation Analyzer
+
+Focus: JSDoc/TSDoc on public APIs and types in `packages/<pkg>/src/index.ts` and the
+files it re-exports.
+
+Prompt must include:
+
+- New or modified public exports (types, functions, classes) have JSDoc/TSDoc with at
+  minimum: a one-line summary, `@param` for non-obvious args, `@returns` for non-trivial
+  return values, and `@throws` for typed `Error` subclasses
+- Doc comments are accurate vs. the implementation (no stale references to renamed args,
+  removed return values, changed throw behavior)
+- Public types use semantic names — flag generic `T`, `U`, `Foo` where domain names exist
+  (e.g. `Address`, `MarketId`)
+- README / package-level doc files are updated when the public API changes shape
+- Examples in doc comments compile (no obvious type errors in inline `@example` blocks)
+
+### Agent 7: Test Coverage Analyzer
+
+Focus: missing or weak tests in `packages/<pkg>/test/` for changes in `packages/<pkg>/src/`.
+
+Prompt must include:
+
+- New public exports without a corresponding test file under `packages/<pkg>/test/`
+- New code paths inside existing exports without test cases (branches, error paths,
+  edge cases like zero/MAX_UINT256/negative bigints)
+- Removed or modified public exports without tests updated
+- Onchain code paths (any code calling `viem`/`wagmi` actions) — confirm there's at
+  least one test that exercises the path against a fork or mock
+- Snapshot or schema tests updated when generated outputs change
+
 ## Step 6: Aggregate and Deduplicate Findings
 
-Merge all agent results. Deduplicate findings that reference the same file+line. Keep the highest severity when duplicates exist.
+Merge all agent results into a single list:
+
+1. Deduplicate findings that reference the same file + line (within **3 lines tolerance** — two findings on the same file within 3 lines of each other are treated as duplicates)
+2. When duplicates exist, keep the finding with the highest severity
+3. Sort by: file path (alphabetical, ASC), then line number (ASC), then severity (DESC)
 
 Map severity levels for display:
 
@@ -199,28 +273,33 @@ Map severity levels for display:
 
 **Only follow this step if running in CI mode (GitHub Actions).**
 
-### 7a: Create pending review and add inline comments
+### 7a: Build the comments array and submit atomically
+
+Construct a JSON object with all findings. Write it to a PR-specific temp file to avoid collisions with concurrent runs:
 
 ```bash
-# Create a pending review (returns review_id)
-# Note: omit the "event" field entirely to create a pending review — "PENDING" is not a valid event value
-REVIEW_ID=$(gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews \
-  --method POST \
-  -f commit_id="<head_commit_sha>" \
-  --jq '.id')
-
-# For each finding, add an inline comment to the pending review
-gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews/$REVIEW_ID/comments \
-  --method POST \
-  -f path="<file>" \
-  -F line=<line> \
-  -f side="RIGHT" \
-  -f body="**[SEVERITY]** <description>
-
-Suggestion: <how to fix>"
+REVIEW_FILE="/tmp/pr-review-<PR_NUMBER>-comments.json"
 ```
 
-### 7b: Submit formal review with verdict
+Build the JSON programmatically from the deduplicated findings. The structure must be:
+
+```json
+{
+  "commit_id": "<HEAD_SHA>",
+  "event": "<APPROVE or REQUEST_CHANGES>",
+  "body": "<REVIEW_BODY>",
+  "comments": [
+    {
+      "path": "<file>",
+      "line": <line_number>,
+      "side": "RIGHT",
+      "body": "**[SEVERITY]** <description>\n\nSuggestion: <how to fix>"
+    }
+  ]
+}
+```
+
+Each finding becomes one entry in the `comments` array.
 
 **Choose the appropriate verdict based on findings:**
 
@@ -229,11 +308,10 @@ Suggestion: <how to fix>"
 | **Approve**         | No critical or important issues (minor issues OK) | `APPROVE`         |
 | **Request Changes** | Any critical issues, or multiple important issues | `REQUEST_CHANGES` |
 
-```bash
-gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews/$REVIEW_ID/events \
-  --method POST \
-  -f event="<APPROVE or REQUEST_CHANGES>" \
-  -f body="<!-- CLAUDE_REVIEW_COMPLETE -->
+The `body` field for CI mode must include the CI markers and the guidelines checklist:
+
+```
+<!-- CLAUDE_REVIEW_COMPLETE -->
 <!-- CLAUDE_VERDICT:APPROVE -->  <!-- Only include for approvals -->
 ## Code Review Summary
 
@@ -250,19 +328,31 @@ See inline comments for details.
 ### Guidelines Compliance
 - [ ] Follows TypeScript strict mode
 - [ ] Uses early returns over nested conditionals
-- [ ] \`bigint\` for onchain quantities; WAD-scaled where appropriate
-- [ ] Reuses SDK types (\`Address\`, \`MarketId\`, \`ChainId\`, \`BigIntish\`)
+- [ ] `bigint` for onchain quantities; WAD-scaled where appropriate
+- [ ] Reuses SDK types (`Address`, `MarketId`, `ChainId`, `BigIntish`)
 - [ ] Type-only imports where possible
-- [ ] Relative imports use \`.js\` suffix (NodeNext)
-- [ ] Public APIs explicitly re-exported from \`src/index.ts\`
-- [ ] Domain failures are typed \`Error\` subclasses
-- [ ] Biome clean (\`pnpm lint\`)
+- [ ] Relative imports use `.js` suffix (NodeNext)
+- [ ] Public APIs explicitly re-exported from `src/index.ts`
+- [ ] Domain failures are typed `Error` subclasses
+- [ ] Biome clean (`pnpm lint`)
 
 ### Verdict
 ✅ **Approved** - Code looks good!
 <!-- OR -->
-❌ **Changes Requested** - Please address the issues above."
+❌ **Changes Requested** - Please address the issues above.
 ```
+
+Submit the review and all inline comments in a **single atomic call**:
+
+```bash
+gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews \
+  --method POST \
+  --input "$REVIEW_FILE"
+```
+
+This creates the review and all inline comments atomically — no partial reviews if something fails midway.
+
+Clean up: `rm -f "$REVIEW_FILE"`
 
 **Important notes for CI mode:**
 
@@ -270,7 +360,8 @@ See inline comments for details.
 - For approvals, also include `<!-- CLAUDE_VERDICT:APPROVE -->` and use `APPROVE` event
 - Line numbers must match the NEW file in the diff (right side)
 - Use `side: "RIGHT"` for commenting on added/modified lines
-- For multi-line suggestions, use `start_line` and `line` parameters
+- For multi-line suggestions, use `start_line` and `line` parameters in each `comments[]` entry
+- If the review creation fails (e.g., permissions, line numbers out of range), fall back to a single PR comment via `gh api repos/<owner>/<repo>/issues/<PR_NUMBER>/comments`
 
 **After posting, skip to Step 8.** CI mode does not use `--watch`.
 
@@ -280,33 +371,40 @@ See inline comments for details.
 
 **Only follow this step if running locally (NOT in CI).**
 
-### 7a: Create pending review and add inline comments
+### 7a: Build the comments array and submit atomically
+
+Construct a JSON object with all findings. Write it to a PR-specific temp file to avoid collisions with concurrent runs:
 
 ```bash
-# Create a pending review (returns review_id)
-# Note: omit the "event" field entirely to create a pending review — "PENDING" is not a valid event value
-REVIEW_ID=$(gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews \
-  --method POST \
-  -f commit_id="<head_commit_sha>" \
-  --jq '.id')
+REVIEW_FILE="/tmp/pr-review-<PR_NUMBER>-comments.json"
+```
 
-# For each finding, add an inline comment to the pending review
-gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews/$REVIEW_ID/comments \
-  --method POST \
-  -f path="<file>" \
-  -F line=<line> \
-  -f side="RIGHT" \
-  -f body="**[SEVERITY]** <description>
+Build the JSON programmatically from the deduplicated findings. The structure must be:
 
-Suggestion: <how to fix>"
+```json
+{
+  "commit_id": "<HEAD_SHA>",
+  "event": "COMMENT",
+  "body": "<REVIEW_BODY>",
+  "comments": [
+    {
+      "path": "<file>",
+      "line": <line_number>,
+      "side": "RIGHT",
+      "body": "**[SEVERITY]** <description>\n\nSuggestion: <how to fix>"
+    }
+  ]
+}
+```
 
-# Submit the review as COMMENT (never auto-approve or request changes in local mode)
-gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews/$REVIEW_ID/events \
-  --method POST \
-  -f event="COMMENT" \
-  -f body="## Parallel PR Review (Claude)
+Each finding becomes one entry in the `comments` array. Always use `"event": "COMMENT"` in local mode — never auto-approve or request changes.
 
-**Reviewed commit:** \`<short_sha>\`
+The `body` field for local mode:
+
+```
+## Parallel PR Review (Claude)
+
+**Reviewed commit:** `<HEAD_SHA_SHORT>`
 
 | Severity | Count |
 |----------|-------|
@@ -315,12 +413,22 @@ gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews/$REVIEW_ID/events \
 | 🔵 Medium | X |
 | 🔵 Minor | X |
 
-_This is an automated parallel review. It will re-run when new commits are pushed (if watching)._"
+_This is an automated parallel review. It will re-run when new commits are pushed (if watching)._
 ```
 
-**Important**: If the pending review API is not available, fall back to posting individual inline comments via `gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/comments`.
+Submit the review and all inline comments in a **single atomic call**:
 
-If there are zero findings, still submit with a body saying "No issues found in this review."
+```bash
+gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews \
+  --method POST \
+  --input "$REVIEW_FILE"
+```
+
+Clean up: `rm -f "$REVIEW_FILE"`
+
+**Important**: If the atomic review API call fails (e.g., permissions, line numbers out of range), fall back to posting a single PR-level comment with all findings via `gh api repos/<owner>/<repo>/issues/<PR_NUMBER>/comments`.
+
+If there are zero findings, still submit with an empty `comments` array and a body saying "No issues found in this review."
 
 ### 7b: Optional Codex pass
 
@@ -333,7 +441,7 @@ which codex
 If available, run in the background (do not wait for it to finish):
 
 ```bash
-codex exec -c model_reasoning_effort=xhigh "Review PR #<PR_NUMBER> in this repo. The PR branch is <headRefName> based on <baseRefName>. Run 'git diff origin/<baseRefName>...origin/<headRefName>' to get the full diff. Analyze the changes for bugs, security issues, code quality, and best practices. Post your findings as inline review comments on the PR using 'gh api' to create a pull request review with comments on specific lines." 2>&1 | tail -50
+codex exec -c model_reasoning_effort=xhigh "Review PR #<PR_NUMBER> in this repo. The PR branch is <HEAD_BRANCH> based on <BASE_BRANCH>. Run 'git diff origin/<BASE_BRANCH>...origin/<HEAD_BRANCH>' to get the full diff. Analyze the changes for bugs, security issues, code quality, and best practices. Post your findings as inline review comments on the PR using 'gh api' to create a pull request review with comments on specific lines." 2>&1 | tail -50
 ```
 
 If `codex` is not installed or the command fails, log the error and continue — Claude review is sufficient on its own.
@@ -345,11 +453,11 @@ If `codex` is not installed or the command fails, log the error and continue —
 Print a summary:
 
 ```
-PR #<number> review posted:
+PR #<PR_NUMBER> review posted:
   Claude: <N> findings (X critical, Y important, Z medium, W minor)
   Codex:  <triggered in background / not available>
   Mode:   <CI / Local>
-Last reviewed commit: <short_sha>
+Last reviewed commit: <HEAD_SHA_SHORT>
 ```
 
 If `--watch` was NOT passed (or in CI mode), the skill is complete here.
@@ -368,10 +476,10 @@ Use `CronCreate` to schedule a recurring job every 2 minutes:
 
 ```
 You are the PR review watcher for PR #<PR_NUMBER> in <owner>/<repo>.
-Last reviewed commit SHA: <LAST_REVIEWED_SHA>.
 Repo path: <REPO_PATH>
 Head branch: <HEAD_BRANCH>
 Base branch: <BASE_BRANCH>
+Bot login: <BOT_LOGIN>
 
 This is a RECURRING cron job. Each run is one check cycle. After completing a cycle, simply end your response — the cron scheduler will invoke you again in 2 minutes.
 
@@ -383,41 +491,51 @@ CYCLE START:
    Run: gh pr view <PR_NUMBER> --repo <owner>/<repo> --json state --jq '.state'
    If not "OPEN": say "PR #<PR_NUMBER> is no longer open (state: <STATE>). Review watcher done." and end.
 
-2. COMPARE SHA:
-   Compare the current head SHA to the last reviewed SHA (<LAST_REVIEWED_SHA>).
-   If the SHA is the same: say "No new commits on PR #<PR_NUMBER>, still at <short_sha>." and end this cycle.
+2. GET LAST REVIEWED SHA:
+   Query the most recent review posted by the bot on this PR (derived at cycle start from GitHub, NOT baked in at CronCreate time):
+   Run: gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews?per_page=100 --jq '[.[] | select(.user.login == "<BOT_LOGIN>")] | sort_by(.submitted_at) | last | .commit_id'
+   If no review by <BOT_LOGIN> is found, fall back to the most recent review on the PR:
+   Run: gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews?per_page=100 --jq 'sort_by(.submitted_at) | last | .commit_id'
+   If still no previous review is found, treat LAST_REVIEWED_SHA as empty (review everything).
+   Otherwise set LAST_REVIEWED_SHA to the returned commit_id.
 
-3. NEW COMMIT DETECTED:
-   Say "New commit detected on PR #<PR_NUMBER>: <new_sha>. Running full review..."
+3. COMPARE SHA:
+   Compare the current head SHA (from step 1) to LAST_REVIEWED_SHA.
+   If they are the same: say "No new commits on PR #<PR_NUMBER>, still at <HEAD_SHA_SHORT>." and end this cycle.
 
-4. GET FULL PR DIFF:
+4. NEW COMMIT DETECTED:
+   Say "New commit detected on PR #<PR_NUMBER>: <HEAD_SHA>. Running full review..."
+
+5. GET FULL PR DIFF:
    Run: cd <REPO_PATH>
    MERGE_BASE=$(git merge-base origin/<BASE_BRANCH> origin/<HEAD_BRANCH>)
    git diff $MERGE_BASE..origin/<HEAD_BRANCH>
    git diff --name-only $MERGE_BASE..origin/<HEAD_BRANCH>
    Also read each changed file from the local filesystem using the Read tool for full context.
 
-5. READ GUIDELINES:
+6. READ GUIDELINES:
    Read CLAUDE.md and CONTRIBUTING.md for monorepo conventions.
 
-6. LAUNCH REVIEW AGENTS in parallel using the Agent tool (subagent_type: "general-purpose"):
-   a. code-quality — TypeScript strict mode, type safety, early returns, assertions, duplication, naming, code smells
+7. LAUNCH REVIEW AGENTS in parallel using the Agent tool (subagent_type: "general-purpose"):
+   a. code-quality — TypeScript strict mode, type safety, early returns, assertions, duplication, naming, code smells. ALWAYS include cross-file impact (changed exports from packages/<pkg>/src/index.ts, public API signature changes, renamed/removed exports, new deep imports) and security (hardcoded secrets/RPC URLs, injection risks, auth bypass, eval/Function/dynamic import).
    b. module-architecture — package boundaries, public exports from src/index.ts, type-only imports, .js suffix (NodeNext), reuse of SDK types (Address, MarketId, ChainId, BigIntish), bigint for onchain quantities, as const / satisfies for ABIs
    c. web3-security — contract interactions, tx params, wallets, permits, race conditions (CRITICAL)
    d. silent-failure-hunter — swallowed errors, empty catch blocks, missing error boundaries, unhandled rejections
    e. style-conventions — Biome clean (pnpm lint), import ordering, type-only imports, no edits to lib/ output, edits to generated *inputs* (graphql/*.gql), not generated files
+   f. documentation — JSDoc/TSDoc on public APIs in packages/<pkg>/src/index.ts and re-exported files; @param/@returns/@throws coverage; doc accuracy vs. implementation; semantic type names; README updates when public API changes; @example blocks compile.
+   g. test-coverage — missing tests in packages/<pkg>/test/ for new public exports; new branches/error paths/edge cases (zero, MAX_UINT256, negative bigints); modified/removed exports without test updates; onchain code paths with at least one fork/mock test; snapshot/schema tests updated when generated outputs change.
    Each agent receives the full diff AND changed file contents, and returns findings as JSON: [{severity, file, line, description}]
 
-7. Collect and deduplicate all agent findings. Keep highest severity for same file+line.
+8. Collect and deduplicate all agent findings (3-line tolerance). Keep highest severity for same file+line. Sort by file path ASC, line number ASC, severity DESC.
 
-8. POST REVIEW to GitHub:
-   a. Create a pending review (omit event field): gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews --method POST -f commit_id="<new_sha>"
-   b. Add inline comments for each finding (format: "**[SEVERITY]** description")
-   c. Submit the review as COMMENT: gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews/<REVIEW_ID>/events --method POST -f event="COMMENT"
+9. POST REVIEW to GitHub as a single atomic call:
+   Build a JSON file at /tmp/pr-review-<PR_NUMBER>-comments.json with commit_id (=<HEAD_SHA>), event="COMMENT", body (summary table), and comments[] array (one entry per finding with path, line, side="RIGHT", body).
+   Run: gh api repos/<owner>/<repo>/pulls/<PR_NUMBER>/reviews --method POST --input /tmp/pr-review-<PR_NUMBER>-comments.json
+   Clean up: rm -f /tmp/pr-review-<PR_NUMBER>-comments.json
 
-9. OPTIONAL CODEX: If `which codex` succeeds, run codex review in background.
+10. OPTIONAL CODEX: If `which codex` succeeds, run codex review in background.
 
-10. Say "Review posted for PR #<PR_NUMBER> commit <new_short_sha>: <N> findings (X critical, Y important, Z medium, W minor)."
+11. Say "Review posted for PR #<PR_NUMBER> commit <HEAD_SHA_SHORT>: <N> findings (X critical, Y important, Z medium, W minor)."
 
 CYCLE END — the cron scheduler will run this again in 2 minutes.
 ```
