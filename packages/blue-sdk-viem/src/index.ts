@@ -1,4 +1,5 @@
 export * from "./abis.js";
+export * from "./error.js";
 export * from "./fetch/index.js";
 export * from "./signatures/index.js";
 export * from "./types.js";
