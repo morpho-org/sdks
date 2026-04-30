@@ -465,4 +465,36 @@ describe("SimulationState", () => {
       );
     });
   });
+
+  describe("reallocatableVaults address casing", () => {
+    const targetUtilization = parseEther("1");
+
+    test("should match vaults regardless of caller-provided casing", () => {
+      const expected = dataFixture.getMarketPublicReallocations(marketA1.id, {
+        defaultMaxWithdrawalUtilization: targetUtilization,
+      });
+
+      const lowerCased = dataFixture.getMarketPublicReallocations(marketA1.id, {
+        defaultMaxWithdrawalUtilization: targetUtilization,
+        reallocatableVaults: [
+          vaultA.address.toLowerCase() as typeof vaultA.address,
+          vaultC.address.toLowerCase() as typeof vaultC.address,
+        ],
+      });
+
+      expect(lowerCased.withdrawals).toEqual(expected.withdrawals);
+    });
+
+    test("should ignore unknown vaults instead of throwing", () => {
+      const { withdrawals } = dataFixture.getMarketPublicReallocations(
+        marketA1.id,
+        {
+          defaultMaxWithdrawalUtilization: targetUtilization,
+          reallocatableVaults: [randomAddress()],
+        },
+      );
+
+      expect(withdrawals).toEqual([]);
+    });
+  });
 });
