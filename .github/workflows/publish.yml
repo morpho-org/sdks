@@ -92,9 +92,9 @@ jobs:
           new_tags="${RUNNER_TEMP}/new-package-tags.txt"
           trap 'rm -f "$before_tags" "$after_tags"' EXIT
 
-          git tag --list | sort > "$before_tags"
+          git tag --list | LC_ALL=C sort > "$before_tags"
           pnpm release --tag "$publish_tag"
-          git tag --list | sort > "$after_tags"
+          git tag --list | LC_ALL=C sort > "$after_tags"
 
           comm -13 "$before_tags" "$after_tags" > "$new_tags"
           if [ -s "$new_tags" ]; then

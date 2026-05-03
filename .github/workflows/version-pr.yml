@@ -167,15 +167,28 @@ jobs:
           fi
 
           git commit -m "chore: version packages"
-          git push --force origin "HEAD:refs/heads/${RELEASE_BRANCH}"
+
+          remote_release_ref="refs/heads/${RELEASE_BRANCH}"
+          local_release_ref="refs/remotes/origin/${RELEASE_BRANCH}"
+          if git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
+            git fetch origin "+${remote_release_ref}:${local_release_ref}"
+            expected_sha="$(git rev-parse "${local_release_ref}")"
+            git push --force-with-lease="${remote_release_ref}:${expected_sha}" origin "HEAD:${remote_release_ref}"
+          else
+            git push origin "HEAD:${remote_release_ref}"
+          fi
+
           echo "has_version_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Open or update release PR
         if: steps.version-commit.outputs.has_version_changes == 'true'
+        shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BASE_BRANCH: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
+
           title="chore: version packages (${BASE_BRANCH})"
           body="$(cat <<BODY
           This PR applies the pending changesets for ${BASE_BRANCH}.
@@ -189,7 +202,7 @@ jobs:
             --head "${RELEASE_BRANCH}" \
             --state open \
             --json number \
-            --jq '.[0].number')"
+            --jq '.[0].number // empty')"
 
           if [ -n "${pr_number}" ]; then
             gh pr edit "${pr_number}" --title "${title}" --body "${body}"
