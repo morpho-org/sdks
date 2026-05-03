@@ -4,4 +4,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    target-branch: dev
+    target-branch: main
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: main

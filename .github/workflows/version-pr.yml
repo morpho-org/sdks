@@ -2,6 +2,11 @@ name: Version PR
 
 on:
   workflow_call:
+    secrets:
+      VERSION_APP_ID:
+        required: true
+      VERSION_APP_PRIVATE_KEY:
+        required: true
 
 permissions:
   contents: read
@@ -23,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -88,13 +93,72 @@ jobs:
       - name: Push release branch
         id: version-commit
         if: steps.pending-changesets.outputs.has_changesets == 'true'
+        shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git add .
+
+          is_allowed_version_path() {
+            case "$1" in
+              packages/*/package.json|packages/*/CHANGELOG.md|.changeset/*.md|.changeset/pre.json)
+                return 0
+                ;;
+              *)
+                return 1
+                ;;
+            esac
+          }
+
+          allowed_changed=()
+          while IFS= read -r -d '' path; do
+            if is_allowed_version_path "$path"; then
+              allowed_changed+=("$path")
+            fi
+          done < <(git diff --name-only -z)
+
+          while IFS= read -r -d '' path; do
+            if is_allowed_version_path "$path"; then
+              allowed_changed+=("$path")
+            fi
+          done < <(git ls-files --others --exclude-standard -z)
+
+          if [ "${#allowed_changed[@]}" -gt 0 ]; then
+            git add -- "${allowed_changed[@]}"
+          fi
+
+          staged_violations=()
+          while IFS= read -r -d '' path; do
+            if ! is_allowed_version_path "$path"; then
+              staged_violations+=("$path")
+            fi
+          done < <(git diff --cached --name-only -z)
+
+          if [ "${#staged_violations[@]}" -gt 0 ]; then
+            echo "::error::Versioning staged files outside the release allowlist:"
+            printf '  %s\n' "${staged_violations[@]}"
+            exit 1
+          fi
+
+          unstaged=()
+          while IFS= read -r -d '' path; do
+            unstaged+=("$path")
+          done < <(git diff --name-only -z)
+
+          untracked=()
+          while IFS= read -r -d '' path; do
+            untracked+=("$path")
+          done < <(git ls-files --others --exclude-standard -z)
+
+          if [ "${#unstaged[@]}" -gt 0 ] || [ "${#untracked[@]}" -gt 0 ]; then
+            echo "::error::Versioning produced files outside the release allowlist:"
+            printf '  %s\n' "${unstaged[@]}" "${untracked[@]}"
+            exit 1
+          fi
 
           if git diff --cached --quiet; then
             echo "No version changes to commit."
