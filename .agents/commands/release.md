@@ -108,7 +108,7 @@ git add .changeset/<filename>.md <source files>
 git commit -m "<conventional-commit message matching the change>"
 ```
 
-If the user already has a PR open, just push the new commit. If not, follow up with `/create-pr`.
+If the user already has a PR open, just push the new commit. If not, follow up with `/pr-create`.
 
 ### Step 6: Final Output
 

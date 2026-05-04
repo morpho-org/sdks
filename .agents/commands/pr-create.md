@@ -1,11 +1,11 @@
-# create-pr
+# pr-create
 
 Create a draft PR (and a new branch if needed).
 
 ## Usage
 
 ```
-/create-pr
+/pr-create
 ```
 
 ## Instructions
