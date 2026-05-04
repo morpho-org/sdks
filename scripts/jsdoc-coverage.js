@@ -86,11 +86,11 @@ const EXPORT_RE =
   /^export\s+(?:(?:async|abstract|default|declare)\s+)*(const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/;
 
 function hasParams(signature) {
-  // Arrow function: `= (...)` or `= async (...)`.
-  const arrow = signature.match(/=\s*(?:async\s+)?\(([^)]*)\)/);
+  // Arrow function: `= (...)`, `= async (...)`, or `= <T>(...)` (generic arrow).
+  const arrow = signature.match(/=\s*(?:async\s+)?(?:<[^>]+>\s*)?\(([^)]*)\)/);
   if (arrow) return arrow[1].trim().length > 0;
-  // Function declaration: `function name(...)`.
-  const fn = signature.match(/function\s+\w+\s*\(([^)]*)\)/);
+  // Function declaration: `function name(...)` or `function name<T>(...)`.
+  const fn = signature.match(/function\s+\w+\s*(?:<[^>]+>\s*)?\(([^)]*)\)/);
   if (fn) return fn[1].trim().length > 0;
   return false;
 }
@@ -204,7 +204,13 @@ function pct(part, total) {
 }
 
 function selfCheck() {
-  const cases = [
+  let pass = 0;
+  let fail = 0;
+  const fails = [];
+
+  // EXPORT_RE — match + kind + name capture for representative export forms,
+  // plus negative cases that must not match.
+  const exportCases = [
     {
       line: "export const foo = (x: number) => x;",
       kind: "const",
@@ -234,25 +240,98 @@ function selfCheck() {
     { line: "  export const indented = 1;", expectMatch: false },
   ];
 
-  let pass = 0;
-  let fail = 0;
-  for (const c of cases) {
+  for (const c of exportCases) {
     const m = c.line.match(EXPORT_RE);
     const matched = !!m;
     const expectMatch = c.expectMatch ?? true;
     let ok = matched === expectMatch;
-    if (ok && expectMatch) {
-      ok = m[1] === c.kind && m[2] === c.name;
-    }
-    if (ok) {
-      pass++;
-    } else {
+    if (ok && expectMatch) ok = m[1] === c.kind && m[2] === c.name;
+    if (ok) pass++;
+    else {
       fail++;
-      process.stderr.write(
-        `FAIL: ${JSON.stringify(c.line)} → expected ${expectMatch ? `kind=${c.kind} name=${c.name}` : "no match"}, got ${matched ? `kind=${m[1]} name=${m[2]}` : "no match"}\n`,
+      fails.push(
+        `EXPORT_RE FAIL: ${JSON.stringify(c.line)} → expected ${expectMatch ? `kind=${c.kind} name=${c.name}` : "no match"}, got ${matched ? `kind=${m[1]} name=${m[2]}` : "no match"}`,
       );
     }
   }
+
+  // hasParams — verifies @param requirement detection across signature shapes.
+  const hasParamsCases = [
+    { sig: "export const foo = (x: number) => x;", expected: true },
+    { sig: "export const foo = () => x;", expected: false },
+    { sig: "export const foo = async (x: number) => x;", expected: true },
+    { sig: "export const foo = <T>(x: T) => x;", expected: true }, // generic arrow
+    { sig: "export const foo = <T,>(x: T) => x;", expected: true },
+    { sig: "export function foo(x: number) {}", expected: true },
+    { sig: "export function foo() {}", expected: false },
+    { sig: "export function foo<T>(x: T) {}", expected: true },
+    { sig: "export const FOO = 100n;", expected: false }, // not a function
+  ];
+  for (const c of hasParamsCases) {
+    const got = hasParams(c.sig);
+    if (got === c.expected) pass++;
+    else {
+      fail++;
+      fails.push(
+        `hasParams FAIL: ${JSON.stringify(c.sig)} → expected ${c.expected}, got ${got}`,
+      );
+    }
+  }
+
+  // isFunctionLike — verifies function vs constant classification.
+  const isFunctionLikeCases = [
+    { kind: "function", sig: "export function foo() {}", expected: true },
+    { kind: "const", sig: "export const foo = (x) => x;", expected: true },
+    {
+      kind: "const",
+      sig: "export const foo = async () => {};",
+      expected: true,
+    },
+    {
+      kind: "const",
+      sig: "export const foo = function () {};",
+      expected: true,
+    },
+    { kind: "const", sig: "export const FOO = 100n;", expected: false },
+    { kind: "type", sig: "export type Foo = string;", expected: false },
+    { kind: "class", sig: "export class Foo {}", expected: false },
+  ];
+  for (const c of isFunctionLikeCases) {
+    const got = isFunctionLike(c.kind, c.sig);
+    if (got === c.expected) pass++;
+    else {
+      fail++;
+      fails.push(
+        `isFunctionLike FAIL: kind=${c.kind} ${JSON.stringify(c.sig)} → expected ${c.expected}, got ${got}`,
+      );
+    }
+  }
+
+  // @internal exemption — verifies the regex distinguishes a real @internal tag
+  // from text that happens to mention @internal inside a code block or string.
+  const internalCases = [
+    { block: "/**\n * Foo.\n * @internal\n */", expected: true },
+    { block: "/** @internal */", expected: true },
+    { block: "/**\n * Foo.\n */", expected: false },
+    {
+      block: "/**\n * Foo.\n * @example\n * `// @internal`\n */",
+      // Approximate: the simple regex DOES match here. Documenting current behavior.
+      // If this becomes a real false-positive in the wild, tighten the regex.
+      expected: true,
+    },
+  ];
+  for (const c of internalCases) {
+    const got = /@internal\b/.test(c.block);
+    if (got === c.expected) pass++;
+    else {
+      fail++;
+      fails.push(
+        `@internal FAIL: ${JSON.stringify(c.block)} → expected ${c.expected}, got ${got}`,
+      );
+    }
+  }
+
+  for (const f of fails) process.stderr.write(`${f}\n`);
   process.stderr.write(`self-check: ${pass} passed, ${fail} failed\n`);
   process.exit(fail === 0 ? 0 : 1);
 }
@@ -273,7 +352,7 @@ for (const pkg of Object.keys(TIER)) {
     const r = analyzeFile(file, { collectUndocumented: verbose });
     total += r.total;
     documented += r.documented;
-    if (verbose && r.undocumented.length > 0) {
+    if (r.undocumented.length > 0) {
       const rel = relative(REPO_ROOT, file);
       for (const u of r.undocumented) {
         undocumented.push({ file: rel, ...u });

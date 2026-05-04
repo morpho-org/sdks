@@ -49,8 +49,8 @@ export interface VaultV2DepositParams {
  * @param params.vault.asset - The vault's underlying ERC-20 asset.
  * @param params.args.amount - Amount of ERC-20 assets to deposit. At least one of `amount` or
  *   `nativeAmount` must be positive. Defaults to `0n`.
- * @param params.args.maxSharePrice - Maximum acceptable share price (slippage protection,
- *   enforced on-chain by `GeneralAdapter1`).
+ * @param params.args.maxSharePrice - Maximum acceptable share price (in RAY, slippage
+ *   protection enforced on-chain by `GeneralAdapter1`).
  * @param params.args.recipient - Address that receives the minted vault shares.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
  *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
@@ -67,11 +67,11 @@ export interface VaultV2DepositParams {
  *   configured wNative.
  * @throws {NativeAmountOnNonWNativeVaultError} when `nativeAmount` is provided but the vault
  *   asset is not the chain's wNative.
- * @throws {ZeroDepositAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed asset differs from `vault.asset`.
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
+ * @throws {ZeroDepositAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @example
  * ```ts
  * import { vaultV2Deposit } from "@morpho-org/morpho-sdk";

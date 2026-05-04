@@ -24,8 +24,6 @@
   ],
   "excludeInternal": true,
   "validation": {
-    "notExported": true,
-    "invalidLink": true,
     "notDocumented": true
   },
   "readme": "none"

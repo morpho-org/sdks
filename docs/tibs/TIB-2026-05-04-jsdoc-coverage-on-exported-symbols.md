@@ -104,7 +104,7 @@ Until then, the burndown is the load-bearing signal and review is the load-beari
 
 ### Implementation Phases
 
-- **Phase 0 — Standard & exemplars.** Publish `docs/jsdoc-style.md`. Backfill `vaultV1Deposit` (`packages/morpho-sdk/src/actions/vaultV1/deposit.ts:60`) and `marketV1Borrow` (`packages/morpho-sdk/src/actions/marketV1/borrow.ts:47`) to the canonical bar. Land TypeDoc config (no CI step yet). Land the burndown script (see Observability).
+- **Phase 0 — Standard & exemplars.** Publish `docs/jsdoc-style.md`. Backfill `vaultV1Deposit` (`packages/morpho-sdk/src/actions/vaultV1/deposit.ts`) and `marketV1Borrow` (`packages/morpho-sdk/src/actions/marketV1/borrow.ts`) to the canonical bar. Land TypeDoc config (no CI step yet). Land the burndown script (see Observability).
 - **Phase 1 — Tier 1 (`morpho-sdk` + `evm-simulation`).** Every action builder; the `MorphoClient` class and its three factory methods; every exported error class in `packages/morpho-sdk/src/types/error.ts`; the `simulate()` and `screenAddresses()` entry points in `evm-simulation`.
 - **Phase 2 — Tier 2 (`blue-sdk`, `simulation-sdk`, `blue-sdk-viem`).** Finish entity classes (`Position`, `User`, `Holding`); document operation handlers and the operation discriminated union; document fetcher functions (`fetchMarket`, `fetchPosition`, `fetchVault`, …) and their type exports.
 - **Phase 3 — Tier 3 (`bundler-sdk-viem`, `liquidation-sdk-viem`, `liquidity-sdk-viem`, `migration-sdk-viem`).** Core encoders and entry points first; helpers second.

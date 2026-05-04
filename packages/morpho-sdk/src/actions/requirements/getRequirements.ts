@@ -63,7 +63,8 @@ type GetRequirementsParams =
  *   existing allowance already covers `amount`.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`. No other typed
  *   error is reachable through this entry point: the values passed into
- *   `getRequirementsApproval` always satisfy `approvalAmount === spendAmount`, so
+ *   `getRequirementsApproval` always satisfy `approvalAmount >= spendAmount` (direct path uses
+ *   `approvalAmount === spendAmount === amount`; Permit2 path uses `MAX_UINT_160`), so
  *   `ApprovalAmountLessThanSpendAmountError` cannot fire from here.
  * @example
  * ```ts

@@ -37,12 +37,14 @@ import { getRequirementsApproval } from "./getRequirementsApproval.js";
  *   bookkeeping invariants break (should not happen with the values this function passes).
  * @example
  * ```ts
+ * import { getChainAddresses } from "@morpho-org/blue-sdk";
  * import { getRequirementsPermit2 } from "@morpho-org/morpho-sdk";
  *
+ * const { permit2 } = getChainAddresses(1);
  * const requirements = getRequirementsPermit2({
  *   address: USDC,
  *   chainId: 1,
- *   permit2: PERMIT2_ADDRESS,
+ *   permit2,
  *   args: { amount: 1_000_000n },
  *   allowancesPermit2: 0n,
  *   allowancesGeneralAdapter: 0n,

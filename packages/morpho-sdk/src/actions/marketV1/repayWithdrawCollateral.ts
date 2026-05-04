@@ -29,7 +29,8 @@ export interface MarketV1RepayWithdrawCollateralParams {
     /**
      * ERC-20 amount to pull into `GeneralAdapter1`. In assets mode, must equal `assets`
      * exactly (`TransferAmountNotEqualToAssetsError` fires otherwise). In shares mode, an
-     * upper-bound estimate to absorb share-price drift.
+     * upper-bound estimate to absorb share-price drift; residual loan tokens are skimmed
+     * back to `receiver`.
      */
     transferAmount: bigint;
     /** Amount of collateral to withdraw. */
@@ -70,7 +71,8 @@ export interface MarketV1RepayWithdrawCollateralParams {
  * @param params.args.shares - Repay amount in borrow shares. Set to `0n` when repaying by assets.
  * @param params.args.transferAmount - ERC-20 amount to pull into `GeneralAdapter1`. In assets
  *   mode, must equal `assets` exactly (`TransferAmountNotEqualToAssetsError` fires otherwise).
- *   In shares mode, this is an upper-bound estimate to absorb share-price drift.
+ *   In shares mode, this is an upper-bound estimate to absorb share-price drift; residual loan
+ *   tokens are skimmed back to `receiver`.
  * @param params.args.withdrawAmount - Amount of collateral to withdraw after the repay leg
  *   completes.
  * @param params.args.onBehalf - Address whose Morpho debt is being repaid.

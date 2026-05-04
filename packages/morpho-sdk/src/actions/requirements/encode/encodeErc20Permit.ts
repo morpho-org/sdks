@@ -51,7 +51,7 @@ interface EncodeErc20PermitParams {
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeErc20Permit(client, {
- *   token: DAI,
+ *   token: USDC, // an ERC-2612-compatible token; DAI uses a non-standard permit signature
  *   spender: generalAdapter1,
  *   amount: 1_000_000n,
  *   chainId: 1,

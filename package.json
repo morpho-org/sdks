@@ -25,6 +25,7 @@
     "lint": "biome check && $npm_execpath lint:address",
     "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
     "jsdoc:coverage": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js",
+    "jsdoc:coverage:check": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js --self-check",
     "docs:build": "typedoc",
     "test": "dotenv -- vitest",
     "test:coverage": "$npm_execpath test --coverage",
