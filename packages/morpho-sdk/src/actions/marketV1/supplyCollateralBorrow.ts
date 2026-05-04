@@ -44,17 +44,57 @@ export interface MarketV1SupplyCollateralBorrowParams {
 /**
  * Prepares an atomic supply-collateral-and-borrow transaction for a Morpho Blue market.
  *
- * Routed through the bundler: collateral transfer + `morphoSupplyCollateral` + `morphoBorrow`.
- * When `nativeAmount` is provided, native ETH is wrapped via GeneralAdapter1.
+ * Routed through bundler3: collateral transfer → `morphoSupplyCollateral` → optional
+ * `reallocateTo` calls → `morphoBorrow`. When `nativeAmount > 0`, native ETH is wrapped via
+ * `GeneralAdapter1.wrapNative()` before the supply leg.
  *
- * **Prerequisite:** GeneralAdapter1 must be authorized on Morpho to borrow on behalf of the user.
+ * Prerequisite: `GeneralAdapter1` must be authorized on Morpho to borrow on behalf of the user.
  * Use `getRequirements()` on the entity to check and obtain the authorization transaction.
  *
- * Zero loss: all collateral reaches Morpho, all borrowed tokens reach the receiver.
- * No dust left in bundler or adapter.
+ * Zero loss: all collateral reaches Morpho, all borrowed tokens reach the receiver. No dust left
+ * in bundler or adapter.
  *
- * @param params - Combined supply collateral and borrow parameters.
- * @returns Deep-frozen transaction.
+ * @param params.market.chainId - The chain the market lives on.
+ * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
+ * @param params.args.amount - Amount of ERC-20 collateral to supply. At least one of `amount` or
+ *   `nativeAmount` must be positive. Defaults to `0n`.
+ * @param params.args.borrowAmount - Loan asset amount to borrow.
+ * @param params.args.onBehalf - Address whose Morpho position is credited with the collateral.
+ * @param params.args.receiver - Address that receives the borrowed assets.
+ * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval for the
+ *   collateral transfer.
+ * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
+ *   collateral supply. Requires the collateral token to be the chain's wNative.
+ * @param params.args.reallocations - Optional vault reallocations to execute between the supply
+ *   and borrow legs, computed by the entity layer.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<MarketV1SupplyCollateralBorrowAction>` with `to`, `value`,
+ *   `data`, and the typed `action` discriminator the simulation layer consumes.
+ * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
+ * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
+ * @throws {NonPositiveBorrowAmountError} when `borrowAmount <= 0n`.
+ * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
+ * @throws {ZeroCollateralAmountError} when both `amount` and `nativeAmount` resolve to zero.
+ * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
+ * @throws {NativeAmountOnNonWNativeCollateralError} when `nativeAmount > 0n` but the collateral
+ *   token is not the chain's wNative.
+ * @example
+ * ```ts
+ * import { marketV1SupplyCollateralBorrow } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = marketV1SupplyCollateralBorrow({
+ *   market: { chainId: 1, marketParams },
+ *   args: {
+ *     amount: 1_000_000_000_000_000_000n,
+ *     borrowAmount: 500_000_000n,
+ *     onBehalf: borrower,
+ *     receiver: borrower,
+ *     minSharePrice: 0n,
+ *   },
+ * });
+ * // tx satisfies Readonly<Transaction<MarketV1SupplyCollateralBorrowAction>>
+ * ```
  */
 export const marketV1SupplyCollateralBorrow = ({
   market: { chainId, marketParams },

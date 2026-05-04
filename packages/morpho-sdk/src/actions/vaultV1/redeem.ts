@@ -9,6 +9,7 @@ import {
   type VaultV1RedeemAction,
 } from "../../types/index.js";
 
+/** Parameters for {@link vaultV1Redeem}. */
 export interface VaultV1RedeemParams {
   vault: {
     address: Address;
@@ -24,17 +25,26 @@ export interface VaultV1RedeemParams {
 /**
  * Prepares a redeem transaction for a VaultV1 (MetaMorpho) contract.
  *
- * Direct vault call — no bundler needed. Redeem has no inflation attack surface.
+ * Direct vault call — no bundler needed. Redeem has no inflation-attack surface.
  *
- * @param {Object} params - The redeem parameters.
- * @param {Object} params.vault - The vault identifiers.
- * @param {Address} params.vault.address - The vault address.
- * @param {Object} params.args - The redeem arguments.
- * @param {bigint} params.args.shares - Amount of shares to redeem.
- * @param {Address} params.args.recipient - Receives the redeemed assets.
- * @param {Address} params.args.onBehalf - Address whose shares are burned.
- * @param {Metadata} [params.metadata] - Optional analytics metadata.
- * @returns {Readonly<Transaction<VaultV1RedeemAction>>} The prepared redeem transaction.
+ * @param params.vault.address - The VaultV1 (MetaMorpho) address.
+ * @param params.args.shares - Amount of vault shares to redeem.
+ * @param params.args.recipient - Address that receives the redeemed assets.
+ * @param params.args.onBehalf - Address whose shares are burned.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<VaultV1RedeemAction>` with `to`, `value`, `data`, and the
+ *   typed `action` discriminator the simulation layer consumes.
+ * @throws {NonPositiveSharesAmountError} when `shares <= 0n`.
+ * @example
+ * ```ts
+ * import { vaultV1Redeem } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = vaultV1Redeem({
+ *   vault: { address: vaultAddress },
+ *   args: { shares: 1_000_000n, recipient, onBehalf },
+ * });
+ * // tx satisfies Readonly<Transaction<VaultV1RedeemAction>>
+ * ```
  */
 export const vaultV1Redeem = ({
   vault: { address: vaultAddress },

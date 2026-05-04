@@ -13,21 +13,51 @@ import {
 } from "./pipeline/index.js";
 
 /**
- * Simulate a bundle of EVM transactions.
+ * Simulates a bundle of EVM transactions on a configured chain.
  *
- * Validates input → resolves authorizations into prepended approve txs → runs the bundle
- * through Tenderly REST (primary) or `eth_simulateV1` (fallback) with a shared timeout
- * budget → parses ERC20/WETH transfers from logs → asserts no funds are retained by
- * `bundler3` → returns the full result set. The caller reads whichever fields they need:
+ * Pipeline: validates input → resolves authorizations into prepended approve transactions →
+ * runs the bundle through Tenderly REST (primary) or `eth_simulateV1` (fallback) within a
+ * shared timeout budget → parses ERC-20 / WETH transfers from logs → asserts no funds are
+ * retained by `bundler3` → returns the full result set. The caller reads whichever fields they
+ * need:
  *
- * - `transfers` + `tenderlyUrl` → user-facing preview.
- * - `simulationTxs` + `transfers` → server-side verification before broadcast, then pass
- *   both to `screenAddresses` for compliance.
+ * - **Preview** (`shareable: true`): `transfers` + `tenderlyUrl`.
+ * - **Verify** (default): `simulationTxs` + `transfers`, then pass both to {@link screenAddresses}
+ *   for compliance.
  *
- * Throws `SimulationValidationError` for bad input, `UnsupportedChainError` when the chain
- * is not configured, `SimulationRevertedError` if the bundle reverts,
- * `BlacklistViolationError` if bundler retention is detected, or `ExternalServiceError` if
- * both backends are unavailable within the timeout budget.
+ * @param config - Backend configuration: Tenderly credentials, per-chain RPC URLs, optional
+ *   logger, and the overall timeout budget.
+ * @param params - Per-call simulation input.
+ * @param params.chainId - Chain id the bundle targets.
+ * @param params.transactions - The bundle's transactions, in execution order. All must share the
+ *   same `from`.
+ * @param params.authorizations - Optional token authorizations resolved into prepended approve
+ *   transactions before the main bundle runs.
+ * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
+ * @param options - Per-call simulation options.
+ * @param options.shareable - When `true`, persists the simulation in Tenderly and returns a
+ *   shareable `tenderlyUrl`. Honored only on the Tenderly backend, not on the `eth_simulateV1`
+ *   fallback. Defaults to `false`.
+ * @returns A `SimulationResult` carrying the resolved `simulationTxs`, parsed `transfers`, the
+ *   optional `tenderlyUrl`, and the opaque Tenderly `assetChanges` payload.
+ * @throws {SimulationValidationError} when `params` fails input validation.
+ * @throws {UnsupportedChainError} when no backend is configured for `chainId`.
+ * @throws {SimulationRevertedError} when the bundle reverts on-chain.
+ * @throws {BlacklistViolationError} when bundler retention is detected after parsing transfers.
+ * @throws {ExternalServiceError} when both backends are unavailable within the timeout budget.
+ * @example
+ * ```ts
+ * import { simulate } from "@morpho-org/evm-simulation";
+ *
+ * const result = await simulate(
+ *   { chains: new Map([[1, { simulateV1Url: "https://..." }]]) },
+ *   {
+ *     chainId: 1,
+ *     transactions: [{ from: user, to: vaultAddress, data: "0x...", value: 0n }],
+ *   },
+ * );
+ * // result satisfies SimulationResult
+ * ```
  */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function simulate(

@@ -12,6 +12,7 @@ import {
   type VaultV2ForceRedeemAction,
 } from "../../types/index.js";
 
+/** Parameters for {@link vaultV2ForceRedeem}. */
 export interface VaultV2ForceRedeemParams {
   vault: {
     address: Address;
@@ -28,35 +29,47 @@ export interface VaultV2ForceRedeemParams {
 }
 
 /**
- * Prepares a force redeem transaction for the VaultV2 contract, using VaultV2's native `multicall`.
+ * Prepares a force-redeem transaction for a VaultV2 contract via the vault's native `multicall`.
  *
- * This function encodes one or more `forceDeallocate` calls followed by a single `redeem`,
- * executed atomically via VaultV2's `multicall`. This allows a user to free liquidity from
- * adapters other than the liquidity adapter and redeem all their shares in one transaction.
-
- *
- * This is the share-based counterpart to `vaultV2ForceWithdraw`, useful when the user wants
- * to redeem a maximum amount of shares rather than specifying an exact asset amount.
+ * Encodes one or more `forceDeallocate` calls followed by a single `redeem`, executed atomically
+ * through VaultV2's `multicall`. Share-based counterpart to {@link vaultV2ForceWithdraw} — use
+ * when the user wants to redeem an exact share amount rather than withdraw exact assets.
  *
  * The total assets passed to `forceDeallocate` calls must be greater than or equal to the
  * asset-equivalent of the redeemed shares. The caller should apply a buffer on the deallocated
- * amounts to account for share-price drift between submission and execution.
+ * amounts to absorb share-price drift between submission and execution.
  *
- * A penalty is taken from `onBehalf` for each deallocation to discourage allocation manipulations.
- * The penalty is applied as a share burn where assets are returned to the vault, so the share price
- * remains stable (except for rounding).
+ * A penalty is taken from `onBehalf` for each deallocation to discourage allocation
+ * manipulation. The penalty is applied as a share burn where assets are returned to the vault,
+ * so the share price stays stable (except for rounding).
  *
- * @param {Object} params - The vault related parameters.
- * @param {Object} params.vault - The vault related parameters.
- * @param {Address} params.vault.address - The vault contract address.
- * @param {Object} params.args - The force redeem related parameters.
- * @param {readonly Deallocation[]} params.args.deallocations - The list of deallocations to perform.
- * @param {Object} params.args.redeem - The redeem parameters applied after deallocations.
- * @param {bigint} params.args.redeem.shares - The amount of shares to redeem.
- * @param {Address} params.args.redeem.recipient - The recipient of the redeemed assets.
- * @param {Address} params.args.onBehalf - The address from which the penalty is taken (share owner).
- * @param {Metadata} [params.metadata] - Optional analytics metadata to append.
- * @returns {Readonly<Transaction<VaultV2ForceRedeemAction>>} The prepared multicall transaction.
+ * @param params.vault.address - The VaultV2 address.
+ * @param params.args.deallocations - The deallocations to perform before redeeming. Must be
+ *   non-empty.
+ * @param params.args.redeem.shares - Amount of vault shares to redeem after the deallocations
+ *   complete.
+ * @param params.args.redeem.recipient - Address that receives the redeemed assets.
+ * @param params.args.onBehalf - Address whose shares are burned and from which the deallocation
+ *   penalty is taken.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<VaultV2ForceRedeemAction>` with `to`, `value`, `data`, and
+ *   the typed `action` discriminator the simulation layer consumes.
+ * @throws {EmptyDeallocationsError} when `deallocations` is empty.
+ * @throws {NonPositiveSharesAmountError} when `redeem.shares <= 0n`.
+ * @example
+ * ```ts
+ * import { vaultV2ForceRedeem } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = vaultV2ForceRedeem({
+ *   vault: { address: vaultAddress },
+ *   args: {
+ *     deallocations: [{ adapter, marketParams, amount: 1_010_000n }],
+ *     redeem: { shares: 1_000_000n, recipient },
+ *     onBehalf,
+ *   },
+ * });
+ * // tx satisfies Readonly<Transaction<VaultV2ForceRedeemAction>>
+ * ```
  */
 export const vaultV2ForceRedeem = ({
   vault: { address: vaultAddress },

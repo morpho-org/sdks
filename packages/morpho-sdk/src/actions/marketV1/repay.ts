@@ -41,19 +41,54 @@ export interface MarketV1RepayParams {
 /**
  * Prepares a repay transaction for a Morpho Blue market.
  *
- * Routed through bundler3 via GeneralAdapter1. Supports two modes:
+ * Routed through bundler3 via `GeneralAdapter1`. Supports two modes:
+ *
  * - **By assets** (`assets > 0, shares = 0`): repays an exact asset amount.
- * - **By shares** (`assets = 0, shares > 0`): repays exact shares (full repay).
+ * - **By shares** (`assets = 0, shares > 0`): repays exact shares (full repay), with
+ *   `transferAmount` set to an upper-bound asset estimate; residual loan tokens are skimmed back
+ *   to `receiver` after the call.
  *
- * Exactly one of `assets`/`shares` must be non-zero. The `transferAmount` controls
- * how many ERC20 tokens are pulled from the user (may differ from `assets` in
- * shares mode where the entity computes an upper-bound estimate).
+ * Exactly one of `assets` / `shares` must be non-zero. Uses `maxSharePrice` to protect against
+ * share price manipulation between transaction construction and execution.
  *
- * Uses `maxSharePrice` to protect against share price manipulation between
- * transaction construction and execution.
+ * @param params.market.chainId - The chain the market lives on.
+ * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
+ * @param params.args.assets - Repay amount in loan-token assets. Set to `0n` when repaying by shares.
+ * @param params.args.shares - Repay amount in borrow shares. Set to `0n` when repaying by assets.
+ * @param params.args.transferAmount - ERC-20 amount to pull into `GeneralAdapter1`. Must be at
+ *   least the repay amount; in shares mode this is an upper-bound estimate to absorb share-price
+ *   drift.
+ * @param params.args.onBehalf - Address whose Morpho debt is being repaid.
+ * @param params.args.receiver - Address that receives residual loan tokens in shares mode.
+ * @param params.args.maxSharePrice - Maximum acceptable repay share price (in ray). Slippage
+ *   protection.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval for the
+ *   loan-token transfer.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<MarketV1RepayAction>` with `to`, `value`, `data`, and the
+ *   typed `action` discriminator the simulation layer consumes.
+ * @throws {MutuallyExclusiveRepayAmountsError} when both `assets` and `shares` are non-zero.
+ * @throws {NonPositiveRepayAmountError} when both `assets` and `shares` are zero.
+ * @throws {NonPositiveTransferAmountError} when `transferAmount <= 0n`.
+ * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and `transferAmount !== assets`.
+ * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
+ * @example
+ * ```ts
+ * import { marketV1Repay } from "@morpho-org/morpho-sdk";
  *
- * @param params - Repay parameters.
- * @returns Deep-frozen transaction.
+ * const tx = marketV1Repay({
+ *   market: { chainId: 1, marketParams },
+ *   args: {
+ *     assets: 500_000_000n,
+ *     shares: 0n,
+ *     transferAmount: 500_000_000n,
+ *     onBehalf: borrower,
+ *     receiver: borrower,
+ *     maxSharePrice: 1_010_000_000_000_000_000n,
+ *   },
+ * });
+ * // tx satisfies Readonly<Transaction<MarketV1RepayAction>>
+ * ```
  */
 export const marketV1Repay = ({
   market: { chainId, marketParams },

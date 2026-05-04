@@ -20,7 +20,33 @@ interface GetRequirementsActionParams {
 }
 
 /**
- * Get the actions required to transfer the asset based on the requirement signature.
+ * Encodes the bundler actions that consume a pre-signed permit / permit2 requirement and pull
+ * the asset into `GeneralAdapter1`.
+ *
+ * Permit2 path emits `approve2` + `transferFrom2`; classic permit path emits `permit` +
+ * `erc20TransferFrom`. The signed `asset` and `amount` must match the pulled `asset` and
+ * `amount` exactly, otherwise the function throws so the caller does not silently spend a
+ * wider-than-expected approval.
+ *
+ * @param params.chainId - The chain the bundle targets (used to resolve `GeneralAdapter1`).
+ * @param params.asset - The ERC-20 to pull into the adapter.
+ * @param params.amount - The amount to pull, in the asset's smallest unit.
+ * @param params.requirementSignature - The signed permit / permit2 to apply before the transfer.
+ * @returns A pair of bundler `Action`s: a permit / approve2 followed by the transfer.
+ * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
+ * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
+ * @example
+ * ```ts
+ * import { getRequirementsAction } from "@morpho-org/morpho-sdk";
+ *
+ * const actions = getRequirementsAction({
+ *   chainId: 1,
+ *   asset: USDC,
+ *   amount: 1_000_000n,
+ *   requirementSignature,
+ * });
+ * // actions satisfies Action[]
+ * ```
  */
 export const getRequirementsAction = ({
   chainId,

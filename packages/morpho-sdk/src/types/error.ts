@@ -1,23 +1,27 @@
 import type { Address } from "viem";
 
+/** Thrown when an asset amount is required to be positive but is zero or negative. */
 export class NonPositiveAssetAmountError extends Error {
   constructor(origin: Address) {
     super(`Asset amount must be positive for address ${origin}`);
   }
 }
 
+/** Thrown when a shares amount is required to be positive but is zero or negative. */
 export class NonPositiveSharesAmountError extends Error {
   constructor(vault: Address) {
     super(`Shares amount must be positive for address: ${vault}`);
   }
 }
 
+/** Thrown when a vault deposit's `maxSharePrice` slippage bound is zero or negative. */
 export class NonPositiveMaxSharePriceError extends Error {
   constructor(vault: Address) {
     super(`Max share price must be positive for vault: ${vault}`);
   }
 }
 
+/** Thrown when a viem client's account address does not match the address required by the call. */
 export class AddressMismatchError extends Error {
   constructor(clientAddress: Address, argsAddress: Address) {
     super(
@@ -26,6 +30,7 @@ export class AddressMismatchError extends Error {
   }
 }
 
+/** Thrown when a viem client's chain id does not match the chain id required by the call. */
 export class ChainIdMismatchError extends Error {
   constructor(clientChainId: number | undefined, argsChainId: number) {
     super(
@@ -34,30 +39,35 @@ export class ChainIdMismatchError extends Error {
   }
 }
 
+/** Thrown when the viem client is missing a property the call requires (e.g. `account.address`). */
 export class MissingClientPropertyError extends Error {
   constructor(property: string) {
     super(`A required ${property} is missing from the client.`);
   }
 }
 
+/** Thrown when an approval amount is smaller than the spend amount it must cover. */
 export class ApprovalAmountLessThanSpendAmountError extends Error {
   constructor() {
     super("Approval amount is less than spend amount");
   }
 }
 
+/** Thrown when a slippage tolerance is negative. */
 export class NegativeSlippageToleranceError extends Error {
   constructor(slippageTolerance: bigint) {
     super(`Slippage tolerance ${slippageTolerance} must not be negative`);
   }
 }
 
+/** Thrown when a Morpho accrual position is missing for a market the call needs to read. */
 export class MissingAccrualPositionError extends Error {
   constructor(market: string) {
     super(`Accrual position is missing for market: ${market}`);
   }
 }
 
+/** Thrown when a slippage tolerance exceeds `MAX_SLIPPAGE_TOLERANCE` (10%). */
 export class ExcessiveSlippageToleranceError extends Error {
   constructor(slippageTolerance: bigint) {
     super(
@@ -66,12 +76,14 @@ export class ExcessiveSlippageToleranceError extends Error {
   }
 }
 
+/** Thrown when a VaultV2 force-withdraw or force-redeem call has no deallocations to perform. */
 export class EmptyDeallocationsError extends Error {
   constructor(vault: Address) {
     super(`Deallocations list cannot be empty for vault: ${vault}`);
   }
 }
 
+/** Thrown when a deposit's amount differs from the amount the supplied permit / permit2 signature was issued for. */
 export class DepositAmountMismatchError extends Error {
   constructor(depositAmount: bigint, signatureAmount: bigint) {
     super(
@@ -80,6 +92,7 @@ export class DepositAmountMismatchError extends Error {
   }
 }
 
+/** Thrown when a deposit's asset differs from the asset the supplied permit / permit2 signature was issued for. */
 export class DepositAssetMismatchError extends Error {
   constructor(depositAsset: Address, signatureAsset: Address) {
     super(
@@ -88,6 +101,7 @@ export class DepositAssetMismatchError extends Error {
   }
 }
 
+/** Thrown when a vault deposit uses `nativeAmount` but the vault asset is not the chain's wNative. */
 export class NativeAmountOnNonWNativeVaultError extends Error {
   constructor(vaultAsset: Address, wNative: Address) {
     super(
@@ -96,6 +110,7 @@ export class NativeAmountOnNonWNativeVaultError extends Error {
   }
 }
 
+/** Thrown when a `nativeAmount` is supplied but the chain has no configured wNative address. */
 export class ChainWNativeMissingError extends Error {
   constructor(chainId: number) {
     super(
@@ -104,12 +119,14 @@ export class ChainWNativeMissingError extends Error {
   }
 }
 
+/** Thrown when `nativeAmount` is negative. */
 export class NegativeNativeAmountError extends Error {
   constructor(nativeAmount: bigint) {
     super(`Native amount must not be negative, got ${nativeAmount}`);
   }
 }
 
+/** Thrown when both `amount` and `nativeAmount` resolve to zero on a vault deposit. */
 export class ZeroDepositAmountError extends Error {
   constructor(vault: Address) {
     super(
@@ -118,6 +135,7 @@ export class ZeroDepositAmountError extends Error {
   }
 }
 
+/** Thrown when a vault entity's address does not match the vault address embedded in the call's args. */
 export class VaultAddressMismatchError extends Error {
   constructor(vaultAddress: Address, argsVaultAddress: Address) {
     super(
@@ -126,12 +144,14 @@ export class VaultAddressMismatchError extends Error {
   }
 }
 
+/** Thrown when a market borrow amount is zero or negative. */
 export class NonPositiveBorrowAmountError extends Error {
   constructor(market: string) {
     super(`Borrow amount must be positive for market: ${market}`);
   }
 }
 
+/** Thrown when both `amount` and `nativeAmount` resolve to zero on a market collateral supply. */
 export class ZeroCollateralAmountError extends Error {
   constructor(market: string) {
     super(
@@ -140,6 +160,7 @@ export class ZeroCollateralAmountError extends Error {
   }
 }
 
+/** Thrown when a collateral supply uses `nativeAmount` but the collateral token is not the chain's wNative. */
 export class NativeAmountOnNonWNativeCollateralError extends Error {
   constructor(collateralToken: Address, wNative: Address) {
     super(
@@ -148,6 +169,7 @@ export class NativeAmountOnNonWNativeCollateralError extends Error {
   }
 }
 
+/** Thrown when a borrow exceeds the LLTV-buffered safe maximum for the position. */
 export class BorrowExceedsSafeLtvError extends Error {
   constructor(borrowAmount: bigint, maxSafeBorrow: bigint) {
     super(
@@ -156,6 +178,7 @@ export class BorrowExceedsSafeLtvError extends Error {
   }
 }
 
+/** Thrown when the market's oracle price is unavailable and position health cannot be validated. */
 export class MissingMarketPriceError extends Error {
   constructor(market: string) {
     super(
@@ -164,6 +187,7 @@ export class MissingMarketPriceError extends Error {
   }
 }
 
+/** Thrown when a `MarketParams.id` does not match the expected market id derived from the other fields. */
 export class MarketIdMismatchError extends Error {
   constructor(marketId: string, expectedMarketId: string) {
     super(
@@ -172,6 +196,7 @@ export class MarketIdMismatchError extends Error {
   }
 }
 
+/** Thrown when an accrual position belongs to a different user than the one expected by the call. */
 export class AccrualPositionUserMismatchError extends Error {
   constructor(positionUser: string, expectedUser: string) {
     super(
@@ -180,18 +205,21 @@ export class AccrualPositionUserMismatchError extends Error {
   }
 }
 
+/** Thrown when a reallocation's fee is negative. */
 export class NegativeReallocationFeeError extends Error {
   constructor(vault: string) {
     super(`Reallocation fee must not be negative for vault: ${vault}`);
   }
 }
 
+/** Thrown when a reallocation has no withdrawals. */
 export class EmptyReallocationWithdrawalsError extends Error {
   constructor(vault: string) {
     super(`Reallocation withdrawals list cannot be empty for vault: ${vault}`);
   }
 }
 
+/** Thrown when a reallocation withdrawal amount is zero or negative. */
 export class NonPositiveReallocationAmountError extends Error {
   constructor(vault: string, market: string) {
     super(
@@ -200,6 +228,7 @@ export class NonPositiveReallocationAmountError extends Error {
   }
 }
 
+/** Thrown when a reallocation withdrawal references the borrow target market (which would be a no-op or self-deal). */
 export class ReallocationWithdrawalOnTargetMarketError extends Error {
   constructor(vault: string, marketId: string) {
     super(
@@ -208,6 +237,7 @@ export class ReallocationWithdrawalOnTargetMarketError extends Error {
   }
 }
 
+/** Thrown when reallocation withdrawals within a vault are not strictly sorted by market id. */
 export class UnsortedReallocationWithdrawalsError extends Error {
   constructor(vault: string, marketId: string) {
     super(
@@ -216,12 +246,14 @@ export class UnsortedReallocationWithdrawalsError extends Error {
   }
 }
 
+/** Thrown when a market repay's `transferAmount` is zero or negative. */
 export class NonPositiveTransferAmountError extends Error {
   constructor(market: string) {
     super(`Transfer amount must be positive for market: ${market}`);
   }
 }
 
+/** Thrown when a market repay in assets mode has `transferAmount !== assets` (asset-mode requires exact transfer). */
 export class TransferAmountNotEqualToAssetsError extends Error {
   constructor(params: {
     transferAmount: bigint;
@@ -234,6 +266,7 @@ export class TransferAmountNotEqualToAssetsError extends Error {
   }
 }
 
+/** Thrown when a market repay specifies both `assets` and `shares` as non-zero (modes are mutually exclusive). */
 export class MutuallyExclusiveRepayAmountsError extends Error {
   constructor(market: string) {
     super(
@@ -242,24 +275,28 @@ export class MutuallyExclusiveRepayAmountsError extends Error {
   }
 }
 
+/** Thrown when both `assets` and `shares` are zero on a market repay. */
 export class NonPositiveRepayAmountError extends Error {
   constructor(market: string) {
     super(`Repay amount must be positive for market: ${market}`);
   }
 }
 
+/** Thrown when a market repay's `maxSharePrice` slippage bound is zero or negative. */
 export class NonPositiveRepayMaxSharePriceError extends Error {
   constructor(market: string) {
     super(`Max share price must be positive for market: ${market}`);
   }
 }
 
+/** Thrown when a market `withdrawCollateral` amount is zero or negative. */
 export class NonPositiveWithdrawCollateralAmountError extends Error {
   constructor(market: string) {
     super(`Withdraw collateral amount must be positive for market: ${market}`);
   }
 }
 
+/** Thrown when a withdraw amount exceeds the position's available collateral. */
 export class WithdrawExceedsCollateralError extends Error {
   constructor(params: {
     withdrawAmount: bigint;
@@ -272,6 +309,7 @@ export class WithdrawExceedsCollateralError extends Error {
   }
 }
 
+/** Thrown when a collateral withdrawal would leave the borrower's position above the LLTV-buffered safe maximum. */
 export class WithdrawMakesPositionUnhealthyError extends Error {
   constructor(params: {
     withdrawAmount: bigint;
@@ -284,12 +322,14 @@ export class WithdrawMakesPositionUnhealthyError extends Error {
   }
 }
 
+/** Thrown when a share-amount conversion would divide by zero (the market has no shares of the relevant kind). */
 export class ShareDivideByZeroError extends Error {
   constructor(market: string) {
     super(`Share divide by zero error for market: ${market}`);
   }
 }
 
+/** Thrown when a repay amount in assets exceeds the borrower's outstanding debt. */
 export class RepayExceedsDebtError extends Error {
   constructor(params: { repayAmount: bigint; debt: bigint; market: string }) {
     super(
@@ -298,6 +338,7 @@ export class RepayExceedsDebtError extends Error {
   }
 }
 
+/** Thrown when EIP-712 signature verification fails (the signed data does not match the expected signer). */
 export class InvalidSignatureError extends Error {
   constructor() {
     super(
@@ -306,6 +347,7 @@ export class InvalidSignatureError extends Error {
   }
 }
 
+/** Thrown when a repay in shares mode supplies more shares than the borrower owes. */
 export class RepaySharesExceedDebtError extends Error {
   constructor(params: {
     repayShares: bigint;
@@ -318,6 +360,7 @@ export class RepaySharesExceedDebtError extends Error {
   }
 }
 
+/** Thrown when a vault selected for reallocation has no configured `PublicAllocator`. */
 export class MissingPublicAllocatorConfigError extends Error {
   constructor(vault: string) {
     super(
@@ -326,12 +369,14 @@ export class MissingPublicAllocatorConfigError extends Error {
   }
 }
 
+/** Thrown when a market borrow's `minSharePrice` slippage bound is negative. */
 export class NonPositiveMinBorrowSharePriceError extends Error {
   constructor(market: string) {
     super(`Min share price must be non-negative for market: ${market}`);
   }
 }
 
+/** Thrown when a vault migration's source vault asset differs from the target vault asset. */
 export class VaultAssetMismatchError extends Error {
   constructor(sourceAsset: Address, targetAsset: Address) {
     super(
@@ -340,6 +385,7 @@ export class VaultAssetMismatchError extends Error {
   }
 }
 
+/** Thrown when a vault redeem's `minSharePrice` slippage bound is negative. */
 export class NegativeMinSharePriceError extends Error {
   constructor(vault: Address) {
     super(`Min share price must be non-negative for vault: ${vault}`);
