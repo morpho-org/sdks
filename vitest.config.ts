@@ -97,7 +97,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "bundler-sdk-viem",
-          include: ["packages/bundler-sdk-viem/test/**/*.test.ts"],
+          include: [
+            "packages/bundler-sdk-viem/test/**/*.test.ts",
+            "packages/bundler-sdk-viem/src/**/*.test.ts",
+          ],
           environment: "happy-dom",
           testTimeout: 60_000,
         },
