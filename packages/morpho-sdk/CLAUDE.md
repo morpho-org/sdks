@@ -1,62 +1,48 @@
-# morpho-sdk Conventions
+# `packages/morpho-sdk/`
 
-The SDK does one thing: build ready-to-send Morpho transactions for VaultV1, VaultV2, and MarketV1. Keep it RPC-only, framework-free, stateless, strict, and explicit.
+Transaction builders for VaultV1, VaultV2, and MarketV1. Subfolders carry the layer-scoped detail; this file is the package overview + glossary.
 
-## Architecture
+> Architecture / type / test / doc / release rules apply per the [root `CLAUDE.md`](../../CLAUDE.md). Subfolder rules: see each `src/<layer>/CLAUDE.md`.
 
-- Preserve one-way layering: `src/client -> src/entities -> src/actions`; lower layers must not reach back into higher layers.
-- `MorphoClient` wraps a viem `Client` + readonly options only; no cache, `init()`, warm-up, background reads, or mutable runtime state.
-- Entities perform viem-backed RPC reads, compute derived values, validate `chainId` and `userAddress`, then return lazy `{ buildTx, getRequirements }` handles.
-- Actions are pure synchronous transaction builders: `(args) => Transaction`, no network I/O, hidden clock, randomness, or `async`.
-- Requirements/signature flows are the only action-adjacent code allowed to read or sign; keep approval, permit, permit2, and Morpho authorization resolution centralized there.
+## Routing summary
 
-## Public API and Types
+- **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem.
+- **MarketV1 bundled paths** (`supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`) route through bundler3 via GeneralAdapter1. `repay` accepts assets (partial) or shares (full, with upper-bound transfer + `maxSharePrice`); `repayWithdrawCollateral` repays first, then withdraws.
+- **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/CLAUDE.md`](./src/actions/CLAUDE.md).
 
-- Re-export public API through barrel `index.ts` files; avoid accidental deep-file public surfaces.
-- Add JSDoc for exported functions and interfaces, and follow neighboring patterns before introducing abstractions.
-- Maintain strict TypeScript with zero `any`; redesign hard-to-type APIs instead of exporting broad or mutable shapes.
-- Public fields and types are `readonly`; returned `Transaction` and signature objects are `deepFreeze`d.
-- Typed error classes are public API; never throw generic `Error` from SDK source.
-- Reuse protocol types such as `Address`, `MarketParams`, `MarketId`, and `bigint` quantities.
-- Keep action types discriminated by `type`; new operations extend `TransactionAction` and add dedicated errors in `src/types/error.ts`.
+## Tests
 
-## `src/actions`
+Per root §5: tests for this package are colocated (`src/**/*.test.ts`). Some legacy tests still live under `packages/morpho-sdk/test/` — migrate them next to source on refactor. Use parameterized fixtures (`randomMarket(...)`); never weaken assertions to make a test pass.
 
-- Always validate inputs with dedicated errors before encoding, append metadata only when provided, and deep-freeze the returned transaction.
-- Never bypass the general adapter for VaultV1/VaultV2 deposits; it enforces `maxSharePrice` and protects against inflation attacks.
-- Vault withdraw/redeem actions are direct vault calls; VaultV2 force withdraw/redeem use VaultV2 `multicall` with one or more `forceDeallocate` calls before the final withdraw/redeem.
-- MarketV1 `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, and `repayWithdrawCollateral` route through bundler3 via GeneralAdapter1; `withdrawCollateral` is a direct Morpho call.
-- `repay` supports exactly one mode: assets for partial repay or shares for full repay; shares mode uses an upper-bound transfer amount and `maxSharePrice`.
-- Preserve `repayWithdrawCollateral` ordering: repay first, then withdraw collateral.
-- Native wrapping is only valid for configured wNative assets/collateral; prepend `nativeTransfer` + `wrapNative` and include native value in `tx.value`.
-- Shared-liquidity `reallocations` encode `PublicAllocator.reallocateTo()` before borrow execution, validate non-empty positive withdrawals and fees, and add total fees to `tx.value`.
-- Requirement encoders are leaf-level and spender-specific: Permit2 and permit flows must verify signatures and must not permit arbitrary spenders when GeneralAdapter1 is required.
+## Glossary
 
-## `src/entities`
+Protocol terms used across this package's docs and JSDoc:
 
-- Validate `chainId` before every on-chain read and before transaction construction; enforce builder equals signer with `validateUserAddress`.
-- Never encode calldata in entities; entities fetch state, compute slippage/health values, and delegate transaction building to actions.
-- Vault entities compute deposit `maxSharePrice` from total assets (`amount + nativeAmount`) and keep VaultV1/VaultV2 differences explicit.
-- MarketV1 entity keeps LLTV buffer checks explicit for `supplyCollateralBorrow`, `withdrawCollateral`, and `repayWithdrawCollateral`; throw typed errors for missing prices or unsafe positions.
-- `withdrawCollateral` has no requirements; `repay` needs loan-token approval only; borrow and repay-withdraw flows need Morpho authorization when routed through GeneralAdapter1.
-- `getReallocationData` may fetch the data needed to compute reallocations, but action encoding and reallocation validation stay outside the entity fetch path.
+### Contracts and adapters
 
-## `src/helpers`
+- **MarketV1 / Morpho Blue** — the immutable lending primitive. A market is identified by `MarketParams { loanToken, collateralToken, oracle, irm, lltv }`.
+- **VaultV1 / MetaMorpho** — ERC-4626 vault layered on top of MarketV1.
+- **VaultV2** — successor vault with adapter-based liquidity routing and `forceDeallocate`.
+- **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
+- **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, and `repayWithdrawCollateral`.
+- **PublicAllocator** — Morpho contract that lets vault curators move liquidity between markets within a vault (`reallocateTo(...)`).
 
-- Helpers stay small, pure, and protocol-specific; return new objects and never mutate inputs.
-- `addTransactionMetadata` only appends the configured origin/timestamp trace data.
-- `computeMaxRepaySharePrice` uses an upper slippage bound and caps at `MAX_ABSOLUTE_SHARE_PRICE`.
-- Health, repay, share, deallocation, and reallocation helpers should expose protocol invariants clearly instead of hiding them behind generic utilities.
+### Bundler actions
 
-## `test`
+The action verbs an integrator sees in the bundle (`BundlerAction.encode...`):
 
-- Security invariants are part of the SDK contract; test routing, authorization, `chainId`, builder/signer equality, LLTV buffers, and accounting behavior.
-- Use the package test setup and fixtures; do not hardcode vault addresses in tests when fixtures exist.
-- E2E action tests should cover transaction building, fork execution, invariant checks, and requirements flows for bundled actions.
-- Never weaken assertions or replace strict assertions with loose ones to make a test pass.
+- **`morphoBorrow` / `morphoSupplyCollateral` / `morphoRepay`** — Morpho Blue contract calls executed by GeneralAdapter1 on the user's behalf.
+- **`setAuthorization`** — Morpho call that grants GeneralAdapter1 the right to call market functions on behalf of the user. Required pre-condition for the three bundled MarketV1 paths above.
+- **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
+- **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
+- **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.
+- **`reallocateTo`** — `PublicAllocator` call that shifts liquidity between markets in a curator vault before a borrow.
 
-## Continuous Improvement
+### Constants and conventions
 
-- Existing code may predate these conventions; do not widen divergence when touching it.
-- Prefer deleting unclear helpers, dependencies, exports, or duplicated logic before adding abstractions.
-- If the SDK cannot yet meet an applicable convention, document the local exception here and make the touched surface closer to the target design.
+- **wNative** — the chain's wrapped-native token (e.g. WETH). The only asset/collateral for which native wrapping bundles are valid.
+- **WAD** — fixed-point scale `1e18`. Used for rates, slippage tolerances, LTVs.
+- **`ORACLE_PRICE_SCALE`** — `1e36`, the scale Morpho uses for `price * collateral / WAD = collateralValueInLoanToken`.
+- **LLTV / LLTV buffer** — Liquidation-LTV. The `DEFAULT_LLTV_BUFFER` (0.5%, hardcoded) is subtracted from the market LLTV before validating that a `supplyCollateralBorrow` (or post-withdraw safety check) keeps the position healthy.
+- **`minSharePrice` / `maxSharePrice`** — slippage bounds attached to bundled `morphoBorrow` / vault deposits, computed from market or vault state plus the user's slippage tolerance (capped by `MAX_SLIPPAGE_TOLERANCE` = 10%).
+- **Permit / Permit2** — signature-based approval flows. Permit covers ERC-2612–compatible tokens (one signature per token); Permit2 (canonical Universal Router pattern) batches and revokes via the Permit2 contract. Both flow through `actions/requirements`.
