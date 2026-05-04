@@ -26,7 +26,7 @@ When reviewing, refer to these project docs as needed:
 | ------------------- | --------------------- | ------------------------------------------------------ |
 | **Project Context** | `CLAUDE.md`           | Monorepo conventions, naming, type/import discipline   |
 | **Contributing**    | `CONTRIBUTING.md`     | Dev setup, package layout, release/changesets flow     |
-| **TIB Template**    | `TIB/TIB-template.md` | Format for design docs referenced from PRs             |
+| **TIB Template**    | `docs/tibs/TEMPLATE.md` | Format for design docs referenced from PRs           |
 | **Biome config**    | `biome.json`          | Style/lint rules enforced on PRs (`pnpm lint`)         |
 
 > **TWO-PHASE SKILL**: Phase 1 (Steps 1-8) does the initial review. Phase 2 (Step 9) creates a continuous watcher via CronCreate if `--watch` was passed. If `--watch` is used, the skill is NOT complete until Step 9's CronCreate call succeeds and you report the job ID to the user.
