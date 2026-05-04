@@ -127,6 +127,13 @@ export default defineConfig({
           ],
         },
       },
+      {
+        extends: true,
+        test: {
+          name: "morpho-test",
+          include: ["packages/morpho-test/src/**/*.test.ts"],
+        },
+      },
     ],
   },
 });
