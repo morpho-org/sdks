@@ -9,6 +9,15 @@ export default defineConfig({
         "packages/test/**",
         "packages/test-wagmi/**",
         "packages/morpho-test/**",
+        "packages/**/src/**/*.test.ts",
+        "packages/**/src/**/__test-utils__/**",
+        "packages/**/src/**/__mocks__/**",
+        "packages/**/src/**/__fixtures__/**",
+        "packages/**/src/**/index.ts",
+        "packages/**/src/**/*.d.ts",
+        "packages/**/src/**/abis.ts",
+        "packages/**/src/api/sdk.ts",
+        "packages/**/src/api/types.ts",
       ],
     },
     sequence: {
@@ -22,7 +31,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "morpho-ts",
-          include: ["packages/morpho-ts/test/**/*.test.ts"],
+          include: [
+            "packages/morpho-ts/test/**/*.test.ts",
+            "packages/morpho-ts/src/**/*.test.ts",
+          ],
         },
       },
       {
