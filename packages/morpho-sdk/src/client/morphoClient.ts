@@ -1,11 +1,15 @@
-import type { MarketParams } from "@morpho-org/blue-sdk";
+import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import {
   MorphoMarketV1,
   MorphoVaultV1,
   MorphoVaultV2,
 } from "../entities/index.js";
-import type { Metadata, MorphoClientType } from "../types/index.js";
+import {
+  MarketIdMismatchError,
+  type Metadata,
+  type MorphoClientType,
+} from "../types/index.js";
 
 export class MorphoClient implements MorphoClientType {
   readonly options: {
@@ -38,6 +42,11 @@ export class MorphoClient implements MorphoClientType {
   }
 
   public marketV1(marketParams: MarketParams, chainId: number) {
+    const derivedId = MarketUtils.getMarketId(marketParams);
+    // Can happen with one-time/hardcoded/agent-written possibly inconsistent input market params.
+    if (marketParams.id !== derivedId) {
+      throw new MarketIdMismatchError(marketParams.id, derivedId);
+    }
     return new MorphoMarketV1(this, marketParams, chainId);
   }
 }

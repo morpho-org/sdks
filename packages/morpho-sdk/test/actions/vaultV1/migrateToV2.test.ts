@@ -38,9 +38,11 @@ describe("MigrateToV2 VaultV1", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args: {
         targetVault: KeyrockUsdcVaultV2.address,
+        targetAsset: KeyrockUsdcVaultV2.asset,
         shares,
         minSharePriceVaultV1: tx_1.action.args.minSharePriceVaultV1,
         maxSharePriceVaultV2: tx_1.action.args.maxSharePriceVaultV2,

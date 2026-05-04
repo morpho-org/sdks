@@ -9,6 +9,8 @@
 - Keep publish exports in `publishConfig.exports`; mirror `types`, `import`, and `require`.
 - Put host libraries in `peerDependencies`, with local test versions in `devDependencies`.
 - Subpath exports need both package exports and TS path support, e.g. `./vitest`.
+- Declare package-specific errors in one centralized error module for that package.
+- Quote interpolated error parameter values in messages, e.g. `expected "${expected}", got "${actual}"`.
 - Each package should own one responsibility; split framework adapters from protocol/core logic.
 - Framework coupling belongs in explicitly named adapter packages such as `*-wagmi`, never in core SDK packages.
 - Change generated inputs, not generated files; keep generated artifacts out of hand-written design decisions.

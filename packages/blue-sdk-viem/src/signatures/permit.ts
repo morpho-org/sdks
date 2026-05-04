@@ -4,7 +4,11 @@ import {
   type Token,
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
-import type { TypedDataDefinition } from "viem";
+import { type TypedDataDefinition, isAddressEqual } from "viem";
+import {
+  InvalidPermitDomainChainIdError,
+  InvalidPermitDomainVerifyingContractError,
+} from "../error.js";
 
 export interface PermitArgs {
   erc20: Token;
@@ -27,6 +31,8 @@ const permitTypes = {
 
 /**
  * Permit signature for ERC20 tokens, following EIP-2612.
+ * Fails closed when fetched EIP-5267 metadata is not bound to the token and chain.
+ * Consumers should use another approval path instead of signing an unsafe domain.
  * Docs: https://eips.ethereum.org/EIPS/eip-2612
  */
 export const getPermitTypedData = (
@@ -35,7 +41,29 @@ export const getPermitTypedData = (
 ): TypedDataDefinition<typeof permitTypes, "Permit"> => {
   const { usdc, eurc } = getChainAddresses(chainId);
 
-  const domain = erc20.eip5267Domain?.eip712Domain ?? {
+  const domain = erc20.eip5267Domain?.eip712Domain;
+
+  if (domain != null) {
+    if (domain.chainId !== chainId) {
+      throw new InvalidPermitDomainChainIdError(
+        erc20.address,
+        chainId,
+        domain.chainId,
+      );
+    }
+
+    if (
+      domain.verifyingContract == null ||
+      !isAddressEqual(domain.verifyingContract, erc20.address)
+    ) {
+      throw new InvalidPermitDomainVerifyingContractError(
+        erc20.address,
+        domain.verifyingContract,
+      );
+    }
+  }
+
+  const permitDomain = domain ?? {
     name: erc20.name,
     version: erc20.address === usdc || erc20.address === eurc ? "2" : "1",
     chainId,
@@ -43,7 +71,7 @@ export const getPermitTypedData = (
   };
 
   return {
-    domain,
+    domain: permitDomain,
     types: permitTypes,
     message: {
       owner,

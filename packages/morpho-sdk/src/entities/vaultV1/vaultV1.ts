@@ -381,9 +381,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
           vault: {
             chainId: this.chainId,
             address: this.vault,
+            asset: sourceVault.asset,
           },
           args: {
             targetVault: targetVault.address,
+            targetAsset: targetVault.asset,
             shares,
             minSharePriceVaultV1,
             maxSharePriceVaultV2,

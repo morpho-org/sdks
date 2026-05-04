@@ -15,6 +15,7 @@
 - Prefer deleting unclear helpers, constants, exports, or duplicated logic before adding abstractions.
 - Add dependencies only when they directly reduce integrator risk or complexity in the owning package.
 - Codify security-sensitive behavior as tests, especially routing, authorization, chain, and accounting invariants.
+- Add concise JSDoc to every new exported JavaScript class, object, constant, or function; avoid JSDoc on internal locals and test helpers.
 
 ## Continuous Improvement
 
