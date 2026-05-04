@@ -74,7 +74,9 @@ function* walk(dir) {
 }
 
 // Matches `export <kind> Name` allowing any combination of leading
-// (async|abstract|default|declare) modifiers in any order.
+// (async|abstract|default|declare) modifiers in any order. Optional leading
+// whitespace lets the regex pick up indented exports — namespace members like
+// `  export function toPeriod(...)` inside `export namespace Time { ... }`.
 //
 // Disambiguation is delegated to the TypeScript compiler — the regex never
 // sees code that doesn't compile, so `export async abstract function foo` and
@@ -86,7 +88,7 @@ function* walk(dir) {
 // Re-export forms (`export { foo } from`, `export * from`, `export type { Foo }`)
 // are intentionally NOT matched — they aren't local exports.
 const EXPORT_RE =
-  /^export\s+(?:(?:async|abstract|default|declare)\s+)*(const|let|var|function|class|interface|type|enum|namespace)\s+([A-Za-z_$][\w$]*)/;
+  /^\s*export\s+(?:(?:async|abstract|default|declare)\s+)*(const|let|var|function|class|interface|type|enum|namespace)\s+([A-Za-z_$][\w$]*)/;
 
 // Matches `@internal` as a real JSDoc tag, not as text inside an `@example`
 // code block. Known limitation: a literal `@internal` mention in a code-fence
@@ -254,7 +256,18 @@ function selfCheck() {
     { line: "export declare const foo: number;", kind: "const", name: "foo" },
     { line: "// not an export", expectMatch: false },
     { line: "import { foo } from 'bar';", expectMatch: false },
-    { line: "  export const indented = 1;", expectMatch: false },
+    // Indented exports must match — namespace members are pervasive in
+    // morpho-ts (e.g. `export function toPeriod` inside `namespace Time`).
+    {
+      line: "  export const indented = 1;",
+      kind: "const",
+      name: "indented",
+    },
+    {
+      line: "  export function toPeriod() {}",
+      kind: "function",
+      name: "toPeriod",
+    },
     // Re-export forms must NOT match — they aren't local exports.
     { line: "export { foo } from './bar.js';", expectMatch: false },
     { line: "export * from './bar.js';", expectMatch: false },

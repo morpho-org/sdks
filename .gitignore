@@ -10,6 +10,9 @@
 # dependencies
 node_modules
 
+# generated docs (typedoc output, configured in typedoc.json)
+docs/api
+
 # testing
 coverage
 .nyc_output
