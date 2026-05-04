@@ -20,7 +20,7 @@ import { getCompoundV3ManagerApprovalMessage } from "../signature/compoundV3.js"
 import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
-} from "./index.js";
+} from "./MigratableSupplyPosition.js";
 
 interface IMigratableSupplyPosition_CompoundV3
   extends Omit<IMigratableSupplyPosition, "protocol"> {

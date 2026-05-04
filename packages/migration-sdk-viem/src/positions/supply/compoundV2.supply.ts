@@ -15,7 +15,7 @@ import {
 import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
-} from "./index.js";
+} from "./MigratableSupplyPosition.js";
 
 interface IMigratableSupplyPosition_CompoundV2
   extends Omit<IMigratableSupplyPosition, "protocol"> {

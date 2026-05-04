@@ -19,7 +19,7 @@ import {
 import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
-} from "./index.js";
+} from "./MigratableSupplyPosition.js";
 
 interface IMigratableSupplyPosition_AaveV3
   extends Omit<IMigratableSupplyPosition, "protocol"> {

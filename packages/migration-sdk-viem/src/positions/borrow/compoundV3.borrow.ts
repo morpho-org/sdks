@@ -27,7 +27,7 @@ import { getCompoundV3ManagerApprovalMessage } from "../signature/compoundV3.js"
 import {
   type IMigratableBorrowPosition,
   MigratableBorrowPosition,
-} from "./index.js";
+} from "./MigratableBorrowPosition.js";
 
 interface IMigratableBorrowPosition_CompoundV3
   extends Omit<IMigratableBorrowPosition, "protocol"> {

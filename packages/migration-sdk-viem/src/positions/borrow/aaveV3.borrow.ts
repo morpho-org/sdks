@@ -31,7 +31,7 @@ import {
 import {
   type IMigratableBorrowPosition,
   MigratableBorrowPosition,
-} from "./index.js";
+} from "./MigratableBorrowPosition.js";
 
 interface IMigratableBorrowPosition_AaveV3
   extends Omit<IMigratableBorrowPosition, "protocol"> {

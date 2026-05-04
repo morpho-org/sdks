@@ -23,7 +23,7 @@ import { getMorphoAaveV3ManagerApprovalTypedData } from "../signature/aaveV3Opti
 import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
-} from "./index.js";
+} from "./MigratableSupplyPosition.js";
 
 interface IMigratableSupplyPosition_AaveV3Optimizer
   extends Omit<IMigratableSupplyPosition, "protocol"> {
