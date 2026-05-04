@@ -1,4 +1,4 @@
-import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId } from "@morpho-org/blue-sdk";
 import { isAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import { withSimplePermit } from "./tokens.js";
