@@ -33,16 +33,51 @@ export interface MarketV1BorrowParams {
 /**
  * Prepares a borrow transaction for a Morpho Blue market.
  *
- * Routed through bundler3 via `morphoBorrow`. The bundler uses the transaction
- * initiator as `onBehalf`. Uses `minSharePrice` to protect against share price
- * manipulation between transaction construction and execution.
+ * Routed through bundler3 via `morphoBorrow`. The bundler uses the transaction initiator as
+ * `onBehalf`. Uses `minSharePrice` to protect against share price manipulation between
+ * transaction construction and execution.
  *
- * When `reallocations` are provided, `reallocateTo` actions are prepended to
- * the bundle, moving liquidity from other markets via the PublicAllocator
- * before borrowing. The reallocation fees are set as the transaction value.
+ * When `reallocations` are provided, `reallocateTo` actions are prepended to the bundle, moving
+ * liquidity from other markets via the PublicAllocator before borrowing. Reallocation fees
+ * accumulate in `tx.value`.
  *
- * @param params - Borrow parameters.
- * @returns Deep-frozen transaction.
+ * @param params.market.chainId - The chain the market lives on.
+ * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
+ * @param params.args.amount - Loan asset amount to borrow, in the loan token's smallest unit.
+ * @param params.args.receiver - Address that receives the borrowed assets.
+ * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
+ * @param params.args.reallocations - Optional vault reallocations to execute before borrowing,
+ *   computed by the entity layer.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<MarketV1BorrowAction>` with `to`, `value`, `data`, and the
+ *   typed `action` discriminator the simulation layer consumes.
+ * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
+ * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n` (negative; zero is
+ *   allowed despite the class name).
+ * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
+ *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
+ * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
+ *   `reallocation.withdrawals` is empty.
+ * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any
+ *   `reallocation.withdrawals[i].amount <= 0n`.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
+ *   reallocation withdrawal references the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
+ *   reallocation withdrawals are not strictly sorted by market id.
+ * @example
+ * ```ts
+ * import { marketV1Borrow } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = marketV1Borrow({
+ *   market: { chainId: 1, marketParams },
+ *   args: {
+ *     amount: 1_000_000n,
+ *     receiver: borrower,
+ *     minSharePrice: 0n, // disables slippage protection — production code should compute via `computeMinBorrowSharePrice` from market state + slippage tolerance
+ *   },
+ * });
+ * // tx satisfies Readonly<Transaction<MarketV1BorrowAction>>
+ * ```
  */
 export const marketV1Borrow = ({
   market: { chainId, marketParams },
