@@ -15,13 +15,6 @@
 
 **Start here.** `@morpho-org/morpho-sdk` is the abstraction layer that simplifies the Morpho protocol: it builds ready-to-send transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **MarketV1** (Morpho Blue) on any EVM-compatible chain.
 
-- One client (`MorphoClient`) wraps a viem `Client` and exposes `vaultV1`, `vaultV2`, and `marketV1` entities.
-- Every action returns a lazy `{ buildTx, getRequirements }` handle so consumers can resolve approvals, permits, and Morpho authorizations before submitting.
-- Routes each operation through the safest path: bundler3 + GeneralAdapter1 with `maxSharePrice` / `minSharePrice` slippage protection where it matters, direct contract calls where it doesn't.
-- Supports native-token wrapping, atomic V1 → V2 migrations, and shared-liquidity reallocations via the PublicAllocator.
-
-For most integrators, `@morpho-org/morpho-sdk` is all you need.
-
 ---
 
 ### Secondary packages
