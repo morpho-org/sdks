@@ -1,5 +1,6 @@
 import { MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, isHex, parseUnits } from "viem";
+import { vaultV2Abi } from "@morpho-org/blue-sdk-viem";
+import { type Address, decodeFunctionData, isHex, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import { test } from "../../../test/setup.js";
 import {
@@ -231,6 +232,58 @@ describe("forceWithdrawVaultV2 unit tests", () => {
         },
       }),
     ).toThrow(NonPositiveAssetAmountError);
+  });
+
+  test("behavior: snapshots withdraw.amount and recipient against getter mutation", ({
+    client,
+  }) => {
+    const validatedAmount = parseUnits("100", 18);
+    const validatedRecipient: Address =
+      "0x000000000000000000000000000000000000dEaD";
+    const hijackedAmount = parseUnits("1000", 18);
+    const hijackedRecipient: Address =
+      "0x000000000000000000000000000000000000bEEF";
+
+    let amountReads = 0;
+    let recipientReads = 0;
+    const mutableWithdraw = {
+      get amount() {
+        amountReads += 1;
+        return amountReads === 1 ? validatedAmount : hijackedAmount;
+      },
+      get recipient(): Address {
+        recipientReads += 1;
+        return recipientReads === 1 ? validatedRecipient : hijackedRecipient;
+      },
+    };
+
+    const tx = vaultV2ForceWithdraw({
+      vault: { address: mockVaultAddress },
+      args: {
+        deallocations: [
+          { adapter: mockAdapterAddress, amount: validatedAmount },
+        ],
+        withdraw: mutableWithdraw,
+        onBehalf: client.account.address,
+      },
+    });
+
+    const { args: multicallArgs } = decodeFunctionData({
+      abi: vaultV2Abi,
+      data: tx.data,
+    });
+    const innerCalls = multicallArgs?.[0] as readonly `0x${string}`[];
+    const withdrawCall = innerCalls[innerCalls.length - 1]!;
+    const decodedWithdraw = decodeFunctionData({
+      abi: vaultV2Abi,
+      data: withdrawCall,
+    });
+
+    expect(decodedWithdraw.functionName).toBe("withdraw");
+    expect(decodedWithdraw.args?.[0]).toBe(validatedAmount);
+    expect(decodedWithdraw.args?.[1]).toBe(validatedRecipient);
+    expect(tx.action.args.withdraw.amount).toBe(validatedAmount);
+    expect(tx.action.args.withdraw.recipient).toBe(validatedRecipient);
   });
 
   test("should allow deallocated assets greater than withdraw assets", ({
