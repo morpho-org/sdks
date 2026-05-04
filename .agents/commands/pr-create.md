@@ -62,22 +62,15 @@ Then proceed to Step 3.
 
 ### Step 3: Commit All Changes
 
-Before creating the PR, review the working tree and commit. First print the status so any unexpected files (`.env*`, `*.key`, `*.pem`, scratch files, lockfile noise) are visible:
+Before creating the PR, commit all uncommitted changes (staged and unstaged). The repo's `.gitignore` is responsible for keeping `.env`, key material, and other untracked artefacts out — trust it:
 
 ```bash
-git status --short
-```
-
-Stop and surface to the user if anything that looks secret-bearing or out of scope is listed. Otherwise stage tracked modifications and any new files that obviously belong to the change, then commit and push:
-
-```bash
-git add -u                                      # tracked modifications
-# git add <explicit-new-files>                  # only new files that belong to this change
+git add -A
 git commit -m "<type>: <short description>"
 git push
 ```
 
-Avoid blanket `git add -A` — it sweeps up untracked scratch files and is the standard way `.env`, key material, or generated artefacts leak into PRs. Use the same type and description that will be used for the PR title.
+Use the same type and description that will be used for the PR title.
 
 ### Step 4: Create Draft PR
 
@@ -136,8 +129,8 @@ PR created: https://github.com/<owner>/<repo>/pull/<number>
 
 ### Important Notes
 
-- Do NOT ask the user any questions — derive everything from the changes (one exception: pause if `git status` shows unexpected files in Step 3).
-- Stage tracked modifications and explicit new files; do not run `git add -A`.
+- Do NOT ask the user any questions — derive everything from the changes.
+- Always commit ALL uncommitted changes before creating the PR; rely on `.gitignore` to keep secrets and scratch files out.
 - If on the default branch, create a new branch from HEAD before creating the PR.
 - If not on the default branch, use the current branch as-is.
 - The PR targets the repo's default branch (`$DEFAULT_BRANCH`).
