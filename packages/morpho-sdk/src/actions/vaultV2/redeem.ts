@@ -32,7 +32,7 @@ export interface VaultV2RedeemParams {
  * @param params.args.shares - Amount of vault shares to redeem.
  * @param params.args.recipient - Address that receives the redeemed assets.
  * @param params.args.onBehalf - Address whose shares are burned.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @param params.metadata - Optional analytics metadata attached to the transaction.
  * @returns A deep-frozen `Transaction<VaultV2RedeemAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveSharesAmountError} when `shares <= 0n`.

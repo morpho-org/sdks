@@ -87,7 +87,7 @@ The guide ships side-by-side good/bad examples drawn from the action builders ci
 
 ### 2. Tiered, package-scoped backfill
 
-Backfill in tiers, in the order the audit ranked them. Within each tier, one PR per layer (e.g. `morpho-sdk/actions/marketV1`, `morpho-sdk/actions/vaultV1`, `simulation-sdk/handlers`) so reviews stay scoped, ownership is obvious, and a single reviewer can hold the canonical shape across the diff. Each PR that touches a published package's `src/` ships a `patch` changeset (doc-only) per §7; repo-meta-only PRs (TIB, style guide, root tooling) may omit the changeset.
+Backfill in tiers, in the order the audit ranked them. Within each tier, one PR per layer (e.g. `morpho-sdk/actions/marketV1`, `morpho-sdk/actions/vaultV1`, `simulation-sdk/handlers`) so reviews stay scoped, ownership is obvious, and a single reviewer can hold the canonical shape across the diff. PRs whose behavior-affecting changes touch a published package ship a `patch` changeset per §7; JSDoc-only changes inside `packages/*/src/` and repo-meta-only PRs (TIB, style guide, root tooling) may omit the changeset.
 
 PRs do not mix JSDoc backfill with feature work or refactors — one concern per PR per §8. PRs do not introduce code changes other than JSDoc; if a docstring reveals a real bug or naming flaw, the fix lands in a separate PR that the docstring PR depends on.
 
@@ -154,13 +154,13 @@ Add ESLint, `typescript-eslint`, and `eslint-plugin-jsdoc` as devDependencies, c
 
 Run TypeDoc against Tier 1 entry points with `validation.notDocumented: true` and promote warnings to errors.
 
-**Why rejected:** TypeDoc's `@param` validator does not accept the dotted leaf-field notation (`@param params.args.amount`) that this repo's [`docs/jsdoc-style.md`](../jsdoc-style.md) mandates for nested options bags. Every leaf produces a "@param … was not used" warning, so `treatWarningsAsErrors: true` against the canonical exemplars (`marketV1Borrow`, `vaultV1Deposit`) fails on day one. Resolving this means either dropping the dotted convention or writing a TypeDoc plugin — both larger changes than this TIB scopes. `pnpm docs:check` continues to surface the warnings informationally.
+**Why rejected:** TypeDoc's `@param` validator does not accept the dotted leaf-field notation (`@param params.args.amount`) that this repo's [`docs/jsdoc-style.md`](../jsdoc-style.md) mandates for nested options bags. Every leaf produces a "@param … was not used" warning, so `treatWarningsAsErrors: true` against the canonical exemplars (`marketV1Borrow`, `vaultV1Deposit`) fails on day one. Resolving this means either dropping the dotted convention or writing a TypeDoc plugin — both larger changes than this TIB scopes. `pnpm docs:build` continues to surface the warnings informationally.
 
 ## Assumptions & Constraints
 
 - Reviewers hold the line on the canonical shape across every phase. Without an automated gate, the convention only sticks if PR review enforces it.
 - AI agents (Claude Code) assist with bulk authoring; PR authors retain responsibility for protocol semantics, the accuracy of the `@throws` list, and that every `@example` snippet actually compiles and runs.
-- Each phase ships independently as a doc-only changeset; no public API changes land via this work.
+- Each phase ships independently with no runtime behavior changes; a `patch` changeset is added when the phase's other changes touch a published package, otherwise omitted (see Proposed Solution pillar 2).
 - Test-helper packages (`morpho-test`, `test`, `test-wagmi`) are out of scope under §5 (their public symbols are fixtures, not integrator surface).
 - Deprecated packages (`@morpho-org/blue-sdk-ethers` and any others marked deprecated in the root `README.md`) are out of scope.
 

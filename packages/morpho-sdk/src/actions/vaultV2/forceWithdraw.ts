@@ -47,7 +47,7 @@ export interface VaultV2ForceWithdrawParams {
  * @param params.args.withdraw.recipient - Address that receives the withdrawn assets.
  * @param params.args.onBehalf - Address whose shares are burned and from which the deallocation
  *   penalty is taken.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @param params.metadata - Optional analytics metadata attached to the multicall transaction.
  * @returns A deep-frozen `Transaction<VaultV2ForceWithdrawAction>` with `to`, `value`, `data`,
  *   and the typed `action` discriminator the simulation layer consumes.
  * @throws {EmptyDeallocationsError} when `deallocations` is empty.

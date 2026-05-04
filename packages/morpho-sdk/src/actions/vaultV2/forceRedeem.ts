@@ -51,7 +51,7 @@ export interface VaultV2ForceRedeemParams {
  * @param params.args.redeem.recipient - Address that receives the redeemed assets.
  * @param params.args.onBehalf - Address whose shares are burned and from which the deallocation
  *   penalty is taken.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @param params.metadata - Optional analytics metadata attached to the multicall transaction.
  * @returns A deep-frozen `Transaction<VaultV2ForceRedeemAction>` with `to`, `value`, `data`, and
  *   the typed `action` discriminator the simulation layer consumes.
  * @throws {EmptyDeallocationsError} when `deallocations` is empty.

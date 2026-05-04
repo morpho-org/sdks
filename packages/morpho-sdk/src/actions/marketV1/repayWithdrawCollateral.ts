@@ -26,7 +26,11 @@ export interface MarketV1RepayWithdrawCollateralParams {
     assets: bigint;
     /** Repay shares amount (0n when repaying by assets). */
     shares: bigint;
-    /** ERC20 amount to transfer to GeneralAdapter1 (computed by entity). */
+    /**
+     * ERC-20 amount to pull into `GeneralAdapter1`. In assets mode, must equal `assets`
+     * exactly (`TransferAmountNotEqualToAssetsError` fires otherwise). In shares mode, an
+     * upper-bound estimate to absorb share-price drift.
+     */
     transferAmount: bigint;
     /** Amount of collateral to withdraw. */
     withdrawAmount: bigint;
@@ -80,9 +84,9 @@ export interface MarketV1RepayWithdrawCollateralParams {
  * @returns A deep-frozen `Transaction<MarketV1RepayWithdrawCollateralAction>` with `to`,
  *   `value`, `data`, and the typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
+ * @throws {NonPositiveRepayAmountError} when either `assets` or `shares` is negative, or when
+ *   both are zero.
  * @throws {MutuallyExclusiveRepayAmountsError} when both `assets` and `shares` are non-zero.
- * @throws {NonPositiveRepayAmountError} when both `assets` and `shares` are zero, or when either
- *   is negative.
  * @throws {NonPositiveTransferAmountError} when `transferAmount <= 0n`.
  * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and `transferAmount !== assets`.
  * @throws {NonPositiveWithdrawCollateralAmountError} when `withdrawAmount <= 0n`.

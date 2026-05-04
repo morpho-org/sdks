@@ -2,6 +2,17 @@
 // JSDoc coverage burndown for Tier 1–4 packages.
 // Approximate, regex-driven. Phase 0 informational; CI gating lands in Phase 5
 // per docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md.
+//
+// Flags:
+//   --verbose       — list every undocumented export under each package.
+//   --json          — emit a machine-readable JSON array (one entry per package)
+//                     instead of the Markdown table. Pairs with --verbose to
+//                     include the per-package undocumented list. Designed for
+//                     the future Phase 5 CI gate.
+//   --self-check    — run a fixed set of EXPORT_RE / hasParams / isFunctionLike
+//                     test cases, print pass/fail, exit 1 on any failure. Cheap
+//                     guard against TypeScript syntax drift breaking the regex
+//                     silently.
 
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -64,6 +75,13 @@ function* walk(dir) {
 
 // Matches `export <kind> Name` allowing any combination of leading
 // (async|abstract|default|declare) modifiers in any order.
+//
+// Disambiguation is delegated to the TypeScript compiler — the regex never
+// sees code that doesn't compile, so `export async abstract function foo` and
+// similar nonsensical combinations cannot reach here in practice. The
+// modifiers are also valid identifiers (`export type async = ...`); the regex
+// is anchored on the `kind` token so name capture is unambiguous in those
+// cases (kind=type, name=async).
 const EXPORT_RE =
   /^export\s+(?:(?:async|abstract|default|declare)\s+)*(const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/;
 
@@ -87,12 +105,16 @@ function isFunctionLike(kind, signature) {
   );
 }
 
-function analyzeFile(filePath) {
+function analyzeFile(filePath, { collectUndocumented }) {
   const text = readFileSync(filePath, "utf-8");
   const lines = text.split("\n");
   const undocumented = [];
   let total = 0;
   let documented = 0;
+
+  const recordMissing = (entry) => {
+    if (collectUndocumented) undocumented.push(entry);
+  };
 
   for (let i = 0; i < lines.length; i++) {
     const m = lines[i].match(EXPORT_RE);
@@ -112,7 +134,7 @@ function analyzeFile(filePath) {
       break;
     }
     if (j < 0 || !lines[j].includes("*/")) {
-      undocumented.push({ name, kind, reason: "no JSDoc" });
+      recordMissing({ name, kind, reason: "no JSDoc" });
       continue;
     }
 
@@ -120,14 +142,21 @@ function analyzeFile(filePath) {
     let k = j;
     while (k >= 0 && !lines[k].trimStart().startsWith("/**")) k--;
     if (k < 0) {
-      undocumented.push({ name, kind, reason: "malformed JSDoc" });
+      recordMissing({ name, kind, reason: "malformed JSDoc" });
       continue;
     }
     const block = lines.slice(k, j + 1).join("\n");
 
+    // @internal exempts the symbol from coverage entirely (matches typedoc's
+    // excludeInternal behavior — these are not on the public docs surface).
+    if (/@internal\b/.test(block)) {
+      total--;
+      continue;
+    }
+
     // Description = at least one non-tag prose line.
     if (!/\n\s*\*\s+[^@\s*]/.test(block) && !/\/\*\*\s+[^@\s*]/.test(block)) {
-      undocumented.push({ name, kind, reason: "no description" });
+      recordMissing({ name, kind, reason: "no description" });
       continue;
     }
 
@@ -158,7 +187,7 @@ function analyzeFile(filePath) {
     if (missing.length === 0) {
       documented++;
     } else {
-      undocumented.push({
+      recordMissing({
         name,
         kind,
         reason: `missing ${missing.join(", ")}`,
@@ -174,7 +203,65 @@ function pct(part, total) {
   return `${Math.round((part / total) * 100)}%`;
 }
 
+function selfCheck() {
+  const cases = [
+    {
+      line: "export const foo = (x: number) => x;",
+      kind: "const",
+      name: "foo",
+    },
+    {
+      line: "export function foo(x: number) { return x; }",
+      kind: "function",
+      name: "foo",
+    },
+    { line: "export async function foo() {}", kind: "function", name: "foo" },
+    { line: "export class Foo {}", kind: "class", name: "Foo" },
+    {
+      line: "export interface Foo { a: number; }",
+      kind: "interface",
+      name: "Foo",
+    },
+    { line: "export type Foo = string;", kind: "type", name: "Foo" },
+    { line: "export enum Foo { A, B }", kind: "enum", name: "Foo" },
+    { line: "export const FOO = 100n;", kind: "const", name: "FOO" },
+    { line: "export type async = string;", kind: "type", name: "async" },
+    { line: "export default function foo() {}", kind: "function", name: "foo" },
+    { line: "export abstract class Foo {}", kind: "class", name: "Foo" },
+    { line: "export declare const foo: number;", kind: "const", name: "foo" },
+    { line: "// not an export", expectMatch: false },
+    { line: "import { foo } from 'bar';", expectMatch: false },
+    { line: "  export const indented = 1;", expectMatch: false },
+  ];
+
+  let pass = 0;
+  let fail = 0;
+  for (const c of cases) {
+    const m = c.line.match(EXPORT_RE);
+    const matched = !!m;
+    const expectMatch = c.expectMatch ?? true;
+    let ok = matched === expectMatch;
+    if (ok && expectMatch) {
+      ok = m[1] === c.kind && m[2] === c.name;
+    }
+    if (ok) {
+      pass++;
+    } else {
+      fail++;
+      process.stderr.write(
+        `FAIL: ${JSON.stringify(c.line)} → expected ${expectMatch ? `kind=${c.kind} name=${c.name}` : "no match"}, got ${matched ? `kind=${m[1]} name=${m[2]}` : "no match"}\n`,
+      );
+    }
+  }
+  process.stderr.write(`self-check: ${pass} passed, ${fail} failed\n`);
+  process.exit(fail === 0 ? 0 : 1);
+}
+
 const verbose = process.argv.includes("--verbose");
+const json = process.argv.includes("--json");
+
+if (process.argv.includes("--self-check")) selfCheck();
+
 const rows = [];
 
 for (const pkg of Object.keys(TIER)) {
@@ -183,7 +270,7 @@ for (const pkg of Object.keys(TIER)) {
   let documented = 0;
   const undocumented = [];
   for (const file of walk(srcDir)) {
-    const r = analyzeFile(file);
+    const r = analyzeFile(file, { collectUndocumented: verbose });
     total += r.total;
     documented += r.documented;
     if (verbose && r.undocumented.length > 0) {
@@ -198,38 +285,45 @@ for (const pkg of Object.keys(TIER)) {
 
 rows.sort((a, b) => a.tier - b.tier || a.pkg.localeCompare(b.pkg));
 
-console.log("# JSDoc coverage burndown");
-console.log("");
-console.log(
-  "Generated by `pnpm jsdoc:coverage`. Tier 1–4 packages only; test helpers and generated code excluded.",
-);
-console.log("");
-console.log("| Tier | Package | Documented | Total | Coverage |");
-console.log("| ---- | ------- | ---------- | ----- | -------- |");
-let totalDocumented = 0;
-let totalCount = 0;
-for (const r of rows) {
+if (json) {
+  // Machine-readable shape for the future Phase 5 gate. Each row is
+  // `{ tier, pkg, total, documented, undocumented }`. `undocumented` is empty
+  // unless `--verbose` is also passed.
+  process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`);
+} else {
+  console.log("# JSDoc coverage burndown");
+  console.log("");
   console.log(
-    `| ${r.tier} | \`${r.pkg}\` | ${r.documented} | ${r.total} | ${pct(r.documented, r.total)} |`,
+    "Generated by `pnpm jsdoc:coverage`. Tier 1–4 packages only; test helpers and generated code excluded.",
   );
-  totalDocumented += r.documented;
-  totalCount += r.total;
-}
-console.log(
-  `| — | **Total** | **${totalDocumented}** | **${totalCount}** | **${pct(totalDocumented, totalCount)}** |`,
-);
-
-if (verbose) {
   console.log("");
-  console.log("## Undocumented exports");
-  console.log("");
+  console.log("| Tier | Package | Documented | Total | Coverage |");
+  console.log("| ---- | ------- | ---------- | ----- | -------- |");
+  let totalDocumented = 0;
+  let totalCount = 0;
   for (const r of rows) {
-    if (r.undocumented.length === 0) continue;
-    console.log(`### ${r.pkg}`);
+    console.log(
+      `| ${r.tier} | \`${r.pkg}\` | ${r.documented} | ${r.total} | ${pct(r.documented, r.total)} |`,
+    );
+    totalDocumented += r.documented;
+    totalCount += r.total;
+  }
+  console.log(
+    `| — | **Total** | **${totalDocumented}** | **${totalCount}** | **${pct(totalDocumented, totalCount)}** |`,
+  );
+
+  if (verbose) {
     console.log("");
-    for (const u of r.undocumented) {
-      console.log(`- \`${u.name}\` (${u.kind}, ${u.reason}) — ${u.file}`);
+    console.log("## Undocumented exports");
+    console.log("");
+    for (const r of rows) {
+      if (r.undocumented.length === 0) continue;
+      console.log(`### ${r.pkg}`);
+      console.log("");
+      for (const u of r.undocumented) {
+        console.log(`- \`${u.name}\` (${u.kind}, ${u.reason}) — ${u.file}`);
+      }
+      console.log("");
     }
-    console.log("");
   }
 }

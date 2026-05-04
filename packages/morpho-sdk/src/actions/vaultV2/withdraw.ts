@@ -32,7 +32,7 @@ export interface VaultV2WithdrawParams {
  * @param params.args.amount - Amount of underlying assets to withdraw.
  * @param params.args.recipient - Address that receives the withdrawn assets.
  * @param params.args.onBehalf - Address whose shares are burned.
- * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @param params.metadata - Optional analytics metadata attached to the transaction.
  * @returns A deep-frozen `Transaction<VaultV2WithdrawAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveAssetAmountError} when `amount <= 0n`.

@@ -47,7 +47,7 @@ interface EncodeErc20Permit2Params {
  *   amount: 1_000_000n,
  *   chainId: 1,
  *   nonce: 0n,
- *   expiration: 4_294_967_295n, // MAX_UINT_48
+ *   expiration: 281_474_976_710_655n, // MAX_UINT_48 (2^48 - 1, effectively indefinite)
  * });
  * // requirement satisfies Requirement
  * ```

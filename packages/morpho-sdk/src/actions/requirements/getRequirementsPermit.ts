@@ -27,7 +27,7 @@ import { encodeErc20Permit } from "./encode/index.js";
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const reqs = await getRequirementsPermit(client, {
- *   token: DAI,
+ *   token: USDC, // an ERC-2612-compatible token; DAI is excluded by getRequirements
  *   chainId: 1,
  *   args: { amount: 1_000_000n },
  *   allowancesGeneralAdapter: 0n,

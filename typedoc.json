@@ -23,13 +23,10 @@
     "**/lib/**"
   ],
   "excludeInternal": true,
-  "skipErrorChecking": true,
   "validation": {
     "notExported": true,
     "invalidLink": true,
     "notDocumented": true
   },
-  "treatWarningsAsErrors": false,
-  "logLevel": "Warn",
   "readme": "none"
 }

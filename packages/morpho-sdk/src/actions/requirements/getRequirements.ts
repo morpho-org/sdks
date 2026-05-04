@@ -41,7 +41,9 @@ type GetRequirementsParams =
  * 1. **`supportSignature: false`** — classic ERC-20 `approve` transaction (or no-op when the
  *    allowance is already large enough).
  * 2. **`supportSignature: true` + EIP-2612 supported + `useSimplePermit`** — single permit
- *    signature against the token itself.
+ *    signature against the token itself. DAI is excluded from this branch (its non-standard
+ *    permit signature is incompatible) and falls through to Permit2 even with
+ *    `useSimplePermit: true`.
  * 3. **`supportSignature: true`, default** — Permit2 flow: classic approval to the Permit2
  *    contract (if needed), followed by a Permit2 signature against `GeneralAdapter1`.
  *

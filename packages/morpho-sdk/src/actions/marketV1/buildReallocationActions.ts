@@ -7,7 +7,8 @@ import type { VaultReallocation } from "../../types/index.js";
  * Builds reallocation bundler actions and computes the total fee.
  *
  * Validates the reallocations, then encodes each as a `reallocateTo` action against the target
- * market. Caller must ensure `reallocations` is non-empty before calling. Internal helper —
+ * market. Returns `{ actions: [], fee: 0n }` for an empty input — callers gate on
+ * `reallocations.length > 0` and skip the call entirely in that case. Internal helper —
  * consumed only by `marketV1Borrow` and `marketV1SupplyCollateralBorrow`; not re-exported on the
  * public surface.
  *
