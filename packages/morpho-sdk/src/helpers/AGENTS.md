@@ -1,26 +1,17 @@
-# Helpers Layer
+# `helpers/`
 
-> Full context: [AGENTS.md](../../AGENTS.md)
+Pure protocol-specific utilities shared across layers. They return new objects and never mutate inputs. Inherits [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
 
-Utility functions shared across layers.
+Per-function contracts (arguments, return shapes, behavior) live as JSDoc on each function — that's the canonical source. This file documents only the layer-level invariants and the shape of the helper categories.
 
-## Intent
+## Categories
 
-- `addTransactionMetadata(tx, metadata)` — concatenates hex-encoded origin + optional timestamp to `tx.data`.
-- Origin: max 4 bytes hex identifier for analytics tracing.
-- Timestamp: 4-byte unix timestamp prepended before origin.
+- **Encoders** (ABI encoding plus input validation, no I/O) — e.g. `encodeForceDeallocateCall(deallocation, onBehalf)`. ABI-encodes a single `VaultV2.forceDeallocate` calldata entry and throws `NonPositiveAssetAmountError` on a non-positive `amount`. The `data` field carries ABI-encoded `MarketParams` for the Morpho Market V1 adapter, or empty bytes otherwise. Internal sub-helpers (e.g. `encodeDeallocateData`) are not exported.
+- **Validators** (pure, throw typed errors) — `validateReallocations(...)`, `validateSlippageTolerance(...)`, `validatePositionHealth(...)`. Each enforces a public-API invariant: see the `error.ts` exports for the full list of error classes a caller may pattern-match on.
+- **Math / share-price helpers** — `computeMaxRepaySharePrice`, `computeMinBorrowSharePrice`, etc. Use `MAX_SLIPPAGE_TOLERANCE` and cap at `MAX_ABSOLUTE_SHARE_PRICE`.
+- **Metadata** — `addTransactionMetadata(tx, metadata)` appends hex-encoded analytics bytes to `tx.data`: an optional 4-byte unix timestamp followed by a 4-byte origin (timestamp is omitted when `metadata.timestamp` is falsy). Callers gate on `metadata` being provided; the helper itself is a no-op when `tx.data` is empty.
 
-- `encodeForceDeallocateCall(deallocation, onBehalf)` — ABI-encodes a single `VaultV2.forceDeallocate` calldata entry.
-- `Deallocation` interface: `{ adapter, assets, marketParams? }`. When `marketParams` is present, `data` is ABI-encoded `MarketParams` (Morpho Market V1 adapter); when omitted, empty bytes are used (e.g. Vault V1 adapters).
+## Constants
 
-- `constant.ts` — shared constants:
-
-  - `MAX_SLIPPAGE_TOLERANCE` = 10% (WAD/10). For vault deposit share price.
-  - `DEFAULT_LLTV_BUFFER` = 0.5% (WAD/200). Hardcoded safety margin below LLTV for `supplyCollateralBorrow`.
-
-- `validateReallocations(reallocations, targetMarketId)` — validates reallocation params: fee >= 0, non-empty withdrawals, positive amounts, no withdrawal on the borrow target market, and withdrawal market IDs must be strictly ascending (required by `PublicAllocator.reallocateTo`). Throws `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`, `NonPositiveReallocationAmountError`, `ReallocationWithdrawalOnTargetMarketError`.
-
-## Key Constraints
-
-- Pure functions. Return new objects — never mutate inputs.
-- `encodeDeallocateData` is internal; only `encodeForceDeallocateCall`.
+- `MAX_SLIPPAGE_TOLERANCE` = 10% (`WAD / 10`) — global slippage-tolerance ceiling, applied by `validateSlippageTolerance` to vault deposit share prices and to market borrow / repay slippage.
+- `DEFAULT_LLTV_BUFFER` = 0.5% (`WAD / 200`) — hardcoded safety margin subtracted from LLTV in `validatePositionHealth` for `supplyCollateralBorrow` and post-withdraw checks.
