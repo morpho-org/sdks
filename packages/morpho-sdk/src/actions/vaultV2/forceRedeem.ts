@@ -56,6 +56,8 @@ export interface VaultV2ForceRedeemParams {
  *   the typed `action` discriminator the simulation layer consumes.
  * @throws {EmptyDeallocationsError} when `deallocations` is empty.
  * @throws {NonPositiveSharesAmountError} when `redeem.shares <= 0n`.
+ * @throws {NonPositiveAssetAmountError} when any `deallocations[i].amount <= 0n` (raised by
+ *   `encodeForceDeallocateCall`).
  * @example
  * ```ts
  * import { vaultV2ForceRedeem } from "@morpho-org/morpho-sdk";

@@ -71,7 +71,13 @@ export class MorphoClient implements MorphoClientType {
    * @example
    * ```ts
    * const vault = client.vaultV1(vaultAddress, 1);
-   * const tx = await vault.deposit({ amount: 1_000_000n, userAddress });
+   * const accrualVault = await vault.getData();
+   * const { buildTx } = vault.deposit({
+   *   amount: 1_000_000n,
+   *   userAddress: depositor,
+   *   accrualVault,
+   * });
+   * const tx = buildTx();
    * ```
    */
   public vaultV1(vault: Address, chainId: number) {
@@ -87,7 +93,13 @@ export class MorphoClient implements MorphoClientType {
    * @example
    * ```ts
    * const vault = client.vaultV2(vaultAddress, 1);
-   * const tx = await vault.deposit({ amount: 1_000_000n, userAddress });
+   * const accrualVault = await vault.getData();
+   * const { buildTx } = vault.deposit({
+   *   amount: 1_000_000n,
+   *   userAddress: depositor,
+   *   accrualVault,
+   * });
+   * const tx = buildTx();
    * ```
    */
   public vaultV2(vault: Address, chainId: number) {
@@ -108,7 +120,13 @@ export class MorphoClient implements MorphoClientType {
    * @example
    * ```ts
    * const market = client.marketV1(marketParams, 1);
-   * const tx = await market.borrow({ amount: 1_000_000n, receiver: borrower });
+   * const positionData = await market.getPositionData(borrower);
+   * const { buildTx } = market.borrow({
+   *   userAddress: borrower,
+   *   amount: 1_000_000n,
+   *   positionData,
+   * });
+   * const tx = buildTx();
    * ```
    */
   public marketV1(marketParams: MarketParams, chainId: number) {

@@ -28,7 +28,13 @@ import { MorphoClient } from "./morphoClient.js";
  * }).extend(morphoViemExtension({ supportSignature: true }));
  *
  * const vault = client.morpho.vaultV1(vaultAddress, 1);
- * const tx = await vault.deposit({ amount: 1_000_000n, userAddress: user });
+ * const accrualVault = await vault.getData();
+ * const { buildTx } = vault.deposit({
+ *   amount: 1_000_000n,
+ *   userAddress: user,
+ *   accrualVault,
+ * });
+ * const tx = buildTx();
  * ```
  */
 export function morphoViemExtension(_options?: {

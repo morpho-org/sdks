@@ -59,6 +59,10 @@ export interface MarketV1SupplyCollateralParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeCollateralError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed asset differs from `marketParams.collateralToken`.
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed amount differs from `args.amount`.
  * @example
  * ```ts
  * import { marketV1SupplyCollateral } from "@morpho-org/morpho-sdk";

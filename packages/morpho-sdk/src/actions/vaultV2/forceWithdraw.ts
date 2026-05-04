@@ -51,7 +51,8 @@ export interface VaultV2ForceWithdrawParams {
  * @returns A deep-frozen `Transaction<VaultV2ForceWithdrawAction>` with `to`, `value`, `data`,
  *   and the typed `action` discriminator the simulation layer consumes.
  * @throws {EmptyDeallocationsError} when `deallocations` is empty.
- * @throws {NonPositiveAssetAmountError} when `withdraw.amount <= 0n`.
+ * @throws {NonPositiveAssetAmountError} when `withdraw.amount <= 0n`, or when any
+ *   `deallocations[i].amount <= 0n` (raised by `encodeForceDeallocateCall`).
  * @example
  * ```ts
  * import { vaultV2ForceWithdraw } from "@morpho-org/morpho-sdk";

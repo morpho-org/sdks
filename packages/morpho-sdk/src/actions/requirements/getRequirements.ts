@@ -59,7 +59,10 @@ type GetRequirementsParams =
  * @returns Promise resolving to an array of either deep-frozen approval transactions or
  *   `Requirement` objects (signature requirements with a `sign()` method). Empty when the
  *   existing allowance already covers `amount`.
- * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`. No other typed
+ *   error is reachable through this entry point: the values passed into
+ *   `getRequirementsApproval` always satisfy `approvalAmount === spendAmount`, so
+ *   `ApprovalAmountLessThanSpendAmountError` cannot fire from here.
  * @example
  * ```ts
  * import { createPublicClient, http } from "viem";

@@ -24,7 +24,6 @@
   ],
   "excludeInternal": true,
   "excludePrivate": true,
-  "excludeProtected": false,
   "skipErrorChecking": true,
   "validation": {
     "notExported": true,

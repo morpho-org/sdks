@@ -3,7 +3,7 @@
 // Approximate, regex-driven. Phase 0 informational; CI gating lands in Phase 5
 // per docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md.
 
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -43,27 +43,29 @@ const EXCLUDED_PATH_PATTERNS = [
 function* walk(dir) {
   let entries;
   try {
-    entries = readdirSync(dir);
-  } catch {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (err) {
+    process.stderr.write(`jsdoc-coverage: skipped ${dir}: ${err.message}\n`);
     return;
   }
-  for (const name of entries) {
-    if (EXCLUDED_DIRS.has(name)) continue;
-    const full = join(dir, name);
-    const s = statSync(full);
-    if (s.isDirectory()) {
+  for (const entry of entries) {
+    if (EXCLUDED_DIRS.has(entry.name)) continue;
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
       yield* walk(full);
       continue;
     }
     if (!full.endsWith(".ts")) continue;
-    if (EXCLUDED_FILE_PATTERNS.some((p) => p.test(name))) continue;
+    if (EXCLUDED_FILE_PATTERNS.some((p) => p.test(entry.name))) continue;
     if (EXCLUDED_PATH_PATTERNS.some((p) => p.test(full))) continue;
     yield full;
   }
 }
 
+// Matches `export <kind> Name` allowing any combination of leading
+// (async|abstract|default|declare) modifiers in any order.
 const EXPORT_RE =
-  /^export\s+(?:async\s+|abstract\s+|default\s+|declare\s+)?(const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/;
+  /^export\s+(?:(?:async|abstract|default|declare)\s+)*(const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/;
 
 function hasParams(signature) {
   // Arrow function: `= (...)` or `= async (...)`.

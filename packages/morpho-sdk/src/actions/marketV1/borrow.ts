@@ -52,7 +52,18 @@ export interface MarketV1BorrowParams {
  * @returns A deep-frozen `Transaction<MarketV1BorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
- * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
+ * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n` (negative; zero is
+ *   allowed despite the class name).
+ * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
+ *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
+ * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
+ *   `reallocation.withdrawals` is empty.
+ * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any
+ *   `reallocation.withdrawals[i].amount <= 0n`.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
+ *   reallocation withdrawal references the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
+ *   reallocation withdrawals are not strictly sorted by market id.
  * @example
  * ```ts
  * import { marketV1Borrow } from "@morpho-org/morpho-sdk";

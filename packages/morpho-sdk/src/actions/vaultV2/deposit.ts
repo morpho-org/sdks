@@ -68,6 +68,10 @@ export interface VaultV2DepositParams {
  * @throws {NativeAmountOnNonWNativeVaultError} when `nativeAmount` is provided but the vault
  *   asset is not the chain's wNative.
  * @throws {ZeroDepositAmountError} when both `amount` and `nativeAmount` resolve to zero.
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed asset differs from `vault.asset`.
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed amount differs from `args.amount`.
  * @example
  * ```ts
  * import { vaultV2Deposit } from "@morpho-org/morpho-sdk";
@@ -76,7 +80,7 @@ export interface VaultV2DepositParams {
  *   vault: { chainId: 1, address: vaultAddress, asset: USDC },
  *   args: {
  *     amount: 1_000_000n,
- *     maxSharePrice: 1_010_000_000_000_000_000n,
+ *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
  *     recipient: depositor,
  *   },
  * });

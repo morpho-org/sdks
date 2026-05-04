@@ -50,10 +50,10 @@ import {
  * import { simulate } from "@morpho-org/evm-simulation";
  *
  * const result = await simulate(
- *   { chains: new Map([[1, { simulateV1Url: "https://..." }]]) },
+ *   { chains: new Map([[1, { simulateV1Url: rpcUrl }]]) },
  *   {
  *     chainId: 1,
- *     transactions: [{ from: user, to: vaultAddress, data: "0x...", value: 0n }],
+ *     transactions: [{ from: user, to: vaultAddress, data: encodedCalldata, value: 0n }],
  *   },
  * );
  * // result satisfies SimulationResult

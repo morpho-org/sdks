@@ -79,6 +79,20 @@ export interface MarketV1SupplyCollateralBorrowParams {
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
  * @throws {NativeAmountOnNonWNativeCollateralError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed asset differs from `marketParams.collateralToken`.
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed amount differs from `args.amount`.
+ * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
+ *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
+ * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
+ *   `reallocation.withdrawals` is empty.
+ * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any
+ *   `reallocation.withdrawals[i].amount <= 0n`.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
+ *   reallocation withdrawal references the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
+ *   reallocation withdrawals are not strictly sorted by market id.
  * @example
  * ```ts
  * import { marketV1SupplyCollateralBorrow } from "@morpho-org/morpho-sdk";

@@ -67,11 +67,16 @@ export interface MarketV1RepayParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<MarketV1RepayAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
+ * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
  * @throws {MutuallyExclusiveRepayAmountsError} when both `assets` and `shares` are non-zero.
- * @throws {NonPositiveRepayAmountError} when both `assets` and `shares` are zero.
+ * @throws {NonPositiveRepayAmountError} when both `assets` and `shares` are zero, or when either
+ *   is negative.
  * @throws {NonPositiveTransferAmountError} when `transferAmount <= 0n`.
  * @throws {TransferAmountNotEqualToAssetsError} when in assets mode and `transferAmount !== assets`.
- * @throws {NonPositiveRepayMaxSharePriceError} when `maxSharePrice <= 0n`.
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed asset differs from `marketParams.loanToken`.
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed amount differs from `args.transferAmount`.
  * @example
  * ```ts
  * import { marketV1Repay } from "@morpho-org/morpho-sdk";
@@ -84,7 +89,7 @@ export interface MarketV1RepayParams {
  *     transferAmount: 500_000_000n,
  *     onBehalf: borrower,
  *     receiver: borrower,
- *     maxSharePrice: 1_010_000_000_000_000_000n,
+ *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
  *   },
  * });
  * // tx satisfies Readonly<Transaction<MarketV1RepayAction>>

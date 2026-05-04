@@ -120,15 +120,18 @@ Rules for examples:
  * import { mainnet } from "viem/chains";
  * import { MorphoClient } from "@morpho-org/morpho-sdk";
  *
- * const client = new MorphoClient({
- *   client: createPublicClient({ chain: mainnet, transport: http() }),
- * });
+ * const client = new MorphoClient(
+ *   createPublicClient({ chain: mainnet, transport: http() }),
+ * );
  *
- * const tx = client.marketV1(marketParams).borrow({
+ * const market = client.marketV1(marketParams, 1);
+ * const positionData = await market.getPositionData(borrower);
+ * const { buildTx } = market.borrow({
+ *   userAddress: borrower,
  *   amount: 1_000_000n,
- *   receiver: "0x...",
- *   minSharePrice: 0n,
+ *   positionData,
  * });
+ * const tx = buildTx();
  * // tx satisfies Readonly<Transaction<MarketV1BorrowAction>>
  * ```
  */
@@ -239,4 +242,4 @@ Copy from those files when in doubt.
 - **One concern per PR** ([`AGENTS.md`](../AGENTS.md) §8): JSDoc backfill PRs do not mix in feature work or refactors.
 - **Doc-only changesets** are `patch` per [`AGENTS.md`](../AGENTS.md) §7. Add the changeset in the same PR.
 - **Coverage is observable**: run `pnpm jsdoc:coverage` to print the per-package burndown table. Backfill PRs paste the new table into their PR description so reviewers see progress without reading the diff.
-- **Enforcement gates** (`eslint-plugin-jsdoc` + TypeDoc warnings-as-errors) flip on after Phase 1 of [TIB-2026-05-04](./tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md). Until then, reviewers hold the line.
+- **Automated enforcement is deferred** — see [TIB-2026-05-04](./tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) Considered Alternative 6. Reviewers and the burndown signal hold the line until Biome ships JSDoc rules (or a lighter in-repo gate emerges).

@@ -42,7 +42,7 @@ The `docs/tibs/` directory is empty after the migration in commit `4be989be` rem
 
 - Reach 100% JSDoc coverage on every exported symbol of every Tier 1–4 package, with `@param`, `@returns`, `@throws`, and `@example` on every exported function and method, per §6.
 - Codify a single canonical JSDoc shape so cleanup PRs converge instead of diverge.
-- Make coverage measurable via an observable burndown so each phase's progress is visible to reviewers without grepping the diff.
+- Make coverage measurable via the `pnpm jsdoc:coverage` burndown so each phase's progress is visible to reviewers without grepping the diff; automated enforcement is deferred to Phase 5 reassessment.
 - Publish a TypeDoc reference site per release, generated from the same JSDoc, per §7.
 
 **Non-Goals**

@@ -75,6 +75,10 @@ export interface VaultV1MigrateToV2Params {
  * @throws {NonPositiveSharesAmountError} when `shares <= 0n`.
  * @throws {NegativeMinSharePriceError} when `minSharePriceVaultV1 < 0n`.
  * @throws {NonPositiveMaxSharePriceError} when `maxSharePriceVaultV2 <= 0n`.
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed asset differs from `vault.address` (the V1 share token).
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed amount differs from `args.shares`.
  * @example
  * ```ts
  * import { vaultV1MigrateToV2 } from "@morpho-org/morpho-sdk";
@@ -86,7 +90,7 @@ export interface VaultV1MigrateToV2Params {
  *     targetAsset: USDC,
  *     shares: 1_000_000n,
  *     minSharePriceVaultV1: 0n,
- *     maxSharePriceVaultV2: 1_010_000_000_000_000_000n,
+ *     maxSharePriceVaultV2: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
  *     recipient,
  *   },
  * });
