@@ -1,7 +1,13 @@
 import type { Address } from "@morpho-org/blue-sdk";
-import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
+import {
+  fetchToken,
+  getPermitTypedData,
+  getVerifiedPermitDomain,
+  type PermitDomainCandidate,
+  UnverifiablePermitDomainError,
+} from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type Client, verifyTypedData } from "viem";
+import { type Client, type TypedDataDomain, verifyTypedData } from "viem";
 import { signTypedData } from "viem/actions";
 import {
   AddressMismatchError,
@@ -19,13 +25,32 @@ interface EncodeErc20PermitParams {
   chainId: number;
   nonce: bigint;
   supportDeployless?: boolean;
+  /**
+   * Pre-verified EIP-712 permit domain for the token. When provided it skips
+   * on-chain rediscovery; obtain one via {@link getVerifiedPermitDomain}.
+   */
+  verifiedDomain?: TypedDataDomain;
+  /**
+   * Extra `(name, version)` candidates to try when discovering the domain via
+   * `DOMAIN_SEPARATOR()` for tokens without EIP-5267 metadata.
+   */
+  extraDomainCandidates?: readonly PermitDomainCandidate[];
 }
 
 export const encodeErc20Permit = async (
   viemClient: Client,
   params: EncodeErc20PermitParams,
 ): Promise<Requirement> => {
-  const { token, spender, amount, chainId, nonce, supportDeployless } = params;
+  const {
+    token,
+    spender,
+    amount,
+    chainId,
+    nonce,
+    supportDeployless,
+    verifiedDomain,
+    extraDomainCandidates,
+  } = params;
 
   if (viemClient.chain?.id !== chainId) {
     throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
@@ -37,6 +62,20 @@ export const encodeErc20Permit = async (
   const tokenData = await fetchToken(token, viemClient, {
     deployless: supportDeployless,
   });
+
+  const domain =
+    verifiedDomain ??
+    (await getVerifiedPermitDomain(viemClient, {
+      token,
+      chainId,
+      tokenName: tokenData.name,
+      knownDomain: tokenData.eip5267Domain?.eip712Domain,
+      extraCandidates: extraDomainCandidates,
+    }));
+
+  if (domain == null) {
+    throw new UnverifiablePermitDomainError(token);
+  }
 
   const action: PermitAction = {
     type: "permit",
@@ -66,6 +105,7 @@ export const encodeErc20Permit = async (
           deadline,
         },
         chainId,
+        { domain },
       );
 
       const signature = await signTypedData(client, {

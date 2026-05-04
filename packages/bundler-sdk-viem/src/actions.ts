@@ -13,6 +13,8 @@ import {
   getDaiPermitTypedData,
   getPermit2PermitTypedData,
   getPermitTypedData,
+  getVerifiedPermitDomain,
+  UnverifiablePermitDomainError,
 } from "@morpho-org/blue-sdk-viem";
 import { getValue, Time } from "@morpho-org/morpho-ts";
 import {
@@ -300,6 +302,16 @@ export const encodeOperation = (
                 signature,
               });
             } else {
+              const verifiedDomain = await getVerifiedPermitDomain(client, {
+                token: tokenData.address,
+                chainId,
+                tokenName: tokenData.name,
+                knownDomain: tokenData.eip5267Domain?.eip712Domain,
+              });
+              if (verifiedDomain == null) {
+                throw new UnverifiablePermitDomainError(tokenData.address);
+              }
+
               const typedData = getPermitTypedData(
                 {
                   erc20: tokenData,
@@ -310,6 +322,7 @@ export const encodeOperation = (
                   deadline,
                 },
                 chainId,
+                { domain: verifiedDomain },
               );
               signature = await signTypedData(client, {
                 ...typedData,

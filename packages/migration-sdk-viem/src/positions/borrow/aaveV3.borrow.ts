@@ -9,6 +9,8 @@ import {
   blueAbi,
   getAuthorizationTypedData,
   getPermitTypedData,
+  getVerifiedPermitDomain,
+  UnverifiablePermitDomainError,
 } from "@morpho-org/blue-sdk-viem";
 import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
@@ -183,6 +185,16 @@ export class MigratableBorrowPosition_AaveV3
             let signature = permitAction.args[4];
             if (signature != null) return signature; // action is already signed
 
+            const verifiedDomain = await getVerifiedPermitDomain(client, {
+              token: aToken.address,
+              chainId,
+              tokenName: aToken.name,
+              knownDomain: aToken.eip5267Domain?.eip712Domain,
+            });
+            if (verifiedDomain == null) {
+              throw new UnverifiablePermitDomainError(aToken.address);
+            }
+
             const typedData = getPermitTypedData(
               {
                 erc20: aToken,
@@ -193,6 +205,7 @@ export class MigratableBorrowPosition_AaveV3
                 deadline,
               },
               chainId,
+              { domain: verifiedDomain },
             );
             signature = await signTypedData(client, {
               ...typedData,

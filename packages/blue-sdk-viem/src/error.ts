@@ -7,7 +7,7 @@ export class InvalidPermitDomainChainIdError extends Error {
   constructor(
     public readonly token: Address,
     public readonly expectedChainId: ChainId,
-    public readonly domainChainId: number | undefined,
+    public readonly domainChainId: number | bigint | undefined,
   ) {
     super(
       `Invalid permit domain chain ID for token "${token}": expected "${expectedChainId}", got "${domainChainId}"`,
@@ -23,6 +23,20 @@ export class InvalidPermitDomainVerifyingContractError extends Error {
   ) {
     super(
       `Invalid permit domain verifying contract: expected "${token}", got "${domainVerifyingContract}"`,
+    );
+  }
+}
+
+/**
+ * Thrown when a token's EIP-712 permit domain cannot be discovered: the token
+ * exposes neither EIP-5267 introspection nor a `DOMAIN_SEPARATOR()` matching
+ * any candidate domain. Consumers should fall back to another approval path
+ * (e.g. Permit2) rather than sign an unverified domain.
+ */
+export class UnverifiablePermitDomainError extends Error {
+  constructor(public readonly token: Address) {
+    super(
+      `Unverifiable permit domain for token "${token}": no EIP-5267 metadata and no candidate domain matched the on-chain DOMAIN_SEPARATOR. Use Permit2 or pass a verified domain explicitly.`,
     );
   }
 }

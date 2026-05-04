@@ -1,5 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import type { Address, Client } from "viem";
+import type { Address, Client, TypedDataDomain } from "viem";
 import { encodeErc20Permit } from "./encode/index.js";
 
 /**
@@ -28,6 +28,12 @@ export const getRequirementsPermit = async (
     allowancesGeneralAdapter: bigint;
     nonce: bigint;
     supportDeployless?: boolean;
+    /**
+     * EIP-712 domain already verified against the token's on-chain
+     * `DOMAIN_SEPARATOR()` (or read from EIP-5267). Forwarded to
+     * `encodeErc20Permit` to skip rediscovery.
+     */
+    verifiedDomain: TypedDataDomain;
   },
 ) => {
   const {
@@ -37,6 +43,7 @@ export const getRequirementsPermit = async (
     allowancesGeneralAdapter,
     nonce,
     supportDeployless,
+    verifiedDomain,
   } = params;
 
   const {
@@ -52,6 +59,7 @@ export const getRequirementsPermit = async (
         chainId,
         nonce,
         supportDeployless,
+        verifiedDomain,
       }),
     ];
   }

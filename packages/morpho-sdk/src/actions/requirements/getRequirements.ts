@@ -1,5 +1,9 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
-import { fetchHolding } from "@morpho-org/blue-sdk-viem";
+import {
+  fetchHolding,
+  fetchToken,
+  getVerifiedPermitDomain,
+} from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import {
@@ -83,14 +87,32 @@ export const getRequirements = async (
     const supportSimplePermit = isDefined(erc2612Nonce) && address !== dai;
 
     if (supportSimplePermit && useSimplePermit) {
-      return await getRequirementsPermit(viemClient, {
+      // Discover and verify the token's EIP-712 permit domain against its
+      // on-chain DOMAIN_SEPARATOR before committing to the simple-permit path.
+      // If verification fails (no EIP-5267 data and no candidate domain
+      // matches), fall back to Permit2 rather than sign a guessed domain that
+      // will revert at execution time.
+      const tokenData = await fetchToken(address, viemClient, {
+        deployless: params.supportDeployless,
+      });
+      const verifiedDomain = await getVerifiedPermitDomain(viemClient, {
         token: address,
         chainId,
-        args: { amount },
-        allowancesGeneralAdapter: erc20Allowances["bundler3.generalAdapter1"],
-        nonce: erc2612Nonce,
-        supportDeployless: params.supportDeployless,
+        tokenName: tokenData.name,
+        knownDomain: tokenData.eip5267Domain?.eip712Domain,
       });
+
+      if (verifiedDomain != null) {
+        return await getRequirementsPermit(viemClient, {
+          token: address,
+          chainId,
+          args: { amount },
+          allowancesGeneralAdapter: erc20Allowances["bundler3.generalAdapter1"],
+          nonce: erc2612Nonce,
+          supportDeployless: params.supportDeployless,
+          verifiedDomain,
+        });
+      }
     }
 
     if (permit2) {
