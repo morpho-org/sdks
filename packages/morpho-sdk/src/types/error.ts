@@ -330,8 +330,7 @@ export class MissingPublicAllocatorConfigError extends Error {
 /**
  * Thrown when shared liquidity selected by `computeReallocations` cannot cover
  * the absolute borrow shortfall on the target market — the resulting
- * `morphoBorrow` would still revert onchain. Mirrors the feasibility guard
- * `populateBundle` enforces in `@morpho-org/bundler-sdk-viem`.
+ * `morphoBorrow` would still revert onchain.
  *
  * Pattern-match on the class and inspect `params` to surface the gap to users.
  */
