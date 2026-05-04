@@ -322,6 +322,16 @@ describe("RepayWithdrawCollateralMarketV1", () => {
     expect(finalState.userCollateralTokenBalance).toEqual(
       initialState.userCollateralTokenBalance + collateralAmount,
     );
+
+    // Bundle must skim residual loan tokens back to the receiver: the user's
+    // outflow should match Morpho's intake exactly (no tokens stranded in
+    // GeneralAdapter1). Pins the conservation invariant on the user side
+    // alongside the bundler3 balance check from `testInvariants`.
+    expect(
+      initialState.userLoanTokenBalance - finalState.userLoanTokenBalance,
+    ).toEqual(
+      finalState.morphoLoanTokenBalance - initialState.morphoLoanTokenBalance,
+    );
   });
 
   test("should throw when withdraw makes position unhealthy (even after repay)", async ({

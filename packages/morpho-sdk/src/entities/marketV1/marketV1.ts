@@ -35,6 +35,7 @@ import {
   computeMaxRepaySharePrice,
   computeMinBorrowSharePrice,
   computeReallocations,
+  projectMarketForRepay,
   validateAccrualPosition,
   validateChainId,
   validateNativeCollateral,
@@ -158,10 +159,41 @@ export interface MarketV1Actions {
    * `getRequirements` returns ERC20 approval for loan token to GeneralAdapter1.
    * Does NOT require Morpho authorization (anyone can repay on behalf of anyone).
    *
-   * **Shares mode:** `slippageTolerance` also caps `transferAmount`.
+   * **Shares mode:** `transferAmount` is sized from the market projected
+   * 2 h forward (upper-bounding on-chain accrual) and `maxSharePrice` from
+   * the same projection plus `slippageTolerance`. The bundle skims residual
+   * loan tokens back to the receiver, so over-buffering is safe.
    *
    * @param params - Repay parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {MutuallyExclusiveRepayAmountsError} when both `assets` and `shares` are provided.
+   * @throws {NonPositiveRepayAmountError} when the repay amount is non-positive.
+   * @throws {RepayExceedsDebtError} (assets mode) when `assets` exceeds outstanding debt.
+   * @throws {RepaySharesExceedDebtError} (shares mode) when `shares` exceeds outstanding borrow shares.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the global cap.
+   * @throws {MissingAccrualPositionError} when `positionData` is missing.
+   * @throws {ChainMismatchError} when the client chain does not match the market chain.
+   * @throws {UserAddressMismatchError} when the connected account does not match `userAddress`.
+   * @example
+   * ```ts
+   * import { MorphoClient } from "@morpho-org/morpho-sdk";
+   *
+   * const morpho = new MorphoClient(viemClient);
+   * const market = morpho.marketV1(marketParams, chainId);
+   * const positionData = await market.getPositionData(userAddress);
+   *
+   * // Full repay by shares (immune to interest accrual).
+   * const { buildTx, getRequirements } = market.repay({
+   *   userAddress,
+   *   positionData,
+   *   shares: positionData.borrowShares,
+   * });
+   *
+   * for (const req of await getRequirements()) {
+   *   await viemClient.sendTransaction(req);
+   * }
+   * await viemClient.sendTransaction(buildTx());
+   * ```
    */
   repay: (
     params: {
@@ -212,10 +244,52 @@ export interface MarketV1Actions {
    * - ERC20 approval for loan token to GeneralAdapter1 (for the repay).
    * - `morpho.setAuthorization(generalAdapter1, true)` if not yet authorized (for the withdraw).
    *
+   * **Shares mode:** `transferAmount` and `maxSharePrice` are sized from
+   * the market projected 2 h forward (upper-bounding on-chain accrual);
+   * the bundle skims residual loan tokens back to the receiver. The
+   * post-repay LLTV check uses the same 2 h projection.
+   *
+   * **Assets mode:** the post-repay LLTV check uses a +10 min projection
+   * (legacy buffer) to avoid silently tightening health on caller-supplied
+   * fixed amounts.
+   *
    * **Stale `positionData` risks underestimated debt and unsafe withdrawal.**
    *
    * @param params - Combined parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
+   * @throws {MutuallyExclusiveRepayAmountsError} when both `assets` and `shares` are provided.
+   * @throws {NonPositiveRepayAmountError} when the repay amount is non-positive.
+   * @throws {NonPositiveWithdrawCollateralAmountError} when `withdrawAmount` is non-positive.
+   * @throws {RepayExceedsDebtError} (assets mode) when `assets` exceeds outstanding debt.
+   * @throws {RepaySharesExceedDebtError} (shares mode) when `shares` exceeds outstanding borrow shares.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance` exceeds the global cap.
+   * @throws {WithdrawExceedsCollateralError} when `withdrawAmount` exceeds available collateral.
+   * @throws {WithdrawMakesPositionUnhealthyError} when the residual position would breach the LLTV buffer.
+   * @throws {BorrowExceedsSafeLtvError} when the post-repay borrow exceeds the LLTV-buffer-adjusted maximum.
+   * @throws {MissingAccrualPositionError} when `positionData` is missing.
+   * @throws {ChainMismatchError} when the client chain does not match the market chain.
+   * @throws {UserAddressMismatchError} when the connected account does not match `userAddress`.
+   * @example
+   * ```ts
+   * import { MorphoClient } from "@morpho-org/morpho-sdk";
+   *
+   * const morpho = new MorphoClient(viemClient);
+   * const market = morpho.marketV1(marketParams, chainId);
+   * const positionData = await market.getPositionData(userAddress);
+   *
+   * // Atomic full deleverage: close the borrow then withdraw all collateral.
+   * const { buildTx, getRequirements } = market.repayWithdrawCollateral({
+   *   userAddress,
+   *   positionData,
+   *   shares: positionData.borrowShares,
+   *   withdrawAmount: positionData.collateral,
+   * });
+   *
+   * for (const req of await getRequirements()) {
+   *   await viemClient.sendTransaction(req);
+   * }
+   * await viemClient.sendTransaction(buildTx());
+   * ```
    */
   repayWithdrawCollateral: (
     params: {
@@ -537,7 +611,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     let assets: bigint;
     let shares: bigint;
     let transferAmount: bigint;
-    let marketForRepay: Market;
 
     if (isSharesMode) {
       validateRepayShares({
@@ -547,13 +620,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
       assets = 0n;
       shares = params.shares;
-      // 2h forward accrual upper-bounds the on-chain repay price; bundle
-      // skims residual back to the receiver.
-      const accrualTimestamp =
-        MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
-        Time.s.from.h(2n);
-      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
-      transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
     } else {
       validateRepayAmount({
         positionData,
@@ -562,9 +628,18 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
       assets = params.assets;
       shares = 0n;
-      transferAmount = params.assets;
-      marketForRepay = positionData.market;
     }
+
+    // Shares mode: project the market forward to upper-bound the on-chain
+    // repay price; the bundle skims residual loan tokens back to the
+    // receiver. Assets mode: caller-supplied amount is the source of truth.
+    const marketForRepay = isSharesMode
+      ? projectMarketForRepay(positionData.market).marketForRepay
+      : positionData.market;
+
+    transferAmount = isSharesMode
+      ? marketForRepay.toBorrowAssets(shares, "Up")
+      : assets;
 
     const maxSharePrice = computeMaxRepaySharePrice({
       repayAssets: assets,
@@ -718,13 +793,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     let assets: bigint;
     let shares: bigint;
     let transferAmount: bigint;
-    let marketForRepay: Market;
-
-    // 2h forward accrual upper-bounds the on-chain repay price (shares
-    // mode) and the post-repay health check; bundle skims residual back.
-    const accrualTimestamp =
-      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
-      Time.s.from.h(2n);
 
     if (isSharesMode) {
       validateRepayShares({
@@ -734,8 +802,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
       assets = 0n;
       shares = params.shares;
-      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
-      transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
     } else {
       validateRepayAmount({
         positionData,
@@ -744,9 +810,21 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
       assets = params.assets;
       shares = 0n;
-      transferAmount = params.assets;
-      marketForRepay = positionData.market;
     }
+
+    // Shares mode: project the market forward to upper-bound the on-chain
+    // repay price; the bundle skims residual back to the receiver. Assets
+    // mode: caller-supplied amount is the source of truth.
+    const sharesProjection = isSharesMode
+      ? projectMarketForRepay(positionData.market)
+      : null;
+    const marketForRepay = sharesProjection
+      ? sharesProjection.marketForRepay
+      : positionData.market;
+
+    transferAmount = isSharesMode
+      ? marketForRepay.toBorrowAssets(shares, "Up")
+      : assets;
 
     if (withdrawAmount > positionData.collateral) {
       throw new WithdrawExceedsCollateralError({
@@ -756,10 +834,20 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
     }
 
+    // Health check evaluates the residual position against a near-term
+    // forward point. Shares mode uses the same 2h projection that sized the
+    // calldata so the simulated repay matches the on-chain repay; assets
+    // mode keeps the legacy +10min buffer to avoid silently tightening the
+    // LLTV check for callers passing a fixed `assets` amount.
+    const healthCheckTimestamp = sharesProjection
+      ? sharesProjection.accrualTimestamp
+      : MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+        Time.s.from.min(10n);
+
     const { position: positionAfterRepay } = positionData.repay(
       assets,
       shares,
-      accrualTimestamp,
+      healthCheckTimestamp,
     );
     validatePositionHealthAfterWithdraw({
       positionData: positionAfterRepay,
