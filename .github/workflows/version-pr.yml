@@ -104,14 +104,9 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
           is_allowed_version_path() {
-            case "$1" in
-              packages/*/package.json|packages/*/CHANGELOG.md|.changeset/*.md|.changeset/pre.json)
-                return 0
-                ;;
-              *)
-                return 1
-                ;;
-            esac
+            [[ "$1" =~ ^packages/[^/]+/package\.json$ ]] ||
+            [[ "$1" =~ ^\.changeset/[^/]+\.md$ ]] ||
+            [[ "$1" == ".changeset/pre.json" ]]
           }
 
           allowed_changed=()

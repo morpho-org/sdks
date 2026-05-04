@@ -96,7 +96,7 @@ jobs:
           pnpm release --tag "$publish_tag"
           git tag --list | LC_ALL=C sort > "$after_tags"
 
-          comm -13 "$before_tags" "$after_tags" > "$new_tags"
+          LC_ALL=C comm -13 "$before_tags" "$after_tags" > "$new_tags"
           if [ -s "$new_tags" ]; then
             echo "has_tags=true" >> "$GITHUB_OUTPUT"
           else
