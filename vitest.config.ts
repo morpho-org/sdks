@@ -41,7 +41,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "blue-sdk",
-          include: ["packages/blue-sdk/test/**/*.test.ts"],
+          include: [
+            "packages/blue-sdk/test/**/*.test.ts",
+            "packages/blue-sdk/src/**/*.test.ts",
+          ],
         },
       },
       {
