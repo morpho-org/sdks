@@ -92,7 +92,7 @@ Two classes of placeholders. Step 9 has a third — see "Placeholder discipline 
 | `<HEAD_BRANCH>` | `gh pr view` → `headRefName` (PR modes) OR `git branch --show-current` (Local-only) | Head/current branch |
 | `<HEAD_SHA>` | `gh pr view` → `headRefOid` (PR modes) OR `git rev-parse HEAD` (Local-only) | Head commit full SHA |
 | `<HEAD_SHA_SHORT>` | first 7 chars of `<HEAD_SHA>` | Head commit short SHA |
-| `<MERGE_BASE>` | `git merge-base origin/<BASE_BRANCH> origin/<HEAD_BRANCH>` (PR modes) OR `git merge-base origin/<BASE_BRANCH> HEAD` (Local-only). **Note**: in the watcher prompt this is re-derived per cycle as `${MERGE_BASE}` — do not bake the CronCreate-time value in. | Common ancestor commit |
+| `<MERGE_BASE>` | `git merge-base origin/<BASE_BRANCH> origin/<HEAD_BRANCH>` (PR modes) OR `git merge-base origin/<BASE_BRANCH> HEAD` (Local-only). **Note**: in the watcher prompt this is re-derived per cycle as `${CYCLE_MERGE_BASE}` — do not bake the CronCreate-time value in. | Common ancestor commit |
 | `<MERGE_BASE_SHORT>` | first 7 chars of `<MERGE_BASE>` | Merge-base short SHA |
 | `<REPO_PATH>` | `git rev-parse --show-toplevel` | Absolute path to repo root |
 | `<BOT_LOGIN>` | `gh api user --jq '.login'` (PR modes only) | Current GitHub user's login |
@@ -344,13 +344,9 @@ Context files read (N):
   ...
 ```
 
-### Adaptive (only if present)
+### Conditional / adaptive (read when relevant)
 
-7. `.agents/guidelines.md` — additional coding standards beyond AGENTS.md.
-8. Scan `.agents/skills/` — list any project-level skills installed.
-9. `docs/tibs/TEMPLATE.md` — read if a doc/TIB-style file is touched in the diff.
-
-If adaptive files are absent, agents fall back to the rules from AGENTS.md and the SDK baseline rules baked into their prompts.
+7. `docs/tibs/TEMPLATE.md` — read if a doc/TIB-style file is touched in the diff.
 
 ## Step 5: Launch Parallel Review Agents
 
@@ -752,7 +748,7 @@ Group findings by file (already sorted by Step 6). Within each file, list highes
 
 **Idempotency:** Local-only mode is stateless — re-running produces fresh output with no persisted artifacts. Safe to run repeatedly. (Compare with `--watch`, which sets persistent state via CronCreate.) Determinism boundary: the diff-derived inputs and sentinel structure are deterministic across runs, but Step 5 launches LLM-backed agents whose finding *wording* can drift even when the diff is byte-identical. Re-runs should produce the SAME sentinel and the SAME counts; finding text may vary.
 
-**Drift reminder for `--local --fix`:** the `--fix` sub-step (7 alt 2b) reimplements parts of `/pr-fix` Step 6 (read-then-Edit, biome check, hard "no commit/push" constraint). Any future change to `/pr-fix` Step 6 must be evaluated for propagation here, and vice versa. Track with a `# DRIFT-CHECK: keep in sync with /pr-fix Step 6` comment in any PR that touches either.
+**Drift reminder for `--local --fix`:** the `--fix` sub-step (7 alt 2b) reimplements the apply-and-validate mechanics from `/pr-fix` Step 6c–6d (read-then-Edit, biome check, hard "no commit/push" constraint). Any future change to `/pr-fix` Step 6c–6d must be evaluated for propagation here, and vice versa. Track with a `# DRIFT-CHECK: keep in sync with /pr-fix Step 6c-6d` comment in any PR that touches either.
 
 If `--fix` was passed, proceed to **Step 7 (alt 2b)**. Otherwise the skill is complete here — Steps 8 and 9 do not apply in `--local` mode.
 
@@ -760,9 +756,22 @@ If `--fix` was passed, proceed to **Step 7 (alt 2b)**. Otherwise the skill is co
 
 **Only execute this sub-step if `--local --fix` was passed.**
 
-#### Pre-flight: stash uncommitted changes (Stash discipline)
+#### Pre-flight: stale-stash check + stash uncommitted changes (Stash discipline)
 
-The Edit tool has no undo. If a fix breaks linting we must revert WITHOUT clobbering pre-existing uncommitted user work. Stash any uncommitted changes BEFORE the fix loop, then restore them after:
+The Edit tool has no undo. If a fix breaks linting we must revert WITHOUT clobbering pre-existing uncommitted user work. The discipline runs in two pre-flight checks before the fix loop:
+
+**Check 1 — refuse to start on a stale safety stash.** A prior `--local --fix` run that crashed could leave a `pr-review --local --fix safety stash` entry in `git stash list`. Detect that and abort loud — the user must inspect it before we create another stash with the same message:
+
+```bash
+if git stash list | grep -q 'pr-review --local --fix safety stash'; then
+  echo "Sentinel: FIX_ABORTED — a stale 'pr-review --local --fix safety stash' already exists in git stash list."
+  echo "Inspect it with: git stash list / git stash show --include-untracked -p stash@{N}"
+  echo "Resolve it (pop, drop, or restore manually) before re-running this skill."
+  exit 1
+fi
+```
+
+**Check 2 — stash any pre-existing uncommitted work.** If the user has uncommitted changes when starting the run, stash them so a failed-lint revert can re-Edit cleanly:
 
 ```bash
 STASHED=0
@@ -885,12 +894,16 @@ If `--watch` WAS passed AND in Local PR mode, **you MUST proceed to Step 9**.
 The watcher prompt embeds three kinds of placeholders. Substituting them incorrectly leads to either stale data or silent failure:
 
 - **CronCreate-time placeholders (must substitute BEFORE CronCreate)** — exactly this allowlist: `<PR_NUMBER>`, `<OWNER>`, `<REPO>`, `<REPO_PATH>`, `<HEAD_BRANCH>`, `<BASE_BRANCH>`, `<BOT_LOGIN>`. These seven are static for the life of the watcher.
-- **Cycle-derived (do NOT substitute)** — written as `${CYCLE_HEAD_SHA}`, `${CYCLE_HEAD_SHA_SHORT}`, `${LAST_REVIEWED_SHA}`, `${PR_STATE}`, `${MERGE_BASE}`, `${CYCLE_MERGE_SHA}`, etc. Computed by the watcher agent each cycle. The literal `${...}` form must appear in the CronCreate prompt — the watcher agent expands them inside each cycle.
+- **Cycle-derived (do NOT substitute)** — every cycle-local variable uses the `CYCLE_*` prefix for parity with `/pr-fix`'s watcher: `${CYCLE_HEAD_SHA}`, `${CYCLE_HEAD_SHA_SHORT}`, `${CYCLE_PR_STATE}`, `${CYCLE_LAST_REVIEWED_SHA}`, `${CYCLE_MERGE_BASE}`, `${CYCLE_FAILED_AGENTS}`, `${CYCLE_LAST_REVIEWED_RAW}`. Computed by the watcher agent each cycle. The literal `${...}` form must appear in the CronCreate prompt — the watcher agent expands them inside each cycle.
 - **Report templates (do NOT substitute, NOT placeholders)** — count tokens like `<N>`, `<X>`, `<Y>`, `<Z>`, `<W>`, `<Q>`, `<D>`, `<P>`, `<A>`, `<S>`, `<R>` and structural tokens like `<file>`, `<line>`, `<reason>`, `<step>`, `<command>`, `<stderr>`, `<commentId>`, `<threadId>`, `<reply text per category above — replace ${CYCLE_HEAD_SHA} with the captured value>` are LITERALS inside output sentinels and inline templates that the watcher agent fills in at run time. They are NOT CronCreate-time placeholders.
 
-**Pre-flight check before calling CronCreate** — scan the assembled prompt for any remaining `<[A-Z_]+>` substring AND check it against the CronCreate-time allowlist above. ONLY abort if a remaining match is in the allowlist (i.e. should have been substituted). Do NOT abort on report-template tokens (`<N>`, `<X>`, etc.) or on structural tokens. Concretely:
+**Pre-flight check before calling CronCreate** — scan the assembled prompt for any remaining `<[A-Z_]+>` substring AND check it against the CronCreate-time allowlist above. ONLY abort if a remaining match is in the allowlist (i.e. should have been substituted). Do NOT abort on report-template tokens (`<N>`, `<X>`, etc.) or on structural tokens. The empty-prompt case must also abort loud — an unset `$ASSEMBLED_PROMPT` would silently pass the grep check (no match → exit 1 → grep returns 1, which is FALSE under `if`):
 
 ```
+if [ -z "$ASSEMBLED_PROMPT" ]; then
+  echo "Sentinel: WATCH_REJECTED — assembled prompt is empty or unset; refusing to schedule a no-op watcher." >&2
+  exit 1
+fi
 ALLOWLIST_REGEX='<(PR_NUMBER|OWNER|REPO|REPO_PATH|HEAD_BRANCH|BASE_BRANCH|BOT_LOGIN)>'
 if printf '%s' "$ASSEMBLED_PROMPT" | grep -Eq "$ALLOWLIST_REGEX"; then
   echo "Sentinel: WATCH_REJECTED — CronCreate-time placeholder still present in prompt; re-render before scheduling." >&2
@@ -914,7 +927,7 @@ The 7-agent set below mirrors Step 5 by hand. Any future Step 5 change — agent
 - recurring: true
 - prompt: The prompt below, with `<UPPERCASE>` placeholders substituted at CronCreate time and `${CYCLE_*}` placeholders left intact:
 
-```
+```text
 You are the PR review watcher for PR #<PR_NUMBER> in <OWNER>/<REPO>.
 Repo path: <REPO_PATH>
 Head branch: <HEAD_BRANCH>
@@ -925,47 +938,45 @@ This is a RECURRING cron job. Each run is one check cycle. After completing a cy
 
 Every shell command below must be checked for non-zero exit. On ANY non-zero exit, say "Sentinel: WATCH_TRANSIENT_ERROR — step <N> (<command>): <stderr>" and end this cycle. Do NOT proceed with stale or empty values.
 
-CYCLE START:
+Note on shell syntax in this prompt: the watcher agent reads each numbered step as INSTRUCTIONS, not as a verbatim bash script. When you see `set CYCLE_HEAD_SHA = ...` it means "compute the value via the shown command, store it as the cycle-local variable named `CYCLE_HEAD_SHA`, refer to it later as `${CYCLE_HEAD_SHA}`". When the watcher does run shell, the assignment is `CYCLE_HEAD_SHA=$(...)` (bare LHS — bash assignment never uses `${VAR}=...` on the LHS). EVERY cycle-local variable in this prompt uses the `CYCLE_` prefix.
 
-Note on shell syntax in this prompt: the watcher agent reads each numbered step as INSTRUCTIONS, not as a verbatim bash script. When you see `set CYCLE_HEAD_SHA = ...` it means "compute the value via the shown command, store it as the cycle-local variable named `CYCLE_HEAD_SHA`, refer to it later as `${CYCLE_HEAD_SHA}`". When the watcher does run shell, the assignment is `CYCLE_HEAD_SHA=$(...)` (bare LHS — bash assignment never uses `${VAR}=...` on the LHS).
+CYCLE START:
 
 1. FETCH AND CHECK STATE:
    Run: cd <REPO_PATH> && git fetch origin — abort cycle (transient error) on non-zero exit.
    set CYCLE_HEAD_SHA = `git rev-parse origin/<HEAD_BRANCH>` — abort cycle if empty.
-   set PR_STATE = `gh pr view <PR_NUMBER> --repo <OWNER>/<REPO> --json state --jq '.state'` — abort cycle if gh fails or returns whitespace-only.
-   If ${PR_STATE} is not "OPEN": say "PR #<PR_NUMBER> is no longer open (state: ${PR_STATE}). Review watcher done." and end.
+   set CYCLE_PR_STATE = `gh pr view <PR_NUMBER> --repo <OWNER>/<REPO> --json state --jq '.state'` — abort cycle if gh fails or returns whitespace-only.
+   If ${CYCLE_PR_STATE} is not "OPEN": say "Sentinel: WATCH_PR_CLOSED — PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting." and end.
    set CYCLE_HEAD_SHA_SHORT = first 7 chars of ${CYCLE_HEAD_SHA}.
 
 2. GET LAST REVIEWED SHA:
    Query the most recent review posted by the bot on this PR (derived at cycle start from GitHub, NOT baked in at CronCreate time). Use jq's --arg to bind <BOT_LOGIN> safely so login content is never spliced into shell-quoted code. Note: `gh api --jq` accepts only one filter string, so the binding must be done by piping into a separate `jq` call (NOT by passing `--arg` to `gh api`):
 
-   ```
-   set LAST_REVIEWED_RAW = `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews?per_page=100`
+   set CYCLE_LAST_REVIEWED_RAW = `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews?per_page=100`
    if gh exit code != 0: abort cycle with WATCH_TRANSIENT_ERROR (auth / rate-limit / network — do NOT fall through to "review everything", which would post duplicate full reviews on every transient failure)
-   set LAST_REVIEWED_SHA = `printf '%s' "$LAST_REVIEWED_RAW" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or (.body | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | .commit_id // ""'`
-   ```
+   set CYCLE_LAST_REVIEWED_SHA = `printf '%s' "$CYCLE_LAST_REVIEWED_RAW" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or (.body | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | .commit_id // ""'`
 
-   - If gh exit was zero AND ${LAST_REVIEWED_SHA} is empty (no previous review), proceed with empty value (review everything on first sighting).
-   - Otherwise ${LAST_REVIEWED_SHA} is the returned commit_id.
+   - If gh exit was zero AND ${CYCLE_LAST_REVIEWED_SHA} is empty (no previous review), proceed with empty value (review everything on first sighting).
+   - Otherwise ${CYCLE_LAST_REVIEWED_SHA} is the returned commit_id.
 
 3. COMPARE SHA:
-   If ${CYCLE_HEAD_SHA} == ${LAST_REVIEWED_SHA}: say "No new commits on PR #<PR_NUMBER>, still at ${CYCLE_HEAD_SHA_SHORT}." and end this cycle.
+   If ${CYCLE_HEAD_SHA} == ${CYCLE_LAST_REVIEWED_SHA}: say "Sentinel: WATCH_REVIEW_CLEAN — PR #<PR_NUMBER> still at ${CYCLE_HEAD_SHA_SHORT}, no new commits since last review." and end this cycle.
 
 4. NEW COMMIT DETECTED:
    Say "New commit detected on PR #<PR_NUMBER>: ${CYCLE_HEAD_SHA}. Running full review..."
 
 5. GET FULL PR DIFF:
    cd <REPO_PATH>
-   set MERGE_BASE = `git merge-base origin/<BASE_BRANCH> origin/<HEAD_BRANCH>` — abort cycle if empty.
-   Run: git diff ${MERGE_BASE}..origin/<HEAD_BRANCH>
-   Run: git diff --name-only ${MERGE_BASE}..origin/<HEAD_BRANCH>
+   set CYCLE_MERGE_BASE = `git merge-base origin/<BASE_BRANCH> origin/<HEAD_BRANCH>` — abort cycle if empty.
+   Run: git diff ${CYCLE_MERGE_BASE}..origin/<HEAD_BRANCH>
+   Run: git diff --name-only ${CYCLE_MERGE_BASE}..origin/<HEAD_BRANCH>
    Also read each changed file from the local filesystem using the Read tool for full context.
 
 6. READ PROJECT CONTEXT (Adaptive — re-discover per cycle, do NOT cache from earlier cycles):
-   Always read (root): AGENTS.md (canonical; CLAUDE.md is a symlink — do not also read it), MISSION.md, CONTRIBUTING.md, biome.json. Read SECURITY.md if any security-relevant code is touched in THIS cycle's diff.
+   Always read (root): AGENTS.md (canonical; CLAUDE.md is a symlink — do not also read it), MISSION.md, CONTRIBUTING.md, biome.json. Read docs/jsdoc-style.md if any exported symbol or JSDoc/@example block is touched in THIS cycle's diff. Read SECURITY.md if any security-relevant code is touched.
    Per-package (only for packages touched by THIS cycle's diff): packages/<pkg>/AGENTS.md, packages/<pkg>/README.md, packages/<pkg>/ARCHITECTURE.md and any other top-level *.md in the package (e.g. BUNDLER3.md), plus any nested AGENTS.md along the path of touched files (e.g. packages/morpho-sdk/src/actions/AGENTS.md).
    Files outside packages/ in the diff use only the root-level baseline (no per-package context).
-   Adaptive (only if present): .agents/guidelines.md, scan .agents/skills/ for project-level skills installed.
+   Conditional/adaptive (only if present): docs/tibs/TEMPLATE.md when the diff touches a TIB-style doc.
    Store as PROJECT_CONTEXT for agent prompts. Per-package AGENTS.md refines the root for that package; the root wins on contradictions.
 
 7. LAUNCH REVIEW AGENTS in parallel using the Agent tool (subagent_type: "general-purpose"). Same 7-agent SDK set as Step 5 of the main flow — keep this list in sync (any Step 5 edit must propagate here in the same PR). Each agent receives the full diff, changed file contents, and PROJECT_CONTEXT. Returns findings as JSON: [{severity, file, line, description}] OR an explicit error sentinel {"agent_error": "<reason>"}.
@@ -977,11 +988,11 @@ Note on shell syntax in this prompt: the watcher agent reads each numbered step 
    f. documentation — JSDoc/TSDoc on public APIs in packages/<pkg>/src/index.ts and re-exported files. Canonical rules: docs/jsdoc-style.md (operationalizes AGENTS.md §6 + MISSION.md goal #3). Check @param/@returns/@throws coverage per the style guide; doc accuracy vs. implementation; semantic type names; README updates when public API changes; @example blocks compile and follow the runnable-recipe shape from the style guide. Uses PROJECT_CONTEXT when present (which now includes docs/jsdoc-style.md when an exported symbol is touched).
    g. test-coverage — missing tests in packages/<pkg>/test/ for new public exports; new branches/error paths/edge cases (zero, MAX_UINT256, negative bigints); modified/removed exports without test updates; onchain code paths with at least one fork/mock test; snapshot/schema tests updated when generated outputs change. Uses PROJECT_CONTEXT when present.
 
-8. Aggregate. Count ${FAILED_AGENTS} (any agent that returned {"agent_error": "..."}). Deduplicate findings (3-line tolerance). Keep highest severity for same file+line. Sort by file path ASC, line number ASC, severity DESC.
+8. Aggregate. Count ${CYCLE_FAILED_AGENTS} (any agent that returned {"agent_error": "..."}). Deduplicate findings (3-line tolerance). Keep highest severity for same file+line. Sort by file path ASC, line number ASC, severity DESC.
 
 9. POST REVIEW to GitHub as a single atomic call:
    Build a JSON file at /tmp/pr-review-<PR_NUMBER>-comments.json with commit_id=${CYCLE_HEAD_SHA} (NOT a CronCreate-time SHA), event="COMMENT", body (summary table), and comments[] array (one entry per finding with path, line, side="RIGHT", body).
-   If ${FAILED_AGENTS} > 0, prepend "> WARNING: ${FAILED_AGENTS} of 7 agents failed — review may be incomplete." to the body.
+   If ${CYCLE_FAILED_AGENTS} > 0, prepend "> WARNING: ${CYCLE_FAILED_AGENTS} of 7 agents failed — review may be incomplete." to the body.
    Run: gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews --method POST --input /tmp/pr-review-<PR_NUMBER>-comments.json — abort cycle if non-zero exit.
    Clean up: rm -f /tmp/pr-review-<PR_NUMBER>-comments.json
 
@@ -999,6 +1010,27 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 3. Note that the watcher auto-expires after 3 days
 4. Only THEN is the skill complete
 
+## Sentinel grammar registry
+
+Every terminal step ends with a single grep-able `Sentinel: NAME — <human prose>` line. This registry is the single source of truth — adding a new sentinel requires adding a row here in the same PR.
+
+| Sentinel | Owning step | Fires on | Trailer grammar |
+|---|---|---|---|
+| `REVIEW_CLEAN` | Step 7 (alt 2) | Local-only mode, zero findings, zero agent failures | `— no issues found in <HEAD_BRANCH> vs <BASE_BRANCH>.` |
+| `REVIEW_INCOMPLETE` | Step 7 (alt 2) | Local-only mode, zero findings BUT some agents crashed | `— <CYCLE_FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` |
+| `REVIEW_DONE_LOCAL` | Step 7 (alt 2) | Local-only mode, non-zero findings | `— <N> findings (X critical, Y high, Z medium, W low) on <HEAD_BRANCH> vs <BASE_BRANCH>.` |
+| `REVIEW_DONE_PR` | Step 8 | CI / Local PR modes, end of run | `— PR #<PR_NUMBER>, <N> findings, mode=<CI\|LocalPR>, commit=<HEAD_SHA_SHORT>` |
+| `FIX_DONE_LOCAL` | Step 7 (alt 2b) | `--local --fix` happy path | `— <X> applied, <Y> skipped (Local-only, unstaged).` |
+| `FIX_DONE_WITH_STASH_CONFLICTS` | Step 7 (alt 2b) | `--local --fix` after `git stash pop` conflict | `— <X> applied, stash@{0} unpopped due to conflicts in <files>; resolve manually before running again.` |
+| `FIX_ABORTED` | Step 7 (alt 2b) pre-flight | Stale safety stash detected, OR `git stash push` failed | `— <reason>` |
+| `WATCH_REJECTED` | Step 9 pre-flight | Empty prompt OR un-substituted CronCreate-time placeholder | `— <reason>` |
+| `WATCH_TRANSIENT_ERROR` | Step 9 watcher (any cycle command) | Any non-zero exit from a `Run:` line inside the cycle | `— step <N> (<command>): <stderr>` |
+| `WATCH_PR_CLOSED` | Step 9 watcher Step 1 | PR is no longer in OPEN state | `— PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting.` |
+| `WATCH_REVIEW_CLEAN` | Step 9 watcher Step 3 | No new commits since last review | `— PR #<PR_NUMBER> still at ${CYCLE_HEAD_SHA_SHORT}, no new commits since last review.` |
+| `WATCH_REVIEW_DONE` | Step 9 watcher Step 11 | Review posted for a new commit | `— PR #<PR_NUMBER> commit ${CYCLE_HEAD_SHA_SHORT}: <N> findings (X critical, Y high, Z medium, W low).` |
+
+`/pr-fix` owns its own sentinel set (`FIX_DONE_PR`, `RECONCILE_OK`, `RECONCILE_FAILED`, `WATCH_FIX_DONE`, `WATCH_FIX_GREEN`, `WATCH_LINT_FAILED`, `WATCH_PR_CLOSED`, plus shared `WATCH_REJECTED` / `WATCH_TRANSIENT_ERROR`); see `pr-fix.md`'s registry for grammar.
+
 ## Error Handling
 
 - If the PR doesn't exist: tell the user and stop
@@ -1010,7 +1042,7 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 ## Notes
 
 - **Three modes**: **CI mode** (in GitHub Actions, with `<PR_NUMBER>`) submits a formal verdict + markers and does not support `--watch`. **Local PR mode** (locally, with `<PR_NUMBER>`) posts as `COMMENT` and optionally supports `--watch`. **Local-only mode** (`--local`, no `<PR_NUMBER>`) prints findings to the terminal — no GitHub interaction at all — and optionally applies fixes locally with `--fix`. `--local` and `--watch` are mutually exclusive.
-- **Adaptive context**: Step 4 reads the root `AGENTS.md` (canonical) and `MISSION.md` for the engineering rules and intent, plus the per-package `AGENTS.md` / `README.md` / `ARCHITECTURE.md` / nested `AGENTS.md` only for packages touched by the diff. Per-package `AGENTS.md` refines the root for that package; the root wins on contradictions. Adaptive add-ons: `.agents/guidelines.md`, `.agents/skills/` scan.
+- **Adaptive context**: Step 4 reads the root `AGENTS.md` (canonical) and `MISSION.md` for the engineering rules and intent, plus the per-package `AGENTS.md` / `README.md` / `ARCHITECTURE.md` / nested `AGENTS.md` only for packages touched by the diff. Per-package `AGENTS.md` refines the root for that package; the root wins on contradictions. The `docs/jsdoc-style.md` rules apply whenever an exported symbol or any JSDoc / `@example` is touched. `docs/tibs/TEMPLATE.md` is read only when a TIB-style doc is touched.
 - **Per-package context is targeted, not exhaustive**: Only AGENTS.md/README.md/ARCHITECTURE.md for packages with changed files are read — context stays bounded for big monorepos. The root rules always apply.
 - **Pairs with `/pr-fix`**: Run `/pr-review --local` before opening a PR for fast feedback; or `/pr-review <PR>` after opening for an inline GitHub review. Then `/pr-fix <PR>` applies posted comments. With `--watch`, the loop is autonomous.
 - **Local-first**: Always use local filesystem and git commands for reading code, diffs, and file contents. In Local-only mode, never call the GitHub API. In PR modes, only use the GitHub API for posting reviews/comments (write operations). Never use the GitHub API to read diffs or file contents — the local repo has everything.

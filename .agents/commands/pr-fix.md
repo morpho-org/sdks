@@ -353,9 +353,11 @@ Only proceed to Step 6 with comments classified as **actionable** AND **not alre
 
 ### 5f: Per-category routing table — used by Step 9, Step 9.5, and Step 12 watcher
 
-Step 9 implements one path per category from 5a. Memorize this routing table; do NOT collapse non-actionable categories into "skipped". The exact reply text is the contract — Step 9 sub-steps and the watcher's Step 7f use these exact strings (modulo the cycle-substituted `${CYCLE_HEAD_SHA}` instead of `<HEAD_SHA>` in the watcher).
+Step 5a defines **seven** terminal categories. The Mixed-purpose case (Question + Actionable, see 5a) is NOT a separate category — it's a variant of `Actionable fix (fixed)` with extended reply text. The table below has one row per category PLUS a Mixed-purpose variant row, so the row count (8) > the category count (7).
 
-| Category | Step 9 path | Exact reply text | Resolve thread? |
+Step 9 implements one path per category. Memorize this routing table; do NOT collapse non-actionable categories into "skipped". The exact reply text is the contract — Step 9 sub-steps and the watcher's Step 7f use these exact strings (modulo the cycle-substituted `${CYCLE_HEAD_SHA}` instead of `<HEAD_SHA>` in the watcher).
+
+| Category (or variant) | Step 9 path | Exact reply text | Resolve thread? |
 |---|---|---|---|
 | **Actionable fix** (after Step 6 applies it) | 9a | `Fixed in <HEAD_SHA> — <brief>` | yes |
 | **Actionable fix** (skipped: low confidence, false positive, conflict) | 9c-skipped | `Skipped — <reason>. Leaving for human review.` | no |
@@ -364,17 +366,27 @@ Step 9 implements one path per category from 5a. Memorize this routing table; do
 | **Praise / Acknowledgment** | 9c-praise | (no reply) | yes |
 | **Already addressed** | 9c-already | `Already addressed in <SHA-or-current-code>.` | yes |
 | **Stale / Inapplicable** | 9c-stale | `Skipped — code referenced no longer exists at this location. Leaving for human review.` | no |
-| **Mixed-purpose** (Question + Actionable, see 5a) | 9a (extended) | `Fixed in <HEAD_SHA> — <brief>. (Re your question: <one-line answer>.)` | yes |
+| **Mixed-purpose VARIANT** (of Actionable+fixed; Step 5a) | 9a (extended) | `Fixed in <HEAD_SHA> — <brief>. (Re your question: <one-line answer>.)` | yes |
 
 **Verifying the per-category routing actually fires (smoke-test recipe)**: this routing is the single most easily-broken contract in the skill (a regression that collapses two categories into one would slip through the green-CI sentinel). To verify after touching Step 5f / Step 9 / Step 12 watcher:
 
-1. Create a throwaway PR with EIGHT review threads — one per category above. The actionable fix should be a trivial change (e.g. add a missing semicolon).
+1. Create a throwaway PR with **eight review threads**: one per category above (7) plus one Mixed-purpose variant (which is an actionable+fixed comment that ALSO contains a question). The actionable fix should be a trivial change (e.g. add a missing semicolon).
 2. Run `/pr-fix <PR>` (no `--watch`).
-3. Check Step 5e's printed bucket counts: every category column should show `1`.
-4. After the run, fetch the threads and verify each thread's last comment matches the **exact reply text** column above (modulo placeholder substitution). Grep for the leading sentence of each row — `Fixed in `, `Skipped — `, `Acknowledged — `, `Leaving this for `, `Already addressed in ` — and confirm exactly one match per category.
+3. Step 5d's printed bucket counts use the seven Step-5a category labels (NOT the eight Step-5f routing rows). Expected counts: `actionable: 3` (one fixed + one skipped + one mixed-purpose, all classified as actionable in Step 5a), and each of `question / discussion / praise / already-addressed / stale: 1`. (Mixed-purpose is part of the actionable bucket; the Step 5d table does NOT have a separate Mixed-purpose column.)
+4. After the run, fetch all eight threads and verify each thread's last comment matches the **exact reply text** column above (modulo placeholder substitution). Distinguish the routing rows by grep, in this order (first match wins per thread):
+   - **Mixed-purpose VARIANT** → grep for the substring `(Re your question:` → exactly **1** match.
+   - **Actionable+fixed (plain)** → count `Fixed in ` matches that do NOT also contain `(Re your question:` → exactly **1**.
+   - **Actionable+skipped** → count `Skipped — ` matches whose body does NOT also start with `Skipped — code referenced no longer exists` → exactly **1**.
+   - **Stale** → count `Skipped — code referenced no longer exists` → exactly **1**.
+   - **Question** → count `Acknowledged — ` → exactly **1**.
+   - **Discussion** → count `Leaving this for human discussion.` → exactly **1**.
+   - **Already-addressed** → count `Already addressed in ` → exactly **1**.
+   - **Praise** → no reply; verify the praise thread's last comment is the original praise (not a bot reply) and the thread is `isResolved=true`.
 5. Verify resolved-state matches the `Resolve thread?` column.
 
 ## Step 6: Apply Fixes
+
+> **Drift reminder**: `/pr-review --local --fix` (Step 7 alt 2b in `.agents/commands/pr-review.md`) reimplements the apply-and-validate mechanics from this Step 6c–6d (read-then-Edit, biome check, no commit/push). Any change to 6c–6d that affects those mechanics must be propagated to `/pr-review`'s `--local --fix` flow in the same PR. `# DRIFT-CHECK: keep in sync with /pr-review Step 7 (alt 2b).`
 
 **Never apply a fix you don't fully understand. A skipped finding is always better than a wrong fix.**
 
@@ -392,7 +404,7 @@ For each file with findings, build a complete understanding before touching anyt
      - `packages/<pkg>/AGENTS.md` — package-specific refinements (these refine the root for this package; root wins on contradictions).
      - `packages/<pkg>/README.md` — public-facing usage.
      - `packages/<pkg>/ARCHITECTURE.md` — if present.
-   - **If the file lives outside `packages/`** (root files, `.agents/commands/*`, `.github/workflows/*`, `scripts/*`, `docs/*`, etc.): use ONLY the root baseline (`AGENTS.md`, `MISSION.md`, plus `docs/jsdoc-style.md` if applicable). Do NOT attempt to derive a synthetic package directory.
+   - **If the file lives outside `packages/`** (root files, `.agents/commands/*`, `.github/workflows/*`, `scripts/*`, `docs/*`, etc.): use the root baseline (`AGENTS.md`, `MISSION.md`, `CONTRIBUTING.md`, `biome.json`, plus `docs/jsdoc-style.md` if applicable). Do NOT attempt to derive a synthetic package directory. (Same scope as `/pr-review` Step 4's "Always read" baseline so the two skills agree on what context applies to outside-packages files.)
    - Any nested `AGENTS.md` along the path of the touched file (e.g. `packages/morpho-sdk/src/actions/AGENTS.md`, `packages/morpho-sdk/src/actions/marketV1/AGENTS.md`).
 
 2. **Read the full file** — Use the Read tool. Understand the overall structure, not just the flagged line.
@@ -612,9 +624,9 @@ REPLY_EOF
 
 > Numbering note: Step 9.5 is a follow-on pass that runs AFTER Step 9 has finished routing each thread but BEFORE the final report (Step 11). It is not a variant or alternative of Step 9. The fractional number signals that relationship.
 
-Fetch unresolved, non-outdated review threads again and make sure **every** current thread is in one of the seven terminal states defined in Step 5f. Do NOT collapse the categories into "fixed vs. skipped" — that contradicts Step 5f and will mis-handle praise / already-addressed / question / discussion threads.
+Fetch unresolved, non-outdated review threads again and make sure **every** current thread is in one of the seven Step-5a terminal categories (or the Mixed-purpose variant of actionable+fixed) defined in Step 5f. Do NOT collapse the categories into "fixed vs. skipped" — that contradicts Step 5f and will mis-handle praise / already-addressed / question / discussion threads.
 
-For each open thread, confirm it landed in exactly one of these terminal states:
+For each open thread, confirm it landed in exactly one of these terminal states (eight rows, one per Step 5f routing row):
 
 | Step 5f category | Terminal state — confirm BOTH |
 |---|---|
@@ -634,7 +646,9 @@ Verification check (run before reporting success):
 - For each thread, inspect the latest bot comment AND the `isResolved` flag.
 - Match against the table above. Any thread that does NOT match exactly one row is a defect — do not report success; either re-route the thread through Step 9, OR add a `Sentinel: RECONCILE_FAILED — thread <id> in unknown state` line and stop.
 
-On clean pass, emit `Sentinel: RECONCILE_OK — <N> threads addressed (<F> fixed-and-resolved, <S> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped).` so a maintainer (or CI) can grep that this pass actually ran (vs. being silently skipped via the empty-list early-exit path from Step 4).
+On clean pass, emit `Sentinel: RECONCILE_OK — <N> threads addressed (<F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped).` so a maintainer (or CI) can grep that this pass actually ran (vs. being silently skipped via the empty-list early-exit path from Step 4). The bucket counts and label set match WATCH_FIX_DONE so a downstream parser handles both with the same regex.
+
+On the empty-list early-exit path from Step 4 (no unresolved comments to address), this step still runs and emits `Sentinel: RECONCILE_OK — 0 threads addressed (0 fixed-and-resolved, 0 skipped-with-reply, 0 questions, 0 discussions, 0 praise-resolved, 0 already-addressed-resolved, 0 stale-skipped).` — confirms the reconciliation actually ran rather than being silently skipped.
 
 ## Step 10: Monitor CI After Push
 
@@ -715,15 +729,24 @@ Commit: <HEAD_SHA_SHORT>
 Conflicts: <RESOLVED X files / NONE / UNRESOLVABLE>
 Fixed: <N> findings (X from Claude, Y from Codex, Z from humans)
 Skipped: <M> findings (see thread replies for reasons)
-CI: <PASS/FAIL/PENDING (timed out — re-check)>
+CI: <PASS/FAIL/PENDING (timed out after 2.5min — re-check)/NA>
 
 Resolved threads: <R>
 Left open for human review: <H>
 
 Note: You are now on branch <HEAD_BRANCH>.
 
-Sentinel: FIX_DONE_PR — PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>, ci=<PASS|FAIL|PENDING>, commit=<HEAD_SHA_SHORT>
+Sentinel: FIX_DONE_PR — PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>, ci=<PASS|FAIL|PENDING|PENDING_TIMEOUT|NA>, commit=<HEAD_SHA_SHORT>
 ```
+
+`ci=` value mapping:
+- `PASS` — `CI_POLL_TIMED_OUT=0` and no failed checks.
+- `FAIL` — `CI_POLL_TIMED_OUT=0` and at least one failed check.
+- `PENDING` — checks still running but not timed out (rare — only if Step 10 was bypassed).
+- `PENDING_TIMEOUT` — `CI_POLL_TIMED_OUT=1` (poll loop exhausted 5×30s without checks settling). Distinguish this from plain `PENDING` so callers know the report is provisional.
+- `NA` — Step 10 was not run (e.g. the Step-4 empty-list early-exit path made no commit).
+
+On the empty-list early-exit path (Step 4 → Step 9.5 → Step 11), Step 10 is skipped and no fix commit is made: emit `fixed=0, skipped=0, resolved=0, ci=NA, commit=<the PR's existing head SHA from Step 2b>`. The sentinel is still grep-able and clearly distinguishable from a "real" run.
 
 The Step 9.5 reconciliation pass already emitted its own `Sentinel: RECONCILE_OK` line on success; this Step 11 sentinel is the terminal grep target for the whole `/pr-fix <PR>` (no `--watch`) run. The pair `Sentinel: RECONCILE_OK` + `Sentinel: FIX_DONE_PR` together attest a clean run.
 
@@ -749,9 +772,13 @@ The watcher prompt embeds three kinds of placeholders. Substituting them incorre
 - **Cycle-derived (do NOT substitute)** — computed by the watcher agent each cycle. Written as `${CYCLE_HEAD_SHA}`, `${CYCLE_PR_STATE}`, `${CYCLE_FAILED_CHECKS}`, `${CYCLE_RUN_ID}`, `${CYCLE_MERGE_SHA}`, etc. The `CYCLE_` prefix is the convention — every cycle-local variable used in the watcher prompt below is named `CYCLE_*`. Using a CronCreate-time `<HEAD_SHA>` for any cycle-derived value would freeze it at watcher-creation time and every reply would reference the wrong (stale) commit.
 - **Report templates (do NOT substitute, NOT placeholders)** — count tokens like `<N>`, `<X>`, `<Y>`, `<Z>`, `<W>`, `<Q>`, `<D>`, `<P>`, `<A>`, `<S>`, `<R>`, `<F>`, `<ST>` and structural tokens like `<file>`, `<line>`, `<reason>`, `<step>`, `<command>`, `<stderr>`, `<commentId>`, `<threadId>`, `<file1>`, `<file2>` are LITERALS inside output sentinels and inline templates that the watcher agent fills in at run time. They are NOT CronCreate-time placeholders.
 
-**Pre-flight check before calling CronCreate** — scan the assembled prompt for any remaining `<[A-Z_]+>` substring AND check it against the CronCreate-time allowlist above. ONLY abort if a remaining match is in the allowlist (i.e. should have been substituted). Do NOT abort on report-template tokens (`<N>`, `<X>`, etc.) or on structural tokens. Concretely:
+**Pre-flight check before calling CronCreate** — scan the assembled prompt for any remaining `<[A-Z_]+>` substring AND check it against the CronCreate-time allowlist above. ONLY abort if a remaining match is in the allowlist (i.e. should have been substituted). Do NOT abort on report-template tokens (`<N>`, `<X>`, etc.) or on structural tokens. The empty-prompt case must also abort loud — an unset `$ASSEMBLED_PROMPT` would silently pass the grep check (no input → no match → grep returns 1):
 
 ```
+if [ -z "$ASSEMBLED_PROMPT" ]; then
+  echo "Sentinel: WATCH_REJECTED — assembled prompt is empty or unset; refusing to schedule a no-op watcher." >&2
+  exit 1
+fi
 ALLOWLIST_REGEX='<(PR_NUMBER|OWNER|REPO|REPO_PATH|HEAD_BRANCH|BASE_BRANCH)>'
 if printf '%s' "$ASSEMBLED_PROMPT" | grep -Eq "$ALLOWLIST_REGEX"; then
   echo "Sentinel: WATCH_REJECTED — CronCreate-time placeholder still present in prompt; re-render before scheduling." >&2
@@ -791,9 +818,12 @@ CYCLE START:
 
 1. CHECK PR STATE:
    set CYCLE_PR_STATE = `cd <REPO_PATH> && gh pr view <PR_NUMBER> --json state --jq '.state'` — abort cycle if gh fails or returns whitespace-only.
-   If ${CYCLE_PR_STATE} is not "OPEN": say "PR #<PR_NUMBER> is no longer open (state: ${CYCLE_PR_STATE}). Fix watcher done." and end.
+   If ${CYCLE_PR_STATE} is not "OPEN": say "Sentinel: WATCH_PR_CLOSED — PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting." and end.
 
 2. FETCH AND SYNC:
+   Pre-condition (CRITICAL): the working tree MUST be clean before `gh pr checkout` runs. A prior cycle that crashed mid-Edit can leave unstaged modifications that `gh pr checkout` does not clean up, and that the next steps would silently carry forward.
+   set CYCLE_WORKTREE_STATUS = `cd <REPO_PATH> && git status --porcelain`
+   If ${CYCLE_WORKTREE_STATUS} is non-empty: say "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (working tree dirty at cycle start: ${CYCLE_WORKTREE_STATUS}). Manual cleanup required." and end. (Do NOT auto-checkout/auto-stash — a human must inspect and decide.)
    Run: cd <REPO_PATH> && git fetch origin && gh pr checkout <PR_NUMBER> — abort cycle on any non-zero exit.
    (`gh pr checkout` is cross-fork-safe — it handles fork PRs and existing local branches.)
    Post-condition: re-query the PR's expected head SHA via `gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid'`, store as ${CYCLE_EXPECTED_HEAD_SHA}, then check `git rev-parse HEAD` matches; abort cycle if mismatch (partial checkout).
@@ -801,9 +831,9 @@ CYCLE START:
 3. CHECK MERGE CONFLICTS:
    Run: cd <REPO_PATH> && git merge --no-commit --no-ff origin/<BASE_BRANCH> 2>&1
    - If clean (or already up to date): run `git rev-parse --verify MERGE_HEAD >/dev/null 2>&1 && git merge --abort || true` and continue to step 4.
-   - If conflicts: for each conflicting file, read it with the Read tool, resolve conflict markers using the Edit tool (keep PR changes if intentional, incorporate base changes if necessary, merge both logically). Then: `git add <resolved files>` and use a heredoc commit (NOT raw `git commit -m "..."` — placeholders may legally contain `$` or backticks):
+   - If conflicts: for each conflicting file, read it with the Read tool, resolve conflict markers using the Edit tool (keep PR changes if intentional, incorporate base changes if necessary, merge both logically). Then: `git add <resolved files>` and use a heredoc commit. `<BASE_BRANCH>` is in the CronCreate-time allowlist so it is substituted into the prompt before the watcher receives it; the single-quoted MERGEEOF preserves the substituted literal verbatim, with no shell injection (the heredoc itself blocks $-interpolation):
        git commit -m "$(cat <<'MERGEEOF'
-merge: resolve conflicts with base branch
+merge: resolve conflicts with <BASE_BRANCH>
 
 Resolved merge conflicts in:
 - <file1>
@@ -847,10 +877,10 @@ MERGEEOF
    - Assign Confidence: HIGH (proceed), Confidence: MEDIUM (proceed but flag in reply), Confidence: LOW (SKIP — record as "skipped: low confidence", reply with what's unclear, leave thread unresolved). Always prefix with `Confidence:` so the tokens never collide with severity.
 
    a. Group actionable + Confidence:HIGH/MEDIUM comments by file. For each file: apply fix with Edit tool per the comment suggestion (using the context already gathered above).
-   b. Run `pnpm exec biome check` on modified files (or `pnpm lint` for the project-wide check). On lint failure, REVERT the just-applied edits before ending the cycle (otherwise the next cycle's `gh pr checkout` runs on a dirty tree and `git merge` will refuse, masking the real cause):
-       Run: `git checkout -- <list of modified files>` to discard the unstaged Edit-tool changes.
-       (Alternative if you prefer to preserve the failed-fix state for debugging: `git stash push -u -m "pr-fix watcher: lint-aborted cycle ${CYCLE_HEAD_SHA}" && git stash drop` — but the simple `git checkout` form is preferred.)
-       Then say "Sentinel: WATCH_LINT_FAILED — PR #<PR_NUMBER> cycle aborted; lint rejected the proposed fix; working tree restored." and end the cycle.
+   b. Run `pnpm exec biome check` on modified files (or `pnpm lint` for the project-wide check). On lint failure, REVERT the just-applied edits before ending the cycle (otherwise the next cycle's clean-tree gate at Step 2 will refuse, looking like a transient error). Use `git stash push -u` (NOT raw `git checkout --`): `git checkout --` is destructive and would also discard any orphaned modifications that pre-existed this cycle's Edit calls — the stash form preserves them in the reflog so a human can recover if needed:
+       Run: `git stash push -u -m "pr-fix watcher: lint-aborted cycle ${CYCLE_HEAD_SHA:-pre-push}"` — capture exit code; if stash itself fails, fall through to a hard abort (`Sentinel: WATCH_TRANSIENT_ERROR — step 7b (git stash failed: <stderr>)`).
+       Run: `git stash drop` (the stashed state is for the reflog only — we don't want to leave a permanent stash entry on every lint-aborted cycle).
+       Then say "Sentinel: WATCH_LINT_FAILED — PR #<PR_NUMBER> cycle aborted; lint rejected the proposed fix; working tree restored (stashed-and-dropped — recoverable from the reflog)." and end the cycle.
    c. Stage: `git add <changed files>` (verify only fix-related files are staged with `git diff --cached --name-only`; unstage unrelated files with `git reset HEAD <file>` if needed).
    d. Commit: `git commit -m "$(cat <<'INNEREOF'
 fix: address PR review findings
@@ -887,7 +917,7 @@ REPLY_EOF
    g. Resolve threads (categories: actionable+fixed / praise / already-addressed):
       `gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -f id=<threadId>`
 
-   h. Say "Sentinel: WATCH_FIX_DONE — PR #<PR_NUMBER> cycle complete: fixed <X>, skipped <Y>, questions <Q>, discussions <D>, praise <P>, already-addressed <A>, stale <S>. Merge SHA: ${CYCLE_MERGE_SHA:-none}. Push SHA: ${CYCLE_HEAD_SHA:-none}. Resolved <R> threads."
+   h. Say "Sentinel: WATCH_FIX_DONE — PR #<PR_NUMBER> cycle complete: <F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped. Merge SHA: ${CYCLE_MERGE_SHA:-none}. Push SHA: ${CYCLE_HEAD_SHA:-none}. Resolved <R> threads." — labels match RECONCILE_OK so a parser can grep either.
 
 CYCLE END — the cron scheduler will run this again in 2 minutes.
 ```
@@ -898,6 +928,26 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 2. Tell them they can cancel with `CronDelete` using that ID
 3. Note that the watcher auto-expires after 3 days
 4. Only THEN is the skill complete
+
+## Sentinel grammar registry
+
+Every terminal step ends with a single grep-able `Sentinel: NAME — <human prose>` line. This registry is the single source of truth for `/pr-fix` — adding a new sentinel requires adding a row here in the same PR.
+
+| Sentinel | Owning step | Fires on | Trailer grammar |
+|---|---|---|---|
+| `RECONCILE_OK` | Step 9.5 | Reconciliation pass succeeded (every thread in a Step 5f terminal state) | `— <N> threads addressed (<F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped).` |
+| `RECONCILE_FAILED` | Step 9.5 | At least one thread is in an unknown terminal state | `— thread <id> in unknown state` |
+| `FIX_DONE_PR` | Step 11 | Terminal sentinel for the whole `/pr-fix <PR>` (no `--watch`) run | `— PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>, ci=<PASS\|FAIL\|PENDING\|PENDING_TIMEOUT\|NA>, commit=<HEAD_SHA_SHORT>` |
+| `WATCH_REJECTED` | Step 12 pre-flight | Empty prompt OR un-substituted CronCreate-time placeholder | `— <reason>` |
+| `WATCH_TRANSIENT_ERROR` | Step 12 watcher (any cycle command) | Any non-zero exit from a `Run:` / `set ... = \`...\`` command, OR dirty working tree at cycle start | `— step <N> (<command>): <stderr>` |
+| `WATCH_PR_CLOSED` | Step 12 watcher Step 1 | PR is no longer in OPEN state | `— PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting.` |
+| `WATCH_FIX_GREEN` | Step 12 watcher Step 6 | Cycle has zero unresolved comments AND CI passing AND no conflicts | `— PR #<PR_NUMBER> is green (no unresolved comments, CI passing, no conflicts).` |
+| `WATCH_LINT_FAILED` | Step 12 watcher Step 7b | Lint rejected the proposed fix; cycle aborted with stash-and-drop revert | `— PR #<PR_NUMBER> cycle aborted; lint rejected the proposed fix; working tree restored (stashed-and-dropped — recoverable from the reflog).` |
+| `WATCH_FIX_DONE` | Step 12 watcher Step 7h | Cycle completed (some categories may be 0) | `— PR #<PR_NUMBER> cycle complete: <F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped. Merge SHA: ${CYCLE_MERGE_SHA:-none}. Push SHA: ${CYCLE_HEAD_SHA:-none}. Resolved <R> threads.` |
+
+The `WATCH_FIX_DONE` and `RECONCILE_OK` count buckets use **identical labels** (`F` / `SK` / `Q` / `D` / `P` / `A` / `ST`) so a downstream parser can grep either with the same regex.
+
+`/pr-review` owns its own sentinel set (`REVIEW_CLEAN`, `REVIEW_INCOMPLETE`, `REVIEW_DONE_LOCAL`, `REVIEW_DONE_PR`, `FIX_DONE_LOCAL`, `FIX_DONE_WITH_STASH_CONFLICTS`, `FIX_ABORTED`, `WATCH_REVIEW_CLEAN`, `WATCH_REVIEW_DONE`, plus shared `WATCH_REJECTED` / `WATCH_TRANSIENT_ERROR` / `WATCH_PR_CLOSED`); see `pr-review.md`'s registry for grammar.
 
 ## Error Handling
 
