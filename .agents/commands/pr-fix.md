@@ -43,7 +43,7 @@ Two classes of placeholders. Step 12 has a third — see "Placeholder discipline
 | `<comment_created_at>` | per-thread, from Step 4 GraphQL (`createdAt` field) | Used by Step 5c freshness check |
 | `<reason>`, `<brief>` | per-finding | Human-readable reason in skip / fix replies |
 | `<file1>`, `<file2>`, `<list of resolved files>` | per-merge-conflict | Filenames in merge-conflict commit body |
-| `<N>`, `<X>`, `<Y>`, `<Z>`, `<W>`, `<M>`, `<R>`, `<F>`, `<S>`, `<Q>`, `<D>`, `<P>`, `<A>` | report templates | counts in summary tables and sentinel lines |
+| `<N>`, `<X>`, `<Y>`, `<Z>`, `<W>`, `<M>`, `<R>`, `<H>`, `<F>`, `<SK>`, `<Q>`, `<D>`, `<P>`, `<A>`, `<ST>` | report templates | counts in summary tables and sentinel lines |
 
 ## Step 1: Detect Repository
 
@@ -384,9 +384,20 @@ Step 9 implements one path per category. Memorize this routing table; do NOT col
    - **Praise** → no reply; verify the praise thread's last comment is the original praise (not a bot reply) and the thread is `isResolved=true`.
 5. Verify resolved-state matches the `Resolve thread?` column.
 
+**Empty-list smoke-test (covers the Step 4 → Step 9.5 → Step 11 early-exit path):**
+
+1. Create a throwaway PR with NO unresolved review threads (every thread already resolved, or no threads at all).
+2. Run `/pr-fix <PR>` (no `--watch`).
+3. Expected output sequence:
+   - `No unresolved comments to fix on PR #<PR>.` (from Step 4's empty-list early-exit notice)
+   - `Sentinel: RECONCILE_OK — 0 threads addressed (0 fixed-and-resolved, 0 skipped-with-reply, 0 questions, 0 discussions, 0 praise-resolved, 0 already-addressed-resolved, 0 stale-skipped).`
+   - `PR #<PR> had no actionable comments — no commit, no push.` (the Step 11 conditional leading line)
+   - `Sentinel: FIX_DONE_PR — PR #<PR>, fixed 0, skipped 0, resolved 0, ci=NA, commit=<existing-head-SHA-from-Step-2b>`
+4. Verify `git log -1 --format='%h %s'` shows the PR's pre-existing head (no new fix commit was created).
+
 ## Step 6: Apply Fixes
 
-> **Drift reminder**: `/pr-review --local --fix` (Step 7 alt 2b in `.agents/commands/pr-review.md`) reimplements the apply-and-validate mechanics from this Step 6c–6d (read-then-Edit, biome check, no commit/push). Any change to 6c–6d that affects those mechanics must be propagated to `/pr-review`'s `--local --fix` flow in the same PR. `# DRIFT-CHECK: keep in sync with /pr-review Step 7 (alt 2b).`
+> **Drift reminder**: `/pr-review --local --fix` (Step 7 alt 2b in `.agents/commands/pr-review.md`) reimplements the apply-and-validate mechanics from this Step 6c–6d (read-then-Edit, biome check, no commit/push). Any change to 6c–6d that affects those mechanics must be propagated to `/pr-review`'s `--local --fix` flow in the same PR. `# DRIFT-CHECK: keep in sync with /pr-review Step 7 (alt 2b)`
 
 **Never apply a fix you don't fully understand. A skipped finding is always better than a wrong fix.**
 
@@ -644,7 +655,7 @@ Verification check (run before reporting success):
 
 - Re-fetch current unresolved, non-outdated threads (+ the just-resolved ones, to verify their terminal state).
 - For each thread, inspect the latest bot comment AND the `isResolved` flag.
-- Match against the table above. Any thread that does NOT match exactly one row is a defect — do not report success; either re-route the thread through Step 9, OR add a `Sentinel: RECONCILE_FAILED — thread <id> in unknown state` line and stop.
+- Match against the table above. Any thread that does NOT match exactly one row is a defect — do not report success. First, attempt to re-route the thread through Step 9. If re-routing is not possible (the thread's terminal state truly cannot be classified), collect ALL such defective thread IDs into a single summary sentinel and stop with: `Sentinel: RECONCILE_FAILED — threads [<id>, <id>, ...] in unknown state.` (One sentinel per run, listing every defective thread — a single grep-able terminal line, matching the pattern used by every other sentinel in this skill.)
 
 On clean pass, emit `Sentinel: RECONCILE_OK — <N> threads addressed (<F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped).` so a maintainer (or CI) can grep that this pass actually ran (vs. being silently skipped via the empty-list early-exit path from Step 4). The bucket counts and label set match WATCH_FIX_DONE so a downstream parser handles both with the same regex.
 
@@ -720,10 +731,13 @@ Continue to Step 11.
 
 ## Step 11: Report to User
 
-Print a final summary that ends with a single grep-able sentinel line:
+Print a final summary that ends with a single grep-able sentinel line. The leading line is conditional on whether any fix was actually applied:
+
+- **Normal path** (Step 6/7/8 ran, at least one fix landed): leading line is `PR #<PR_NUMBER> fixes applied and pushed.`
+- **Empty-list early-exit path** (Step 4 routed straight to Step 9.5 → Step 11; no commit, no push): leading line is `PR #<PR_NUMBER> had no actionable comments — no commit, no push.`
 
 ```
-PR #<PR_NUMBER> fixes applied and pushed.
+<conditional leading line per the rule above>
 
 Commit: <HEAD_SHA_SHORT>
 Conflicts: <RESOLVED X files / NONE / UNRESOLVABLE>
@@ -770,13 +784,13 @@ The watcher prompt embeds three kinds of placeholders. Substituting them incorre
 
 - **CronCreate-time placeholders (must substitute BEFORE CronCreate)** — exactly this allowlist: `<PR_NUMBER>`, `<OWNER>`, `<REPO>`, `<REPO_PATH>`, `<HEAD_BRANCH>`, `<BASE_BRANCH>`. These six are static for the life of the watcher.
 - **Cycle-derived (do NOT substitute)** — computed by the watcher agent each cycle. Written as `${CYCLE_HEAD_SHA}`, `${CYCLE_PR_STATE}`, `${CYCLE_FAILED_CHECKS}`, `${CYCLE_RUN_ID}`, `${CYCLE_MERGE_SHA}`, etc. The `CYCLE_` prefix is the convention — every cycle-local variable used in the watcher prompt below is named `CYCLE_*`. Using a CronCreate-time `<HEAD_SHA>` for any cycle-derived value would freeze it at watcher-creation time and every reply would reference the wrong (stale) commit.
-- **Report templates (do NOT substitute, NOT placeholders)** — count tokens like `<N>`, `<X>`, `<Y>`, `<Z>`, `<W>`, `<Q>`, `<D>`, `<P>`, `<A>`, `<S>`, `<R>`, `<F>`, `<ST>` and structural tokens like `<file>`, `<line>`, `<reason>`, `<step>`, `<command>`, `<stderr>`, `<commentId>`, `<threadId>`, `<file1>`, `<file2>` are LITERALS inside output sentinels and inline templates that the watcher agent fills in at run time. They are NOT CronCreate-time placeholders.
+- **Report templates (do NOT substitute, NOT placeholders)** — count tokens like `<N>`, `<X>`, `<Y>`, `<Z>`, `<W>`, `<R>`, `<F>`, `<SK>`, `<Q>`, `<D>`, `<P>`, `<A>`, `<ST>` and structural tokens like `<file>`, `<line>`, `<reason>`, `<step>`, `<command>`, `<stderr>`, `<commentId>`, `<threadId>`, `<file1>`, `<file2>` are LITERALS inside output sentinels and inline templates that the watcher agent fills in at run time. They are NOT CronCreate-time placeholders.
 
 **Pre-flight check before calling CronCreate** — scan the assembled prompt for any remaining `<[A-Z_]+>` substring AND check it against the CronCreate-time allowlist above. ONLY abort if a remaining match is in the allowlist (i.e. should have been substituted). Do NOT abort on report-template tokens (`<N>`, `<X>`, etc.) or on structural tokens. The empty-prompt case must also abort loud — an unset `$ASSEMBLED_PROMPT` would silently pass the grep check (no input → no match → grep returns 1):
 
 ```
-if [ -z "$ASSEMBLED_PROMPT" ]; then
-  echo "Sentinel: WATCH_REJECTED — assembled prompt is empty or unset; refusing to schedule a no-op watcher." >&2
+if [ -z "${ASSEMBLED_PROMPT//[[:space:]]/}" ]; then
+  echo "Sentinel: WATCH_REJECTED — assembled prompt is empty, unset, or whitespace-only; refusing to schedule a no-op watcher." >&2
   exit 1
 fi
 ALLOWLIST_REGEX='<(PR_NUMBER|OWNER|REPO|REPO_PATH|HEAD_BRANCH|BASE_BRANCH)>'
@@ -822,9 +836,17 @@ CYCLE START:
 
 2. FETCH AND SYNC:
    Pre-condition (CRITICAL): the working tree MUST be clean before `gh pr checkout` runs. A prior cycle that crashed mid-Edit can leave unstaged modifications that `gh pr checkout` does not clean up, and that the next steps would silently carry forward.
+
+   Pre-condition A — `git status` must succeed AND the tree must be clean:
    set CYCLE_WORKTREE_STATUS = `cd <REPO_PATH> && git status --porcelain`
-   If ${CYCLE_WORKTREE_STATUS} is non-empty: say "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (working tree dirty at cycle start: ${CYCLE_WORKTREE_STATUS}). Manual cleanup required." and end. (Do NOT auto-checkout/auto-stash — a human must inspect and decide.)
-   Run: cd <REPO_PATH> && git fetch origin && gh pr checkout <PR_NUMBER> — abort cycle on any non-zero exit.
+   Check the `git status` exit code separately from the captured stdout: if `git status` itself exits non-zero (corrupted index, lock contention, missing .git/), say "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (git status failed: <stderr>)." and end — do NOT proceed to inspect emptiness.
+   If ${CYCLE_WORKTREE_STATUS} is non-empty (tree is dirty): truncate it for the sentinel — set CYCLE_WORKTREE_DIRTY_COUNT = `printf '%s' "${CYCLE_WORKTREE_STATUS}" | wc -l`, set CYCLE_WORKTREE_DIRTY_FIRST = `printf '%s' "${CYCLE_WORKTREE_STATUS}" | head -n1`. Then say "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (working tree dirty: ${CYCLE_WORKTREE_DIRTY_COUNT} modified path(s); first: ${CYCLE_WORKTREE_DIRTY_FIRST}). Manual cleanup required." and end. (Do NOT auto-checkout/auto-stash — a human must inspect and decide.)
+
+   Pre-condition B — no orphan watcher stash from a crashed prior cycle:
+   set CYCLE_ORPHAN_STASHES = `cd <REPO_PATH> && git stash list --format='%gs' | grep -E 'pr-fix watcher: lint-aborted cycle' || true`
+   If ${CYCLE_ORPHAN_STASHES} is non-empty: say "Sentinel: WATCH_TRANSIENT_ERROR — step 2 (orphan watcher stash detected: ${CYCLE_ORPHAN_STASHES}). A prior cycle crashed between stash-push and stash-drop. Inspect with \`git stash list\` and resolve manually before re-running." and end.
+
+   Then run: cd <REPO_PATH> && git fetch origin && gh pr checkout <PR_NUMBER> — abort cycle on any non-zero exit.
    (`gh pr checkout` is cross-fork-safe — it handles fork PRs and existing local branches.)
    Post-condition: re-query the PR's expected head SHA via `gh pr view <PR_NUMBER> --json headRefOid --jq '.headRefOid'`, store as ${CYCLE_EXPECTED_HEAD_SHA}, then check `git rev-parse HEAD` matches; abort cycle if mismatch (partial checkout).
 
@@ -878,9 +900,27 @@ MERGEEOF
 
    a. Group actionable + Confidence:HIGH/MEDIUM comments by file. For each file: apply fix with Edit tool per the comment suggestion (using the context already gathered above).
    b. Run `pnpm exec biome check` on modified files (or `pnpm lint` for the project-wide check). On lint failure, REVERT the just-applied edits before ending the cycle (otherwise the next cycle's clean-tree gate at Step 2 will refuse, looking like a transient error). Use `git stash push -u` (NOT raw `git checkout --`): `git checkout --` is destructive and would also discard any orphaned modifications that pre-existed this cycle's Edit calls — the stash form preserves them in the reflog so a human can recover if needed:
-       Run: `git stash push -u -m "pr-fix watcher: lint-aborted cycle ${CYCLE_HEAD_SHA:-pre-push}"` — capture exit code; if stash itself fails, fall through to a hard abort (`Sentinel: WATCH_TRANSIENT_ERROR — step 7b (git stash failed: <stderr>)`).
-       Run: `git stash drop` (the stashed state is for the reflog only — we don't want to leave a permanent stash entry on every lint-aborted cycle).
-       Then say "Sentinel: WATCH_LINT_FAILED — PR #<PR_NUMBER> cycle aborted; lint rejected the proposed fix; working tree restored (stashed-and-dropped — recoverable from the reflog)." and end the cycle.
+
+   - Run: `git stash push -u -m "pr-fix watcher: lint-aborted cycle ${CYCLE_HEAD_SHA:-pre-push}"` — capture exit code; if stash itself fails, fall through to a hard abort (`Sentinel: WATCH_TRANSIENT_ERROR — step 7b (git stash failed: <stderr>)`).
+   - Run: `git stash drop` and capture its exit code.
+     - If `git stash drop` SUCCEEDS: say `Sentinel: WATCH_LINT_FAILED — PR #<PR_NUMBER> cycle aborted; lint rejected the proposed fix; working tree restored (stashed-and-dropped — recoverable from the reflog).` and end the cycle.
+     - If `git stash drop` FAILS (rare — stash ref moved, locked index): the stash entry persists at `stash@{0}` and orphan stashes will accumulate. Emit a degraded sentinel: `Sentinel: WATCH_LINT_FAILED — PR #<PR_NUMBER> cycle aborted; lint rejected the proposed fix; stash retained at stash@{0} — drop failed: <stderr>. Resolve manually with \`git stash drop stash@{0}\`.` and end the cycle.
+
+   **Recovery procedure (if a maintainer wants to inspect the discarded fix after a `WATCH_LINT_FAILED`):**
+
+   Even after `git stash drop`, the stash COMMIT remains in `git fsck --unreachable` for `gc.reflogExpire` (default 90 days). To recover:
+
+   ```bash
+   # 1. Find unreachable stash commits.
+   git fsck --unreachable --no-reflogs 2>/dev/null | grep '^unreachable commit' | awk '{print $3}' | while read sha; do
+     git log -1 --format='%H %s' "$sha" | grep -q 'pr-fix watcher: lint-aborted cycle' && echo "$sha"
+   done
+
+   # 2. Apply (or just inspect) the SHA you want.
+   git stash apply <sha>
+   # OR
+   git show <sha>
+   ```
    c. Stage: `git add <changed files>` (verify only fix-related files are staged with `git diff --cached --name-only`; unstage unrelated files with `git reset HEAD <file>` if needed).
    d. Commit: `git commit -m "$(cat <<'INNEREOF'
 fix: address PR review findings
@@ -933,10 +973,18 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 
 Every terminal step ends with a single grep-able `Sentinel: NAME — <human prose>` line. This registry is the single source of truth for `/pr-fix` — adding a new sentinel requires adding a row here in the same PR.
 
+### Stability policy
+
+Downstream parsers (CI gates, dashboards, the `/pr-review` companion skill) MAY rely on the grammar in this registry. Changes are governed as follows:
+
+- **Patch / minor** (no breaking change): adding a new sentinel, adding a new field at the END of an existing trailer, fixing a trailer's prose without changing tokens or field order — all OK without a deprecation window.
+- **Major** (breaking change): renaming a sentinel, removing a field, changing field order, narrowing the value space of a field. REQUIRES the 4-step deprecation flow used elsewhere in the repo (AGENTS.md §7): introduce the new sentinel/grammar → emit BOTH the old and the new for one minor → mark the old `@deprecated` in this registry → remove the old in the next major.
+- **Cross-skill changes** (a sentinel is shared between `/pr-review` and `/pr-fix`): the change must land in BOTH registries in the same PR. The "Drift reminder" sections in both skills name the cross-references that govern this.
+
 | Sentinel | Owning step | Fires on | Trailer grammar |
 |---|---|---|---|
 | `RECONCILE_OK` | Step 9.5 | Reconciliation pass succeeded (every thread in a Step 5f terminal state) | `— <N> threads addressed (<F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped).` |
-| `RECONCILE_FAILED` | Step 9.5 | At least one thread is in an unknown terminal state | `— thread <id> in unknown state` |
+| `RECONCILE_FAILED` | Step 9.5 | At least one thread is in an unknown terminal state | `— threads [<id>, <id>, ...] in unknown state.` (single summary line listing every defective thread) |
 | `FIX_DONE_PR` | Step 11 | Terminal sentinel for the whole `/pr-fix <PR>` (no `--watch`) run | `— PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>, ci=<PASS\|FAIL\|PENDING\|PENDING_TIMEOUT\|NA>, commit=<HEAD_SHA_SHORT>` |
 | `WATCH_REJECTED` | Step 12 pre-flight | Empty prompt OR un-substituted CronCreate-time placeholder | `— <reason>` |
 | `WATCH_TRANSIENT_ERROR` | Step 12 watcher (any cycle command) | Any non-zero exit from a `Run:` / `set ... = \`...\`` command, OR dirty working tree at cycle start | `— step <N> (<command>): <stderr>` |

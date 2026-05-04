@@ -277,11 +277,12 @@ Before launching review agents, read the project-level documentation that define
 2. `MISSION.md` — mission, scope, and values. Explains *why* the rules in AGENTS.md exist.
 3. `CONTRIBUTING.md` — dev setup, package layout, release/changesets flow.
 4. `biome.json` — style/lint rules enforced on PRs (`pnpm lint`).
-5. `docs/jsdoc-style.md` — **canonical JSDoc style guide** for the monorepo. Operationalizes AGENTS.md §6. Read whenever the diff touches an exported symbol from any `packages/<pkg>/src/index.ts` re-export entry, an `@example` block, or any JSDoc comment. Backed by `docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md` (rollout sequence).
 
 ### Conditional baseline (read when relevant)
 
+5. `docs/jsdoc-style.md` — **canonical JSDoc style guide** for the monorepo. Operationalizes AGENTS.md §6. Read whenever the diff touches an exported symbol from any `packages/<pkg>/src/index.ts` re-export entry, an `@example` block, or any JSDoc comment. Backed by `docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md` (rollout sequence).
 6. `SECURITY.md` — security policy. Read if any security-relevant code is touched (auth, signing, RPC URLs, calldata, addresses).
+7. `docs/tibs/TEMPLATE.md` — read if a doc/TIB-style file is touched in the diff.
 
 ### Per-package context (only for packages touched by the diff)
 
@@ -319,13 +320,13 @@ Do NOT use `-maxdepth 2` — it would miss nested `AGENTS.md` (e.g. `packages/mo
 
 ### Files outside `packages/`
 
-If a changed file lives outside `packages/` (root files like `AGENTS.md` itself, or `.agents/commands/*.md`, `.github/workflows/*`, `scripts/*`, `docs/*`, etc.), it has no per-package context — use only the root-level baseline (items 1–5). Do NOT attempt to derive a synthetic package directory from the path.
+If a changed file lives outside `packages/` (root files like `AGENTS.md` itself, or `.agents/commands/*.md`, `.github/workflows/*`, `scripts/*`, `docs/*`, etc.), it has no per-package context — use only the root-level baseline (items 1–4 always; items 5–7 when their conditional triggers apply). Do NOT attempt to derive a synthetic package directory from the path.
 
 ### Worked example
 
 If the diff touches `packages/morpho-sdk/src/actions/foo.ts` and `packages/blue-sdk-viem/src/bar.ts`:
 
-- Always read: `AGENTS.md`, `MISSION.md`, `CONTRIBUTING.md`, `biome.json`. Add `docs/jsdoc-style.md` if either file modifies an exported symbol's signature or JSDoc. Add `SECURITY.md` if security-relevant code is touched.
+- Always read (items 1–4): `AGENTS.md`, `MISSION.md`, `CONTRIBUTING.md`, `biome.json`. Conditionally read (items 5–7): `docs/jsdoc-style.md` if either file modifies an exported symbol's signature, JSDoc, or `@example` block; `SECURITY.md` if security-relevant code is touched; `docs/tibs/TEMPLATE.md` if a TIB-style doc is touched.
 - For `packages/morpho-sdk`: `packages/morpho-sdk/AGENTS.md`, `packages/morpho-sdk/README.md`, `packages/morpho-sdk/ARCHITECTURE.md`, `packages/morpho-sdk/BUNDLER3.md`, `packages/morpho-sdk/src/actions/AGENTS.md` (nested, on the path).
 - For `packages/blue-sdk-viem`: `packages/blue-sdk-viem/AGENTS.md`, `packages/blue-sdk-viem/README.md`.
 
@@ -343,10 +344,6 @@ Context files read (N):
   packages/morpho-sdk/src/actions/AGENTS.md
   ...
 ```
-
-### Conditional / adaptive (read when relevant)
-
-7. `docs/tibs/TEMPLATE.md` — read if a doc/TIB-style file is touched in the diff.
 
 ## Step 5: Launch Parallel Review Agents
 
@@ -760,14 +757,23 @@ If `--fix` was passed, proceed to **Step 7 (alt 2b)**. Otherwise the skill is co
 
 The Edit tool has no undo. If a fix breaks linting we must revert WITHOUT clobbering pre-existing uncommitted user work. The discipline runs in two pre-flight checks before the fix loop:
 
-**Check 1 — refuse to start on a stale safety stash.** A prior `--local --fix` run that crashed could leave a `pr-review --local --fix safety stash` entry in `git stash list`. Detect that and abort loud — the user must inspect it before we create another stash with the same message:
+**Check 1 — refuse to start on a stale safety stash.** A prior `--local --fix` run that crashed could leave a `pr-review --local --fix safety stash` entry in `git stash list`. Detect that and abort loud — the user must inspect it before we create another stash with the same message.
+
+The check anchors on the WHOLE stash subject (after stripping `git stash list`'s `On <branch>:` prefix) using fixed-string matching, so a user-named stash that merely *contains* the substring won't false-positive:
 
 ```bash
-if git stash list | grep -q 'pr-review --local --fix safety stash'; then
+if git stash list --format='%gs' | grep -Fxq 'pr-review --local --fix safety stash'; then
   echo "Sentinel: FIX_ABORTED — a stale 'pr-review --local --fix safety stash' already exists in git stash list."
   echo "Inspect it with: git stash list / git stash show --include-untracked -p stash@{N}"
   echo "Resolve it (pop, drop, or restore manually) before re-running this skill."
-  exit 1
+  echo ""
+  echo "Escape hatch for false-positives: if you have a deliberately-named stash with this exact subject"
+  echo "that you want to keep, drop the safety check by setting PR_REVIEW_FIX_BYPASS_STALE_STASH=1 in"
+  echo "the environment. Use sparingly — the check exists to prevent stash-pop ambiguity."
+  if [ "${PR_REVIEW_FIX_BYPASS_STALE_STASH:-0}" != "1" ]; then
+    exit 1
+  fi
+  echo "PR_REVIEW_FIX_BYPASS_STALE_STASH=1 — bypassing stale-stash check at user request."
 fi
 ```
 
@@ -900,8 +906,8 @@ The watcher prompt embeds three kinds of placeholders. Substituting them incorre
 **Pre-flight check before calling CronCreate** — scan the assembled prompt for any remaining `<[A-Z_]+>` substring AND check it against the CronCreate-time allowlist above. ONLY abort if a remaining match is in the allowlist (i.e. should have been substituted). Do NOT abort on report-template tokens (`<N>`, `<X>`, etc.) or on structural tokens. The empty-prompt case must also abort loud — an unset `$ASSEMBLED_PROMPT` would silently pass the grep check (no match → exit 1 → grep returns 1, which is FALSE under `if`):
 
 ```
-if [ -z "$ASSEMBLED_PROMPT" ]; then
-  echo "Sentinel: WATCH_REJECTED — assembled prompt is empty or unset; refusing to schedule a no-op watcher." >&2
+if [ -z "${ASSEMBLED_PROMPT//[[:space:]]/}" ]; then
+  echo "Sentinel: WATCH_REJECTED — assembled prompt is empty, unset, or whitespace-only; refusing to schedule a no-op watcher." >&2
   exit 1
 fi
 ALLOWLIST_REGEX='<(PR_NUMBER|OWNER|REPO|REPO_PATH|HEAD_BRANCH|BASE_BRANCH|BOT_LOGIN)>'
@@ -954,7 +960,7 @@ CYCLE START:
 
    set CYCLE_LAST_REVIEWED_RAW = `gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews?per_page=100`
    if gh exit code != 0: abort cycle with WATCH_TRANSIENT_ERROR (auth / rate-limit / network — do NOT fall through to "review everything", which would post duplicate full reviews on every transient failure)
-   set CYCLE_LAST_REVIEWED_SHA = `printf '%s' "$CYCLE_LAST_REVIEWED_RAW" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or (.body | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | .commit_id // ""'`
+   set CYCLE_LAST_REVIEWED_SHA = `printf '%s' "${CYCLE_LAST_REVIEWED_RAW}" | jq --arg login "<BOT_LOGIN>" -r '[.[] | select(.user.login == $login or (.body | test("Parallel PR Review|Code Review Summary")))] | sort_by(.submitted_at) | last | .commit_id // ""'`
 
    - If gh exit was zero AND ${CYCLE_LAST_REVIEWED_SHA} is empty (no previous review), proceed with empty value (review everything on first sighting).
    - Otherwise ${CYCLE_LAST_REVIEWED_SHA} is the returned commit_id.
@@ -1014,10 +1020,18 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 
 Every terminal step ends with a single grep-able `Sentinel: NAME — <human prose>` line. This registry is the single source of truth — adding a new sentinel requires adding a row here in the same PR.
 
+### Stability policy
+
+Downstream parsers (CI gates, dashboards, the `/pr-fix` companion skill) MAY rely on the grammar in this registry. Changes are governed as follows:
+
+- **Patch / minor** (no breaking change): adding a new sentinel, adding a new field at the END of an existing trailer, fixing a trailer's prose without changing tokens or field order — all OK without a deprecation window.
+- **Major** (breaking change): renaming a sentinel, removing a field, changing field order, narrowing the value space of a field (e.g. removing `PENDING_TIMEOUT` from `ci=`). REQUIRES the 4-step deprecation flow used elsewhere in the repo (AGENTS.md §7): introduce the new sentinel/grammar → emit BOTH the old and the new for one minor → mark the old `@deprecated` in this registry → remove the old in the next major.
+- **Cross-skill changes** (a sentinel is shared between `/pr-review` and `/pr-fix`): the change must land in BOTH registries in the same PR. The "Drift reminder" sections in both skills name the cross-references that govern this.
+
 | Sentinel | Owning step | Fires on | Trailer grammar |
 |---|---|---|---|
 | `REVIEW_CLEAN` | Step 7 (alt 2) | Local-only mode, zero findings, zero agent failures | `— no issues found in <HEAD_BRANCH> vs <BASE_BRANCH>.` |
-| `REVIEW_INCOMPLETE` | Step 7 (alt 2) | Local-only mode, zero findings BUT some agents crashed | `— <CYCLE_FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` |
+| `REVIEW_INCOMPLETE` | Step 7 (alt 2) | Local-only mode, zero findings BUT some agents crashed | `— <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` |
 | `REVIEW_DONE_LOCAL` | Step 7 (alt 2) | Local-only mode, non-zero findings | `— <N> findings (X critical, Y high, Z medium, W low) on <HEAD_BRANCH> vs <BASE_BRANCH>.` |
 | `REVIEW_DONE_PR` | Step 8 | CI / Local PR modes, end of run | `— PR #<PR_NUMBER>, <N> findings, mode=<CI\|LocalPR>, commit=<HEAD_SHA_SHORT>` |
 | `FIX_DONE_LOCAL` | Step 7 (alt 2b) | `--local --fix` happy path | `— <X> applied, <Y> skipped (Local-only, unstaged).` |
@@ -1029,7 +1043,7 @@ Every terminal step ends with a single grep-able `Sentinel: NAME — <human pros
 | `WATCH_REVIEW_CLEAN` | Step 9 watcher Step 3 | No new commits since last review | `— PR #<PR_NUMBER> still at ${CYCLE_HEAD_SHA_SHORT}, no new commits since last review.` |
 | `WATCH_REVIEW_DONE` | Step 9 watcher Step 11 | Review posted for a new commit | `— PR #<PR_NUMBER> commit ${CYCLE_HEAD_SHA_SHORT}: <N> findings (X critical, Y high, Z medium, W low).` |
 
-`/pr-fix` owns its own sentinel set (`FIX_DONE_PR`, `RECONCILE_OK`, `RECONCILE_FAILED`, `WATCH_FIX_DONE`, `WATCH_FIX_GREEN`, `WATCH_LINT_FAILED`, `WATCH_PR_CLOSED`, plus shared `WATCH_REJECTED` / `WATCH_TRANSIENT_ERROR`); see `pr-fix.md`'s registry for grammar.
+`/pr-fix` owns its own sentinel set (`FIX_DONE_PR`, `RECONCILE_OK`, `RECONCILE_FAILED`, `WATCH_FIX_DONE`, `WATCH_FIX_GREEN`, `WATCH_LINT_FAILED`, plus shared `WATCH_REJECTED` / `WATCH_TRANSIENT_ERROR` / `WATCH_PR_CLOSED`); see `pr-fix.md`'s registry for grammar.
 
 ## Error Handling
 
