@@ -351,51 +351,13 @@ Proceeding with <N> actionable fixes...
 
 Only proceed to Step 6 with comments classified as **actionable** AND **not already addressed**. All other categories are handled in Step 9 (replies) and Step 9.5 (reconciliation), not in Step 6 (fix application).
 
-### 5f: Per-category routing table — used by Step 9, Step 9.5, and Step 12 watcher
+### 5f: Per-category routing — see `.agents/lib/pr-fix-routing.md`
 
-Step 5a defines **seven** terminal categories. The Mixed-purpose case (Question + Actionable, see 5a) is NOT a separate category — it's a variant of `Actionable fix (fixed)` with extended reply text. The table below has one row per category PLUS a Mixed-purpose variant row, so the row count (8) > the category count (7).
+The routing table (eight rows, exact reply text per category, resolve-yes/no per category) is the single source of truth for both Step 9 and Step 12 watcher Step 7. It lives in `.agents/lib/pr-fix-routing.md` so the main flow and the watcher reference one source instead of maintaining two parallel copies.
 
-Step 9 implements one path per category. Memorize this routing table; do NOT collapse non-actionable categories into "skipped". The exact reply text is the contract — Step 9 sub-steps and the watcher's Step 7f use these exact strings (modulo the cycle-substituted `${CYCLE_HEAD_SHA}` instead of `<HEAD_SHA>` in the watcher).
+**Read `.agents/lib/pr-fix-routing.md` now and treat its routing table as the contract for Step 9 below.** Step 9 emits the per-category replies + resolves following that file's reply-mechanism + resolve-mechanism templates.
 
-| Category (or variant) | Step 9 path | Exact reply text | Resolve thread? |
-|---|---|---|---|
-| **Actionable fix** (after Step 6 applies it) | 9a | `Fixed in <HEAD_SHA> — <brief>` | yes |
-| **Actionable fix** (skipped: low confidence, false positive, conflict) | 9c-skipped | `Skipped — <reason>. Leaving for human review.` | no |
-| **Question / Clarification** | 9c-question | `Acknowledged — leaving for the author to answer.` | no |
-| **Discussion / Opinion** | 9c-discussion | `Leaving this for human discussion.` | no |
-| **Praise / Acknowledgment** | 9c-praise | (no reply) | yes |
-| **Already addressed** | 9c-already | `Already addressed in <SHA-or-current-code>.` | yes |
-| **Stale / Inapplicable** | 9c-stale | `Skipped — code referenced no longer exists at this location. Leaving for human review.` | no |
-| **Mixed-purpose VARIANT** (of Actionable+fixed; Step 5a) | 9a (extended) | `Fixed in <HEAD_SHA> — <brief>. (Re your question: <one-line answer>.)` | yes |
-
-**Verifying the per-category routing actually fires (smoke-test recipe)**: this routing is the single most easily-broken contract in the skill (a regression that collapses two categories into one would slip through the green-CI sentinel). To verify after touching Step 5f / Step 9 / Step 12 watcher:
-
-1. Create a throwaway PR with **eight review threads**: one per category above (7) plus one Mixed-purpose variant (which is an actionable+fixed comment that ALSO contains a question). The actionable fix should be a trivial change (e.g. add a missing semicolon).
-2. Run `/pr-fix <PR>` (no `--watch`).
-3. Step 5d's printed bucket counts use the seven Step-5a category labels (NOT the eight Step-5f routing rows). Expected counts: `actionable: 3` (one fixed + one skipped + one mixed-purpose, all classified as actionable in Step 5a), and each of `question / discussion / praise / already-addressed / stale: 1`. (Mixed-purpose is part of the actionable bucket; the Step 5d table does NOT have a separate Mixed-purpose column.)
-4. After the run, fetch all eight threads and verify each thread's last comment matches the **exact reply text** column above (modulo placeholder substitution). Distinguish the routing rows by grep, in this order (first match wins per thread):
-   - **Mixed-purpose VARIANT** → grep for the substring `(Re your question:` → exactly **1** match.
-   - **Actionable+fixed (plain)** → count `Fixed in ` matches that do NOT also contain `(Re your question:` → exactly **1**.
-   - **Actionable+skipped** → count `Skipped — ` matches whose body does NOT also start with `Skipped — code referenced no longer exists` → exactly **1**.
-   - **Stale** → count `Skipped — code referenced no longer exists` → exactly **1**.
-   - **Question** → count `Acknowledged — ` → exactly **1**.
-   - **Discussion** → count `Leaving this for human discussion.` → exactly **1**.
-   - **Already-addressed** → count `Already addressed in ` → exactly **1**.
-   - **Praise** → no reply; verify the praise thread's last comment is the original praise (not a bot reply) and the thread is `isResolved=true`.
-5. Verify resolved-state matches the `Resolve thread?` column.
-
-**Empty-list smoke-test (covers the Step 4 → Step 9.5 → Step 11 early-exit path):**
-
-**Pre-conditions for the recipe**: the throwaway PR must be cleanly mergeable with its base — Step 3 (merge-conflict resolution) must be a no-op. If Step 3 has to push a merge commit, HEAD will have moved by the time Step 11 fires and the expected `commit=<existing-head-SHA-from-Step-2b>` field below will instead be the merge commit SHA (still valid output, but not what the recipe checks for).
-
-1. Create a throwaway PR with NO unresolved review threads (every thread already resolved, or no threads at all). Verify the PR is "mergeable" via `gh pr view <PR> --json mergeable --jq '.mergeable'` returning `MERGEABLE` BEFORE running the recipe (so Step 3 is a no-op).
-2. Run `/pr-fix <PR>` (no `--watch`).
-3. Expected output sequence:
-   - `No unresolved comments to fix on PR #<PR>.` (from Step 4's empty-list early-exit notice)
-   - `Sentinel: RECONCILE_OK — 0 threads addressed (0 fixed-and-resolved, 0 skipped-with-reply, 0 questions, 0 discussions, 0 praise-resolved, 0 already-addressed-resolved, 0 stale-skipped).`
-   - `PR #<PR> — no commit, no push.` (the Step 11 "no fix pushed" leading line)
-   - `Sentinel: FIX_DONE_PR — PR #<PR>, fixed 0, skipped 0, resolved 0, ci=NA, commit=<existing-head-SHA-from-Step-2b>`
-4. Verify `git log -1 --format='%h %s'` shows the PR's pre-existing head (no new fix commit was created). If a merge commit appears (because pre-condition was violated and Step 3 ran), the recipe's exact-output assertions below the merge commit are no longer comparable — re-run on a cleanly-mergeable PR.
+Smoke-test recipes for this routing (per-category; empty-list early-exit) live in `.agents/commands/AGENTS.md` — maintainer-only material.
 
 ## Step 6: Apply Fixes
 
@@ -525,113 +487,14 @@ EOF
 git push origin <HEAD_BRANCH>
 ```
 
-## Step 9: Reply to and Resolve Review Threads
+## Step 9: Reply to and resolve review threads
 
-For each finding that was fixed:
+**Read `.agents/lib/pr-fix-routing.md` (already loaded in Step 5f) and follow it verbatim.** For each thread classified in Step 5a, look up its routing-table row and:
 
-### 9a: Reply to the comment thread
+1. Send the reply (if the row's reply column is non-empty) using the file's reply-mechanism heredoc template, substituting `<HEAD_SHA>` (this is the main flow), `<commentId>` from Step 4, and any per-finding fields (`<brief>`, `<reason>`, `<SHA-or-current-code>`, `<one-line answer>` for Mixed-purpose).
+2. Resolve the thread (if the row's resolve column is `yes`) using the file's resolve-mechanism graphql mutation with `<threadId>` from Step 4.
 
-Use a heredoc inside `$(cat <<'EOF' ... EOF)` to ensure real newlines (not literal `\n`):
-
-```bash
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  --method POST \
-  -F in_reply_to=<commentId> \
-  -f body="$(cat <<'REPLY_EOF'
-> <abbreviated original comment>
-
-Fixed in <HEAD_SHA> — <brief description of what was changed>
-REPLY_EOF
-)"
-```
-
-### 9b: Resolve the thread
-
-```bash
-gh api graphql -f query='
-  mutation($threadId: ID!) {
-    resolveReviewThread(input: {threadId: $threadId}) {
-      thread { isResolved }
-    }
-  }' -f threadId=<threadId>
-```
-
-### 9c: For non-fixed findings — route per the Step 5f table
-
-Each category gets a distinct reply + resolve action. Do NOT collapse them all into "skipped + leave open" — that contradicts Step 5f.
-
-**9c-skipped (actionable but not applied — low confidence / false positive / convention conflict):** reply with reason, do NOT resolve.
-
-```bash
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  --method POST \
-  -F in_reply_to=<commentId> \
-  -f body="$(cat <<'REPLY_EOF'
-> <abbreviated original comment>
-
-Skipped — <reason why this was not fixed>. Leaving for human review.
-REPLY_EOF
-)"
-```
-
-**9c-question (Question / Clarification):** reply acknowledging, do NOT resolve. Author answers.
-
-```bash
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  --method POST \
-  -F in_reply_to=<commentId> \
-  -f body="$(cat <<'REPLY_EOF'
-> <abbreviated original comment>
-
-Acknowledged — leaving for the author to answer.
-REPLY_EOF
-)"
-```
-
-**9c-discussion (Discussion / Opinion):** reply noting it's left for humans, do NOT resolve.
-
-```bash
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  --method POST \
-  -F in_reply_to=<commentId> \
-  -f body="$(cat <<'REPLY_EOF'
-> <abbreviated original comment>
-
-Leaving this for human discussion.
-REPLY_EOF
-)"
-```
-
-**9c-praise (Praise / Acknowledgment):** no reply needed. Resolve the thread silently using the 9b mutation.
-
-**9c-already (Already addressed):** reply noting where it was addressed, AND resolve the thread.
-
-```bash
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  --method POST \
-  -F in_reply_to=<commentId> \
-  -f body="$(cat <<'REPLY_EOF'
-> <abbreviated original comment>
-
-Already addressed in <SHA-or-current-code description>.
-REPLY_EOF
-)"
-# then run the 9b resolve mutation
-```
-
-**9c-stale (Stale / Inapplicable):** reply noting the code moved/disappeared, do NOT resolve (leave for human to confirm).
-
-```bash
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  --method POST \
-  -F in_reply_to=<commentId> \
-  -f body="$(cat <<'REPLY_EOF'
-> <abbreviated original comment>
-
-Skipped — code referenced no longer exists at this location. Leaving for human review.
-REPLY_EOF
-)"
-```
+Do NOT inline the per-category bash here — the lib file is the contract. Track the bucket counts (`<F>`, `<SK>`, `<Q>`, `<D>`, `<P>`, `<A>`, `<ST>`, `<R>`) per the lib's output contract; Step 9.5 and Step 11 read these.
 
 ## Step 9.5: Reconcile All Current Open Threads
 
@@ -806,10 +669,6 @@ fi
 
 **Note on shell syntax in the watcher prompt below**: the watcher agent reads each numbered step as INSTRUCTIONS, not as a verbatim bash script. When you see `set CYCLE_HEAD_SHA = ...` it means "compute the value via the shown command, store it as the cycle-local variable named `CYCLE_HEAD_SHA`, refer to it later as `${CYCLE_HEAD_SHA}`". When the watcher does run shell, the assignment is `CYCLE_HEAD_SHA=$(...)` (bare LHS — bash assignment never uses `${VAR}=...` on the LHS).
 
-### Drift reminder
-
-Step 7 below replicates the Step 5–9 logic from the main fix flow, including the per-category routing table from Step 5f. Any future change to the main flow's triage/reply behavior MUST be propagated here in the same PR.
-
 ### CronCreate parameters
 
 - cron: `*/2 * * * *`
@@ -933,36 +792,13 @@ INNEREOF
 )"`
    e. Push: `git push origin <HEAD_BRANCH>` — set CYCLE_HEAD_SHA = `git rev-parse HEAD` (the SHA produced by THIS cycle's push, NOT a CronCreate-time value).
 
-   f. **Per-category replies (use the routing table from main flow Step 5f). The Step 5f `<HEAD_SHA>` token in reply text becomes `${CYCLE_HEAD_SHA}` here):**
+   f. **Per-category replies + resolves**: read `.agents/lib/pr-fix-routing.md` and follow it verbatim. Substitute `${CYCLE_HEAD_SHA}` for `<HEAD_SHA>` in the actionable+fixed and Mixed-purpose rows (the only intentional difference between main flow and watcher). Non-actionable categories (praise, already-addressed via current-code, stale, question, discussion) MUST NOT reference `${CYCLE_HEAD_SHA}` — it may be unset on cycles where step e never ran.
 
-      - **Actionable + fixed** (incl. Mixed-purpose) → only fires when step e ran AND ${CYCLE_HEAD_SHA} is set. Reply with EXACT text `Fixed in ${CYCLE_HEAD_SHA} — <brief>` (or, for Mixed-purpose, `Fixed in ${CYCLE_HEAD_SHA} — <brief>. (Re your question: <one-line answer>.)`) + resolve thread (mutation in step g).
-      - **Actionable + skipped (Confidence:LOW or convention conflict)** → reply EXACT `Skipped — <reason>. Leaving for human review.` + leave unresolved.
-      - **Question** → reply EXACT `Acknowledged — leaving for the author to answer.` + leave unresolved.
-      - **Discussion** → reply EXACT `Leaving this for human discussion.` + leave unresolved.
-      - **Praise** → no reply (do NOT call the comments POST endpoint), just resolve via step g. NEVER reference ${CYCLE_HEAD_SHA} here — it may be unset on praise-only cycles.
-      - **Already-addressed** → reply EXACT `Already addressed in <SHA-or-current-code>.` + resolve. NEVER reference ${CYCLE_HEAD_SHA} here.
-      - **Stale** → reply EXACT `Skipped — code referenced no longer exists at this location. Leaving for human review.` + leave unresolved. NEVER reference ${CYCLE_HEAD_SHA} here.
+      Track bucket counts (`<F>`, `<SK>`, `<Q>`, `<D>`, `<P>`, `<A>`, `<ST>`, `<R>`) per the lib's output contract for use in step h's sentinel.
 
-      Reply text MUST match the Step 5f table verbatim (the only intentional difference is `<HEAD_SHA>` → `${CYCLE_HEAD_SHA}` in the watcher). All replies use heredoc-inline form for real newlines:
-
-```
-gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/comments \
-  --method POST \
-  -F in_reply_to=<commentId> \
-  -f body="$(cat <<'REPLY_EOF'
-> <abbreviated comment>
-
-<reply text per Step 5f category above — substitute ${CYCLE_HEAD_SHA} only in the actionable+fixed branches>
-REPLY_EOF
-)"
-```
-
-   g. Resolve threads (categories: actionable+fixed / praise / already-addressed):
-      `gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -f id=<threadId>`
-
-   h. Determine the cycle's CI verdict for the sentinel. The watcher's Step 4 captures only `${CYCLE_FAILED_CHECKS}` (one-shot, no poll). Pending checks are NOT captured because the cycle runs every 2 minutes anyway — a still-running CI is just picked up by the next cycle. Therefore the watcher's `ci=` value space is `FAIL` / `NA` / `UNKNOWN`:
+   g. Determine the cycle's CI verdict for the sentinel. The watcher's Step 4 captures only `${CYCLE_FAILED_CHECKS}` (one-shot, no poll). Pending checks are NOT captured because the cycle runs every 2 minutes anyway — a still-running CI is just picked up by the next cycle. Therefore the watcher's `ci=` value space is `FAIL` / `NA` / `UNKNOWN`:
      - `FAIL` — `${CYCLE_FAILED_CHECKS}` is non-empty.
-     - `NA` — the cycle made no commit AND no CI run was triggered (e.g. WATCH_FIX_GREEN path, or cycle ended at WATCH_LINT_FAILED before push). Step 7h is reached only on the actual fix-and-push branch, so `NA` is rare here but reserved for completeness.
+     - `NA` — the cycle made no commit AND no CI run was triggered (e.g. WATCH_FIX_GREEN path, or cycle ended at WATCH_LINT_FAILED before push). Step 7g is reached only on the actual fix-and-push branch, so `NA` is rare here but reserved for completeness.
      - `UNKNOWN` — fix was pushed and `${CYCLE_FAILED_CHECKS}` is empty (could be PASS, could be PENDING; the watcher does not distinguish — that's `FIX_DONE_PR`'s job, which polls with a timeout).
 
    Set CYCLE_CI_VERDICT accordingly, then say:
@@ -980,25 +816,7 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 
 ## Sentinel grammar registry
 
-Every terminal step ends with a single grep-able `Sentinel: NAME — <human prose>` line. This registry is the single source of truth for `/pr-fix` — adding a new sentinel requires adding a row here in the same PR.
-
-Sentinel names and trailer field order are part of the contract — rename or reorder fields only with a deprecation note in the central registry at `.agents/commands/AGENTS.md`.
-
-| Sentinel | Owning step | Fires on | Trailer grammar |
-|---|---|---|---|
-| `RECONCILE_OK` | Step 9.5 | Reconciliation pass succeeded (every thread in a Step 5f terminal state) | `— <N> threads addressed (<F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped).` |
-| `RECONCILE_FAILED` | Step 9.5 | At least one thread is in an unknown terminal state | `— <N> threads in unknown state: <id1> <id2> <id3>.` (single summary line, space-separated IDs — shell-friendly for `for id in` loops) |
-| `FIX_DONE_PR` | Step 11 | Terminal sentinel for the whole `/pr-fix <PR>` (no `--watch`) run | `— PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>, ci=<PASS\|FAIL\|PENDING\|PENDING_TIMEOUT\|NA>, commit=<HEAD_SHA_SHORT>` |
-| `WATCH_REJECTED` | Step 12 pre-flight | Empty prompt OR un-substituted CronCreate-time placeholder | `— <reason>` |
-| `WATCH_TRANSIENT_ERROR` | Step 12 watcher (any cycle command) | Any non-zero exit from a `Run:` / `set ... = \`...\`` command, OR dirty working tree at cycle start | `— step <N> (<command>): <stderr>`. **Note**: permanent failures (branch-protection rejection on `git push`, expired auth token) flow through this same sentinel and will repeat every 2 minutes until the watcher expires (3 days) or the user runs `CronDelete`. Watch for repeated identical sentinels and intervene. |
-| `WATCH_PR_CLOSED` | Step 12 watcher Step 1 | PR is no longer in OPEN state | `— PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting.` |
-| `WATCH_FIX_GREEN` | Step 12 watcher Step 6 | Cycle has zero unresolved comments AND CI passing AND no conflicts | `— PR #<PR_NUMBER> is green (no unresolved comments, CI passing, no conflicts).` |
-| `WATCH_LINT_FAILED` | Step 12 watcher Step 7b | Lint rejected the proposed fix; cycle aborted with stash-and-drop revert | `— PR #<PR_NUMBER> cycle aborted; lint rejected the proposed fix; working tree restored (stashed-and-dropped — recoverable from the reflog).` |
-| `WATCH_FIX_DONE` | Step 12 watcher Step 7h | Cycle completed (some categories may be 0) | `— PR #<PR_NUMBER> cycle complete: <F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped. Merge SHA: ${CYCLE_MERGE_SHA:-none}. Push SHA: ${CYCLE_HEAD_SHA:-none}. Resolved <R> threads. ci=<FAIL\|NA\|UNKNOWN>.` (watcher's Step 4 is one-shot, no poll — distinguishing PASS from PENDING requires the poll loop in `FIX_DONE_PR`'s Step 10c) |
-
-The `WATCH_FIX_DONE` and `RECONCILE_OK` count buckets use **identical labels** (`F` / `SK` / `Q` / `D` / `P` / `A` / `ST`) so a downstream parser can grep either with the same regex.
-
-The full sentinel grammar registry across all skills (including the `/pr-review-ci`, `/pr-review-gh`, `/pr-review-local` set) lives in `.agents/commands/AGENTS.md`.
+Sentinel names and trailer grammars (for `RECONCILE_OK`, `RECONCILE_FAILED`, `FIX_DONE_PR`, `WATCH_REJECTED`, `WATCH_TRANSIENT_ERROR`, `WATCH_PR_CLOSED`, `WATCH_FIX_GREEN`, `WATCH_LINT_FAILED`, `WATCH_FIX_DONE`) live in `.agents/commands/AGENTS.md`. Adding a new sentinel or changing an existing trailer requires updating that file in the same PR.
 
 ## Error Handling
 

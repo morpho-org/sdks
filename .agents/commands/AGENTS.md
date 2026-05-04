@@ -49,3 +49,36 @@ Sentinel names and trailer field order are part of the contract — rename or re
 - **Placeholder discipline (watcher prompts)**: `<UPPERCASE>` placeholders are CronCreate-time substitutions; `${CYCLE_*}` placeholders are cycle-derived (computed inside each cycle by the watcher agent, NOT substituted at CronCreate time). Pre-flight grep before CronCreate must abort if any unsubstituted `<UPPERCASE>` remains.
 - **Whitespace-only validation**: `gh pr view` field validation must use `[ -z "${X//[[:space:]]/}" ]` — bare `[ -z "$X" ]` lets whitespace-only values silently pass.
 - **Codex pass**: removed in the iter-10 split. The pre-existing `codex exec` background invocation was vestigial (fire-and-forget, no dedup, optional). If you want a real co-reviewer, build it as Agent 8 in `pr-review-base.md` Step 5 with proper output integration into Step 6's aggregator.
+
+## Smoke-test recipes (maintainer-only, not loaded at runtime)
+
+### `/pr-fix` per-category routing
+
+The routing in `.agents/lib/pr-fix-routing.md` is the most easily-broken contract in the skill — a regression that collapses two categories into one would slip through the green-CI sentinel. To verify after touching the routing table, Step 9 of `/pr-fix`, or watcher Step 7:
+
+1. Create a throwaway PR with **eight review threads**: one per category in the routing table (7) plus one Mixed-purpose variant (an actionable+fixed comment that ALSO contains a question). The actionable fix should be a trivial change (e.g. add a missing semicolon).
+2. Run `/pr-fix <PR>` (no `--watch`).
+3. `/pr-fix` Step 5d's printed bucket counts use the seven Step-5a category labels (NOT the eight routing-table rows). Expected counts: `actionable: 3` (one fixed + one skipped + one mixed-purpose, all classified as actionable in Step 5a), and each of `question / discussion / praise / already-addressed / stale: 1`. (Mixed-purpose rolls up under actionable in the bucket counts.)
+4. After the run, fetch all eight threads and verify each thread's last comment matches the **exact reply text** column of the routing table (modulo placeholder substitution). Distinguish the rows by grep, in this order (first match wins per thread):
+   - **Mixed-purpose VARIANT** → grep for the substring `(Re your question:` → exactly **1** match.
+   - **Actionable+fixed (plain)** → count `Fixed in ` matches that do NOT also contain `(Re your question:` → exactly **1**.
+   - **Actionable+skipped** → count `Skipped — ` matches whose body does NOT also start with `Skipped — code referenced no longer exists` → exactly **1**.
+   - **Stale** → count `Skipped — code referenced no longer exists` → exactly **1**.
+   - **Question** → count `Acknowledged — ` → exactly **1**.
+   - **Discussion** → count `Leaving this for human discussion.` → exactly **1**.
+   - **Already-addressed** → count `Already addressed in ` → exactly **1**.
+   - **Praise** → no reply; verify the praise thread's last comment is the original praise (not a bot reply) and the thread is `isResolved=true`.
+5. Verify resolved-state matches the `Resolve thread?` column of the routing table.
+
+### `/pr-fix` empty-list early-exit (Step 4 → Step 9.5 → Step 11)
+
+**Pre-conditions**: the throwaway PR must be cleanly mergeable with its base — Step 3 (merge-conflict resolution) must be a no-op. If Step 3 has to push a merge commit, HEAD will have moved by the time Step 11 fires and the expected `commit=<existing-head-SHA-from-Step-2b>` field below will instead be the merge commit SHA.
+
+1. Create a throwaway PR with NO unresolved review threads (every thread already resolved, or no threads at all). Verify `gh pr view <PR> --json mergeable --jq '.mergeable'` returns `MERGEABLE` BEFORE running the recipe.
+2. Run `/pr-fix <PR>` (no `--watch`).
+3. Expected output sequence:
+   - `No unresolved comments to fix on PR #<PR>.` (from Step 4's empty-list early-exit notice)
+   - `Sentinel: RECONCILE_OK — 0 threads addressed (0 fixed-and-resolved, 0 skipped-with-reply, 0 questions, 0 discussions, 0 praise-resolved, 0 already-addressed-resolved, 0 stale-skipped).`
+   - `PR #<PR> — no commit, no push.` (the Step 11 "no fix pushed" leading line)
+   - `Sentinel: FIX_DONE_PR — PR #<PR>, fixed 0, skipped 0, resolved 0, ci=NA, commit=<existing-head-SHA-from-Step-2b>`
+4. Verify `git log -1 --format='%h %s'` shows the PR's pre-existing head (no new fix commit was created). If a merge commit appears, the recipe's pre-condition was violated and the exact-output assertions don't apply — re-run on a cleanly-mergeable PR.
