@@ -42,7 +42,7 @@ The `docs/tibs/` directory is empty after the migration in commit `4be989be` rem
 
 - Reach 100% JSDoc coverage on every exported symbol of every Tier 1–4 package, with `@param`, `@returns`, `@throws`, and `@example` on every exported function and method, per §6.
 - Codify a single canonical JSDoc shape so cleanup PRs converge instead of diverge.
-- Replace review-only enforcement with an automated CI gate that fails when any exported symbol on the public surface is missing the required tags.
+- Make coverage measurable via an observable burndown so each phase's progress is visible to reviewers without grepping the diff.
 - Publish a TypeDoc reference site per release, generated from the same JSDoc, per §7.
 
 **Non-Goals**
@@ -52,6 +52,7 @@ The `docs/tibs/` directory is empty after the migration in commit `4be989be` rem
 - Backfilling JSDoc on packages already marked deprecated in the root `README.md` and slated for removal.
 - Reformatting prose on existing JSDoc that already meets the §6 bar — only fill gaps and fix violations.
 - Standing up a docs website as part of this TIB; only the TypeDoc generator and CI publish step are in scope. A curated recipes site is a follow-up.
+- Adding a second linter to the toolchain. Biome owns lint per [`AGENTS.md`](../../AGENTS.md) §8, and adding ESLint (or any second linter) for a single rule family is out of scope. Automated JSDoc enforcement waits for Biome to ship JSDoc rules — see Considered Alternatives.
 
 ## Current Solution
 
@@ -90,14 +91,16 @@ Backfill in tiers, in the order the audit ranked them. Within each tier, one PR 
 
 PRs do not mix JSDoc backfill with feature work or refactors — one concern per PR per §8. PRs do not introduce code changes other than JSDoc; if a docstring reveals a real bug or naming flaw, the fix lands in a separate PR that the docstring PR depends on.
 
-### 3. Automated enforcement
+### 3. Observable progress, automated gate deferred
 
-Replace review-only enforcement with two CI gates, switched on **after Phase 1 lands** so the gate does not block in-flight feature work:
+Make coverage visible without adding a second linter. Ship the burndown script (`pnpm jsdoc:coverage`) and run it informationally in CI — the table shows up in workflow logs and PR descriptions for backfill PRs, so the trajectory is visible at every commit. Reviewers continue to hold the line on the canonical shape during Phases 1–4.
 
-- **`eslint-plugin-jsdoc`**, scoped via `overrides` to `packages/*/src/**/*.ts` excluding `*.test.ts`, `**/internal/**`, and `**/generated/**`. Rules to enable: `require-jsdoc` on exports, `require-param`, `require-returns`, `require-throws`, `require-example`, `check-tag-names`, `no-undefined-types`. Rules to **skip**: `require-description-complete-sentence` (too noisy on identifier-heavy descriptions).
-- **TypeDoc with `--treatWarningsAsErrors`** in CI for the public surface. TypeDoc warns on missing JSDoc when `--validation.notDocumented` is enabled; we promote those warnings to errors. Output published per §7 release flow.
+An automated gate lands only when one of these arrives:
 
-Per-package coverage is also tracked as an observable burndown (see Observability) so progress through Phases 1–4 is visible without grepping the diff.
+- **Biome ships JSDoc rules.** Biome owns lint per [`AGENTS.md`](../../AGENTS.md) §8. Adding rules there keeps the toolchain single-linter and avoids the dep / config / pin friction explored in Considered Alternatives.
+- **A lighter-weight in-repo gate** that does not bring in a second linter (e.g. extending the burndown script with a TypeScript compiler API walk to fail CI when Tier 1 regresses).
+
+Until then, the burndown is the load-bearing signal and review is the load-bearing gate. Reviewers must reject any new Tier 1 export that ships without §6 JSDoc.
 
 ### Implementation Phases
 
@@ -106,7 +109,7 @@ Per-package coverage is also tracked as an observable burndown (see Observabilit
 - **Phase 2 — Tier 2 (`blue-sdk`, `simulation-sdk`, `blue-sdk-viem`).** Finish entity classes (`Position`, `User`, `Holding`); document operation handlers and the operation discriminated union; document fetcher functions (`fetchMarket`, `fetchPosition`, `fetchVault`, …) and their type exports.
 - **Phase 3 — Tier 3 (`bundler-sdk-viem`, `liquidation-sdk-viem`, `liquidity-sdk-viem`, `migration-sdk-viem`).** Core encoders and entry points first; helpers second.
 - **Phase 4 — Tier 4 (`blue-sdk-wagmi`, `simulation-sdk-wagmi`, `morpho-ts`).** Hook contracts (`@param` for inputs, `@returns` describing the hook's return tuple, `@example` showing a minimal React caller); time and format utilities.
-- **Phase 5 — Enforcement.** Wire `eslint-plugin-jsdoc` and TypeDoc warnings-as-errors into the existing CI workflow. Require JSDoc on every new export from this point forward. Update `pnpm lint` to invoke the new ESLint pass alongside Biome.
+- **Phase 5 — Reassessment.** Re-evaluate the automated gate when Biome ships JSDoc rules (or a lighter-weight in-repo equivalent emerges). Until then, the burndown is the visible signal and reviewers hold the line per Phases 0–4 outcomes. No second linter is added in the meantime.
 - **Phase 6 — Publication.** TypeDoc site generated per release and linked from the per-major CHANGELOG entry per §7.
 
 ## Considered Alternatives
@@ -141,32 +144,37 @@ Require description, `@param`, `@returns`, `@throws` — but treat `@example` as
 
 **Why rejected:** The `@example` block is the single highest-leverage element for AI legibility. MISSION.md goal #3 calls out "runnable single-file recipes as few-shot examples" specifically. The burden is real but is the cost of meeting the rule we wrote.
 
-### Alternative 6: Extend Biome with a custom JSDoc rule
+### Alternative 6: Adopt `eslint-plugin-jsdoc` as the automated gate
 
-Wait until Biome ships a JSDoc plugin or rule set, and then enforce there to keep a single linter.
+Add ESLint, `typescript-eslint`, and `eslint-plugin-jsdoc` as devDependencies, configure a flat config scoped to backfilled paths, and chain `eslint` into `pnpm lint`.
 
-**Why rejected:** Biome has no plugin system for custom rules at the time of writing, and no JSDoc rules on its roadmap. Waiting for Biome would defer enforcement indefinitely. Revisit whenever Biome ships JSDoc support — at which point we collapse the two linters into one.
+**Why rejected:** Adds a second linter (ESLint + parser + plugin) on top of Biome with the explicit goal of replacing one of Biome's responsibilities. The repo's ajv pin (`pnpm.overrides.ajv: 8.18.0`) further requires scoped sub-overrides (`@eslint/eslintrc>ajv`, `eslint>ajv`) to coexist — that wiring is brittle and will surface again on every ESLint upgrade. Footprint is significant for a single rule family. Biome owns lint per §8; the strategic home for an automated gate is Biome itself when it ships JSDoc rules. Until then, observable burndown + reviewer enforcement is enough — see Proposed Solution pillar 3.
+
+### Alternative 7: TypeDoc with `--treatWarningsAsErrors` as the gate
+
+Run TypeDoc against Tier 1 entry points with `validation.notDocumented: true` and promote warnings to errors.
+
+**Why rejected:** TypeDoc's `@param` validator does not accept the dotted leaf-field notation (`@param params.args.amount`) that this repo's [`docs/jsdoc-style.md`](../jsdoc-style.md) mandates for nested options bags. Every leaf produces a "@param … was not used" warning, so `treatWarningsAsErrors: true` against the canonical exemplars (`marketV1Borrow`, `vaultV1Deposit`) fails on day one. Resolving this means either dropping the dotted convention or writing a TypeDoc plugin — both larger changes than this TIB scopes. `pnpm docs:check` continues to surface the warnings informationally.
 
 ## Assumptions & Constraints
 
-- Reviewers hold the line on the canonical shape during Phases 1–4, before the CI gate is on.
+- Reviewers hold the line on the canonical shape across every phase. Without an automated gate, the convention only sticks if PR review enforces it.
 - AI agents (Claude Code) assist with bulk authoring; PR authors retain responsibility for protocol semantics, the accuracy of the `@throws` list, and that every `@example` snippet actually compiles and runs.
 - Each phase ships independently as a doc-only changeset; no public API changes land via this work.
 - Test-helper packages (`morpho-test`, `test`, `test-wagmi`) are out of scope under §5 (their public symbols are fixtures, not integrator surface).
 - Deprecated packages (`@morpho-org/blue-sdk-ethers` and any others marked deprecated in the root `README.md`) are out of scope.
-- The CI gate flips on **after** Phase 1 lands, so existing branches in flight are not blocked retroactively.
 
 ## Dependencies
 
-- `eslint` and `eslint-plugin-jsdoc` (Phase 5 only). New dev-dependencies at the root, not in any published `package.json`.
-- `typedoc` (Phases 0 and 6). Dev-dependency at the root.
+- `typedoc` (Phases 0 and 6). Dev-dependency at the root. Used informationally — strict gate (`treatWarningsAsErrors`) is out of scope per Considered Alternative 7.
 - No new runtime dependencies and no peer-dep changes; the only peer dep on the public surface remains `viem` per §4.
+- No new linter dependency. `eslint-plugin-jsdoc` was evaluated and rejected (Considered Alternative 6).
 
 ## Observability
 
 - **`scripts/jsdoc-coverage.js`** — a Node script run via `pnpm jsdoc:coverage` that walks every Tier 1–4 package, counts exported symbols against the §6 bar (description present, all required tags present), and prints a Markdown table. Used as the burndown chart for Phases 1–4 and posted to PR descriptions for backfill PRs.
-- **CI step** that runs the same script and fails if any Tier 1–4 package regresses below its previous-commit coverage percentage. Active from Phase 5 onward; informational from Phase 1 onward.
-- **TypeDoc warnings** surfaced in CI logs from Phase 0; promoted to errors from Phase 5.
+- **CI step** that runs the same script informationally and prints the table to the workflow logs. The script does not exit non-zero on missing JSDoc — that gate waits for Phase 5 reassessment.
+- **TypeDoc warnings** surfaced in CI logs from Phase 0; promotion to errors is deferred per Considered Alternative 7.
 
 ## Security
 
@@ -185,21 +193,10 @@ Two operational rules apply to the JSDoc itself:
 
 ## Open Questions
 
+- When does Biome ship JSDoc rules? Tracking this is the trigger for Phase 5 reassessment.
 - `docs/jsdoc-style.md` versus an addition to a per-package `AGENTS.md` — the recommendation is the repo-wide doc because the rule is repo-wide, but reviewers may prefer to keep guidance closer to the code it governs.
 - Whether `@example` blocks for entity fetchers must pin a real Anvil block (matching §5 fork-test conventions) or may use a generic `createPublicClient({ transport: http() })` snippet. Recommendation is the latter to keep examples small and copy-pasteable; pinned examples can live in `morpho-sdk` recipes instead.
 - Whether `*-wagmi` hook JSDoc should document the React rendering contract (dependency arrays, suspense behavior, refetch on mount) inline on each hook or via a single hooks-conventions page that every hook links to. Defer to Phase 4 owners.
-
-## Addenda
-
-### 2026-05-04 — TypeDoc strict gate deferred
-
-**Author:** @0xbulma
-
-The Phase 5 plan specifies `eslint-plugin-jsdoc` **plus** TypeDoc with `--treatWarningsAsErrors`. The ESLint half landed cleanly with rule `jsdoc/require-jsdoc` + `require-param` + `require-returns` + `require-example` scoped to Tier 1 paths.
-
-The TypeDoc half hit a real conflict: TypeDoc's `@param` validator does not accept the dotted leaf-field notation (`@param params.args.amount`) that this repo's [`docs/jsdoc-style.md`](../jsdoc-style.md) mandates for nested options bags. TypeDoc emits "@param with name X, which was not used" for every leaf, so `treatWarningsAsErrors: true` against the Tier 1 surface fails immediately on the canonical exemplars (`marketV1Borrow`, `vaultV1Deposit`, …).
-
-Resolution path is a separate follow-up: pick one of (a) drop the dotted convention in favor of TypeDoc-native object literal documentation, (b) write a TypeDoc plugin that understands dotted notation, or (c) accept the warnings and gate only on TypeDoc errors (`validation.invalidLink`, `validation.notExported`). Choice belongs in its own TIB; in the meantime ESLint is the load-bearing Phase 5 gate, and `pnpm docs:check` (informational) continues to surface the warnings without failing CI.
 
 ## References
 

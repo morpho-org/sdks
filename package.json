@@ -22,9 +22,8 @@
   "scripts": {
     "prepare": "husky",
     "build": "pnpm -r --if-present build",
-    "lint": "biome check && $npm_execpath lint:jsdoc && $npm_execpath lint:address",
+    "lint": "biome check && $npm_execpath lint:address",
     "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
-    "lint:jsdoc": "eslint",
     "jsdoc:coverage": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js",
     "docs:check": "typedoc",
     "test": "dotenv -- vitest",
@@ -43,14 +42,11 @@
     "@vitest/coverage-v8": "^4.1.4",
     "@vitest/ui": "^4.1.4",
     "dotenv-cli": "^8.0.0",
-    "eslint": "^9.18.0",
-    "eslint-plugin-jsdoc": "^50.6.1",
     "happy-dom": "^20.8.9",
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",
     "solc": "0.8.27",
     "typedoc": "^0.28.19",
-    "typescript-eslint": "^8.20.0",
     "typescript": "^5.9.3",
     "undici": "^6.24.1",
     "vite": "^8.0.8",
@@ -62,8 +58,6 @@
       "@babel/helpers": "7.29.2",
       "@graphql-codegen/client-preset": "5.2.4",
       "ajv": "8.18.0",
-      "@eslint/eslintrc>ajv": "6.12.6",
-      "eslint>ajv": "6.12.6",
       "axios": "1.15.0",
       "flatted": "3.4.2",
       "follow-redirects": "1.16.0",
@@ -84,8 +78,7 @@
   },
   "lint-staged": {
     "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
-    "*.[tj]s*": "biome check --write --no-errors-on-unmatched && lint:address",
-    "packages/{morpho-sdk,evm-simulation}/src/**/*.ts": "eslint --no-error-on-unmatched-pattern"
+    "*.[tj]s*": "biome check --write --no-errors-on-unmatched && lint:address"
   },
   "commitlint": {
     "extends": [
