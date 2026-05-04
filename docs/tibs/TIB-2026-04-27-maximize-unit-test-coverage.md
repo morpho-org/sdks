@@ -24,18 +24,18 @@ We just adopted the TIB convention (PR #555). This TIB is the architectural deci
 
 **Goals**
 
-- Push **unit-test** coverage of every in-scope package as close to 100% as practical, on every public function and every meaningful branch.
-- Make `pnpm test:coverage` produce a complete, accurate report locally without requiring RPC URLs. This requires moving fork-dependent unit tests to mocked tests where the function under test does not actually need chain state.
+- Push **unit-test** coverage of every in-scope package as close to 100% as practical, on every public function and every meaningful branch, by **adding new unit tests** for the functions that currently have none.
+- Make `pnpm test:coverage` produce a complete, accurate report locally without requiring RPC URLs. The new unit tests do not depend on a fork — they mock viem at the transport level and HTTP at `nock`. Existing fork tests still need RPC URLs to run; that's unchanged.
 - Establish reusable mocking primitives so contributors can write new unit tests without inventing fixtures: a viem transport-level mock, a `nock`-based HTTP/GraphQL pattern, deterministic test accounts.
-- Keep existing fork-based **integration** tests — they exercise contract round-trips that mocks cannot — but separate them clearly from unit tests by file naming and CI gating.
-- Adopt **colocation** (`src/Foo.test.ts` next to `src/Foo.ts`) as the file-layout convention so reviewers see test changes adjacent to source changes and gaps are obvious in directory listings.
+- Adopt **colocation** (`src/Foo.test.ts` next to `src/Foo.ts`) as the file-layout convention **for the new unit tests**, so reviewers see new test changes adjacent to source changes and coverage gaps are obvious in directory listings.
 - Exclude generated files (`abis.ts`, GraphQL `api/types.ts`, `api/sdk.ts`) from `coverage.include` so reported numbers reflect hand-written code.
 
 **Non-Goals**
 
-- Migrating layout or adding tests to the **out-of-scope** packages (`simulation-sdk`, `simulation-sdk-wagmi`, `migration-sdk-viem`, `blue-sdk-wagmi`, `test-wagmi`). Those keep their `test/` directories and current vitest project entries unchanged. A future TIB can extend the same conventions to them.
-- Replacing vitest, biome, tsc, or pnpm. No new tools.
+- **Moving, renaming, or refactoring any existing fork-based / e2e / integration test.** The current `test/` directories and their contents are left in place untouched. Existing tests keep working exactly as today; this TIB strictly adds new unit tests in `src/` alongside them. A future TIB may revisit consolidating layouts, but it is explicitly out of scope here.
+- Migrating layout or adding tests to the **out-of-scope** packages (`simulation-sdk`, `simulation-sdk-wagmi`, `migration-sdk-viem`, `blue-sdk-wagmi`, `test-wagmi`). Those keep their `test/` directories and current vitest project entries unchanged.
 - Rewriting fork-based tests as mocked tests where the test purpose is end-to-end contract verification.
+- Replacing vitest, biome, tsc, or pnpm. No new tools.
 - Setting a numeric coverage threshold in CI as part of this TIB. The aim is "extensive coverage of every function," measured per-file qualitatively. A follow-up TIB can introduce thresholds once the floor is high enough.
 - Hand-testing barrel `index.ts` files or generated `abis.ts` / `api/types.ts` — these are excluded from coverage.
 
@@ -99,28 +99,30 @@ Local run of `pnpm test:coverage --project <name> --coverage.reportOnFailure=tru
 
 ## Proposed Solution
 
-Reach high unit-test coverage of the eight in-scope packages by writing **mocked unit tests** for every untested function — using viem's `custom()` transport for RPC and `nock` for HTTP/GraphQL — and migrating the existing test files to a colocated layout that makes gaps visible.
+Reach high unit-test coverage of the eight in-scope packages by **adding new mocked unit tests** for every untested function — using viem's `custom()` transport for RPC and `nock` for HTTP/GraphQL. Existing tests in each package's `test/` directory (fork-based, e2e, or otherwise) are left in place untouched; the new tests live alongside source files in `src/`, and both layouts coexist permanently for the lifetime of this TIB.
 
 The conventions below are means to that end, not the end itself.
 
-### Convention 1 — Colocation
+### Convention 1 — Colocation (for new unit tests)
 
-Test files live next to source files. `src/Foo.ts` ⇒ `src/Foo.test.ts`. Naming follows source casing (`MathLib.test.ts` for PascalCase; `format.test.ts` for camelCase). Never `.spec.ts`. Fork-bound tests use the `*.integration.test.ts` infix (still matched by `**/*.test.ts`; the infix is informational and lets future CI carve out integration runs if needed).
+New unit tests live next to source files. `src/Foo.ts` ⇒ `src/Foo.test.ts`. Naming follows source casing (`MathLib.test.ts` for PascalCase; `format.test.ts` for camelCase). Never `.spec.ts`.
+
+Existing tests in `packages/X/test/` are not moved or renamed — including any `*.test.ts` already there, fork-based or not. The two layouts coexist; vitest's project `include` is widened to a union (see Configuration changes).
 
 ```
 packages/X/
 ├── src/
 │   ├── Foo.ts
-│   ├── Foo.test.ts                  # mocked unit test
-│   ├── Foo.integration.test.ts      # fork test (optional, only where needed)
+│   ├── Foo.test.ts                  # NEW colocated mocked unit test
 │   ├── sub/
 │   │   ├── Bar.ts
-│   │   └── Bar.test.ts
-│   └── __test-utils__/
-│       ├── fixtures.ts              # was test/setup.ts
-│       ├── nock-setup.ts            # for HTTP-using packages
+│   │   └── Bar.test.ts              # NEW
+│   └── __test-utils__/              # NEW shared test helpers (mock builders, nock setup)
+│       ├── nock-setup.ts
 │       └── <package-specific>.ts
-└── (test/ deleted after migration)
+└── test/                            # UNTOUCHED: existing fork/e2e tests remain
+    ├── setup.ts
+    └── *.test.ts
 ```
 
 ### Convention 2 — Mock viem at the transport level
@@ -164,20 +166,22 @@ nock.enableNetConnect("127.0.0.1");
 
 Wired in via `setupFiles` on that project's vitest entry. Per-test mocks are scoped via `beforeEach` / `afterEach(() => nock.cleanAll())`. GraphQL is mocked at the same HTTP layer (e.g. `nock(BLUE_API_BASE_URL).post("/graphql").reply(200, fixture)`) — never via `vi.mock("./api/sdk.js", ...)` because of concurrent-test races (`sequence: { concurrent: true }` is global) and codegen-shape coupling.
 
-### Convention 4 — Keep fork tests, but separate them
+### Convention 4 — Existing tests are not touched
 
-Existing fork tests stay. They are renamed `Foo.integration.test.ts` and relocated next to source. They remain in the same vitest project as the unit tests for now (the include glob `**/*.test.ts` matches both); a follow-up can split them into a separate project gated on RPC URL availability.
+Every file currently under `packages/X/test/` (in-scope or out-of-scope) keeps its current path, name, imports, and contents. No `git mv`, no rename to `*.integration.test.ts`, no rewriting of `import "../src/..."` paths. Those tests continue to run in the same vitest project as today.
+
+This is a deliberate scope cut: the prize is high unit-test coverage, and migrating dozens of working fork tests adds churn (and review surface) without contributing to that prize. A follow-up TIB can revisit consolidating layouts once the new unit tests are in place.
 
 ### Configuration changes
 
-- **`vitest.config.ts` — projects.** Each in-scope project's `include` flips from `packages/X/test/**/*.test.ts` to `packages/X/src/**/*.test.ts`. Special carve-out for `liquidation-sdk-viem` to keep `test/examples/` running:
+- **`vitest.config.ts` — projects.** Each in-scope project's `include` is **widened to a union** so the existing `test/` files keep running and the new `src/` tests are picked up alongside them:
   ```ts
   include: [
-    "packages/liquidation-sdk-viem/src/**/*.test.ts",
-    "packages/liquidation-sdk-viem/test/examples/**/*.test.ts",
+    "packages/X/test/**/*.test.ts",   // existing — untouched
+    "packages/X/src/**/*.test.ts",    // new — colocated unit tests
   ],
   ```
-  Out-of-scope projects keep their existing `test/` includes.
+  Out-of-scope projects keep their current single-include entries unchanged.
 
 - **`vitest.config.ts` — coverage.** Tighten `exclude` so generated/test code does not pollute the report:
   ```ts
@@ -220,33 +224,39 @@ Existing fork tests stay. They are renamed `Foo.integration.test.ts` and relocat
 
 ### Implementation Phases
 
-Ordered easiest-first: each phase validates the conventions and primitives that the next one depends on. One PR per phase, stacked on this TIB's branch.
+Ordered easiest-first: each phase validates the conventions and primitives that the next one depends on. One PR per phase, stacked on this TIB's branch. **No phase moves, renames, or rewrites any existing test in `packages/X/test/`.** Each phase only adds new `*.test.ts` files in `packages/X/src/` (and shared helpers in `src/__test-utils__/`).
 
-- **Phase 1 — `morpho-ts`** *(target: ≥ 95% line coverage, ≥ 90% branch).* Pure TS utilities, no mocking. Migrates `test/{format,time,utils}.test.ts` to colocated. Adds tests for the three currently-zero files: `format/array.ts`, `format/string.ts`, `types.ts`. Validates the colocation tooling (vitest include update, tsconfig excludes, coverage excludes).
+- **Phase 1 — `morpho-ts`** *(target: ≥ 95% line coverage, ≥ 90% branch).* Pure TS utilities, no mocking. Adds colocated unit tests for every source file, especially the three currently-zero ones: `format/array.ts`, `format/string.ts`, `types.ts`. Validates the colocation tooling (vitest include union, tsconfig excludes, coverage excludes).
 
-- **Phase 2 — `packages/test` + new `src/mock.ts`** *(target: ≥ 80%, the rest is anvil bootstrap).* Introduces `createMockClient` / `mockRead` and the `./mock` sub-export. Adds tests for `mock.ts`, `fixtures.ts` (`randomAddress`, `testAccount`), `vitest.ts`, and the non-fork-bound logic of `anvil.ts` and `client.ts` (arg builders, action wiring shape).
+- **Phase 2 — `packages/test` + new `src/mock.ts`** *(target: ≥ 80%, the rest is anvil bootstrap).* Introduces `createMockClient` / `mockRead` and the `./mock` sub-export. Adds colocated unit tests for `mock.ts`, `fixtures.ts` (`randomAddress`, `testAccount`), `vitest.ts`, and the non-fork-bound logic of `anvil.ts` and `client.ts` (arg builders, action wiring shape). Existing `test/utils.test.ts` stays where it is.
 
-- **Phase 3 — `blue-sdk`** *(target: ≥ 90% line, ≥ 85% branch).* Largest pure-logic package. Migrates `test/unit/*.test.ts` and renames `test/e2e/Market.test.ts` to `Market.integration.test.ts`. Adds tests for every untested file: `math/MathLib.ts`, `math/AdaptiveCurveIrmLib.ts`, `math/SharesMath.ts`, `errors.ts`, `addresses.ts`, `chain.ts`, `preLiquidation.ts`, all token classes (incl. zero-coverage `ExchangeRateWrappedToken.ts`), `holding/AssetBalances.ts` (zero-coverage), `Position`, `PreLiquidationPosition`, every vault class incl. `VaultUser.ts` (zero-coverage), all v2 vault adapters, `MarketParams`. Uses `randomMarket` / `randomVault` from `@morpho-org/morpho-test`.
+- **Phase 3 — `blue-sdk`** *(target: ≥ 90% line, ≥ 85% branch).* Largest pure-logic package. Adds colocated unit tests for every source file: `math/MathLib.ts`, `math/AdaptiveCurveIrmLib.ts`, `math/SharesMath.ts`, `errors.ts`, `addresses.ts`, `chain.ts`, `preLiquidation.ts`, all token classes (incl. zero-coverage `ExchangeRateWrappedToken.ts`), `holding/AssetBalances.ts` (zero-coverage), `Position`, `PreLiquidationPosition`, every vault class incl. `VaultUser.ts` (zero-coverage), all v2 vault adapters, `MarketParams`. Uses `randomMarket` / `randomVault` from `@morpho-org/morpho-test`. Existing `test/unit/*.test.ts` and `test/e2e/Market.test.ts` are untouched.
 
-- **Phase 4 — `morpho-test`** *(target: meaningful tests on every fixture).* Tests confirm each fixture passes the validators its consumers apply (e.g. `MarketParams` constructor accepts the shape; vault decimals offsets are valid).
+- **Phase 4 — `morpho-test`** *(target: meaningful tests on every fixture).* Adds colocated unit tests confirming each fixture passes the validators its consumers apply (e.g. `MarketParams` constructor accepts the shape; vault decimals offsets are valid).
 
-- **Phase 5 — `liquidity-sdk-viem`** *(target: ≥ 95%).* Smallest viem package; establishes the canonical nock + GraphQL pattern. Migrates `test/loader.test.ts`. **Adds tests for `loader.ts`** (currently 0% — the only logic in the package). Adds smoke-level tests for `api/sdk.ts`.
+- **Phase 5 — `liquidity-sdk-viem`** *(target: ≥ 95%).* Smallest viem package; establishes the canonical nock + GraphQL pattern. **Adds colocated unit tests for `loader.ts`** (currently 0% — the only logic in the package) and smoke-level tests for `api/sdk.ts`. Existing `test/loader.test.ts` stays.
 
-- **Phase 6 — `bundler-sdk-viem`** *(target: ≥ 90%).* Pure encoders; no RPC dependency. Migrates `test/helpers.ts` to `src/__test-utils__/bundle-helpers.ts`. Round-trip tests for `BundlerAction.ts` (currently 16.52%), `actions.ts`, `operations.ts`, `ActionBundle.ts`, `bundle.ts`, `errors.ts` (zero-coverage), `types/actions.ts` (zero-coverage), `types/operations.ts`. Use viem's `decodeFunctionData` to assert the recovered structure matches the encoder input on each public method.
+- **Phase 6 — `bundler-sdk-viem`** *(target: ≥ 90%).* Pure encoders; no RPC dependency. Adds colocated round-trip tests for `BundlerAction.ts` (currently 16.52%), `actions.ts`, `operations.ts`, `ActionBundle.ts`, `bundle.ts`, `errors.ts` (zero-coverage), `types/actions.ts` (zero-coverage), `types/operations.ts`. Use viem's `decodeFunctionData` to assert the recovered structure matches the encoder input on each public method. Existing fork-based tests in `test/` stay.
 
-- **Phase 7 — `blue-sdk-viem`** *(target: ≥ 85%).* Largest viem-using surface. Migrates 12 existing fork tests as `*.integration.test.ts`. Adds **mocked** unit tests for every `fetch/*.ts` (incl. zero-coverage `MarketParams.ts` and `VaultUser.ts`) and `queries/*.ts` using `createMockClient` + `mockRead`. **Adds tests for `MetaMorphoAction.ts` (zero-coverage, 332 LOC of encoders)** by ABI round-tripping every public encoder. Adds tests for `utils.ts`, `error.ts`, `types.ts`, and every `signatures/*.ts` (deterministic test private keys; assert signature shape and recoverable signer). Adds tests for the 4 zero-coverage `augment/Vault*.ts` files (assert the expected static/instance methods are attached).
+- **Phase 7 — `blue-sdk-viem`** *(target: ≥ 85%).* Largest viem-using surface. Adds **mocked** colocated unit tests for every `fetch/*.ts` (incl. zero-coverage `MarketParams.ts` and `VaultUser.ts`) and `queries/*.ts` using `createMockClient` + `mockRead`. **Adds colocated tests for `MetaMorphoAction.ts` (zero-coverage, 332 LOC of encoders)** by ABI round-tripping every public encoder. Adds colocated tests for `utils.ts`, `error.ts`, `types.ts`, and every `signatures/*.ts` (deterministic test private keys; assert signature shape and recoverable signer). Adds colocated tests for the 4 zero-coverage `augment/Vault*.ts` files (assert the expected static/instance methods are attached). The 12 existing fork tests in `test/` stay.
 
-- **Phase 8 — `liquidation-sdk-viem`** *(target: ≥ 80%).* Largest external-service surface; goes last so the patterns are settled. Keeps `test/examples/*.test.ts` in place via the union include. Migrates other tests, adds nock-based tests for `swap/1inch.ts`, `swap/paraswap.ts`, `swap/index.ts` (zero-coverage), `flashbots.ts`, `api/index.ts`. **Adds unit tests for `LiquidationEncoder.ts` (zero-coverage, 1,001 LOC)** — the single largest gap in the repo — split into multiple `describe` blocks per public method, with `mockRead` for the swap-quote RPC dance and `nock` for the upstream price/quote APIs. Adds unit tests for `positions/getters.ts`, `preLiquidation/helpers.ts`, `preLiquidation/positionGetters.ts` (all zero-coverage), `addresses.ts`, `thresholds.ts`, all `tokens/*.ts` (incl. zero-coverage `sky.ts`, low-coverage `midas.ts` 2.70%, `spectra.ts` 6.25%, `pendle.ts`).
+- **Phase 8 — `liquidation-sdk-viem`** *(target: ≥ 80%).* Largest external-service surface; goes last so the patterns are settled. **Adds colocated unit tests for `LiquidationEncoder.ts` (zero-coverage, 1,001 LOC)** — the single largest gap in the repo — split into multiple `describe` blocks per public method, with `mockRead` for the swap-quote RPC dance and `nock` for the upstream price/quote APIs. Adds colocated nock-based tests for `swap/1inch.ts`, `swap/paraswap.ts`, `swap/index.ts` (zero-coverage), `flashbots.ts`, `api/index.ts`. Adds colocated unit tests for `positions/getters.ts`, `preLiquidation/helpers.ts`, `preLiquidation/positionGetters.ts` (all zero-coverage), `addresses.ts`, `thresholds.ts`, all `tokens/*.ts` (incl. zero-coverage `sky.ts`, low-coverage `midas.ts` 2.70%, `spectra.ts` 6.25%, `pendle.ts`). Existing `test/examples/*.test.ts` and other `test/` files stay where they are.
 
-Each phase's PR ends with: tests pass; `find packages/X/lib -name "*.test.*"` after build returns empty; `pnpm pack --dry-run` shows no test files; the project's coverage rises to its phase target; the relevant zero-coverage files listed above are no longer at zero.
+Each phase's PR ends with: existing tests still pass; new colocated tests pass; `find packages/X/lib -name "*.test.*"` after build returns empty; `pnpm pack --dry-run` shows no test files; the project's coverage rises to its phase target; the relevant zero-coverage files listed above are no longer at zero.
 
 ## Considered Alternatives
 
-### Alternative 1: Add tests in existing `test/` directories without changing layout
+### Alternative 1: Add new tests in the existing `test/` directories
 
-Leave the test layout alone; only add new tests in the existing `test/` folders.
+Put new unit tests in `packages/X/test/` next to the existing ones, without introducing colocation.
 
-**Why rejected:** Misses the visibility benefit of colocation — gaps in test coverage stay invisible in directory listings, and reviewers must context-switch between two trees. The cost of moving existing tests is low (mostly path rewrites) and pays back permanently.
+**Why rejected:** Misses the visibility benefit. `test/` directories already grow without a clear taxonomy (unit vs e2e vs integration). Adding to that pile makes coverage gaps invisible from a directory listing. Colocation makes "this file has no sibling test" obvious in code review and tooling.
+
+### Alternative 1b: Migrate existing fork tests to the colocated layout as well
+
+Move every existing `test/*.test.ts` next to its source as part of this TIB.
+
+**Why rejected:** The prize is unit-test coverage. Migrating dozens of working fork tests adds churn — `git mv`, rewriting `import "../src/..."` paths, splitting setup files, special-casing `liquidation-sdk-viem/test/examples/` — without contributing to coverage. The two layouts coexisting is acceptable; a follow-up TIB can consolidate later if desired.
 
 ### Alternative 2: Keep tests fork-based; just add more
 
@@ -320,9 +330,8 @@ No new attack surface. The migration is layout and tooling, not runtime. Two min
 
 ## Open Questions
 
-- Should the convention permit `src/Foo.test.ts` and `src/Foo.integration.test.ts` *both* for the same source file, or should fork-only files keep just the `.integration.test.ts`? Lean towards "permit both" — the typical case in `blue-sdk-viem` is a fetch function with a mocked unit test for shape/decoding plus an integration test for end-to-end behavior. Worth confirming on the first viem-using package to migrate (Phase 7).
-- Should the integration tests be split into their own vitest project now, or in a follow-up? Splitting now adds config complexity; deferring keeps this TIB tight. Recommendation: defer.
-- Are there any in-scope packages that legitimately *cannot* be unit-tested without a fork (e.g. pure RPC plumbing whose entire purpose is the round-trip)? Phase 7 will surface candidates; if found, those files keep only an `.integration.test.ts` and are excluded from the coverage `include`.
+- Are there any in-scope source files that legitimately *cannot* be unit-tested at all without a fork (e.g. pure RPC plumbing whose entire purpose is the round-trip)? Phase 7 will surface candidates. If found, those files are excluded from `coverage.include` and rely on the existing fork test in `test/` for confidence.
+- Naming for the new colocated tests next to source files that already have an existing fork test in `packages/X/test/`: does `src/Foo.test.ts` reading "the unit test for `Foo`" cause any confusion with the e2e file at `test/Foo.test.ts`? Lean towards "no — the path disambiguates and the file content makes it obvious," but worth a sanity check on the first viem-using package.
 
 ## References
 
