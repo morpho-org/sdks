@@ -1,10 +1,10 @@
 import {
   AccrualVaultV2MorphoMarketV1AdapterV2,
+  getChainAddresses,
   type MarketId,
   UnknownFactory,
   UnknownOfFactory,
   VaultV2MorphoMarketV1AdapterV2,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { fromEntries } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
@@ -21,6 +21,7 @@ import {
 import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchMarket } from "../Market.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultV2MorphoMarketV1AdapterV2(
   address: Address,
   client: Client,
@@ -54,6 +55,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
           ),
         ],
         supplyShares: fromEntries(
+          // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
           adapter.marketSupplyShares.map(({ marketId, supplyShares }) => [
             marketId,
             supplyShares,
@@ -153,6 +155,7 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
   });
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchAccrualVaultV2MorphoMarketV1AdapterV2(
   address: Address,
   client: Client,

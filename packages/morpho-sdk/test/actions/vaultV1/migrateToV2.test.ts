@@ -1,11 +1,11 @@
-import { MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  MorphoClient,
   isRequirementApproval,
   isRequirementSignature,
+  MorphoClient,
   vaultV1MigrateToV2,
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";

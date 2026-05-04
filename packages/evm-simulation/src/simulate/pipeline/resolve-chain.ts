@@ -1,6 +1,5 @@
-import type { SimulationConfig } from "../../types.js";
-
 import { UnsupportedChainError } from "../../errors.js";
+import type { SimulationConfig } from "../../types.js";
 
 interface ChainCapability {
   tenderlySupported: boolean;

@@ -3,7 +3,9 @@
   "version": "0.0.0",
   "description": "Collection of SDKs to ease interactions with the Morpho protocol and Morpho Vaults",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "contributors": [
+    "Rubilmax <rmilon@gmail.com>"
+  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
@@ -20,8 +22,11 @@
   "scripts": {
     "prepare": "husky",
     "build": "pnpm -r --if-present build",
-    "lint": "biome check && $npm_execpath lint:address",
+    "lint": "biome check && $npm_execpath jsdoc:coverage:check && $npm_execpath lint:address",
     "lint:address": "node --no-warnings=ExperimentalWarning scripts/lint/checksum-address.js",
+    "jsdoc:coverage": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js",
+    "jsdoc:coverage:check": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js --self-check",
+    "docs:build": "typedoc",
     "test": "dotenv -- vitest",
     "test:coverage": "$npm_execpath test --coverage",
     "coverage:report": "genhtml --hierarchical --sort --prefix \"$(pwd)\" -o coverage/lcov coverage/lcov.info",
@@ -30,7 +35,7 @@
     "release": "changeset publish"
   },
   "devDependencies": {
-    "@biomejs/biome": "^1.9.4",
+    "@biomejs/biome": "^2.4.14",
     "@changesets/cli": "^2.29.8",
     "@commitlint/cli": "^20.2.0",
     "@commitlint/config-conventional": "^20.2.0",
@@ -42,6 +47,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",
     "solc": "0.8.27",
+    "typedoc": "^0.28.19",
     "typescript": "^5.9.3",
     "undici": "^6.24.1",
     "vite": "^8.0.8",
@@ -76,6 +82,8 @@
     "*.[tj]s*": "biome check --write --no-errors-on-unmatched && lint:address"
   },
   "commitlint": {
-    "extends": ["@commitlint/config-conventional"]
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   }
 }

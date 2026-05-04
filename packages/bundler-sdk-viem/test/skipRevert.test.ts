@@ -1,8 +1,8 @@
 import {
   ChainId,
+  getChainAddresses,
   Holding,
   Token,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { SimulationState } from "@morpho-org/simulation-sdk";
 import {
@@ -24,6 +24,7 @@ const {
 const tokenA = "0x1111111111111111111111111111111111111111" as const;
 const tokenB = "0x2222222222222222222222222222222222222222" as const;
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const makeHolding = (
   user: typeof tokenA,
   token: typeof tokenA,

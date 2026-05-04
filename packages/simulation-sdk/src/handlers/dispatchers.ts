@@ -1,14 +1,13 @@
 import { makeCreator } from "mutative";
-
-import type { SimulationState } from "../SimulationState.js";
 import { SimulationErrors } from "../errors.js";
 import {
-  type Operation,
   isBlueOperation,
   isErc20Operation,
   isMetaMorphoOperation,
   isParaswapOperation,
+  type Operation,
 } from "../operations.js";
+import type { SimulationState } from "../SimulationState.js";
 
 import { handleBlueOperation } from "./blue/index.js";
 import { handleErc20Operation } from "./erc20/index.js";
@@ -26,6 +25,7 @@ export const produceImmutable = makeCreator({
   strict: true,
 });
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const handleOperation = (
   operation: Operation,
   data: MaybeDraft<SimulationState>,
@@ -52,6 +52,7 @@ export function handleOperations<Operation>(
   operations: Operation[],
   startData: MaybeDraft<SimulationState>,
 ): SimulationResult;
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export function handleOperations<O>(
   operations: O[],
   startData: MaybeDraft<SimulationState>,
@@ -61,6 +62,7 @@ export function handleOperations<O>(
     index: number,
   ) => MaybeDraft<SimulationState>,
 ): SimulationResult;
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export function handleOperations(
   operations: Operation[],
   startData: MaybeDraft<SimulationState>,
@@ -81,6 +83,7 @@ export function handleOperations(
   return results;
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const simulateOperation = (
   operation: Operation,
   data: MaybeDraft<SimulationState>,

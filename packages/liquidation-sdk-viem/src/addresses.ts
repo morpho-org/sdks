@@ -1,8 +1,8 @@
 import {
   type Address,
-  ChainId,
   addresses,
   addressesRegistry,
+  ChainId,
   deployments,
   registerCustomAddresses,
 } from "@morpho-org/blue-sdk";

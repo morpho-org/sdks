@@ -1,12 +1,10 @@
 import {
+  addressesRegistry,
   ChainId,
   type InputMarketParams,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
-import { QueryClient } from "@tanstack/react-query";
-
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
+import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
 import { markets } from "@morpho-org/morpho-test";
 import { getLast } from "@morpho-org/morpho-ts";
 import {
@@ -14,6 +12,7 @@ import {
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
 import { renderHook, waitFor } from "@morpho-org/test-wagmi";
+import { QueryClient } from "@tanstack/react-query";
 import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
@@ -32,6 +31,7 @@ describe("Blue_AccrueInterest", () => {
 
     const { result, rerender } = await renderHook(
       config,
+      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
       (block: MinimalBlock) =>
         useSimulationState({
           marketIds: [usdc_wstEth.id],

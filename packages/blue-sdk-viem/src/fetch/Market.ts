@@ -1,19 +1,18 @@
-import { type Client, zeroAddress } from "viem";
-
 import {
+  getChainAddresses,
   Market,
   type MarketId,
   MarketParams,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { type Client, zeroAddress } from "viem";
 
 import { getChainId, readContract } from "viem/actions";
-import type { DeploylessFetchParameters } from "../types.js";
-
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis.js";
 import { abi, code } from "../queries/GetMarket.js";
+import type { DeploylessFetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchMarket(
   id: MarketId,
   client: Client,

@@ -1,22 +1,21 @@
 import "evm-maths";
-import fetchMock from "fetch-mock";
 
 import {
   type Address,
+  addressesRegistry,
   ChainId,
   type InputMarketParams,
   type MarketId,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import { format } from "@morpho-org/morpho-ts";
-import type { BuildTxInput } from "@velora-dex/sdk";
-
 import { blueAbi, fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import {
   Flashbots,
   type LiquidationEncoder,
 } from "@morpho-org/liquidation-sdk-viem";
+import { format } from "@morpho-org/morpho-ts";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test";
+import type { BuildTxInput } from "@velora-dex/sdk";
+import fetchMock from "fetch-mock";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
@@ -69,6 +68,7 @@ describe("should liquidate Spectra Tokens", () => {
   });
 
   const syncTimestamp = async (client: AnvilTestClient, timestamp?: bigint) => {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp ??= (await client.timestamp()) + 60n;
 
     vi.useFakeTimers({

@@ -1,11 +1,11 @@
 import {
   type ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
+  getChainAddresses,
   type Market,
   type MarketId,
   MathLib,
   type Position,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { BlueInputBundlerOperations } from "@morpho-org/bundler-sdk-viem";
 import { BlueSimulationErrors } from "@morpho-org/simulation-sdk";

@@ -32,23 +32,55 @@ type GetRequirementsParams =
     });
 
 /**
- * Get token "requirement" for approval/permit before interacting with protocol.
+ * Resolves the approval requirements an integrator must satisfy before a Morpho bundle pulls
+ * tokens through `GeneralAdapter1`.
  *
- * Three flows:
- * 1. If signature not supported, use classic approval (transaction).
- * 2. If signature supported, try simple permit (EIP-2612), else fallback to permit2.
+ * Reads the user's current `holding` (allowances + nonces) from the chain, then picks one of
+ * three flows:
  *
- * @param viemClient - The connected viem Client instance, with the correct chain and account.
- * @param params - Destructured object with:
- * @param params.address - ERC20 token address.
- * @param params.chainId - Chain/network id.
- * @param params.args - Object with:
- * @param params.args.amount - Required token amount.
- * @param params.args.from - The account that will grant approval.
- * @param params.supportSignature - Whether signature-based approvals are supported. If true, will try to use permit or permit2.
- * @param params.supportDeployless - Whether to use deployless mode.
- * @param params.useSimplePermit - use simple permit if EIP-2612 is supported. Only available when `supportSignature` is `true`.
- * @returns Promise of array of approval transaction or requirement objects.
+ * 1. **`supportSignature: false`** — classic ERC-20 `approve` transaction (or no-op when the
+ *    allowance is already large enough).
+ * 2. **`supportSignature: true` + EIP-2612 supported + `useSimplePermit`** — single permit
+ *    signature against the token itself. DAI is excluded from this branch (its non-standard
+ *    permit signature is incompatible) and falls through to Permit2 even with
+ *    `useSimplePermit: true`.
+ * 3. **`supportSignature: true`, default** — Permit2 flow: classic approval to the Permit2
+ *    contract (if needed), followed by a Permit2 signature against `GeneralAdapter1`.
+ *
+ * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
+ * @param params - Requirement resolution parameters.
+ * @param params.address - ERC-20 token address.
+ * @param params.chainId - Chain id; must match `viemClient.chain.id`.
+ * @param params.args.amount - Required token amount. Returns `[]` when zero.
+ * @param params.args.from - Account that will grant the approval.
+ * @param params.supportSignature - Whether the integrator can collect a signature; controls
+ *   permit / permit2 vs. classic approval.
+ * @param params.supportDeployless - Whether to fetch holdings via deployless multicall.
+ * @param params.useSimplePermit - When `supportSignature` is `true`, prefer EIP-2612 permit if
+ *   the token supports it.
+ * @returns Promise resolving to an array of either deep-frozen approval transactions or
+ *   `Requirement` objects (signature requirements with a `sign()` method). Empty when the
+ *   existing allowance already covers `amount`.
+ * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`. No other typed
+ *   error is reachable through this entry point: the values passed into
+ *   `getRequirementsApproval` always satisfy `approvalAmount >= spendAmount` (direct path uses
+ *   `approvalAmount === spendAmount === amount`; Permit2 path uses `MAX_UINT_160`), so
+ *   `ApprovalAmountLessThanSpendAmountError` cannot fire from here.
+ * @example
+ * ```ts
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { getRequirements } from "@morpho-org/morpho-sdk";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const requirements = await getRequirements(client, {
+ *   address: USDC,
+ *   chainId: 1,
+ *   supportSignature: true,
+ *   args: { amount: 1_000_000n, from: user },
+ * });
+ * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]
+ * ```
  */
 export const getRequirements = async (
   viemClient: Client,

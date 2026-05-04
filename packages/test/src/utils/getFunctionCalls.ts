@@ -5,10 +5,10 @@ import {
   type Client,
   type ContractFunctionArgs,
   type ContractFunctionName,
-  type Hash,
-  type Hex,
   decodeFunctionData,
   getAddress,
+  type Hash,
+  type Hex,
 } from "viem";
 
 type OtsTraceNode = {

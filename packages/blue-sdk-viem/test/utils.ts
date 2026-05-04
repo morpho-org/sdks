@@ -1,7 +1,7 @@
 import {
+  getChainAddresses,
   type MarketParams,
   MathLib,
-  getChainAddresses,
   marketParamsAbi,
 } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
@@ -10,8 +10,8 @@ import {
   type Abi,
   type Address,
   type ContractFunctionName,
-  type EncodeFunctionDataParameters,
   decodeEventLog,
+  type EncodeFunctionDataParameters,
   encodeAbiParameters,
   encodeFunctionData,
   maxUint128,
@@ -105,17 +105,20 @@ export const deployVaultV2 = async (
   return vaultAddress;
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function deployMorphoMarketV1Adapter(
   client: AnvilTestClient,
   vaultAddress: Address,
   version: "1" | "2",
 ): Promise<{ address: Address }>;
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function deployMorphoMarketV1Adapter(
   client: AnvilTestClient,
   vaultAddress: Address,
   version: "1" | "2",
   initialSetup: { marketParams: MarketParams; deposit: bigint },
 ): Promise<{ address: Address; supplyShares: bigint }>;
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function deployMorphoMarketV1Adapter(
   client: AnvilTestClient,
   vaultAddress: Address,

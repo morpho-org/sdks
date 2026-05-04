@@ -1,8 +1,6 @@
 import { type Address, type Hex, zeroAddress } from "viem";
-
-import type { SimulateParams, SimulationAuthorization } from "../../types.js";
-
 import { SimulationValidationError } from "../../errors.js";
+import type { SimulateParams, SimulationAuthorization } from "../../types.js";
 import { validateInput } from "./validate-input.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";

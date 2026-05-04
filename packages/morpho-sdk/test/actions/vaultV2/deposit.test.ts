@@ -2,8 +2,8 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  MorphoClient,
   isRequirementApproval,
+  MorphoClient,
   vaultV2Deposit,
 } from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";

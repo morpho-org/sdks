@@ -55,6 +55,7 @@ export const getAccruedExchangeRate = (
   return exchangeRate;
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const fetchAccruedExchangeRate = async (
   cTokenAddress: Address,
   client: Client,

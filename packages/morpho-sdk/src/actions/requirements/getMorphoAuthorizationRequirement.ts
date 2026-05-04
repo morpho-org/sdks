@@ -10,17 +10,33 @@ import {
 } from "../../types/index.js";
 
 /**
- * Checks whether GeneralAdapter1 is authorized on Morpho for the given user.
- * If not authorized, returns a deep-frozen `morpho.setAuthorization(generalAdapter1, true)` transaction.
- * Returns `null` if authorization is already in place.
+ * Resolves whether `GeneralAdapter1` needs Morpho authorization for the given user, and returns
+ * the `setAuthorization(generalAdapter1, true)` transaction when it does.
  *
- * Required before any bundled borrow on behalf of the user (e.g. `supplyCollateralBorrow`).
+ * Reads `Morpho.isAuthorized(userAddress, generalAdapter1)` on the target chain. Required before
+ * any bundled MarketV1 path that operates on behalf of the user (`borrow`,
+ * `supplyCollateralBorrow`, `repayWithdrawCollateral`).
  *
- * @param params - Request parameters.
- * @param params.viemClient - Connected viem client.
- * @param params.chainId - Target chain ID (used to look up Morpho and GeneralAdapter1 addresses).
- * @param params.userAddress - The user who needs to authorize GeneralAdapter1.
- * @returns Deep-frozen authorization transaction, or `null` if already authorized.
+ * @param params.viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
+ * @param params.chainId - Target chain id (used to resolve Morpho and `GeneralAdapter1`).
+ * @param params.userAddress - The user that must authorize `GeneralAdapter1`.
+ * @returns A deep-frozen `Transaction<MorphoAuthorizationAction>`, or `null` when authorization
+ *   is already in place.
+ * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @example
+ * ```ts
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { getMorphoAuthorizationRequirement } from "@morpho-org/morpho-sdk";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const tx = await getMorphoAuthorizationRequirement({
+ *   viemClient: client,
+ *   chainId: 1,
+ *   userAddress: borrower,
+ * });
+ * // tx is null when already authorized, otherwise satisfies Readonly<Transaction<MorphoAuthorizationAction>>
+ * ```
  */
 export const getMorphoAuthorizationRequirement = async (params: {
   viemClient: Client;

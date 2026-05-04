@@ -1,4 +1,4 @@
-import { Holding, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, Holding, MathLib } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, test, vi } from "vitest";

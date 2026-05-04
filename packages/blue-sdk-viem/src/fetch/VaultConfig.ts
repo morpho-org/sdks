@@ -1,11 +1,11 @@
-import type { Address, Client } from "viem";
-
 import { VaultConfig } from "@morpho-org/blue-sdk";
+import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi } from "../abis.js";
 import type { DeploylessFetchParameters } from "../types.js";
 import { fetchToken } from "./Token.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultConfig(
   address: Address,
   client: Client,

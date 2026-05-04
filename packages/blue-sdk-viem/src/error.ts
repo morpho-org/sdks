@@ -3,6 +3,7 @@ import { BaseError, ContractFunctionRevertedError } from "viem";
 
 /** Thrown when a permit domain targets another chain; consumers should not sign it. */
 export class InvalidPermitDomainChainIdError extends Error {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     public readonly token: Address,
     public readonly expectedChainId: ChainId,

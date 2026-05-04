@@ -2,8 +2,8 @@ import {
   type AccrualVault,
   type AccrualVaultV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
   getChainAddresses,
+  MathLib,
 } from "@morpho-org/blue-sdk";
 import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
 import { type Address, isAddressEqual } from "viem";
@@ -134,6 +134,7 @@ export interface VaultV1Actions {
 }
 
 export class MorphoVaultV1 implements VaultV1Actions {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     private readonly client: MorphoClientType,
     private readonly vault: Address,

@@ -66,6 +66,7 @@ export const getEffectiveLocale = () => {
  * @param from the locale the numStr is in (e.g. "en-US")
  * @param to the locale to convert to (e.g. "fr-FR")
  */
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const convertNumStrToLocal = (
   numStr: string,
   from: string,
