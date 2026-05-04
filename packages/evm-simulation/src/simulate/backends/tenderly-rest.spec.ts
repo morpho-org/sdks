@@ -1,9 +1,7 @@
 import type { Address, Hex } from "viem";
 import { vi } from "vitest";
-
-import type { SimulationTransaction, TenderlyRestConfig } from "../../types.js";
-
 import { ExternalServiceError, SimulationRevertedError } from "../../errors.js";
+import type { SimulationTransaction, TenderlyRestConfig } from "../../types.js";
 import { simulateTenderlyRest } from "./tenderly-rest.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";

@@ -1,7 +1,7 @@
 import {
+  getChainAddresses,
   type MarketParams,
   MathLib,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import type { AnvilTestClient } from "@morpho-org/test";

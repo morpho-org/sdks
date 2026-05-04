@@ -8,10 +8,10 @@ import {
   type ContractFunctionName,
   type ExtractAbiFunctionForArgs,
   type GetAbiItemParameters,
-  type ReadContractParameters,
-  type Transport,
   getAbiItem,
   getAddress,
+  type ReadContractParameters,
+  type Transport,
 } from "viem";
 import { readContract } from "viem/actions";
 import { parseUnits } from "viem/utils";
@@ -72,6 +72,7 @@ function zipParams<
   V extends readonly unknown[],
 >(params: T, values: V): ZipToObject<T, V> {
   return params.reduce(
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     (acc, param, index) => {
       return typeof param.name === "string"
         ? // biome-ignore lint/performance/noAccumulatingSpread: This keeps type system happy with negligible performance impact

@@ -1,14 +1,13 @@
+import { VaultUser } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 
-import { VaultUser } from "@morpho-org/blue-sdk";
-
 import { getChainId, readContract } from "viem/actions";
-import type { DeploylessFetchParameters } from "../types.js";
-
 import { metaMorphoAbi } from "../abis.js";
 import { abi, code } from "../queries/GetVaultUser.js";
+import type { DeploylessFetchParameters } from "../types.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultUser(
   vault: Address,
   user: Address,

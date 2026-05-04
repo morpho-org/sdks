@@ -29,6 +29,7 @@ export namespace MorphoAaveMath {
    * @param p2pIndexCursor in BASE_UNITS _(4 decimals)_
    * @returns the raw p2p rate
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   function _computeMidRate(
     supplyRate: bigint,
     borrowRate: bigint,
@@ -54,6 +55,7 @@ export namespace MorphoAaveMath {
    * @param proportionIdle in RAY _(27 decimals)_
    * @returns the computed P2P rates in RAY _(27 decimals)_
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   function _computeP2PRates(
     poolSupplyRate: bigint,
     poolBorrowRate: bigint,
@@ -111,6 +113,7 @@ export namespace MorphoAaveMath {
    * @param reserveFactor in BASE_UNITS _(4 decimals)_
    * @returns the computed APYs in BASE_UNITS _(4 decimals)_
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function computeApysFromRates(
     poolSupplyRate: bigint,
     poolBorrowRate: bigint,

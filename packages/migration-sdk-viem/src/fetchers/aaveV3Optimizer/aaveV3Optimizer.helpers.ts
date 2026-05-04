@@ -67,6 +67,7 @@ export namespace PoolInterestRates {
     };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   function _calculateLinearInterest(
     rate: bigint,
     lastUpdateTimestamp: bigint,
@@ -78,6 +79,7 @@ export namespace PoolInterestRates {
 
     return MorphoAaveMath.INDEX_ONE + (rate * exp) / Time.s.from.y(1n);
   }
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   function _calculateCompoundedInterest(
     rate: bigint,
     lastUpdateTimestamp: bigint,
@@ -342,6 +344,7 @@ export namespace P2PInterestRates {
     return p2pBorrowRate;
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   function _computeGrowthFactors(
     newPoolSupplyIndex: bigint,
     newPoolBorrowIndex: bigint,
@@ -398,6 +401,7 @@ export namespace P2PInterestRates {
     };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   function _computeP2PIndex(
     poolGrowthFactor: bigint,
     p2pGrowthFactor: bigint,
@@ -434,6 +438,7 @@ export namespace P2PInterestRates {
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   function _weightedAverage(x: bigint, y: bigint, percentage: bigint) {
     const z = MorphoAaveMath.PERCENT_ONE - percentage;
     return (

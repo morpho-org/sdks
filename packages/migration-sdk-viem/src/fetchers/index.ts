@@ -1,11 +1,9 @@
 import type { Address } from "@morpho-org/blue-sdk";
-
-import type { MigratablePosition } from "../positions/index.js";
-import { MigratableProtocol } from "../types/index.js";
-
 import type { DeploylessFetchParameters } from "@morpho-org/blue-sdk-viem";
 import { fromEntries } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
+import type { MigratablePosition } from "../positions/index.js";
+import { MigratableProtocol } from "../types/index.js";
 import { fetchAaveV2Positions } from "./aaveV2/aaveV2.fetchers.js";
 import { fetchAaveV3Positions } from "./aaveV3/aaveV3.fetchers.js";
 import { fetchAaveV3OptimizerPositions } from "./aaveV3Optimizer/aaveV3Optimizer.fetchers.js";
@@ -46,6 +44,7 @@ const FETCHERS = {
  * console.log(positions);
  * ```
  */
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchMigratablePositions(
   user: Address,
   client: Client,

@@ -4,23 +4,23 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { http, createPublicClient, parseUnits } from "viem";
+import { createPublicClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   AddressMismatchError,
+  computeMaxRepaySharePrice,
+  isRequirementApproval,
+  isRequirementAuthorization,
   MissingAccrualPositionError,
   MissingClientPropertyError,
   MorphoClient,
+  marketV1RepayWithdrawCollateral,
   NonPositiveRepayAmountError,
   NonPositiveWithdrawCollateralAmountError,
   RepayExceedsDebtError,
   ShareDivideByZeroError,
   WithdrawMakesPositionUnhealthyError,
-  computeMaxRepaySharePrice,
-  isRequirementApproval,
-  isRequirementAuthorization,
-  marketV1RepayWithdrawCollateral,
 } from "../../../src/index.js";
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";

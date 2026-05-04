@@ -47,6 +47,7 @@ describe(type, () => {
     expect(result).toEqual(dataFixture);
   });
 
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   test("should throw if accruing interest in the past", ({ expect }) => {
     const dataFixtureCopy = _.cloneDeep(dataFixture);
     dataFixtureCopy.block.timestamp -= 1n;

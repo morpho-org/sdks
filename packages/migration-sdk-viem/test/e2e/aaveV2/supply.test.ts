@@ -1,19 +1,18 @@
-import { type Address, maxUint256, parseEther, parseUnits } from "viem";
-import {
-  MigratableProtocol,
-  SupplyMigrationLimiter,
-  fetchMigratablePositions,
-} from "../../../src/index.js";
-import { MigratableSupplyPosition_AaveV2 } from "../../../src/positions/supply/aaveV2.supply.js";
-
-import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId, MathLib } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
+import { type Address, maxUint256, parseEther, parseUnits } from "viem";
 import { sendTransaction } from "viem/actions";
 import { describe, expect } from "vitest";
 import { migrationAddressesRegistry } from "../../../src/config.js";
+import {
+  fetchMigratablePositions,
+  MigratableProtocol,
+  SupplyMigrationLimiter,
+} from "../../../src/index.js";
 import { MigratableBorrowPosition_AaveV2 } from "../../../src/positions/borrow/aaveV2.borrow.js";
+import { MigratableSupplyPosition_AaveV2 } from "../../../src/positions/supply/aaveV2.supply.js";
 import { test } from "../setup.js";
 
 const aWeth = "0x030bA81f1c18d280636F32af80b9AAd02Cf0854e";
@@ -24,6 +23,7 @@ const {
   usdc,
 } = addressesRegistry[ChainId.EthMainnet];
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const writeSupply = async (
   client: AnvilTestClient,
   market: Address,

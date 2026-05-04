@@ -3,8 +3,8 @@ import { useRef } from "react";
 import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 import {
-  type VaultUserParameters,
   fetchVaultUserQueryOptions,
+  type VaultUserParameters,
 } from "../queries/fetchVaultUser.js";
 import type { UseCompositeQueriesReturnType } from "../types/index.js";
 import { replaceDeepEqual, uniqBy } from "../utils/index.js";

@@ -2,7 +2,7 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { MorphoClient, isRequirementApproval } from "../../../src/index.js";
+import { isRequirementApproval, MorphoClient } from "../../../src/index.js";
 import { Re7UsdtVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";

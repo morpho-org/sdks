@@ -1,10 +1,10 @@
 import {
   type Address,
   type ChainId,
-  type Token,
   getChainAddresses,
+  type Token,
 } from "@morpho-org/blue-sdk";
-import { type TypedDataDefinition, isAddressEqual } from "viem";
+import { isAddressEqual, type TypedDataDefinition } from "viem";
 import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,

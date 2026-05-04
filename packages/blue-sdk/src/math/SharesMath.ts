@@ -10,6 +10,7 @@ export namespace SharesMath {
   export const VIRTUAL_SHARES = 1000000n;
   export const VIRTUAL_ASSETS = 1n;
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function toAssets(
     shares: BigIntish,
     totalAssets: BigIntish,
@@ -24,6 +25,7 @@ export namespace SharesMath {
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function toShares(
     assets: BigIntish,
     totalAssets: BigIntish,

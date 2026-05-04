@@ -1,7 +1,11 @@
-import { lstatSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { lstatSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { getAddress } from "viem";
 import config from "../../biome.json" with { type: "json" };
+
+const ignored = (config.files?.includes ?? [])
+  .filter((pattern) => pattern.startsWith("!"))
+  .map((pattern) => pattern.replace(/^!(\*\*\/)?/, ""));
 
 const lint = (path) => {
   const files = readdirSync(path, { encoding: "utf-8" });
@@ -17,7 +21,7 @@ const lint = (path) => {
 
     if (
       (!file.endsWith(".ts") && !file.endsWith(".js")) ||
-      config.files.ignore.some((ignored) => file.includes(ignored))
+      ignored.some((pattern) => file.includes(pattern))
     )
       continue;
 

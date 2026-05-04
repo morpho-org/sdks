@@ -1,22 +1,20 @@
 import {
-  http,
   type BlockTag,
   createPublicClient,
   getAddress,
+  http,
   maxUint256,
 } from "viem";
-
-import type {
-  RawLog,
-  RawSimulationResult,
-  SimulationTransaction,
-} from "../../types.js";
-
 import {
   ExternalServiceError,
   SimulationRevertedError,
   SimulationValidationError,
 } from "../../errors.js";
+import type {
+  RawLog,
+  RawSimulationResult,
+  SimulationTransaction,
+} from "../../types.js";
 
 /**
  * Simulate transactions using eth_simulateV1 (viem simulateCalls).

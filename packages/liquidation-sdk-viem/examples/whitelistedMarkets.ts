@@ -1,37 +1,37 @@
 import {
   ChainId,
-  type MarketId,
-  Token,
-  UnknownTokenPriceError,
   erc20WrapperTokens,
   getChainAddresses,
   isMarketId,
+  type MarketId,
+  Token,
+  UnknownTokenPriceError,
 } from "@morpho-org/blue-sdk";
 import { safeGetAddress, safeParseNumber } from "@morpho-org/blue-sdk-viem";
 import {
+  apiSdk,
+  collateralUsdThreshold,
   Flashbots,
+  getPositions,
+  getRepayDataPreLiquidation,
   LiquidationEncoder,
   Midas,
+  mainnetAddresses,
   type PartialApiToken,
   Pendle,
   Spectra,
-  apiSdk,
-  collateralUsdThreshold,
-  getPositions,
-  getRepayDataPreLiquidation,
-  mainnetAddresses,
 } from "@morpho-org/liquidation-sdk-viem";
 import {
   type Account,
   type Address,
   type Chain,
-  type LocalAccount,
-  type Transport,
-  type WalletClient,
   erc20Abi,
   erc4626Abi,
+  type LocalAccount,
   maxUint256,
   parseEther,
+  type Transport,
+  type WalletClient,
 } from "viem";
 import {
   estimateFeesPerGas,
@@ -57,6 +57,7 @@ export namespace BlueSdkConverter {
 
 export const check = async <
   client extends WalletClient<Transport, Chain, Account>,
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 >(
   executorAddress: Address,
   client: client,
@@ -418,6 +419,7 @@ export const check = async <
   );
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const main = async <client extends WalletClient<Transport, Chain, Account>>(
   executorAddress: Address,
   client: client,

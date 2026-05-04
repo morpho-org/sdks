@@ -1,8 +1,8 @@
 import {
+  addressesRegistry,
   ChainId,
   Market,
   MathLib,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { invalidateAllBlueSdkQueries } from "@morpho-org/blue-sdk-wagmi";
 import { markets, vaults } from "@morpho-org/morpho-test";
@@ -311,6 +311,7 @@ describe("useSimulationState", () => {
   test("should fail transfer with insufficient balance", async ({
     config,
     client,
+    // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
     expect,
   }) => {
     const amount = 1_000000n;
@@ -374,6 +375,7 @@ describe("useSimulationState", () => {
   test("should fail transfer with insufficient allowance", async ({
     config,
     client,
+    // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
     expect,
   }) => {
     const amount = 1_000000n;
@@ -451,6 +453,7 @@ describe("useSimulationState", () => {
 
     const { result, rerender } = await renderHook(
       config,
+      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
       (block: MinimalBlock) =>
         useSimulationState({
           marketIds: [],

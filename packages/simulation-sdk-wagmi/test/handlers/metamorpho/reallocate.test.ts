@@ -32,6 +32,7 @@ describe("MetaMorpho_Reallocate", () => {
 
     const { result, rerender } = await renderHook(
       config,
+      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
       (block: MinimalBlock) =>
         useSimulationState({
           marketIds: [

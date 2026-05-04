@@ -3,10 +3,12 @@ import { AccrualVault, Vault } from "@morpho-org/blue-sdk";
 import { fetchAccrualVault, fetchVault } from "../fetch/index.js";
 
 declare module "@morpho-org/blue-sdk" {
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   namespace Vault {
     let fetch: typeof fetchVault;
   }
 
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   namespace AccrualVault {
     let fetch: typeof fetchAccrualVault;
   }
@@ -15,4 +17,4 @@ declare module "@morpho-org/blue-sdk" {
 Vault.fetch = fetchVault;
 AccrualVault.fetch = fetchAccrualVault;
 
-export { Vault, AccrualVault };
+export { AccrualVault, Vault };

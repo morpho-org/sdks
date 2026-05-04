@@ -38,6 +38,7 @@ export function invalidateAllBlueSdkQueries(
 ) {
   const cancelRefetch = options?.cancelRefetch ?? true;
 
+  // biome-ignore lint/nursery/noFloatingPromises: TODO await or void this promise
   queryClient.invalidateQueries({
     queryKey: [BLUE_SDK_QUERY_KEY_PREFIX],
     cancelRefetch,

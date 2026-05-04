@@ -5,6 +5,7 @@ import type { IToken } from "./Token.js";
 import { WrappedToken } from "./WrappedToken.js";
 
 export class ExchangeRateWrappedToken extends WrappedToken {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     token: IToken,
     readonly underlying: Address,

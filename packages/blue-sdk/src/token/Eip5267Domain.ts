@@ -89,6 +89,7 @@ export class Eip5267Domain implements IEip5267Domain {
       [field in Eip712Field]?: field extends "chainId"
         ? number
         : Eip5267Domain[field];
+      // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     }>((acc, field, i) => {
       if (fields & (2n ** BigInt(i))) {
         // @ts-expect-error Typescript doesn't infer value type based on field.

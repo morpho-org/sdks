@@ -3,7 +3,9 @@
   "description": "Abstraction layer for Morpho's complexity.",
   "version": "1.1.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": ["Foulks-Plb <https://x.com/FoulkPlb>"],
+  "contributors": [
+    "Foulks-Plb <https://x.com/FoulkPlb>"
+  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
@@ -13,7 +15,9 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "$npm_execpath build",
     "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",

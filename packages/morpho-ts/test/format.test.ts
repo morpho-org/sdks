@@ -1,6 +1,5 @@
-import { Format, createFormat, format } from "../src/index.js";
-
 import { describe, expect, test } from "vitest";
+import { createFormat, Format, format } from "../src/index.js";
 
 describe("format", () => {
   const number = 12345.6789;
@@ -34,13 +33,13 @@ describe("format", () => {
         { custom: { format: Format.number, digits: 10, unit: "custom" } },
       );
 
-      //@ts-ignore
+      //@ts-expect-error
       const hexOptions = customFormat.hex._options;
       expect(hexOptions.format).toBe(Format.hex);
       expect(hexOptions.default).toBe("default hex");
       expect(hexOptions.prefix).toBe(false);
 
-      //@ts-ignore
+      //@ts-expect-error
       const numberOptions = customFormat.number._options;
       expect(numberOptions.format).toBe(Format.number);
       expect(numberOptions.unit).toBe("number");
@@ -48,7 +47,7 @@ describe("format", () => {
       expect(numberOptions.digits).toBe(2);
       expect(numberOptions.default).toBe(undefined);
 
-      //@ts-ignore
+      //@ts-expect-error
       const shortOptions = customFormat.short._options;
       expect(shortOptions.format).toBe(Format.short);
       expect(shortOptions.unit).toBe("short");
@@ -57,7 +56,7 @@ describe("format", () => {
       expect(shortOptions.default).toBe(undefined);
       expect(shortOptions.smallValuesWithCommas).toBe(true);
 
-      //@ts-ignore
+      //@ts-expect-error
       const percentOptions = customFormat.percent._options;
       expect(percentOptions.format).toBe(Format.percent);
       expect(percentOptions.unit).toBe("percent");
@@ -65,7 +64,7 @@ describe("format", () => {
       expect(percentOptions.digits).toBe(2);
       expect(percentOptions.default).toBe(undefined);
 
-      //@ts-ignore
+      //@ts-expect-error
       const commasOptions = customFormat.commas._options;
       expect(commasOptions.format).toBe(Format.commas);
       expect(commasOptions.unit).toBe("commas");
@@ -74,7 +73,7 @@ describe("format", () => {
       expect(commasOptions.default).toBe(undefined);
 
       const customFormatter = customFormat.custom;
-      //@ts-ignore
+      //@ts-expect-error
       const customOptions = customFormatter._options;
       expect(customOptions.format).toBe(Format.number);
       expect(customOptions.unit).toBe("custom");
@@ -90,11 +89,11 @@ describe("format", () => {
       const formatter2 = formatters.number.digits(0);
       const formatter3 = formatter1.digits(5);
 
-      //@ts-ignore
+      //@ts-expect-error
       const options1 = formatter1._options;
-      //@ts-ignore
+      //@ts-expect-error
       const options2 = formatter2._options;
-      //@ts-ignore
+      //@ts-expect-error
       const options3 = formatter3._options;
 
       expect(options1.digits).toBe(10);
@@ -181,7 +180,7 @@ describe("format", () => {
           .max(undefined)
           .default(undefined);
 
-        //@ts-ignore
+        //@ts-expect-error
         const options = newFormatter._options;
         expect(options.digits).toBe(2);
         expect(options.locale).toBe("en-US");
@@ -200,7 +199,7 @@ describe("format", () => {
           .max(null)
           .default(undefined);
 
-        //@ts-ignore
+        //@ts-expect-error
         const options = newFormatter._options;
         expect(options.digits).toBe(2);
         expect(options.locale).toBe("en-US");

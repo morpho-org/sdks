@@ -59,12 +59,15 @@ declare global {
   }
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 String.prototype.insert = function (index, substr, fillWith) {
+  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
   if (index < 0) index = this.length + index;
 
   let filler = "";
   if (index < 0) {
     if (fillWith) filler = fillWith.repeat(-index).slice(index);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     index = 0;
   }
   return this.slice(0, index) + substr + filler + this.slice(index);
@@ -105,6 +108,7 @@ const RANGES = [
     symbol: "k",
   },
 ];
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const _formatShort = (
   bi: bigint,
   decimals: number,
@@ -135,6 +139,7 @@ const _formatShort = (
   );
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const _formatCommas = (
   bi: bigint,
   decimals: number,
@@ -147,17 +152,17 @@ const _formatCommas = (
   const [wholePart, decimalPart] = stringValue.split(".");
 
   return _applyOptions(
-    wholePart!
-      .split("")
-      .reduce(
-        (formattedNumber, digit, i, arr) =>
-          `${formattedNumber}${!i || (arr.length - i) % 3 ? "" : ","}${digit}`,
-        "",
-      ) + (decimalPart ? `.${decimalPart}` : ""),
+    wholePart!.split("").reduce(
+      // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+      (formattedNumber, digit, i, arr) =>
+        `${formattedNumber}${!i || (arr.length - i) % 3 ? "" : ","}${digit}`,
+      "",
+    ) + (decimalPart ? `.${decimalPart}` : ""),
     formatOptions,
   );
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const _formatNumber = (
   bi: bigint,
   decimals: number,
@@ -199,12 +204,14 @@ const _applyOptions = (
     decimalPart = decimalPart.replace(/\.?0+$/, "");
   }
 
+  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
   value = (wholePart || "0") + (decimalPart ? `.${decimalPart}` : "");
 
   const { value: _value, decimalSymbol } = getEnUSNumberToLocalParts(
     value,
     formatOptions.locale,
   );
+  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
   value = _value;
 
   const firstNonZero = value.match(/[1-9]/);
@@ -219,6 +226,7 @@ const _applyOptions = (
   return value;
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 function formatBI(
   bi: bigint,
   decimals: number,
@@ -370,6 +378,7 @@ export abstract class BaseFormatter {
 
       const numberExp = Number(exp ?? 0);
 
+      // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
       decimals = Math.min(100, Math.max(0, -numberExp)) + digits.length;
 
       if (numberExp > 0) {
@@ -378,9 +387,12 @@ export abstract class BaseFormatter {
 
         const strValue = `${whole}${newDigits.slice(0, numberExp)}.${newDigits.slice(numberExp)}`;
 
+        // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
         decimals = strValue.split(".")[1]?.length ?? 0;
+        // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
         value = BigInt(strValue.replace(".", ""));
       } else {
+        // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
         value = BigInt(value.toFixed(decimals).replace(".", ""));
       }
     }

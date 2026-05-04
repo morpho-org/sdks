@@ -1,4 +1,4 @@
-import { MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isHex } from "viem";
 import { mainnet } from "viem/chains";
