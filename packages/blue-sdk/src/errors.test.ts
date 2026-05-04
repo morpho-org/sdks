@@ -78,7 +78,7 @@ describe("error classes", () => {
   });
 
   test("UnknownOfFactory preserves factory and address", () => {
-    const factory: Address = "0xbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbBbB";
+    const factory: Address = "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB";
     const err = new UnknownOfFactory(factory, ADDRESS);
     expect(err.factory).toBe(factory);
     expect(err.address).toBe(ADDRESS);

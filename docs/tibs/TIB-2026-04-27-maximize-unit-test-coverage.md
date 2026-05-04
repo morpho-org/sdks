@@ -5,7 +5,7 @@
 | **Status** | Proposed                                                                                                                                               |
 | **Date**   | 2026-04-27                                                                                                                                             |
 | **Author** | @0xbulma                                                                                                                                               |
-| **Scope**  | Repo-wide. In-scope packages: `morpho-ts`, `blue-sdk`, `blue-sdk-viem`, `bundler-sdk-viem`, `liquidation-sdk-viem`, `liquidity-sdk-viem`, `morpho-test`, `test`. Excluded: `simulation-sdk`, `simulation-sdk-wagmi`, `migration-sdk-viem`, `blue-sdk-wagmi`, `test-wagmi`. |
+| **Scope**  | Repo-wide. In-scope packages: `morpho-ts`, `blue-sdk`, `blue-sdk-viem`, `bundler-sdk-viem`, `liquidation-sdk-viem`, `liquidity-sdk-viem`, `morpho-test`, `test`, `morpho-sdk`, `evm-simulation`. Excluded: `simulation-sdk`, `simulation-sdk-wagmi`, `migration-sdk-viem`, `blue-sdk-wagmi`, `test-wagmi`. |
 
 ---
 
@@ -341,3 +341,33 @@ No new attack surface. The migration is layout and tooling, not runtime. Two min
 - [`packages/blue-sdk-viem/test/setup.ts`](../../packages/blue-sdk-viem/test/setup.ts) — canonical fork fixture file (to be migrated to `src/__test-utils__/fixtures.ts`).
 - [`packages/blue-sdk-viem/src/fetch/Market.ts`](../../packages/blue-sdk-viem/src/fetch/Market.ts) — canonical viem-action-using source whose new colocated unit test will exercise the transport mock pattern.
 - [`packages/liquidation-sdk-viem/src/LiquidationEncoder.ts`](../../packages/liquidation-sdk-viem/src/LiquidationEncoder.ts) — largest single zero-coverage file (1,001 LOC).
+
+## Addenda
+
+### 2026-05-04 — Extend scope to `morpho-sdk` and `evm-simulation`
+
+**Author:** @0xbulma
+
+Two new packages landed on `main` after this TIB was authored: `morpho-sdk` (1.1.0, the new flagship transaction-builder package featured in the README via #581) and `evm-simulation` (1.0.0, the EVM simulation engine). Neither was in the original in-scope list because neither existed yet.
+
+Both already practice the conventions this TIB advocates:
+
+- `morpho-sdk` ships **48** test files (24 colocated under `src/` + 24 fork-bound tests under `test/`), uses `tsconfig.build.{cjs,esm}.json` `exclude: ["**/*.test.ts"]`, and is wired into `vitest.config.ts` with `include: ["packages/morpho-sdk/src/**/*.test.ts", "packages/morpho-sdk/test/**/*.test.ts"]`.
+- `evm-simulation` ships **18** colocated `.spec.ts` files entirely under `src/` (no `test/` directory), uses `exclude: ["**/*.spec.ts", "**/*.test.ts", "src/test-helpers/**"]`, and runs in its own vitest project with `include: ["packages/evm-simulation/src/**/*.spec.ts", "packages/evm-simulation/src/**/*.test.ts"]`.
+
+**Coverage as of audit (lcov-merged, repo-wide denominator):**
+
+| Package | Lines | Coverage |
+| --- | --- | --- |
+| `evm-simulation` | 326/344 | **94.77%** |
+| `morpho-sdk` (colocated only, fork tests skipped) | varies | high — full suite blocked locally by `MAINNET_RPC_URL` env validation |
+
+**Decision**: extend scope to both packages and write tests for `morpho-sdk` source files that lacked colocated coverage. `evm-simulation` requires no new tests — it is already at the TIB target.
+
+**New tests added under this addendum**:
+
+- `packages/morpho-sdk/src/helpers/constant.test.ts` — `MAX_SLIPPAGE_TOLERANCE`, `DEFAULT_LLTV_BUFFER`, `MAX_ABSOLUTE_SHARE_PRICE` invariants.
+- `packages/morpho-sdk/src/helpers/encodeDeallocation.test.ts` — `encodeForceDeallocateCall` round-trip via `decodeFunctionData`/`decodeAbiParameters` for both adapter shapes (with/without `marketParams`); error path on non-positive amounts.
+- `packages/morpho-sdk/src/helpers/metadata.test.ts` — `addTransactionMetadata` empty-data short-circuit, timestamp append, origin append (raw hex), origin-with-0x rejection (current implementation behavior), warn-on-invalid-origin, `to`/`value` preservation, combined timestamp + origin layout.
+
+**Out of scope (deferred)**: `morpho-sdk/src/entities/marketV1/marketV1.ts` (1,071 LOC) and the larger `actions/marketV1` / `actions/vaultV1` / `actions/vaultV2` builders are still primarily exercised by fork-bound tests under `packages/morpho-sdk/test/` plus colocated tests that import the fork setup. Their non-fork unit-test extension can land in follow-ups; the conventions are already in place.

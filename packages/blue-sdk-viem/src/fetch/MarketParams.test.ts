@@ -29,7 +29,7 @@ describe("fetchMarketParams", () => {
 
     const handle = createMockClient();
     mockRead(handle, {
-      address: "0xBBBbbbbBbbBBBBbBBbBBBbBbBBBbBbBbBBBbbBBb",
+      address: "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
       abi: blueAbi,
       functionName: "idToMarketParams",
       result: [

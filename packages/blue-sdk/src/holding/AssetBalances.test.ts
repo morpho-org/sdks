@@ -4,12 +4,12 @@ import type { Address } from "../types.js";
 import { AssetBalances, type PeripheralBalance } from "./AssetBalances.js";
 
 const ETH = new Token({
-  address: "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee" as Address,
+  address: "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE" as Address,
   symbol: "ETH",
   decimals: 18,
 });
 const WSTETH = new Token({
-  address: "0x7f39c581f595b53c5cb19bd0b3f8da6c935e2ca0" as Address,
+  address: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0" as Address,
   symbol: "wstETH",
   decimals: 18,
 });

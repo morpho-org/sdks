@@ -69,10 +69,10 @@ describe("safeParseUnits", () => {
 
 describe("safeGetAddress", () => {
   test("returns the EIP-55 checksum form for any input case", () => {
-    expect(safeGetAddress("0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48")).toBe(
+    expect(safeGetAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")).toBe(
       "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     );
-    expect(safeGetAddress("0xA0B86991C6218B36C1D19D4A2E9EB0CE3606EB48")).toBe(
+    expect(safeGetAddress("0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48")).toBe(
       "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
     );
   });
