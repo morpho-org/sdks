@@ -3,7 +3,9 @@
   "description": "Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes.",
   "version": "2.7.1",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "contributors": [
+    "Rubilmax <rmilon@gmail.com>"
+  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
@@ -12,7 +14,9 @@
   },
   "license": "MIT",
   "type": "module",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "main": "src/index.ts",
   "exports": {
     ".": "./src/index.ts",
@@ -22,9 +26,15 @@
   },
   "typesVersions": {
     "*": {
-      "vitest": ["src/vitest.ts"],
-      "fixtures": ["src/fixtures.ts"],
-      "playwright": ["src/playwright.ts"]
+      "vitest": [
+        "src/vitest.ts"
+      ],
+      "fixtures": [
+        "src/fixtures.ts"
+      ],
+      "playwright": [
+        "src/playwright.ts"
+      ]
     }
   },
   "scripts": {

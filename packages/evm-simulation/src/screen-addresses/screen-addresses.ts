@@ -1,13 +1,11 @@
 import { getAddress, zeroAddress } from "viem";
 import { z } from "zod";
-
+import { AddressScreeningError } from "../errors.js";
 import type {
   SimulationLogger,
   SimulationTransaction,
   Transfer,
 } from "../types.js";
-
-import { AddressScreeningError } from "../errors.js";
 import { sanctionedAddresses } from "./sanctioned-addresses.js";
 
 const CHAINALYSIS_API_URL = "https://api.chainalysis.com/api/risk/v2/entities";
@@ -137,6 +135,7 @@ export async function screenAddresses(params: {
  * A SINGLE deadline covers both the POST and the GET, keeping the per-address
  * wall-time budget at `CHAINALYSIS_TIMEOUT_MS` (5 s) rather than doubling it.
  */
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 async function screenWithChainalysis(
   address: string,
   apiKey: string,

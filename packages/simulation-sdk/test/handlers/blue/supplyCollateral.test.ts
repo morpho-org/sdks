@@ -1,7 +1,6 @@
+import { addressesRegistry, ChainId, SharesMath } from "@morpho-org/blue-sdk";
 import _ from "lodash";
 import { parseUnits } from "viem";
-
-import { ChainId, SharesMath, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";

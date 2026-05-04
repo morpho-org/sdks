@@ -1583,6 +1583,7 @@ export function registerCustomAddresses({
   const customizer =
     (type: string) =>
     // biome-ignore lint/suspicious/noExplicitAny: type is not trivial and not important here
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     (objValue: any, srcValue: any, key: string) => {
       if (
         objValue !== undefined &&

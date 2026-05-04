@@ -369,6 +369,7 @@ export class AccrualVault extends Vault implements IAccrualVault {
    * @param assets The maximum amount of assets to deposit.
    */
   public maxDeposit(assets: BigIntish): CapacityLimit {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     assets = BigInt(assets);
 
     const suppliable = this.allocations

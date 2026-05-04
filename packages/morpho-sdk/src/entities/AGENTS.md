@@ -1,23 +1,18 @@
-# Entity Layer
+# `entities/`
 
-> Full context: [AGENTS.md](../../AGENTS.md)
+`MorphoVaultV1` implements `VaultV1Actions`. `MorphoVaultV2` implements `VaultV2Actions`. `MorphoMarketV1` implements `MarketV1Actions`. Inherits the rules in [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
 
-`MorphoVaultV1` implements `VaultV1Actions`. `MorphoVaultV2` implements `VaultV2Actions`. `MorphoMarketV1` implements `MarketV1Actions`.
+## Responsibilities
 
-## Intent
+- Fetch on-chain state (vault accrual data, market/position data).
+- Compute derived values (e.g. `maxSharePrice` with slippage, LLTV buffer health).
+- Validate `chainId` and `userAddress` match the client/builder before any on-chain read or transaction construction.
+- Return lazy `{ buildTx, getRequirements }` handles — no side effects at construction.
 
-- Fetches on-chain data (vault accrual data for V1/V2, market/position data for MarketV1).
-- Computes derived values (e.g. `maxSharePrice` with slippage, LLTV buffer health check).
-- Delegates transaction building to pure action functions.
-- Returns `{ buildTx, getRequirements }` — lazy evaluation, no side effects at construction.
+## Routing
 
-## Shared Liquidity (Reallocations)
+See [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md) routing summary.
 
-`MorphoMarketV1.borrow()` and `supplyCollateralBorrow()` accept an optional `reallocations: VaultReallocation[]`. The entity passes it through to the action layer — encoding and validation happen there.
+## Shared liquidity
 
-## Key Constraints
-
-- Validate `chainId` match before any on-chain call.
-- Never encode calldata here — that belongs in Actions.
-- Vault deposits go through the bundler (both V1 and V2). Withdraw/redeem are direct vault calls.
-- MarketV1: all operations (`supplyCollateral`, `borrow`, `supplyCollateralBorrow`) are routed through bundler3 via GeneralAdapter1.
+`MorphoMarketV1.borrow()` and `supplyCollateralBorrow()` accept optional `reallocations: VaultReallocation[]`. The entity passes them through to the action layer; encoding and validation happen there. `getReallocationData` may fetch the inputs needed to compute reallocations, but action encoding stays outside the entity fetch path.

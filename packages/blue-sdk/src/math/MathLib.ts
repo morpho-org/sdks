@@ -26,6 +26,7 @@ export namespace MathLib {
    * @param a The number
    */
   export function abs(a: BigIntish) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     a = BigInt(a);
 
     return a >= 0 ? a : -a;
@@ -55,7 +56,9 @@ export namespace MathLib {
    * @param y The second number
    */
   export function zeroFloorSub(x: BigIntish, y: BigIntish) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     x = BigInt(x);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     y = BigInt(y);
 
     return x <= y ? 0n : x - y;
@@ -84,6 +87,7 @@ export namespace MathLib {
    * @param x The first number
    * @param y The second number
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function wMul(
     x: BigIntish,
     y: BigIntish,
@@ -115,6 +119,7 @@ export namespace MathLib {
    * @param x The first number
    * @param y The second number
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function wDiv(
     x: BigIntish,
     y: BigIntish,
@@ -129,13 +134,17 @@ export namespace MathLib {
    * @param y The second number
    * @param denominator The denominator
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function mulDivDown(
     x: BigIntish,
     y: BigIntish,
     denominator: BigIntish,
   ) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     x = BigInt(x);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     y = BigInt(y);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     denominator = BigInt(denominator);
     if (denominator === 0n) throw Error("MathLib: DIVISION_BY_ZERO");
 
@@ -148,9 +157,13 @@ export namespace MathLib {
    * @param y The second number
    * @param denominator The denominator
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function mulDivUp(x: BigIntish, y: BigIntish, denominator: BigIntish) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     x = BigInt(x);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     y = BigInt(y);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     denominator = BigInt(denominator);
     if (denominator === 0n) throw Error("MathLib: DIVISION_BY_ZERO");
 
@@ -159,6 +172,7 @@ export namespace MathLib {
     return (x * y) / denominator + roundup;
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function mulDiv(
     x: BigIntish,
     y: BigIntish,

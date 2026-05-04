@@ -1,5 +1,5 @@
 import { type MarketId, MathLib, NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
-
+import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import {
   MetaMorphoErrors,
   PublicAllocatorErrors,
@@ -10,8 +10,6 @@ import type { MetaMorphoOperations } from "../../operations.js";
 import { handleBlueOperation } from "../blue/index.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
-
-import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { handleMetaMorphoReallocateOperation } from "./reallocate.js";
 
 export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
@@ -58,7 +56,7 @@ export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
     );
 
   let totalWithdrawn = 0n;
-  let prevId: MarketId | undefined = undefined;
+  let prevId: MarketId | undefined;
 
   const allocations: { id: MarketId; assets: bigint }[] = [];
   for (const { id, assets } of withdrawals) {

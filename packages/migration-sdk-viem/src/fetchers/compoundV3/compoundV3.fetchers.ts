@@ -1,11 +1,10 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
-import { isDefined, values } from "@morpho-org/morpho-ts";
-
 import {
-  type DeploylessFetchParameters,
   blueAbi,
+  type DeploylessFetchParameters,
   fetchToken,
 } from "@morpho-org/blue-sdk-viem";
+import { isDefined, values } from "@morpho-org/morpho-ts";
 import type { Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { cometAbi, cometExtAbi } from "../../abis/compoundV3.js";
@@ -20,6 +19,7 @@ import {
 } from "../../types/index.js";
 import { rateToApy } from "../../utils/rates.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 async function fetchCompoundV3InstancePosition(
   user: Address,
   cometAddress: Address,
@@ -313,6 +313,7 @@ async function fetchCompoundV3InstancePosition(
   });
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchCompoundV3Positions(
   user: Address,
   client: Client,

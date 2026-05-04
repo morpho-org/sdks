@@ -11,11 +11,11 @@ import { test } from "../../../test/setup.js";
 import {
   DepositAmountMismatchError,
   DepositAssetMismatchError,
+  isRequirementApproval,
+  isRequirementSignature,
   NonPositiveAssetAmountError,
   NonPositiveMaxSharePriceError,
   ZeroDepositAmountError,
-  isRequirementApproval,
-  isRequirementSignature,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";

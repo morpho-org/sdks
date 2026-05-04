@@ -231,6 +231,7 @@ export class Market implements IMarket {
     endBorrowRate: bigint;
     endRateAtTarget?: bigint;
   } {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;
@@ -336,6 +337,7 @@ export class Market implements IMarket {
    * Defaults to `lastUpdate` (returns a copy of the market).
    */
   public accrueInterest(timestamp: BigIntish = this.lastUpdate) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
 
     const { elapsed, avgBorrowRate, endRateAtTarget } =
@@ -357,13 +359,16 @@ export class Market implements IMarket {
     });
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if ((assets === 0n) === (shares === 0n))
       throw new BlueErrors.InconsistentInput(assets, shares);
 
     const market = this.accrueInterest(timestamp);
 
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     if (shares === 0n) shares = market.toSupplyShares(assets, "Down");
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     else assets = market.toSupplyAssets(shares, "Up");
 
     market.totalSupplyAssets += assets;
@@ -372,13 +377,16 @@ export class Market implements IMarket {
     return { market, assets, shares };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if ((assets === 0n) === (shares === 0n))
       throw new BlueErrors.InconsistentInput(assets, shares);
 
     const market = this.accrueInterest(timestamp);
 
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     if (shares === 0n) shares = market.toSupplyShares(assets, "Up");
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     else assets = market.toSupplyAssets(shares, "Down");
 
     market.totalSupplyAssets -= assets;
@@ -390,13 +398,16 @@ export class Market implements IMarket {
     return { market, assets, shares };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if ((assets === 0n) === (shares === 0n))
       throw new BlueErrors.InconsistentInput(assets, shares);
 
     const market = this.accrueInterest(timestamp);
 
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     if (shares === 0n) shares = market.toBorrowShares(assets, "Up");
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     else assets = market.toBorrowAssets(shares, "Down");
 
     market.totalBorrowAssets += assets;
@@ -408,13 +419,16 @@ export class Market implements IMarket {
     return { market, assets, shares };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     if ((assets === 0n) === (shares === 0n))
       throw new BlueErrors.InconsistentInput(assets, shares);
 
     const market = this.accrueInterest(timestamp);
 
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     if (shares === 0n) shares = market.toBorrowShares(assets, "Down");
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     else assets = market.toBorrowAssets(shares, "Up");
 
     market.totalBorrowAssets -= assets;
@@ -775,6 +789,7 @@ export class Market implements IMarket {
    * @param loanTokenBalance The balance of loan assets.
    * @param collateralTokenBalance The balance of collateral assets.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getMaxCapacities(
     position: {
       collateral: bigint;

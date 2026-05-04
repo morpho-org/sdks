@@ -1,8 +1,6 @@
 import { isAddress, zeroAddress } from "viem";
-
-import type { SimulateParams } from "../../types.js";
-
 import { SimulationValidationError } from "../../errors.js";
+import type { SimulateParams } from "../../types.js";
 import { validateAuthorizations } from "../authorizations/index.js";
 
 /**

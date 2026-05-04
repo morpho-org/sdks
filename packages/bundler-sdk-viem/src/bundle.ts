@@ -8,6 +8,7 @@ import {
 } from "./operations.js";
 import type { InputBundlerOperation } from "./types/index.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const setupBundle = (
   inputOperations: InputBundlerOperation[],
   startData: SimulationState,

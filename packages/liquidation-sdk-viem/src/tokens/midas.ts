@@ -146,6 +146,7 @@ export namespace Midas {
     return convert(originalAmount, originalDecimals, 18n);
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   function convert(
     originalAmount: bigint,
     originalDecimals: bigint,

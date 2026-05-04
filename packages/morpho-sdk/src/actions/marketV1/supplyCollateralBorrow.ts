@@ -1,4 +1,4 @@
-import { type MarketParams, getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
 import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";

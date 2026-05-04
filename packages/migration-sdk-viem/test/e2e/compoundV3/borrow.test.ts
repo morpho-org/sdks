@@ -1,17 +1,10 @@
 import {
-  BorrowMigrationLimiter,
-  MigratableProtocol,
-  SupplyMigrationLimiter,
-  fetchMigratablePositions,
-  migrationAddressesRegistry,
-} from "../../../src/index.js";
-
-import {
+  addressesRegistry,
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
+import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 
 import { markets } from "@morpho-org/morpho-test";
 import { entries } from "@morpho-org/morpho-ts";
@@ -23,11 +16,16 @@ import {
   parseEther,
   parseUnits,
 } from "viem";
-import { type TestAPI, describe, expect } from "vitest";
-
-import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { sendTransaction } from "viem/actions";
+import { describe, expect, type TestAPI } from "vitest";
 import { cometAbi, cometExtAbi } from "../../../src/abis/compoundV3.js";
+import {
+  BorrowMigrationLimiter,
+  fetchMigratablePositions,
+  MigratableProtocol,
+  migrationAddressesRegistry,
+  SupplyMigrationLimiter,
+} from "../../../src/index.js";
 import { MigratableBorrowPosition_CompoundV3 } from "../../../src/positions/borrow/compoundV3.borrow.js";
 import { test } from "../setup.js";
 
@@ -87,11 +85,13 @@ const TEST_CONFIGS = [
 ] as const;
 
 describe("Borrow position on COMPOUND V3", () => {
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   for (const { chainId, testFn, markets } of TEST_CONFIGS) {
     const {
       bundler3: { generalAdapter1, compoundV3MigrationAdapter },
     } = addressesRegistry[chainId];
 
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     const writeSupplyCollateral = async (
       client: ViemTestContext["client"],
       comet: Address,
@@ -118,6 +118,7 @@ describe("Borrow position on COMPOUND V3", () => {
       await client.mine({ blocks: 500 }); //accrue some interests
     };
 
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     const writeBorrow = async (
       client: ViemTestContext["client"],
       comet: Address,

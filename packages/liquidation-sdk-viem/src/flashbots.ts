@@ -3,12 +3,12 @@ import {
   type Chain,
   type FormattedTransactionRequest,
   type Hex,
+  keccak256,
   type LocalAccount,
+  stringToBytes,
   type Transport,
   type UnionOmit,
   type WalletClient,
-  keccak256,
-  stringToBytes,
 } from "viem";
 import { estimateGas, getTransactionCount } from "viem/actions";
 
@@ -82,6 +82,7 @@ export namespace Flashbots {
    * const success = (await bundleRes.wait()) === FlashbotsBundleResolution.BundleIncluded
    * ```
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export async function sendRawBundle(
     txs: Hex[],
     targetBlockNumber: bigint,
@@ -111,6 +112,7 @@ export namespace Flashbots {
     });
 
     if (!response.ok) {
+      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
       const body = await response.json();
 
       throw Error(body.error ?? body ?? "eth_sendBundle failed");

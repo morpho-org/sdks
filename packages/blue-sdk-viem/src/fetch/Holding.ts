@@ -1,12 +1,13 @@
 import {
   ChainUtils,
   ERC20_ALLOWANCE_RECIPIENTS,
+  getChainAddresses,
   Holding,
   NATIVE_ADDRESS,
-  getChainAddresses,
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
+import { fromEntries, getValue } from "@morpho-org/morpho-ts";
 import {
   type Address,
   type Client,
@@ -15,8 +16,6 @@ import {
   zeroAddress,
 } from "viem";
 import { getBalance, getChainId, readContract } from "viem/actions";
-
-import { fromEntries, getValue } from "@morpho-org/morpho-ts";
 import {
   erc2612Abi,
   permissionedErc20WrapperAbi,
@@ -29,6 +28,7 @@ import type { DeploylessFetchParameters } from "../types.js";
 
 export const optionalBoolean = [undefined, false, true] as const;
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchHolding(
   user: Address,
   token: Address,

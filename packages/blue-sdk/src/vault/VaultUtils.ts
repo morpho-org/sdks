@@ -8,11 +8,13 @@ export namespace VaultUtils {
     return MathLib.zeroFloorSub(18n, decimals);
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function toAssets(
     shares: BigIntish,
     {
       totalAssets,
       totalSupply,
+      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
       decimalsOffset,
     }: {
       totalAssets: BigIntish;
@@ -29,11 +31,13 @@ export namespace VaultUtils {
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function toShares(
     assets: BigIntish,
     {
       totalAssets,
       totalSupply,
+      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
       decimalsOffset,
     }: {
       totalAssets: BigIntish;

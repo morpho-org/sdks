@@ -1,12 +1,10 @@
-import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
-
+import { getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
+import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { MetaMorphoErrors } from "../../errors.js";
 import type { MetaMorphoOperations } from "../../operations.js";
 import { handleBlueOperation } from "../blue/index.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
-
-import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { handleMetaMorphoAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleMetaMorphoWithdrawOperation: OperationHandler<

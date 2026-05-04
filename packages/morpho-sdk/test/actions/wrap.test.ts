@@ -1,16 +1,16 @@
-import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  isRequirementApproval,
+  isRequirementSignature,
   MorphoClient,
   NativeAmountOnNonWNativeVaultError,
   NegativeNativeAmountError,
-  ZeroDepositAmountError,
-  isRequirementApproval,
-  isRequirementSignature,
   vaultV1Deposit,
   vaultV2Deposit,
+  ZeroDepositAmountError,
 } from "../../src/index.js";
 import {
   GauntletWethVaultV1,

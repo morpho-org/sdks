@@ -21,6 +21,7 @@ const permitArgs = (token: Token) => ({
   deadline: 1n,
 });
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const tokenWithDomain = (
   address = randomAddress(),
   fields: `0x${string}` = "0x0f",

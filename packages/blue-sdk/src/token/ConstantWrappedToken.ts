@@ -7,6 +7,7 @@ import { WrappedToken } from "./WrappedToken.js";
 export class ConstantWrappedToken extends WrappedToken {
   public readonly underlyingDecimals;
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     token: IToken,
     underlying: Address,
@@ -17,6 +18,7 @@ export class ConstantWrappedToken extends WrappedToken {
     this.underlyingDecimals = BigInt(underlyingDecimals);
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public override toWrappedExactAmountIn(
     unwrappedAmount: bigint,
     _slippage?: bigint,
@@ -26,6 +28,7 @@ export class ConstantWrappedToken extends WrappedToken {
   }
 
   /** The amount of unwrappedTokens that should be wrapped to receive `wrappedAmount` */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public toWrappedExactAmountOut(
     wrappedAmount: bigint,
     _slippage?: bigint,
@@ -35,6 +38,7 @@ export class ConstantWrappedToken extends WrappedToken {
   }
 
   /** The expected amount when unwrapping `wrappedAmount` */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public toUnwrappedExactAmountIn(
     wrappedAmount: bigint,
     _slippage?: bigint,
@@ -44,6 +48,7 @@ export class ConstantWrappedToken extends WrappedToken {
   }
 
   /** The amount of wrappedTokens that should be unwrapped to receive `unwrappedAmount` */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public toUnwrappedExactAmountOut(
     unwrappedAmount: bigint,
     _slippage?: bigint,

@@ -1,5 +1,5 @@
 import { test } from "@playwright/test";
-import { http, type Chain, formatUnits } from "viem";
+import { type Chain, formatUnits, http } from "viem";
 import { type AnvilArgs, spawnAnvil } from "./anvil.js";
 import { type AnvilTestClient, createAnvilTestClient } from "./client.js";
 
@@ -38,6 +38,7 @@ export const createViemTest = <chain extends Chain>(
 };
 
 export const expect = test.expect.extend({
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   toApproxEqual(
     received: bigint,
     expected: bigint,
@@ -50,7 +51,7 @@ export const expect = test.expect.extend({
     const expectedNumber = Number(formatUnits(expected, decimals));
 
     let pass: boolean;
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: Playwright matcher result is untyped
     let matcherResult: any;
     try {
       test.expect(receivedNumber).toBeCloseTo(expectedNumber, numDigits);
