@@ -9,26 +9,52 @@ import { encodeErc20Permit2 } from "./encode/encodeErc20Permit2.js";
 import { getRequirementsApproval } from "./getRequirementsApproval.js";
 
 /**
- * Get token "requirement" for permit2.
+ * Computes the Permit2 prerequisites for `GeneralAdapter1` to pull `amount` of `address`.
  *
- * Two steps:
- * 1. Verify if the allowance is enough on permit2 contract.
- * => If not, approve the token to permit2 contract with classic approval on infinite amount.
- * 2. Verify if the allowance is enough on general adapter from permit2 contract.
- * => If not, approve the token to general adapter from permit2 contract with permit2 signature on the required amount.
+ * Returns an empty array when the direct adapter allowance already covers `amount`. Otherwise
+ * emits two ordered prerequisites:
  *
- * @param params - Destructured object with:
- * @param params.address - ERC20 token address.
- * @param params.chainId - Chain/network id.
- * @param params.permit2 - Permit2 contract address.
- * @param params.args - Object with:
+ * 1. A classic ERC-20 approval to the Permit2 contract (infinite, if not already in place).
+ * 2. A Permit2 `Requirement` signed against `GeneralAdapter1` (skipped when the existing
+ *    Permit2-managed allowance covers `amount` and is not about to expire within four hours).
+ *
+ * @param params.address - ERC-20 token address.
+ * @param params.chainId - The chain the bundle targets.
+ * @param params.permit2 - The Permit2 contract address for the chain.
  * @param params.args.amount - Required token amount.
- * @param params.allowancesGeneralAdapter - Allowance for general adapter from permit2 contract.
- * @param params.allowancesPermit2 - Allowance for permit2.
- * @param params.allowanceGeneralAdapterPermit2 - Allowance for general adapter from permit2 contract.
- * @param params.allowanceGeneralAdapterExpiration - Expiration for general adapter from permit2 contract.
- * @param params.nonce - Nonce for permit2.
- * @returns An array of approval transaction or requirement signatures objects.
+ * @param params.allowancesPermit2 - The user's current allowance of `address` for the Permit2
+ *   contract.
+ * @param params.allowancesGeneralAdapter - The user's current direct allowance of `address` for
+ *   `GeneralAdapter1` (separate from the Permit2-managed allowance).
+ * @param params.allowanceGeneralAdapterPermit2 - The Permit2-managed allowance for
+ *   `GeneralAdapter1` to spend `address`.
+ * @param params.allowanceGeneralAdapterExpiration - Expiration timestamp of the Permit2-managed
+ *   allowance.
+ * @param params.nonce - The user's current Permit2 nonce for `(address, GeneralAdapter1)`.
+ * @returns Ordered list of approval transactions and/or `Requirement` objects to satisfy before
+ *   bundling.
+ * @throws {ApprovalAmountLessThanSpendAmountError} from the inner approval helper when its
+ *   bookkeeping invariants break (should not happen with the values this function passes).
+ * @example
+ * ```ts
+ * import { getChainAddresses } from "@morpho-org/blue-sdk";
+ * import { getRequirementsPermit2 } from "@morpho-org/morpho-sdk";
+ *
+ * const { permit2 } = getChainAddresses(1);
+ * if (!permit2) throw new Error("Permit2 not configured for this chain");
+ * const requirements = getRequirementsPermit2({
+ *   address: USDC,
+ *   chainId: 1,
+ *   permit2,
+ *   args: { amount: 1_000_000n },
+ *   allowancesPermit2: 0n,
+ *   allowancesGeneralAdapter: 0n,
+ *   allowanceGeneralAdapterPermit2: 0n,
+ *   allowanceGeneralAdapterExpiration: 0n,
+ *   nonce: 0n,
+ * });
+ * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction> | Requirement>)[]
+ * ```
  */
 export const getRequirementsPermit2 = (params: {
   address: Address;

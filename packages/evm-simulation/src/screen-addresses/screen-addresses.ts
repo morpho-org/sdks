@@ -27,30 +27,46 @@ const chainalysisEntitySchema = z
 type Verdict = "severe" | "clean";
 
 /**
- * Screen all relevant addresses from a simulation for sanctioned/compromised addresses.
+ * Screens every address that appears in a simulated bundle (transfer senders and recipients,
+ * plus tx `from` / `to`) against the static {@link sanctionedAddresses} list and, when
+ * configured, the Chainalysis Entity API.
  *
- * Screening targets (deduped, lowercased, zero-addr removed):
- * - Transfer senders and recipients from simulation result
- * - `from` and `to` of every tx in `simulationTxs` (catches native-value flows)
+ * Addresses are deduped and lowercased; the zero address is removed. Checks run in order:
  *
- * Checks run in order:
- * 1. Static {@link sanctionedAddresses} set (fast, no network, always on).
- * 2. Chainalysis Entity API — one lookup per address, lookups across addresses
- *    run in parallel. Only fires if `chainalysisApiKey` is provided.
- *    **Fail-open on transport errors before registration** (network / timeout /
- *    non-ok POST): the address is treated as clean, a warn is logged, and the
- *    simulation proceeds. This is the documented posture — a Chainalysis
- *    outage must not block all simulations.
- *    **Fail-closed on partial registration**: if the registration POST succeeded
- *    but the subsequent lookup GET fails, the address is treated as Severe.
- *    The data already persisted server-side, so failing open at this point
- *    would let a pass slip through based on a half-completed check.
- *    **Fail-closed on schema drift**: if Chainalysis returns an unknown risk
- *    tier or a body that doesn't parse, the address is treated as Severe so a
- *    future stricter tier isn't silently downgraded.
+ * 1. **Static sanctioned list** — always on, no network. Throws on the first hit.
+ * 2. **Chainalysis Entity API** — one lookup per address, lookups parallelized. Only runs when
+ *    `chainalysisApiKey` is provided.
+ *    - **Fail-open on transport errors before registration** (network / timeout / non-ok POST):
+ *      treat the address as clean and log a warn. A Chainalysis outage must not block all
+ *      simulations.
+ *    - **Fail-closed on partial registration**: if the registration POST succeeded but the
+ *      lookup GET fails, treat the address as Severe.
+ *    - **Fail-closed on schema drift**: an unknown risk tier or unparsed body is treated as
+ *      Severe so a future stricter tier is not silently downgraded.
  *
- * Throws `AddressScreeningError` on any Severe hit. Intended to be called after
- * `simulate`, passing the returned `simulationTxs` and `transfers`.
+ * Intended to be called after {@link simulate}, passing the returned `simulationTxs` and
+ * `transfers`.
+ *
+ * @param params.simulationTxs - The resolved transactions returned by `simulate()`.
+ * @param params.transfers - The parsed transfers returned by `simulate()`.
+ * @param params.chainalysisApiKey - Optional Chainalysis token. When absent, only the static
+ *   sanctioned list runs.
+ * @param params.signal - Optional `AbortSignal` propagated to every Chainalysis request.
+ * @param params.logger - Optional `SimulationLogger` for warn-level diagnostics.
+ * @returns Resolves to `void` on a clean screening; throws on any Severe hit.
+ * @throws {AddressScreeningError} when any address matches the static sanctioned list or
+ *   resolves to Severe via Chainalysis.
+ * @example
+ * ```ts
+ * import { screenAddresses, simulate } from "@morpho-org/evm-simulation";
+ *
+ * const result = await simulate(config, params);
+ * await screenAddresses({
+ *   simulationTxs: result.simulationTxs,
+ *   transfers: result.transfers,
+ *   chainalysisApiKey: process.env.CHAINALYSIS_API_KEY,
+ * });
+ * ```
  */
 export async function screenAddresses(params: {
   simulationTxs: SimulationTransaction[];
@@ -134,6 +150,8 @@ export async function screenAddresses(params: {
  *
  * A SINGLE deadline covers both the POST and the GET, keeping the per-address
  * wall-time budget at `CHAINALYSIS_TIMEOUT_MS` (5 s) rather than doubling it.
+ *
+ * @internal
  */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 async function screenWithChainalysis(
