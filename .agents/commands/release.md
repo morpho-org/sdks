@@ -1,6 +1,6 @@
 # release
 
-Prepare and open a release PR that, once merged to `main`, triggers npm publish via CI.
+Add a changeset to the current branch so that, when the PR merges to `main` (or `next`), CI versions and publishes the affected packages.
 
 ## Usage
 
@@ -8,189 +8,120 @@ Prepare and open a release PR that, once merged to `main`, triggers npm publish 
 /release
 ```
 
+## Background
+
+This monorepo releases via [Changesets](https://github.com/changesets/changesets). Releases are automated; contributors only author changesets:
+
+- A PR with package changes adds one or more `.changeset/*.md` files describing the bump per package.
+- After merge to `main` or `next`, `.github/workflows/version-pr.yml` runs `pnpm run version` and opens a `changeset-release/<branch>` PR with the version bumps.
+- Merging that release PR triggers `.github/workflows/publish.yml`, which runs `pnpm release` to publish each newly-versioned package to npm (`latest` from `main`, `next` from `next`).
+
+You never bump `package.json`, tag, or push directly. The changeset is the only artifact you produce.
+
+See `CONTRIBUTING.md` ("Changesets" section) for the source of truth.
+
 ## Instructions
 
-You are helping the user prepare a release. The workflow analyzes changes since the last published version, bumps the version in `package.json`, and opens a PR on a `chore/release-v<version>` branch. Merging the PR to `main` triggers CI to publish on npm.
+You are helping the user add a changeset for the changes on their current branch.
 
-### Step 1: Switch to main and Validate Working Tree
+### Step 1: Identify Changed Packages
 
-**Hard requirement:** Releases MUST always be based on the latest `main`. Never release from a feature branch or a stale local main.
-
-First, switch to `main` and pull the latest changes. If either command fails, **stop immediately** and report the error to the user:
+Determine which packages under `packages/*` have source changes vs. `origin/main`:
 
 ```bash
-git checkout main && git pull origin main
+git fetch origin main
+git diff --name-only origin/main...HEAD -- 'packages/*' | awk -F/ '{print $2}' | sort -u
 ```
 
-Then verify you are on `main`:
+For each candidate package, ignore changes that don't affect published output (tests, fixtures, internal docs). Skim the diff to confirm whether the change is publishable:
 
 ```bash
-git branch --show-current
+git diff origin/main...HEAD -- packages/<name>
 ```
 
-If the output is not `main`, **abort** and inform the user.
+If no package has publishable changes, this is a docs/chore PR — go to Step 4 (empty changeset).
 
-Then check for uncommitted changes:
+### Step 2: Choose the Bump Per Package
 
-```bash
-git status --porcelain
-```
+For each affected package, pick the smallest semver bump that describes the public impact:
 
-If output is non-empty, warn the user and ask whether to proceed or abort.
+| Bump    | When to use                                                        |
+| ------- | ------------------------------------------------------------------ |
+| `patch` | Bug fixes, perf improvements, internal refactors, dep bumps        |
+| `minor` | New backwards-compatible APIs, exports, or behavior                |
+| `major` | Breaking changes to types or runtime behavior of the public API    |
 
-### Step 2: Identify the Last Release
+Rules of thumb specific to this repo:
 
-Fetch tags from the remote first to ensure the local clone is up to date:
+- Type-only narrowing of an exported signature is breaking → `major`.
+- Adding a new export or a new optional parameter → `minor`.
+- Loosening an internal guard or fixing accounting → `patch`.
+- A change that only touches `test/`, `examples/`, or non-published files → no changeset needed for that package; if no package needs a release, use an empty changeset.
 
-```bash
-git fetch --tags
-```
+If multiple packages are affected, list every one with its own bump (changesets supports this in a single file).
 
-Then resolve the latest version tag:
+### Step 3: Present the Plan
 
-```bash
-git tag --sort=-version:refname | head -1
-```
+Before writing the file, show the user:
 
-Store the result as `$LAST_TAG`. Read the current version from `package.json` → `version` field.
+1. **Affected packages** — `@morpho-org/<name>` for each
+2. **Proposed bump per package**
+3. **Summary line** — one or two sentences describing the user-facing impact (this becomes the changelog entry consumed by Changesets)
 
-**Bootstrap (no tags exist):** If `git tag` returns nothing, this is the first release.
-Set `$LAST_TAG` to empty and continue — Step 3 will use the full commit history.
+Ask the user to confirm or adjust bumps and wording.
 
-### Step 3: Collect Commits Since Last Release
+### Step 4: Write the Changeset
 
-If `$LAST_TAG` is set:
+Use `pnpm changeset` (interactive) when the user prefers the prompt, or write the file directly when running non-interactively.
 
-```bash
-git log $LAST_TAG..HEAD --oneline --no-merges
-```
-
-If `$LAST_TAG` is empty (bootstrap / first release), list all commits on the current branch:
-
-```bash
-git log HEAD --oneline --no-merges
-```
-
-If there are zero commits, inform the user there is nothing to release and stop.
-
-### Step 4: Analyze and Categorize Changes
-
-Read each commit message. Classify using conventional commit prefixes:
-
-| Prefix                              | Category      | Bump     |
-| ----------------------------------- | ------------- | -------- |
-| `feat`                              | Feature       | minor    |
-| `fix`                               | Bug fix       | patch    |
-| `perf`                              | Performance   | patch    |
-| `refactor`                          | Refactor      | patch    |
-| `docs`                              | Documentation | — (skip) |
-| `chore`                             | Chore         | — (skip) |
-| `test`                              | Test          | — (skip) |
-| `BREAKING CHANGE` or `!` after type | Breaking      | major    |
-
-Rules for determining the bump:
-
-- If ANY commit is a breaking change → `major`
-- Else if ANY commit is `feat` → `minor`
-- Else → `patch`
-- If only `docs`/`chore`/`test` commits exist, ask the user if they still want to release (default: no).
-
-Also read the diff for each non-trivial commit to write an accurate summary:
-
-```bash
-git diff $LAST_TAG..HEAD --stat       # when $LAST_TAG is set
-git diff --stat $(git rev-list --max-parents=0 HEAD)..HEAD  # bootstrap: diff from root commit
-```
-
-### Step 5: Present the Release Plan
-
-Before proceeding, present the user with:
-
-1. **Commits included** — list of commits grouped by category
-2. **Proposed bump** — patch / minor / major
-3. **New version** — computed from current version + bump
-4. **Changelog summary** — the description that will go in the PR body
-
-Ask the user to confirm or adjust (e.g., override bump level, edit summary).
-
-### Step 6: Bump Version in package.json
-
-Use `npm version <bump> --no-git-tag-version` to update `package.json` (and `package-lock.json` if present) without creating a git tag or commit:
-
-```bash
-npm version <patch|minor|major> --no-git-tag-version
-```
-
-Verify the version was updated correctly by reading `package.json`.
-
-### Step 7: Run Validation
-
-```bash
-pnpm lint && pnpm build
-```
-
-Both must pass. Fix any issues before continuing.
-
-### Step 8: Update CHANGELOG.md
-
-Prepend a new entry to `CHANGELOG.md` following the existing format:
+**Direct file form** (write to `.changeset/<short-kebab-name>.md`):
 
 ```markdown
-## <new-version>
+---
+"@morpho-org/<package-a>": <patch|minor|major>
+"@morpho-org/<package-b>": <patch|minor|major>
+---
 
-### Minor Changes (if any feat commits)
-
-- <commit-hash>: <Description of the feature>
-
-### Patch Changes (if any fix/perf/refactor commits)
-
-- <commit-hash>: <Description of the fix>
+<One-or-two-sentence summary of the user-facing change. Imperative mood,
+no trailing period required, mirror the style of merged changesets.>
 ```
 
-Write accurate, detailed descriptions by reading the diffs. Match the style of existing entries.
+For docs/chore-only PRs, write an empty changeset:
 
-### Step 9: Create Release Branch and PR
+```markdown
+---
+---
+
+<Short summary of the change for traceability, even though no package is bumped.>
+```
+
+(Equivalent to `pnpm changeset --empty`.)
+
+The filename should be a short kebab-case slug derived from the change (e.g. `fix-permit-domain-validation.md`). Avoid auto-generated random names — they make `git log` harder to read.
+
+### Step 5: Commit With the Source Change
+
+Stage the changeset alongside the source diff and commit. Do **not** create a release branch, do **not** edit `package.json`, do **not** add `CHANGELOG.md` entries (the repo is configured with `"changelog": false`).
 
 ```bash
-git checkout -b chore/release-v<new-version>
-git add package.json CHANGELOG.md
-git commit -m "chore(release): v<new-version>"
-git push -u origin chore/release-v<new-version>
+git add .changeset/<filename>.md <source files>
+git commit -m "<conventional-commit message matching the change>"
 ```
 
-Then create the PR:
+If the user already has a PR open, just push the new commit. If not, follow up with `/create-pr`.
 
-```bash
-gh pr create --base main --title "chore(release): v<new-version>" --body "$(cat <<'EOF'
-## Release v<new-version>
+### Step 6: Final Output
 
-### Changes since v<old-version> (or "Initial release" if bootstrap)
+Tell the user:
 
-#### Features
-- ...
-
-#### Bug Fixes
-- ...
-
-#### Other
-- ...
-
-### Bump
-`<bump>` — <old-version> → <new-version>
-EOF
-)"
-```
-
-### Step 10: Final Output
-
-Return to the user:
-
-- Link to the created PR
-- Summary of what was included
-- Reminder: merging this PR to `main` will trigger CI → git tag → npm publish
+- The changeset file written and the bump per package
+- That CI will open a `changeset-release/<base>` PR after merge, and that merging that PR is what triggers publish
+- A reminder to verify the bump is correct on the version PR before merging it
 
 ### Important Notes
 
-- Never force-push or push directly to `main`.
-- The release workflow in CI handles creating the git tag and publishing to npm when the release PR is merged.
-- Always run `pnpm lint && pnpm build` before committing.
+- **Never** bump `version` in any `package.json` manually; `pnpm run version` does this on the release PR.
+- **Never** add or edit `CHANGELOG.md` files inside packages; this repo doesn't track them.
+- If the branch targets `next`, the same flow applies — Changesets handles prerelease mode automatically as long as `.changeset/pre.json` is present on `next`.
+- If you see `.changeset/pre.json` while working from `main`, stop and surface it to the user; CI will refuse to publish until `pnpm changeset pre exit` is committed.
+- Internal-dependency bumps (one package depends on another) are propagated automatically as `patch` (`updateInternalDependencies: "patch"` in `.changeset/config.json`); you don't need to list downstream packages explicitly.
