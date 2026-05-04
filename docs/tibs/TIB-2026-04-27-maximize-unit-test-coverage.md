@@ -413,4 +413,36 @@ The denominator changes for `liquidity-sdk-viem` and `liquidation-sdk-viem` are 
 - `packages/blue-sdk/src/math/MathLib.ts`, `SharesMath.ts`, `AdaptiveCurveIrmLib.ts` → 100%
 - `packages/blue-sdk/src/errors.ts`, `preLiquidation.ts` → 100%
 
-**Files still at 0% locally that CI is expected to cover via fork tests** (pre-existing fork tests under `test/`): `LiquidationEncoder.ts`, most of `morpho-sdk/src/actions/*` and `morpho-sdk/src/entities/*`, and the larger `MetaMorphoAction.ts`. These are flagged in each phase PR's "Out of scope" section.
+**Files still at 0% locally that CI is expected to cover via fork tests** (pre-existing fork tests under `test/`): `LiquidationEncoder.ts`, most of `morpho-sdk/src/actions/*` and `morpho-sdk/src/entities/*`. These are flagged in each phase PR's "Out of scope" section.
+
+### 2026-05-04 — Phase 10 extension: MetaMorphoAction, MarketUtils gaps, flashbots
+
+**Author:** @0xbulma
+
+After the post-implementation report above, an additional phase was applied to chip away at the deferred large-file gaps. Phase 10 targeted the most tractable remaining surface — pure encoders and pure-math helpers — without trying to reach the very largest deferred files (`LiquidationEncoder.ts` 1,001 LOC, `BundlerAction.ts` 2,346 LOC, `marketV1.ts` 1,071 LOC), which need their own dedicated effort.
+
+**New tests (52 passing)**
+
+- `packages/blue-sdk-viem/src/MetaMorphoAction.test.ts` — **27 tests** covering every encoder: configuration (curator, allocator, fee recipient, skim recipient, fee), timelock (submit/accept/revoke), supply cap (submit/accept/revoke), forced market removal, guardian, management (skim, supply queue, withdraw queue, reallocate), and ERC4626 (mint, deposit, withdraw, redeem). Each test round-trips the calldata via `decodeFunctionData` and asserts on the decoded function name + args. Plus invariant checks (selectors are distinct, every call ≥ 4 bytes).
+- `packages/blue-sdk/src/market/MarketUtils.test.ts` — **22 tests** covering `getUtilization` (all branches: 0/0, supply=0+borrow>0, normal, 100%, 0%), `getCollateralPower`, `getCollateralValue` (incl. missing-price branch), `getMaxBorrowAssets`, `toSupplyAssets`/`toSupplyShares` rounding, `getAccruedInterest` (zero-elapsed, zero-fee, non-zero with realistic rate), `rateToApy` (zero, monotonicity, scaling).
+- `packages/liquidation-sdk-viem/src/flashbots.test.ts` — **3 tests** for `Flashbots.sendRawBundle` via nock: posts JSON-RPC `eth_sendBundle` to the relay with the correct body shape, encodes the target block as hex, and signs the body with the supplied account. (Note: `signBundle` is intentionally not unit-tested here — it depends on viem/actions named imports that cannot be cleanly stubbed in ESM. Documented inline.)
+
+**Coverage after Phase 10 (combined run, 10 in-scope projects)**
+
+| Test files (pass / fail) | Tests (pass / fail / skip) | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- | --- |
+| **79 / 63** | **966 / 79 / 3** | **44.23%** | **36.49%** | **49.26%** | **44.56%** |
+
+**Per-package line coverage delta from Phase 9**
+
+| Package | Phase 9 | Phase 10 | Δ |
+| --- | --- | --- | --- |
+| **blue-sdk-viem** | 61.77% | **67.85%** | +6.08 pp ← MetaMorphoAction encoders |
+| **blue-sdk** | 80.76% | **80.98%** | +0.22 pp ← MarketUtils gap-fill (most was already covered by `test/unit/MarketUtils.test.ts`) |
+| **liquidation-sdk-viem** | 18.86% | **19.71%** | +0.85 pp ← flashbots `sendRawBundle` |
+| morpho-ts | 96.32% | 96.32% | (unchanged — already at target) |
+| evm-simulation | 94.77% | 94.77% | (unchanged) |
+
+**`MetaMorphoAction.ts` notable**: this file was at **0%** in the original baseline. After Phase 10, the 21 public encoder methods are exercised in full by ABI round-trip — moving 332 LOC of zero-coverage source to (effectively) full coverage on the encoder surface.
+
+**Out of scope still (Phase 11+)**: `LiquidationEncoder.ts` (1,001 LOC), `BundlerAction.ts` (2,346 LOC), `morpho-sdk/src/entities/marketV1/marketV1.ts` (1,071 LOC), and the morpho-sdk `actions/*` builders. Each warrants its own dedicated effort with `mockRead` / `nock` and is best landed as a separate TIB or follow-up.
