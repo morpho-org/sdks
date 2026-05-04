@@ -4,6 +4,7 @@ import {
   type Chain,
   type Client,
   type ContractFunctionName,
+  type CustomTransport,
   createClient,
   custom,
   decodeFunctionData,
@@ -31,7 +32,7 @@ export type RpcHandler = (call: {
  * inspect call history, override per-test, or swap implementations on the fly.
  */
 export interface MockClientHandle<chain extends Chain = Chain> {
-  client: Client;
+  client: Client<CustomTransport, chain>;
   request: Mock<RpcHandler>;
   chain: chain;
 }
