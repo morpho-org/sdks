@@ -1,5 +1,10 @@
 # Morpho SDKs
 
+[![npm version](https://img.shields.io/npm/v/@morpho-org/morpho-sdk.svg)](https://www.npmjs.com/package/@morpho-org/morpho-sdk)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-blue.svg)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+[![CI](https://github.com/morpho-org/sdks/actions/workflows/test.yml/badge.svg)](https://github.com/morpho-org/sdks/actions/workflows/test.yml)
+
 ![image](https://github.com/user-attachments/assets/c77d5054-5342-4c1b-81ae-b8c002c2fd8d)
 
 <p align="center"><i>A collection of Software Development Kits to ease interactions with the Morpho protocol and Morpho Vaults.</i></p>
@@ -7,25 +12,42 @@
 
 ## Getting Started
 
-### Viem
+### ⭐ [`@morpho-org/morpho-sdk`](./packages/morpho-sdk/) — the recommended entry point
+
+**Start here.** `@morpho-org/morpho-sdk` is the abstraction layer that simplifies the Morpho protocol: it builds ready-to-send transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **MarketV1** (Morpho Blue) on any EVM-compatible chain.
+
+- One client (`MorphoClient`) wraps a viem `Client` and exposes `vaultV1`, `vaultV2`, and `marketV1` entities.
+- Every action returns a lazy `{ buildTx, getRequirements }` handle so consumers can resolve approvals, permits, and Morpho authorizations before submitting.
+- Routes each operation through the safest path: bundler3 + GeneralAdapter1 with `maxSharePrice` / `minSharePrice` slippage protection where it matters, direct contract calls where it doesn't.
+- Supports native-token wrapping, atomic V1 → V2 migrations, and shared-liquidity reallocations via the PublicAllocator.
+
+For most integrators, `@morpho-org/morpho-sdk` is all you need.
+
+---
+
+### Secondary packages
+
+The packages below are lower-level building blocks. Use them only if `@morpho-org/morpho-sdk` does not cover your use case.
+
+#### Viem
 
 - [**`@morpho-org/blue-sdk-viem`**](./packages/blue-sdk-viem/): Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods
 - [**`@morpho-org/bundler-sdk-viem`**](./packages/bundler-sdk-viem/): Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to transform simple interactions on Morpho (such as `Blue_Borrow`) and Morpho Vaults (such as `MetaMorpho_Deposit`) into the required bundles (with ERC20 approvals, transfers, etc) to submit to the bundler onchain
 - [**`@morpho-org/liquidity-sdk-viem`**](./packages/liquidity-sdk-viem/): Viem-based package that helps seamlessly calculate the liquidity available through the PublicAllocator
 - [**`@morpho-org/liquidation-sdk-viem`**](./packages/liquidation-sdk-viem/): Viem-based package that provides utilities to build viem-based liquidation bots on Morpho and examples using Flashbots and Morpho's GraphQL API
 
-### Wagmi
+#### Wagmi
 
-- [**`@morpho-org/blue-sdk-wagmi`**](./packages/blue-sdk-wagmi/): Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities
-- [**`@morpho-org/simulation-sdk-wagmi`**](./packages/simulation-sdk-wagmi/): Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states
+- [**`@morpho-org/blue-sdk-wagmi`**](./packages/blue-sdk-wagmi/) `⚠️ deprecated`: Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities
+- [**`@morpho-org/simulation-sdk-wagmi`**](./packages/simulation-sdk-wagmi/) `⚠️ deprecated`: Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states
 
-### Development
+#### Development
 
 - [**`@morpho-org/morpho-ts`**](./packages/morpho-ts/): TypeScript package to handle all things time & format-related
 
 - [**`@morpho-org/blue-sdk`**](./packages/blue-sdk/): Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`)
 
-- [**`@morpho-org/simulation-sdk`**](./packages/simulation-sdk/): Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`)
+- [**`@morpho-org/simulation-sdk`**](./packages/simulation-sdk/) `⚠️ deprecated`: Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`)
 
 ### Testing
 
