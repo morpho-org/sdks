@@ -89,11 +89,7 @@ export const computeReallocations = ({
 
   if (requiredAssets <= 0n) return [];
 
-  // Absolute borrow shortfall: liquidity strictly required for `morphoBorrow`
-  // to succeed onchain. May be lower than `requiredAssets` (which targets a
-  // utilization ceiling). Tracked separately so we can detect the case where
-  // selected withdrawals satisfy the supply-target heuristic but still leave
-  // the borrow itself impossible.
+  // Liquidity strictly required for `morphoBorrow` to succeed onchain.
   const absoluteShortfall =
     newTotalBorrowAssets > newTotalSupplyAssets
       ? newTotalBorrowAssets - newTotalSupplyAssets
@@ -127,9 +123,7 @@ export const computeReallocations = ({
     if (requiredAssets === 0n) break;
   }
 
-  // Mirror the bundler-side feasibility check: if the selected withdrawals
-  // do not fully cover the borrow shortfall, the resulting `morphoBorrow`
-  // would revert onchain. Refuse to surface a fee-bearing partial plan.
+  // Refuse fee-bearing partial plans for an unreachable borrow.
   if (totalReallocated < absoluteShortfall) {
     throw new InsufficientSharedLiquidityError({
       market: marketId,

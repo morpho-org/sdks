@@ -559,15 +559,13 @@ describe("computeReallocations", () => {
     });
 
     test("error: InsufficientSharedLiquidityError when reallocations cannot cover the borrow shortfall", () => {
-      // Target: 800 supply, 500 borrow. borrow 500 → newBorrow 1000, newSupply 800.
-      // Absolute shortfall = 200 WAD. Friendly 50 + aggressive 100 = 150 < 200.
+      // Shortfall 200 WAD; total available 50 + 100 = 150 WAD.
       const tm = makeMarket(targetParams, {
         totalSupplyAssets: 800n * MathLib.WAD,
         totalBorrowAssets: 500n * MathLib.WAD,
       });
       const borrowAmount = 500n * MathLib.WAD;
 
-      // Phase 2 must trigger: 500 + 500 = 1000 > 850.
       const friendlyTargetMarket = makeMarket(targetParams, {
         totalSupplyAssets: 850n * MathLib.WAD,
         totalBorrowAssets: 500n * MathLib.WAD,
@@ -596,9 +594,7 @@ describe("computeReallocations", () => {
     });
 
     test("should not throw when shortfall is zero even if supply target is unmet", () => {
-      // newBorrow ≤ newSupply → absoluteShortfall = 0; partial supply-target
-      // coverage is acceptable because the borrow itself is feasible.
-      const borrowAmount = 500n * MathLib.WAD; // newBorrow=1000, newSupply=1000.
+      const borrowAmount = 500n * MathLib.WAD;
 
       const friendlyTargetMarket = makeMarket(targetParams, {
         totalSupplyAssets: 1500n * MathLib.WAD,
@@ -606,7 +602,6 @@ describe("computeReallocations", () => {
       });
 
       const data = makeMockState({
-        // Only 50 WAD provided; supply-target requiredAssets ≈ 105 WAD.
         friendlyWithdrawals: [
           { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
         ],
