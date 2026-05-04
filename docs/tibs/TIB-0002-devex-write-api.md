@@ -105,6 +105,10 @@ This unlocks four developer audiences that are currently underserved:
 - No JSON-RPC interface and no GraphQL surface in v1. REST + OpenAPI only.
 - No per-user persistence (history, favourites, drafts). The service is fully
   stateless.
+- **Not** a refactor of the existing repo-wide e2e / fork test infrastructure
+  (`@morpho-org/test`, anvil-based suites under `packages/*/test`). The new
+  package brings its own tests; the existing suites are not moved, restructured,
+  or rewritten as part of this initiative.
 
 ## Current Solution
 
@@ -268,6 +272,36 @@ in `evm-simulation`. The service is a transport translator.
   / ingress layer, not inside the service. The service emits the metrics needed for
   the gateway to apply per-key quotas.
 
+### Testing strategy
+
+The package's testing budget is **explicitly unit-first**. Because the service is
+a thin transport translator (Zod → SDK → Zod), almost every behaviour worth
+testing — schema validation, error mapping, response shape, requirements
+serialisation, idempotency, two-step signature replay — can be exercised with
+fast, hermetic unit tests that mock the `MorphoClient` and `simulate` calls.
+
+Goals for this package's own tests:
+
+- **Maximise unit-test coverage.** The bar is line and branch coverage on the
+  handler, schema, and error-mapping layers via tests that take milliseconds and
+  require no fork, no RPC, no Tenderly.
+- Mock the SDK boundary at `MorphoClient` and `simulate`. Snapshot the JSON
+  payloads. Assert on error codes for every typed error class enumerated in
+  *Phase 1*.
+- Use the shared `@morpho-org/test` fork harness only for a small set of
+  end-to-end smoke tests — one happy-path action per entity (deposit / borrow /
+  repayWithdrawCollateral) — sufficient to catch SDK upgrades that break the
+  contract. These run in CI but are not the primary coverage vehicle.
+
+What this TIB **does not** propose:
+
+- It does not propose moving, deduplicating, or refactoring the existing
+  repo-wide e2e / fork test suites that live under `packages/*/test`. Those
+  suites are out of scope. The new package adds tests; it does not touch
+  existing ones.
+- It does not propose changing the existing CI matrix, fork startup logic, or
+  `@morpho-org/test` API. Any such change would be a separate TIB.
+
 ### Implementation Phases
 
 - **Phase 1 — Skeleton & one action end-to-end:**
@@ -281,8 +315,8 @@ in `evm-simulation`. The service is a transport translator.
     machine-readable `code` field. Negative tests for the obvious classes
     (`AddressMismatchError`, `BorrowExceedsSafeLtvError`,
     `NativeAmountOnNonWNativeVaultError`, `MissingClientPropertyError`).
-  - CI: lint, build, unit + integration tests against an Anvil fork (reusing
-    `@morpho-org/test`).
+  - CI: lint, build, and the unit-first test suite described in *Testing
+    strategy* below.
 
 - **Phase 2 — Full SDK coverage:**
   - Expose every entity × action combination listed under *Surface* above.
@@ -481,9 +515,6 @@ Statelessness is load-bearing for the operational profile.
    metadata** so the consumer can pass just `{ userAddress, marketId }` and let
    the service fetch the position. Trades request brevity for an extra upstream
    dependency on the API's read path.
-6. **TIB number reservation:** confirm `TIB-0002` is free repo-wide. (TIB-0001 is
-   the only existing TIB in the imported `morpho-sdk` directory; if the numbering
-   is per-package rather than repo-wide, this should be re-numbered.)
 
 ## References
 
