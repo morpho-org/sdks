@@ -765,20 +765,34 @@ The Edit tool has no undo. If a fix breaks linting we must revert WITHOUT clobbe
 
 **Check 1 — refuse to start on a stale safety stash.** A prior `--local --fix` run that crashed could leave a `pr-review --local --fix safety stash` entry in `git stash list`. Detect that and abort loud — the user must inspect it before we create another stash with the same message.
 
-The check anchors on the WHOLE stash subject (after stripping `git stash list`'s `On <branch>:` prefix) using fixed-string matching, so a user-named stash that merely *contains* the substring won't false-positive. We capture the count and the matching refs so the user knows exactly how many stashes the check fires on, and we gate the warning prose on the bypass env var so an opted-in user doesn't see the "stale stash" warning before the bypass confirmation:
+The check anchors on the WHOLE stash subject (after stripping `git stash list`'s `On <branch>:` prefix) using fixed-string matching, so a user-named stash that merely *contains* the substring won't false-positive. We use `--format='%gd%x09%gs'` (tab-separated) to avoid awk's space-collapse hazard from OFS reconstruction, then split on the literal tab. The `%gs` value still carries the `On <branch>: ` prefix that `git stash` adds — strip it explicitly. We capture the count and the matching refs so the user knows exactly how many stashes the check fires on, and we gate the warning prose on the bypass env var so an opted-in user doesn't see the "stale stash" warning before the bypass confirmation:
 
 ```bash
-MATCHING_STASH_REFS=$(git stash list --format='%gd %gs' \
-  | awk -F' ' 'NR>0 { ref=$1; $1=""; sub(/^ /,""); if ($0=="pr-review --local --fix safety stash") print ref }')
-MATCHING_STASH_COUNT=$(printf '%s' "$MATCHING_STASH_REFS" | grep -c '^stash@' || true)
-if [ "$MATCHING_STASH_COUNT" -gt 0 ]; then
+# %gd is the stash ref (e.g. stash@{0}); %gs is the full subject including the "On <branch>: " prefix
+# that git stash auto-prepends. Split on tab, strip the prefix, then exact-match the canonical subject.
+MATCHING_STASH_REFS=$(git stash list --format='%gd%x09%gs' \
+  | awk -F'\t' 'NR>0 {
+      ref = $1
+      subj = $2
+      sub(/^On [^:]+: /, "", subj)
+      if (subj == "pr-review --local --fix safety stash") print ref
+    }')
+# Count non-empty lines; printf "%s" "" outputs zero bytes so grep -c '.' returns 0 cleanly.
+MATCHING_STASH_COUNT=$(printf '%s\n' "$MATCHING_STASH_REFS" | grep -c '^stash@' || true)
+if [ "${MATCHING_STASH_COUNT:-0}" -gt 0 ]; then
   if [ "${PR_REVIEW_FIX_BYPASS_STALE_STASH:-0}" = "1" ]; then
     echo "PR_REVIEW_FIX_BYPASS_STALE_STASH=1 — ${MATCHING_STASH_COUNT} 'pr-review --local --fix safety stash' entry/entries present; bypassing stale-stash check at user request."
   else
     echo "Sentinel: FIX_ABORTED — ${MATCHING_STASH_COUNT} stale 'pr-review --local --fix safety stash' entry/entries detected:"
-    printf '  %s\n' $MATCHING_STASH_REFS
+    # Quote the variable to avoid word-splitting / glob expansion if a future ref format ever contains whitespace or globs.
+    while IFS= read -r ref; do
+      [ -n "$ref" ] && printf '  %s\n' "$ref"
+    done <<EOF
+$MATCHING_STASH_REFS
+EOF
     echo "Inspect each with: git stash show --include-untracked -p <ref>"
-    echo "Resolve each (pop, drop, or restore manually) before re-running this skill."
+    echo "Resolve each by COMMIT SHA (positional refs shift when other stashes are pushed):"
+    echo "  for ref in \$MATCHING_STASH_REFS; do sha=\$(git rev-parse \"\$ref\"); echo \"  drop with: git stash drop \$sha\"; done"
     echo ""
     echo "Escape hatch for false-positives: if you have a deliberately-named stash with this exact subject"
     echo "that you want to keep, drop the safety check by setting PR_REVIEW_FIX_BYPASS_STALE_STASH=1 in"
@@ -787,6 +801,8 @@ if [ "$MATCHING_STASH_COUNT" -gt 0 ]; then
   fi
 fi
 ```
+
+**Concurrency caveat**: this skill assumes single-threaded execution within the current repo. If the user runs `git stash` (or another `/pr-review --local --fix` cycle) in parallel between the `MATCHING_STASH_REFS` capture and any later stash operation, the captured refs may shift. The recovery instruction above intentionally instructs the user to resolve by **commit SHA** (`git rev-parse <ref>` first, then `git stash drop <sha>`) to dodge positional-ref shift in that case.
 
 **Check 2 — stash any pre-existing uncommitted work.** If the user has uncommitted changes when starting the run, stash them so a failed-lint revert can re-Edit cleanly:
 
@@ -1036,11 +1052,20 @@ These recipes complement the "Validating --local end-to-end" table at the top of
 
 **Whitespace-only ASSEMBLED_PROMPT guard (Step 9 watcher CronCreate pre-flight):**
 
+> **Drift reminder**: this recipe is duplicated verbatim in `/pr-fix`'s smoke-tests section because the pre-flight guard is identical in both skills. Any change to the guard logic must propagate to BOTH recipes in the same PR. `# DRIFT-CHECK: keep in sync with /pr-fix smoke-tests`
+
 ```bash
-# Same three cases as /pr-fix's smoke test — the guard is identical:
-ASSEMBLED_PROMPT='' bash -c '<paste the pre-flight guard>'              # WATCH_REJECTED
-ASSEMBLED_PROMPT=$'\n  \t\n' bash -c '<paste the pre-flight guard>'     # WATCH_REJECTED
-ASSEMBLED_PROMPT='actual content' bash -c '<paste the pre-flight guard>' # exit 0, no sentinel
+# Self-contained: inline the guard so the recipe runs without `<paste ...>` indirection.
+GUARD='
+if [ -z "${ASSEMBLED_PROMPT//[[:space:]]/}" ]; then
+  echo "Sentinel: WATCH_REJECTED — assembled prompt is empty, unset, or whitespace-only; refusing to schedule a no-op watcher." >&2
+  exit 1
+fi
+echo "OK: prompt has non-whitespace content"
+'
+ASSEMBLED_PROMPT=''            bash -c "$GUARD"   # Case (a) empty           → WATCH_REJECTED, exit 1
+ASSEMBLED_PROMPT=$'\n  \t\n'   bash -c "$GUARD"   # Case (b) whitespace-only → WATCH_REJECTED, exit 1
+ASSEMBLED_PROMPT='real text'   bash -c "$GUARD"   # Case (c) real content    → "OK: ...", exit 0
 ```
 
 **Stale-stash check + bypass env var (Step 7 alt 2b Check 1):**
@@ -1070,12 +1095,30 @@ git stash drop stash@{0}
 **Stash-pop conflict path (Step 7 alt 2b restore-stash failure):**
 
 ```bash
-# Synthetic: stash a change that conflicts with what the fix loop applies.
-# 1. Edit fileA to value V1, stash it (this becomes the "pre-existing uncommitted work").
-# 2. Run /pr-review --local --fix where the fix loop would also edit fileA to value V2.
-# 3. The stash-pop fails with conflicts.
-# Expected: Sentinel: FIX_DONE_WITH_STASH_CONFLICTS — <X> applied, stash@{0} unpopped due to conflicts in fileA ...
-# Verify `git status` shows fileA in conflict state.
+# Synthetic recipe — stash a change that conflicts with what the fix loop will apply.
+# Pre-condition: a real /pr-review --local review has produced at least one finding that wants to
+# Edit some file F to value V_FIX. Set F and V_FIX in this script to match.
+F=path/to/some/file.ts                # the file the next /pr-review --local --fix would edit
+V_FIX="<the value the fix loop will set>"  # known from a prior dry-run
+
+# 1. Set fileA's working-tree value to V_PREEXISTING (different from V_FIX).
+git checkout -- "$F"                  # start clean
+sed -i.bak 's/some pattern/V_PREEXISTING/' "$F" && rm -f "$F.bak"
+
+# 2. The skill's Stash discipline (Step 7 alt 2b Pre-flight Check 2) detects the uncommitted change
+#    and stashes it. The fix loop then writes V_FIX. The stash pop afterward attempts to restore
+#    V_PREEXISTING on top of V_FIX → conflict.
+/pr-review --local --fix              # invoke the skill
+
+# Expected:
+#   Sentinel: FIX_DONE_WITH_STASH_CONFLICTS — <X> applied, stash@{0} unpopped due to conflicts in <F> ...
+# Verify:
+git status --porcelain | grep "^UU $F"   # expect: one matching line (unmerged-unmerged)
+git stash list | grep 'pr-review --local --fix safety stash'  # expect: stash@{0} still present
+
+# Cleanup:
+git checkout --conflict=diff3 "$F"    # inspect both sides
+# Resolve manually (or: `git checkout HEAD -- "$F" && git stash drop stash@{0}` to discard).
 ```
 
 ## Sentinel grammar registry
@@ -1084,14 +1127,14 @@ Every terminal step ends with a single grep-able `Sentinel: NAME — <human pros
 
 ### Stability policy
 
-**Effective from this commit forward** (the registry was introduced in this skill upgrade; sentinels and trailer fields shipped before the registry have no retroactive deprecation obligation).
+**Effective from this commit forward** (the registry was introduced in this skill upgrade — date 2026-05-04; downstream parsers may anchor by examining `git log --diff-filter=A -- .agents/commands/pr-review.md` for the registry's first appearance). Sentinels and trailer fields shipped before the registry have no retroactive deprecation obligation.
 
 **Shell requirement**: pre-flight checks and watcher cycle commands use bash-only constructs (`${var//pattern/}` parameter substitution, `[[ ... ]]` tests, `set -euo`-friendly idioms). The skill's execution model assumes the agent's Bash tool runs `bash` (the default on macOS/Linux). Do NOT rewrite the prompt to be POSIX-portable without verifying the harness.
 
 Downstream parsers (CI gates, dashboards, the `/pr-fix` companion skill) MAY rely on the grammar in this registry. Changes are governed as follows:
 
 - **Patch / minor** (no breaking change): adding a new sentinel, adding a new field at the END of an existing trailer, fixing a trailer's prose without changing tokens or field order — all OK without a deprecation window. (Old parsers continue to match what they already match; new sentinels/fields are simply unseen by them.)
-- **Major** (breaking change): renaming a sentinel, removing a field, changing field order, narrowing the value space of a field (e.g. removing `PENDING_TIMEOUT` from `ci=`). REQUIRES the 4-step deprecation flow used elsewhere in the repo (AGENTS.md §7), in canonical order: introduce successor → mark the old `@deprecated` in this registry (Status column) → maintain BOTH the old and the new for one minor → remove the old in the next major.
+- **Major** (breaking change): renaming a sentinel, removing a field, changing field order, narrowing the value space of a field (e.g. removing `PENDING_TIMEOUT` from `ci=`). REQUIRES the 4-step deprecation flow used elsewhere in the repo (AGENTS.md §7), in canonical order: introduce successor → mark the old `@deprecated` in this registry (using the cell-based marking convention below — strikethrough the sentinel name and append a deprecation note in the trailer-grammar cell) → maintain BOTH the old and the new for one minor → remove the old in the next major.
 - **Cross-skill changes** (a sentinel is shared between `/pr-review` and `/pr-fix`): the change must land in BOTH registries in the same PR. The "Drift reminder" sections in both skills name the cross-references that govern this.
 
 **Deprecation marking convention.** When a sentinel enters its 4-step deprecation flow, mark its row in the registry table as follows:
@@ -1099,9 +1142,11 @@ Downstream parsers (CI gates, dashboards, the `/pr-fix` companion skill) MAY rel
 - Append `(deprecated, removal: <next-major-version-or-date>; superseded by NEW_SENTINEL_NAME)` at the END of the existing trailer-grammar cell.
 - Keep the row visible until the next major release removes it — that's how the "maintain BOTH for one minor" step is observable to downstream parsers.
 
-Example row (hypothetical retired sentinel, illustration only — don't ship this):
+Example row (hypothetical retired sentinel, illustration only — DO NOT ship this row in the live registry):
 
+<!-- BEGIN-EXAMPLE-DO-NOT-SHIP -->
 | `~~OLD_SENTINEL~~` | <step> | <fire condition> | `<existing trailer> (deprecated, removal: 2.0.0; superseded by NEW_SENTINEL)` |
+<!-- END-EXAMPLE-DO-NOT-SHIP -->
 
 | Sentinel | Owning step | Fires on | Trailer grammar |
 |---|---|---|---|
