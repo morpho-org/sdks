@@ -758,7 +758,7 @@ The Edit tool has no undo. If a fix breaks linting we must revert WITHOUT clobbe
 
 **Check 1 — refuse to start on a stale safety stash.** A prior `--local --fix` run that crashed could leave a `pr-review --local --fix safety stash` entry in `git stash list`. Detect that and abort loud — the user must inspect it before we create another stash with the same message.
 
-The check anchors on the WHOLE stash subject (after stripping `git stash list`'s `On <branch>:` prefix) using fixed-string matching, so a user-named stash that merely *contains* the substring won't false-positive. We use `--format='%gd%x09%gs'` (tab-separated) to avoid awk's space-collapse hazard from OFS reconstruction, then split on the literal tab. The `%gs` value still carries the `On <branch>: ` prefix that `git stash` adds — strip it explicitly. We capture the count and the matching refs so the user knows exactly how many stashes the check fires on, and we gate the warning prose on the bypass env var so an opted-in user doesn't see the "stale stash" warning before the bypass confirmation:
+The check anchors on the WHOLE stash subject (after stripping `git stash list`'s `On <branch>:` prefix) using fixed-string matching, so a user-named stash that merely *contains* the substring won't false-positive. We use `--format='%gd%x09%gs'` (tab-separated) to avoid awk's space-collapse hazard from OFS reconstruction, then split on the literal tab. The `%gs` value still carries the `On <branch>: ` prefix that `git stash` adds — strip it explicitly:
 
 ```bash
 # %gd is the stash ref (e.g. stash@{0}); %gs is the full subject including the "On <branch>: " prefix
@@ -1026,8 +1026,8 @@ Sentinel names and trailer field order are part of the contract — rename or re
 
 | Sentinel | Owning step | Fires on | Trailer grammar |
 |---|---|---|---|
-| `REVIEW_CLEAN` | Step 7 (alt 2) | Local-only mode, zero findings, zero agent failures | `— no issues found in <HEAD_BRANCH> vs <BASE_BRANCH>.` |
-| `REVIEW_INCOMPLETE` | Step 7 (alt 2) | Local-only mode, zero findings BUT some agents crashed | `— <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` |
+| `REVIEW_CLEAN` | Step 7 (alt) Local PR + Step 7 (alt 2) Local-only | Zero findings, zero agent failures | `— no issues found in <HEAD_BRANCH> vs <BASE_BRANCH>.` |
+| `REVIEW_INCOMPLETE` | Step 7 (alt) Local PR + Step 7 (alt 2) Local-only | Zero findings BUT some agents crashed | `— <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` |
 | `REVIEW_DONE_LOCAL` | Step 7 (alt 2) | Local-only mode, non-zero findings | `— <N> findings (X critical, Y high, Z medium, W low) on <HEAD_BRANCH> vs <BASE_BRANCH>.` |
 | `REVIEW_DONE_PR` | Step 8 | CI / Local PR modes, end of run | `— PR #<PR_NUMBER>, <N> findings, mode=<CI\|LocalPR>, commit=<HEAD_SHA_SHORT>` |
 | `FIX_DONE_LOCAL` | Step 7 (alt 2b) | `--local --fix` happy path | `— <X> applied, <Y> skipped (Local-only, unstaged).` |

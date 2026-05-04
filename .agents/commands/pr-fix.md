@@ -393,7 +393,7 @@ Step 9 implements one path per category. Memorize this routing table; do NOT col
 3. Expected output sequence:
    - `No unresolved comments to fix on PR #<PR>.` (from Step 4's empty-list early-exit notice)
    - `Sentinel: RECONCILE_OK — 0 threads addressed (0 fixed-and-resolved, 0 skipped-with-reply, 0 questions, 0 discussions, 0 praise-resolved, 0 already-addressed-resolved, 0 stale-skipped).`
-   - `PR #<PR> had no actionable comments — no commit, no push.` (the Step 11 conditional leading line)
+   - `PR #<PR> — no commit, no push.` (the Step 11 "no fix pushed" leading line)
    - `Sentinel: FIX_DONE_PR — PR #<PR>, fixed 0, skipped 0, resolved 0, ci=NA, commit=<existing-head-SHA-from-Step-2b>`
 4. Verify `git log -1 --format='%h %s'` shows the PR's pre-existing head (no new fix commit was created). If a merge commit appears (because pre-condition was violated and Step 3 ran), the recipe's exact-output assertions below the merge commit are no longer comparable — re-run on a cleanly-mergeable PR.
 
@@ -762,7 +762,7 @@ Sentinel: FIX_DONE_PR — PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>,
 - `PENDING_TIMEOUT` — `CI_POLL_TIMED_OUT=1` (poll loop exhausted 5×30s without checks settling). Distinguish this from plain `PENDING` so callers know the report is provisional.
 - `NA` — Step 10 was not run (e.g. the Step-4 empty-list early-exit path made no commit).
 
-On the empty-list early-exit path (Step 4 → Step 9.5 → Step 11), Step 10 is skipped and no fix commit is made: emit `fixed=0, skipped=0, resolved=0, ci=NA, commit=<the PR's existing head SHA from Step 2b>`. The sentinel is still grep-able and clearly distinguishable from a "real" run.
+On the empty-list early-exit path (Step 4 → Step 9.5 → Step 11), Step 10 is skipped and no fix commit is made: emit `fixed=0, skipped=0, resolved=0, ci=NA, commit=<the PR's existing head SHA from Step 2b>`. If Step 2b's SHA capture is somehow unset, fall back to `commit=unknown` rather than letting an unrendered placeholder leak into the sentinel. The sentinel is still grep-able and clearly distinguishable from a "real" run.
 
 The Step 9.5 reconciliation pass already emitted its own `Sentinel: RECONCILE_OK` line on success; this Step 11 sentinel is the terminal grep target for the whole `/pr-fix <PR>` (no `--watch`) run. The pair `Sentinel: RECONCILE_OK` + `Sentinel: FIX_DONE_PR` together attest a clean run.
 
@@ -863,14 +863,14 @@ Resolved merge conflicts in:
 MERGEEOF
 )"
      Capture the resulting SHA: set CYCLE_MERGE_SHA = `git rev-parse HEAD`. Then `git push origin <HEAD_BRANCH>`. Report ${CYCLE_MERGE_SHA} and the resolved files in this cycle's WATCH_FIX_DONE sentinel below.
-   - If conflicts are too ambiguous: `git merge --abort`, report which files, continue to step 4.
+   - If conflicts are too ambiguous: `git merge --abort`, set CYCLE_MERGE_AMBIGUOUS = `<list of files>`, continue to step 4. Step 6 must NOT emit WATCH_FIX_GREEN while this flag is set — see Step 6 for the gate.
 
 4. CHECK CI:
    set CYCLE_FAILED_CHECKS = `cd <REPO_PATH> && gh pr checks <PR_NUMBER> --json name,bucket,link --jq '.[] | select(.bucket == "fail")'` — abort cycle if gh fails (non-zero exit, distinct from "no failures").
    If ${CYCLE_FAILED_CHECKS} is non-empty:
    a. set CYCLE_RUN_ID = `gh pr checks <PR_NUMBER> --json bucket,link --jq '.[] | select(.bucket == "fail") | .link | capture("/runs/(?<id>[0-9]+)") | .id' | head -1`
    b. Get logs: `gh run view "${CYCLE_RUN_ID}" --repo <OWNER>/<REPO> --log-failed`
-   c. If caused by a recent fix commit: apply corrective fix, commit "fix: address CI failure", set CYCLE_HEAD_SHA = `git rev-parse HEAD`, push (max 2 retries).
+   c. If caused by a recent fix commit: apply corrective fix, commit "fix: address CI failure", set CYCLE_HEAD_SHA = `git rev-parse HEAD`, push (max 2 retries). If both retries fail: stop retrying, fall through to step 5 with `${CYCLE_FAILED_CHECKS}` non-empty (so Step 7h emits `ci=FAIL`); the next 2-minute cycle will re-evaluate the failure against any new state.
    d. If pre-existing: note it, do not fix.
 
 5. FETCH UNRESOLVED REVIEW COMMENTS using gh api graphql (same query shape as Step 4 of the main flow — request `pageInfo { hasNextPage endCursor }` and abort the cycle with WATCH_TRANSIENT_ERROR if `hasNextPage` is true; pagination not implemented inline). Required field set: id, isResolved, isOutdated, comments.nodes.{databaseId, body, path, originalLine, createdAt, author.login}.
@@ -879,7 +879,8 @@ MERGEEOF
    Parse severity case-insensitively from the comment body.
 
 6. EVALUATE:
-   If zero unresolved comments AND CI passing AND no conflicts: say "Sentinel: WATCH_FIX_GREEN — PR #<PR_NUMBER> is green (no unresolved comments, CI passing, no conflicts)." and end this cycle.
+   If zero unresolved comments AND CI passing AND no conflicts AND ${CYCLE_MERGE_AMBIGUOUS:-} is empty: say "Sentinel: WATCH_FIX_GREEN — PR #<PR_NUMBER> is green (no unresolved comments, CI passing, no conflicts)." and end this cycle.
+   If ${CYCLE_MERGE_AMBIGUOUS:-} is non-empty: say "Sentinel: WATCH_TRANSIENT_ERROR — step 3 (merge with <BASE_BRANCH> hit ambiguous conflicts in: ${CYCLE_MERGE_AMBIGUOUS}). Aborted; needs human resolution." and end this cycle. (Do NOT emit WATCH_FIX_GREEN — the PR is not actually green.)
 
 7. APPLY FIXES for unresolved comments:
 
@@ -959,14 +960,13 @@ REPLY_EOF
    g. Resolve threads (categories: actionable+fixed / praise / already-addressed):
       `gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -f id=<threadId>`
 
-   h. Determine the cycle's CI verdict for the sentinel. The watcher's Step 4 is a ONE-SHOT CI status snapshot (no poll loop — the cycle runs every 2 minutes anyway, so a long-running CI just means the next cycle picks up the latest state). Therefore the watcher's `ci=` value space is a strict subset of `FIX_DONE_PR`'s: `PASS` / `FAIL` / `PENDING` / `NA`. **`PENDING_TIMEOUT` does NOT appear here** — that value is reserved for `FIX_DONE_PR`'s explicit poll-with-timeout (Step 10c). Mapping:
-     - `PASS` — `${CYCLE_FAILED_CHECKS}` is empty AND no checks are pending in this snapshot.
+   h. Determine the cycle's CI verdict for the sentinel. The watcher's Step 4 captures only `${CYCLE_FAILED_CHECKS}` (one-shot, no poll). Pending checks are NOT captured because the cycle runs every 2 minutes anyway — a still-running CI is just picked up by the next cycle. Therefore the watcher's `ci=` value space is `FAIL` / `NA` / `UNKNOWN`:
      - `FAIL` — `${CYCLE_FAILED_CHECKS}` is non-empty.
-     - `PENDING` — checks are still running (`gh pr checks` shows any check with `bucket == "pending"`).
      - `NA` — the cycle made no commit AND no CI run was triggered (e.g. WATCH_FIX_GREEN path, or cycle ended at WATCH_LINT_FAILED before push). Step 7h is reached only on the actual fix-and-push branch, so `NA` is rare here but reserved for completeness.
+     - `UNKNOWN` — fix was pushed and `${CYCLE_FAILED_CHECKS}` is empty (could be PASS, could be PENDING; the watcher does not distinguish — that's `FIX_DONE_PR`'s job, which polls with a timeout).
 
    Set CYCLE_CI_VERDICT accordingly, then say:
-   "Sentinel: WATCH_FIX_DONE — PR #<PR_NUMBER> cycle complete: <F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped. Merge SHA: ${CYCLE_MERGE_SHA:-none}. Push SHA: ${CYCLE_HEAD_SHA:-none}. Resolved <R> threads. ci=${CYCLE_CI_VERDICT}." — labels match RECONCILE_OK so a parser can grep either with the same regex; `ci=` value space is `FIX_DONE_PR`'s minus `PENDING_TIMEOUT`.
+   "Sentinel: WATCH_FIX_DONE — PR #<PR_NUMBER> cycle complete: <F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped. Merge SHA: ${CYCLE_MERGE_SHA:-none}. Push SHA: ${CYCLE_HEAD_SHA:-none}. Resolved <R> threads. ci=${CYCLE_CI_VERDICT}." — labels match RECONCILE_OK so a parser can grep either with the same regex.
 
 CYCLE END — the cron scheduler will run this again in 2 minutes.
 ```
@@ -990,11 +990,11 @@ Sentinel names and trailer field order are part of the contract — rename or re
 | `RECONCILE_FAILED` | Step 9.5 | At least one thread is in an unknown terminal state | `— <N> threads in unknown state: <id1> <id2> <id3>.` (single summary line, space-separated IDs — shell-friendly for `for id in` loops) |
 | `FIX_DONE_PR` | Step 11 | Terminal sentinel for the whole `/pr-fix <PR>` (no `--watch`) run | `— PR #<PR_NUMBER>, fixed <N>, skipped <M>, resolved <R>, ci=<PASS\|FAIL\|PENDING\|PENDING_TIMEOUT\|NA>, commit=<HEAD_SHA_SHORT>` |
 | `WATCH_REJECTED` | Step 12 pre-flight | Empty prompt OR un-substituted CronCreate-time placeholder | `— <reason>` |
-| `WATCH_TRANSIENT_ERROR` | Step 12 watcher (any cycle command) | Any non-zero exit from a `Run:` / `set ... = \`...\`` command, OR dirty working tree at cycle start | `— step <N> (<command>): <stderr>` |
+| `WATCH_TRANSIENT_ERROR` | Step 12 watcher (any cycle command) | Any non-zero exit from a `Run:` / `set ... = \`...\`` command, OR dirty working tree at cycle start | `— step <N> (<command>): <stderr>`. **Note**: permanent failures (branch-protection rejection on `git push`, expired auth token) flow through this same sentinel and will repeat every 2 minutes until the watcher expires (3 days) or the user runs `CronDelete`. Watch for repeated identical sentinels and intervene. |
 | `WATCH_PR_CLOSED` | Step 12 watcher Step 1 | PR is no longer in OPEN state | `— PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting.` |
 | `WATCH_FIX_GREEN` | Step 12 watcher Step 6 | Cycle has zero unresolved comments AND CI passing AND no conflicts | `— PR #<PR_NUMBER> is green (no unresolved comments, CI passing, no conflicts).` |
 | `WATCH_LINT_FAILED` | Step 12 watcher Step 7b | Lint rejected the proposed fix; cycle aborted with stash-and-drop revert | `— PR #<PR_NUMBER> cycle aborted; lint rejected the proposed fix; working tree restored (stashed-and-dropped — recoverable from the reflog).` |
-| `WATCH_FIX_DONE` | Step 12 watcher Step 7h | Cycle completed (some categories may be 0) | `— PR #<PR_NUMBER> cycle complete: <F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped. Merge SHA: ${CYCLE_MERGE_SHA:-none}. Push SHA: ${CYCLE_HEAD_SHA:-none}. Resolved <R> threads. ci=<PASS\|FAIL\|PENDING\|NA>.` (no `PENDING_TIMEOUT` — watcher's Step 4 is one-shot, not a polling loop) |
+| `WATCH_FIX_DONE` | Step 12 watcher Step 7h | Cycle completed (some categories may be 0) | `— PR #<PR_NUMBER> cycle complete: <F> fixed-and-resolved, <SK> skipped-with-reply, <Q> questions, <D> discussions, <P> praise-resolved, <A> already-addressed-resolved, <ST> stale-skipped. Merge SHA: ${CYCLE_MERGE_SHA:-none}. Push SHA: ${CYCLE_HEAD_SHA:-none}. Resolved <R> threads. ci=<FAIL\|NA\|UNKNOWN>.` (watcher's Step 4 is one-shot, no poll — distinguishing PASS from PENDING requires the poll loop in `FIX_DONE_PR`'s Step 10c) |
 
 The `WATCH_FIX_DONE` and `RECONCILE_OK` count buckets use **identical labels** (`F` / `SK` / `Q` / `D` / `P` / `A` / `ST`) so a downstream parser can grep either with the same regex.
 
