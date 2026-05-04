@@ -112,7 +112,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "liquidation-sdk-viem",
-          include: ["packages/liquidation-sdk-viem/test/**/*.test.ts"],
+          include: [
+            "packages/liquidation-sdk-viem/test/**/*.test.ts",
+            "packages/liquidation-sdk-viem/src/**/*.test.ts",
+          ],
           testTimeout: 90_000,
         },
       },
