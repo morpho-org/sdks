@@ -6,12 +6,23 @@ import type { VaultReallocation } from "../../types/index.js";
 /**
  * Builds reallocation bundler actions and computes the total fee.
  *
- * Validates the reallocations, then encodes each as a `reallocateTo` action.
- * Caller must ensure `reallocations` is non-empty before calling.
+ * Validates the reallocations, then encodes each as a `reallocateTo` action against the target
+ * market. Returns `{ actions: [], fee: 0n }` for an empty input — callers gate on
+ * `reallocations.length > 0` and skip the call entirely in that case. Internal helper —
+ * consumed only by `marketV1Borrow` and `marketV1SupplyCollateralBorrow`; not re-exported on the
+ * public surface.
  *
  * @param reallocations - The vault reallocations to encode.
- * @param targetMarketParams - The target market params for the borrow.
- * @returns The encoded actions and total reallocation fee.
+ * @param targetMarketParams - The target market params the freed liquidity is destined for.
+ * @returns The encoded `reallocateTo` actions and the summed reallocation fee (in native, used
+ *   as `tx.value` in the parent bundle).
+ * @throws {NegativeReallocationFeeError} when any reallocation fee is negative.
+ * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
+ * @throws {NonPositiveReallocationAmountError} when any withdrawal amount is non-positive.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} when withdrawals within a reallocation are not
+ *   strictly sorted by market id.
+ * @internal
  */
 export const buildReallocationActions = (
   reallocations: readonly VaultReallocation[],
