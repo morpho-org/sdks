@@ -127,9 +127,9 @@ export interface VaultV1Actions {
     buildTx: (
       requirementSignature?: RequirementSignature,
     ) => Readonly<Transaction<VaultV1MigrateToV2Action>>;
-    getRequirements: (params?: {
-      useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    getRequirements: () => Promise<
+      (Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]
+    >;
   };
 }
 
@@ -364,13 +364,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
 
     return {
-      getRequirements: async (params?: { useSimplePermit?: boolean }) =>
+      getRequirements: async () =>
         await getRequirements(this.client.viemClient, {
           address: this.vault,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
           supportDeployless: this.client.options.supportDeployless,
-          useSimplePermit: params?.useSimplePermit,
+          // V1 shares always implement EIP-2612.
+          useSimplePermit: true,
           args: {
             amount: shares,
             from: userAddress,
