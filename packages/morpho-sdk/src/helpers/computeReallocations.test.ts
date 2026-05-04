@@ -583,17 +583,65 @@ describe("computeReallocations", () => {
         vaultFees: { [VAULT_A]: 1000n },
       });
 
-      expect(() =>
+      try {
         computeReallocations({
           reallocationData: data,
           marketId: targetParams.id,
           borrowAmount,
           options: { enabled: true },
-        }),
-      ).toThrow(InsufficientSharedLiquidityError);
+        });
+        expect.unreachable();
+      } catch (e) {
+        expect(e).toBeInstanceOf(InsufficientSharedLiquidityError);
+        const err = e as InsufficientSharedLiquidityError;
+        expect(err.params.marketId).toBe(targetParams.id);
+        expect(err.params.shortfall).toBe(200n * MathLib.WAD);
+        expect(err.params.available).toBe(150n * MathLib.WAD);
+      }
     });
 
-    test("should not throw when shortfall is zero even if supply target is unmet", () => {
+    test("error: InsufficientSharedLiquidityError just-below-boundary case (locks strict < comparison)", () => {
+      // Shortfall 200 WAD; available 50 + 149 = 199 WAD (one WAD short).
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: 800n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const borrowAmount = 500n * MathLib.WAD;
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 850n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        targetMarket: tm,
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        aggressiveWithdrawals: [
+          { id: sourceB.id, vault: VAULT_A, assets: 149n * MathLib.WAD },
+        ],
+        vaultFees: { [VAULT_A]: 1000n },
+      });
+
+      try {
+        computeReallocations({
+          reallocationData: data,
+          marketId: targetParams.id,
+          borrowAmount,
+          options: { enabled: true },
+        });
+        expect.unreachable();
+      } catch (e) {
+        expect(e).toBeInstanceOf(InsufficientSharedLiquidityError);
+        const err = e as InsufficientSharedLiquidityError;
+        expect(err.params.shortfall).toBe(200n * MathLib.WAD);
+        expect(err.params.available).toBe(199n * MathLib.WAD);
+      }
+    });
+
+    test("behavior: does not throw when absolute shortfall is zero even if supply target is unmet", () => {
       const borrowAmount = 500n * MathLib.WAD;
 
       const friendlyTargetMarket = makeMarket(targetParams, {
@@ -620,7 +668,7 @@ describe("computeReallocations", () => {
       expect(result[0]!.withdrawals[0]!.amount).toBe(50n * MathLib.WAD);
     });
 
-    test("should throw MissingPublicAllocatorConfigError when vault config is missing", () => {
+    test("error: MissingPublicAllocatorConfigError when vault config is missing", () => {
       const borrowAmount = 500n * MathLib.WAD;
 
       const friendlyTargetMarket = makeMarket(targetParams, {

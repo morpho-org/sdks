@@ -90,6 +90,11 @@ export const computeReallocations = ({
   if (requiredAssets <= 0n) return [];
 
   // Liquidity strictly required for `morphoBorrow` to succeed onchain.
+  // Soundness of the post-loop guard relies on `requiredAssets >= absoluteShortfall`:
+  //   - phase 1 only: skipping phase 2 means the friendly reallocation already
+  //     brings `friendlyTotalBorrow + borrow <= friendlyTotalSupply`, so the
+  //     friendly withdrawals alone cover `absoluteShortfall`.
+  //   - phase 2: `requiredAssets` is reset to exactly `absoluteShortfall`.
   const absoluteShortfall =
     newTotalBorrowAssets > newTotalSupplyAssets
       ? newTotalBorrowAssets - newTotalSupplyAssets
@@ -126,7 +131,7 @@ export const computeReallocations = ({
   // Refuse fee-bearing partial plans for an unreachable borrow.
   if (totalReallocated < absoluteShortfall) {
     throw new InsufficientSharedLiquidityError({
-      market: marketId,
+      marketId,
       shortfall: absoluteShortfall,
       available: totalReallocated,
     });
