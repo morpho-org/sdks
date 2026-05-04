@@ -399,7 +399,7 @@ Step 9 implements one path per category. Memorize this routing table; do NOT col
 
 ## Step 6: Apply Fixes
 
-> **Drift reminder**: `/pr-review --local --fix` (Step 7 alt 2b in `.agents/commands/pr-review.md`) reimplements the apply-and-validate mechanics from this Step 6c–6d (read-then-Edit, biome check, no commit/push). Any change to 6c–6d that affects those mechanics must be propagated to `/pr-review`'s `--local --fix` flow in the same PR.
+> **Drift reminder**: `/pr-review-local --fix` (Step 7b in `.agents/commands/pr-review-local.md`) reimplements the apply-and-validate mechanics from this Step 6c–6d (read-then-Edit, biome check, no commit/push). Any change to 6c–6d that affects those mechanics must be propagated to `/pr-review-local`'s `--fix` flow in the same PR.
 
 **Never apply a fix you don't fully understand. A skipped finding is always better than a wrong fix.**
 
@@ -417,7 +417,7 @@ For each file with findings, build a complete understanding before touching anyt
      - `packages/<pkg>/AGENTS.md` — package-specific refinements (these refine the root for this package; root wins on contradictions).
      - `packages/<pkg>/README.md` — public-facing usage.
      - `packages/<pkg>/ARCHITECTURE.md` — if present.
-   - **If the file lives outside `packages/`** (root files, `.agents/commands/*`, `.github/workflows/*`, `scripts/*`, `docs/*`, etc.): use the root baseline (`AGENTS.md`, `MISSION.md`, `CONTRIBUTING.md`, `biome.json`, plus `docs/jsdoc-style.md` if applicable). Do NOT attempt to derive a synthetic package directory. (Same scope as `/pr-review` Step 4's "Always read" baseline so the two skills agree on what context applies to outside-packages files.)
+   - **If the file lives outside `packages/`** (root files, `.agents/commands/*`, `.github/workflows/*`, `scripts/*`, `docs/*`, etc.): use the root baseline (`AGENTS.md`, `MISSION.md`, `CONTRIBUTING.md`, `biome.json`, plus `docs/jsdoc-style.md` if applicable). Do NOT attempt to derive a synthetic package directory. (Same scope as `.agents/lib/pr-review-base.md` Step 4's "Always read" baseline so the two skills agree on what context applies to outside-packages files.)
    - Any nested `AGENTS.md` along the path of the touched file (e.g. `packages/morpho-sdk/src/actions/AGENTS.md`, `packages/morpho-sdk/src/actions/marketV1/AGENTS.md`).
 
 2. **Read the full file** — Use the Read tool. Understand the overall structure, not just the flagged line.
@@ -982,7 +982,7 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 
 Every terminal step ends with a single grep-able `Sentinel: NAME — <human prose>` line. This registry is the single source of truth for `/pr-fix` — adding a new sentinel requires adding a row here in the same PR.
 
-Sentinel names and trailer field order are part of the contract — rename or reorder fields only with a deprecation note in the table. Cross-skill changes (sentinels shared with `/pr-review`) must land in both registries in the same PR.
+Sentinel names and trailer field order are part of the contract — rename or reorder fields only with a deprecation note in the central registry at `.agents/commands/AGENTS.md`.
 
 | Sentinel | Owning step | Fires on | Trailer grammar |
 |---|---|---|---|
@@ -998,7 +998,7 @@ Sentinel names and trailer field order are part of the contract — rename or re
 
 The `WATCH_FIX_DONE` and `RECONCILE_OK` count buckets use **identical labels** (`F` / `SK` / `Q` / `D` / `P` / `A` / `ST`) so a downstream parser can grep either with the same regex.
 
-`/pr-review` owns its own sentinel set (`REVIEW_CLEAN`, `REVIEW_INCOMPLETE`, `REVIEW_DONE_LOCAL`, `REVIEW_DONE_PR`, `FIX_DONE_LOCAL`, `FIX_DONE_WITH_STASH_CONFLICTS`, `FIX_ABORTED`, `WATCH_REVIEW_CLEAN`, `WATCH_REVIEW_DONE`, plus shared `WATCH_REJECTED` / `WATCH_TRANSIENT_ERROR` / `WATCH_PR_CLOSED`); see `pr-review.md`'s registry for grammar.
+The full sentinel grammar registry across all skills (including the `/pr-review-ci`, `/pr-review-gh`, `/pr-review-local` set) lives in `.agents/commands/AGENTS.md`.
 
 ## Error Handling
 
@@ -1019,7 +1019,7 @@ The `WATCH_FIX_DONE` and `RECONCILE_OK` count buckets use **identical labels** (
 - **Conflict-aware**: Detects merge conflicts with the base branch before applying review fixes. Resolves conflicts intelligently by reading both sides and merging logically. Conflicts that can't be safely resolved are reported for human intervention.
 - **Quality gates**: Runs `pnpm exec biome check` after each file fix and `pnpm lint && pnpm -r --if-present build` after all fixes. Ensures fixes don't introduce new issues.
 - **Self-contained watcher**: The cron watcher does actual work inline (resolves conflicts, applies fixes, replies to threads, resolves threads) rather than re-invoking the skill. The reason is operational: cron-fired agents start with no conversation history, so the watcher prompt must be standalone. The watcher also performs relevance assessment on every cycle — it never blindly fixes.
-- **Pairs with `/pr-review`**: `/pr-review --local` for pre-PR feedback (terminal-only, no GitHub), `/pr-review <PR>` for inline GitHub review after opening, `/pr-fix <PR>` to apply posted comments. With `/pr-review <PR> --watch` plus `/pr-fix <PR> --watch`, the review-fix loop is fully autonomous.
+- **Pairs with the `/pr-review-*` skills**: `/pr-review-local` for pre-PR feedback (terminal-only, no GitHub), `/pr-review-gh <PR>` for inline GitHub review after opening, `/pr-fix <PR>` to apply posted comments. With `/pr-review-gh <PR> --watch` plus `/pr-fix <PR> --watch`, the review-fix loop is fully autonomous (the two crons are independent — both fire every 2 minutes; no cross-cron coordination today).
 - Fixes are applied to the PR branch, not main/dev
 - One commit for all fixes — keeps the PR history clean
 - Each reply includes the commit SHA for traceability
