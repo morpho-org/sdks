@@ -1,10 +1,10 @@
 import {
   type Address,
+  addressesRegistry,
   ChainId,
   ExchangeRateWrappedToken,
   MathLib,
   NATIVE_ADDRESS,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
@@ -13,14 +13,14 @@ import type { ViemTestContext } from "@morpho-org/test/vitest";
 import { entries } from "lodash";
 import { maxUint256, parseUnits } from "viem";
 import { sendTransaction, writeContract } from "viem/actions";
-import { type TestAPI, describe, expect } from "vitest";
+import { describe, expect, type TestAPI } from "vitest";
 import { cErc20Abi } from "../../../src/abis/compoundV2.js";
 import { migrationAddressesRegistry } from "../../../src/config.js";
 import { fetchAccruedExchangeRate } from "../../../src/fetchers/compoundV2/compoundV2.helpers.js";
 import {
+  fetchMigratablePositions,
   MigratableProtocol,
   SupplyMigrationLimiter,
-  fetchMigratablePositions,
 } from "../../../src/index.js";
 import { MigratableSupplyPosition_CompoundV2 } from "../../../src/positions/supply/compoundV2.supply.js";
 import { test } from "../setup.js";
@@ -86,6 +86,7 @@ describe("Supply position on COMPOUND V2", () => {
       bundler3: { generalAdapter1, compoundV2MigrationAdapter },
     } = addressesRegistry[chainId];
 
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     const writeSupply = async (
       client: ViemTestContext["client"],
       cErc20: Address,

@@ -1,11 +1,11 @@
-import { MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  MorphoClient,
   isRequirementApproval,
   isRequirementSignature,
+  MorphoClient,
 } from "../../../src/index.js";
 import {
   KeyrockUsdcVaultV2,
@@ -156,6 +156,7 @@ describe("Permit2", () => {
 
         await client.sendTransaction(approval);
 
+        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
         const permit2 = requirements[1];
 
         if (!isRequirementSignature(permit2)) {

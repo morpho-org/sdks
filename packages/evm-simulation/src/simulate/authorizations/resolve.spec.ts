@@ -1,8 +1,8 @@
 import {
   type Address,
-  type Hex,
   decodeFunctionData,
   erc20Abi,
+  type Hex,
   maxUint256,
 } from "viem";
 

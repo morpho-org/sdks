@@ -1,3 +1,4 @@
+import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { maxUint256 } from "viem";
 import {
   Erc20Errors,
@@ -6,8 +7,6 @@ import {
 } from "../../errors.js";
 import type { Erc20Operations } from "../../operations.js";
 import type { OperationHandler } from "../types.js";
-
-import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { handleErc20ApproveOperation } from "./approve.js";
 
 export const handleErc20PermitOperation: OperationHandler<

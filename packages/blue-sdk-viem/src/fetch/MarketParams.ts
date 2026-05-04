@@ -1,9 +1,9 @@
 import {
+  _try,
+  getChainAddresses,
   type MarketId,
   MarketParams,
   UnknownMarketParamsError,
-  _try,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";
@@ -11,6 +11,7 @@ import { blueAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchMarketParams(
   id: MarketId,
   client: Client,

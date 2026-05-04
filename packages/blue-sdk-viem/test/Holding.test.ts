@@ -1,8 +1,8 @@
 import {
+  addressesRegistry,
   ChainId,
   MathLib,
   NATIVE_ADDRESS,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import { maxUint256 } from "viem";

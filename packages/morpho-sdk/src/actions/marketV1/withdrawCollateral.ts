@@ -1,4 +1,4 @@
-import { type MarketParams, getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData } from "viem";

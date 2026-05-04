@@ -1,11 +1,9 @@
-import { BlueErrors, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
-
+import { BlueErrors, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
+import { maxUint256 } from "viem";
 import { BlueSimulationErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
-
-import { maxUint256 } from "viem";
 import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
 export const handleBlueWithdrawOperation: OperationHandler<

@@ -1,14 +1,14 @@
 import { randomAddress } from "@morpho-org/test/fixtures";
 import { describe, expect, test } from "vitest";
 import {
-  type ChainAddresses,
-  ChainId,
-  NATIVE_ADDRESS,
   addresses,
   addressesRegistry,
+  type ChainAddresses,
+  ChainId,
   deployments,
   getChainAddresses,
   getUnwrappedToken,
+  NATIVE_ADDRESS,
   registerCustomAddresses,
 } from "../../src/index.js";
 
@@ -187,18 +187,19 @@ describe("addresses", () => {
         wNative: 0n,
       },
     },
-  ])(
-    "should expose era-2 addresses for chain $chainId",
-    ({ chainId, expectedAddresses, expectedDeployments }) => {
-      expect(getChainAddresses(chainId)).toMatchObject(expectedAddresses);
-      expect((deployments as Record<number, unknown>)[chainId]).toMatchObject(
-        expectedDeployments,
-      );
-      expect(
-        getUnwrappedToken(expectedAddresses.wNative as `0x${string}`, chainId),
-      ).toEqual(NATIVE_ADDRESS);
-    },
-  );
+  ])("should expose era-2 addresses for chain $chainId", ({
+    chainId,
+    expectedAddresses,
+    expectedDeployments,
+  }) => {
+    expect(getChainAddresses(chainId)).toMatchObject(expectedAddresses);
+    expect((deployments as Record<number, unknown>)[chainId]).toMatchObject(
+      expectedDeployments,
+    );
+    expect(
+      getUnwrappedToken(expectedAddresses.wNative as `0x${string}`, chainId),
+    ).toEqual(NATIVE_ADDRESS);
+  });
 
   test("should throw when overriding existing address", () => {
     const randomAddress1 = randomAddress();

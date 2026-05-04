@@ -128,6 +128,7 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
 export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     vault: IAccrualVaultV2,
     public accrualLiquidityAdapter: IAccrualVaultV2Adapter | undefined,
@@ -231,6 +232,7 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       this.forceDeallocatePenalties,
     );
 
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp = BigInt(timestamp);
 
     const elapsed = timestamp - this.lastUpdate;

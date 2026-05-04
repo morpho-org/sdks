@@ -53,6 +53,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
   ) {
     this.dataLoader = new DataLoader(
       async (marketIds) => {
+        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
         const { client, parameters } = this;
         const chainId = client.chain.id;
 
@@ -99,6 +100,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
               (market) =>
                 market.supplyingVaults?.map((vault) => [
                   vault.address,
+                  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
                   vault.state?.allocation?.map(({ market }) => market) ?? [],
                 ]) ?? [],
             ),
@@ -119,6 +121,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
             ),
             Promise.all(
               allVaultsMarkets.map(
+                // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
                 async ([vault, markets]) =>
                   [
                     vault,
@@ -143,6 +146,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
             ),
             Promise.all(
               allVaultsMarkets.map(
+                // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
                 async ([vault, markets]) =>
                   [
                     vault,
@@ -213,6 +217,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
         const maxWithdrawalUtilization =
           parameters.maxWithdrawalUtilization ??
           fromEntries(
+            // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
             allVaultsMarkets.flatMap(([, markets]) =>
               markets.map((market) => [
                 market.uniqueKey,

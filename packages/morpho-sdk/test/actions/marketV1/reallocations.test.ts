@@ -6,14 +6,14 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   EmptyReallocationWithdrawalsError,
+  isRequirementApproval,
+  isRequirementAuthorization,
   MorphoClient,
+  marketV1Borrow,
+  marketV1SupplyCollateralBorrow,
   NegativeReallocationFeeError,
   NonPositiveReallocationAmountError,
   ReallocationWithdrawalOnTargetMarketError,
-  isRequirementApproval,
-  isRequirementAuthorization,
-  marketV1Borrow,
-  marketV1SupplyCollateralBorrow,
 } from "../../../src/index.js";
 import type { VaultReallocation } from "../../../src/types/index.js";
 import {

@@ -1,15 +1,15 @@
 import {
-  MathLib,
   addressesRegistry,
   getChainAddresses,
+  MathLib,
 } from "@morpho-org/blue-sdk";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  MorphoClient,
   isRequirementApproval,
   isRequirementSignature,
+  MorphoClient,
   marketV1SupplyCollateral,
 } from "../../../src/index.js";
 import {

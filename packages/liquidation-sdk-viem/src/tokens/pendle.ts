@@ -252,6 +252,7 @@ export namespace Pendle {
     syCurrentSupply?: number;
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export async function getApiData<T extends {}, U>(
     chainId: number,
     endpoint: string,
@@ -277,6 +278,7 @@ export namespace Pendle {
     return res.json() as Promise<U>;
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export async function getSwapCallData(
     chainId: number,
     marketAddress: string,
@@ -314,6 +316,7 @@ export namespace Pendle {
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function isPT(
     token: string,
     chainId: ChainId,

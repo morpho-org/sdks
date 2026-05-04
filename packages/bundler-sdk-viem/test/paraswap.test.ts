@@ -1,4 +1,4 @@
-import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId } from "@morpho-org/blue-sdk";
 
 import { blueAbi, fetchPosition } from "@morpho-org/blue-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";

@@ -1,4 +1,26 @@
 import {
+  ChainId,
+  getChainAddresses,
+  type InputMarketParams,
+} from "@morpho-org/blue-sdk";
+import {
+  blueAbi,
+  erc2612Abi,
+  permit2Abi,
+  publicAllocatorAbi,
+} from "@morpho-org/blue-sdk-viem";
+import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
+import {
+  type Address,
+  encodeAbiParameters,
+  encodeFunctionData,
+  type Hex,
+  keccak256,
+  maxUint256,
+  parseSignature,
+  zeroHash,
+} from "viem";
+import {
   aaveV2MigrationAdapterAbi,
   aaveV3MigrationAdapterAbi,
   aaveV3OptimizerMigrationAdapterAbi,
@@ -12,29 +34,6 @@ import {
   paraswapAdapterAbi,
   universalRewardsDistributorAbi,
 } from "./abis.js";
-
-import {
-  ChainId,
-  type InputMarketParams,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
-import {
-  blueAbi,
-  erc2612Abi,
-  permit2Abi,
-  publicAllocatorAbi,
-} from "@morpho-org/blue-sdk-viem";
-import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
-import {
-  type Address,
-  type Hex,
-  encodeAbiParameters,
-  encodeFunctionData,
-  keccak256,
-  maxUint256,
-  parseSignature,
-  zeroHash,
-} from "viem";
 import { BundlerErrors } from "./errors.js";
 import type {
   Action,
@@ -425,6 +424,7 @@ export namespace BundlerAction {
    * @param amount The amount of native tokens to send (in wei).
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function nativeTransfer(
     chainId: ChainId,
     owner: Address,
@@ -473,6 +473,7 @@ export namespace BundlerAction {
    * @param adapter The address of the adapter to use.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function erc20Transfer(
     asset: Address,
     recipient: Address,
@@ -503,6 +504,7 @@ export namespace BundlerAction {
    * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function erc20TransferFrom(
     chainId: ChainId,
     asset: Address,
@@ -541,6 +543,7 @@ export namespace BundlerAction {
    * @param signature The Ethers signature to permit the tokens.
    * @param skipRevert Whether to allow the permit to revert without making the whole bundle revert. Defaults to true.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function permit(
     chainId: ChainId,
     owner: Address,
@@ -590,6 +593,7 @@ export namespace BundlerAction {
    * @param signature The Ethers signature to permit the tokens.
    * @param skipRevert Whether to allow the permit to revert without making the whole bundle revert.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function permitDai(
     chainId: ChainId,
     owner: Address,
@@ -663,6 +667,7 @@ export namespace BundlerAction {
    * @param signature The Ethers signature to permit the tokens.
    * @param skipRevert Whether to allow the permit to revert without making the whole bundle revert. Defaults to true.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function approve2(
     chainId: ChainId,
     owner: Address,
@@ -710,6 +715,7 @@ export namespace BundlerAction {
    * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function transferFrom2(
     chainId: ChainId,
     asset: Address,
@@ -743,6 +749,7 @@ export namespace BundlerAction {
    * @param amount The amount of tokens to wrap.
    * @param skipRevert Whether to allow the wrap to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoWrapperDepositFor(
     chainId: ChainId,
     recipient: Address,
@@ -780,6 +787,7 @@ export namespace BundlerAction {
    * @param amount The amount of tokens to send.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function erc20WrapperDepositFor(
     chainId: ChainId,
     wrapper: Address,
@@ -842,6 +850,7 @@ export namespace BundlerAction {
    * @param amount The amount of tokens to send.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function erc20WrapperWithdrawTo(
     chainId: ChainId,
     wrapper: Address,
@@ -907,6 +916,7 @@ export namespace BundlerAction {
    * @param receiver The address to send the shares to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function erc4626Mint(
     chainId: ChainId,
     erc4626: Address,
@@ -943,6 +953,7 @@ export namespace BundlerAction {
    * @param receiver The address to send the shares to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function erc4626Deposit(
     chainId: ChainId,
     erc4626: Address,
@@ -980,6 +991,7 @@ export namespace BundlerAction {
    * @param owner The address on behalf of which the assets are withdrawn.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function erc4626Withdraw(
     chainId: ChainId,
     erc4626: Address,
@@ -1018,6 +1030,7 @@ export namespace BundlerAction {
    * @param owner The address on behalf of which the assets are withdrawn.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function erc4626Redeem(
     chainId: ChainId,
     erc4626: Address,
@@ -1055,6 +1068,7 @@ export namespace BundlerAction {
    * @param signature The Ethers signature to authorize the account.
    * @param skipRevert Whether to allow the authorization call to revert without making the whole bundle revert. Defaults to true.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoSetAuthorizationWithSig(
     chainId: ChainId,
     authorization: Authorization,
@@ -1096,6 +1110,7 @@ export namespace BundlerAction {
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoSupply(
     chainId: ChainId,
     market: InputMarketParams,
@@ -1139,6 +1154,7 @@ export namespace BundlerAction {
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupplyCollateral` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoSupplyCollateral(
     chainId: ChainId,
     market: InputMarketParams,
@@ -1181,6 +1197,7 @@ export namespace BundlerAction {
    * @param receiver The address to send borrowed tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoBorrow(
     chainId: ChainId,
     market: InputMarketParams,
@@ -1220,6 +1237,7 @@ export namespace BundlerAction {
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoSupply` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoRepay(
     chainId: ChainId,
     market: InputMarketParams,
@@ -1264,6 +1282,7 @@ export namespace BundlerAction {
    * @param receiver The address to send withdrawn tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoWithdraw(
     chainId: ChainId,
     market: InputMarketParams,
@@ -1300,6 +1319,7 @@ export namespace BundlerAction {
    * @param receiver The address to send withdrawn tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoWithdrawCollateral(
     chainId: ChainId,
     market: InputMarketParams,
@@ -1334,6 +1354,7 @@ export namespace BundlerAction {
    * @param callbackCalls The array of calls to execute inside Morpho Blue's `onMorphoFlashLoan` callback.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function morphoFlashLoan(
     chainId: ChainId,
     token: Address,
@@ -1374,6 +1395,7 @@ export namespace BundlerAction {
    * @param supplyMarketParams The market params to reallocate to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function publicAllocatorReallocateTo(
     chainId: ChainId,
     vault: Address,
@@ -1412,6 +1434,7 @@ export namespace BundlerAction {
    * @param receiver The address to send the tokens to.
    * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function paraswapBuy(
     chainId: ChainId,
     augustus: Address,
@@ -1456,6 +1479,7 @@ export namespace BundlerAction {
    * @param receiver The address to send the tokens to.
    * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function paraswapSell(
     chainId: ChainId,
     augustus: Address,
@@ -1509,6 +1533,7 @@ export namespace BundlerAction {
    * @param receiver The address to send the tokens to.
    * @param skipRevert Whether to allow the swap to revert without making the whole bundle revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function paraswapBuyMorphoDebt(
     chainId: ChainId,
     augustus: Address,
@@ -1565,6 +1590,7 @@ export namespace BundlerAction {
    * @param proof The Merkle proof to claim the rewards.
    * @param skipRevert Whether to allow the claim to revert without making the whole bundle revert. Defaults to true.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function urdClaim(
     distributor: Address,
     account: Address,
@@ -1597,6 +1623,7 @@ export namespace BundlerAction {
    * @param recipient The address to send tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function wrapNative(
     chainId: ChainId,
     amount: bigint,
@@ -1629,6 +1656,7 @@ export namespace BundlerAction {
    * @param recipient The address to send tokens to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function unwrapNative(
     chainId: ChainId,
     amount: bigint,
@@ -1665,6 +1693,7 @@ export namespace BundlerAction {
    * @param recipient The address to send stETH to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function stakeEth(
     chainId: ChainId,
     amount: bigint,
@@ -1701,6 +1730,7 @@ export namespace BundlerAction {
    * @param recipient The address to send wstETH to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function wrapStEth(
     chainId: ChainId,
     amount: bigint,
@@ -1733,6 +1763,7 @@ export namespace BundlerAction {
    * @param recipient The address to send stETH to.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function unwrapStEth(
     chainId: ChainId,
     amount: bigint,
@@ -1769,6 +1800,7 @@ export namespace BundlerAction {
    * @param rateMode The interest rate mode used by the debt to repay.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function aaveV2Repay(
     chainId: ChainId,
     asset: Address,
@@ -1806,6 +1838,7 @@ export namespace BundlerAction {
    * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function aaveV2Withdraw(
     chainId: ChainId,
     asset: Address,
@@ -1845,6 +1878,7 @@ export namespace BundlerAction {
    * @param rateMode The interest rate mode used by the debt to repay.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function aaveV3Repay(
     chainId: ChainId,
     asset: Address,
@@ -1882,6 +1916,7 @@ export namespace BundlerAction {
    * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function aaveV3Withdraw(
     chainId: ChainId,
     asset: Address,
@@ -1920,6 +1955,7 @@ export namespace BundlerAction {
    * @param onBehalf The address on behalf of which to repay.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function aaveV3OptimizerRepay(
     chainId: ChainId,
     underlying: Address,
@@ -1957,6 +1993,7 @@ export namespace BundlerAction {
    * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function aaveV3OptimizerWithdraw(
     chainId: ChainId,
     underlying: Address,
@@ -1997,6 +2034,7 @@ export namespace BundlerAction {
    * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function aaveV3OptimizerWithdrawCollateral(
     chainId: ChainId,
     underlying: Address,
@@ -2039,6 +2077,7 @@ export namespace BundlerAction {
    * @param signature The Ethers signature to submit.
    * @param skipRevert Whether to allow the signature to revert without making the whole bundle revert. Defaults to true.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function aaveV3OptimizerApproveManagerWithSig(
     chainId: ChainId,
     aaveV3Optimizer: Address,
@@ -2116,6 +2155,7 @@ export namespace BundlerAction {
    * @param onBehalf The account on behalf of which to repay.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function compoundV2Repay(
     chainId: ChainId,
     cToken: Address,
@@ -2159,6 +2199,7 @@ export namespace BundlerAction {
    * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function compoundV2Redeem(
     chainId: ChainId,
     cToken: Address,
@@ -2204,6 +2245,7 @@ export namespace BundlerAction {
    * @param onBehalf The address on behalf of which to repay.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function compoundV3Repay(
     chainId: ChainId,
     instance: Address,
@@ -2241,6 +2283,7 @@ export namespace BundlerAction {
    * @param recipient The recipient of ERC20 tokens.
    * @param skipRevert Whether to allow the transfer to revert without making the whole bundler revert. Defaults to false.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function compoundV3WithdrawFrom(
     chainId: ChainId,
     instance: Address,
@@ -2285,6 +2328,7 @@ export namespace BundlerAction {
    * @param signature The Ethers signature to submit.
    * @param skipRevert Whether to allow the signature to revert without making the whole bundle revert. Defaults to true.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function compoundV3AllowBySig(
     chainId: ChainId,
     instance: Address,

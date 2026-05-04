@@ -1,62 +1,62 @@
 import {
   type Address,
-  NATIVE_ADDRESS,
   getChainAddresses,
   getUnwrappedToken,
+  NATIVE_ADDRESS,
 } from "@morpho-org/blue-sdk";
+import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
+import { withSimplePermit } from "@morpho-org/morpho-test";
 import { isDefined, keys, values } from "@morpho-org/morpho-ts";
-
+import type { SimulationState } from "@morpho-org/simulation-sdk";
+import { type AnvilTestClient, testAccount } from "@morpho-org/test";
+import { type Account, type Chain, zeroAddress } from "viem";
+import { parseAccount } from "viem/accounts";
+import { expect } from "vitest";
 import {
   type BundlingOptions,
   type InputBundlerOperation,
   setupBundle,
 } from "../src/index.js";
 
-import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
-import { withSimplePermit } from "@morpho-org/morpho-test";
-import type { SimulationState } from "@morpho-org/simulation-sdk";
-import { type AnvilTestClient, testAccount } from "@morpho-org/test";
-import { type Account, type Chain, zeroAddress } from "viem";
-import { parseAccount } from "viem/accounts";
-import { expect } from "vitest";
-
 export const donator = testAccount(9);
 
 export const donate =
-  <chain extends Chain>(
-    client: AnvilTestClient<chain>,
-    erc20: Address,
-    donation: bigint,
-    vault: Address,
-    morpho: Address,
-  ) =>
-  async (data: SimulationState) => {
-    await client.deal({
-      erc20,
-      account: donator,
-      amount: donation,
-    });
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+    <chain extends Chain>(
+      client: AnvilTestClient<chain>,
+      erc20: Address,
+      donation: bigint,
+      vault: Address,
+      morpho: Address,
+    ) =>
+    async (data: SimulationState) => {
+      await client.deal({
+        erc20,
+        account: donator,
+        amount: donation,
+      });
 
-    await client.approve({
-      account: donator,
-      address: erc20,
-      args: [morpho, donation],
-    });
-    await client.writeContract({
-      account: donator,
-      address: morpho,
-      abi: blueAbi,
-      functionName: "supply",
-      args: [
-        { ...data.getMarket(data.getVault(vault).withdrawQueue[0]!).params },
-        donation,
-        0n,
-        vault,
-        "0x",
-      ],
-    });
-  };
+      await client.approve({
+        account: donator,
+        address: erc20,
+        args: [morpho, donation],
+      });
+      await client.writeContract({
+        account: donator,
+        address: morpho,
+        abi: blueAbi,
+        functionName: "supply",
+        args: [
+          { ...data.getMarket(data.getVault(vault).withdrawQueue[0]!).params },
+          donation,
+          0n,
+          vault,
+          "0x",
+        ],
+      });
+    };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const setupTestBundle = async <chain extends Chain = Chain>(
   client: AnvilTestClient<chain>,
   startData: SimulationState,
@@ -149,7 +149,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
 
   for (const tx of bundle.txs()) {
     await client.sendTransaction(
-      // @ts-ignore
+      // @ts-expect-error
       { ...tx, account, gasPrice },
     );
   }

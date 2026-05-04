@@ -1,10 +1,10 @@
 import {
+  addressesRegistry,
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
   MarketParams,
   MathLib,
   NATIVE_ADDRESS,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import {
@@ -53,6 +53,7 @@ describe("populateBundle", () => {
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
+        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
         async ({ client, config, expect }) => {
           const id = eth_wstEth.id;
 
@@ -2020,6 +2021,7 @@ describe("populateBundle", () => {
             ],
             {
               unwrapTokens: new Set([wNative]),
+              // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
               onBundleTx: async (data) => {
                 await donate(
                   client,
@@ -2742,6 +2744,7 @@ describe("populateBundle", () => {
 
       test[ChainId.EthMainnet](
         "should fail if balance exceeded",
+        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
         async ({ client, config, expect }) => {
           const id = eth_wstEth.id;
 
@@ -4734,6 +4737,7 @@ describe("populateBundle", () => {
             {
               supportsSignature: false,
               unwrapTokens: new Set([wNative]),
+              // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
               onBundleTx: async (data) => {
                 await donate(
                   client,

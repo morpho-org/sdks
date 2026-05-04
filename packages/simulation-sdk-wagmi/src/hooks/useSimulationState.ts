@@ -1,21 +1,21 @@
 import {
+  addresses,
   Eip5267Domain,
   type MarketId,
   Token,
-  addresses,
 } from "@morpho-org/blue-sdk";
 import {
-  type DeploylessFetchParameters,
   blueAbi,
+  type DeploylessFetchParameters,
 } from "@morpho-org/blue-sdk-viem";
 import {
   type ConfigParameter,
   type FetchMarketsParameters,
   type FetchTokensParameters,
   type FetchUsersParameters,
+  type FetchVaultsParameters,
   type FetchVaultV2AdaptersParameters,
   type FetchVaultV2sParameters,
-  type FetchVaultsParameters,
   invalidateAllBlueSdkQueries,
   useChainId,
   useHoldings,
@@ -24,10 +24,10 @@ import {
   useTokens,
   useUsers,
   useVaultMarketConfigs,
+  useVaults,
   useVaultUsers,
   useVaultV2Adapters,
   useVaultV2s,
-  useVaults,
 } from "@morpho-org/blue-sdk-wagmi";
 import { values } from "@morpho-org/morpho-ts";
 import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";

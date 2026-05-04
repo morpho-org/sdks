@@ -92,6 +92,7 @@ export namespace MarketUtils {
    * @param market The market state.
    * @param elapsed The time elapsed since the last market update (in seconds).
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getAccruedInterest(
     borrowRate: BigIntish,
     {
@@ -137,6 +138,7 @@ export namespace MarketUtils {
     },
     utilization: BigIntish,
   ) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     utilization = BigInt(utilization);
     if (utilization === 0n) {
       if (getUtilization(market) === 0n) return 0n;
@@ -165,6 +167,7 @@ export namespace MarketUtils {
     },
     utilization: BigIntish,
   ) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     utilization = BigInt(utilization);
     totalSupplyAssets = BigInt(totalSupplyAssets);
     totalBorrowAssets = BigInt(totalBorrowAssets);
@@ -247,6 +250,7 @@ export namespace MarketUtils {
    * Return `undefined` iff the market's price is undefined.
    * To calculate the amount of loan assets that can be borrowed, use `getMaxBorrowableAssets`.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getMaxBorrowAssets(
     collateral: BigIntish,
     market: { price?: BigIntish },
@@ -262,6 +266,7 @@ export namespace MarketUtils {
    * Returns the maximum amount of loan assets that can be borrowed given a certain borrow position.
    * Return `undefined` iff the market's price is undefined.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getMaxBorrowableAssets(
     {
       collateral,
@@ -291,6 +296,7 @@ export namespace MarketUtils {
    * Returns the amount of collateral that would be seized in a liquidation given a certain amount of repaid shares.
    * Return `undefined` iff the market's price is undefined.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getLiquidationSeizedAssets(
     repaidShares: BigIntish,
     market: {
@@ -319,6 +325,7 @@ export namespace MarketUtils {
    * Returns the amount of borrow shares that would be repaid in a liquidation given a certain amount of seized collateral.
    * Return `undefined` iff the market's price is undefined.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getLiquidationRepaidShares(
     seizedAssets: BigIntish,
     market: {
@@ -344,6 +351,7 @@ export namespace MarketUtils {
    * Returns the maximum amount of collateral that is worth being seized in a liquidation given a certain borrow position.
    * Return `undefined` iff the market's price is undefined.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getSeizableCollateral(
     position: { collateral: BigIntish; borrowShares: BigIntish },
     market: {
@@ -368,6 +376,7 @@ export namespace MarketUtils {
    * Returns the amount of collateral that can be withdrawn given a certain borrow position.
    * Return `undefined` iff the market's price is undefined.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getWithdrawableCollateral(
     {
       collateral,
@@ -403,6 +412,7 @@ export namespace MarketUtils {
    * Return `undefined` iff the market's price is undefined.
    * @param position The borrow position to check.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function isHealthy(
     {
       collateral,
@@ -430,6 +440,7 @@ export namespace MarketUtils {
    * that set the user's position to be liquidatable.
    * Returns null if the position is not a borrow.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getLiquidationPrice(
     {
       collateral,
@@ -459,6 +470,7 @@ export namespace MarketUtils {
    * Returns `undefined` iff the market's price is undefined.
    * Returns null if the position is not a borrow.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getPriceVariationToLiquidationPrice(
     position: { collateral: BigIntish; borrowShares: BigIntish },
     market: {
@@ -488,6 +500,7 @@ export namespace MarketUtils {
    * If the debt is 0, health factor is `MaxUint256`.
    * Returns `undefined` iff the market's price is undefined.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getHealthFactor(
     {
       collateral,
@@ -547,6 +560,7 @@ export namespace MarketUtils {
    * Returns the usage ratio of the maximum borrow capacity given a certain borrow position (scaled by WAD).
    * Returns `undefined` iff the market's price is undefined.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getBorrowCapacityUsage(
     position: { collateral: BigIntish; borrowShares: BigIntish },
     market: {
@@ -564,6 +578,7 @@ export namespace MarketUtils {
     return MathLib.wDivUp(MathLib.WAD, hf);
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function toSupplyAssets(
     shares: BigIntish,
     market: {
@@ -580,6 +595,7 @@ export namespace MarketUtils {
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function toSupplyShares(
     assets: BigIntish,
     market: {
@@ -596,6 +612,7 @@ export namespace MarketUtils {
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function toBorrowAssets(
     shares: BigIntish,
     market: {
@@ -612,6 +629,7 @@ export namespace MarketUtils {
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function toBorrowShares(
     assets: BigIntish,
     market: {

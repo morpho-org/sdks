@@ -1,10 +1,8 @@
-import { describe, expect } from "vitest";
-import { test } from "./setup.js";
-
 import { ChainId } from "@morpho-org/blue-sdk";
-
 import { vaults } from "@morpho-org/morpho-test";
+import { describe, expect } from "vitest";
 import { fetchAccrualVault, fetchVault } from "../src/index.js";
+import { test } from "./setup.js";
 
 const { steakUsdc } = vaults[ChainId.EthMainnet];
 

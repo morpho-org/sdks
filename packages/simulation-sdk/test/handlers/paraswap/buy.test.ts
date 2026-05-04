@@ -1,7 +1,6 @@
+import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import _ from "lodash";
 import { concat, padHex, parseEther, parseUnits, zeroAddress } from "viem";
-
-import { DEFAULT_SLIPPAGE_TOLERANCE, MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, tokenA, tokenB, userA, userB } from "../../fixtures.js";

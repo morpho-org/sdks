@@ -1,4 +1,4 @@
-import { ChainId, MarketParams, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId, MarketParams } from "@morpho-org/blue-sdk";
 
 import { markets } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";

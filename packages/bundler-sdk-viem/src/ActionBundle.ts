@@ -42,6 +42,7 @@ export class ActionBundle<
     actions?: Action[],
     requirements?: ActionBundleRequirements<TR, SR>,
   );
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     stepsOrChainId: SimulationResult | number,
     public readonly actions: Action[] = [],

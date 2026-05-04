@@ -1,8 +1,7 @@
-import { GraphQLClient } from "graphql-request";
+import type { MarketId } from "@morpho-org/blue-sdk";
 
 import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
-
-import type { MarketId } from "@morpho-org/blue-sdk";
+import { GraphQLClient } from "graphql-request";
 import { getSdk } from "./sdk.js";
 import type { InputMaybe, OrderDirection } from "./types.js";
 

@@ -10,10 +10,10 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   BorrowExceedsSafeLtvError,
-  MissingAccrualPositionError,
-  MorphoClient,
   computeMinBorrowSharePrice,
   isRequirementAuthorization,
+  MissingAccrualPositionError,
+  MorphoClient,
   marketV1Borrow,
 } from "../../../src/index.js";
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";

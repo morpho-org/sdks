@@ -1,5 +1,3 @@
-import { parseEther, parseUnits } from "viem";
-
 import {
   ChainId,
   Market,
@@ -9,9 +7,9 @@ import {
   Vault,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
-
+import { parseEther, parseUnits } from "viem";
+import { describe, expect, test } from "vitest";
 import { SimulationState } from "../src/index.js";
-
 import {
   dataFixture,
   marketA1,
@@ -24,8 +22,6 @@ import {
   vaultA,
   vaultC,
 } from "./fixtures.js";
-
-import { describe, expect, test } from "vitest";
 
 describe("SimulationState", () => {
   describe("with 100% target utilization", () => {
