@@ -371,3 +371,46 @@ Both already practice the conventions this TIB advocates:
 - `packages/morpho-sdk/src/helpers/metadata.test.ts` — `addTransactionMetadata` empty-data short-circuit, timestamp append, origin append (raw hex), origin-with-0x rejection (current implementation behavior), warn-on-invalid-origin, `to`/`value` preservation, combined timestamp + origin layout.
 
 **Out of scope (deferred)**: `morpho-sdk/src/entities/marketV1/marketV1.ts` (1,071 LOC) and the larger `actions/marketV1` / `actions/vaultV1` / `actions/vaultV2` builders are still primarily exercised by fork-bound tests under `packages/morpho-sdk/test/` plus colocated tests that import the fork setup. Their non-fork unit-test extension can land in follow-ups; the conventions are already in place.
+
+### 2026-05-04 — Coverage after implementation
+
+**Author:** @0xbulma
+
+Single-shot run of `pnpm test:coverage --project <each-in-scope> --coverage.reportOnFailure=true`, lcov merged, after Phases 1–9 landed. Local fork tests still fail to RPC rate-limiting; CI numbers are higher.
+
+**Combined (all 10 in-scope projects)**
+
+| Test files (pass / fail) | Tests (pass / fail / skip) | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- | --- |
+| **76 / 63** | **914 / 79 / 3** | **43.76%** | **36.39%** | **47.43%** | **44.07%** |
+
+(Per-project pass/fail breakdown is dominated by fork tests that cannot complete locally.)
+
+**Per-package line coverage (lcov-merged):**
+
+| Package | Lines (LF) | Hit (LH) | Coverage | Δ from baseline |
+| --- | --- | --- | --- | --- |
+| **morpho-ts** | 299 | 288 | **96.32%** | +17.72 pp ✓ Phase 1 target met |
+| **evm-simulation** | 344 | 326 | **94.77%** | (new in scope; no new tests required) |
+| **blue-sdk** | 894 | 722 | **80.76%** | +11.86 pp |
+| **blue-sdk-viem** | 395 | 244 | **61.77%** | +5.01 pp |
+| **bundler-sdk-viem** | 833 | 299 | **35.89%** | +0.62 pp |
+| **liquidity-sdk-viem** | 43 | 13 | 30.23% | denominator fell from 244 → 43 (excludes applied to `api/sdk.ts`, `api/types.ts`, `index.ts`); the underlying loader is still mostly fork-covered |
+| **morpho-sdk** | 873 | 253 | 28.98% | (new in scope; full coverage blocked locally by `MAINNET_RPC_URL`) |
+| **liquidation-sdk-viem** | 350 | 66 | 18.86% | denominator fell from 617 → 350 after excludes; LiquidationEncoder remains the largest gap |
+
+The denominator changes for `liquidity-sdk-viem` and `liquidation-sdk-viem` are the consequence of `coverage.exclude` adding `index.ts`, `abis.ts`, `api/sdk.ts`, `api/types.ts` — exactly what the TIB's "exclude generated files" recommendation called for. The reported percentage moves around, but it now reflects only hand-written code.
+
+**Files moved from 0% in the original baseline to ≥ 90% after implementation** (selection):
+
+- `packages/morpho-ts/src/utils.ts` 0 → 100%
+- `packages/morpho-ts/src/urls.ts` 0 → 100%
+- `packages/morpho-ts/src/format/array.ts` 0 → 100%
+- `packages/morpho-ts/src/format/string.ts` 0 → 100%
+- `packages/blue-sdk/src/holding/AssetBalances.ts` 0 → 100%
+- `packages/blue-sdk/src/token/ExchangeRateWrappedToken.ts` 0 → 100%
+- `packages/blue-sdk/src/vault/VaultUser.ts` 0 → 100%
+- `packages/blue-sdk/src/math/MathLib.ts`, `SharesMath.ts`, `AdaptiveCurveIrmLib.ts` → 100%
+- `packages/blue-sdk/src/errors.ts`, `preLiquidation.ts` → 100%
+
+**Files still at 0% locally that CI is expected to cover via fork tests** (pre-existing fork tests under `test/`): `LiquidationEncoder.ts`, most of `morpho-sdk/src/actions/*` and `morpho-sdk/src/entities/*`, and the larger `MetaMorphoAction.ts`. These are flagged in each phase PR's "Out of scope" section.
