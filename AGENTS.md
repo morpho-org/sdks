@@ -60,7 +60,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 3. `async` in actions; clocks, randomness, network reads, or signing in transaction builders.
 4. Mutation of input arguments.
 5. Deep imports across packages (`from "@morpho-org/foo/src/internal/..."`). Public surface is `src/index.ts`.
-6. Mocked viem clients on code paths that hit RPC. Use Anvil forks via `@morpho-org/test`.
+6. **Mock-only fork paths or fork-only mock paths.** Integration tests that exercise contract round-trips must use Anvil forks via `@morpho-org/test` — not `vi.mock`/`vi.spyOn` of viem's actions, which silently miss when the SDK uses `viem/actions` named imports. **Permitted exception**: pure unit tests for non-fork-bound logic (encoders, deserialization, validation) may inject a mocked transport via `createMockClient` from `@morpho-org/test/mock` (per TIB-2026-04-27). The mock intercepts JSON-RPC at `client.transport`, which is the same surface `viem/actions` reads from, so it's behaviour-faithful. Anvil forks remain mandatory for end-to-end contract verification.
 7. Edits to generated outputs (`src/api/sdk.ts`, anything under `lib/`). Edit the input.
 8. Framework imports (`react`, `wagmi`, `redux`, `ethers`) in core packages.
 9. New runtime dependencies without a package-level reason and a written justification in the PR description.
@@ -117,7 +117,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Test isolation:** deterministic, independent. Use parameterized factories (`randomMarket({ loanToken })`) over hand-rolled fixtures. No cross-test state, no mutating shared fixtures.
 - **Inline snapshots** (`toMatchInlineSnapshot`) for transaction shapes and decoded calldata, seeded as the convention adopts. Re-record only when the change in transaction shape is intended and reviewed in the same PR.
 - **Errors asserted by class identity, not message string** — messages can change without notice; classes are public API.
-- **No mocked viem clients** on RPC paths. Use Anvil forks at pinned blocks. Pure-function tests need neither Anvil nor a viem client.
+- **Mocked viem clients are limited to unit tests via the transport boundary.** Integration / fork tests of contract round-trips use Anvil forks at pinned blocks. Pure-function tests need neither Anvil nor a viem client. Unit tests that need a viem `Client` shape for code that internally calls `viem/actions` (`readContract`, `getChainId`, …) may use `createMockClient` from `@morpho-org/test/mock`, which installs a `vi.fn`-backed `custom()` transport — the same surface `viem/actions` resolves through, so the mock is behaviour-faithful (per TIB-2026-04-27). Do **not** stub `client.readContract` directly with `vi.spyOn`; the actions resolve through `client.transport` and the spy will silently no-op.
 - **Shared test helpers** live in `morpho-test`, `test`, `test-wagmi` — never in published runtime paths of feature packages.
 
 ---

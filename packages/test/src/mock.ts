@@ -47,6 +47,16 @@ export interface MockClientHandle<chain extends Chain = Chain> {
  * The default handler answers `eth_chainId` from the supplied chain and throws
  * for everything else; tests pre-program responses via {@link mockRead} or by
  * mutating `request.mockImplementation` directly.
+ *
+ * @param chain - The viem {@link Chain} the mock client is bound to. The
+ *   chain id is reported via the default `eth_chainId` handler. Defaults
+ *   to `mainnet`.
+ * @returns A {@link MockClientHandle} bundling the constructed `client`,
+ *   the underlying `request` mock (for `vi.fn` assertions), and the
+ *   resolved `chain`.
+ * @throws `Error` from the underlying mock when the caller invokes an RPC
+ *   method that has not been pre-programmed — missing mocks fail loudly
+ *   with the offending method and params in the message.
  */
 export function createMockClient<chain extends Chain = typeof mainnet>(
   chain: chain = mainnet as unknown as chain,
@@ -72,14 +82,34 @@ interface MockReadOptions<
 }
 
 /**
- * Pre-program a single `eth_call` response by `(to, function selector)` on a
- * mock client created via {@link createMockClient}. Subsequent matching calls
- * resolve with the ABI-encoded `result`; non-matching calls throw with an
- * "unhandled" message that includes the function name attempted, so test
- * failures pinpoint the missing mock.
+ * Pre-program an `eth_call` response by `(to, function selector)` on a mock
+ * client created via {@link createMockClient}. Subsequent matching calls
+ * resolve with the ABI-encoded `result`; non-matching calls fall through to
+ * any previously registered mock and ultimately throw with an "unhandled"
+ * message so missing mocks fail loudly.
  *
  * Multiple `mockRead` calls **stack**: the most recent matching mock wins.
  * Mocks set on the same `(address, functionName)` are last-write-wins.
+ *
+ * Overloaded reads (multiple `view`/`pure` functions sharing the same name
+ * but with different argument types) are handled by computing the selector
+ * for **every** same-named ABI entry and matching the call's selector
+ * against the full set. This ensures the mock fires regardless of which
+ * overload `readContract` chose at the call site.
+ *
+ * @param handle - The {@link MockClientHandle} returned by
+ *   {@link createMockClient}.
+ * @param options - The mock target and response.
+ * @param options.address - The contract address that should match the
+ *   `to` field of an `eth_call` (compared case-insensitively).
+ * @param options.abi - The ABI containing the target function.
+ * @param options.functionName - The name of the `view`/`pure` function
+ *   to intercept. All overloads of this name are matched.
+ * @param options.result - The value `eth_call` should return. Encoded
+ *   via viem's `encodeFunctionResult`; the caller is responsible for
+ *   passing a shape matching the function's declared return type.
+ * @throws `Error` if `functionName` is not present in `abi` (function
+ *   typo / wrong abi). The thrown message names the missing function.
  */
 export function mockRead<
   abi extends Abi,
@@ -87,18 +117,23 @@ export function mockRead<
 >(handle: MockClientHandle, options: MockReadOptions<abi, fn>): void {
   const { request } = handle;
   const target = options.address.toLowerCase();
-  // Compute the 4-byte selector once per mock by composing the function
-  // signature with viem's helpers. This avoids repeating expensive ABI
-  // walks on every RPC dispatch.
-  const fnAbi = options.abi.find(
+  // Compute selectors for every same-named overload up front. ABI entries
+  // can declare multiple `view`/`pure` functions with the same name and
+  // different argument types; the caller's `readContract` will pick one
+  // overload, and we have to recognize whichever one it encoded.
+  const fnAbiItems = options.abi.filter(
     (item): item is Extract<typeof item, { type: "function" }> =>
       item.type === "function" && item.name === options.functionName,
   );
-  if (!fnAbi)
+  if (fnAbiItems.length === 0)
     throw new Error(
       `[mockRead] function ${String(options.functionName)} not found in abi`,
     );
-  const selector = toFunctionSelector(toFunctionSignature(fnAbi));
+  const selectors = new Set(
+    fnAbiItems.map((item) =>
+      toFunctionSelector(toFunctionSignature(item)).toLowerCase(),
+    ),
+  );
 
   const previous = request.getMockImplementation();
   request.mockImplementation(async (call) => {
@@ -109,7 +144,8 @@ export function mockRead<
       if (
         tx?.to?.toLowerCase() === target &&
         typeof tx.data === "string" &&
-        tx.data.toLowerCase().startsWith(selector.toLowerCase())
+        // 4-byte selector + leading "0x" = first 10 chars
+        selectors.has(tx.data.slice(0, 10).toLowerCase())
       ) {
         // viem's overloaded encodeFunctionResult signature does not narrow
         // well against a generic abi; tests are responsible for passing a
@@ -130,10 +166,20 @@ export function mockRead<
 }
 
 /**
- * Optional helper: assert that the mocked transport observed exactly one
- * `eth_call` to `(address, functionName)` and return the decoded args. Useful
+ * Inspect the mocked transport's call history for `eth_call`s to a specific
+ * `(address, functionName)` pair and return their decoded arguments. Useful
  * when a test cares less about the response and more about *what* the SDK
  * called and with which arguments.
+ *
+ * @param handle - The {@link MockClientHandle} returned by
+ *   {@link createMockClient}.
+ * @param match - The contract and function to filter on.
+ * @param match.address - Contract address (case-insensitive).
+ * @param match.abi - ABI containing the function.
+ * @param match.functionName - Name of the function whose calls should be
+ *   returned.
+ * @returns An array of decoded call data objects (`{ functionName, args }`)
+ *   in the order the mock observed them. Empty array if no calls matched.
  */
 export function expectReadCall<
   abi extends Abi,

@@ -206,6 +206,38 @@ describe("mockRead", () => {
       }),
     ).toBe(6);
   });
+
+  test("matches every overload of a function name", async () => {
+    // Two overloads of `safeTransferFrom` with different argument lists,
+    // both view (uncommon in practice but exercises the dispatch).
+    const overloadedAbi = parseAbi([
+      "function counter(uint256 a) view returns (uint256)",
+      "function counter(address b) view returns (uint256)",
+    ]);
+    const handle = createMockClient();
+    mockRead(handle, {
+      address: TOKEN,
+      abi: overloadedAbi,
+      functionName: "counter",
+      result: 42n,
+    });
+
+    // Either overload's call data should resolve via the mock.
+    const r1 = await readContract(handle.client, {
+      address: TOKEN,
+      abi: overloadedAbi,
+      functionName: "counter",
+      args: [1n],
+    });
+    const r2 = await readContract(handle.client, {
+      address: TOKEN,
+      abi: overloadedAbi,
+      functionName: "counter",
+      args: [HOLDER],
+    });
+    expect(r1).toBe(42n);
+    expect(r2).toBe(42n);
+  });
 });
 
 describe("expectReadCall", () => {
