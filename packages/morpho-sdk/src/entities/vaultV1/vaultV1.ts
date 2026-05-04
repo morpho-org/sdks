@@ -109,6 +109,9 @@ export interface VaultV1Actions {
    * Redeems all V1 shares and atomically deposits the resulting assets into V2
    * via bundler3. Computes slippage-protected share prices for both legs.
    *
+   * The permit is signed against the V1 vault shares, which always implement
+   * EIP-2612, so `getRequirements` always uses simple permit (no opt-out).
+   *
    * @param {Object} params - The migration parameters.
    * @param {Address} params.userAddress - User address initiating the migration.
    * @param {AccrualVault} params.sourceVault - Pre-fetched V1 vault data.
