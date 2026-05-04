@@ -1,17 +1,16 @@
 import "evm-maths";
-import fetchMock from "fetch-mock";
 
 import {
+  addressesRegistry,
   ChainId,
   type InputMarketParams,
   type MarketId,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import { Time, format } from "@morpho-org/morpho-ts";
-
 import { blueAbi, fetchMarket, fetchToken } from "@morpho-org/blue-sdk-viem";
 import { Flashbots } from "@morpho-org/liquidation-sdk-viem";
+import { format, Time } from "@morpho-org/morpho-ts";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test";
+import fetchMock from "fetch-mock";
 import { erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";
@@ -46,6 +45,7 @@ describe("midas liquidation", () => {
   });
 
   const syncTimestamp = async (client: AnvilTestClient, timestamp?: bigint) => {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     timestamp ??= (await client.timestamp()) + 60n;
 
     vi.useFakeTimers({

@@ -1,11 +1,10 @@
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
+import { decodeAbiParameters, type Hex } from "viem";
 import {
   InvalidMarketParamsError,
   UnknownMarketParamsError,
 } from "../errors.js";
 import type { Address, BigIntish, MarketId } from "../types.js";
-
-import { type Hex, decodeAbiParameters } from "viem";
 import { MarketUtils } from "./MarketUtils.js";
 
 export interface IMarketParams {

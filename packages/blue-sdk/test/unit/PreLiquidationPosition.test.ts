@@ -1,6 +1,7 @@
 import { parseEther, parseUnits } from "viem";
 import { describe, expect, test } from "vitest";
 import {
+  addresses,
   CapacityLimitReason,
   ChainId,
   Market,
@@ -8,7 +9,6 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
   PreLiquidationPosition,
-  addresses,
 } from "../../src/index.js";
 import { PreLiquidationParams } from "../../src/position/index.js";
 

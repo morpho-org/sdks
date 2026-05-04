@@ -1,19 +1,16 @@
-import {
-  MigratableProtocol,
-  SupplyMigrationLimiter,
-  fetchMigratablePositions,
-  migrationAddressesRegistry,
-} from "../../../src/index.js";
-
-import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
-
-import { type Address, maxUint256, parseEther, parseUnits } from "viem";
-
+import { addressesRegistry, ChainId, MathLib } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
+import { type Address, maxUint256, parseEther, parseUnits } from "viem";
 import { sendTransaction } from "viem/actions";
-import { type TestAPI, describe, expect } from "vitest";
+import { describe, expect, type TestAPI } from "vitest";
+import {
+  fetchMigratablePositions,
+  MigratableProtocol,
+  migrationAddressesRegistry,
+  SupplyMigrationLimiter,
+} from "../../../src/index.js";
 import { MigratableBorrowPosition_AaveV3 } from "../../../src/positions/borrow/aaveV3.borrow.js";
 import { MigratableSupplyPosition_AaveV3 } from "../../../src/positions/supply/aaveV3.supply.js";
 import { test } from "../setup.js";
@@ -57,6 +54,7 @@ describe("Supply position on AAVE V3", () => {
       usdc,
     } = addressesRegistry[chainId];
 
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     const writeSupply = async (
       client: ViemTestContext["client"],
       market: Address,

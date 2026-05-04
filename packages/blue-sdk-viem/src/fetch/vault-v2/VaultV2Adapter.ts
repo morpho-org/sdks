@@ -1,6 +1,6 @@
 import {
-  UnsupportedVaultV2AdapterError,
   getChainAddresses,
+  UnsupportedVaultV2AdapterError,
 } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -10,8 +10,10 @@ import {
   morphoVaultV1AdapterFactoryAbi,
 } from "../../abis.js";
 import type { DeploylessFetchParameters } from "../../types.js";
-import { fetchVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter.js";
-import { fetchAccrualVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter.js";
+import {
+  fetchAccrualVaultV2MorphoMarketV1Adapter,
+  fetchVaultV2MorphoMarketV1Adapter,
+} from "./VaultV2MorphoMarketV1Adapter.js";
 import {
   fetchAccrualVaultV2MorphoMarketV1AdapterV2,
   fetchVaultV2MorphoMarketV1AdapterV2,
@@ -21,6 +23,7 @@ import {
   fetchVaultV2MorphoVaultV1Adapter,
 } from "./VaultV2MorphoVaultV1Adapter.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultV2Adapter(
   address: Address,
   client: Client,
@@ -87,6 +90,7 @@ export async function fetchVaultV2Adapter(
   throw new UnsupportedVaultV2AdapterError(address);
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchAccrualVaultV2Adapter(
   address: Address,
   client: Client,

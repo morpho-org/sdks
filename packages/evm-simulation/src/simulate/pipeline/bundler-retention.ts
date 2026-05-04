@@ -1,13 +1,11 @@
 import {
-  UnsupportedChainIdError,
   getChainAddresses,
+  UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, getAddress } from "viem";
-
-import type { SimulationLogger, Transfer } from "../../types.js";
-
 import { BlacklistViolationError } from "../../errors.js";
+import type { SimulationLogger, Transfer } from "../../types.js";
 
 /**
  * Dust tolerance for bundler retention, in raw token units.
@@ -88,6 +86,7 @@ export function assertNoBundlerRetention(
   // Map keyed by (bundler, token) → structured entry. Avoids string parse-back.
   const flow = new Map<string, BundlerEntry>();
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   const recordFlow = (
     address: Address,
     token: Address,

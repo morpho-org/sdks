@@ -1,11 +1,10 @@
 import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
 import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
-
-import { useRef } from "react";
 import {
-  type HoldingParameters,
   fetchHoldingQueryOptions,
+  type HoldingParameters,
 } from "../queries/fetchHolding.js";
 import type { UseCompositeQueriesReturnType } from "../types/index.js";
 import { replaceDeepEqual, uniqBy } from "../utils/index.js";

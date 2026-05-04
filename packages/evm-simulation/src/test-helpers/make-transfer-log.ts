@@ -1,8 +1,6 @@
 import type { Address } from "viem";
-
-import type { RawLog } from "../types.js";
-
 import { TRANSFER_TOPIC } from "../simulate/parsing/transfers.js";
+import type { RawLog } from "../types.js";
 import { encodeUint256 } from "./encode-uint256.js";
 import { padAddress } from "./pad-address.js";
 

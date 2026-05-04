@@ -1,7 +1,6 @@
+import { addressesRegistry, ChainId } from "@morpho-org/blue-sdk";
 import _ from "lodash";
 import { parseUnits, zeroAddress } from "viem";
-
-import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
@@ -213,7 +212,7 @@ describe(type, () => {
       ),
     ).toThrowErrorMatchingInlineSnapshot(
       `
-    [Error: unknown holding of user "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB\" of token \"0x0000000000000000000000000000000000000009"
+    [Error: unknown holding of user "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB" of token "0x0000000000000000000000000000000000000009"
 
     when simulating operation:
     {

@@ -29,6 +29,7 @@ import {
  * `BlacklistViolationError` if bundler retention is detected, or `ExternalServiceError` if
  * both backends are unavailable within the timeout budget.
  */
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function simulate(
   config: SimulationConfig,
   params: SimulateParams,

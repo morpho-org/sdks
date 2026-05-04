@@ -5,10 +5,10 @@ import { describe, expect } from "vitest";
 import {
   MissingAccrualPositionError,
   MorphoClient,
+  marketV1WithdrawCollateral,
   NonPositiveWithdrawCollateralAmountError,
   WithdrawExceedsCollateralError,
   WithdrawMakesPositionUnhealthyError,
-  marketV1WithdrawCollateral,
 } from "../../../src/index.js";
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";

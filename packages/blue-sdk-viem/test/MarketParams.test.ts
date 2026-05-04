@@ -1,16 +1,13 @@
-import { encodeAbiParameters, zeroAddress } from "viem";
-
 import {
+  addressesRegistry,
   ChainId,
   type MarketId,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
-
+import { markets } from "@morpho-org/morpho-test";
+import { encodeAbiParameters, zeroAddress } from "viem";
+import { describe, expect } from "vitest";
 import { MarketParams } from "../src/augment/MarketParams.js";
 import { test } from "./setup.js";
-
-import { markets } from "@morpho-org/morpho-test";
-import { describe, expect } from "vitest";
 
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 

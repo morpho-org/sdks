@@ -111,9 +111,10 @@ export abstract class MigratableBorrowPosition
     this.morphoNonce = config.morphoNonce;
   }
 
-  abstract getLtv(options?: { withdrawn?: bigint; repaid?: bigint }):
-    | bigint
-    | null;
+  abstract getLtv(options?: {
+    withdrawn?: bigint;
+    repaid?: bigint;
+  }): bigint | null;
 
   protected abstract _getMigrationTx(
     args: MigratableBorrowPosition.Args,

@@ -327,6 +327,7 @@ export interface MarketV1Actions {
 }
 
 export class MorphoMarketV1 implements MarketV1Actions {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     private readonly client: MorphoClientType,
     public readonly marketParams: MarketParams,

@@ -1,4 +1,30 @@
 import {
+  convexWrapperTokens,
+  DEFAULT_SLIPPAGE_TOLERANCE,
+  erc20WrapperTokens,
+  getChainAddresses,
+  getUnwrappedToken,
+  MathLib,
+  NATIVE_ADDRESS,
+} from "@morpho-org/blue-sdk";
+import {
+  blueAbi,
+  getAuthorizationTypedData,
+  getDaiPermitTypedData,
+  getPermit2PermitTypedData,
+  getPermitTypedData,
+} from "@morpho-org/blue-sdk-viem";
+import { getValue, Time } from "@morpho-org/morpho-ts";
+import {
+  APPROVE_ONLY_ONCE_TOKENS,
+  getCurrent,
+  MAX_TOKEN_APPROVALS,
+  type MaybeDraft,
+  type Operation,
+  type SimulationState,
+  simulateOperation,
+} from "@morpho-org/simulation-sdk";
+import {
   type Account,
   type Address,
   type Client,
@@ -10,34 +36,6 @@ import {
   verifyTypedData,
   zeroAddress,
 } from "viem";
-
-import {
-  DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
-  NATIVE_ADDRESS,
-  convexWrapperTokens,
-  erc20WrapperTokens,
-  getChainAddresses,
-  getUnwrappedToken,
-} from "@morpho-org/blue-sdk";
-import { Time, getValue } from "@morpho-org/morpho-ts";
-import {
-  APPROVE_ONLY_ONCE_TOKENS,
-  MAX_TOKEN_APPROVALS,
-  type MaybeDraft,
-  type Operation,
-  type SimulationState,
-  getCurrent,
-  simulateOperation,
-} from "@morpho-org/simulation-sdk";
-
-import {
-  blueAbi,
-  getAuthorizationTypedData,
-  getDaiPermitTypedData,
-  getPermit2PermitTypedData,
-  getPermitTypedData,
-} from "@morpho-org/blue-sdk-viem";
 import { signTypedData } from "viem/actions";
 import { ActionBundle, ActionBundleRequirements } from "./ActionBundle.js";
 import { BundlerErrors } from "./errors.js";
@@ -49,6 +47,7 @@ import type {
 
 export const MAX_ABSOLUTE_SHARE_PRICE = 100n * MathLib.RAY;
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 const encodeErc20Approval = (
   token: Address,
   spender: Address,
@@ -57,6 +56,7 @@ const encodeErc20Approval = (
 ) => {
   const { chainId } = data;
 
+  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
   amount = MathLib.min(
     amount,
     MAX_TOKEN_APPROVALS[chainId]?.[token] ?? maxUint256,
@@ -80,6 +80,7 @@ const encodeErc20Approval = (
   return txRequirements;
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const encodeOperation = (
   operation: BundlerOperation,
   dataBefore: MaybeDraft<SimulationState>,
@@ -109,6 +110,7 @@ export const encodeOperation = (
     args: {
       ...operation.args,
       ...(callback && {
+        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
         callback: (dataBefore) => {
           callbackBundle = encodeBundle(
             callback.map((callbackOperation) => ({
@@ -1125,6 +1127,7 @@ export const encodeOperation = (
   };
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export function encodeBundle(
   operations: BundlerOperation[],
   startData: MaybeDraft<SimulationState>,

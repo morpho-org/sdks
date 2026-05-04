@@ -1,12 +1,4 @@
 import {
-  type Address,
-  maxUint256,
-  parseEther,
-  parseUnits,
-  zeroAddress,
-} from "viem";
-
-import {
   ChainId,
   ConstantWrappedToken,
   Holding,
@@ -14,17 +6,24 @@ import {
   MathLib,
   NATIVE_ADDRESS,
   Position,
+  registerCustomAddresses,
   SECONDS_PER_YEAR,
   Token,
   User,
   Vault,
   VaultV2,
   VaultV2MorphoVaultV1Adapter,
-  registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
 import { randomMarket, randomVault } from "@morpho-org/morpho-test";
 import { randomAddress } from "@morpho-org/test";
 import _merge from "lodash/merge.js";
+import {
+  type Address,
+  maxUint256,
+  parseEther,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 
 import { SimulationState } from "../src/index.js";
 

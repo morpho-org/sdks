@@ -12,6 +12,7 @@ export abstract class WrappedToken extends Token {
   }
 
   /** The expected amount when wrapping `unwrappedAmount` */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public toWrappedExactAmountIn(
     unwrappedAmount: bigint,
     slippage = 0n,
@@ -23,6 +24,7 @@ export abstract class WrappedToken extends Token {
   }
 
   /** The amount of unwrappedTokens that should be wrapped to receive `wrappedAmount` */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public toWrappedExactAmountOut(
     wrappedAmount: bigint,
     slippage = 0n,
@@ -38,6 +40,7 @@ export abstract class WrappedToken extends Token {
   }
 
   /** The expected amount when unwrapping `wrappedAmount` */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public toUnwrappedExactAmountIn(
     wrappedAmount: bigint,
     slippage = 0n,
@@ -49,6 +52,7 @@ export abstract class WrappedToken extends Token {
   }
 
   /** The amount of wrappedTokens that should be unwrapped to receive `unwrappedAmount` */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public toUnwrappedExactAmountOut(
     unwrappedAmount: bigint,
     slippage = 0n,

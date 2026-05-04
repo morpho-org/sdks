@@ -1,8 +1,5 @@
-import type { Abi, ContractFunctionArgs, ContractFunctionName } from "viem";
-import { type ReadContractData, readContractQueryOptions } from "wagmi/query";
-import { replaceDeepEqual } from "../utils/index.js";
-
 import { useQueries } from "@tanstack/react-query";
+import type { Abi, ContractFunctionArgs, ContractFunctionName } from "viem";
 import {
   type Config,
   type ResolvedRegister,
@@ -11,6 +8,8 @@ import {
   useChainId,
   useConfig,
 } from "wagmi";
+import { type ReadContractData, readContractQueryOptions } from "wagmi/query";
+import { replaceDeepEqual } from "../utils/index.js";
 
 export type UseReadContractsParameters<
   abi extends Abi | readonly unknown[] = Abi,
@@ -63,11 +62,11 @@ export function useReadContracts<
   return useQueries({
     queries: allParameters.map((parameters) => {
       const { abi, address, functionName, query = {} } = parameters;
-      // @ts-ignore
+      // @ts-expect-error
       const code = parameters.code as Hex | undefined;
 
       const options = readContractQueryOptions<config, abi, functionName, args>(
-        // @ts-ignore
+        // @ts-expect-error
         parameters.config ?? config,
         {
           // biome-ignore lint/suspicious/noExplicitAny: compatible default type

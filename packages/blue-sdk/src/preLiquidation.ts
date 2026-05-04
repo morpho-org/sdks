@@ -86,6 +86,7 @@ export const defaultPreLiquidationParamsRegistry = new Map([
 ]);
 
 export const getDefaultPreLiquidationParams = (lltv: BigIntish) => {
+  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
   lltv = BigInt(lltv);
 
   const defaultParams = defaultPreLiquidationParamsRegistry.get(lltv);

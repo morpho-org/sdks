@@ -9,15 +9,15 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  computeMaxRepaySharePrice,
+  isRequirementApproval,
   MissingAccrualPositionError,
   MorphoClient,
+  marketV1Repay,
   NonPositiveRepayAmountError,
   RepayExceedsDebtError,
   RepaySharesExceedDebtError,
   ShareDivideByZeroError,
-  computeMaxRepaySharePrice,
-  isRequirementApproval,
-  marketV1Repay,
 } from "../../../src/index.js";
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";

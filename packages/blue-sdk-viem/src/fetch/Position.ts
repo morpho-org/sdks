@@ -1,10 +1,10 @@
 import {
   AccrualPosition,
+  getChainAddresses,
   type MarketId,
   Position,
   PreLiquidationParams,
   PreLiquidationPosition,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import type { Address, Client } from "viem";
@@ -14,6 +14,7 @@ import type { DeploylessFetchParameters, FetchParameters } from "../types.js";
 import { readContractRestructured } from "../utils.js";
 import { fetchMarket } from "./Market.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchPosition(
   user: Address,
   marketId: MarketId,
@@ -38,6 +39,7 @@ export async function fetchPosition(
   });
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchPreLiquidationParams(
   preLiquidation: Address,
   client: Client,
@@ -62,6 +64,7 @@ export async function fetchPreLiquidationParams(
   });
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchAccrualPosition(
   user: Address,
   marketId: MarketId,
@@ -78,6 +81,7 @@ export async function fetchAccrualPosition(
   return new AccrualPosition(position, market);
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchPreLiquidationPosition(
   user: Address,
   marketId: MarketId,

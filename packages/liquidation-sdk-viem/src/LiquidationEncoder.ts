@@ -23,8 +23,8 @@ import {
   mkrSkyConverterAbi,
   preLiquidationAbi,
   redemptionVaultAbi,
-  sUsdsAbi,
   spectraPrincipalTokenAbi,
+  sUsdsAbi,
 } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";
@@ -42,6 +42,7 @@ export class LiquidationEncoder<
     Account
   >,
 > extends ExecutorEncoder<client> {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   async handlePendleTokens(
     collateralToken: Address,
     seizedAssets: bigint,
@@ -122,6 +123,7 @@ export class LiquidationEncoder<
     return { srcAmount, srcToken };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   async handleSpectraTokens(
     collateralToken: Address,
     seizedAssets: bigint,
@@ -189,6 +191,7 @@ export class LiquidationEncoder<
    *  Route is USD0USD0++ -> USD0 -> USDC
    * @returns the total swapped USDC amount
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   async curveSwapUsd0Usd0PPForUsdc(
     amount: bigint,
     expectedDestAmount: bigint,
@@ -266,6 +269,7 @@ export class LiquidationEncoder<
    *  Route is USD0++ -> USD0 -> USDC
    * @returns the total swapped USDC amount
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   async swapUSD0PPToUSDC(
     amount: bigint,
     expectedDestAmount: bigint,
@@ -333,6 +337,7 @@ export class LiquidationEncoder<
     return finalUSDCAmount;
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getCurveWithdrawalAmount(
     pool: Address,
     amount: bigint,
@@ -352,6 +357,7 @@ export class LiquidationEncoder<
     });
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getCurveSwapOutputAmountFromInput(
     pool: Address,
     amount: bigint,
@@ -374,6 +380,7 @@ export class LiquidationEncoder<
     });
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getCurveSwapInputAmountFromOutput(
     pool: Address,
     destAmount: bigint,
@@ -405,6 +412,7 @@ export class LiquidationEncoder<
     });
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public removeLiquidityFromCurvePool(
     pool: Address,
     amount: bigint,
@@ -431,6 +439,7 @@ export class LiquidationEncoder<
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public curveSwap(
     pool: Address,
     amount: bigint,
@@ -466,6 +475,7 @@ export class LiquidationEncoder<
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public spectraCurveSwap(
     pool: Address,
     amount: bigint,
@@ -511,6 +521,7 @@ export class LiquidationEncoder<
     });
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public usdsWithdraw(amount: bigint, owner: Address, receiver: Address) {
     this.pushCall(
       mainnetAddresses.sUsds!,
@@ -613,6 +624,7 @@ export class LiquidationEncoder<
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public async handleTokenSwap(
     chainId: ChainId,
     initialSrcToken: Address,
@@ -812,6 +824,7 @@ export class LiquidationEncoder<
     };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   async getRedemptionParams(
     vault: Address,
     tokenOut: Address,
@@ -968,6 +981,7 @@ export class LiquidationEncoder<
     });
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public preLiquidationPreLiquidate(
     preLiquidation: Address,
     borrower: Address,
@@ -975,6 +989,7 @@ export class LiquidationEncoder<
     repaidShares: bigint,
     callbackCalls?: Hex[],
   ) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     callbackCalls ??= [];
     this.pushCall(
       preLiquidation,

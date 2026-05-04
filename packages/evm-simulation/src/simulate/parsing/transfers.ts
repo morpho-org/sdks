@@ -1,4 +1,4 @@
-import { type Hex, getAddress, zeroAddress, zeroHash } from "viem";
+import { getAddress, type Hex, zeroAddress, zeroHash } from "viem";
 
 import type { RawLog, SimulationLogger, Transfer } from "../../types.js";
 
@@ -163,6 +163,7 @@ function isUint256Hex(value: Hex | undefined): value is Hex {
   return typeof value === "string" && value.length === UINT256_HEX_LENGTH;
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 function warnMalformed(
   logger: SimulationLogger | undefined,
   log: RawLog,

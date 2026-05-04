@@ -1,4 +1,4 @@
-import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
+import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 import {
   type IMarketParams,
   MarketParams,
@@ -7,11 +7,11 @@ import {
 import type { AccrualPosition } from "../../position/index.js";
 import type { BigIntish } from "../../types.js";
 import { CapacityLimitReason } from "../../utils.js";
-import { VaultV2Adapter } from "./VaultV2Adapter.js";
 import type {
   IAccrualVaultV2Adapter,
   IVaultV2Adapter,
 } from "./VaultV2Adapter.js";
+import { VaultV2Adapter } from "./VaultV2Adapter.js";
 
 export interface IVaultV2MorphoMarketV1Adapter
   extends Omit<IVaultV2Adapter, "adapterId" | "type"> {
@@ -110,6 +110,7 @@ export class AccrualVaultV2MorphoMarketV1Adapter
   maxWithdraw(data: Hex) {
     const marketId = MarketParams.fromHex(data).id;
     const position = this.positions.find(
+      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
       (position) => position.marketId === marketId,
     );
 

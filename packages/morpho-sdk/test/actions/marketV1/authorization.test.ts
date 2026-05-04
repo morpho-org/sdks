@@ -3,8 +3,8 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  MorphoClient,
   isRequirementAuthorization,
+  MorphoClient,
 } from "../../../src/index.js";
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { supplyCollateral } from "../../helpers/marketV1.js";

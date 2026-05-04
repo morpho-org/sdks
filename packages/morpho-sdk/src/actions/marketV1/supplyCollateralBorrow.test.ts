@@ -1,4 +1,4 @@
-import { MarketParams, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, MarketParams } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, vi } from "vitest";
@@ -8,14 +8,14 @@ import {
 } from "../../../test/fixtures/marketV1.js";
 import { test } from "../../../test/setup.js";
 import {
+  isRequirementApproval,
+  isRequirementSignature,
   NativeAmountOnNonWNativeCollateralError,
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
   NonPositiveMinBorrowSharePriceError,
   ZeroCollateralAmountError,
-  isRequirementApproval,
-  isRequirementSignature,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";

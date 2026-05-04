@@ -1,6 +1,6 @@
-import { type Address, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
+import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
-import { Time, deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type Client, verifyTypedData } from "viem";
 import { signTypedData } from "viem/actions";
 import {

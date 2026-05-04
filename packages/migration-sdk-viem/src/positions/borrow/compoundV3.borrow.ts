@@ -1,12 +1,12 @@
 import {
   DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
   getChainAddresses,
+  MathLib,
 } from "@morpho-org/blue-sdk";
 
 import { blueAbi, getAuthorizationTypedData } from "@morpho-org/blue-sdk-viem";
 import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
-import { Time, format } from "@morpho-org/morpho-ts";
+import { format, Time } from "@morpho-org/morpho-ts";
 import {
   type Account,
   type Address,
@@ -27,7 +27,7 @@ import { getCompoundV3ManagerApprovalMessage } from "../signature/compoundV3.js"
 import {
   type IMigratableBorrowPosition,
   MigratableBorrowPosition,
-} from "./index.js";
+} from "./MigratableBorrowPosition.js";
 
 interface IMigratableBorrowPosition_CompoundV3
   extends Omit<IMigratableBorrowPosition, "protocol"> {
@@ -64,7 +64,10 @@ export class MigratableBorrowPosition_CompoundV3
   getLtv({
     withdrawn = 0n,
     repaid = 0n,
-  }: { withdrawn?: bigint; repaid?: bigint } = {}): bigint | null {
+  }: {
+    withdrawn?: bigint;
+    repaid?: bigint;
+  } = {}): bigint | null {
     const totalCollateralUsd =
       ((this.collateral - withdrawn) * this.collateralPriceUsd) /
       parseUnits("1", this.collateralToken.decimals);

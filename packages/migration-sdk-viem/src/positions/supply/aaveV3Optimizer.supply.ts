@@ -1,17 +1,9 @@
 import {
-  UnsupportedChainIdError,
   getChainAddresses,
+  UnsupportedChainIdError,
 } from "@morpho-org/blue-sdk";
-import { Time } from "@morpho-org/morpho-ts";
-
-import { migrationAddresses } from "../../config.js";
-import {
-  MigratableProtocol,
-  type MigrationTransactionRequirement,
-  SupplyMigrationLimiter,
-} from "../../types/index.js";
-
 import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import {
   type Account,
   type Client,
@@ -21,11 +13,17 @@ import {
 } from "viem";
 import { signTypedData } from "viem/actions";
 import { morphoAaveV3Abi } from "../../abis/aaveV3Optimizer.js";
+import { migrationAddresses } from "../../config.js";
+import {
+  MigratableProtocol,
+  type MigrationTransactionRequirement,
+  SupplyMigrationLimiter,
+} from "../../types/index.js";
 import { getMorphoAaveV3ManagerApprovalTypedData } from "../signature/aaveV3Optimizer.js";
 import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
-} from "./index.js";
+} from "./MigratableSupplyPosition.js";
 
 interface IMigratableSupplyPosition_AaveV3Optimizer
   extends Omit<IMigratableSupplyPosition, "protocol"> {

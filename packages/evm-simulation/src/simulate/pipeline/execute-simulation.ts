@@ -1,12 +1,10 @@
 import type { BlockTag } from "viem";
-
+import { ExternalServiceError, UnsupportedChainError } from "../../errors.js";
 import type {
   RawSimulationResult,
   SimulationConfig,
   SimulationTransaction,
 } from "../../types.js";
-
-import { ExternalServiceError, UnsupportedChainError } from "../../errors.js";
 import { simulateTenderlyRest, simulateV1 } from "../backends/index.js";
 import { resolveChain } from "./resolve-chain.js";
 
