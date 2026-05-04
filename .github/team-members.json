@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Maps GitHub team slugs → member GitHub handles → Slack user IDs. Used by PR notification workflows to route Slack DMs. Team slugs must match @morpho-org/<slug> on GitHub.",
+  "teams": {
+    "curator-team": {
+      "cashd": "U08B2J6D788",
+      "BZahory": "U0AAGS3BJ5D",
+      "haydenshively": "U089XEG69E2"
+    },
+    "markets-team": {
+      "garethfuller": "U08ASENTN3T",
+      "rfviolato": "U08KZ95UW5B",
+      "haydenshively": "U089XEG69E2",
+      "spennyp": "U06QKE1VBA7"
+    },
+    "apps-admins": {
+      "garethfuller": "U08ASENTN3T",
+      "tarikbellamine": "U09CFDG26VA",
+      "0xbulma": "U06BS7VN03W"
+    },
+    "marketing-team": {
+      "zouloux": "U07SMN7425U",
+      "remiroyc": "U08B2J6LCHW",
+      "0xbulma": "U06BS7VN03W"
+    },
+    "product-apps-team": {
+      "batteer": "U05FB0XEM7Y",
+      "100-dro": "U07P4F10L3B"
+    },
+    "apps-tech-leads": {
+      "cashd": "U08B2J6D788",
+      "spennyp": "U06QKE1VBA7",
+      "0xbulma": "U06BS7VN03W"
+    },
+    "apps-maintainers": {
+      "garethfuller": "U08ASENTN3T",
+      "cashd": "U08B2J6D788",
+      "haydenshively": "U089XEG69E2",
+      "spennyp": "U06QKE1VBA7",
+      "0xbulma": "U06BS7VN03W"
+    },
+    "integration-apps-team": {
+      "tomrpl": "U03TC9S0CE4"
+    },
+    "vvrm-team": {
+      "alexbensimon": "U08D4PDSDBQ",
+      "remiroyc": "U08B2J6LCHW",
+      "Foulks-Plb": "U07G2B1ANLW",
+      "0xbulma": "U06BS7VN03W"
+    }
+  },
+  "members": {
+    "batteer": "U05FB0XEM7Y",
+    "rfviolato": "U08KZ95UW5B",
+    "garethfuller": "U08ASENTN3T",
+    "haydenshively": "U089XEG69E2",
+    "Jean-Grimal": "U05A615L5DX",
+    "jonator": "U0AB9SSMSKH",
+    "BZahory": "U0AAGS3BJ5D",
+    "cashd": "U08B2J6D788",
+    "spennyp": "U06QKE1VBA7",
+    "remiroyc": "U08B2J6LCHW",
+    "PierreMorpho": "U08CWP0JQ23",
+    "Foulks-Plb": "U07G2B1ANLW",
+    "alexbensimon": "U08D4PDSDBQ",
+    "zouloux": "U07SMN7425U",
+    "0xbulma": "U06BS7VN03W",
+    "the-real-chrizzo": "U0AGM5D0YAG",
+    "tomrpl": "U03TC9S0CE4",
+    "100-dro": "U07P4F10L3B",
+    "tarikbellamine": "U09CFDG26VA"
+  }
+}
