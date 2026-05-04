@@ -538,7 +538,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     let shares: bigint;
     let transferAmount: bigint;
     let marketForRepay: Market;
-    let sharePriceSlippage = slippageTolerance;
 
     if (isSharesMode) {
       validateRepayShares({
@@ -555,7 +554,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
         Time.s.from.h(2n);
       marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
       transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
-      sharePriceSlippage = 0n;
     } else {
       validateRepayAmount({
         positionData,
@@ -572,7 +570,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
       repayAssets: assets,
       repayShares: shares,
       market: marketForRepay,
-      slippageTolerance: sharePriceSlippage,
+      slippageTolerance,
     });
 
     return {
@@ -721,7 +719,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     let shares: bigint;
     let transferAmount: bigint;
     let marketForRepay: Market;
-    let sharePriceSlippage = slippageTolerance;
 
     // 2h forward accrual upper-bounds the on-chain repay price (shares
     // mode) and the post-repay health check; bundle skims residual back.
@@ -739,7 +736,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
       shares = params.shares;
       marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
       transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
-      sharePriceSlippage = 0n;
     } else {
       validateRepayAmount({
         positionData,
@@ -776,7 +772,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
       repayAssets: assets,
       repayShares: shares,
       market: marketForRepay,
-      slippageTolerance: sharePriceSlippage,
+      slippageTolerance,
     });
 
     return {
