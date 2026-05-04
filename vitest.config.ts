@@ -118,7 +118,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "test",
-          include: ["packages/test/test/**/*.test.ts"],
+          include: [
+            "packages/test/test/**/*.test.ts",
+            "packages/test/src/**/*.test.ts",
+          ],
         },
       },
     ],

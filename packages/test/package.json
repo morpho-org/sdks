@@ -18,12 +18,14 @@
     ".": "./src/index.ts",
     "./vitest": "./src/vitest.ts",
     "./fixtures": "./src/fixtures.ts",
+    "./mock": "./src/mock.ts",
     "./playwright": "./src/playwright.ts"
   },
   "typesVersions": {
     "*": {
       "vitest": ["src/vitest.ts"],
       "fixtures": ["src/fixtures.ts"],
+      "mock": ["src/mock.ts"],
       "playwright": ["src/playwright.ts"]
     }
   },
@@ -74,6 +76,11 @@
         "types": "./lib/esm/fixtures.d.ts",
         "import": "./lib/esm/fixtures.js",
         "require": "./lib/cjs/fixtures.js"
+      },
+      "./mock": {
+        "types": "./lib/esm/mock.d.ts",
+        "import": "./lib/esm/mock.js",
+        "require": "./lib/cjs/mock.js"
       },
       "./playwright": {
         "types": "./lib/esm/playwright.d.ts",
