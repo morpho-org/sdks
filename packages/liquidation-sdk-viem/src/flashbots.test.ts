@@ -71,7 +71,11 @@ describe("Flashbots.sendRawBundle", () => {
     // and assert it matches the account that produced the header — this
     // catches regressions that swap signMessage for signTypedData (etc).
     expect(observedSig).toBeTruthy();
-    const [headerAddress, signature] = observedSig!.split(":") as [string, Hex];
+    const sigParts = observedSig!.split(":");
+    // Pin the exact 2-part shape so a regression that drops the colon
+    // (or doubles it) fails on this check, not on a confusing decode error.
+    expect(sigParts).toHaveLength(2);
+    const [headerAddress, signature] = sigParts as [string, Hex];
     expect(headerAddress).toBe(account.address);
     const recovered = await recoverMessageAddress({
       message: keccak256(stringToBytes(observedRawBody!)),

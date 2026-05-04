@@ -1,6 +1,8 @@
 import { ChainId } from "@morpho-org/blue-sdk";
 import type { SimulationResult } from "@morpho-org/simulation-sdk";
+import { createMockClient } from "@morpho-org/test/mock";
 import type { Address, Hex } from "viem";
+import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { ActionBundle, ActionBundleRequirements } from "./ActionBundle.js";
 import type {
@@ -58,8 +60,6 @@ describe("ActionBundleRequirements", () => {
     // ActionBundleRequirements.sign passes the client through verbatim to
     // each requirement.sign — both stubs ignore the client, so a mocked
     // transport-only handle from createMockClient is sufficient.
-    const { createMockClient } = await import("@morpho-org/test/mock");
-    const { mainnet } = await import("viem/chains");
     const { client } = createMockClient(mainnet);
     const sigs = await r.sign(client);
     expect(sigs).toEqual(["0x01", "0x02"]);

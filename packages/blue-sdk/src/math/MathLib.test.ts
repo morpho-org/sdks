@@ -32,11 +32,11 @@ describe("MathLib.maxUint", () => {
     expect(() => MathLib.maxUint(33)).toThrow(/Invalid number of bits/);
   });
 
-  test("nBits=0 throws via BigInt('0x') (boundary case)", () => {
+  test("nBits=0 throws SyntaxError via BigInt('0x') (boundary case)", () => {
     // Pinned to current behaviour: maxUint(0) calls BigInt("0x"), which
     // throws SyntaxError. If a future refactor adds a guard, this test
-    // should be updated alongside.
-    expect(() => MathLib.maxUint(0)).toThrow();
+    // should be updated alongside (and the new typed-error class pinned).
+    expect(() => MathLib.maxUint(0)).toThrow(SyntaxError);
   });
 });
 

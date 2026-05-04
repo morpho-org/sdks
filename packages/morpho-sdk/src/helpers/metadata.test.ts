@@ -9,10 +9,11 @@ describe("addTransactionMetadata", () => {
     vi.restoreAllMocks();
   });
 
-  test("returns the tx unchanged when data is missing entirely", () => {
+  test("returns the tx unchanged when data is empty (falsy)", () => {
     // The implementation short-circuits on `!data`. The literal "0x" is truthy,
     // so the function still processes it; only an empty/undefined data returns
-    // the input verbatim.
+    // the input verbatim. Casting an empty string to `Hex` mirrors how
+    // upstream code paths treat "missing data" (zero-byte calldata).
     const tx = {
       to: TO,
       value: 0n,

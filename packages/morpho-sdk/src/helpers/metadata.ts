@@ -11,6 +11,13 @@ import type { Metadata } from "../types/index.js";
  * The function ensures that the transaction data is correctly formatted
  * and includes optional metadata elements if provided.
  *
+ * `metadata.origin` accepts either a raw hex string (`"cafe"`) or a
+ * 0x-prefixed hex string (`"0xcafe"`); both produce the same appended
+ * 4-byte origin tag. The 0x prefix is stripped before length-validation,
+ * so an origin of `"0xdeadbeef"` (10 chars including prefix, 8 raw hex
+ * chars) is accepted while `"0xdeadbeef00"` (10 raw hex chars) is rejected
+ * and a warning is logged.
+ *
  * @param {Object} tx - The original transaction object.
  * @param {Hex} tx.data - The existing hex-encoded data for the transaction.
  * @param {bigint} tx.value - The value to be sent with the transaction.

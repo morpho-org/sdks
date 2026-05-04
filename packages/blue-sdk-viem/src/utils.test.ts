@@ -1,4 +1,4 @@
-import { parseAbi, parseUnits } from "viem";
+import { InvalidAddressError, parseAbi, parseUnits } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   restructure,
@@ -77,8 +77,10 @@ describe("safeGetAddress", () => {
     );
   });
 
-  test("throws on a non-address string", () => {
-    expect(() => safeGetAddress("0xnotanaddress")).toThrow();
+  test("throws InvalidAddressError on a non-address string", () => {
+    // Pin viem's typed error class so a regression that swaps to a generic
+    // Error or silently coerces is caught.
+    expect(() => safeGetAddress("0xnotanaddress")).toThrow(InvalidAddressError);
   });
 });
 
@@ -105,6 +107,10 @@ describe("restructure", () => {
   });
 
   test("throws when the function does not exist in the abi", () => {
+    // `restructure` throws a plain Error with a "non-function type"
+    // message because `getAbiItem` returns undefined. Pin the message so
+    // a regression that swaps the throw shape (e.g. silently returning
+    // `{}`) is caught.
     expect(() =>
       restructure([] as never, {
         abi: namedAbi,
@@ -112,7 +118,7 @@ describe("restructure", () => {
         name: "doesNotExist",
         args: [],
       }),
-    ).toThrow();
+    ).toThrow(/non-function type/);
   });
 
   test("throws when ABI outputs lack names", () => {

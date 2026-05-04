@@ -129,28 +129,38 @@ packages/X/
 
 Source uses `import { readContract } from "viem/actions"; readContract(client, args)`. Those action functions read from `client.transport`, not from `client.readContract`. Stubbing client methods with `vi.spyOn` does **not** intercept them. Mock at the transport.
 
-A new shared helper module `packages/test/src/mock.ts` is added and exposed via a new `./mock` sub-export in `packages/test/package.json` (`exports`, `typesVersions`, `publishConfig.exports` — three sites):
+A new shared helper module `packages/test/src/mock.ts` is added and exposed via a new `./mock` sub-export in `packages/test/package.json` (`exports`, `typesVersions`, `publishConfig.exports` — three sites). The shipped API is:
 
 ```ts
-import { type Address, type Chain, createClient, custom, encodeFunctionResult, type Abi } from "viem";
+import { createMockClient, mockRead, expectReadCall } from "@morpho-org/test/mock";
 import { mainnet } from "viem/chains";
-import { vi } from "vitest";
 
-export function createMockClient(chain: Chain = mainnet) {
-  const request = vi.fn(async ({ method, params }) => {
-    if (method === "eth_chainId") return `0x${chain.id.toString(16)}`;
-    throw new Error(`Unhandled RPC ${method} ${JSON.stringify(params)}`);
-  });
-  const client = createClient({ chain, transport: custom({ request }) });
-  return { client, request };
-}
+// `chain` is required (no default) so chainId-validation tests cannot
+// silently drift to a wrong assumption.
+const handle = createMockClient(mainnet);
+// handle: { client, request: Mock<RpcHandler>, chain, dispatch: Map<string, Hex> }
 
-export function mockRead<abi extends Abi>(
-  request: ReturnType<typeof vi.fn>,
-  match: { address: Address; abi: abi; functionName: string },
-  result: unknown,
-): void { /* dispatch eth_call by `to` + selector → encodeFunctionResult */ }
+mockRead(handle, {
+  address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  abi: erc20,
+  functionName: "decimals",
+  result: 6,
+});
+
+// Inspect what the SDK called (filtered by address + functionName,
+// including all overloads of that name).
+const calls = expectReadCall(handle, {
+  address: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+  abi: erc20,
+  functionName: "balanceOf",
+});
 ```
+
+Internals:
+
+- `createMockClient` builds a real viem `Client` over a `vi.fn`-backed `custom()` transport. Pre-handled RPCs: `eth_chainId` (returns the bound chain id) and `eth_call` (dispatched through a `Map<string, Hex>` keyed by `${addressLower}|${selectorLower}`). Every other RPC throws an "unhandled" error so missing mocks fail loudly.
+- `mockRead` ABI-encodes `result` via viem's `encodeFunctionResult` and registers the encoded bytes under one key per same-named ABI entry, so all overloads of `functionName` resolve through the mock regardless of which one the caller's `readContract` selected.
+- `expectReadCall` returns `{ functionName, args }` for every observed `eth_call` matching the `(address, abi, functionName)` triple, in observed order.
 
 Used by every test of `fetch/*.ts`, `queries/*.ts`, augmenters, and encoders that internally call viem actions.
 

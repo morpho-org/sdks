@@ -509,12 +509,15 @@ describe("deepFreeze", () => {
     expect(deepFreeze(undefined)).toBe(undefined);
   });
 
-  test("frozen objects throw on mutation in strict mode", () => {
+  test("frozen objects throw TypeError on mutation in strict mode", () => {
     const obj = { a: 1 };
     deepFreeze(obj);
+    // ESM modules are strict-mode by default, so writing to a frozen
+    // object throws `TypeError`. Pinning the class catches a regression
+    // that downgrades to silent no-op (loose-mode behaviour).
     expect(() => {
       obj.a = 2;
-    }).toThrow();
+    }).toThrow(TypeError);
   });
 
   test("handles primitive scalars without throwing", () => {

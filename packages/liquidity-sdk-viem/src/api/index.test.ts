@@ -1,5 +1,5 @@
 import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
-import { GraphQLClient } from "graphql-request";
+import { ClientError, GraphQLClient } from "graphql-request";
 import nock from "nock";
 import { afterEach, describe, expect, test } from "vitest";
 import { ApiTypes, apiSdk } from "./index.js";
@@ -56,14 +56,17 @@ describe("apiSdk.getMarkets via nock", () => {
     expect(result.markets.items).toEqual([]);
   });
 
-  test("propagates GraphQL errors", async () => {
+  test("propagates GraphQL errors as ClientError", async () => {
     nock(new URL(BLUE_API_GRAPHQL_URL).origin)
       .post("/graphql")
       .reply(200, { errors: [{ message: "boom" }] });
 
+    // graphql-request throws its own typed `ClientError` for response-shaped
+    // errors; pinning the class catches a regression that swaps to a generic
+    // Error or silently swallows the response.
     await expect(
       apiSdk.getMarkets({ chainId: 1, marketIds: [] }),
-    ).rejects.toThrow();
+    ).rejects.toBeInstanceOf(ClientError);
   });
 });
 

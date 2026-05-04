@@ -214,3 +214,72 @@ describe("MetaMorphoAction — calldata invariants", () => {
     expect(a.slice(0, 10)).not.toBe(b.slice(0, 10));
   });
 });
+
+// Security-critical encoder snapshots. These pin the exact calldata
+// produced for each privileged setter, so a regression that swaps in a
+// different ABI (or quietly retypes an argument) is caught byte-for-byte.
+// The snapshots include the 4-byte selector + 32-byte arg(s) ABI-encoded.
+//
+// Note: vitest 4 requires `toMatchInlineSnapshot` to be called via the
+// test-context `expect` injected through the test callback. The parameter
+// is renamed `tExpect` to avoid shadowing the file-level `expect` import
+// (biome `noShadow`).
+describe("MetaMorphoAction — privileged setter calldata snapshots", () => {
+  test("setCurator pins calldata", ({ expect: tExpect }) => {
+    tExpect(MetaMorphoAction.setCurator(ADDR_A)).toMatchInlineSnapshot(
+      `"0xe90956cf0000000000000000000000001111111111111111111111111111111111111111"`,
+    );
+  });
+
+  test("setFee pins calldata", ({ expect: tExpect }) => {
+    tExpect(MetaMorphoAction.setFee(parseEther("0.05"))).toMatchInlineSnapshot(
+      `"0x69fe0e2d00000000000000000000000000000000000000000000000000b1a2bc2ec50000"`,
+    );
+  });
+
+  test("setFeeRecipient pins calldata", ({ expect: tExpect }) => {
+    tExpect(MetaMorphoAction.setFeeRecipient(ADDR_A)).toMatchInlineSnapshot(
+      `"0xe74b981b0000000000000000000000001111111111111111111111111111111111111111"`,
+    );
+  });
+
+  test("setIsAllocator pins calldata", ({ expect: tExpect }) => {
+    tExpect(
+      MetaMorphoAction.setIsAllocator(ADDR_A, true),
+    ).toMatchInlineSnapshot(
+      `"0xb192a84a00000000000000000000000011111111111111111111111111111111111111110000000000000000000000000000000000000000000000000000000000000001"`,
+    );
+  });
+
+  test("submitGuardian pins calldata", ({ expect: tExpect }) => {
+    tExpect(MetaMorphoAction.submitGuardian(ADDR_A)).toMatchInlineSnapshot(
+      `"0x9d6b4a450000000000000000000000001111111111111111111111111111111111111111"`,
+    );
+  });
+
+  test("acceptGuardian pins calldata (no args)", ({ expect: tExpect }) => {
+    tExpect(MetaMorphoAction.acceptGuardian()).toMatchInlineSnapshot(
+      `"0xa5f31d61"`,
+    );
+  });
+
+  test("submitCap pins calldata", ({ expect: tExpect }) => {
+    tExpect(
+      MetaMorphoAction.submitCap(PARAMS, 1_000_000n),
+    ).toMatchInlineSnapshot(
+      `"0x3b24c2bf00000000000000000000000011111111111111111111111111111111111111110000000000000000000000002222222222222222222222222222222222222222000000000000000000000000333333333333333333333333333333333333333300000000000000000000000044444444444444444444444444444444444444440000000000000000000000000000000000000000000000000bef55718ad6000000000000000000000000000000000000000000000000000000000000000f4240"`,
+    );
+  });
+
+  test("acceptCap pins calldata", ({ expect: tExpect }) => {
+    tExpect(MetaMorphoAction.acceptCap(PARAMS)).toMatchInlineSnapshot(
+      `"0x6fda386800000000000000000000000011111111111111111111111111111111111111110000000000000000000000002222222222222222222222222222222222222222000000000000000000000000333333333333333333333333333333333333333300000000000000000000000044444444444444444444444444444444444444440000000000000000000000000000000000000000000000000bef55718ad60000"`,
+    );
+  });
+
+  test("submitMarketRemoval pins calldata", ({ expect: tExpect }) => {
+    tExpect(MetaMorphoAction.submitMarketRemoval(PARAMS)).toMatchInlineSnapshot(
+      `"0x84755b5f00000000000000000000000011111111111111111111111111111111111111110000000000000000000000002222222222222222222222222222222222222222000000000000000000000000333333333333333333333333333333333333333300000000000000000000000044444444444444444444444444444444444444440000000000000000000000000000000000000000000000000bef55718ad60000"`,
+    );
+  });
+});

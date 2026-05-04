@@ -1,5 +1,5 @@
 import nock from "nock";
-import { afterEach, describe, expect, test } from "vitest";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { OneInch } from "./1inch.js";
 import type { SwapParams } from "./types.js";
 
@@ -33,6 +33,7 @@ describe("OneInch URL builders", () => {
 describe("OneInch.fetchSwap via nock", () => {
   afterEach(() => {
     nock.cleanAll();
+    vi.unstubAllEnvs();
   });
 
   test("forwards search params and parses the response on 200", async () => {
@@ -122,29 +123,29 @@ describe("OneInch.fetchSwap via nock", () => {
 
   test("missing API key falls through with 'Bearer undefined' header", async () => {
     let observedAuth: string | undefined;
-    const originalKey = process.env.ONE_INCH_SWAP_API_KEY;
-    delete process.env.ONE_INCH_SWAP_API_KEY;
-    try {
-      nock("https://api.1inch.dev", {
-        reqheaders: {
-          authorization: (val) => {
-            observedAuth = val;
-            return true;
-          },
-        },
-      })
-        .get("/swap/v6.0/1/swap")
-        .query(true)
-        .reply(200, { dstAmount: "1" });
+    // `vi.stubEnv` with `undefined` removes the env var for the duration of
+    // the test; the `afterEach` `vi.unstubAllEnvs()` restores the original.
+    // This avoids mutating `process.env` directly, which leaks across
+    // concurrent tests under vitest's `sequence: { concurrent: true }`.
+    vi.stubEnv("ONE_INCH_SWAP_API_KEY", undefined);
 
-      // No second arg, no env var → apiKey = undefined.
-      await OneInch.fetchSwap(baseParams);
-      // Pinning the current behaviour: helper does not error on missing
-      // key, just sends the literal string "undefined". Documented so a
-      // future security fix that rejects missing keys can update both.
-      expect(observedAuth).toBe("Bearer undefined");
-    } finally {
-      if (originalKey != null) process.env.ONE_INCH_SWAP_API_KEY = originalKey;
-    }
+    nock("https://api.1inch.dev", {
+      reqheaders: {
+        authorization: (val) => {
+          observedAuth = val;
+          return true;
+        },
+      },
+    })
+      .get("/swap/v6.0/1/swap")
+      .query(true)
+      .reply(200, { dstAmount: "1" });
+
+    // No second arg, no env var → apiKey = undefined.
+    await OneInch.fetchSwap(baseParams);
+    // Pinning the current behaviour: helper does not error on missing
+    // key, just sends the literal string "undefined". Documented so a
+    // future security fix that rejects missing keys can update both.
+    expect(observedAuth).toBe("Bearer undefined");
   });
 });

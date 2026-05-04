@@ -1,3 +1,9 @@
+// This module imports `vi` from `vitest` at the top level. That's
+// intentional: `@morpho-org/test`'s `vitest` peer is *optional*, so any
+// production codebase that does not have vitest installed will fail to
+// resolve `@morpho-org/test/mock` at import time — which is exactly what
+// we want, since the mock client is for tests only and must not be loaded
+// in production runtimes. Do not "tree-shake" or move this import.
 import {
   type Abi,
   type Address,
@@ -41,8 +47,16 @@ export interface MockClientHandle<chain extends Chain = Chain> {
   request: Mock<RpcHandler>;
   chain: chain;
   /**
-   * `(addressLower, selectorLower)` → encoded eth_call result. Last-write-
-   * wins on duplicate keys.
+   * Internal `eth_call` dispatch registry. Keys are
+   * `${address.toLowerCase()}|${selector.toLowerCase()}` (selector is the
+   * 4-byte hex prefix `0x` + 8 chars). Values are the encoded `eth_call`
+   * results returned to the caller. Last-write-wins on duplicate keys.
+   *
+   * Only mutate this directly for advanced cases (clearing between phases
+   * of a test). Do **not** hoist a single handle into `beforeAll` and
+   * share it across `test.concurrent`-flagged tests; if entries are
+   * written following a different key format they will silently fail to
+   * match incoming `eth_call`s.
    */
   dispatch: Map<string, Hex>;
 }
@@ -152,7 +166,9 @@ interface MockReadOptions<
  *   {@link createMockClient}.
  * @param options - The mock target and response.
  * @param options.address - The contract address that should match the
- *   `to` field of an `eth_call` (compared case-insensitively).
+ *   `to` field of an `eth_call`. Compared case-insensitively, with **no**
+ *   checksum validation — pass the same checksum-correct address the SDK
+ *   under test uses, or you may hide upstream `getAddress()` bugs.
  * @param options.abi - The ABI containing the target function.
  * @param options.functionName - The name of the `view`/`pure` function
  *   to intercept. All overloads of this name are matched.
@@ -161,6 +177,8 @@ interface MockReadOptions<
  *   passing a shape matching the function's declared return type.
  * @throws `Error` if `functionName` is not present in `abi` (function
  *   typo / wrong abi). The thrown message names the missing function.
+ * @throws `Error` from `encodeFunctionResult` if `options.result` does
+ *   not match the function's declared return shape.
  *
  * @example
  * ```ts
@@ -255,16 +273,34 @@ export function expectReadCall<
   abi extends Abi,
   fn extends ContractFunctionName<abi>,
 >(
-  handle: MockClientHandle,
+  handle: MockClientHandle<Chain>,
   match: { address: Address; abi: abi; functionName: fn },
 ) {
   const targetAddress = match.address.toLowerCase();
+  // Pre-compute selectors for every same-named ABI entry so unrelated
+  // calls to the same address (e.g. a different function on the same
+  // contract) are filtered out *before* decoding. Without this, an
+  // unrelated call whose selector is not in `match.abi` would throw on
+  // `decodeFunctionData` and abort the whole iteration.
+  const selectors = new Set(
+    match.abi
+      .filter(
+        (item): item is Extract<typeof item, { type: "function" }> =>
+          item.type === "function" && item.name === match.functionName,
+      )
+      .map((item) =>
+        toFunctionSelector(toFunctionSignature(item)).toLowerCase(),
+      ),
+  );
   return handle.request.mock.calls.flatMap(([call]) => {
     if (call.method !== "eth_call") return [];
     const [tx] = (call.params ?? []) as [{ to?: Address; data?: Hex }];
     if (tx?.to?.toLowerCase() !== targetAddress) return [];
     if (typeof tx.data !== "string") return [];
-    const decoded = decodeFunctionData({ abi: match.abi, data: tx.data });
-    return decoded.functionName === match.functionName ? [decoded] : [];
+    if (!selectors.has(tx.data.slice(0, 10).toLowerCase())) return [];
+    // Selector matches `match.functionName`, so decode is expected to
+    // succeed. If it doesn't, the caller passed a mismatched abi —
+    // bubble the decode error rather than swallowing it.
+    return [decodeFunctionData({ abi: match.abi, data: tx.data })];
   });
 }

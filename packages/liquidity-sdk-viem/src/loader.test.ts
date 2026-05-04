@@ -41,13 +41,14 @@ describe("LiquidityLoader (constructor + public API)", () => {
     const { client } = createMockClient(mainnet);
     const loader = new LiquidityLoader(client);
     // The loader needs `getBlock` (eth_getBlockByNumber) which the mock
-    // client does not handle by default. The Promise must reject loudly
-    // rather than silently resolving — assert that.
+    // client does not handle by default. Pin the exact error message so a
+    // regression that swaps in a different RPC dependency surfaces here
+    // rather than silently passing on any rejection.
     await expect(
       loader.fetch(
         "0x0000000000000000000000000000000000000000000000000000000000000001" as MarketId,
       ),
-    ).rejects.toThrow();
+    ).rejects.toThrow(/unhandled RPC eth_getBlockByNumber/);
   });
 
   test("accepts maxWithdrawalUtilization override map", () => {

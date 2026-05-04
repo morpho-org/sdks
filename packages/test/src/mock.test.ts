@@ -2,6 +2,7 @@ import {
   type Address,
   decodeFunctionData,
   encodeFunctionData,
+  type Hex,
   parseAbi,
 } from "viem";
 import { readContract } from "viem/actions";
@@ -238,14 +239,12 @@ describe("mockRead", () => {
     expect(r2).toBe(42n);
   });
 
-  test("does NOT match non-view/pure overloads of the same name", async () => {
-    // `counter(uint256)` is view, `counter(address)` is nonpayable.
-    // The TS signature on mockRead's `functionName` only allows view/pure
-    // overloads of the name; the runtime filter mirrors this by including
-    // every entry whose `name === functionName` regardless of mutability,
-    // so the nonpayable selector is also registered. This test pins the
-    // current behaviour: the helper is permissive, callers should not
-    // mock state-mutating overloads.
+  test("registers the nonpayable overload selector too (current permissive behaviour)", async () => {
+    // The TS signature on `mockRead`'s `functionName` only allows view/pure
+    // overloads of the name, but the runtime filter is broader: it includes
+    // every ABI entry whose `name === functionName` regardless of mutability.
+    // This test pins that behaviour by directly invoking `eth_call` with the
+    // nonpayable selector and asserting the dispatch hits.
     const mixedAbi = parseAbi([
       "function counter(uint256 a) view returns (uint256)",
       "function counter(address b) returns (uint256)",
@@ -257,7 +256,7 @@ describe("mockRead", () => {
       functionName: "counter",
       result: 7n,
     });
-    // The view overload still resolves correctly.
+    // The view overload still resolves through readContract.
     expect(
       await readContract(handle.client, {
         address: TOKEN,
@@ -266,6 +265,22 @@ describe("mockRead", () => {
         args: [1n],
       }),
     ).toBe(7n);
+    // The nonpayable selector is also registered. Hand-craft an eth_call
+    // for the `counter(address)` selector and assert it hits the dispatch
+    // (no "unhandled RPC" error). If a future refactor narrows the runtime
+    // filter to view/pure only, this call will start throwing and this test
+    // should be flipped to assert rejection.
+    const nonpayableCallData = encodeFunctionData({
+      abi: mixedAbi,
+      functionName: "counter",
+      args: [HOLDER],
+    });
+    const result = (await handle.client.request({
+      method: "eth_call",
+      params: [{ to: TOKEN, data: nonpayableCallData }, "latest"],
+    })) as Hex;
+    // 7n encoded as uint256 = 32 bytes of 0 with trailing 7.
+    expect(BigInt(result)).toBe(7n);
   });
 });
 
