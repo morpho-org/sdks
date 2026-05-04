@@ -108,13 +108,11 @@ graph TD
 
 Pick whichever style best represents the change. Do NOT include both unless
 the PR genuinely covers both cases.]
-
-<!--
-Always use `graph LR` for transaction flows (left-to-right = temporal order)
-and `graph TD` for architecture diagrams (top-down = dependency direction).
 ````
 
--->
+> **Diagram style note (for the agent — do not copy into the PR body):**
+> Always use `graph LR` for transaction flows (left-to-right = temporal order)
+> and `graph TD` for architecture diagrams (top-down = dependency direction).
 
 ## DevEx (optional)
 

@@ -26,17 +26,24 @@ You are helping the user add a changeset for the changes on their current branch
 
 ### Step 1: Identify Changed Packages
 
-Determine which packages under `packages/*` have source changes vs. `origin/main`:
+Resolve the PR's base branch first — this repo releases from both `main` and `next`, so always diff against the actual target, not a hardcoded `main`:
 
 ```bash
-git fetch origin main
-git diff --name-only origin/main...HEAD -- 'packages/*' | awk -F/ '{print $2}' | sort -u
+BASE_BRANCH=$(gh pr view --json baseRefName --jq .baseRefName 2>/dev/null \
+  || gh repo view --json defaultBranchRef --jq .defaultBranchRef.name)
+git fetch origin "$BASE_BRANCH"
+```
+
+Determine which packages under `packages/*` have source changes vs. that base:
+
+```bash
+git diff --name-only "origin/$BASE_BRANCH...HEAD" -- 'packages/*' | awk -F/ '{print $2}' | sort -u
 ```
 
 For each candidate package, ignore changes that don't affect published output (tests, fixtures, internal docs). Skim the diff to confirm whether the change is publishable:
 
 ```bash
-git diff origin/main...HEAD -- packages/<name>
+git diff "origin/$BASE_BRANCH...HEAD" -- packages/<name>
 ```
 
 If no package has publishable changes, this is a docs/chore PR — go to Step 4 (empty changeset).
