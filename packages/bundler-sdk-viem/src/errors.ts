@@ -8,6 +8,7 @@ import type { ActionType, InputBundlerOperation } from "./types/index.js";
 
 export namespace BundlerErrors {
   export class Bundle extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly error: Error,
       public readonly index: number,

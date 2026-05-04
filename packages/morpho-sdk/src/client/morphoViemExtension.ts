@@ -3,32 +3,38 @@ import type { Metadata } from "../types/index.js";
 import { MorphoClient } from "./morphoClient.js";
 
 /**
- * Morpho extension for viem clients.
- * Adds `morpho` namespace with `vaultV1` and `vaultV2` accessors.
+ * Returns a viem `extend(...)` function that adds a `morpho` namespace to a viem client. The
+ * namespace exposes a `MorphoClient` instance built from the same client and the supplied
+ * options.
  *
- * @param metadata - (Optional) Metadata appended to all transactions for analytics.
- * @param supportSignature - (Optional) Enable off-chain permit/permit2 approvals.
- * @param supportDeployless - (Optional) Enable deployless reads for on-chain data fetching.
- * @returns Extension function that adds morpho namespace to viem clients.
- *
+ * @param _options - Optional SDK-wide options forwarded to the inner `MorphoClient`.
+ * @param _options.metadata - Optional analytics metadata applied to every transaction the
+ *   resulting `MorphoClient` builds.
+ * @param _options.supportSignature - Whether the integrator can collect EIP-712 signatures for
+ *   permit / permit2.
+ * @param _options.supportDeployless - Whether entity fetchers may use deployless multicall.
+ * @returns A viem extension function — `client.extend(morphoViemExtension(...))` adds
+ *   `client.morpho`.
  * @example
  * ```ts
- * import { createWalletClient, http } from 'viem';
- * import { mainnet } from 'viem/chains';
- * import { morphoViemExtension } from '@morpho-org/morpho-sdk';
+ * import { createWalletClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
  *
  * const client = createWalletClient({
  *   chain: mainnet,
  *   transport: http(),
- *   account: '0x...',
- * }).extend(morphoViemExtension());
+ *   account: user,
+ * }).extend(morphoViemExtension({ supportSignature: true }));
  *
- * // VaultV1 (MetaMorpho)
- * const vaultV1 = client.morpho.vaultV1('0x...', 1);
- * const depositV1 = await vaultV1.deposit({ amount: 1000000000000000000n, userAddress: '0x...' });
- *
- * // VaultV2
- * const vaultV2 = client.morpho.vaultV2('0x...', 1);
+ * const vault = client.morpho.vaultV1(vaultAddress, 1);
+ * const accrualVault = await vault.getData();
+ * const { buildTx } = vault.deposit({
+ *   amount: 1_000_000n,
+ *   userAddress: user,
+ *   accrualVault,
+ * });
+ * const tx = buildTx();
  * ```
  */
 export function morphoViemExtension(_options?: {

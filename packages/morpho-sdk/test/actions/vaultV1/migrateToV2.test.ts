@@ -1,11 +1,11 @@
-import { MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  MorphoClient,
   isRequirementApproval,
   isRequirementSignature,
+  MorphoClient,
   vaultV1MigrateToV2,
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
@@ -38,9 +38,11 @@ describe("MigrateToV2 VaultV1", () => {
       vault: {
         chainId: mainnet.id,
         address: SteakhouseUsdcVaultV1.address,
+        asset: SteakhouseUsdcVaultV1.asset,
       },
       args: {
         targetVault: KeyrockUsdcVaultV2.address,
+        targetAsset: KeyrockUsdcVaultV2.asset,
         shares,
         minSharePriceVaultV1: tx_1.action.args.minSharePriceVaultV1,
         maxSharePriceVaultV2: tx_1.action.args.maxSharePriceVaultV2,

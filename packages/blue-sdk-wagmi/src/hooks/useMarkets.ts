@@ -5,8 +5,8 @@ import { useRef } from "react";
 import type { UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 import {
-  type MarketParameters,
   fetchMarketQueryOptions,
+  type MarketParameters,
 } from "../queries/fetchMarket.js";
 import type { UseIndexedQueriesReturnType } from "../types/index.js";
 import { replaceDeepEqual } from "../utils/index.js";

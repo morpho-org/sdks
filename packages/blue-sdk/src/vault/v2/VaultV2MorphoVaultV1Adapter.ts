@@ -1,4 +1,4 @@
-import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
+import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 
 import { VaultV2Adapter } from "./VaultV2Adapter.js";
 
@@ -57,6 +57,7 @@ export class AccrualVaultV2MorphoVaultV1Adapter
   extends VaultV2MorphoVaultV1Adapter
   implements IAccrualVaultV2MorphoVaultV1Adapter, IAccrualVaultV2Adapter
 {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     adapter: IAccrualVaultV2MorphoVaultV1Adapter,
     public accrualVaultV1: AccrualVault,

@@ -1,5 +1,3 @@
-import { parseEther, parseUnits } from "viem";
-
 import {
   ChainId,
   Market,
@@ -9,9 +7,9 @@ import {
   Vault,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
-
+import { parseEther, parseUnits } from "viem";
+import { describe, expect, test } from "vitest";
 import { SimulationState } from "../src/index.js";
-
 import {
   dataFixture,
   marketA1,
@@ -24,8 +22,6 @@ import {
   vaultA,
   vaultC,
 } from "./fixtures.js";
-
-import { describe, expect, test } from "vitest";
 
 describe("SimulationState", () => {
   describe("with 100% target utilization", () => {
@@ -463,6 +459,38 @@ describe("SimulationState", () => {
       expect(data.getMarket(marketA3.id).liquidity).toEqual(
         dataFixture.getMarket(marketA3.id).liquidity,
       );
+    });
+  });
+
+  describe("reallocatableVaults address casing", () => {
+    const targetUtilization = parseEther("1");
+
+    test("should match vaults regardless of caller-provided casing", () => {
+      const expected = dataFixture.getMarketPublicReallocations(marketA1.id, {
+        defaultMaxWithdrawalUtilization: targetUtilization,
+      });
+
+      const lowerCased = dataFixture.getMarketPublicReallocations(marketA1.id, {
+        defaultMaxWithdrawalUtilization: targetUtilization,
+        reallocatableVaults: [
+          vaultA.address.toLowerCase() as typeof vaultA.address,
+          vaultC.address.toLowerCase() as typeof vaultC.address,
+        ],
+      });
+
+      expect(lowerCased.withdrawals).toEqual(expected.withdrawals);
+    });
+
+    test("should ignore unknown vaults instead of throwing", () => {
+      const { withdrawals } = dataFixture.getMarketPublicReallocations(
+        marketA1.id,
+        {
+          defaultMaxWithdrawalUtilization: targetUtilization,
+          reallocatableVaults: [randomAddress()],
+        },
+      );
+
+      expect(withdrawals).toEqual([]);
     });
   });
 });

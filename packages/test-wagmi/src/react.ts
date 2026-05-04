@@ -1,20 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  configure,
   type Queries,
+  type queries,
   type RenderHookOptions,
   type RenderOptions,
-  configure,
-  type queries,
   render as rtl_render,
   renderHook as rtl_renderHook,
   waitFor as rtl_waitFor,
   type waitForOptions,
 } from "@testing-library/react";
 import {
+  createElement,
   type FunctionComponent,
   type ReactElement,
   type ReactNode,
-  createElement,
 } from "react";
 import type { Chain, Transport } from "viem";
 import { type Config, WagmiProvider } from "wagmi";
@@ -22,6 +22,7 @@ import { type Config, WagmiProvider } from "wagmi";
 configure({ asyncUtilTimeout: 5_000 });
 
 // biome-ignore lint/suspicious/noExplicitAny: test utility
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export function createWrapper<TComponent extends FunctionComponent<any>>(
   Wrapper: TComponent,
   props: Parameters<TComponent>[0],
@@ -52,8 +53,10 @@ export function renderHook<
     chains[number]["id"],
     Transport
   >,
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 >(
   config: Config<chains, transports>,
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   render: (props: Props) => Result,
   options?: RenderHookOptions<Props, Q> & { queryClient?: QueryClient },
 ) {
@@ -79,6 +82,7 @@ export function render<
     chains[number]["id"],
     Transport
   >,
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 >(
   config: Config<chains, transports>,
   element: ReactElement,

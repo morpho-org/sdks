@@ -1,12 +1,12 @@
 import {
   AccrualVaultV2,
+  addressesRegistry,
   CapacityLimitReason,
   MarketParams,
   MathLib,
   VaultV2MorphoMarketV1Adapter,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import type { AnvilTestClient } from "@morpho-org/test";
 import {

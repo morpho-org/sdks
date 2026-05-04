@@ -1,4 +1,4 @@
-import { type Hex, formatUnits } from "viem";
+import { formatUnits, type Hex } from "viem";
 import type { Address, MarketId } from "./types.js";
 
 export class InvalidMarketParamsError extends Error {
@@ -64,6 +64,7 @@ export namespace BlueErrors {
   }
 
   export class InvalidInterestAccrual extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly marketId: MarketId,
       public readonly timestamp: bigint,
@@ -123,6 +124,7 @@ export namespace BlueErrors {
 
 export namespace VaultV2Errors {
   export class InvalidInterestAccrual extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly vault: Address,
       public readonly timestamp: bigint,

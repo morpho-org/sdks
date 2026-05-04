@@ -206,8 +206,10 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return new AccrualPosition(this, this._market.accrueInterest(timestamp));
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public supply(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     ({ market, assets, shares } = market.supply(assets, shares, timestamp));
 
     const position = new AccrualPosition(this, market);
@@ -217,8 +219,10 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public withdraw(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     ({ market, assets, shares } = market.withdraw(assets, shares, timestamp));
 
     const position = new AccrualPosition(this, market);
@@ -263,11 +267,13 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return position;
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public borrow(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
     if (market.price == null)
       throw new BlueErrors.UnknownOraclePrice(market.id);
 
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     ({ market, assets, shares } = market.borrow(assets, shares, timestamp));
 
     const position = new AccrualPosition(this, market);
@@ -280,8 +286,10 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     return { position, assets, shares };
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public repay(assets: bigint, shares: bigint, timestamp?: BigIntish) {
     let { _market: market } = this;
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     ({ market, assets, shares } = market.repay(assets, shares, timestamp));
 
     const position = new AccrualPosition(this, market);
@@ -314,6 +322,7 @@ export class AccrualPosition extends Position implements IAccrualPosition {
     );
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getMaxCapacities(
     loanTokenBalance: bigint,
     collateralTokenBalance: bigint,

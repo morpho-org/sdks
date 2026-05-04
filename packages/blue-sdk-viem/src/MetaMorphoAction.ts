@@ -1,5 +1,5 @@
 import type { InputMarketParams, MarketId } from "@morpho-org/blue-sdk";
-import { type Address, type Hex, encodeFunctionData } from "viem";
+import { type Address, encodeFunctionData, type Hex } from "viem";
 import { metaMorphoAbi } from "./abis.js";
 
 export type MetaMorphoCall = Hex;
@@ -298,6 +298,7 @@ export namespace MetaMorphoAction {
    * @param receiver The address of the receiver of the assets.
    * @param owner The address of the owner of the shares to redeem.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function withdraw(
     assets: bigint,
     receiver: Address,
@@ -316,6 +317,7 @@ export namespace MetaMorphoAction {
    * @param receiver The address of the receiver of the assets.
    * @param owner The address of the owner of the shares to redeem.
    */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function redeem(
     shares: bigint,
     receiver: Address,

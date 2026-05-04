@@ -20,6 +20,7 @@ export interface PartialApiToken
     "address" | "decimals" | "symbol" | "priceUsd"
   > {}
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function getPositions(
   client: Client<Transport, Chain, Account>,
   chainId: ChainId,
@@ -52,6 +53,7 @@ export async function getPositions(
   };
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 async function getLiquidatablePositions(
   client: Client<Transport, Chain, Account>,
   chainId: ChainId,

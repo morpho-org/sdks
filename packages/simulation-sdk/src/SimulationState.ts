@@ -1,4 +1,5 @@
 import {
+  _try,
   AccrualPosition,
   AccrualVault,
   AccrualVaultV2,
@@ -6,6 +7,7 @@ import {
   type Address,
   AssetBalances,
   ChainId,
+  getChainAddresses,
   type Holding,
   type Market,
   type MarketId,
@@ -28,17 +30,15 @@ import {
   type VaultV2Adapter,
   VaultV2MorphoVaultV1Adapter,
   WrappedToken,
-  _try,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import {
-  Time,
-  ZERO_ADDRESS,
   bigIntComparator,
   isDefined,
   keys,
+  Time,
   values,
+  ZERO_ADDRESS,
 } from "@morpho-org/morpho-ts";
 import {
   UnknownHoldingError,
@@ -411,6 +411,7 @@ export class SimulationState implements InputSimulationState {
     return _try(this.getAccrualVaultV2.bind(this, address), UnknownDataError);
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getBundleBalance(
     user: Address,
     token: Address,
@@ -424,6 +425,7 @@ export class SimulationState implements InputSimulationState {
       const {
         bundler3: { generalAdapter1 },
       } = getChainAddresses(this.chainId);
+      // biome-ignore lint/nursery/noFloatingPromises: TODO await or void this promise
       _try(() => {
         balance += this.getHolding(generalAdapter1, token).balance;
       }, UnknownDataError);
@@ -432,6 +434,7 @@ export class SimulationState implements InputSimulationState {
     }, UnknownDataError);
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getBundleMaxBalance(
     user: Address,
     token: Address,
@@ -448,6 +451,7 @@ export class SimulationState implements InputSimulationState {
       .reduce((acc, { dstAmount }) => acc + dstAmount, 0n);
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getBundleMaxCapacities(
     user: Address,
     marketId: MarketId,
@@ -482,6 +486,7 @@ export class SimulationState implements InputSimulationState {
     }, UnknownDataError);
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   public getBundleAssetBalances(
     user: Address,
     token: Address,
@@ -506,6 +511,7 @@ export class SimulationState implements InputSimulationState {
 
       if (!wrappedToken) return balances;
 
+      // biome-ignore lint/nursery/noFloatingPromises: TODO await or void this promise
       _try(() => {
         if (wrappedToken instanceof VaultToken) return;
 
@@ -538,6 +544,7 @@ export class SimulationState implements InputSimulationState {
         wNative != null &&
         stEth != null
       ) {
+        // biome-ignore lint/nursery/noFloatingPromises: TODO await or void this promise
         _try(() => {
           const wEthBalance = this.getBundleBalance(user, wNative);
 
@@ -561,6 +568,7 @@ export class SimulationState implements InputSimulationState {
           }
         }, UnknownDataError);
 
+        // biome-ignore lint/nursery/noFloatingPromises: TODO await or void this promise
         _try(() => {
           const ethBalance = this.getBundleBalance(user, NATIVE_ADDRESS);
 
@@ -585,6 +593,7 @@ export class SimulationState implements InputSimulationState {
         }, UnknownDataError);
       }
 
+      // biome-ignore lint/nursery/noFloatingPromises: TODO await or void this promise
       _try(() => {
         if (!(wrappedToken instanceof VaultToken)) return;
 
@@ -637,7 +646,7 @@ export class SimulationState implements InputSimulationState {
     marketId: MarketId,
     {
       enabled = true,
-      reallocatableVaults = keys(this.vaultMarketConfigs),
+      reallocatableVaults,
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
       delay = Time.s.from.h(1n),
@@ -645,8 +654,20 @@ export class SimulationState implements InputSimulationState {
   ) {
     if (!enabled) return { withdrawals: [], data: this };
 
+    const configuredVaults = keys(this.vaultMarketConfigs);
+    // EVM addresses are case-insensitive; resolve caller casing back to the stored key.
+    const vaultKeyByLower = new Map<string, Address>(
+      configuredVaults.map((k) => [k.toLowerCase(), k]),
+    );
+
     // Filter the vaults that have the market enabled and configured on the PublicAllocator.
-    reallocatableVaults = reallocatableVaults.filter((vault) => {
+    reallocatableVaults = Array.from(
+      new Set(
+        (reallocatableVaults ?? configuredVaults)
+          .map((v) => vaultKeyByLower.get(v.toLowerCase()))
+          .filter(isDefined),
+      ),
+    ).filter((vault) => {
       const vaultMarketConfig = this.vaultMarketConfigs[vault]?.[marketId];
 
       return (
@@ -660,6 +681,7 @@ export class SimulationState implements InputSimulationState {
 
     const _getMarketPublicReallocations = () => {
       const vaultWithdrawals = reallocatableVaults
+        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
         .map((vault) =>
           _try(() => {
             const { cap, pendingCap, publicAllocatorConfig } =
@@ -732,6 +754,7 @@ export class SimulationState implements InputSimulationState {
           }, UnknownDataError),
         )
         .filter(
+          // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
           (vaultWithdrawals) =>
             vaultWithdrawals?.largestWithdrawal != null &&
             vaultWithdrawals.largestWithdrawal.assets > 0n,
@@ -739,6 +762,7 @@ export class SimulationState implements InputSimulationState {
         // Sort by decreasing reallocatable liquidity.
         .sort(
           bigIntComparator(
+            // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
             (vaultWithdrawals) => vaultWithdrawals!.largestWithdrawal!.assets,
             "desc",
           ),

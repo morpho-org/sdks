@@ -1,6 +1,6 @@
-import { type Address, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
+import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
-import { Time, deepFreeze } from "@morpho-org/morpho-ts";
+import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type Client, verifyTypedData } from "viem";
 import { signTypedData } from "viem/actions";
 import {
@@ -11,6 +11,7 @@ import {
   type Requirement,
 } from "../../../types/index.js";
 
+/** Parameters for {@link encodeErc20Permit2}. */
 interface EncodeErc20Permit2Params {
   token: Address;
   amount: bigint;
@@ -19,6 +20,38 @@ interface EncodeErc20Permit2Params {
   expiration: bigint;
 }
 
+/**
+ * Builds a Permit2 `Requirement` that, once signed, lets `GeneralAdapter1` pull `amount` of
+ * `token` via the Permit2 contract.
+ *
+ * The Permit2 spender is hardcoded to `GeneralAdapter1` for the resolved chain — never another
+ * address — otherwise the resulting signature could be reused independently of the Morpho
+ * bundle. Deadline defaults to two hours from `Time.timestamp()`.
+ *
+ * @param params - Permit2 encoding parameters.
+ * @param params.token - ERC-20 token address.
+ * @param params.amount - Permit2 allowance amount (per-call).
+ * @param params.chainId - Target chain id (resolves `GeneralAdapter1`).
+ * @param params.nonce - The user's current Permit2 nonce for `(token, GeneralAdapter1)`.
+ * @param params.expiration - Permit2-managed allowance expiration timestamp.
+ * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
+ * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
+ * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
+ * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
+ * @example
+ * ```ts
+ * import { encodeErc20Permit2 } from "@morpho-org/morpho-sdk";
+ *
+ * const requirement = encodeErc20Permit2({
+ *   token: USDC,
+ *   amount: 1_000_000n,
+ *   chainId: 1,
+ *   nonce: 0n,
+ *   expiration: 281_474_976_710_655n, // MAX_UINT_48 (2^48 - 1, effectively indefinite)
+ * });
+ * // requirement satisfies Requirement
+ * ```
+ */
 export const encodeErc20Permit2 = (
   params: EncodeErc20Permit2Params,
 ): Requirement => {

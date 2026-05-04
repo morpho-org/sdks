@@ -2,7 +2,7 @@ import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { MorphoClient, isRequirementApproval } from "../../src/index.js";
+import { isRequirementApproval, MorphoClient } from "../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
 import { test } from "../setup.js";

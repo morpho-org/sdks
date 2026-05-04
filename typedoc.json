@@ -1,0 +1,30 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": [
+    "packages/morpho-sdk/src/index.ts",
+    "packages/evm-simulation/src/index.ts",
+    "packages/blue-sdk/src/index.ts",
+    "packages/simulation-sdk/src/index.ts",
+    "packages/blue-sdk-viem/src/index.ts",
+    "packages/bundler-sdk-viem/src/index.ts",
+    "packages/liquidation-sdk-viem/src/index.ts",
+    "packages/liquidity-sdk-viem/src/index.ts",
+    "packages/migration-sdk-viem/src/index.ts",
+    "packages/blue-sdk-wagmi/src/index.ts",
+    "packages/simulation-sdk-wagmi/src/index.ts",
+    "packages/morpho-ts/src/index.ts"
+  ],
+  "out": "docs/api",
+  "exclude": [
+    "**/*.test.ts",
+    "**/internal/**",
+    "**/api/sdk.ts",
+    "**/api/types.ts",
+    "**/lib/**"
+  ],
+  "excludeInternal": true,
+  "validation": {
+    "notDocumented": true
+  },
+  "readme": "none"
+}

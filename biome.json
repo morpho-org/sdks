@@ -1,14 +1,15 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.3/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.14/schema.json",
   "files": {
-    "ignore": [
-      "lib",
-      ".vscode",
-      "cache",
-      "coverage",
-      "artifacts",
-      "packages/liquidation-sdk-viem/src/api/sdk.ts",
-      "packages/liquidity-sdk-viem/src/api/sdk.ts"
+    "includes": [
+      "**",
+      "!**/lib",
+      "!**/.vscode",
+      "!**/cache",
+      "!**/coverage",
+      "!**/artifacts",
+      "!**/packages/liquidation-sdk-viem/src/api/sdk.ts",
+      "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
     ]
   },
   "formatter": {
@@ -17,16 +18,15 @@
     "indentStyle": "space",
     "indentWidth": 2
   },
-  "organizeImports": {
-    "enabled": true
-  },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
   "linter": {
     "enabled": true,
     "rules": {
       "recommended": true,
       "complexity": {
         "noForEach": "off",
-        "noBannedTypes": "off"
+        "noBannedTypes": "off",
+        "useMaxParams": { "level": "error", "options": { "max": 2 } }
       },
       "correctness": {
         "noUnusedImports": "error",
@@ -34,15 +34,24 @@
         "useExhaustiveDependencies": "error"
       },
       "style": {
-        "noParameterAssign": "off",
+        "noParameterAssign": "error",
         "useBlockStatements": "off",
         "noUnusedTemplateLiteral": "off",
-        "noNonNullAssertion": "off"
+        "noNonNullAssertion": "off",
+        "noUselessElse": "error"
       },
       "suspicious": {
         "useGetterReturn": "off",
         "noAssignInExpressions": "off",
-        "noFallthroughSwitchClause": "off"
+        "noFallthroughSwitchClause": "off",
+        "noNonNullAssertedOptionalChain": "off",
+        "useIterableCallbackReturn": "off"
+      },
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "useExhaustiveSwitchCases": "error",
+        "noShadow": "error"
       }
     }
   }
