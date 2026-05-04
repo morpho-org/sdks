@@ -34,11 +34,6 @@ Conflicts:
 - `--local` + `<PR_NUMBER>` → warn `<PR_NUMBER> ignored — --local is set`, drop `<PR_NUMBER>`.
 - `--local` while `CI=true`/`GITHUB_ACTIONS=true` → `--local` always wins (explicit user intent over env detection).
 
-### Environment variables
-
-| Variable | Effect |
-|---|---|
-| `PR_REVIEW_FIX_BYPASS_STALE_STASH=1` | `--local --fix` only: bypass the pre-flight stale-stash safety check (Step 7 alt 2b Check 1). Use when a deliberately-named user stash with the exact subject `pr-review --local --fix safety stash` is present and the user has confirmed it isn't an orphan from a crashed run. Default: unset (= safety check enforced). |
 
 ## Examples
 
@@ -63,8 +58,6 @@ The `--local` flow is stateless and emits a single grep-able sentinel per outcom
 | `--fix` happy path | `Sentinel: FIX_DONE_LOCAL — <X> applied, <Y> skipped (Local-only, unstaged).` plus `git diff` shows the unstaged edits. |
 | `--fix` with stash-pop conflict | `Sentinel: FIX_DONE_WITH_STASH_CONFLICTS — <X> applied, stash@{0} unpopped due to conflicts in <files>.` |
 | `--fix` aborted before any edit | `Sentinel: FIX_ABORTED — <reason>.` |
-
-**Caveat (idempotency boundary):** the diff-derived inputs and sentinel structure are deterministic across runs, but Step 5 launches LLM-backed agents whose finding wording can drift even when the diff is byte-identical. Re-runs should produce the SAME sentinel and the SAME counts; finding *text* may vary.
 
 ## Documentation Reference
 
@@ -588,7 +581,7 @@ If `<FAILED_AGENTS>` from Step 6 is non-zero, append a warning line to the body 
 > WARNING: <FAILED_AGENTS> of 7 agents failed (<names>) — review may be incomplete.
 ```
 
-When agents have failed, downgrade the verdict: never `APPROVE` while any agent failed; default to `COMMENT` (skip the formal verdict) if the failure count is high enough that a critical issue could have been missed.
+When agents have failed, never `APPROVE`. Use `REQUEST_CHANGES` with the WARNING line so a human resolves it.
 
 Submit the review and all inline comments in a **single atomic call**:
 
@@ -751,7 +744,7 @@ Group findings by file (already sorted by Step 6). Within each file, list highes
 
 **Idempotency:** Local-only mode is stateless — re-running produces fresh output with no persisted artifacts. Safe to run repeatedly. (Compare with `--watch`, which sets persistent state via CronCreate.) Determinism boundary: the diff-derived inputs and sentinel structure are deterministic across runs, but Step 5 launches LLM-backed agents whose finding *wording* can drift even when the diff is byte-identical. Re-runs should produce the SAME sentinel and the SAME counts; finding text may vary.
 
-**Drift reminder for `--local --fix`:** the `--fix` sub-step (7 alt 2b) reimplements the apply-and-validate mechanics from `/pr-fix` Step 6c–6d (read-then-Edit, biome check, hard "no commit/push" constraint). Any future change to `/pr-fix` Step 6c–6d must be evaluated for propagation here, and vice versa. Track with a `# DRIFT-CHECK: keep in sync with /pr-fix Step 6c-6d` comment in any PR that touches either.
+**Drift reminder for `--local --fix`:** the `--fix` sub-step (7 alt 2b) reimplements the apply-and-validate mechanics from `/pr-fix` Step 6c–6d (read-then-Edit, biome check, hard "no commit/push" constraint). Any future change to `/pr-fix` Step 6c–6d must be evaluated for propagation here, and vice versa.
 
 If `--fix` was passed, proceed to **Step 7 (alt 2b)**. Otherwise the skill is complete here — Steps 8 and 9 do not apply in `--local` mode.
 
@@ -780,29 +773,12 @@ MATCHING_STASH_REFS=$(git stash list --format='%gd%x09%gs' \
 # Count non-empty lines; printf "%s" "" outputs zero bytes so grep -c '.' returns 0 cleanly.
 MATCHING_STASH_COUNT=$(printf '%s\n' "$MATCHING_STASH_REFS" | grep -c '^stash@' || true)
 if [ "${MATCHING_STASH_COUNT:-0}" -gt 0 ]; then
-  if [ "${PR_REVIEW_FIX_BYPASS_STALE_STASH:-0}" = "1" ]; then
-    echo "PR_REVIEW_FIX_BYPASS_STALE_STASH=1 — ${MATCHING_STASH_COUNT} 'pr-review --local --fix safety stash' entry/entries present; bypassing stale-stash check at user request."
-  else
-    echo "Sentinel: FIX_ABORTED — ${MATCHING_STASH_COUNT} stale 'pr-review --local --fix safety stash' entry/entries detected:"
-    # Quote the variable to avoid word-splitting / glob expansion if a future ref format ever contains whitespace or globs.
-    while IFS= read -r ref; do
-      [ -n "$ref" ] && printf '  %s\n' "$ref"
-    done <<EOF
-$MATCHING_STASH_REFS
-EOF
-    echo "Inspect each with: git stash show --include-untracked -p <ref>"
-    echo "Resolve each by COMMIT SHA (positional refs shift when other stashes are pushed):"
-    echo "  for ref in \$MATCHING_STASH_REFS; do sha=\$(git rev-parse \"\$ref\"); echo \"  drop with: git stash drop \$sha\"; done"
-    echo ""
-    echo "Escape hatch for false-positives: if you have a deliberately-named stash with this exact subject"
-    echo "that you want to keep, drop the safety check by setting PR_REVIEW_FIX_BYPASS_STALE_STASH=1 in"
-    echo "the environment. Use sparingly — the check exists to prevent stash-pop ambiguity."
-    exit 1
-  fi
+  echo "Sentinel: FIX_ABORTED — stale 'pr-review --local --fix safety stash' detected:" >&2
+  printf '%s\n' "$MATCHING_STASH_REFS" >&2
+  echo "Run \`git stash drop <ref>\` (or by commit SHA via \`git rev-parse <ref>\`) and retry." >&2
+  exit 1
 fi
 ```
-
-**Concurrency caveat**: this skill assumes single-threaded execution within the current repo. If the user runs `git stash` (or another `/pr-review --local --fix` cycle) in parallel between the `MATCHING_STASH_REFS` capture and any later stash operation, the captured refs may shift. The recovery instruction above intentionally instructs the user to resolve by **commit SHA** (`git rev-parse <ref>` first, then `git stash drop <sha>`) to dodge positional-ref shift in that case.
 
 **Check 2 — stash any pre-existing uncommitted work.** If the user has uncommitted changes when starting the run, stash them so a failed-lint revert can re-Edit cleanly:
 
@@ -946,13 +922,9 @@ fi
 
 `${...}` placeholders and report-template tokens like `<N>` / `<file>` are intentional and exempt by construction (the regex only matches the seven static placeholders by name).
 
-### Failure handling discipline
-
-Every `Run:` line in the cycle must have an exit-status check. On any failure, end the cycle with `Sentinel: WATCH_TRANSIENT_ERROR — <step>: <stderr>` and stop — do NOT proceed with stale or empty values. The cron scheduler will retry on the next tick.
-
 ### Drift reminder
 
-The 7-agent set below mirrors Step 5 by hand. Any future Step 5 change — agent added/removed/renamed, prompt extended — must be propagated here in the same PR, or the watcher silently lags. Add a `# DRIFT-CHECK: keep in sync with Step 5` comment in every PR that touches Step 5.
+The 7-agent set below mirrors Step 5 by hand. Any future Step 5 change — agent added/removed/renamed, prompt extended — must be propagated here in the same PR, or the watcher silently lags.
 
 ### CronCreate parameters
 
@@ -1046,107 +1018,11 @@ CYCLE END — the cron scheduler will run this again in 2 minutes.
 3. Note that the watcher auto-expires after 3 days
 4. Only THEN is the skill complete
 
-## Smoke tests for `--local --fix` and the watcher
-
-These recipes complement the "Validating --local end-to-end" table at the top of the file. They cover the new behaviors added in iter-5/iter-6 (whitespace-only guard, stale-stash check + bypass, stash-pop conflict path).
-
-**Whitespace-only ASSEMBLED_PROMPT guard (Step 9 watcher CronCreate pre-flight):**
-
-> **Drift reminder**: this recipe is duplicated verbatim in `/pr-fix`'s smoke-tests section because the pre-flight guard is identical in both skills. Any change to the guard logic must propagate to BOTH recipes in the same PR. `# DRIFT-CHECK: keep in sync with /pr-fix smoke-tests`
-
-```bash
-# Self-contained: inline the guard so the recipe runs without `<paste ...>` indirection.
-GUARD='
-if [ -z "${ASSEMBLED_PROMPT//[[:space:]]/}" ]; then
-  echo "Sentinel: WATCH_REJECTED — assembled prompt is empty, unset, or whitespace-only; refusing to schedule a no-op watcher." >&2
-  exit 1
-fi
-echo "OK: prompt has non-whitespace content"
-'
-ASSEMBLED_PROMPT=''            bash -c "$GUARD"   # Case (a) empty           → WATCH_REJECTED, exit 1
-ASSEMBLED_PROMPT=$'\n  \t\n'   bash -c "$GUARD"   # Case (b) whitespace-only → WATCH_REJECTED, exit 1
-ASSEMBLED_PROMPT='real text'   bash -c "$GUARD"   # Case (c) real content    → "OK: ...", exit 0
-```
-
-**Stale-stash check + bypass env var (Step 7 alt 2b Check 1):**
-
-```bash
-# Case (a): clean — no safety stash exists.
-/pr-review --local --fix         # expect: proceeds normally
-
-# Case (b): stale safety stash present — abort.
-git stash push -u -m "pr-review --local --fix safety stash"
-/pr-review --local --fix         # expect: Sentinel: FIX_ABORTED — 1 stale ... entries detected: stash@{0}
-                                 #         exit code 1
-
-# Case (c): same state, with bypass env var — proceed.
-PR_REVIEW_FIX_BYPASS_STALE_STASH=1 /pr-review --local --fix
-                                 # expect: PR_REVIEW_FIX_BYPASS_STALE_STASH=1 — 1 'pr-review --local --fix safety stash' entry/entries present; bypassing ...
-
-# Case (d): substring-only (NOT exact subject) — must NOT trip.
-git stash drop stash@{0}
-git stash push -u -m "my pr-review --local --fix safety stash backup"   # substring, not exact
-/pr-review --local --fix         # expect: proceeds normally (grep -Fxq matches whole line only)
-
-# Cleanup
-git stash drop stash@{0}
-```
-
-**Stash-pop conflict path (Step 7 alt 2b restore-stash failure):**
-
-```bash
-# Synthetic recipe — stash a change that conflicts with what the fix loop will apply.
-# Pre-condition: a real /pr-review --local review has produced at least one finding that wants to
-# Edit some file F to value V_FIX. Set F and V_FIX in this script to match.
-F=path/to/some/file.ts                # the file the next /pr-review --local --fix would edit
-V_FIX="<the value the fix loop will set>"  # known from a prior dry-run
-
-# 1. Set fileA's working-tree value to V_PREEXISTING (different from V_FIX).
-git checkout -- "$F"                  # start clean
-sed -i.bak 's/some pattern/V_PREEXISTING/' "$F" && rm -f "$F.bak"
-
-# 2. The skill's Stash discipline (Step 7 alt 2b Pre-flight Check 2) detects the uncommitted change
-#    and stashes it. The fix loop then writes V_FIX. The stash pop afterward attempts to restore
-#    V_PREEXISTING on top of V_FIX → conflict.
-/pr-review --local --fix              # invoke the skill
-
-# Expected:
-#   Sentinel: FIX_DONE_WITH_STASH_CONFLICTS — <X> applied, stash@{0} unpopped due to conflicts in <F> ...
-# Verify:
-git status --porcelain | grep "^UU $F"   # expect: one matching line (unmerged-unmerged)
-git stash list | grep 'pr-review --local --fix safety stash'  # expect: stash@{0} still present
-
-# Cleanup:
-git checkout --conflict=diff3 "$F"    # inspect both sides
-# Resolve manually (or: `git checkout HEAD -- "$F" && git stash drop stash@{0}` to discard).
-```
-
 ## Sentinel grammar registry
 
 Every terminal step ends with a single grep-able `Sentinel: NAME — <human prose>` line. This registry is the single source of truth — adding a new sentinel requires adding a row here in the same PR.
 
-### Stability policy
-
-**Effective from this commit forward** (the registry was introduced in this skill upgrade — date 2026-05-04; downstream parsers may anchor by examining `git log --diff-filter=A -- .agents/commands/pr-review.md` for the registry's first appearance). Sentinels and trailer fields shipped before the registry have no retroactive deprecation obligation.
-
-**Shell requirement**: pre-flight checks and watcher cycle commands use bash-only constructs (`${var//pattern/}` parameter substitution, `[[ ... ]]` tests, `set -euo`-friendly idioms). The skill's execution model assumes the agent's Bash tool runs `bash` (the default on macOS/Linux). Do NOT rewrite the prompt to be POSIX-portable without verifying the harness.
-
-Downstream parsers (CI gates, dashboards, the `/pr-fix` companion skill) MAY rely on the grammar in this registry. Changes are governed as follows:
-
-- **Patch / minor** (no breaking change): adding a new sentinel, adding a new field at the END of an existing trailer, fixing a trailer's prose without changing tokens or field order — all OK without a deprecation window. (Old parsers continue to match what they already match; new sentinels/fields are simply unseen by them.)
-- **Major** (breaking change): renaming a sentinel, removing a field, changing field order, narrowing the value space of a field (e.g. removing `PENDING_TIMEOUT` from `ci=`). REQUIRES the 4-step deprecation flow used elsewhere in the repo (AGENTS.md §7), in canonical order: introduce successor → mark the old `@deprecated` in this registry (using the cell-based marking convention below — strikethrough the sentinel name and append a deprecation note in the trailer-grammar cell) → maintain BOTH the old and the new for one minor → remove the old in the next major.
-- **Cross-skill changes** (a sentinel is shared between `/pr-review` and `/pr-fix`): the change must land in BOTH registries in the same PR. The "Drift reminder" sections in both skills name the cross-references that govern this.
-
-**Deprecation marking convention.** When a sentinel enters its 4-step deprecation flow, mark its row in the registry table as follows:
-- Strikethrough the sentinel name: `~~SENTINEL_NAME~~`.
-- Append `(deprecated, removal: <next-major-version-or-date>; superseded by NEW_SENTINEL_NAME)` at the END of the existing trailer-grammar cell.
-- Keep the row visible until the next major release removes it — that's how the "maintain BOTH for one minor" step is observable to downstream parsers.
-
-Example row (hypothetical retired sentinel, illustration only — DO NOT ship this row in the live registry):
-
-<!-- BEGIN-EXAMPLE-DO-NOT-SHIP -->
-| `~~OLD_SENTINEL~~` | <step> | <fire condition> | `<existing trailer> (deprecated, removal: 2.0.0; superseded by NEW_SENTINEL)` |
-<!-- END-EXAMPLE-DO-NOT-SHIP -->
+Sentinel names and trailer field order are part of the contract — rename or reorder fields only with a deprecation note in the table. Cross-skill changes (sentinels shared with `/pr-fix`) must land in both registries in the same PR.
 
 | Sentinel | Owning step | Fires on | Trailer grammar |
 |---|---|---|---|
