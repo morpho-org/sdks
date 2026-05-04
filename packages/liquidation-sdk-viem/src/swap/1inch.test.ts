@@ -59,13 +59,18 @@ describe("OneInch.fetchSwap via nock", () => {
     expect(observedSlippage).toBe("1"); // 100 bps -> 1%
   });
 
-  test("throws when the upstream returns a non-OK status", async () => {
+  test("throws an Error when the upstream returns a non-OK status", async () => {
     nock("https://api.1inch.dev")
       .get("/swap/v6.0/1/swap")
       .query(true)
       .reply(500, "internal");
 
-    await expect(OneInch.fetchSwap(baseParams, "k")).rejects.toThrow();
+    // Source throws via `throw Error(res.statusText)`. Pinning to Error
+    // (not just any rejection) catches a regression that swaps to a
+    // different shape (e.g. silently returning undefined).
+    await expect(OneInch.fetchSwap(baseParams, "k")).rejects.toBeInstanceOf(
+      Error,
+    );
   });
 
   test("sends the Authorization header with the api key", async () => {
@@ -97,5 +102,49 @@ describe("OneInch.fetchSwap via nock", () => {
 
     const res = await OneInch.fetchSwap({ ...baseParams, fee: undefined }, "k");
     expect(res.dstAmount).toBe("1");
+  });
+
+  test("non-numeric slippage encodes as 'NaN' (current behaviour pinned)", async () => {
+    let observedSlippage: string | undefined;
+    nock("https://api.1inch.dev")
+      .get("/swap/v6.0/1/swap")
+      .query((q) => {
+        observedSlippage = q.slippage as string;
+        return true;
+      })
+      .reply(200, { dstAmount: "1" });
+
+    await OneInch.fetchSwap({ ...baseParams, slippage: "abc" }, "k");
+    // `Number("abc") / 100 → NaN`, which `toString(10)` emits as "NaN".
+    // Pinning the current behaviour so a refactor doesn't silently change it.
+    expect(observedSlippage).toBe("NaN");
+  });
+
+  test("missing API key falls through with 'Bearer undefined' header", async () => {
+    let observedAuth: string | undefined;
+    const originalKey = process.env.ONE_INCH_SWAP_API_KEY;
+    delete process.env.ONE_INCH_SWAP_API_KEY;
+    try {
+      nock("https://api.1inch.dev", {
+        reqheaders: {
+          authorization: (val) => {
+            observedAuth = val;
+            return true;
+          },
+        },
+      })
+        .get("/swap/v6.0/1/swap")
+        .query(true)
+        .reply(200, { dstAmount: "1" });
+
+      // No second arg, no env var → apiKey = undefined.
+      await OneInch.fetchSwap(baseParams);
+      // Pinning the current behaviour: helper does not error on missing
+      // key, just sends the literal string "undefined". Documented so a
+      // future security fix that rejects missing keys can update both.
+      expect(observedAuth).toBe("Bearer undefined");
+    } finally {
+      if (originalKey != null) process.env.ONE_INCH_SWAP_API_KEY = originalKey;
+    }
   });
 });

@@ -16,9 +16,19 @@ describe("addTransactionMetadata", () => {
     const tx = {
       to: TO,
       value: 0n,
-      data: "" as unknown as Hex,
+      data: "" as Hex,
     };
     expect(addTransactionMetadata(tx, { origin: "" })).toBe(tx);
+  });
+
+  test("treats metadata.timestamp = false the same as omitted", () => {
+    const tx = { to: TO, value: 0n, data: "0xdeadbeef" as Hex };
+    const explicit = addTransactionMetadata(tx, {
+      origin: "",
+      timestamp: false,
+    });
+    const omitted = addTransactionMetadata(tx, { origin: "" });
+    expect(explicit.data).toBe(omitted.data);
   });
 
   test("appends a 4-byte timestamp when metadata.timestamp is truthy", () => {
@@ -39,12 +49,11 @@ describe("addTransactionMetadata", () => {
     expect(result.data).toBe("0xdeadbeefcafe");
   });
 
-  test("warns and skips an origin with a 0x prefix (current implementation does not normalize it)", () => {
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  test("strips a 0x prefix from origin and appends the raw hex", () => {
     const tx = { to: TO, value: 0n, data: "0xdeadbeef" as Hex };
     const result = addTransactionMetadata(tx, { origin: "0xcafe" });
-    expect(result.data).toBe("0xdeadbeef");
-    expect(warn).toHaveBeenCalled();
+    // Source now strips leading 0x; final calldata = data + cafe.
+    expect(result.data).toBe("0xdeadbeefcafe");
   });
 
   test("warns and skips invalid origin (non-hex characters)", () => {
@@ -56,9 +65,22 @@ describe("addTransactionMetadata", () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  test("warns and skips origin longer than 8 hex chars", () => {
+  test("warns and skips origin longer than 8 hex chars (raw)", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const tx = { to: TO, value: 0n, data: "0xdeadbeef" as Hex };
+    // 10 hex chars without 0x prefix — exercises the explicit length check
+    // (origin.length > 8) AFTER the 0x-strip and isHex pass.
+    const result = addTransactionMetadata(tx, {
+      origin: "deadbeef00",
+    });
+    expect(result.data).toBe("0xdeadbeef");
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test("warns and skips origin longer than 8 hex chars (with 0x prefix)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const tx = { to: TO, value: 0n, data: "0xdeadbeef" as Hex };
+    // After stripping "0x", the remaining "deadbeef00" is 10 chars.
     const result = addTransactionMetadata(tx, {
       origin: "0xdeadbeef00",
     });

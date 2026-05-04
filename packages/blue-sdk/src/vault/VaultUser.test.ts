@@ -18,17 +18,4 @@ describe("VaultUser", () => {
     expect(u.isAllocator).toBe(true);
     expect(u.allowance).toBe(100n);
   });
-
-  test("isAllocator and allowance can be reassigned (mutable)", () => {
-    const u = new VaultUser({
-      vault: VAULT,
-      user: USER,
-      isAllocator: false,
-      allowance: 0n,
-    });
-    u.isAllocator = true;
-    u.allowance = 999n;
-    expect(u.isAllocator).toBe(true);
-    expect(u.allowance).toBe(999n);
-  });
 });

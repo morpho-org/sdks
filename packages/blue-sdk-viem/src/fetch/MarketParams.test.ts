@@ -1,6 +1,7 @@
-import { ChainId, MarketParams } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId, MarketParams } from "@morpho-org/blue-sdk";
 import { randomMarket } from "@morpho-org/morpho-test";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { blueAbi } from "../abis.js";
 import { fetchMarketParams } from "./MarketParams.js";
@@ -9,7 +10,7 @@ describe("fetchMarketParams", () => {
   test("returns the cached MarketParams when one was previously constructed (cache hit)", async () => {
     // Constructing a MarketParams seeds MarketParams._CACHE.
     const params = randomMarket({ lltv: 800000000000000000n });
-    const { client } = createMockClient();
+    const { client } = createMockClient(mainnet);
 
     const result = await fetchMarketParams(params.id, client);
 
@@ -20,31 +21,13 @@ describe("fetchMarketParams", () => {
     expect(result.lltv).toBe(params.lltv);
   });
 
-  test("respects an explicit chainId when fetching from chain (cache miss path is reachable)", async () => {
-    // Construct a MarketParams to obtain a known id, then drop it from cache.
+  test("on cache miss, fetches MarketParams from the canonical morpho contract", async () => {
     const params = randomMarket();
-    // Force a cache miss by using a fresh id that's never been seeded.
+    // A fresh id never seeded in MarketParams._CACHE forces the RPC path.
     const freshId =
       "0xdead000000000000000000000000000000000000000000000000000000000001" as typeof params.id;
 
-    const handle = createMockClient();
-    mockRead(handle, {
-      address: "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB",
-      abi: blueAbi,
-      functionName: "idToMarketParams",
-      result: [
-        params.loanToken,
-        params.collateralToken,
-        params.oracle,
-        params.irm,
-        params.lltv,
-      ],
-    });
-
-    // Note: the mockRead address is arbitrary here; the real call uses the
-    // morpho address from getChainAddresses(chainId). Use chainId=EthMainnet
-    // and program the canonical morpho address.
-    const { addressesRegistry } = await import("@morpho-org/blue-sdk");
+    const handle = createMockClient(mainnet);
     const morpho = addressesRegistry[ChainId.EthMainnet].morpho;
     mockRead(handle, {
       address: morpho,

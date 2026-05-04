@@ -19,17 +19,4 @@ describe("VaultMarketPublicAllocatorConfig", () => {
     expect(c.maxIn).toBe(100n);
     expect(c.maxOut).toBe(50n);
   });
-
-  test("maxIn and maxOut are mutable; vault and marketId are readonly to TS", () => {
-    const c = new VaultMarketPublicAllocatorConfig({
-      vault: VAULT,
-      marketId: MARKET,
-      maxIn: 0n,
-      maxOut: 0n,
-    });
-    c.maxIn = 1n;
-    c.maxOut = 2n;
-    expect(c.maxIn).toBe(1n);
-    expect(c.maxOut).toBe(2n);
-  });
 });

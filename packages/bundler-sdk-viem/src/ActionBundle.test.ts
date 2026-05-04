@@ -20,13 +20,20 @@ describe("ActionBundleRequirements", () => {
   });
 
   test("preserves provided txs and signatures", () => {
+    // Use a nativeTransfer action which has well-typed args (no signature
+    // placeholder needed, unlike permit). The `action` field is opaque to
+    // ActionBundleRequirements — it just stores it.
+    const sigAction: Action = {
+      type: "nativeTransfer",
+      args: [ADDR, ADDR, 1n],
+    };
     const tx: TransactionRequirement = {
       type: "erc20Approve",
       args: [ADDR, ADDR, 1n],
       tx: { to: ADDR, data: TX_DATA },
     };
     const sig: SignatureRequirement = {
-      action: { type: "permit", args: [ADDR, ADDR, 1n, 0n, null!] },
+      action: sigAction,
       sign: async () => "0x" as Hex,
     };
     const r = new ActionBundleRequirements([tx], [sig]);
@@ -35,17 +42,25 @@ describe("ActionBundleRequirements", () => {
   });
 
   test("sign aggregates async signatures from each requirement", async () => {
+    const sigAction: Action = {
+      type: "nativeTransfer",
+      args: [ADDR, ADDR, 1n],
+    };
     const sig1: SignatureRequirement = {
-      action: { type: "permit", args: [ADDR, ADDR, 1n, 0n, null!] },
+      action: sigAction,
       sign: async () => "0x01" as Hex,
     };
     const sig2: SignatureRequirement = {
-      action: { type: "permit", args: [ADDR, ADDR, 1n, 0n, null!] },
+      action: sigAction,
       sign: async () => "0x02" as Hex,
     };
     const r = new ActionBundleRequirements([], [sig1, sig2]);
-    // The client is just passed through to each requirement.sign; mock minimal shape.
-    const client = { account: { address: ADDR } } as never;
+    // ActionBundleRequirements.sign passes the client through verbatim to
+    // each requirement.sign — both stubs ignore the client, so a mocked
+    // transport-only handle from createMockClient is sufficient.
+    const { createMockClient } = await import("@morpho-org/test/mock");
+    const { mainnet } = await import("viem/chains");
+    const { client } = createMockClient(mainnet);
     const sigs = await r.sign(client);
     expect(sigs).toEqual(["0x01", "0x02"]);
   });

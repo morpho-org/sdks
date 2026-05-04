@@ -108,8 +108,17 @@ describe("bigIntComparator", () => {
   });
 
   test("treats two null/undefined entries as equal (returns 0)", () => {
-    const cmp = bigIntComparator<{ v: bigint | null }>((x) => x.v);
-    expect(cmp({ v: null }, { v: null })).toBe(0);
+    const cmpNull = bigIntComparator<{ v: bigint | null }>((x) => x.v);
+    expect(cmpNull({ v: null }, { v: null })).toBe(0);
+
+    const cmpUndef = bigIntComparator<{ v: bigint | undefined }>((x) => x.v);
+    expect(cmpUndef({ v: undefined }, { v: undefined })).toBe(0);
+
+    // Mixed nullish: source uses `xA == null && xB == null`.
+    const cmpMixed = bigIntComparator<{ v: bigint | null | undefined }>(
+      (x) => x.v,
+    );
+    expect(cmpMixed({ v: null }, { v: undefined })).toBe(0);
   });
 
   test("works with very large bigints", () => {

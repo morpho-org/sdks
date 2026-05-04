@@ -39,7 +39,9 @@ export function addTransactionMetadata(
   }
 
   try {
-    const origin = metadata.origin.replace(/^(?!0x)/, "");
+    // Strip a leading "0x" if present so callers can pass either
+    // "cafe" or "0xcafe" — both produce the same 4-byte appended origin.
+    const origin = metadata.origin.replace(/^0x/, "");
 
     if (!isHex(`0x${origin}`))
       throw Error("Calldata origin must consists of only hex characters");

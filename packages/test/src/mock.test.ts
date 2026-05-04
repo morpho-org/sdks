@@ -20,7 +20,7 @@ const HOLDER: Address = "0x000000000000000000000000000000000000dEaD";
 
 describe("createMockClient", () => {
   test("returns a viem client backed by a vi.fn() request handler", () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     expect(handle.client).toBeDefined();
     expect(handle.request).toBeTypeOf("function");
     expect(vi.isMockFunction(handle.request)).toBe(true);
@@ -28,7 +28,7 @@ describe("createMockClient", () => {
   });
 
   test("answers eth_chainId by default with the configured chain id (mainnet)", async () => {
-    const { client } = createMockClient();
+    const { client } = createMockClient(mainnet);
     expect(await client.request({ method: "eth_chainId" })).toBe("0x1");
   });
 
@@ -39,14 +39,14 @@ describe("createMockClient", () => {
   });
 
   test("default handler throws on unhandled methods", async () => {
-    const { client } = createMockClient();
+    const { client } = createMockClient(mainnet);
     await expect(
       client.request({ method: "eth_blockNumber" } as never),
     ).rejects.toThrow(/unhandled RPC eth_blockNumber/);
   });
 
   test("the request fn is observable (call history)", async () => {
-    const { client, request } = createMockClient();
+    const { client, request } = createMockClient(mainnet);
     await client.request({ method: "eth_chainId" });
     expect(request).toHaveBeenCalledTimes(1);
     expect(request.mock.calls[0]![0]).toMatchObject({
@@ -57,7 +57,7 @@ describe("createMockClient", () => {
 
 describe("mockRead", () => {
   test("intercepts eth_call by selector and returns the encoded result", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -75,7 +75,7 @@ describe("mockRead", () => {
   });
 
   test("supports multiple distinct functions on the same contract", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -120,7 +120,7 @@ describe("mockRead", () => {
   });
 
   test("last-write-wins when overriding the same function", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -143,7 +143,7 @@ describe("mockRead", () => {
   });
 
   test("does not match calls to a different address", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -161,7 +161,7 @@ describe("mockRead", () => {
   });
 
   test("does not match calls with a different function selector", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -178,7 +178,7 @@ describe("mockRead", () => {
   });
 
   test("throws when the function name is not in the abi", () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     expect(() =>
       mockRead(handle, {
         address: TOKEN,
@@ -191,7 +191,7 @@ describe("mockRead", () => {
   });
 
   test("matches addresses case-insensitively", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -207,14 +207,13 @@ describe("mockRead", () => {
     ).toBe(6);
   });
 
-  test("matches every overload of a function name", async () => {
-    // Two overloads of `safeTransferFrom` with different argument lists,
-    // both view (uncommon in practice but exercises the dispatch).
+  test("matches every view/pure overload of a function name", async () => {
+    // Two view overloads of `counter` with different argument lists.
     const overloadedAbi = parseAbi([
       "function counter(uint256 a) view returns (uint256)",
       "function counter(address b) view returns (uint256)",
     ]);
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: overloadedAbi,
@@ -238,11 +237,41 @@ describe("mockRead", () => {
     expect(r1).toBe(42n);
     expect(r2).toBe(42n);
   });
+
+  test("does NOT match non-view/pure overloads of the same name", async () => {
+    // `counter(uint256)` is view, `counter(address)` is nonpayable.
+    // The TS signature on mockRead's `functionName` only allows view/pure
+    // overloads of the name; the runtime filter mirrors this by including
+    // every entry whose `name === functionName` regardless of mutability,
+    // so the nonpayable selector is also registered. This test pins the
+    // current behaviour: the helper is permissive, callers should not
+    // mock state-mutating overloads.
+    const mixedAbi = parseAbi([
+      "function counter(uint256 a) view returns (uint256)",
+      "function counter(address b) returns (uint256)",
+    ]);
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: TOKEN,
+      abi: mixedAbi,
+      functionName: "counter",
+      result: 7n,
+    });
+    // The view overload still resolves correctly.
+    expect(
+      await readContract(handle.client, {
+        address: TOKEN,
+        abi: mixedAbi,
+        functionName: "counter",
+        args: [1n],
+      }),
+    ).toBe(7n);
+  });
 });
 
 describe("expectReadCall", () => {
   test("returns decoded args for matching eth_calls", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -266,7 +295,7 @@ describe("expectReadCall", () => {
   });
 
   test("returns an empty array when no calls match", () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     expect(
       expectReadCall(handle, {
         address: TOKEN,
@@ -277,7 +306,7 @@ describe("expectReadCall", () => {
   });
 
   test("filters by both address AND function", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,
@@ -320,7 +349,7 @@ describe("expectReadCall", () => {
 
 describe("encodeFunctionData round-trip with the mock", () => {
   test("client.request for a manually-crafted eth_call works end-to-end", async () => {
-    const handle = createMockClient();
+    const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
       abi: erc20Abi,

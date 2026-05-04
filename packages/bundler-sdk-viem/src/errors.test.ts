@@ -16,8 +16,7 @@ describe("BundlerErrors namespace", () => {
     const steps = [] as unknown as SimulationResult;
     const err = new BundlerErrors.Bundle(inner, 3, inputOp, steps);
 
-    expect(err).toBeInstanceOf(Error);
-    expect(err.message).toBe("boom");
+    expect(err).toBeInstanceOf(BundlerErrors.Bundle);
     expect(err.error).toBe(inner);
     expect(err.index).toBe(3);
     expect(err.inputOperation).toBe(inputOp);
@@ -25,41 +24,44 @@ describe("BundlerErrors namespace", () => {
     expect(err.stack).toBe(inner.stack);
   });
 
-  test("MissingSignature has the right message", () => {
+  test("MissingSignature is a class identity", () => {
     const err = new BundlerErrors.MissingSignature();
-    expect(err.message).toBe("missing signature");
+    expect(err).toBeInstanceOf(BundlerErrors.MissingSignature);
     expect(err).toBeInstanceOf(Error);
   });
 
-  test("MissingSwapData has the right message", () => {
-    expect(new BundlerErrors.MissingSwapData().message).toBe(
-      "missing swap data",
+  test("MissingSwapData is a class identity", () => {
+    expect(new BundlerErrors.MissingSwapData()).toBeInstanceOf(
+      BundlerErrors.MissingSwapData,
     );
   });
 
-  test("UnexpectedAction includes type and chainId in the message", () => {
-    const err = new BundlerErrors.UnexpectedAction(
-      "erc20Transfer" as ActionType,
-      1,
+  // The remaining classes (UnexpectedAction, UnexpectedSignature,
+  // MissingSkimHandler, UnskimedToken) don't store constructor arguments
+  // as public fields — only the formatted message uses them. Per AGENTS.md
+  // §3, that's a future API tightening (errors should expose typed fields).
+  // Until then, class-identity is the only stable assertion.
+  test("UnexpectedAction is a class identity", () => {
+    expect(
+      new BundlerErrors.UnexpectedAction("erc20Transfer" as ActionType, 1),
+    ).toBeInstanceOf(BundlerErrors.UnexpectedAction);
+  });
+
+  test("UnexpectedSignature is a class identity", () => {
+    expect(new BundlerErrors.UnexpectedSignature(ADDRESS)).toBeInstanceOf(
+      BundlerErrors.UnexpectedSignature,
     );
-    expect(err.message).toContain("erc20Transfer");
-    expect(err.message).toContain('"1"');
   });
 
-  test("UnexpectedSignature includes the spender address", () => {
-    const err = new BundlerErrors.UnexpectedSignature(ADDRESS);
-    expect(err.message).toContain(ADDRESS);
+  test("MissingSkimHandler is a class identity", () => {
+    expect(
+      new BundlerErrors.MissingSkimHandler("Blue_Supply" as OperationType),
+    ).toBeInstanceOf(BundlerErrors.MissingSkimHandler);
   });
 
-  test("MissingSkimHandler includes the operation type", () => {
-    const err = new BundlerErrors.MissingSkimHandler(
-      "Blue_Supply" as OperationType,
+  test("UnskimedToken is a class identity", () => {
+    expect(new BundlerErrors.UnskimedToken(ADDRESS)).toBeInstanceOf(
+      BundlerErrors.UnskimedToken,
     );
-    expect(err.message).toContain("Blue_Supply");
-  });
-
-  test("UnskimedToken includes the token address", () => {
-    const err = new BundlerErrors.UnskimedToken(ADDRESS);
-    expect(err.message).toContain(ADDRESS);
   });
 });

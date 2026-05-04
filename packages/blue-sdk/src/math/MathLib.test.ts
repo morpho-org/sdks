@@ -31,6 +31,13 @@ describe("MathLib.maxUint", () => {
     expect(() => MathLib.maxUint(7)).toThrow(/Invalid number of bits/);
     expect(() => MathLib.maxUint(33)).toThrow(/Invalid number of bits/);
   });
+
+  test("nBits=0 throws via BigInt('0x') (boundary case)", () => {
+    // Pinned to current behaviour: maxUint(0) calls BigInt("0x"), which
+    // throws SyntaxError. If a future refactor adds a guard, this test
+    // should be updated alongside.
+    expect(() => MathLib.maxUint(0)).toThrow();
+  });
 });
 
 describe("MathLib.abs", () => {
@@ -84,6 +91,10 @@ describe("MathLib.zeroFloorSub", () => {
   });
   test("accepts BigIntish", () => {
     expect(MathLib.zeroFloorSub("100", 30)).toBe(70n);
+  });
+  test("with negative y, behaves as x - y (no zero floor needed)", () => {
+    // x=10, y=-5 → 10 <= -5 is false → returns 10 - (-5) = 15
+    expect(MathLib.zeroFloorSub(10n, -5n)).toBe(15n);
   });
 });
 

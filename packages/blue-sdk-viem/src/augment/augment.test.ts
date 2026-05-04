@@ -13,45 +13,42 @@ import {
   VaultUser,
 } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
+import {
+  fetchHolding,
+  fetchMarket,
+  fetchMarketParams,
+  fetchPosition,
+  fetchToken,
+  fetchUser,
+  fetchVault,
+  fetchVaultConfig,
+  fetchVaultMarketAllocation,
+  fetchVaultMarketConfig,
+  fetchVaultMarketPublicAllocatorConfig,
+  fetchVaultUser,
+} from "../fetch/index.js";
 
 // Importing this barrel triggers the static augmentation of every blue-sdk class.
 import "./index.js";
 
 describe("blue-sdk augmentations", () => {
-  test("Market.fetch is wired", () => {
-    expect(typeof Market.fetch).toBe("function");
-  });
-  test("MarketParams.fetch is wired", () => {
-    expect(typeof MarketParams.fetch).toBe("function");
-  });
-  test("Token.fetch is wired", () => {
-    expect(typeof Token.fetch).toBe("function");
-  });
-  test("Position.fetch is wired", () => {
-    expect(typeof Position.fetch).toBe("function");
-  });
-  test("Holding.fetch is wired", () => {
-    expect(typeof Holding.fetch).toBe("function");
-  });
-  test("User.fetch is wired", () => {
-    expect(typeof User.fetch).toBe("function");
-  });
-  test("Vault.fetch is wired", () => {
-    expect(typeof Vault.fetch).toBe("function");
-  });
-  test("VaultConfig.fetch is wired", () => {
-    expect(typeof VaultConfig.fetch).toBe("function");
-  });
-  test("VaultMarketAllocation.fetch is wired", () => {
-    expect(typeof VaultMarketAllocation.fetch).toBe("function");
-  });
-  test("VaultMarketConfig.fetch is wired", () => {
-    expect(typeof VaultMarketConfig.fetch).toBe("function");
-  });
-  test("VaultMarketPublicAllocatorConfig.fetch is wired", () => {
-    expect(typeof VaultMarketPublicAllocatorConfig.fetch).toBe("function");
-  });
-  test("VaultUser.fetch is wired", () => {
-    expect(typeof VaultUser.fetch).toBe("function");
+  // Identity assertions (`.toBe(...)`) so a regression that wired the static
+  // method to a different function (or a no-op stub) is caught — a
+  // `typeof X.fetch === "function"` check would not.
+  test("every augmented blue-sdk class is wired to its fetch function", () => {
+    expect(Market.fetch).toBe(fetchMarket);
+    expect(MarketParams.fetch).toBe(fetchMarketParams);
+    expect(Token.fetch).toBe(fetchToken);
+    expect(Position.fetch).toBe(fetchPosition);
+    expect(Holding.fetch).toBe(fetchHolding);
+    expect(User.fetch).toBe(fetchUser);
+    expect(Vault.fetch).toBe(fetchVault);
+    expect(VaultConfig.fetch).toBe(fetchVaultConfig);
+    expect(VaultMarketAllocation.fetch).toBe(fetchVaultMarketAllocation);
+    expect(VaultMarketConfig.fetch).toBe(fetchVaultMarketConfig);
+    expect(VaultMarketPublicAllocatorConfig.fetch).toBe(
+      fetchVaultMarketPublicAllocatorConfig,
+    );
+    expect(VaultUser.fetch).toBe(fetchVaultUser);
   });
 });

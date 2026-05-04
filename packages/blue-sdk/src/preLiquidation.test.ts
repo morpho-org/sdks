@@ -87,6 +87,7 @@ describe("getDefaultPreLiquidationParams", () => {
   test("the thrown error preserves the lltv", () => {
     try {
       getDefaultPreLiquidationParams(parseEther("0.5"));
+      expect.fail("expected to throw UnsupportedPreLiquidationParamsError");
     } catch (e) {
       expect(e).toBeInstanceOf(UnsupportedPreLiquidationParamsError);
       expect((e as UnsupportedPreLiquidationParamsError).lltv).toBe(
