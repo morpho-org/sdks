@@ -41,6 +41,7 @@ import { getRequirementsApproval } from "./getRequirementsApproval.js";
  * import { getRequirementsPermit2 } from "@morpho-org/morpho-sdk";
  *
  * const { permit2 } = getChainAddresses(1);
+ * if (!permit2) throw new Error("Permit2 not configured for this chain");
  * const requirements = getRequirementsPermit2({
  *   address: USDC,
  *   chainId: 1,

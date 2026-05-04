@@ -89,7 +89,7 @@ export interface VaultV1MigrateToV2Params {
  *     targetVault,
  *     targetAsset: USDC,
  *     shares: 1_000_000n,
- *     minSharePriceVaultV1: 0n,
+ *     minSharePriceVaultV1: 0n, // disables redeem-leg slippage protection — production code should compute from source vault state + slippage tolerance
  *     maxSharePriceVaultV2: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
  *     recipient,
  *   },

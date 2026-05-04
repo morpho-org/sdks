@@ -73,7 +73,7 @@ export interface MarketV1BorrowParams {
  *   args: {
  *     amount: 1_000_000n,
  *     receiver: borrower,
- *     minSharePrice: 0n,
+ *     minSharePrice: 0n, // disables slippage protection — production code should compute via `computeMinBorrowSharePrice` from market state + slippage tolerance
  *   },
  * });
  * // tx satisfies Readonly<Transaction<MarketV1BorrowAction>>

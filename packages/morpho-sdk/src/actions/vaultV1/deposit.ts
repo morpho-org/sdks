@@ -67,10 +67,11 @@ export interface VaultV1DepositParams {
  *   configured wNative.
  * @throws {NativeAmountOnNonWNativeVaultError} when `nativeAmount` is provided but the vault
  *   asset is not the chain's wNative.
- * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
- *   is provided and the signed asset differs from `vault.asset`.
- * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
- *   is provided and the signed amount differs from `args.amount`.
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `amount > 0n` and
+ *   `requirementSignature` is provided and the signed asset differs from `vault.asset`. The
+ *   signature is ignored on the native-only path (`amount === 0n` with `nativeAmount > 0n`).
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `amount > 0n` and
+ *   `requirementSignature` is provided and the signed amount differs from `args.amount`.
  * @throws {ZeroDepositAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @example
  * ```ts

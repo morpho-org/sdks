@@ -104,7 +104,7 @@ export interface MarketV1SupplyCollateralBorrowParams {
  *     borrowAmount: 500_000_000n,
  *     onBehalf: borrower,
  *     receiver: borrower,
- *     minSharePrice: 0n,
+ *     minSharePrice: 0n, // disables slippage protection — production code should compute via `computeMinBorrowSharePrice` from market state + slippage tolerance
  *   },
  * });
  * // tx satisfies Readonly<Transaction<MarketV1SupplyCollateralBorrowAction>>

@@ -51,7 +51,7 @@ interface EncodeErc20PermitParams {
  *
  * const client = createWalletClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeErc20Permit(client, {
- *   token: USDC, // an ERC-2612-compatible token; DAI uses a non-standard permit signature
+ *   token: USDC, // L1 mainnet USDC. Bridged USDC.e on L2s often does not implement EIP-2612 — query token metadata before signing on other chains. DAI uses a non-standard permit signature.
  *   spender: generalAdapter1,
  *   amount: 1_000_000n,
  *   chainId: 1,

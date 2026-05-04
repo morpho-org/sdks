@@ -82,11 +82,24 @@ function* walk(dir) {
 // modifiers are also valid identifiers (`export type async = ...`); the regex
 // is anchored on the `kind` token so name capture is unambiguous in those
 // cases (kind=type, name=async).
+//
+// Re-export forms (`export { foo } from`, `export * from`, `export type { Foo }`)
+// are intentionally NOT matched — they aren't local exports.
 const EXPORT_RE =
-  /^export\s+(?:(?:async|abstract|default|declare)\s+)*(const|let|var|function|class|interface|type|enum)\s+([A-Za-z_$][\w$]*)/;
+  /^export\s+(?:(?:async|abstract|default|declare)\s+)*(const|let|var|function|class|interface|type|enum|namespace)\s+([A-Za-z_$][\w$]*)/;
+
+// Matches `@internal` as a real JSDoc tag, not as text inside an `@example`
+// code block. Known limitation: a literal `@internal` mention in a code-fence
+// (e.g. `// @internal`) inside `@example` will still match — no occurrences in
+// the repo today; tighten if a real false positive surfaces.
+function isInternal(jsdocBlock) {
+  return /@internal\b/.test(jsdocBlock);
+}
 
 function hasParams(signature) {
   // Arrow function: `= (...)`, `= async (...)`, or `= <T>(...)` (generic arrow).
+  // Known limitation: nested generic constraints like `<T extends Foo<Bar>>`
+  // break the `[^>]+` consume — no occurrences in Tier 1 today.
   const arrow = signature.match(/=\s*(?:async\s+)?(?:<[^>]+>\s*)?\(([^)]*)\)/);
   if (arrow) return arrow[1].trim().length > 0;
   // Function declaration: `function name(...)` or `function name<T>(...)`.
@@ -98,9 +111,11 @@ function hasParams(signature) {
 function isFunctionLike(kind, signature) {
   if (kind === "function") return true;
   if (kind !== "const" && kind !== "let" && kind !== "var") return false;
-  // const X = (...) => ... | const X = async (...) => ... | const X = function ...
+  // const X = (...) => ... | const X = async (...) => ...
+  // const X = <T>(...) => ... (generic arrow — symmetric with hasParams)
+  // const X = function ...
   return (
-    /=\s*(?:async\s+)?\(/.test(signature) ||
+    /=\s*(?:async\s+)?(?:<[^>]+>\s*)?\(/.test(signature) ||
     /=\s*(?:async\s+)?function\b/.test(signature)
   );
 }
@@ -149,7 +164,7 @@ function analyzeFile(filePath, { collectUndocumented }) {
 
     // @internal exempts the symbol from coverage entirely (matches typedoc's
     // excludeInternal behavior — these are not on the public docs surface).
-    if (/@internal\b/.test(block)) {
+    if (isInternal(block)) {
       total--;
       continue;
     }
@@ -160,12 +175,13 @@ function analyzeFile(filePath, { collectUndocumented }) {
       continue;
     }
 
-    // Classes, interfaces, types, enums: description suffices per §6.
+    // Classes, interfaces, types, enums, namespaces: description suffices per §6.
     if (
       kind === "class" ||
       kind === "interface" ||
       kind === "type" ||
-      kind === "enum"
+      kind === "enum" ||
+      kind === "namespace"
     ) {
       documented++;
       continue;
@@ -230,6 +246,7 @@ function selfCheck() {
     },
     { line: "export type Foo = string;", kind: "type", name: "Foo" },
     { line: "export enum Foo { A, B }", kind: "enum", name: "Foo" },
+    { line: "export namespace Foo {}", kind: "namespace", name: "Foo" },
     { line: "export const FOO = 100n;", kind: "const", name: "FOO" },
     { line: "export type async = string;", kind: "type", name: "async" },
     { line: "export default function foo() {}", kind: "function", name: "foo" },
@@ -238,6 +255,10 @@ function selfCheck() {
     { line: "// not an export", expectMatch: false },
     { line: "import { foo } from 'bar';", expectMatch: false },
     { line: "  export const indented = 1;", expectMatch: false },
+    // Re-export forms must NOT match — they aren't local exports.
+    { line: "export { foo } from './bar.js';", expectMatch: false },
+    { line: "export * from './bar.js';", expectMatch: false },
+    { line: "export type { Foo } from './bar.js';", expectMatch: false },
   ];
 
   for (const c of exportCases) {
@@ -279,12 +300,18 @@ function selfCheck() {
   }
 
   // isFunctionLike — verifies function vs constant classification.
+  // Generic arrows are now recognized symmetrically with hasParams.
   const isFunctionLikeCases = [
     { kind: "function", sig: "export function foo() {}", expected: true },
     { kind: "const", sig: "export const foo = (x) => x;", expected: true },
     {
       kind: "const",
       sig: "export const foo = async () => {};",
+      expected: true,
+    },
+    {
+      kind: "const",
+      sig: "export const foo = <T>(x: T) => x;",
       expected: true,
     },
     {
@@ -307,26 +334,27 @@ function selfCheck() {
     }
   }
 
-  // @internal exemption — verifies the regex distinguishes a real @internal tag
-  // from text that happens to mention @internal inside a code block or string.
+  // @internal exemption — exercises the production isInternal() helper so any
+  // future tweak to the @internal recognition rule is caught at self-check time.
   const internalCases = [
     { block: "/**\n * Foo.\n * @internal\n */", expected: true },
     { block: "/** @internal */", expected: true },
     { block: "/**\n * Foo.\n */", expected: false },
     {
       block: "/**\n * Foo.\n * @example\n * `// @internal`\n */",
-      // Approximate: the simple regex DOES match here. Documenting current behavior.
-      // If this becomes a real false-positive in the wild, tighten the regex.
+      // Documented limitation: the simple regex DOES match `@internal` inside
+      // a code-fence. No occurrences in the repo today; tighten if a real
+      // false positive surfaces.
       expected: true,
     },
   ];
   for (const c of internalCases) {
-    const got = /@internal\b/.test(c.block);
+    const got = isInternal(c.block);
     if (got === c.expected) pass++;
     else {
       fail++;
       fails.push(
-        `@internal FAIL: ${JSON.stringify(c.block)} → expected ${c.expected}, got ${got}`,
+        `isInternal FAIL: ${JSON.stringify(c.block)} → expected ${c.expected}, got ${got}`,
       );
     }
   }
