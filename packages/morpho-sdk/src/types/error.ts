@@ -326,6 +326,18 @@ export class MissingPublicAllocatorConfigError extends Error {
   }
 }
 
+export class InsufficientSharedLiquidityError extends Error {
+  constructor(params: {
+    market: string;
+    shortfall: bigint;
+    available: bigint;
+  }) {
+    super(
+      `Shared liquidity is insufficient to cover the borrow on market ${params.market}: shortfall "${params.shortfall}", available "${params.available}". Reduce the borrow amount or wait for additional vault liquidity.`,
+    );
+  }
+}
+
 export class NonPositiveMinBorrowSharePriceError extends Error {
   constructor(market: string) {
     super(`Min share price must be non-negative for market: ${market}`);

@@ -13,7 +13,10 @@ import {
   WethUsdsMarketV1,
   WstethUsdcSourceMarket,
 } from "../../test/fixtures/marketV1.js";
-import { MissingPublicAllocatorConfigError } from "../types/index.js";
+import {
+  InsufficientSharedLiquidityError,
+  MissingPublicAllocatorConfigError,
+} from "../types/index.js";
 import { computeReallocations } from "./computeReallocations.js";
 
 // --- Constants ---
@@ -553,6 +556,73 @@ describe("computeReallocations", () => {
       expect(resultLow[0]!.withdrawals[0]!.amount).toBeGreaterThan(
         resultHigh[0]!.withdrawals[0]!.amount,
       );
+    });
+
+    test("error: InsufficientSharedLiquidityError when reallocations cannot cover the borrow shortfall", () => {
+      // Target: 800 supply, 500 borrow. borrow 500 → newBorrow 1000, newSupply 800.
+      // Absolute shortfall = 200 WAD. Friendly 50 + aggressive 100 = 150 < 200.
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: 800n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const borrowAmount = 500n * MathLib.WAD;
+
+      // Phase 2 must trigger: 500 + 500 = 1000 > 850.
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 850n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        targetMarket: tm,
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        aggressiveWithdrawals: [
+          { id: sourceB.id, vault: VAULT_A, assets: 100n * MathLib.WAD },
+        ],
+        vaultFees: { [VAULT_A]: 1000n },
+      });
+
+      expect(() =>
+        computeReallocations({
+          reallocationData: data,
+          marketId: targetParams.id,
+          borrowAmount,
+          options: { enabled: true },
+        }),
+      ).toThrow(InsufficientSharedLiquidityError);
+    });
+
+    test("should not throw when shortfall is zero even if supply target is unmet", () => {
+      // newBorrow ≤ newSupply → absoluteShortfall = 0; partial supply-target
+      // coverage is acceptable because the borrow itself is feasible.
+      const borrowAmount = 500n * MathLib.WAD; // newBorrow=1000, newSupply=1000.
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        // Only 50 WAD provided; supply-target requiredAssets ≈ 105 WAD.
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 0n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        borrowAmount,
+        options: { enabled: true },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.withdrawals[0]!.amount).toBe(50n * MathLib.WAD);
     });
 
     test("should throw MissingPublicAllocatorConfigError when vault config is missing", () => {
