@@ -116,12 +116,12 @@ Rules for examples:
 /**
  * @example
  * ```ts
- * import { createPublicClient, http } from "viem";
+ * import { createWalletClient, http } from "viem";
  * import { mainnet } from "viem/chains";
  * import { MorphoClient } from "@morpho-org/morpho-sdk";
  *
  * const client = new MorphoClient(
- *   createPublicClient({ chain: mainnet, transport: http() }),
+ *   createWalletClient({ chain: mainnet, transport: http(), account: borrower }),
  * );
  *
  * const market = client.marketV1(marketParams, 1);
@@ -240,6 +240,6 @@ Copy from those files when in doubt.
 ## Operational rules
 
 - **One concern per PR** ([`AGENTS.md`](../AGENTS.md) §8): JSDoc backfill PRs do not mix in feature work or refactors.
-- **Doc-only changesets** are `patch` per [`AGENTS.md`](../AGENTS.md) §7. Add the changeset in the same PR.
+- **Doc-only changesets** are `patch` per [`AGENTS.md`](../AGENTS.md) §7 when the PR touches a published package's `src/`. Repo-meta-only PRs (TIB, style guide, root tooling) may omit a changeset.
 - **Coverage is observable**: run `pnpm jsdoc:coverage` to print the per-package burndown table. Backfill PRs paste the new table into their PR description so reviewers see progress without reading the diff.
 - **Automated enforcement is deferred** — see [TIB-2026-05-04](./tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) Considered Alternative 6. Reviewers and the burndown signal hold the line until Biome ships JSDoc rules (or a lighter in-repo gate emerges).

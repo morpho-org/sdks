@@ -55,9 +55,10 @@ export interface MarketV1RepayParams {
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
  * @param params.args.assets - Repay amount in loan-token assets. Set to `0n` when repaying by shares.
  * @param params.args.shares - Repay amount in borrow shares. Set to `0n` when repaying by assets.
- * @param params.args.transferAmount - ERC-20 amount to pull into `GeneralAdapter1`. Must be at
- *   least the repay amount; in shares mode this is an upper-bound estimate to absorb share-price
- *   drift.
+ * @param params.args.transferAmount - ERC-20 amount to pull into `GeneralAdapter1`. In assets
+ *   mode, must equal `assets` exactly (`TransferAmountNotEqualToAssetsError` fires otherwise).
+ *   In shares mode, this is an upper-bound estimate to absorb share-price drift; residual loan
+ *   tokens are skimmed back to `receiver`.
  * @param params.args.onBehalf - Address whose Morpho debt is being repaid.
  * @param params.args.receiver - Address that receives residual loan tokens in shares mode.
  * @param params.args.maxSharePrice - Maximum acceptable repay share price (in ray). Slippage

@@ -23,7 +23,6 @@
     "**/lib/**"
   ],
   "excludeInternal": true,
-  "excludePrivate": true,
   "skipErrorChecking": true,
   "validation": {
     "notExported": true,

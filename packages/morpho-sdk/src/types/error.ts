@@ -275,7 +275,7 @@ export class MutuallyExclusiveRepayAmountsError extends Error {
   }
 }
 
-/** Thrown when both `assets` and `shares` are zero on a market repay. */
+/** Thrown when a market repay has non-positive amounts: both `assets` and `shares` are zero, or either is negative. */
 export class NonPositiveRepayAmountError extends Error {
   constructor(market: string) {
     super(`Repay amount must be positive for market: ${market}`);

@@ -37,12 +37,12 @@ export class MorphoClient implements MorphoClientType {
    *   client builds.
    * @example
    * ```ts
-   * import { createPublicClient, http } from "viem";
+   * import { createWalletClient, http } from "viem";
    * import { mainnet } from "viem/chains";
    * import { MorphoClient } from "@morpho-org/morpho-sdk";
    *
    * const client = new MorphoClient(
-   *   createPublicClient({ chain: mainnet, transport: http() }),
+   *   createWalletClient({ chain: mainnet, transport: http(), account: user }),
    *   { supportSignature: true },
    * );
    * ```

@@ -87,7 +87,7 @@ The guide ships side-by-side good/bad examples drawn from the action builders ci
 
 ### 2. Tiered, package-scoped backfill
 
-Backfill in tiers, in the order the audit ranked them. Within each tier, one PR per layer (e.g. `morpho-sdk/actions/marketV1`, `morpho-sdk/actions/vaultV1`, `simulation-sdk/handlers`) so reviews stay scoped, ownership is obvious, and a single reviewer can hold the canonical shape across the diff. Each PR ships a `patch` changeset (doc-only) per §7.
+Backfill in tiers, in the order the audit ranked them. Within each tier, one PR per layer (e.g. `morpho-sdk/actions/marketV1`, `morpho-sdk/actions/vaultV1`, `simulation-sdk/handlers`) so reviews stay scoped, ownership is obvious, and a single reviewer can hold the canonical shape across the diff. Each PR that touches a published package's `src/` ships a `patch` changeset (doc-only) per §7; repo-meta-only PRs (TIB, style guide, root tooling) may omit the changeset.
 
 PRs do not mix JSDoc backfill with feature work or refactors — one concern per PR per §8. PRs do not introduce code changes other than JSDoc; if a docstring reveals a real bug or naming flaw, the fix lands in a separate PR that the docstring PR depends on.
 

@@ -7,7 +7,9 @@ import type { VaultReallocation } from "../../types/index.js";
  * Builds reallocation bundler actions and computes the total fee.
  *
  * Validates the reallocations, then encodes each as a `reallocateTo` action against the target
- * market. Caller must ensure `reallocations` is non-empty before calling.
+ * market. Caller must ensure `reallocations` is non-empty before calling. Internal helper —
+ * consumed only by `marketV1Borrow` and `marketV1SupplyCollateralBorrow`; not re-exported on the
+ * public surface.
  *
  * @param reallocations - The vault reallocations to encode.
  * @param targetMarketParams - The target market params the freed liquidity is destined for.
@@ -19,13 +21,7 @@ import type { VaultReallocation } from "../../types/index.js";
  * @throws {ReallocationWithdrawalOnTargetMarketError} when a withdrawal references the target market.
  * @throws {UnsortedReallocationWithdrawalsError} when withdrawals within a reallocation are not
  *   strictly sorted by market id.
- * @example
- * ```ts
- * import { buildReallocationActions } from "@morpho-org/morpho-sdk";
- *
- * const { actions, fee } = buildReallocationActions(reallocations, targetMarketParams);
- * // actions satisfies Action[]; fee satisfies bigint
- * ```
+ * @internal
  */
 export const buildReallocationActions = (
   reallocations: readonly VaultReallocation[],
