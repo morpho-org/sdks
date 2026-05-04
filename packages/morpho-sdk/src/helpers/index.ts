@@ -1,10 +1,6 @@
 export { computeReallocations } from "./computeReallocations.js";
 export { addTransactionMetadata } from "./metadata.js";
 export {
-  projectMarketForRepay,
-  REPAY_ACCRUAL_BUFFER,
-} from "./projectMarketForRepay.js";
-export {
   computeMaxRepaySharePrice,
   computeMinBorrowSharePrice,
 } from "./slippage.js";

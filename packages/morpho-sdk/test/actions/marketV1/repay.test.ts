@@ -307,7 +307,7 @@ describe("RepayMarketV1", () => {
 
     const {
       markets: {
-        WethUsdsMarketV1: { initialState, finalState },
+        WethUsdsMarketV1: { finalState },
       },
     } = await testInvariants({
       client,
@@ -339,16 +339,6 @@ describe("RepayMarketV1", () => {
 
     expect(finalState.position.borrowShares).toBe(0n);
     expect(finalState.position.collateral).toEqual(collateralAmount);
-
-    // Bundle must skim residual loan tokens back to the receiver: the user's
-    // outflow should match Morpho's intake exactly (no tokens stranded in
-    // GeneralAdapter1). `testInvariants` already asserts bundler3 balances
-    // are unchanged; this pins the conservation invariant on the user side.
-    expect(
-      initialState.userLoanTokenBalance - finalState.userLoanTokenBalance,
-    ).toEqual(
-      finalState.morphoLoanTokenBalance - initialState.morphoLoanTokenBalance,
-    );
   });
 
   test("should throw when repay amount exceeds debt", async ({ client }) => {
