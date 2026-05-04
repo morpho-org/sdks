@@ -41,6 +41,8 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 
 - [**`@morpho-org/simulation-sdk`**](./packages/simulation-sdk/) `⚠️ deprecated`: Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`)
 
+- [**`@morpho-org/evm-simulation`**](./packages/evm-simulation/): EVM simulation engine for Morpho transactions, with Tenderly REST and `eth_simulateV1` backends, signature authorization handling, sanctions screening, and bundler retention checks
+
 ### Testing
 
 - [**`@morpho-org/test`**](./packages/test/): Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes
