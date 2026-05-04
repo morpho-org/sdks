@@ -61,8 +61,6 @@ export const vaultV2ForceWithdraw = ({
     throw new EmptyDeallocationsError(vaultAddress);
   }
 
-  // Snapshot getter-backed fields once so validation, calldata encoding, and
-  // the typed action description cannot drift from each other.
   const { amount: withdrawAmount, recipient: withdrawRecipient } = withdraw;
 
   if (withdrawAmount <= 0n) {
