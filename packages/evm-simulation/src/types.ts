@@ -147,3 +147,43 @@ export interface RawLog {
   topics: Hex[];
   data: Hex;
 }
+
+/**
+ * Internal mirror of `SimulationCallResult`, mutable during construction by
+ * the simulation backends.
+ */
+export interface RawCallResult {
+  logs: RawLog[];
+  status: boolean;
+  returnData: Hex;
+  gasUsed: bigint;
+  /** Tenderly-only `asset_changes` payload. Absent on `eth_simulateV1`. */
+  assetChanges?: unknown;
+}
+
+/**
+ * Per-transaction normalized output from the simulation backend.
+ *
+ * `SimulationResult.callResults[i]` corresponds 1:1 with
+ * `SimulationResult.simulationTxs[i]`. Use this to read raw logs, status,
+ * return data, gas used, and (Tenderly only) asset changes per transaction.
+ */
+export interface SimulationCallResult {
+  readonly logs: readonly RawLog[];
+  /**
+   * True iff the call succeeded. The bundle as a whole reverts via
+   * `SimulationRevertedError` before the result is returned, so on a
+   * successful `simulate()` every entry is `true` today. Field kept for
+   * forward-compatibility with backends that may surface per-call status.
+   */
+  readonly status: boolean;
+  /** Return data from the top-level call. */
+  readonly returnData: Hex;
+  /** Gas used by this call (root frame). */
+  readonly gasUsed: bigint;
+  /**
+   * Tenderly-only `asset_changes` payload for this tx. Opaque `unknown` —
+   * do not destructure without validation. Absent on `eth_simulateV1`.
+   */
+  readonly assetChanges?: unknown;
+}
