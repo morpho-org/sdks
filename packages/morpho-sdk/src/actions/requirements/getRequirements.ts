@@ -4,7 +4,7 @@ import { isDefined } from "@morpho-org/morpho-ts";
 import { validateChainId } from "../../helpers/index.js";
 import type {
   ERC20ApprovalAction,
-  PublicClient,
+  PublicClientWithChain,
   Requirement,
   Transaction,
 } from "../../types/index.js";
@@ -83,7 +83,7 @@ type GetRequirementsParams =
  * ```
  */
 export const getRequirements = async (
-  viemClient: PublicClient,
+  viemClient: PublicClientWithChain,
   params: GetRequirementsParams,
 ): Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]> => {
   const {

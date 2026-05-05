@@ -11,7 +11,7 @@ import {
   InvalidSignatureError,
   type Permit2Action,
   type Requirement,
-  type WalletClient,
+  type WalletClientWithChain,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeErc20Permit2}. */
@@ -85,7 +85,7 @@ export const encodeErc20Permit2 = (
 
   return {
     action,
-    async sign(client: WalletClient, userAddress: Address) {
+    async sign(client: WalletClientWithChain, userAddress: Address) {
       validateChainId(client.chain.id, chainId);
       validateUserAddress(client.account.address, userAddress);
 

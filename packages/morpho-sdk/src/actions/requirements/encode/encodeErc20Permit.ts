@@ -10,9 +10,9 @@ import {
 import {
   InvalidSignatureError,
   type PermitAction,
-  type PublicClient,
+  type PublicClientWithChain,
   type Requirement,
-  type WalletClient,
+  type WalletClientWithChain,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
@@ -64,7 +64,7 @@ interface EncodeErc20PermitParams {
  * ```
  */
 export const encodeErc20Permit = async (
-  viemClient: PublicClient,
+  viemClient: PublicClientWithChain,
   params: EncodeErc20PermitParams,
 ): Promise<Requirement> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;
@@ -89,7 +89,7 @@ export const encodeErc20Permit = async (
 
   return {
     action,
-    async sign(client: WalletClient, userAddress: Address) {
+    async sign(client: WalletClientWithChain, userAddress: Address) {
       validateChainId(client.chain.id, chainId);
       validateUserAddress(client.account.address, userAddress);
 

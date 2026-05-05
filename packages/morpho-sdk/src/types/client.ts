@@ -12,7 +12,7 @@ import type { Metadata } from "./index.js";
  * builders for on-chain reads and transaction construction. The SDK never reads `account`
  * from this client.
  */
-export type PublicClient<
+export type PublicClientWithChain<
   chain extends Chain = Chain,
   transport extends Transport = Transport,
 > = Client<transport, chain>;
@@ -21,7 +21,7 @@ export type PublicClient<
  * Viem wallet client with a required `chain` and `account`. Used by `Requirement.sign(...)`
  * to produce EIP-712 permit / permit2 signatures.
  */
-export type WalletClient<
+export type WalletClientWithChain<
   chain extends Chain = Chain,
   account extends Account = Account,
   transport extends Transport = Transport,
@@ -33,7 +33,7 @@ export type WalletClient<
  * entity-factory methods the SDK exposes.
  */
 export interface MorphoClientType {
-  readonly viemClient: PublicClient;
+  readonly viemClient: PublicClientWithChain;
   readonly options: {
     readonly supportSignature: boolean;
     readonly supportDeployless?: boolean;

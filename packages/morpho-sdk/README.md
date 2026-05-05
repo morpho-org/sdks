@@ -71,13 +71,13 @@ const tx = buildTx(permitSignature);
 The SDK exports two viem-style type aliases:
 
 ```ts
-import type { PublicClient, WalletClient } from "@morpho-org/morpho-sdk";
-// PublicClient = Client<Transport, Chain>
-// WalletClient = Client<Transport, Chain, Account>
+import type { PublicClientWithChain, WalletClientWithChain } from "@morpho-org/morpho-sdk";
+// PublicClientWithChain = Client<Transport, Chain>
+// WalletClientWithChain = Client<Transport, Chain, Account>
 ```
 
-- **`PublicClient`** → `new MorphoClient(publicClient)`. Reads on-chain state and builds transactions. `chain` is mandatory. The SDK checks `chain.id === expected chainId` before every read or build.
-- **`WalletClient`** → `requirement.sign(walletClient, userAddress)`. Signs permit / permit2. `chain` AND `account` are mandatory. The SDK checks `chain.id === expected chainId` AND `account.address === userAddress`.
+- **`PublicClientWithChain`** → `new MorphoClient(publicClient)`. Reads on-chain state and builds transactions. `chain` is mandatory. The SDK checks `chain.id === expected chainId` before every read or build.
+- **`WalletClientWithChain`** → `requirement.sign(walletClient, userAddress)`. Signs permit / permit2. `chain` AND `account` are mandatory. The SDK checks `chain.id === expected chainId` AND `account.address === userAddress`.
 
 The integrator owns both. Mismatches throw typed errors (`ChainIdMismatchError`, `MissingClientPropertyError`, `AddressMismatchError`).
 

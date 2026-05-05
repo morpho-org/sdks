@@ -9,7 +9,7 @@ import {
   MarketIdMismatchError,
   type Metadata,
   type MorphoClientType,
-  type PublicClient,
+  type PublicClientWithChain,
 } from "../types/index.js";
 
 /**
@@ -29,7 +29,7 @@ export class MorphoClient implements MorphoClientType {
 
   /**
    * @param viemClient - Connected viem public `Client` whose `chain` is set. Used for on-chain
-   *   reads only; signature flows take a `WalletClient` directly via `Requirement.sign(...)`.
+   *   reads only; signature flows take a `WalletClientWithChain` directly via `Requirement.sign(...)`.
    * @param _options - SDK-wide options.
    * @param _options.supportSignature - Whether the integrator can collect EIP-712 signatures for
    *   permit / permit2. Defaults to `false` (classic approvals only).
@@ -49,7 +49,7 @@ export class MorphoClient implements MorphoClientType {
    * ```
    */
   constructor(
-    public readonly viemClient: PublicClient,
+    public readonly viemClient: PublicClientWithChain,
     readonly _options?: {
       readonly supportSignature?: boolean;
       readonly supportDeployless?: boolean;
