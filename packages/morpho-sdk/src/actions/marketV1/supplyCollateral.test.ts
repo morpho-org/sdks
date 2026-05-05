@@ -6,6 +6,7 @@ import {
   UsdcEurcvMarketV1,
   WethUsdsMarketV1,
 } from "../../../test/fixtures/marketV1.js";
+import { publicFromTestClient } from "../../../test/helpers/morphoTestClient.js";
 import { test } from "../../../test/setup.js";
 import {
   isRequirementApproval,
@@ -112,7 +113,7 @@ describe("marketV1SupplyCollateral unit tests", () => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,

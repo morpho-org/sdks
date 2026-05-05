@@ -7,6 +7,7 @@ import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
 } from "../../../test/fixtures/vaultV1.js";
+import { publicFromTestClient } from "../../../test/helpers/morphoTestClient.js";
 import { test } from "../../../test/setup.js";
 import {
   DepositAmountMismatchError,
@@ -32,7 +33,7 @@ describe("depositVaultV1 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,
@@ -90,7 +91,7 @@ describe("depositVaultV1 unit tests", () => {
     const amount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -151,7 +152,7 @@ describe("depositVaultV1 unit tests", () => {
     const amount = parseUnits("5", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,
@@ -247,7 +248,7 @@ describe("depositVaultV1 unit tests", () => {
     const depositAmount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -423,7 +424,7 @@ describe("depositVaultV1 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,

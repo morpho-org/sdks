@@ -1,5 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import type { Account, Address, Chain, PublicClient, Transport } from "viem";
+import type { Address, PublicClient } from "viem";
 import { encodeErc20Permit } from "./encode/index.js";
 
 /**
@@ -37,7 +37,7 @@ import { encodeErc20Permit } from "./encode/index.js";
  * ```
  */
 export const getRequirementsPermit = async (
-  viemClient: PublicClient<Transport, Chain | undefined, Account | undefined>,
+  viemClient: PublicClient,
   params: {
     token: Address;
     chainId: number;

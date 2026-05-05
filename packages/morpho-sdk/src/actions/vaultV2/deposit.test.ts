@@ -7,6 +7,7 @@ import {
   KeyrockUsdcVaultV2,
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
+import { publicFromTestClient } from "../../../test/helpers/morphoTestClient.js";
 import { test } from "../../../test/setup.js";
 import {
   DepositAmountMismatchError,
@@ -38,7 +39,7 @@ describe.sequential("depositVaultV2 unit tests", () => {
     const maxSharePrice = 1000000000000000000n; // 1:1 share price
 
     // Create DAI permit signature
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,
@@ -98,7 +99,7 @@ describe.sequential("depositVaultV2 unit tests", () => {
     const assets = parseUnits("1000", 6); // 1000 USDC
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -159,7 +160,7 @@ describe.sequential("depositVaultV2 unit tests", () => {
     const assets = parseUnits("5", 18); // 5 WETH
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: wNative,
       chainId: mainnet.id,
       supportSignature: true,
@@ -218,7 +219,7 @@ describe.sequential("depositVaultV2 unit tests", () => {
     const depositAmount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: usdc,
       chainId: mainnet.id,
       supportSignature: true,
@@ -375,7 +376,7 @@ describe.sequential("depositVaultV2 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: dai,
       chainId: mainnet.id,
       supportSignature: true,

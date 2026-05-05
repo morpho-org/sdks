@@ -8,6 +8,7 @@ import {
   KeyrockUsdcVaultV2,
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
+import { publicFromTestClient } from "../../../test/helpers/morphoTestClient.js";
 import { test } from "../../../test/setup.js";
 import {
   DepositAssetMismatchError,
@@ -121,7 +122,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: SteakhouseUsdcVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -184,7 +185,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 5000000000000000000n; // 5 shares (18 decimals)
 
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: GauntletWethVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
@@ -275,7 +276,7 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
     // Sign permit for WETH vault shares
-    const requirements = await getRequirements(client, {
+    const requirements = await getRequirements(publicFromTestClient(client), {
       address: GauntletWethVaultV1.address,
       chainId: mainnet.id,
       supportSignature: true,
