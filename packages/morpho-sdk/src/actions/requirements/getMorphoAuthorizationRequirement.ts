@@ -6,7 +6,6 @@ import {
   type Client,
   encodeFunctionData,
   publicActions,
-  type Transport,
 } from "viem";
 import type {
   MorphoAuthorizationAction,
@@ -42,7 +41,7 @@ import type {
  * ```
  */
 export const getMorphoAuthorizationRequirement = async (params: {
-  viemClient: Client<Transport>;
+  viemClient: Client;
   chainId: number;
   userAddress: Address;
 }): Promise<Readonly<Transaction<MorphoAuthorizationAction>> | null> => {

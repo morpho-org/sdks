@@ -1,12 +1,7 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import {
-  type Client,
-  type Transport,
-  verifyTypedData,
-  type WalletClient,
-} from "viem";
+import { type Client, verifyTypedData, type WalletClient } from "viem";
 import { signTypedData } from "viem/actions";
 import {
   validateChainId,
@@ -54,7 +49,7 @@ interface EncodeErc20PermitParams {
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  */
 export const encodeErc20Permit = async (
-  viemClient: Client<Transport>,
+  viemClient: Client,
   params: EncodeErc20PermitParams,
 ): Promise<Requirement> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;

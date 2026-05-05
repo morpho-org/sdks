@@ -1,5 +1,5 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
-import { type Address, type Client, createClient, type Transport } from "viem";
+import { type Address, type Client, createClient } from "viem";
 import {
   MorphoMarketV1,
   MorphoVaultV1,
@@ -48,7 +48,7 @@ export class MorphoClient implements MorphoClientType {
    * @returns A fresh viem `Client` bound to `config.transports[chainId]`.
    * @throws {UnsupportedChainError} when no transport is configured for `chainId`.
    */
-  public getViemClient(chainId: number): Client<Transport> {
+  public getViemClient(chainId: number): Client {
     const transport = this.config.transports[chainId];
     if (transport == null) {
       throw new UnsupportedChainError(chainId);

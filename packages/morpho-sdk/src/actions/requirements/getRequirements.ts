@@ -1,7 +1,7 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { fetchHolding } from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
-import type { Client, Transport } from "viem";
+import type { Client } from "viem";
 import type {
   ERC20ApprovalAction,
   Requirement,
@@ -67,7 +67,7 @@ type GetRequirementsParams =
  *   `ApprovalAmountLessThanSpendAmountError` cannot fire from here.
  */
 export const getRequirements = async (
-  viemClient: Client<Transport>,
+  viemClient: Client,
   params: GetRequirementsParams,
 ): Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]> => {
   const {

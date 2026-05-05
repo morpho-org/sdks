@@ -43,7 +43,7 @@ export interface MorphoClientType {
    *
    * @throws {UnsupportedChainError} when no transport is configured for `chainId`.
    */
-  getViemClient: (chainId: number) => Client<Transport>;
+  getViemClient: (chainId: number) => Client;
 
   vaultV1: (vault: Address, chainId: number) => VaultV1Actions;
   vaultV2: (vault: Address, chainId: number) => VaultV2Actions;

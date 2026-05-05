@@ -1,5 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import type { Address, Client, Transport } from "viem";
+import type { Address, Client } from "viem";
 import { encodeErc20Permit } from "./encode/index.js";
 
 /**
@@ -37,7 +37,7 @@ import { encodeErc20Permit } from "./encode/index.js";
  * ```
  */
 export const getRequirementsPermit = async (
-  viemClient: Client<Transport>,
+  viemClient: Client,
   params: {
     token: Address;
     chainId: number;
