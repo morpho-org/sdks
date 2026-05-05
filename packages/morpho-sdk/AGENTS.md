@@ -20,7 +20,7 @@ new MorphoClient({
 
 ## Signing
 
-`Requirement.sign(walletClient, userAddress)` takes a viem `Client<Transport, Chain | undefined, Account>` (account mandatory). The callback validates chain id and account address explicitly at the top, then produces the EIP-712 signature.
+`Requirement.sign(walletClient, userAddress)` takes a viem `WalletClient` (bare). The callback runtime-validates `chain.id`, then asserts `account` is set (throws `MissingClientPropertyError`), then validates `account.address` against `userAddress`, then produces the EIP-712 signature.
 
 The integrator owns the wallet client; the SDK never builds one. Mismatches throw typed errors (`ChainIdMismatchError`, `MissingClientPropertyError`, `AddressMismatchError`).
 
