@@ -1,0 +1,101 @@
+name: Extract Linear Issue ID
+description: Extracts a Linear issue ID from a PR body or branch name
+
+inputs:
+  pr-body:
+    description: The PR body text
+    required: false
+    default: ''
+  branch-name:
+    description: The branch name (e.g., feature/apps-123-description)
+    required: false
+    default: ''
+  commits-json:
+    description: JSON array of commit objects from pulls.listCommits() — each must have a .commit.message field
+    required: false
+    default: ''
+
+outputs:
+  found:
+    description: Whether a Linear issue ID was found
+    value: ${{ steps.extract.outputs.found }}
+  issue_id:
+    description: The Linear issue ID (e.g., APPS-123)
+    value: ${{ steps.extract.outputs.issue_id }}
+  url:
+    description: The full Linear issue URL
+    value: ${{ steps.extract.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Extract Linear ID
+      id: extract
+      shell: bash
+      # PR body is passed via env var (not interpolated into the script)
+      # to avoid injection from PR bodies containing special characters.
+      env:
+        PR_BODY: ${{ inputs.pr-body }}
+        BRANCH_NAME: ${{ inputs.branch-name }}
+        COMMITS_JSON: ${{ inputs.commits-json }}
+      run: |
+        ISSUE_ID=""
+        URL=""
+
+        # 1. Check for existing Linear URL in PR body (most reliable)
+        #    Linear URLs use lowercase IDs, so match case-insensitively and uppercase afterward
+        if [[ "$PR_BODY" =~ https://linear\.app/([^[:space:]/]+)/issue/([A-Za-z]{2,10}-[0-9]+) ]]; then
+          ISSUE_ID=$(echo "${BASH_REMATCH[2]}" | tr '[:lower:]' '[:upper:]')
+          URL="${BASH_REMATCH[0]}"
+        fi
+
+        # 2. Check branch name (e.g., feature/crtr-1892-description)
+        if [[ -z "$ISSUE_ID" && -n "$BRANCH_NAME" ]]; then
+          SEGMENT="${BRANCH_NAME##*/}"
+          UPPER_SEGMENT=$(echo "$SEGMENT" | tr '[:lower:]' '[:upper:]')
+          EXCLUDED="^(ERC|EIP|BIP|BEP|SIP|KIP|SEP|RFC|CIP|AIP|PIP|MIP|ADR|TIB)-"
+          if [[ "$UPPER_SEGMENT" =~ ^([A-Z]{2,10}-[0-9]+) ]]; then
+            CANDIDATE="${BASH_REMATCH[1]}"
+            if [[ ! "$CANDIDATE" =~ $EXCLUDED ]]; then
+              ISSUE_ID="$CANDIDATE"
+            fi
+          fi
+        fi
+
+        # 3. Check commit messages for Linear ID
+        if [[ -z "$ISSUE_ID" && -n "$COMMITS_JSON" ]]; then
+          EXCLUDED="^(ERC|EIP|BIP|BEP|SIP|KIP|SEP|RFC|CIP|AIP|PIP|MIP|ADR|TIB)-"
+          while IFS= read -r CANDIDATE; do
+            if [[ -n "$CANDIDATE" && ! "$CANDIDATE" =~ $EXCLUDED ]]; then
+              ISSUE_ID="$CANDIDATE"
+              break
+            fi
+          done < <(echo "$COMMITS_JSON" | jq -r '.[].commit.message' 2>/dev/null \
+            | grep -oE '\b[A-Z]{2,10}-[0-9]+\b')
+        fi
+
+        # 4. Check PR body for raw Linear ID, excluding common non-Linear prefixes
+        #    (e.g., ERC-4626, EIP-1559 are standard identifiers, not Linear tickets)
+        #    This is the least reliable check, so it runs last.
+        if [[ -z "$ISSUE_ID" ]]; then
+          EXCLUDED="^(ERC|EIP|BIP|BEP|SIP|KIP|SEP|RFC|CIP|AIP|PIP|MIP|ADR|TIB)-"
+          while IFS= read -r CANDIDATE; do
+            if [[ -n "$CANDIDATE" && ! "$CANDIDATE" =~ $EXCLUDED ]]; then
+              ISSUE_ID="$CANDIDATE"
+              break
+            fi
+          done < <(echo "$PR_BODY" | grep -oE '\b[A-Z]{2,10}-[0-9]+\b')
+        fi
+
+        # Build URL if we found an ID without a URL
+        if [[ -n "$ISSUE_ID" && -z "$URL" ]]; then
+          URL="https://linear.app/morpho-labs/issue/${ISSUE_ID}"
+        fi
+
+        if [[ -n "$ISSUE_ID" ]]; then
+          echo "found=true" >> "$GITHUB_OUTPUT"
+          echo "issue_id=$ISSUE_ID" >> "$GITHUB_OUTPUT"
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+        else
+          echo "found=false" >> "$GITHUB_OUTPUT"
+        fi
