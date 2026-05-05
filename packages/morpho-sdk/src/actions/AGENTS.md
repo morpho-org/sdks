@@ -9,6 +9,12 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 - `marketV1/` — Morpho Blue `supplyCollateral` / `borrow` / `supplyCollateralBorrow` / `repay` / `repayWithdrawCollateral` / `withdrawCollateral`. Borrow paths support optional shared liquidity via `reallocations`.
 - `requirements/` — token approvals, permit/permit2 signatures, Morpho authorization resolved before deposit/supply.
 
+## Signing (`requirements/`)
+
+`getRequirements()` may return `Requirement` objects that the integrator signs off-chain. `Requirement.sign(walletClient, userAddress)` takes a viem **wallet client** (`Client<Transport, Chain, Account>`). It calls `validateWalletClient(walletClient, { chainId, userAddress })` first: `chainId` and `account.address` must both match. Then it produces the EIP-712 signature and verifies it.
+
+Builders themselves never sign and never read `account` — that's the wallet client's job at signing time only.
+
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).

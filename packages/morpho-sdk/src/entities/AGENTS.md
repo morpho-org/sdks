@@ -4,9 +4,9 @@
 
 ## Responsibilities
 
-- Fetch on-chain state (vault accrual data, market/position data).
+- Fetch on-chain state via the public client (vault accrual data, market/position data).
 - Compute derived values (e.g. `maxSharePrice` with slippage, LLTV buffer health).
-- Validate `chainId` and `userAddress` match the client/builder before any on-chain read or transaction construction.
+- Validate `chainId` against `client.viemClient.chain.id` before any read or build (`validateChainId`). No `userAddress` check here — the public client has no account; address verification belongs to `Requirement.sign(...)` (see [`src/actions/AGENTS.md`](../actions/AGENTS.md)).
 - Return lazy `{ buildTx, getRequirements }` handles — no side effects at construction.
 
 ## Routing

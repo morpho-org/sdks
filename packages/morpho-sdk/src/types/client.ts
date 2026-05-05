@@ -1,5 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import type { Address, Client } from "viem";
+import type { Address, Chain, Client, Transport } from "viem";
 import type {
   MarketV1Actions,
   VaultV1Actions,
@@ -9,10 +9,11 @@ import type { Metadata } from "./index.js";
 
 /**
  * Structural contract every concrete `MorphoClient` implementation satisfies. Carries the viem
- * client, the resolved options bag, and the three entity-factory methods the SDK exposes.
+ * public client (its `chain` is required), the resolved options bag, and the three
+ * entity-factory methods the SDK exposes.
  */
 export interface MorphoClientType {
-  readonly viemClient: Client;
+  readonly viemClient: Client<Transport, Chain>;
   readonly options: {
     readonly supportSignature: boolean;
     readonly supportDeployless?: boolean;

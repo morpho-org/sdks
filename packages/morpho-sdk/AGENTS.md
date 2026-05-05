@@ -4,6 +4,15 @@ Transaction builders for VaultV1, VaultV2, and MarketV1. Subfolders carry the la
 
 > Architecture / type / test / doc / release rules apply per the [root `AGENTS.md`](../../AGENTS.md). Subfolder rules: see each `src/<layer>/AGENTS.md`.
 
+## Clients
+
+Two viem clients, two roles:
+
+- **Public client** — passed to `new MorphoClient(viemClient)`. Used for reads and building transactions. Must have `chain` set. SDK checks: `chain.id === expected chainId`.
+- **Wallet client** — passed to `Requirement.sign(client, userAddress)` for permit / permit2 signing. Must have `chain` and `account` set. SDK checks: `chain.id === expected chainId` AND `account.address === userAddress`.
+
+The integrator owns both clients and decides where each is used. The SDK never reads `account` from the public client.
+
 ## Routing summary
 
 - **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem.

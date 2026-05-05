@@ -16,4 +16,5 @@ export {
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,
+  validateWalletClient,
 } from "./validate.js";

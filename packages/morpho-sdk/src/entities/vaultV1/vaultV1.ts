@@ -18,10 +18,9 @@ import {
   MAX_ABSOLUTE_SHARE_PRICE,
   MAX_SLIPPAGE_TOLERANCE,
 } from "../../helpers/constant.js";
-import { validateChainId, validateUserAddress } from "../../helpers/index.js";
+import { validateChainId } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
-  ChainIdMismatchError,
   ChainWNativeMissingError,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
@@ -142,15 +141,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
   ) {}
 
   async getData(parameters?: FetchParameters) {
-    if (
-      this.client.viemClient.chain?.id &&
-      this.client.viemClient.chain?.id !== this.chainId
-    ) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     return fetchAccrualVault(this.vault, this.client.viemClient, {
       ...parameters,
@@ -170,12 +161,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     accrualVault: AccrualVault;
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     if (!isAddressEqual(accrualVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, accrualVault.address);
@@ -263,12 +249,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -285,12 +266,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
-    if (this.client.viemClient.chain?.id !== this.chainId) {
-      throw new ChainIdMismatchError(
-        this.client.viemClient.chain?.id,
-        this.chainId,
-      );
-    }
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -319,8 +295,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     shares: bigint;
     slippageTolerance?: bigint;
   }) {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     if (!isAddressEqual(sourceVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, sourceVault.address);

@@ -1,5 +1,5 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
-import type { Address, Client } from "viem";
+import type { Address, Chain, Client, Transport } from "viem";
 import {
   MorphoMarketV1,
   MorphoVaultV1,
@@ -27,8 +27,8 @@ export class MorphoClient implements MorphoClientType {
   };
 
   /**
-   * @param viemClient - Connected viem `Client`. Public reads use it as-is; signature flows use
-   *   it as a `WalletClient` and require `account` to be set.
+   * @param viemClient - Connected viem public `Client` whose `chain` is set. Used for on-chain
+   *   reads only; signature flows take a `WalletClient` directly via `Requirement.sign(...)`.
    * @param _options - SDK-wide options.
    * @param _options.supportSignature - Whether the integrator can collect EIP-712 signatures for
    *   permit / permit2. Defaults to `false` (classic approvals only).
@@ -37,18 +37,18 @@ export class MorphoClient implements MorphoClientType {
    *   client builds.
    * @example
    * ```ts
-   * import { createWalletClient, http } from "viem";
+   * import { createPublicClient, http } from "viem";
    * import { mainnet } from "viem/chains";
    * import { MorphoClient } from "@morpho-org/morpho-sdk";
    *
    * const client = new MorphoClient(
-   *   createWalletClient({ chain: mainnet, transport: http(), account: user }),
+   *   createPublicClient({ chain: mainnet, transport: http() }),
    *   { supportSignature: true },
    * );
    * ```
    */
   constructor(
-    public readonly viemClient: Client,
+    public readonly viemClient: Client<Transport, Chain>,
     readonly _options?: {
       readonly supportSignature?: boolean;
       readonly supportDeployless?: boolean;

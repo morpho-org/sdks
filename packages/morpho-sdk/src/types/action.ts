@@ -1,4 +1,4 @@
-import type { Address, Client, Hex } from "viem";
+import type { Account, Address, Chain, Client, Hex, Transport } from "viem";
 import type { Deallocation } from "./deallocation.js";
 
 export interface BaseAction<
@@ -13,7 +13,10 @@ export interface ERC20ApprovalAction
   extends BaseAction<"erc20Approval", { spender: Address; amount: bigint }> {}
 
 export interface ERC20PermitAction {
-  sign: (client: Client, userAddress: Address) => Promise<Hex>;
+  sign: (
+    client: Client<Transport, Chain, Account>,
+    userAddress: Address,
+  ) => Promise<Hex>;
 }
 
 export interface VaultV2DepositAction
@@ -268,7 +271,10 @@ export interface Permit2Args {
 }
 
 export interface Requirement {
-  sign: (client: Client, userAddress: Address) => Promise<RequirementSignature>;
+  sign: (
+    client: Client<Transport, Chain, Account>,
+    userAddress: Address,
+  ) => Promise<RequirementSignature>;
   action: PermitAction | Permit2Action;
 }
 

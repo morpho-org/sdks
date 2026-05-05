@@ -6,7 +6,14 @@ import {
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual } from "viem";
+import {
+  type Account,
+  type Address,
+  type Chain,
+  type Client,
+  isAddressEqual,
+  type Transport,
+} from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
@@ -158,6 +165,25 @@ export const validateChainId = (
   if (clientChainId !== expectedChainId) {
     throw new ChainIdMismatchError(clientChainId, expectedChainId);
   }
+};
+
+/**
+ * Validates a wallet client used to sign a `Requirement`: both its `chain.id` matches
+ * `expected.chainId` and its `account.address` matches `expected.userAddress`.
+ *
+ * Throws {@link ChainIdMismatchError} when the chain ids differ.
+ * Throws {@link MissingClientPropertyError} when the client has no account.
+ * Throws {@link AddressMismatchError} when the account differs from `userAddress`.
+ *
+ * @param client - The viem wallet client about to sign.
+ * @param expected - Expected `chainId` and `userAddress`.
+ */
+export const validateWalletClient = (
+  client: Client<Transport, Chain | undefined, Account | undefined>,
+  expected: { chainId: number; userAddress: Address },
+): void => {
+  validateChainId(client.chain?.id, expected.chainId);
+  validateUserAddress(client.account?.address, expected.userAddress);
 };
 
 /**

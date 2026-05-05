@@ -66,9 +66,18 @@ const requirements = await getRequirements();
 const tx = buildTx(permitSignature);
 ```
 
-### Integration invariant — builder = signer
+### Clients
 
-**`userAddress` MUST equal the connected account on the viem client used to build the tx, and that same client MUST sign it.** Enforced by `validateUserAddress` (throws `MissingClientPropertyError` / `AddressMismatchError`); critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls).
+The SDK uses two viem clients with separate roles:
+
+- **Public client** → `new MorphoClient(publicClient)`. Reads on-chain state and builds transactions. `chain` must be set. The SDK checks `chain.id === expected chainId` before every read or build.
+- **Wallet client** → `requirement.sign(walletClient, userAddress)`. Signs permit / permit2. `chain` AND `account` must be set. The SDK checks `chain.id === expected chainId` AND `account.address === userAddress`.
+
+The integrator owns both. Mismatches throw typed errors (`ChainIdMismatchError`, `MissingClientPropertyError`, `AddressMismatchError`).
+
+### Integration invariant — signer = executor
+
+**The wallet client that signs a permit MUST also send the resulting transaction.** Critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls).
 
 | Entity       | Action                   | Route                     | Why                                                                                                 |
 | ------------ | ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------- |
