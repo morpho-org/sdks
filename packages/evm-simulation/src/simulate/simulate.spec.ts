@@ -131,6 +131,64 @@ describe.sequential("simulate — success", () => {
     expect(callArgs.shareable).toBe(true);
   });
 
+  it("attributes Transfer.txIdx to the emitting tx in a multi-tx bundle", async () => {
+    const APPROVE_AMOUNT = 1_000_000n;
+    const TRANSFER_AMOUNT = 500_000n;
+
+    // Two callResults: tx 0 emits a Transfer of APPROVE_AMOUNT, tx 1 emits a
+    // Transfer of TRANSFER_AMOUNT. The emitting index must round-trip.
+    mockTenderlyRest.mockResolvedValueOnce({
+      callResults: [
+        {
+          logs: [
+            makeTransferLog({
+              token: USDC,
+              from: USER,
+              to: SPENDER,
+              amount: APPROVE_AMOUNT,
+            }),
+          ],
+          status: true,
+          returnData: "0x",
+          gasUsed: 0n,
+        },
+        {
+          logs: [
+            makeTransferLog({
+              token: USDC,
+              from: USER,
+              to: VAULT,
+              amount: TRANSFER_AMOUNT,
+            }),
+          ],
+          status: true,
+          returnData: "0x",
+          gasUsed: 0n,
+        },
+      ],
+    });
+
+    const result = await simulate(
+      makeConfig(),
+      makeParams({
+        transactions: [
+          { from: USER, to: USDC, data: "0x095ea7b3" as Hex },
+          { from: USER, to: VAULT, data: "0xa9059cbb" as Hex },
+        ],
+      }),
+    );
+
+    expect(result.callResults).toHaveLength(2);
+    const approveTransfer = result.transfers.find(
+      (t) => t.amount === APPROVE_AMOUNT,
+    );
+    const mainTransfer = result.transfers.find(
+      (t) => t.amount === TRANSFER_AMOUNT,
+    );
+    expect(approveTransfer?.txIdx).toBe(0);
+    expect(mainTransfer?.txIdx).toBe(1);
+  });
+
   it("throws BlacklistViolationError end-to-end when backend logs show bundler retention", async () => {
     // Pin the pipeline wiring: simulate() must invoke assertNoBundlerRetention
     // on the parsed transfers and surface BlacklistViolationError. Without

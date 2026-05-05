@@ -64,6 +64,7 @@ export async function simulate(
 
   return {
     simulationTxs,
+    callResults: result.callResults,
     transfers,
     tenderlyUrl: result.tenderlyUrl,
   };

@@ -96,27 +96,30 @@ export interface Transfer {
 }
 
 /**
- * Happy-path return of `simulate`. All failures throw typed errors. The same shape is
- * returned regardless of `options.shareable` — fields unused by your use case can be
- * ignored:
+ * Happy-path return of `simulate`. All failures throw typed errors.
  *
- * - Preview (`shareable: true`): read `transfers` + `tenderlyUrl`.
- * - Verify (`shareable: false`, default): read `simulationTxs` + `transfers`, pass both
- *   to `screenAddresses`.
- *
- * `tenderlyUrl` is set only when `shareable: true` AND the Tenderly backend ran
- * successfully (not the `eth_simulateV1` fallback). `assetChanges` is Tenderly-only
- * raw data.
+ * - `simulationTxs` is the full resolved transaction list (including
+ *   prepended authorization txs).
+ * - `callResults[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
+ *   status, returnData/gasUsed, and (Tenderly only) assetChanges per tx.
+ * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
+ *   transfer to its emitting transaction.
+ * - `tenderlyUrl` is set only when `shareable: true` AND the Tenderly backend
+ *   ran successfully (not the `eth_simulateV1` fallback).
  */
 export interface SimulationResult {
   /** The full resolved transaction list (including prepended authorization txs). */
-  simulationTxs: SimulationTransaction[];
+  readonly simulationTxs: readonly SimulationTransaction[];
+  /**
+   * Per-transaction normalized output. `callResults[i]` corresponds 1:1 with
+   * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas
+   * used, and (Tenderly only) asset changes per transaction.
+   */
+  readonly callResults: readonly SimulationCallResult[];
   /** Parsed ERC-20 / WETH9 transfers from the simulation. */
-  transfers: Transfer[];
+  readonly transfers: readonly Transfer[];
   /** Shareable Tenderly URL. Present only when `shareable: true` and Tenderly ran (not fallback). */
-  tenderlyUrl?: string;
-  /** Raw Tenderly `asset_changes` payload. Opaque `unknown` — do not destructure without validation. */
-  assetChanges?: unknown;
+  readonly tenderlyUrl?: string;
 }
 
 /** Minimal structured logger the package calls for warnings and info. */
