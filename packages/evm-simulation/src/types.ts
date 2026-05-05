@@ -134,18 +134,18 @@ export interface SimulateParams {
 
 /**
  * Internal raw result from a simulation adapter before normalization.
- * Both Tenderly and simulateV1 produce this.
+ * `callResults[i]` corresponds 1:1 with the i-th transaction passed to the
+ * backend.
  */
 export interface RawSimulationResult {
-  logs: RawLog[];
+  callResults: RawCallResult[];
   tenderlyUrl?: string;
-  rawAssetChanges?: unknown;
 }
 
 export interface RawLog {
-  address: Address;
-  topics: Hex[];
-  data: Hex;
+  readonly address: Address;
+  readonly topics: readonly Hex[];
+  readonly data: Hex;
 }
 
 /**

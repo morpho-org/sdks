@@ -54,7 +54,9 @@ export async function simulate(
     blockNumber: params.blockNumber,
     shareable,
   });
-  const transfers = parseTransfers(result.logs, config.logger);
+  // TEMPORARY: parseTransfers still takes flat logs; per-tx wiring lands in Task 4.
+  const flatLogs = result.callResults.flatMap((cr) => cr.logs);
+  const transfers = parseTransfers(flatLogs, config.logger);
 
   assertNoBundlerRetention({
     chainId: params.chainId,
@@ -66,6 +68,5 @@ export async function simulate(
     simulationTxs,
     transfers,
     tenderlyUrl: result.tenderlyUrl,
-    assetChanges: result.rawAssetChanges,
   };
 }

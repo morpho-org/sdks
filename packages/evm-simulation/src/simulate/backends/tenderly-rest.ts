@@ -2,6 +2,7 @@ import { type Address, type BlockTag, type Hex, isAddress, isHex } from "viem";
 import { z } from "zod";
 import { ExternalServiceError, SimulationRevertedError } from "../../errors.js";
 import type {
+  RawCallResult,
   RawLog,
   RawSimulationResult,
   SimulationLogger,
@@ -46,6 +47,7 @@ const tenderlyRawResponseSchema = z
     transaction: z
       .object({
         error_message: z.string().optional(),
+        gas_used: z.number().optional(),
         transaction_info: z
           .object({
             logs: z
@@ -65,6 +67,12 @@ const tenderlyRawResponseSchema = z
               )
               .optional(),
             asset_changes: z.unknown().optional(),
+            call_trace: z
+              .object({
+                output: hexSchema.optional(),
+              })
+              .passthrough()
+              .optional(),
           })
           .passthrough(),
       })
@@ -214,8 +222,9 @@ async function simulateSingle(params: {
   }
 
   const data = tenderlyRawResponseSchema.parse(await response.json());
-  const result = parseTenderlyResponse(data, shareable);
+  const callResult = parseTenderlyCallResult(data);
 
+  let tenderlyUrl: string | undefined;
   if (shareable && data.simulation.id) {
     const shared = await shareSimulation({
       baseUrl,
@@ -224,10 +233,12 @@ async function simulateSingle(params: {
       signal,
       logger,
     });
-    if (!shared) result.tenderlyUrl = undefined;
+    if (shared) {
+      tenderlyUrl = `https://dashboard.tenderly.co/shared/simulation/${data.simulation.id}`;
+    }
   }
 
-  return result;
+  return { callResults: [callResult], tenderlyUrl };
 }
 
 async function simulateBundle(params: {
@@ -276,26 +287,15 @@ async function simulateBundle(params: {
   const data = tenderlyBundleRawResponseSchema.parse(await response.json());
   const simulations = data.simulation_results;
 
-  // Collect logs from ALL steps (approvals + main tx) for complete bundler retention coverage.
-  // Only build the shareable URL from the last step; others parse with shareable=false.
-  const allLogs: RawLog[] = [];
-  let lastResult: RawSimulationResult | undefined;
-  let lastSimulationId: string | undefined;
-  for (let i = 0; i < simulations.length; i++) {
-    const sim = simulations[i]!;
-    const isLast = i === simulations.length - 1;
-    const parsed = parseTenderlyResponse(sim, isLast && shareable);
-    allLogs.push(...parsed.logs);
-    if (isLast) {
-      lastResult = parsed;
-      lastSimulationId = sim.simulation.id;
-    }
-  }
+  const callResults: RawCallResult[] = simulations.map((sim) =>
+    parseTenderlyCallResult(sim),
+  );
 
-  // Schema enforces `.min(1)` — lastResult is always defined after the loop.
-  let tenderlyUrl = lastResult!.tenderlyUrl;
+  const lastSim = simulations[simulations.length - 1]!;
+  const lastSimulationId = lastSim.simulation.id;
 
-  if (shareable && tenderlyUrl && lastSimulationId) {
+  let tenderlyUrl: string | undefined;
+  if (shareable && lastSimulationId) {
     const shared = await shareSimulation({
       baseUrl,
       config,
@@ -303,14 +303,12 @@ async function simulateBundle(params: {
       signal,
       logger,
     });
-    if (!shared) tenderlyUrl = undefined;
+    if (shared) {
+      tenderlyUrl = `https://dashboard.tenderly.co/shared/simulation/${lastSimulationId}`;
+    }
   }
 
-  return {
-    logs: allLogs,
-    tenderlyUrl,
-    rawAssetChanges: lastResult!.rawAssetChanges,
-  };
+  return { callResults, tenderlyUrl };
 }
 
 /**
@@ -358,10 +356,13 @@ async function shareSimulation(params: {
   }
 }
 
-function parseTenderlyResponse(
-  data: TenderlyRawResponse,
-  shareable: boolean,
-): RawSimulationResult {
+/**
+ * Parse one Tenderly simulation response into a `RawCallResult`. The caller
+ * (single-sim or bundle) assembles the `RawSimulationResult` around it.
+ *
+ * Throws `SimulationRevertedError` if `simulation.status !== true`.
+ */
+function parseTenderlyCallResult(data: TenderlyRawResponse): RawCallResult {
   const { simulation, transaction } = data;
 
   if (simulation.status !== true) {
@@ -387,14 +388,11 @@ function parseTenderlyResponse(
     }
   }
 
-  const tenderlyUrl =
-    shareable && simulation.id
-      ? `https://dashboard.tenderly.co/shared/simulation/${simulation.id}`
-      : undefined;
-
   return {
     logs: rawLogs,
-    tenderlyUrl,
-    rawAssetChanges: transaction.transaction_info.asset_changes,
+    status: true,
+    returnData: transaction.transaction_info.call_trace?.output ?? "0x",
+    gasUsed: BigInt(transaction.gas_used ?? 0),
+    assetChanges: transaction.transaction_info.asset_changes,
   };
 }

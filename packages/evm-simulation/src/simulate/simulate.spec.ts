@@ -44,7 +44,17 @@ function makeSuccessResult(
   logs: RawLog[] = [],
   tenderlyUrl?: string,
 ): RawSimulationResult {
-  return { logs, tenderlyUrl };
+  return {
+    callResults: [
+      {
+        logs,
+        status: true,
+        returnData: "0x",
+        gasUsed: 0n,
+      },
+    ],
+    tenderlyUrl,
+  };
 }
 
 function makeConfig(

@@ -55,7 +55,7 @@ beforeEach(() => vi.clearAllMocks());
 describe.sequential("executeSimulation — Tenderly + simulateV1 configured", () => {
   it("calls Tenderly first and returns its result on success", async () => {
     mockTenderlyRest.mockResolvedValueOnce({
-      logs: [],
+      callResults: [],
       tenderlyUrl: "https://dashboard.tenderly.co/shared/simulation/abc",
     });
 
@@ -72,7 +72,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
   });
 
   it("passes shareable through to Tenderly", async () => {
-    mockTenderlyRest.mockResolvedValueOnce({ logs: [] });
+    mockTenderlyRest.mockResolvedValueOnce({ callResults: [] });
 
     await executeSimulation({
       config: bothBackends(),
@@ -90,7 +90,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
     // test instead of silently shifting the split.
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
     try {
-      mockTenderlyRest.mockResolvedValueOnce({ logs: [] });
+      mockTenderlyRest.mockResolvedValueOnce({ callResults: [] });
 
       await executeSimulation({
         config: bothBackends(10_000),
@@ -110,7 +110,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
     mockTenderlyRest.mockRejectedValueOnce(
       new ExternalServiceError("Tenderly 502"),
     );
-    mockSimulateV1.mockResolvedValueOnce({ logs: [] });
+    mockSimulateV1.mockResolvedValueOnce({ callResults: [] });
 
     const result = await executeSimulation({
       config: bothBackends(),
@@ -163,7 +163,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
     mockTenderlyRest.mockRejectedValueOnce(
       new ExternalServiceError("Tenderly timeout"),
     );
-    mockSimulateV1.mockResolvedValueOnce({ logs: [] });
+    mockSimulateV1.mockResolvedValueOnce({ callResults: [] });
 
     const result = await executeSimulation({
       config: bothBackends(1),
@@ -184,7 +184,7 @@ describe.sequential("executeSimulation — Tenderly only (no simulateV1Url for c
   };
 
   it("returns Tenderly result on success", async () => {
-    mockTenderlyRest.mockResolvedValueOnce({ logs: [] });
+    mockTenderlyRest.mockResolvedValueOnce({ callResults: [] });
     const result = await executeSimulation({
       config: tenderlyOnly,
       chainId: 1,
@@ -221,7 +221,7 @@ describe.sequential("executeSimulation — simulateV1 only (chain not in Tenderl
   };
 
   it("uses simulateV1 directly without touching Tenderly", async () => {
-    mockSimulateV1.mockResolvedValueOnce({ logs: [] });
+    mockSimulateV1.mockResolvedValueOnce({ callResults: [] });
     await executeSimulation({
       config: simV1Only,
       chainId: 1,

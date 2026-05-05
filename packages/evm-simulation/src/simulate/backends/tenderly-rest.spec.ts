@@ -53,6 +53,7 @@ function successBody(options: { id?: string; logs?: unknown[] } = {}) {
   return {
     simulation: { id: options.id ?? "sim-abc", status: true },
     transaction: {
+      gas_used: 21_000,
       transaction_info: {
         logs: options.logs ?? [
           {
@@ -64,6 +65,7 @@ function successBody(options: { id?: string; logs?: unknown[] } = {}) {
           },
         ],
         asset_changes: { foo: "bar" },
+        call_trace: { output: "0xfeed" as Hex },
       },
     },
   };
@@ -186,8 +188,11 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
     expect(result.tenderlyUrl).toBe(
       "https://dashboard.tenderly.co/shared/simulation/sim-xyz",
     );
-    expect(result.logs).toHaveLength(1);
-    expect(result.logs[0]!.address).toBe(USDC);
+    expect(result.callResults).toHaveLength(1);
+    expect(result.callResults[0]!.logs).toHaveLength(1);
+    expect(result.callResults[0]!.logs[0]!.address).toBe(USDC);
+    expect(result.callResults[0]!.returnData).toBe("0xfeed");
+    expect(result.callResults[0]!.gasUsed).toBe(21_000n);
   });
 
   it("clears tenderlyUrl when /share endpoint call fails", async () => {
@@ -264,7 +269,7 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
     expect(body.block_number).toBe("latest");
   });
 
-  it("returns assetChanges from transaction_info", async () => {
+  it("returns per-tx assetChanges from transaction_info", async () => {
     const fetchMock = vi
       .fn<MockFetch>()
       .mockResolvedValueOnce({ ok: true, json: async () => successBody() });
@@ -277,7 +282,7 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
       shareable: false,
     });
 
-    expect(result.rawAssetChanges).toEqual({ foo: "bar" });
+    expect(result.callResults[0]!.assetChanges).toEqual({ foo: "bar" });
   });
 });
 
@@ -308,7 +313,7 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
     expect(simulations[1]!.to).toBe(USDC);
   });
 
-  it("collects logs from every bundle step", async () => {
+  it("emits one callResults entry per bundle step with that step's logs", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -347,8 +352,9 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
       shareable: false,
     });
 
-    expect(result.logs).toHaveLength(2);
-    expect(result.logs.map((l) => l.topics[0])).toEqual(["0x1111", "0x2222"]);
+    expect(result.callResults).toHaveLength(2);
+    expect(result.callResults[0]!.logs[0]!.topics[0]).toBe("0x1111");
+    expect(result.callResults[1]!.logs[0]!.topics[0]).toBe("0x2222");
   });
 
   it("only creates a shareable URL from the LAST bundle step", async () => {
