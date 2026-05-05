@@ -6,6 +6,13 @@ import {
   MorphoVaultV2,
 } from "../entities/index.js";
 import {
+  RESERVED_MORPHO_CLIENT_NAMES,
+  validateExtensionMap,
+  wrapExtensionFactory,
+} from "../helpers/validateExtension.js";
+import {
+  type ExtensionEntityFactory,
+  type ExtensionMap,
   MarketIdMismatchError,
   type Metadata,
   type MorphoClientType,
@@ -47,6 +54,10 @@ export class MorphoClient implements MorphoClientType {
    * );
    * ```
    */
+  /** @internal Extensions registered through `.extend()`, surfaced as enumerable instance props. */
+  private readonly _extensions: ReadonlyMap<string, ExtensionEntityFactory>;
+
+  // biome-ignore lint/complexity/useMaxParams: third arg is `@internal`, only used by `.extend()` to clone.
   constructor(
     public readonly viemClient: Client,
     readonly _options?: {
@@ -54,12 +65,27 @@ export class MorphoClient implements MorphoClientType {
       readonly supportDeployless?: boolean;
       readonly metadata?: Metadata;
     },
+    /**
+     * @internal Used by `.extend()` to carry registered extensions when cloning. Integrators must
+     * not pass this directly — call `.extend(fn)` on an existing client instead.
+     */
+    extensions?: ReadonlyMap<string, ExtensionEntityFactory>,
   ) {
     this.options = {
       ..._options,
       supportSignature: _options?.supportSignature ?? false,
       supportDeployless: _options?.supportDeployless,
     };
+
+    this._extensions = extensions ?? new Map();
+    for (const [name, factory] of this._extensions) {
+      Object.defineProperty(this, name, {
+        value: factory,
+        enumerable: true,
+        writable: false,
+        configurable: false,
+      });
+    }
   }
 
   /**
@@ -136,5 +162,68 @@ export class MorphoClient implements MorphoClientType {
       throw new MarketIdMismatchError(marketParams.id, derivedId);
     }
     return new MorphoMarketV1(this, marketParams, chainId);
+  }
+
+  /**
+   * Returns a new `MorphoClient` carrying every previously registered entity factory plus the
+   * ones produced by `extension(this)`. The original client is left untouched (statelessness per
+   * `client/CLAUDE.md`). Extensions are accessible as enumerable instance properties.
+   *
+   * Validation runs at registration time (name collision, identifier format, factory must be a
+   * function) and lazily on each call (entity returns an object of methods, each method returns
+   * `{ buildTx, getRequirements? }`, `buildTx()` returns a `Transaction`-shaped object,
+   * `getRequirements()` resolves to `Transaction | Requirement` items). The validator does not
+   * call `deepFreeze` and does not inject `metadata` — the integrator keeps full control.
+   *
+   * @param extension - Callback receiving the current client and returning a record of entity
+   *   factories. Each factory takes the entity's identifying args (e.g. address, chain id) and
+   *   returns an object whose methods build actions.
+   * @returns A new client whose type is `this & TExtension`.
+   * @throws {ExtensionNameCollisionError} when a key collides with a reserved client member or a
+   *   previously registered extension.
+   * @throws {InvalidExtensionNameError} when a key does not match `/^[a-z][a-zA-Z0-9]*$/`.
+   * @throws {InvalidExtensionShapeError} when the callback does not return a non-empty record of
+   *   functions.
+   * @throws {InvalidEntityShapeError} when an entity factory does not return a record of
+   *   functions (raised lazily on call).
+   * @throws {InvalidActionShapeError} when an action method does not return `{ buildTx, … }`.
+   * @throws {InvalidTransactionShapeError} when `buildTx()` returns a malformed transaction.
+   * @throws {InvalidRequirementShapeError} when `getRequirements()` resolves to malformed items.
+   * @example
+   * ```ts
+   * import { defineEntity, MorphoClient } from "@morpho-org/morpho-sdk";
+   *
+   * const client = new MorphoClient(viemClient).extend((c) => ({
+   *   myLending: defineEntity((vault: Address, chainId: number) => ({
+   *     depositAndBoost: ({ amount, userAddress }: { amount: bigint; userAddress: Address }) => ({
+   *       buildTx: () => ({
+   *         to: vault,
+   *         value: 0n,
+   *         data: "0x",
+   *         action: { type: "myLendingDeposit", args: { amount, userAddress, chainId } },
+   *       }),
+   *     }),
+   *   })),
+   * }));
+   *
+   * const tx = client.myLending(vault, 1).depositAndBoost({ amount: 1n, userAddress }).buildTx();
+   * ```
+   */
+  public extend<const TExtension extends ExtensionMap>(
+    extension: (client: this) => TExtension,
+  ): this & TExtension {
+    const raw = extension(this);
+    validateExtensionMap(raw, [
+      ...RESERVED_MORPHO_CLIENT_NAMES,
+      ...this._extensions.keys(),
+    ]);
+
+    const merged = new Map(this._extensions);
+    for (const [name, factory] of Object.entries(raw)) {
+      merged.set(name, wrapExtensionFactory(name, factory));
+    }
+
+    return new MorphoClient(this.viemClient, this._options, merged) as this &
+      TExtension;
   }
 }

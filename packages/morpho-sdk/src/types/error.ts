@@ -391,3 +391,101 @@ export class NegativeMinSharePriceError extends Error {
     super(`Min share price must be non-negative for vault: ${vault}`);
   }
 }
+
+/**
+ * Thrown by `MorphoClient.extend()` when an extension key collides with a reserved client member
+ * (`viemClient`, `options`, `vaultV1`, `vaultV2`, `marketV1`, `extend`, …) or with a previously
+ * registered extension. Pick a different name, or remove the prior extension.
+ */
+export class ExtensionNameCollisionError extends Error {
+  constructor(name: string, kind: "reserved" | "duplicate") {
+    super(
+      `Extension name "${name}" collides with ${
+        kind === "reserved"
+          ? "a reserved MorphoClient member"
+          : "a previously registered extension"
+      }. Pick a different name.`,
+    );
+  }
+}
+
+/**
+ * Thrown by `MorphoClient.extend()` when an extension key is not a valid identifier (must match
+ * `/^[a-z][a-zA-Z0-9]*$/`).
+ */
+export class InvalidExtensionNameError extends Error {
+  constructor(name: string) {
+    super(
+      `Extension name "${name}" is invalid. Names must match /^[a-z][a-zA-Z0-9]*$/.`,
+    );
+  }
+}
+
+/**
+ * Thrown by `MorphoClient.extend()` when the extension factory does not return a non-empty record
+ * of entity factories (i.e. functions).
+ */
+export class InvalidExtensionShapeError extends Error {
+  constructor(reason: string) {
+    super(`Invalid extension shape: ${reason}`);
+  }
+}
+
+/**
+ * Thrown when an integrator-provided entity factory returns something that is not a record of
+ * action methods. The entity name and the offending property/reason are included.
+ */
+export class InvalidEntityShapeError extends Error {
+  constructor(entityName: string, reason: string) {
+    super(`Entity "${entityName}" returned an invalid shape: ${reason}`);
+  }
+}
+
+/**
+ * Thrown when an integrator-provided action method returns an object missing `buildTx` (or whose
+ * `buildTx` / `getRequirements` is not a function).
+ */
+export class InvalidActionShapeError extends Error {
+  constructor(params: {
+    entityName: string;
+    methodName: string;
+    reason: string;
+  }) {
+    super(
+      `Action "${params.entityName}.${params.methodName}" has an invalid shape: ${params.reason}`,
+    );
+  }
+}
+
+/**
+ * Thrown when an integrator-provided `buildTx()` returns an object that does not match the
+ * `Transaction` shape (`{ to, value, data, action: { type, args } }`).
+ */
+export class InvalidTransactionShapeError extends Error {
+  constructor(params: {
+    entityName: string;
+    methodName: string;
+    reason: string;
+  }) {
+    super(
+      `Transaction returned by "${params.entityName}.${params.methodName}.buildTx()" has an invalid shape: ${params.reason}`,
+    );
+  }
+}
+
+/**
+ * Thrown when an integrator-provided `getRequirements()` resolves to an array whose entries do
+ * not match `Transaction` or `Requirement` shapes. The failing index is included.
+ */
+export class InvalidRequirementShapeError extends Error {
+  constructor(params: {
+    entityName: string;
+    methodName: string;
+    index: number;
+    reason: string;
+  }) {
+    super(
+      `Requirement at index ${params.index} returned by "${params.entityName}.${params.methodName}.getRequirements()" has an invalid shape: ${params.reason}`,
+    );
+  }
+}

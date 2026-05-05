@@ -1,0 +1,5 @@
+---
+"@morpho-org/morpho-sdk": minor
+---
+
+`MorphoClient` now exposes a viem-style `.extend()` method that lets integrators graft custom entity factories onto a client. Each call returns a new client (statelessness preserved) typed as `this & TExtension`, so successive extensions accumulate. Validation is two-staged: at registration the extension map is checked for naming collisions (vs reserved members and previously registered extensions), identifier shape, and value types; at call time the entity, action, and `Transaction` / `Requirement` shapes are validated structurally — the integrator keeps full control of `deepFreeze` and `metadata` injection on the returned transactions. New exports: `defineEntity` identity helper, `ExtensionAction` / `ExtensionEntity` / `ExtensionEntityFactory` / `ExtensionMap` types, and the typed errors `ExtensionNameCollisionError`, `InvalidExtensionNameError`, `InvalidExtensionShapeError`, `InvalidEntityShapeError`, `InvalidActionShapeError`, `InvalidTransactionShapeError`, `InvalidRequirementShapeError`.
