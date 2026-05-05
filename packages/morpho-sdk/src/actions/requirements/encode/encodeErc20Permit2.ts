@@ -1,13 +1,7 @@
 import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import {
-  type Account,
-  type Chain,
-  type Client,
-  type Transport,
-  verifyTypedData,
-} from "viem";
+import { verifyTypedData, type WalletClient } from "viem";
 import { signTypedData } from "viem/actions";
 import {
   validateChainId,
@@ -15,6 +9,7 @@ import {
 } from "../../../helpers/index.js";
 import {
   InvalidSignatureError,
+  MissingClientPropertyError,
   type Permit2Action,
   type Requirement,
 } from "../../../types/index.js";
@@ -90,12 +85,12 @@ export const encodeErc20Permit2 = (
 
   return {
     action,
-    async sign(
-      client: Client<Transport, Chain | undefined, Account>,
-      userAddress: Address,
-    ) {
+    async sign(client: WalletClient, userAddress: Address) {
       validateChainId(client.chain?.id, chainId);
-      validateUserAddress(client.account?.address, userAddress);
+      if (!client.account)
+        throw new MissingClientPropertyError("client.account");
+      validateUserAddress(client.account.address, userAddress);
+      const account = client.account;
 
       const typedData = getPermit2PermitTypedData(
         {
@@ -112,7 +107,7 @@ export const encodeErc20Permit2 = (
       );
       const signature = await signTypedData(client, {
         ...typedData,
-        account: client.account,
+        account,
       });
 
       const isValid = await verifyTypedData({
