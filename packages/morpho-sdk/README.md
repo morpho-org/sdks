@@ -66,25 +66,6 @@ const requirements = await getRequirements();
 const tx = buildTx(permitSignature);
 ```
 
-### Clients
-
-The SDK exports two viem-style type aliases:
-
-```ts
-import type { PublicClientWithChain, WalletClientWithChain } from "@morpho-org/morpho-sdk";
-// PublicClientWithChain = Client<Transport, Chain>
-// WalletClientWithChain = Client<Transport, Chain, Account>
-```
-
-- **`PublicClientWithChain`** → `new MorphoClient(publicClient)`. Reads on-chain state and builds transactions. `chain` is mandatory. The SDK checks `chain.id === expected chainId` before every read or build.
-- **`WalletClientWithChain`** → `requirement.sign(walletClient, userAddress)`. Signs permit / permit2. `chain` AND `account` are mandatory. The SDK checks `chain.id === expected chainId` AND `account.address === userAddress`.
-
-The integrator owns both. Mismatches throw typed errors (`ChainIdMismatchError`, `MissingClientPropertyError`, `AddressMismatchError`).
-
-### Integration invariant — signer = executor
-
-**The wallet client that signs a permit MUST also send the resulting transaction.** Critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls).
-
 | Entity       | Action                   | Route                     | Why                                                                                                 |
 | ------------ | ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------- |
 | **VaultV2**  | `deposit`                | Bundler (general adapter) | Enforces `maxSharePrice` — inflation attack prevention. Supports native token wrapping.             |

@@ -101,6 +101,8 @@ export interface MarketV1Actions {
    * `getRequirements` returns ERC20 approval or permit for GeneralAdapter1.
    * When `nativeAmount` is provided, native token is wrapped; collateral must be wNative.
    *
+   * **The tx MUST be broadcast by `userAddress`.** `erc20TransferFrom` pulls collateral from `msg.sender`; `morphoSupplyCollateral` credits `userAddress`'s position. A mismatch silently donates the broadcaster's tokens to `userAddress`'s position.
+   *
    * @param params - Supply collateral parameters.
    * @returns Object with `buildTx` and `getRequirements`.
    */
@@ -159,6 +161,8 @@ export interface MarketV1Actions {
    *
    * **Shares mode:** `slippageTolerance` also caps `transferAmount`.
    *
+   * **The tx MUST be broadcast by `userAddress`** unless a donation is intended: loan tokens are pulled from `msg.sender` (broadcaster) to repay `userAddress`'s debt.
+   *
    * @param params - Repay parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
    */
@@ -213,6 +217,8 @@ export interface MarketV1Actions {
    *
    * **Stale `positionData` risks underestimated debt and unsafe withdrawal.**
    *
+   * **The tx MUST be broadcast by `userAddress`.** The bundle mixes explicit `onBehalf=userAddress` (repay) with `msg.sender` semantics (`erc20TransferFrom` + `morphoWithdrawCollateral` on GA1). A mismatch makes the broadcaster pay the loan tokens AND lose their own collateral, while `userAddress` benefits (debt reduced, collateral received).
+   *
    * @param params - Combined parameters including pre-fetched `positionData`.
    * @returns Object with `buildTx` and `getRequirements`.
    */
@@ -252,6 +258,8 @@ export interface MarketV1Actions {
    * - `morpho.setAuthorization(generalAdapter1, true)` if adapter is not yet authorized.
    *
    * **Stale `positionData` may cause unexpected health.**
+   *
+   * **The tx MUST be broadcast by `userAddress`.** Collateral is pulled from `msg.sender` (broadcaster) but credited to `userAddress`'s position; the borrowed funds flow to `userAddress`. A mismatch silently funds `userAddress`'s leveraged position with the broadcaster's collateral.
    *
    * @param params - Combined parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.

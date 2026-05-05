@@ -58,6 +58,8 @@ export interface VaultV1Actions {
    * Uses pre-fetched accrual vault data to compute `maxSharePrice` with slippage tolerance,
    * then returns `buildTx` and `getRequirements` for lazy evaluation.
    *
+   * **The tx MUST be broadcast by `userAddress`.** Assets are pulled from `msg.sender` (broadcaster) but vault shares are minted to `userAddress`.
+   *
    * @param {Object} params - The deposit parameters.
    * @param {bigint} params.amount - Amount of assets to deposit.
    * @param {Address} params.userAddress - User address initiating the deposit.
@@ -107,6 +109,8 @@ export interface VaultV1Actions {
    *
    * Redeems all V1 shares and atomically deposits the resulting assets into V2
    * via bundler3. Computes slippage-protected share prices for both legs.
+   *
+   * **The tx MUST be broadcast by `userAddress`.** V1 shares are pulled from `msg.sender` (broadcaster) and V2 shares are minted to `userAddress`. A mismatch silently transfers the broadcaster's V1 position to `userAddress` on V2.
    *
    * @param {Object} params - The migration parameters.
    * @param {Address} params.userAddress - User address initiating the migration.

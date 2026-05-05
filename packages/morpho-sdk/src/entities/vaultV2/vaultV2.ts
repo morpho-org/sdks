@@ -60,6 +60,8 @@ export interface VaultV2Actions {
    * then returns the prepared deposit transaction and a function for retrieving all required approval transactions.
    * Bundler Integration: This flow uses the bundler to atomically execute the user's asset transfer and vault deposit in a single transaction for slippage protection.
    *
+   * **The tx MUST be broadcast by `userAddress`.** Assets are pulled from `msg.sender` (broadcaster) but vault shares are minted to `userAddress`.
+   *
    * @param {Object} params - The deposit parameters.
    * @param {bigint} [params.amount=0n] - Amount of ERC-20 assets to deposit. At least one of amount or nativeAmount must be provided.
    * @param {Address} params.userAddress - User address initiating the deposit.
