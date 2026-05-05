@@ -42,7 +42,7 @@ interface EncodeErc20PermitParams {
  * @param params.nonce - The user's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
- * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`, or from `sign()` when the wallet client's `chain.id` differs.
+ * @throws {ChainIdMismatchError} when `viemClient.chain.id !== params.chainId`, or from `sign()` when the wallet client's `chain.id` differs.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
@@ -68,7 +68,7 @@ export const encodeErc20Permit = async (
 ): Promise<Requirement> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;
 
-  validateChainId(viemClient.chain?.id, chainId);
+  validateChainId(viemClient.chain.id, chainId);
 
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
@@ -89,8 +89,8 @@ export const encodeErc20Permit = async (
   return {
     action,
     async sign(client: WalletClientWithChain, userAddress: Address) {
-      validateChainId(client.chain?.id, chainId);
-      validateUserAddress(client.account?.address, userAddress);
+      validateChainId(client.chain.id, chainId);
+      validateUserAddress(client.account.address, userAddress);
 
       const typedData = getPermitTypedData(
         {

@@ -50,7 +50,7 @@ type GetRequirementsParams =
  * @param viemClient - Connected `PublicClientWithChain` whose `chain.id` matches `params.chainId`.
  * @param params - Requirement resolution parameters.
  * @param params.address - ERC-20 token address.
- * @param params.chainId - Chain id; must match `viemClient.chain?.id`.
+ * @param params.chainId - Chain id; must match `viemClient.chain.id`.
  * @param params.args.amount - Required token amount. Returns `[]` when zero.
  * @param params.args.from - Account that will grant the approval.
  * @param params.supportSignature - Whether the integrator can collect a signature; controls
@@ -92,7 +92,7 @@ export const getRequirements = async (
     supportSignature,
     args: { amount, from },
   } = params;
-  validateChainId(viemClient.chain?.id, chainId);
+  validateChainId(viemClient.chain.id, chainId);
 
   if (amount === 0n) {
     return [];

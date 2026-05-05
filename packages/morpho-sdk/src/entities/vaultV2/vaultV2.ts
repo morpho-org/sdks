@@ -176,7 +176,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
   ) {}
 
   async getData(parameters?: FetchParameters) {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     return fetchAccrualVaultV2(this.vault, this.client.viemClient, {
       ...parameters,
@@ -196,7 +196,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     accrualVault: AccrualVaultV2;
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     if (!isAddressEqual(accrualVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, accrualVault.address);
@@ -284,7 +284,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -301,7 +301,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -326,7 +326,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     withdraw: { amount: bigint };
     userAddress: Address;
   }) {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     return {
       buildTx: () =>
@@ -354,7 +354,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     redeem: { shares: bigint };
     userAddress: Address;
   }) {
-    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
 
     return {
       buildTx: () =>
