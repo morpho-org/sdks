@@ -1,5 +1,5 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import { type Address, type Client, createClient, type Transport } from "viem";
 import {
   MorphoMarketV1,
   MorphoVaultV1,
@@ -7,132 +7,94 @@ import {
 } from "../entities/index.js";
 import {
   MarketIdMismatchError,
-  type Metadata,
   type MorphoClientType,
-  type PublicClientWithChain,
+  type MorphoConfig,
+  UnsupportedChainError,
 } from "../types/index.js";
 
 /**
- * Stateless entry point of the SDK. Wraps a viem `Client` plus a frozen options bag and exposes
- * factory methods for the protocol entities.
+ * Stateless entry point of the SDK. Holds a `MorphoConfig` (transports per chain + options)
+ * and exposes factory methods for the protocol entities.
  *
- * Holds no state beyond configuration: no cache, no `init()`, no warm-up. Each factory call
- * (`vaultV1`, `vaultV2`, `marketV1`) returns a fresh entity bound to this client.
+ * No state beyond configuration: no cache, no `init()`, no warm-up. Each factory call
+ * (`vaultV1`, `vaultV2`, `marketV1`) returns a fresh entity bound to a freshly built viem
+ * client for the requested chain.
  */
 export class MorphoClient implements MorphoClientType {
-  /** SDK-wide options resolved from the constructor's `_options` argument. */
-  readonly options: {
-    readonly supportSignature: boolean;
-    readonly supportDeployless?: boolean;
-    readonly metadata?: Metadata;
-  };
-
   /**
-   * @param viemClient - Connected viem public `Client` whose `chain` is set. Used for on-chain
-   *   reads only; signature flows take a `WalletClientWithChain` directly via `Requirement.sign(...)`.
-   * @param _options - SDK-wide options.
-   * @param _options.supportSignature - Whether the integrator can collect EIP-712 signatures for
-   *   permit / permit2. Defaults to `false` (classic approvals only).
-   * @param _options.supportDeployless - Whether entity fetchers may use deployless multicall.
-   * @param _options.metadata - Optional analytics metadata applied to every transaction this
-   *   client builds.
+   * @param config - SDK-wide configuration. Must include a `transports` map keyed by chain id.
    * @example
    * ```ts
-   * import { createPublicClient, http } from "viem";
-   * import { mainnet } from "viem/chains";
+   * import { http } from "viem";
    * import { MorphoClient } from "@morpho-org/morpho-sdk";
    *
-   * const client = new MorphoClient(
-   *   createPublicClient({ chain: mainnet, transport: http() }),
-   *   { supportSignature: true },
-   * );
+   * const morpho = new MorphoClient({
+   *   transports: {
+   *     1: http("https://eth-mainnet.example"),
+   *     8453: http("https://base-mainnet.example"),
+   *   },
+   *   supportSignature: true,
+   * });
    * ```
    */
-  constructor(
-    public readonly viemClient: PublicClientWithChain,
-    readonly _options?: {
-      readonly supportSignature?: boolean;
-      readonly supportDeployless?: boolean;
-      readonly metadata?: Metadata;
-    },
-  ) {
-    this.options = {
-      ..._options,
-      supportSignature: _options?.supportSignature ?? false,
-      supportDeployless: _options?.supportDeployless,
-    };
+  constructor(public readonly config: MorphoConfig) {}
+
+  /**
+   * Builds a viem `Client` for the requested chain id from the configured transport. The
+   * returned client has `chain` left `undefined` — the SDK identifies the chain via the
+   * `chainId` carried by the entity that owns the client.
+   *
+   * @param chainId - Chain id to build the client for.
+   * @returns A fresh viem `Client` bound to `config.transports[chainId]`.
+   * @throws {UnsupportedChainError} when no transport is configured for `chainId`.
+   */
+  public getViemClient(chainId: number): Client<Transport> {
+    const transport = this.config.transports[chainId];
+    if (transport == null) {
+      throw new UnsupportedChainError(chainId);
+    }
+    return createClient({ transport });
   }
 
   /**
-   * Returns a `MorphoVaultV1` (MetaMorpho) entity bound to this client.
+   * Returns a `MorphoVaultV1` (MetaMorpho) entity bound to this client for the given chain.
    *
    * @param vault - VaultV1 address.
-   * @param chainId - Chain the vault lives on.
+   * @param chainId - Chain the vault lives on. Must be in `config.transports`.
    * @returns A fresh `MorphoVaultV1` entity.
-   * @example
-   * ```ts
-   * const vault = client.vaultV1(vaultAddress, 1);
-   * const accrualVault = await vault.getData();
-   * const { buildTx } = vault.deposit({
-   *   amount: 1_000_000n,
-   *   userAddress: depositor,
-   *   accrualVault,
-   * });
-   * const tx = buildTx();
-   * ```
+   * @throws {UnsupportedChainError} when no transport is configured for `chainId`.
    */
   public vaultV1(vault: Address, chainId: number) {
     return new MorphoVaultV1(this, vault, chainId);
   }
 
   /**
-   * Returns a `MorphoVaultV2` entity bound to this client.
+   * Returns a `MorphoVaultV2` entity bound to this client for the given chain.
    *
    * @param vault - VaultV2 address.
-   * @param chainId - Chain the vault lives on.
+   * @param chainId - Chain the vault lives on. Must be in `config.transports`.
    * @returns A fresh `MorphoVaultV2` entity.
-   * @example
-   * ```ts
-   * const vault = client.vaultV2(vaultAddress, 1);
-   * const accrualVault = await vault.getData();
-   * const { buildTx } = vault.deposit({
-   *   amount: 1_000_000n,
-   *   userAddress: depositor,
-   *   accrualVault,
-   * });
-   * const tx = buildTx();
-   * ```
+   * @throws {UnsupportedChainError} when no transport is configured for `chainId`.
    */
   public vaultV2(vault: Address, chainId: number) {
     return new MorphoVaultV2(this, vault, chainId);
   }
 
   /**
-   * Returns a `MorphoMarketV1` entity bound to this client. Validates that the supplied
-   * `marketParams.id` matches the hash of the other params, so a hand-rolled or agent-written
-   * `MarketParams` cannot point at the wrong market silently.
+   * Returns a `MorphoMarketV1` entity bound to this client for the given chain. Validates
+   * that the supplied `marketParams.id` matches the hash of the other params, so a
+   * hand-rolled or agent-written `MarketParams` cannot point at the wrong market silently.
    *
-   * @param marketParams - Market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`,
-   *   `id`).
-   * @param chainId - Chain the market lives on.
+   * @param marketParams - Market params (`loanToken`, `collateralToken`, `oracle`, `irm`,
+   *   `lltv`, `id`).
+   * @param chainId - Chain the market lives on. Must be in `config.transports`.
    * @returns A fresh `MorphoMarketV1` entity.
-   * @throws {MarketIdMismatchError} when `marketParams.id` does not equal the hash derived from
-   *   the other fields.
-   * @example
-   * ```ts
-   * const market = client.marketV1(marketParams, 1);
-   * const positionData = await market.getPositionData(borrower);
-   * const { buildTx } = market.borrow({
-   *   userAddress: borrower,
-   *   amount: 1_000_000n,
-   *   positionData,
-   * });
-   * const tx = buildTx();
-   * ```
+   * @throws {UnsupportedChainError} when no transport is configured for `chainId`.
+   * @throws {MarketIdMismatchError} when `marketParams.id` does not equal the hash derived
+   *   from the other fields.
    */
   public marketV1(marketParams: MarketParams, chainId: number) {
     const derivedId = MarketUtils.getMarketId(marketParams);
-    // Can happen with one-time/hardcoded/agent-written possibly inconsistent input market params.
     if (marketParams.id !== derivedId) {
       throw new MarketIdMismatchError(marketParams.id, derivedId);
     }

@@ -6,7 +6,7 @@
  */
 
 import dotenv from "dotenv";
-import { type Address, createWalletClient, http, parseUnits } from "viem";
+import { type Address, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { MorphoClient } from "../src/client/index.js";
 import { env } from "../test/env.js";
@@ -27,14 +27,10 @@ async function main() {
     throw new Error("USER_ADDRESS is required");
   }
 
-  // Create wallet client
-  const walletClient = createWalletClient({
-    chain: mainnet,
-    transport: http(MAINNET_RPC_URL),
+  // Create Morpho client with per-chain transports
+  const morpho = new MorphoClient({
+    transports: { [mainnet.id]: http(MAINNET_RPC_URL) },
   });
-
-  // Create Morpho client
-  const morpho = new MorphoClient(walletClient);
 
   console.log("🔷 Morpho SDK Example - MorphoClient");
   console.log("====================================\n");

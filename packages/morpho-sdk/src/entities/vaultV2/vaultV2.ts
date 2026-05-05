@@ -5,7 +5,12 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
-import { type Address, isAddressEqual } from "viem";
+import {
+  type Address,
+  type Client,
+  isAddressEqual,
+  type Transport,
+} from "viem";
 import {
   getRequirements,
   vaultV2Deposit,
@@ -15,7 +20,6 @@ import {
   vaultV2Withdraw,
 } from "../../actions/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
-import { validateChainId } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainWNativeMissingError,
@@ -168,20 +172,22 @@ export interface VaultV2Actions {
 }
 
 export class MorphoVaultV2 implements VaultV2Actions {
+  private readonly viemClient: Client<Transport>;
+
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     private readonly client: MorphoClientType,
     private readonly vault: Address,
     private readonly chainId: number,
-  ) {}
+  ) {
+    this.viemClient = client.getViemClient(chainId);
+  }
 
   async getData(parameters?: FetchParameters) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
-    return fetchAccrualVaultV2(this.vault, this.client.viemClient, {
+    return fetchAccrualVaultV2(this.vault, this.viemClient, {
       ...parameters,
       chainId: this.chainId,
-      deployless: this.client.options.supportDeployless,
+      deployless: this.client.config.supportDeployless,
     });
   }
 
@@ -196,8 +202,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
     accrualVault: AccrualVaultV2;
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     if (!isAddressEqual(accrualVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, accrualVault.address);
     }
@@ -252,11 +256,11 @@ export class MorphoVaultV2 implements VaultV2Actions {
 
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) =>
-        await getRequirements(this.client.viemClient, {
+        await getRequirements(this.viemClient, {
           address: accrualVault.asset,
           chainId: this.chainId,
-          supportSignature: this.client.options.supportSignature,
-          supportDeployless: this.client.options.supportDeployless,
+          supportSignature: this.client.config.supportSignature ?? false,
+          supportDeployless: this.client.config.supportDeployless,
           useSimplePermit: params?.useSimplePermit,
           args: {
             amount,
@@ -278,14 +282,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
             requirementSignature,
             nativeAmount,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     return {
       buildTx: () =>
         vaultV2Withdraw({
@@ -295,14 +297,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
             recipient: userAddress,
             onBehalf: userAddress,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     return {
       buildTx: () =>
         vaultV2Redeem({
@@ -312,7 +312,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
             recipient: userAddress,
             onBehalf: userAddress,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
@@ -326,8 +326,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
     withdraw: { amount: bigint };
     userAddress: Address;
   }) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     return {
       buildTx: () =>
         vaultV2ForceWithdraw({
@@ -340,7 +338,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
             },
             onBehalf: userAddress,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
@@ -354,8 +352,6 @@ export class MorphoVaultV2 implements VaultV2Actions {
     redeem: { shares: bigint };
     userAddress: Address;
   }) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     return {
       buildTx: () =>
         vaultV2ForceRedeem({
@@ -368,7 +364,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
             },
             onBehalf: userAddress,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }

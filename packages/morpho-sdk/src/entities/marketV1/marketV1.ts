@@ -20,7 +20,7 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
-import type { Address } from "viem";
+import type { Address, Client, Transport } from "viem";
 import {
   getMorphoAuthorizationRequirement,
   getRequirements,
@@ -36,7 +36,6 @@ import {
   computeMinBorrowSharePrice,
   computeReallocations,
   validateAccrualPosition,
-  validateChainId,
   validateNativeCollateral,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
@@ -334,20 +333,22 @@ export interface MarketV1Actions {
 }
 
 export class MorphoMarketV1 implements MarketV1Actions {
+  private readonly viemClient: Client<Transport>;
+
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     private readonly client: MorphoClientType,
     public readonly marketParams: MarketParams,
     private readonly chainId: number,
-  ) {}
+  ) {
+    this.viemClient = client.getViemClient(chainId);
+  }
 
   async getMarketData(parameters?: FetchParameters): Promise<Market> {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
-    return fetchMarket(this.marketParams.id, this.client.viemClient, {
+    return fetchMarket(this.marketParams.id, this.viemClient, {
       ...parameters,
       chainId: this.chainId,
-      deployless: this.client.options.supportDeployless,
+      deployless: this.client.config.supportDeployless,
     });
   }
 
@@ -355,15 +356,13 @@ export class MorphoMarketV1 implements MarketV1Actions {
     userAddress: Address,
     parameters?: FetchParameters,
   ): Promise<AccrualPosition> {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     return fetchAccrualPosition(
       userAddress,
       this.marketParams.id,
-      this.client.viemClient,
+      this.viemClient,
       {
         ...parameters,
-        deployless: this.client.options.supportDeployless,
+        deployless: this.client.config.supportDeployless,
         chainId: this.chainId,
       },
     );
@@ -374,8 +373,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     userAddress,
     nativeAmount,
   }: { userAddress: Address } & DepositAmountArgs) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     if (amount < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
     }
@@ -395,11 +392,11 @@ export class MorphoMarketV1 implements MarketV1Actions {
 
     return {
       getRequirements: (params?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+        getRequirements(this.viemClient, {
           address: this.marketParams.collateralToken,
           chainId: this.chainId,
-          supportSignature: this.client.options.supportSignature,
-          supportDeployless: this.client.options.supportDeployless,
+          supportSignature: this.client.config.supportSignature ?? false,
+          supportDeployless: this.client.config.supportDeployless,
           useSimplePermit: params?.useSimplePermit,
           args: { amount, from: userAddress },
         }),
@@ -416,7 +413,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
             onBehalf: userAddress,
             requirementSignature,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
@@ -434,8 +431,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     slippageTolerance?: bigint;
     reallocations?: readonly VaultReallocation[];
   }) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     if (amount <= 0n) {
       throw new NonPositiveBorrowAmountError(this.marketParams.id);
     }
@@ -468,7 +463,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     return {
       getRequirements: async () => {
         const authTx = await getMorphoAuthorizationRequirement({
-          viemClient: this.client.viemClient,
+          viemClient: this.viemClient,
           chainId: this.chainId,
           userAddress,
         });
@@ -487,7 +482,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
             minSharePrice,
             reallocations,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
@@ -499,8 +494,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
   ) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     const {
       userAddress,
       positionData,
@@ -577,11 +570,11 @@ export class MorphoMarketV1 implements MarketV1Actions {
 
     return {
       getRequirements: (reqParams?: { useSimplePermit?: boolean }) =>
-        getRequirements(this.client.viemClient, {
+        getRequirements(this.viemClient, {
           address: this.marketParams.loanToken,
           chainId: this.chainId,
-          supportSignature: this.client.options.supportSignature,
-          supportDeployless: this.client.options.supportDeployless,
+          supportSignature: this.client.config.supportSignature ?? false,
+          supportDeployless: this.client.config.supportDeployless,
           useSimplePermit: reqParams?.useSimplePermit,
           args: { amount: transferAmount, from: userAddress },
         }),
@@ -601,7 +594,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
             maxSharePrice,
             requirementSignature,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
@@ -615,8 +608,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     amount: bigint;
     positionData: AccrualPosition;
   }) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     if (amount <= 0n) {
       throw new NonPositiveWithdrawCollateralAmountError(this.marketParams.id);
     }
@@ -658,7 +649,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
             onBehalf: userAddress,
             receiver: userAddress,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
@@ -671,8 +662,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
   ) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     const {
       userAddress,
       withdrawAmount,
@@ -777,16 +766,16 @@ export class MorphoMarketV1 implements MarketV1Actions {
     return {
       getRequirements: async (reqParams?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getRequirements(this.client.viemClient, {
+          getRequirements(this.viemClient, {
             address: this.marketParams.loanToken,
             chainId: this.chainId,
-            supportSignature: this.client.options.supportSignature,
-            supportDeployless: this.client.options.supportDeployless,
+            supportSignature: this.client.config.supportSignature ?? false,
+            supportDeployless: this.client.config.supportDeployless,
             useSimplePermit: reqParams?.useSimplePermit,
             args: { amount: transferAmount, from: userAddress },
           }),
           getMorphoAuthorizationRequirement({
-            viemClient: this.client.viemClient,
+            viemClient: this.viemClient,
             chainId: this.chainId,
             userAddress,
           }),
@@ -811,7 +800,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
             maxSharePrice,
             requirementSignature,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
@@ -831,8 +820,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     slippageTolerance?: bigint;
     reallocations?: readonly VaultReallocation[];
   } & DepositAmountArgs) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
     if (amount < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
     }
@@ -883,16 +870,16 @@ export class MorphoMarketV1 implements MarketV1Actions {
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) => {
         const [erc20Requirements, authTx] = await Promise.all([
-          getRequirements(this.client.viemClient, {
+          getRequirements(this.viemClient, {
             address: this.marketParams.collateralToken,
             chainId: this.chainId,
-            supportSignature: this.client.options.supportSignature,
-            supportDeployless: this.client.options.supportDeployless,
+            supportSignature: this.client.config.supportSignature ?? false,
+            supportDeployless: this.client.config.supportDeployless,
             useSimplePermit: params?.useSimplePermit,
             args: { amount, from: userAddress },
           }),
           getMorphoAuthorizationRequirement({
-            viemClient: this.client.viemClient,
+            viemClient: this.viemClient,
             chainId: this.chainId,
             userAddress,
           }),
@@ -917,7 +904,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
             requirementSignature,
             reallocations,
           },
-          metadata: this.client.options.metadata,
+          metadata: this.client.config.metadata,
         }),
     };
   }
@@ -929,13 +916,11 @@ export class MorphoMarketV1 implements MarketV1Actions {
     vaultAddresses: readonly Address[];
     block: MinimalBlock;
   }): Promise<SimulationState> {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
-
-    const client = this.client.viemClient;
+    const client = this.viemClient;
     const fetchParams = {
       blockNumber: block.number,
       chainId: this.chainId,
-      deployless: this.client.options.supportDeployless,
+      deployless: this.client.config.supportDeployless,
     };
 
     const targetMarketId = this.marketParams.id;

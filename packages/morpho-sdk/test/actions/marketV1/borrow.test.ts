@@ -13,12 +13,12 @@ import {
   computeMinBorrowSharePrice,
   isRequirementAuthorization,
   MissingAccrualPositionError,
-  MorphoClient,
   marketV1Borrow,
 } from "../../../src/index.js";
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { supplyCollateral } from "../../helpers/marketV1.js";
+import { morphoFromTestClient } from "../../helpers/morphoTestClient.js";
 import { test } from "../../setup.js";
 
 describe("BorrowMarketV1", () => {
@@ -33,7 +33,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = morphoFromTestClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -78,7 +78,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = morphoFromTestClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -123,7 +123,7 @@ describe("BorrowMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = morphoFromTestClient(client);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -183,7 +183,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = morphoFromTestClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -199,7 +199,7 @@ describe("BorrowMarketV1", () => {
   test("should revert when positionData is not provided", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = morphoFromTestClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>

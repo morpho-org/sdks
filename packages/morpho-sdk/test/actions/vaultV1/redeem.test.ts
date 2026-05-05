@@ -1,18 +1,15 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import {
-  isRequirementApproval,
-  MorphoClient,
-  vaultV1Redeem,
-} from "../../../src/index.js";
+import { isRequirementApproval, vaultV1Redeem } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { morphoFromTestClient } from "../../helpers/morphoTestClient.js";
 import { test } from "../../setup.js";
 
 describe("Redeem VaultV1", () => {
   test("should create redeem transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = morphoFromTestClient(client);
 
     const redeem = morpho
       .vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id)
@@ -54,7 +51,7 @@ describe("Redeem VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = morphoFromTestClient(client);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -100,7 +97,7 @@ describe("Redeem VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = morphoFromTestClient(client);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -163,7 +160,7 @@ describe("Redeem VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = morphoFromTestClient(client);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

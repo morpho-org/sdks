@@ -1,14 +1,15 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { MorphoClient, vaultV1Withdraw } from "../../../src/index.js";
+import { vaultV1Withdraw } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { morphoFromTestClient } from "../../helpers/morphoTestClient.js";
 import { test } from "../../setup.js";
 
 describe("Withdraw VaultV1", () => {
   test("should create withdraw transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = morphoFromTestClient(client);
 
     const withdraw = morpho
       .vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id)
@@ -51,7 +52,7 @@ describe("Withdraw VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = morphoFromTestClient(client);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -97,7 +98,7 @@ describe("Withdraw VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = morphoFromTestClient(client);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

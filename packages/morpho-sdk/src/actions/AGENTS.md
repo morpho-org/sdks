@@ -11,7 +11,7 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 ## Signing (`requirements/`)
 
-`getRequirements()` may return `Requirement` objects that the integrator signs off-chain. `Requirement.sign(walletClient, userAddress)` takes the SDK's exported **`WalletClientWithChain`** type (alias for `Client<Transport, Chain, Account>`). The sign callback runs `validateChainId(client.chain.id, chainId)` and `validateUserAddress(client.account.address, userAddress)` explicitly — no wrapper — then produces the EIP-712 signature and verifies it.
+`getRequirements()` may return `Requirement` objects that the integrator signs off-chain. `Requirement.sign(walletClient, userAddress)` takes a viem `Client<Transport, Chain | undefined, Account>` (account mandatory; chain optional). The sign callback runs `validateChainId(client.chain?.id, chainId)` and `validateUserAddress(client.account?.address, userAddress)` explicitly at the top, then produces the EIP-712 signature and verifies it.
 
 Builders themselves never sign and never read `account` — that's the wallet client's job at signing time only.
 

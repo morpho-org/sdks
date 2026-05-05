@@ -1,11 +1,15 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { type Address, encodeFunctionData, publicActions } from "viem";
-import { validateChainId } from "../../helpers/index.js";
+import {
+  type Address,
+  type Client,
+  encodeFunctionData,
+  publicActions,
+  type Transport,
+} from "viem";
 import type {
   MorphoAuthorizationAction,
-  PublicClientWithChain,
   Transaction,
 } from "../../types/index.js";
 
@@ -17,12 +21,11 @@ import type {
  * any bundled MarketV1 path that operates on behalf of the user (`borrow`,
  * `supplyCollateralBorrow`, `repayWithdrawCollateral`).
  *
- * @param params.viemClient - Connected `PublicClientWithChain` whose `chain.id` matches `params.chainId`.
+ * @param params.viemClient - viem `Client` for the target chain.
  * @param params.chainId - Target chain id (used to resolve Morpho and `GeneralAdapter1`).
  * @param params.userAddress - The user that must authorize `GeneralAdapter1`.
  * @returns A deep-frozen `Transaction<MorphoAuthorizationAction>`, or `null` when authorization
  *   is already in place.
- * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @example
  * ```ts
  * import { createPublicClient, http } from "viem";
@@ -39,13 +42,11 @@ import type {
  * ```
  */
 export const getMorphoAuthorizationRequirement = async (params: {
-  viemClient: PublicClientWithChain;
+  viemClient: Client<Transport>;
   chainId: number;
   userAddress: Address;
 }): Promise<Readonly<Transaction<MorphoAuthorizationAction>> | null> => {
   const { viemClient, chainId, userAddress } = params;
-
-  validateChainId(viemClient.chain.id, chainId);
 
   const {
     morpho,

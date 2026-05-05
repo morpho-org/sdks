@@ -2,9 +2,10 @@ import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { isRequirementApproval, MorphoClient } from "../../src/index.js";
+import { isRequirementApproval } from "../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
+import { morphoFromTestClient } from "../helpers/morphoTestClient.js";
 import { test } from "../setup.js";
 
 describe("Metadata", () => {
@@ -27,7 +28,7 @@ describe("Metadata", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, {
+        const morpho = morphoFromTestClient(client, {
           metadata: {
             origin: "25AFEA44",
             timestamp: true,
@@ -98,7 +99,7 @@ describe("Metadata", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, {
+        const morpho = morphoFromTestClient(client, {
           metadata: {
             origin: "25AFEA44",
           },

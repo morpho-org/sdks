@@ -4,14 +4,25 @@ Transaction builders for VaultV1, VaultV2, and MarketV1. Subfolders carry the la
 
 > Architecture / type / test / doc / release rules apply per the [root `AGENTS.md`](../../AGENTS.md). Subfolder rules: see each `src/<layer>/AGENTS.md`.
 
-## Clients
+## Configuration
 
-Two viem clients, two roles. The SDK exports two type aliases (close to viem's nomenclature):
+`MorphoClient` takes a `MorphoConfig`:
 
-- **`PublicClientWithChain`** = `Client<Transport, Chain>` — chain mandatory. Passed to `new MorphoClient(viemClient)`. Used for reads and tx building. SDK checks: `chain.id === expected chainId`.
-- **`WalletClientWithChain`** = `Client<Transport, Chain, Account>` — chain and account mandatory. Passed to `Requirement.sign(client, userAddress)` for permit / permit2 signing. SDK checks: `chain.id === expected chainId` AND `account.address === userAddress`.
+```ts
+new MorphoClient({
+  transports: { 1: http(mainnetRpc), 8453: http(baseRpc) },
+  supportSignature: true,
+});
+```
 
-The integrator owns both clients and decides where each is used. The SDK never reads `account` from `PublicClientWithChain`. Sign callbacks call `validateChainId` and `validateUserAddress` directly — no wrapper helper.
+- **`transports`** — per-chain viem `Transport` map. The SDK builds a fresh `Client` per entity via `MorphoClient.getViemClient(chainId)`. Throws `UnsupportedChainError` for chains not in the map.
+- One `MorphoClient` instance can serve multiple chains in parallel — each `marketV1(...)` / `vaultV1(...)` / `vaultV2(...)` call resolves its transport from `chainId`.
+
+## Signing
+
+`Requirement.sign(walletClient, userAddress)` takes a viem `Client<Transport, Chain | undefined, Account>` (account mandatory). The callback validates chain id and account address explicitly at the top, then produces the EIP-712 signature.
+
+The integrator owns the wallet client; the SDK never builds one. Mismatches throw typed errors (`ChainIdMismatchError`, `MissingClientPropertyError`, `AddressMismatchError`).
 
 ## Routing summary
 

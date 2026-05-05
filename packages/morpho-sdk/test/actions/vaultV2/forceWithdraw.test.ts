@@ -2,9 +2,10 @@ import { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { MorphoClient, vaultV2ForceWithdraw } from "../../../src/index.js";
+import { vaultV2ForceWithdraw } from "../../../src/index.js";
 import { ReEcosystemUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { morphoFromTestClient } from "../../helpers/morphoTestClient.js";
 import { test } from "../../setup.js";
 
 describe("ForceWithdraw VaultV2", () => {
@@ -28,7 +29,7 @@ describe("ForceWithdraw VaultV2", () => {
   test("should create force withdraw transaction from adapter market V1", async ({
     client,
   }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = morphoFromTestClient(client);
     const initialAssetPosition = parseUnits("200", 6);
     const assetsDeallocate = parseUnits("100", 6);
     const assetsWithdraw = parseUnits("100", 6);
@@ -97,7 +98,7 @@ describe("ForceWithdraw VaultV2", () => {
   test("should force withdraw transaction from adapter vault V1", async ({
     client,
   }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = morphoFromTestClient(client);
     // on the fork, this vault v1 has small allocation
     const initialAssetPosition = parseUnits("200", 6);
     const assets = 100n;
@@ -158,7 +159,7 @@ describe("ForceWithdraw VaultV2", () => {
   test("should force withdraw transaction with multiple deallocations", async ({
     client,
   }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = morphoFromTestClient(client);
     const assetsDeallocate1 = parseUnits("1", 6);
     const assetsDeallocate2 = 1n;
     const withdrawAssets = assetsDeallocate1 + assetsDeallocate2;

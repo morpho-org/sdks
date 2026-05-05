@@ -39,6 +39,15 @@ export class ChainIdMismatchError extends Error {
   }
 }
 
+/** Thrown when a `MorphoClient` is asked to operate on a chain id that has no transport configured. */
+export class UnsupportedChainError extends Error {
+  constructor(chainId: number) {
+    super(
+      `No transport configured for chain ${chainId}. Add it to MorphoClient config.transports.`,
+    );
+  }
+}
+
 /** Thrown when the viem client is missing a property the call requires (e.g. `account.address`). */
 export class MissingClientPropertyError extends Error {
   constructor(property: string) {

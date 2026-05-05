@@ -1,10 +1,9 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { fetchHolding } from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { validateChainId } from "../../helpers/index.js";
+import type { Client, Transport } from "viem";
 import type {
   ERC20ApprovalAction,
-  PublicClientWithChain,
   Requirement,
   Transaction,
 } from "../../types/index.js";
@@ -47,10 +46,11 @@ type GetRequirementsParams =
  * 3. **`supportSignature: true`, default** — Permit2 flow: classic approval to the Permit2
  *    contract (if needed), followed by a Permit2 signature against `GeneralAdapter1`.
  *
- * @param viemClient - Connected `PublicClientWithChain` whose `chain.id` matches `params.chainId`.
+ * @param viemClient - viem `Client` for the target chain. Built by the SDK from
+ *   `MorphoClient.getViemClient(chainId)` for the entity, or by the integrator directly.
  * @param params - Requirement resolution parameters.
  * @param params.address - ERC-20 token address.
- * @param params.chainId - Chain id; must match `viemClient.chain.id`.
+ * @param params.chainId - Target chain id.
  * @param params.args.amount - Required token amount. Returns `[]` when zero.
  * @param params.args.from - Account that will grant the approval.
  * @param params.supportSignature - Whether the integrator can collect a signature; controls
@@ -61,29 +61,13 @@ type GetRequirementsParams =
  * @returns Promise resolving to an array of either deep-frozen approval transactions or
  *   `Requirement` objects (signature requirements with a `sign()` method). Empty when the
  *   existing allowance already covers `amount`.
- * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`. No other typed
- *   error is reachable through this entry point: the values passed into
+ * @returns No typed error reachable through this entry point: the values passed into
  *   `getRequirementsApproval` always satisfy `approvalAmount >= spendAmount` (direct path uses
  *   `approvalAmount === spendAmount === amount`; Permit2 path uses `MAX_UINT_160`), so
  *   `ApprovalAmountLessThanSpendAmountError` cannot fire from here.
- * @example
- * ```ts
- * import { createPublicClient, http } from "viem";
- * import { mainnet } from "viem/chains";
- * import { getRequirements } from "@morpho-org/morpho-sdk";
- *
- * const client = createPublicClient({ chain: mainnet, transport: http() });
- * const requirements = await getRequirements(client, {
- *   address: USDC,
- *   chainId: 1,
- *   supportSignature: true,
- *   args: { amount: 1_000_000n, from: user },
- * });
- * // requirements satisfies (Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]
- * ```
  */
 export const getRequirements = async (
-  viemClient: PublicClientWithChain,
+  viemClient: Client<Transport>,
   params: GetRequirementsParams,
 ): Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]> => {
   const {
@@ -92,7 +76,6 @@ export const getRequirements = async (
     supportSignature,
     args: { amount, from },
   } = params;
-  validateChainId(viemClient.chain.id, chainId);
 
   if (amount === 0n) {
     return [];
@@ -106,6 +89,7 @@ export const getRequirements = async (
   const { erc20Allowances, erc2612Nonce, permit2BundlerAllowance } =
     await fetchHolding(from, address, viemClient, {
       deployless: params.supportDeployless,
+      chainId,
     });
 
   if (supportSignature) {

@@ -1,14 +1,15 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { MorphoClient, vaultV2Withdraw } from "../../../src/index.js";
+import { vaultV2Withdraw } from "../../../src/index.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
+import { morphoFromTestClient } from "../../helpers/morphoTestClient.js";
 import { test } from "../../setup.js";
 
 describe("Withdraw VaultV2", () => {
   test("should create redeem transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = morphoFromTestClient(client);
 
     const withdraw = morpho
       .vaultV2(KeyrockUsdcVaultV2.address, mainnet.id)
@@ -51,7 +52,7 @@ describe("Withdraw VaultV2", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = morphoFromTestClient(client);
         const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
         const withdraw = vaultV2.withdraw({
           userAddress: client.account.address,
