@@ -157,16 +157,18 @@ If the user wants to keep their work-in-progress, they `git stash push -u`, run 
 
 ### Apply fixes
 
-For each finding from Step 7, starting from highest severity:
+**Batch by file** — process all findings on a given file as one unit, validate once, revert all-or-nothing. This avoids the silent-destruction bug where a per-finding revert (`git checkout -- <file>`) would wipe earlier successful fixes on the same file along with the failing one.
+
+For each file with findings (files in any order; findings within a file ordered highest severity first):
 
 1. Read the file from the local filesystem.
-2. Apply the suggested fix using the Edit tool.
-3. Validate with the project linter:
+2. Apply EVERY finding for this file via the Edit tool, accumulating edits.
+3. Validate the file once with the project linter:
    ```bash
    pnpm exec biome check <file>
    ```
-4. If the fix breaks linting, revert the edit (use `git checkout -- <file>` — safe because the pre-condition guarantees the working tree was clean before the loop) and skip the finding.
-5. Track which findings were fixed and which were skipped.
+4. **All-or-nothing revert.** If lint passes, mark every finding for this file as `applied`. If lint fails, run `git checkout -- <file>` to revert the entire file (safe because the pre-condition guarantees the working tree was clean before the loop), and mark every finding for this file as `skipped: lint rejected the batch`. Do NOT report partial success — the user sees a consistent picture in `git diff`.
+5. Track per-file outcomes: applied count, skipped count, skip reason.
 
 ### Report
 
