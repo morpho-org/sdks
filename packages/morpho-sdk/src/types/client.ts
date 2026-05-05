@@ -1,5 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import type { Address, Client, Transport } from "viem";
+import type { Address, PublicClient, Transport } from "viem";
 import type {
   MarketV1Actions,
   VaultV1Actions,
@@ -37,13 +37,13 @@ export interface MorphoClientType {
   readonly config: MorphoConfig;
 
   /**
-   * Builds a viem `Client` for the requested chain id from the configured transport. The
-   * returned client has `chain` left `undefined` — the SDK identifies the chain via the
+   * Builds a viem `PublicClient` for the requested chain id from the configured transport.
+   * The returned client has `chain` left `undefined` — the SDK identifies the chain via the
    * `chainId` carried by the entity that owns the client.
    *
    * @throws {UnsupportedChainError} when no transport is configured for `chainId`.
    */
-  getViemClient: (chainId: number) => Client;
+  getViemClient: (chainId: number) => PublicClient;
 
   vaultV1: (vault: Address, chainId: number) => VaultV1Actions;
   vaultV2: (vault: Address, chainId: number) => VaultV2Actions;

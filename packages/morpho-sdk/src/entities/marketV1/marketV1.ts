@@ -20,7 +20,7 @@ import {
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
 import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
-import type { Address, Client } from "viem";
+import type { Address, PublicClient } from "viem";
 import {
   getMorphoAuthorizationRequirement,
   getRequirements,
@@ -333,7 +333,7 @@ export interface MarketV1Actions {
 }
 
 export class MorphoMarketV1 implements MarketV1Actions {
-  private readonly viemClient: Client;
+  private readonly viemClient: PublicClient;
 
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(

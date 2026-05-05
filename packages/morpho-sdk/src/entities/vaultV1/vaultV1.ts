@@ -6,7 +6,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
-import { type Address, type Client, isAddressEqual } from "viem";
+import { type Address, isAddressEqual, type PublicClient } from "viem";
 import {
   getRequirements,
   vaultV1Deposit,
@@ -136,7 +136,7 @@ export interface VaultV1Actions {
 }
 
 export class MorphoVaultV1 implements VaultV1Actions {
-  private readonly viemClient: Client;
+  private readonly viemClient: PublicClient;
 
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(

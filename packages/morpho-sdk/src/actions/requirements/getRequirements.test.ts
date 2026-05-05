@@ -1,5 +1,5 @@
 import { addressesRegistry, Holding, MathLib } from "@morpho-org/blue-sdk";
-import type { Address, Client } from "viem";
+import type { Address, PublicClient } from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
@@ -30,7 +30,7 @@ describe("getRequirements", () => {
   const mockFrom: Address = "0x1234567890123456789012345678901234567890";
   const mockAmount = 1000000n;
 
-  let mockClient: Client;
+  let mockClient: PublicClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,7 +38,7 @@ describe("getRequirements", () => {
       chain: {
         id: mainnet.id,
       },
-    } as unknown as Client;
+    } as unknown as PublicClient;
 
     // Mock fetchToken to return token data required for permit signing
     vi.mocked(fetchToken).mockResolvedValue({

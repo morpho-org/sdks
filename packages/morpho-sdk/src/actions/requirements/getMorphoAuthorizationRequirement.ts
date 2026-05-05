@@ -1,12 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import {
-  type Address,
-  type Client,
-  encodeFunctionData,
-  publicActions,
-} from "viem";
+import { type Address, encodeFunctionData, type PublicClient } from "viem";
 import type {
   MorphoAuthorizationAction,
   Transaction,
@@ -20,7 +15,7 @@ import type {
  * any bundled MarketV1 path that operates on behalf of the user (`borrow`,
  * `supplyCollateralBorrow`, `repayWithdrawCollateral`).
  *
- * @param params.viemClient - viem `Client` for the target chain.
+ * @param params.viemClient - viem `PublicClient` for the target chain.
  * @param params.chainId - Target chain id (used to resolve Morpho and `GeneralAdapter1`).
  * @param params.userAddress - The user that must authorize `GeneralAdapter1`.
  * @returns A deep-frozen `Transaction<MorphoAuthorizationAction>`, or `null` when authorization
@@ -41,7 +36,7 @@ import type {
  * ```
  */
 export const getMorphoAuthorizationRequirement = async (params: {
-  viemClient: Client;
+  viemClient: PublicClient;
   chainId: number;
   userAddress: Address;
 }): Promise<Readonly<Transaction<MorphoAuthorizationAction>> | null> => {
@@ -52,8 +47,7 @@ export const getMorphoAuthorizationRequirement = async (params: {
     bundler3: { generalAdapter1 },
   } = getChainAddresses(chainId);
 
-  const pc = viemClient.extend(publicActions);
-  const isAuthorized = await pc.readContract({
+  const isAuthorized = await viemClient.readContract({
     address: morpho,
     abi: blueAbi,
     functionName: "isAuthorized",
