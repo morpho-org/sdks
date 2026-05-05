@@ -40,9 +40,8 @@ const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const SPENDER: Address = "0x3333333333333333333333333333333333333333";
 
-// TODO Task 5: `makeSuccessResult` builds a single `callResult` for all logs.
-// Multi-tx tests will need a per-tx factory once `SimulationResult.callResults`
-// is asserted directly.
+// `makeSuccessResult` is a single-tx convenience. For multi-tx, build
+// `callResults` inline (see "attributes Transfer.txIdx" below).
 function makeSuccessResult(
   logs: RawLog[] = [],
   tenderlyUrl?: string,

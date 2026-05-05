@@ -53,8 +53,8 @@ type Verdict = "severe" | "clean";
  * `simulate`, passing the returned `simulationTxs` and `transfers`.
  */
 export async function screenAddresses(params: {
-  simulationTxs: SimulationTransaction[];
-  transfers: Transfer[];
+  simulationTxs: readonly SimulationTransaction[];
+  transfers: readonly Transfer[];
   chainalysisApiKey?: string;
   signal?: AbortSignal;
   logger?: SimulationLogger;
