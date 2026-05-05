@@ -6,12 +6,12 @@ Transaction builders for VaultV1, VaultV2, and MarketV1. Subfolders carry the la
 
 ## Clients
 
-Two viem clients, two roles:
+Two viem clients, two roles. The SDK exports two type aliases (close to viem's nomenclature):
 
-- **Public client** — passed to `new MorphoClient(viemClient)`. Used for reads and building transactions. Must have `chain` set. SDK checks: `chain.id === expected chainId`.
-- **Wallet client** — passed to `Requirement.sign(client, userAddress)` for permit / permit2 signing. Must have `chain` and `account` set. SDK checks: `chain.id === expected chainId` AND `account.address === userAddress`.
+- **`PublicClient`** = `Client<Transport, Chain>` — chain mandatory. Passed to `new MorphoClient(viemClient)`. Used for reads and tx building. SDK checks: `chain.id === expected chainId`.
+- **`WalletClient`** = `Client<Transport, Chain, Account>` — chain and account mandatory. Passed to `Requirement.sign(client, userAddress)` for permit / permit2 signing. SDK checks: `chain.id === expected chainId` AND `account.address === userAddress`.
 
-The integrator owns both clients and decides where each is used. The SDK never reads `account` from the public client.
+The integrator owns both clients and decides where each is used. The SDK never reads `account` from `PublicClient`. Sign callbacks call `validateChainId` and `validateUserAddress` directly — no wrapper helper.
 
 ## Routing summary
 

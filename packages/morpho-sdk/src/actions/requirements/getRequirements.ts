@@ -1,12 +1,12 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { fetchHolding } from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
-import type { Client } from "viem";
-import {
-  ChainIdMismatchError,
-  type ERC20ApprovalAction,
-  type Requirement,
-  type Transaction,
+import { validateChainId } from "../../helpers/index.js";
+import type {
+  ERC20ApprovalAction,
+  PublicClient,
+  Requirement,
+  Transaction,
 } from "../../types/index.js";
 import { getRequirementsApproval } from "./getRequirementsApproval.js";
 import { getRequirementsPermit } from "./getRequirementsPermit.js";
@@ -83,7 +83,7 @@ type GetRequirementsParams =
  * ```
  */
 export const getRequirements = async (
-  viemClient: Client,
+  viemClient: PublicClient,
   params: GetRequirementsParams,
 ): Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]> => {
   const {
@@ -92,9 +92,7 @@ export const getRequirements = async (
     supportSignature,
     args: { amount, from },
   } = params;
-  if (viemClient.chain?.id !== chainId) {
-    throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
-  }
+  validateChainId(viemClient.chain.id, chainId);
 
   if (amount === 0n) {
     return [];

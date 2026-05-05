@@ -1,5 +1,4 @@
-import type { Chain, Client, Transport } from "viem";
-import type { Metadata } from "../types/index.js";
+import type { Metadata, PublicClient } from "../types/index.js";
 import { MorphoClient } from "./morphoClient.js";
 
 /**
@@ -42,7 +41,7 @@ export function morphoViemExtension(_options?: {
   readonly supportSignature?: boolean;
   readonly supportDeployless?: boolean;
 }) {
-  return <TClient extends Client<Transport, Chain>>(client: TClient) => {
+  return <TClient extends PublicClient>(client: TClient) => {
     return {
       morpho: new MorphoClient(client, _options),
     };

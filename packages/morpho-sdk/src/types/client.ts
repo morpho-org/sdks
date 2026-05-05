@@ -1,5 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import type { Address, Chain, Client, Transport } from "viem";
+import type { Account, Address, Chain, Client, Transport } from "viem";
 import type {
   MarketV1Actions,
   VaultV1Actions,
@@ -8,12 +8,32 @@ import type {
 import type { Metadata } from "./index.js";
 
 /**
- * Structural contract every concrete `MorphoClient` implementation satisfies. Carries the viem
- * public client (its `chain` is required), the resolved options bag, and the three
+ * Viem public client with a required `chain`. Used by `MorphoClient`, entities, and action
+ * builders for on-chain reads and transaction construction. The SDK never reads `account`
+ * from this client.
+ */
+export type PublicClient<
+  chain extends Chain = Chain,
+  transport extends Transport = Transport,
+> = Client<transport, chain>;
+
+/**
+ * Viem wallet client with a required `chain` and `account`. Used by `Requirement.sign(...)`
+ * to produce EIP-712 permit / permit2 signatures.
+ */
+export type WalletClient<
+  chain extends Chain = Chain,
+  account extends Account = Account,
+  transport extends Transport = Transport,
+> = Client<transport, chain, account>;
+
+/**
+ * Structural contract every concrete `MorphoClient` implementation satisfies. Carries the
+ * viem public client (`chain` is required), the resolved options bag, and the three
  * entity-factory methods the SDK exposes.
  */
 export interface MorphoClientType {
-  readonly viemClient: Client<Transport, Chain>;
+  readonly viemClient: PublicClient;
   readonly options: {
     readonly supportSignature: boolean;
     readonly supportDeployless?: boolean;

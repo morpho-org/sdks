@@ -1,19 +1,17 @@
 import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import {
-  type Account,
-  type Chain,
-  type Client,
-  type Transport,
-  verifyTypedData,
-} from "viem";
+import { verifyTypedData } from "viem";
 import { signTypedData } from "viem/actions";
-import { validateWalletClient } from "../../../helpers/index.js";
+import {
+  validateChainId,
+  validateUserAddress,
+} from "../../../helpers/index.js";
 import {
   InvalidSignatureError,
   type Permit2Action,
   type Requirement,
+  type WalletClient,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeErc20Permit2}. */
@@ -87,11 +85,9 @@ export const encodeErc20Permit2 = (
 
   return {
     action,
-    async sign(
-      client: Client<Transport, Chain, Account>,
-      userAddress: Address,
-    ) {
-      validateWalletClient(client, { chainId, userAddress });
+    async sign(client: WalletClient, userAddress: Address) {
+      validateChainId(client.chain.id, chainId);
+      validateUserAddress(client.account.address, userAddress);
 
       const typedData = getPermit2PermitTypedData(
         {

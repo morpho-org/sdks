@@ -1,12 +1,12 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import type { Client } from "viem";
 import { type Address, encodeFunctionData, publicActions } from "viem";
-import {
-  ChainIdMismatchError,
-  type MorphoAuthorizationAction,
-  type Transaction,
+import { validateChainId } from "../../helpers/index.js";
+import type {
+  MorphoAuthorizationAction,
+  PublicClient,
+  Transaction,
 } from "../../types/index.js";
 
 /**
@@ -39,15 +39,13 @@ import {
  * ```
  */
 export const getMorphoAuthorizationRequirement = async (params: {
-  viemClient: Client;
+  viemClient: PublicClient;
   chainId: number;
   userAddress: Address;
 }): Promise<Readonly<Transaction<MorphoAuthorizationAction>> | null> => {
   const { viemClient, chainId, userAddress } = params;
 
-  if (viemClient.chain?.id !== chainId) {
-    throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
-  }
+  validateChainId(viemClient.chain.id, chainId);
 
   const {
     morpho,

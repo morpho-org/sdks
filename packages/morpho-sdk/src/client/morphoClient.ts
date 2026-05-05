@@ -1,5 +1,5 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
-import type { Address, Chain, Client, Transport } from "viem";
+import type { Address } from "viem";
 import {
   MorphoMarketV1,
   MorphoVaultV1,
@@ -9,6 +9,7 @@ import {
   MarketIdMismatchError,
   type Metadata,
   type MorphoClientType,
+  type PublicClient,
 } from "../types/index.js";
 
 /**
@@ -48,7 +49,7 @@ export class MorphoClient implements MorphoClientType {
    * ```
    */
   constructor(
-    public readonly viemClient: Client<Transport, Chain>,
+    public readonly viemClient: PublicClient,
     readonly _options?: {
       readonly supportSignature?: boolean;
       readonly supportDeployless?: boolean;

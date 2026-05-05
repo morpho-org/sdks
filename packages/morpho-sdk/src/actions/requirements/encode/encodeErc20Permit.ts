@@ -1,20 +1,18 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import {
-  type Account,
-  type Chain,
-  type Client,
-  type Transport,
-  verifyTypedData,
-} from "viem";
+import { verifyTypedData } from "viem";
 import { signTypedData } from "viem/actions";
-import { validateWalletClient } from "../../../helpers/index.js";
 import {
-  ChainIdMismatchError,
+  validateChainId,
+  validateUserAddress,
+} from "../../../helpers/index.js";
+import {
   InvalidSignatureError,
   type PermitAction,
+  type PublicClient,
   type Requirement,
+  type WalletClient,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
@@ -66,14 +64,12 @@ interface EncodeErc20PermitParams {
  * ```
  */
 export const encodeErc20Permit = async (
-  viemClient: Client,
+  viemClient: PublicClient,
   params: EncodeErc20PermitParams,
 ): Promise<Requirement> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;
 
-  if (viemClient.chain?.id !== chainId) {
-    throw new ChainIdMismatchError(viemClient.chain?.id, chainId);
-  }
+  validateChainId(viemClient.chain.id, chainId);
 
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
@@ -93,11 +89,9 @@ export const encodeErc20Permit = async (
 
   return {
     action,
-    async sign(
-      client: Client<Transport, Chain, Account>,
-      userAddress: Address,
-    ) {
-      validateWalletClient(client, { chainId, userAddress });
+    async sign(client: WalletClient, userAddress: Address) {
+      validateChainId(client.chain.id, chainId);
+      validateUserAddress(client.account.address, userAddress);
 
       const typedData = getPermitTypedData(
         {
