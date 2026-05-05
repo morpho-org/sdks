@@ -40,6 +40,10 @@ const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const SPENDER: Address = "0x3333333333333333333333333333333333333333";
 
+// TODO Task 4/5: makeSuccessResult creates one callResult for all logs.
+// Multi-tx tests (authorizations) will need a per-tx factory once the
+// temporary flatten in simulate.ts is removed and SimulationResult.callResults
+// is asserted directly.
 function makeSuccessResult(
   logs: RawLog[] = [],
   tenderlyUrl?: string,
