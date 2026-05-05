@@ -13,19 +13,19 @@ import type { Metadata } from "./index.js";
  * from this client.
  */
 export type PublicClientWithChain<
-  chain extends Chain = Chain,
-  transport extends Transport = Transport,
-> = Client<transport, chain>;
+  TTransport extends Transport = Transport,
+  TChain extends Chain = Chain,
+> = Client<TTransport, TChain>;
 
 /**
  * Viem wallet client with a required `chain` and `account`. Used by `Requirement.sign(...)`
  * to produce EIP-712 permit / permit2 signatures.
  */
 export type WalletClientWithChain<
-  chain extends Chain = Chain,
-  account extends Account = Account,
-  transport extends Transport = Transport,
-> = Client<transport, chain, account>;
+  TTransport extends Transport = Transport,
+  TChain extends Chain = Chain,
+  TAccount extends Account = Account,
+> = Client<TTransport, TChain, TAccount>;
 
 /**
  * Structural contract every concrete `MorphoClient` implementation satisfies. Carries the

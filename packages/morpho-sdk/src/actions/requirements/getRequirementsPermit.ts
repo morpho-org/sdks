@@ -10,7 +10,7 @@ import { encodeErc20Permit } from "./encode/index.js";
  * Returns an empty array when the existing allowance for `GeneralAdapter1` already covers
  * `amount`.
  *
- * @param viemClient - Connected viem `Client` (used by the returned `Requirement.sign()`).
+ * @param viemClient - Connected `PublicClientWithChain` (used by `encodeErc20Permit` for `fetchToken`). Signing happens via the returned `Requirement.sign(walletClient, userAddress)`.
  * @param params.token - ERC-20 token address (must support EIP-2612).
  * @param params.chainId - The chain the bundle targets.
  * @param params.args.amount - Required token amount.
@@ -22,11 +22,11 @@ import { encodeErc20Permit } from "./encode/index.js";
  *   the existing allowance already covers `amount`.
  * @example
  * ```ts
- * import { createWalletClient, http } from "viem";
+ * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
  * import { getRequirementsPermit } from "@morpho-org/morpho-sdk";
  *
- * const client = createWalletClient({ chain: mainnet, transport: http() });
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
  * const reqs = await getRequirementsPermit(client, {
  *   token: USDC, // an ERC-2612-compatible token; DAI is excluded by getRequirements
  *   chainId: 1,

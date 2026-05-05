@@ -47,7 +47,7 @@ type GetRequirementsParams =
  * 3. **`supportSignature: true`, default** — Permit2 flow: classic approval to the Permit2
  *    contract (if needed), followed by a Permit2 signature against `GeneralAdapter1`.
  *
- * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
+ * @param viemClient - Connected `PublicClientWithChain` whose `chain.id` matches `params.chainId`.
  * @param params - Requirement resolution parameters.
  * @param params.address - ERC-20 token address.
  * @param params.chainId - Chain id; must match `viemClient.chain.id`.

@@ -33,7 +33,7 @@ interface EncodeErc20PermitParams {
  * signature, verifies it against the connected account, and returns a `RequirementSignature`
  * the bundler action helpers can consume. Deadline defaults to two hours from `Time.timestamp()`.
  *
- * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
+ * @param viemClient - Connected `PublicClientWithChain` whose `chain.id` matches `params.chainId`.
  * @param params - Permit encoding parameters.
  * @param params.token - ERC-20 token address (must support EIP-2612).
  * @param params.spender - Address that will be granted the permit allowance.
@@ -42,17 +42,16 @@ interface EncodeErc20PermitParams {
  * @param params.nonce - The user's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
- * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
- * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
+ * @throws {ChainIdMismatchError} when `viemClient.chain.id !== params.chainId`, or from `sign()` when the wallet client's `chain.id` differs.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
- * import { createWalletClient, http } from "viem";
+ * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
  * import { encodeErc20Permit } from "@morpho-org/morpho-sdk";
  *
- * const client = createWalletClient({ chain: mainnet, transport: http() });
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
  * const requirement = await encodeErc20Permit(client, {
  *   token: USDC, // L1 mainnet USDC. Bridged USDC.e on L2s often does not implement EIP-2612 — query token metadata before signing on other chains. DAI uses a non-standard permit signature.
  *   spender: generalAdapter1,

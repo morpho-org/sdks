@@ -17,7 +17,7 @@ import type {
  * any bundled MarketV1 path that operates on behalf of the user (`borrow`,
  * `supplyCollateralBorrow`, `repayWithdrawCollateral`).
  *
- * @param params.viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
+ * @param params.viemClient - Connected `PublicClientWithChain` whose `chain.id` matches `params.chainId`.
  * @param params.chainId - Target chain id (used to resolve Morpho and `GeneralAdapter1`).
  * @param params.userAddress - The user that must authorize `GeneralAdapter1`.
  * @returns A deep-frozen `Transaction<MorphoAuthorizationAction>`, or `null` when authorization
