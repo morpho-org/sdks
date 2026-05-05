@@ -1,6 +1,11 @@
 import { getAddress, type Hex, zeroAddress, zeroHash } from "viem";
 
-import type { RawLog, SimulationLogger, Transfer } from "../../types.js";
+import type {
+  RawCallResult,
+  RawLog,
+  SimulationLogger,
+  Transfer,
+} from "../../types.js";
 
 // keccak256("Transfer(address,address,uint256)") — ERC-20 transfer event
 export const TRANSFER_TOPIC =
@@ -18,137 +23,146 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
 /**
  * Parse raw EVM logs into individual Transfer events.
  *
+ * Iterates over per-tx `callResults` and stamps each emitted `Transfer.txIdx`
+ * with the index of the originating call. WETH9 wrap/unwrap dedup is scoped
+ * to the same tx — wrap/unwrap pairs always emit in the same call.
+ *
  * **Supported event types:** ERC20 `Transfer(from, to, amount)` and WETH9
  * `Deposit(to, amount)` / `Withdrawal(from, amount)`. WETH9 mint/burn Transfer
  * events paired with their Deposit/Withdrawal are deduplicated. ERC721 and
  * ERC1155 transfer events are **not** parsed — consumers with NFT flows will
  * see an incomplete transfer list.
  *
- * **WETH9-specific dedup:** matches Transfer-to/from zero against the
- * matching Deposit/Withdrawal event on the same contract with the same data
- * and withdrawer. Non-standard wrapped-native implementations (e.g., rebasing
- * or fee-on-withdraw wrappers) may escape the dedup and produce double-counts.
- *
  * **Failure mode:** on a per-log parse failure (malformed topic length,
  * non-hex data), the log is skipped and a `warn` is emitted via the logger.
- * The caller receives a possibly-incomplete transfer list. Upstream sources
- * (e.g., Tenderly response schemas) should validate log shape before calling
- * here to avoid silent drops.
  *
  * Output is sorted canonically by token, from, to, amount for determinism.
+ * `txIdx` is attached but does not influence sort order.
  */
 export function parseTransfers(
-  logs: RawLog[],
+  callResults: readonly RawCallResult[],
   logger?: SimulationLogger,
 ): Transfer[] {
   const transfers: Transfer[] = [];
 
-  for (const log of logs) {
-    try {
-      const topic0 = log.topics[0];
-      if (topic0 === undefined) continue;
+  for (let txIdx = 0; txIdx < callResults.length; txIdx++) {
+    const logs = callResults[txIdx]!.logs;
+    for (const log of logs) {
+      try {
+        const topic0 = log.topics[0];
+        if (topic0 === undefined) continue;
 
-      switch (topic0) {
-        case WITHDRAWAL_TOPIC: {
-          const fromTopic = log.topics[1];
-          if (!isTopicHex(fromTopic) || !isUint256Hex(log.data)) {
-            warnMalformed(
-              logger,
-              log,
-              "WETH9 Withdrawal: bad topic[1] or data length",
-            );
-            continue;
-          }
-          transfers.push({
-            token: getAddress(log.address),
-            from: getAddress(`0x${fromTopic.slice(26)}`),
-            to: zeroAddress,
-            amount: BigInt(log.data),
-          });
-          continue;
-        }
-
-        case DEPOSIT_TOPIC: {
-          const toTopic = log.topics[1];
-          if (!isTopicHex(toTopic) || !isUint256Hex(log.data)) {
-            warnMalformed(
-              logger,
-              log,
-              "WETH9 Deposit: bad topic[1] or data length",
-            );
-            continue;
-          }
-          transfers.push({
-            token: getAddress(log.address),
-            from: zeroAddress,
-            to: getAddress(`0x${toTopic.slice(26)}`),
-            amount: BigInt(log.data),
-          });
-          continue;
-        }
-
-        case TRANSFER_TOPIC: {
-          // ERC-20 Transfer has 3 topics; ERC-721 Transfer has 4 (tokenId indexed).
-          // ERC-721 flows are out of scope.
-          if (log.topics.length !== 3) continue;
-
-          const fromTopic = log.topics[1]!;
-          const toTopic = log.topics[2]!;
-
-          if (
-            !isTopicHex(fromTopic) ||
-            !isTopicHex(toTopic) ||
-            !isUint256Hex(log.data)
-          ) {
-            warnMalformed(logger, log, "ERC20 Transfer: bad topic/data length");
+        switch (topic0) {
+          case WITHDRAWAL_TOPIC: {
+            const fromTopic = log.topics[1];
+            if (!isTopicHex(fromTopic) || !isUint256Hex(log.data)) {
+              warnMalformed(
+                logger,
+                log,
+                "WETH9 Withdrawal: bad topic[1] or data length",
+              );
+              continue;
+            }
+            transfers.push({
+              token: getAddress(log.address),
+              from: getAddress(`0x${fromTopic.slice(26)}`),
+              to: zeroAddress,
+              amount: BigInt(log.data),
+              txIdx,
+            });
             continue;
           }
 
-          // WETH9 unwrap dedup: Transfer to zero paired with a Withdrawal of equal amount.
-          if (
-            toTopic === zeroHash &&
-            logs.some(
-              (other) =>
-                other.topics[0] === WITHDRAWAL_TOPIC &&
-                other.address === log.address &&
-                other.data === log.data &&
-                other.topics.length === 2 &&
-                other.topics[1] === fromTopic,
+          case DEPOSIT_TOPIC: {
+            const toTopic = log.topics[1];
+            if (!isTopicHex(toTopic) || !isUint256Hex(log.data)) {
+              warnMalformed(
+                logger,
+                log,
+                "WETH9 Deposit: bad topic[1] or data length",
+              );
+              continue;
+            }
+            transfers.push({
+              token: getAddress(log.address),
+              from: zeroAddress,
+              to: getAddress(`0x${toTopic.slice(26)}`),
+              amount: BigInt(log.data),
+              txIdx,
+            });
+            continue;
+          }
+
+          case TRANSFER_TOPIC: {
+            // ERC-20 Transfer has 3 topics; ERC-721 Transfer has 4 (tokenId indexed).
+            // ERC-721 flows are out of scope.
+            if (log.topics.length !== 3) continue;
+
+            const fromTopic = log.topics[1]!;
+            const toTopic = log.topics[2]!;
+
+            if (
+              !isTopicHex(fromTopic) ||
+              !isTopicHex(toTopic) ||
+              !isUint256Hex(log.data)
+            ) {
+              warnMalformed(
+                logger,
+                log,
+                "ERC20 Transfer: bad topic/data length",
+              );
+              continue;
+            }
+
+            // WETH9 unwrap dedup: Transfer to zero paired with a Withdrawal of
+            // equal amount in the SAME tx.
+            if (
+              toTopic === zeroHash &&
+              logs.some(
+                (other) =>
+                  other.topics[0] === WITHDRAWAL_TOPIC &&
+                  other.address === log.address &&
+                  other.data === log.data &&
+                  other.topics.length === 2 &&
+                  other.topics[1] === fromTopic,
+              )
             )
-          )
-            continue;
+              continue;
 
-          // WETH9 wrap dedup: Transfer from zero paired with a Deposit of equal amount.
-          if (
-            fromTopic === zeroHash &&
-            logs.some(
-              (other) =>
-                other.topics[0] === DEPOSIT_TOPIC &&
-                other.address === log.address &&
-                other.data === log.data &&
-                other.topics.length === 2 &&
-                other.topics[1] === toTopic,
+            // WETH9 wrap dedup: Transfer from zero paired with a Deposit of
+            // equal amount in the SAME tx.
+            if (
+              fromTopic === zeroHash &&
+              logs.some(
+                (other) =>
+                  other.topics[0] === DEPOSIT_TOPIC &&
+                  other.address === log.address &&
+                  other.data === log.data &&
+                  other.topics.length === 2 &&
+                  other.topics[1] === toTopic,
+              )
             )
-          )
-            continue;
+              continue;
 
-          transfers.push({
-            token: getAddress(log.address),
-            from: getAddress(`0x${fromTopic.slice(26)}`),
-            to: getAddress(`0x${toTopic.slice(26)}`),
-            amount: BigInt(log.data),
-          });
-          continue;
+            transfers.push({
+              token: getAddress(log.address),
+              from: getAddress(`0x${fromTopic.slice(26)}`),
+              to: getAddress(`0x${toTopic.slice(26)}`),
+              amount: BigInt(log.data),
+              txIdx,
+            });
+            continue;
+          }
         }
+      } catch (error) {
+        // Safety net for anything that slips past the length checks above
+        // (e.g., viem checksum throws on non-hex input). Loud enough to diagnose.
+        warnMalformed(
+          logger,
+          log,
+          error instanceof Error ? error.message : String(error),
+        );
       }
-    } catch (error) {
-      // Safety net for anything that slips past the length checks above
-      // (e.g., viem checksum throws on non-hex input). Loud enough to diagnose.
-      warnMalformed(
-        logger,
-        log,
-        error instanceof Error ? error.message : String(error),
-      );
     }
   }
 

@@ -82,10 +82,17 @@ export type SimulationAuthorization =
  * `SimulationResult.transfers`.
  */
 export interface Transfer {
-  token: Address;
-  from: Address;
-  to: Address;
-  amount: bigint;
+  readonly token: Address;
+  readonly from: Address;
+  readonly to: Address;
+  readonly amount: bigint;
+  /**
+   * Index into `SimulationResult.simulationTxs` of the transaction that
+   * emitted the underlying log. For bundles with prepended authorization
+   * approvals, indices `[0, simulationTxs.length - params.transactions.length)`
+   * are authorization txs; the remainder are caller-supplied.
+   */
+  readonly txIdx: number;
 }
 
 /**
