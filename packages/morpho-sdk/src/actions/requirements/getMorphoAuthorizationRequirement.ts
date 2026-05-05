@@ -45,7 +45,7 @@ export const getMorphoAuthorizationRequirement = async (params: {
 }): Promise<Readonly<Transaction<MorphoAuthorizationAction>> | null> => {
   const { viemClient, chainId, userAddress } = params;
 
-  validateChainId(viemClient.chain.id, chainId);
+  validateChainId(viemClient.chain?.id, chainId);
 
   const {
     morpho,

@@ -342,7 +342,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
   ) {}
 
   async getMarketData(parameters?: FetchParameters): Promise<Market> {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return fetchMarket(this.marketParams.id, this.client.viemClient, {
       ...parameters,
@@ -355,7 +355,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     userAddress: Address,
     parameters?: FetchParameters,
   ): Promise<AccrualPosition> {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     return fetchAccrualPosition(
       userAddress,
@@ -374,7 +374,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     userAddress,
     nativeAmount,
   }: { userAddress: Address } & DepositAmountArgs) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
@@ -434,7 +434,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     slippageTolerance?: bigint;
     reallocations?: readonly VaultReallocation[];
   }) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount <= 0n) {
       throw new NonPositiveBorrowAmountError(this.marketParams.id);
@@ -499,7 +499,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
   ) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const {
       userAddress,
@@ -615,7 +615,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     amount: bigint;
     positionData: AccrualPosition;
   }) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount <= 0n) {
       throw new NonPositiveWithdrawCollateralAmountError(this.marketParams.id);
@@ -671,7 +671,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
       slippageTolerance?: bigint;
     } & RepayAmountArgs,
   ) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const {
       userAddress,
@@ -831,7 +831,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     slippageTolerance?: bigint;
     reallocations?: readonly VaultReallocation[];
   } & DepositAmountArgs) {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
@@ -929,7 +929,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     vaultAddresses: readonly Address[];
     block: MinimalBlock;
   }): Promise<SimulationState> {
-    validateChainId(this.client.viemClient.chain.id, this.chainId);
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const client = this.client.viemClient;
     const fetchParams = {
