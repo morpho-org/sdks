@@ -84,7 +84,7 @@ Structure:
 | Verdict | When | Event |
 |---|---|---|
 | **Approve** | No critical or high issues AND `<FAILED_AGENTS>` is zero | `APPROVE` |
-| **Request Changes** | Any critical, OR multiple high, OR `<FAILED_AGENTS>` is non-zero | `REQUEST_CHANGES` |
+| **Request Changes** | Any critical, OR any high, OR `<FAILED_AGENTS>` is non-zero | `REQUEST_CHANGES` |
 
 When agents have failed, never `APPROVE` — `REQUEST_CHANGES` with the WARNING line so a human resolves it.
 
@@ -142,7 +142,9 @@ This creates the review and all inline comments atomically — no partial review
 If the review creation fails (permissions, line numbers out of range), fall back to a single PR-level comment:
 
 ```bash
-gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments
+gh api repos/<OWNER>/<REPO>/issues/<PR_NUMBER>/comments \
+  --method POST \
+  -f body="<REVIEW_BODY>"
 ```
 
 If there are zero findings AND zero failures, submit with empty `comments[]` and a body saying "No issues found in this review."
@@ -165,6 +167,7 @@ Sentinel: REVIEW_DONE_PR — PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEA
 - **No `--watch`** in CI — the run is one-shot per PR push.
 - **For pre-PR review**: use `/pr-review-local` (terminal-only, no GitHub interaction).
 - **For local PR review with optional watcher**: use `/pr-review-gh`.
+
 ## Sentinel grammar
 
 | Sentinel | Owning step | Trailer grammar |

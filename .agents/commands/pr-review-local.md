@@ -21,7 +21,8 @@ A maintainer changing this skill should verify each outcome shape:
 |---|---|
 | Clean branch, no findings | `Sentinel: REVIEW_CLEAN — no issues found in <HEAD_BRANCH> vs <BASE_BRANCH>.` |
 | Findings present | `Sentinel: REVIEW_DONE_LOCAL — <N> findings (X critical, Y high, Z medium, W low) on <HEAD_BRANCH> vs <BASE_BRANCH>.` |
-| Findings + agent crash | `Sentinel: REVIEW_INCOMPLETE — <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` |
+| Findings + agent crash | `Sentinel: REVIEW_DONE_LOCAL — <N> findings (X critical, Y high, Z medium, W low) on <HEAD_BRANCH> vs <BASE_BRANCH>.` (with a `WARNING: <FAILED_AGENTS> of 7 agents failed (<names>) — review may be incomplete.` line prepended to the findings output) |
+| Zero findings + agent crash | `Sentinel: REVIEW_INCOMPLETE — <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` |
 | `--fix` happy path | `Sentinel: FIX_DONE_LOCAL — <X> applied, <Y> skipped (Local-only, unstaged).` plus `git diff` shows the unstaged edits. |
 | `--fix` aborted on dirty tree | `Sentinel: FIX_ABORTED — working tree is not clean. Commit or stash before --fix.` |
 
@@ -74,7 +75,17 @@ if [ -z "$BASE_BRANCH" ]; then
 fi
 ```
 
-If `<HEAD_BRANCH>` equals `<BASE_BRANCH>` AND `git status --porcelain` is empty, inform the user `No changes to review on <HEAD_BRANCH> vs <BASE_BRANCH>` and stop.
+**Empty-diff short-circuit.** Compute the actual commit-range diff before any review work, and stop only if it is empty AND the working tree is clean. Branch-name equality alone is NOT sufficient — a clean tree on `main` with unpushed commits ahead of `origin/main` still has changes to review:
+
+```bash
+MERGE_BASE=$(git merge-base origin/<BASE_BRANCH> HEAD)
+COMMIT_RANGE_FILES=$(git diff --name-only "$MERGE_BASE..HEAD")
+WORKTREE_DIRTY=$(git status --porcelain)
+if [ -z "$COMMIT_RANGE_FILES" ] && [ -z "$WORKTREE_DIRTY" ]; then
+  echo "No changes to review on <HEAD_BRANCH> vs <BASE_BRANCH>"
+  exit 0
+fi
+```
 
 ## Steps 3–6: Shared review base
 
@@ -120,7 +131,7 @@ Group findings by file (already sorted by Step 6). Within each file, list highes
 
 - Zero findings AND zero agent failures → `Sentinel: REVIEW_CLEAN — no issues found in <HEAD_BRANCH> vs <BASE_BRANCH>.`
 - Zero findings BUT non-zero agent failures → `Sentinel: REVIEW_INCOMPLETE — <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.`
-- Non-zero findings → `Sentinel: REVIEW_DONE_LOCAL — <N> findings (X critical, Y high, Z medium, W low) on <HEAD_BRANCH> vs <BASE_BRANCH>.`
+- Non-zero findings → `Sentinel: REVIEW_DONE_LOCAL — <N> findings (X critical, Y high, Z medium, W low) on <HEAD_BRANCH> vs <BASE_BRANCH>.` If `<FAILED_AGENTS>` is also non-zero, prepend a single `WARNING: <FAILED_AGENTS> of 7 agents failed (<names>) — review may be incomplete.` line to the findings output BEFORE the sentinel.
 
 When `FIX=1`: suppress the `REVIEW_DONE_LOCAL` sentinel (Step 7b will emit its own terminal sentinel). `REVIEW_CLEAN` / `REVIEW_INCOMPLETE` still print before falling through — they're honest summaries even when fixes are about to be applied.
 
@@ -186,6 +197,7 @@ Sentinel: FIX_DONE_LOCAL — <X> applied, <Y> skipped (Local-only, unstaged).
 
 - **No GitHub interaction**. The skill never calls `gh api`. All output stays in the terminal.
 - **Refuse on dirty tree** for `--fix`. The previous stash-and-pop machinery is gone — clean precondition replaces ~80 lines of stash plumbing and a class of stash-pop-conflict bugs.
+
 ## Sentinel grammar
 
 | Sentinel | Owning step | Trailer grammar |

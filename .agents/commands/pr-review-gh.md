@@ -191,6 +191,7 @@ After CronCreate returns the job ID:
 
 - **`COMMENT` event only** — never auto-approve or request changes in local PR mode. The user reviews findings and decides.
 - **`--watch` semantics**: 2-minute cron, self-contained per cycle (no CronCreate-time SHA leakage), watcher cycles re-discover project context per cycle.
+
 ## Sentinel grammar
 
 | Sentinel | Owning step | Trailer grammar |
