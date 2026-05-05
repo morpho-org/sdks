@@ -1,16 +1,15 @@
-import { type Address, type Client, zeroAddress } from "viem";
-
 import {
   AccrualVault,
   Eip5267Domain,
+  getChainAddresses,
   type MarketId,
   UnknownFactory,
   UnknownOfFactory,
   Vault,
   VaultConfig,
   type VaultPublicAllocatorConfig,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { type Address, type Client, zeroAddress } from "viem";
 
 import { getChainId, readContract } from "viem/actions";
 import {
@@ -18,12 +17,12 @@ import {
   metaMorphoFactoryAbi,
   publicAllocatorAbi,
 } from "../abis.js";
+import { abi, code } from "../queries/GetVault.js";
 import type { DeploylessFetchParameters } from "../types.js";
+import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
-import { abi, code } from "../queries/GetVault.js";
-import { fetchVaultConfig } from "./VaultConfig.js";
-
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVault(
   address: Address,
   client: Client,
@@ -271,6 +270,7 @@ export async function fetchVault(
         functionName: "accruedFee",
         args: [address],
       }),
+      // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
     ]).then(([admin, fee, accruedFee]) => ({ admin, fee, accruedFee }));
 
   const [supplyQueue, withdrawQueue, publicAllocatorConfig, isMetaMorphoV1_0] =
@@ -331,6 +331,7 @@ export async function fetchVault(
     lostAssets,
   });
 }
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchAccrualVault(
   address: Address,
   client: Client,

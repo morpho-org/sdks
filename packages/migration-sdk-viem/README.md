@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Viem-based extension of `@morpho-org/bundler-sdk-viem` that exports utilities to build migration bundles to migrate lending positions (on aave, compound, morpho-aaveV3-optimizer, ...) to the morpho protocol.
 
 ## Installation
@@ -33,7 +35,9 @@ npm install @morpho-org/migration-sdk-viem
 yarn add @morpho-org/migration-sdk-viem
 ```
 
-## `MigratableSupplyPosition`
+## Usage
+
+### `MigratableSupplyPosition`
 
 An abstraction representing a supply position that can be migrated between protocols. Each protocol has its own specific implementation, derived from this base class:
 
@@ -43,13 +47,13 @@ An abstraction representing a supply position that can be migrated between proto
 - `MigratableSupplyPosition_CompoundV3`
 - `MigratableSupplyPosition_AaveV3Optimizer`
 
-### Features
+#### Features
 
 - Encapsulates the details of a supply position.
 - Abstracts the logic to generate migration transactions.
 - Supports specifying protocol, user, and migration constraints.
 
-### Creating an Instance
+#### Creating an Instance
 
 ```typescript
 import { ChainId, Address } from "@morpho-org/blue-sdk";
@@ -75,7 +79,7 @@ const positionConfig: IMigratableSupplyPosition_AaveV2 = {
 const customPosition = new MigratableSupplyPosition_AaveV2(positionConfig);
 ```
 
-### Building a migration bundle
+#### Building a migration bundle
 
 ```typescript
 const migrationArgs = {
@@ -117,15 +121,15 @@ The obtained bundle is made of:
 
 ---
 
-### API Reference
+#### API Reference
 
-#### `MigratableSupplyPosition.Args`
+##### `MigratableSupplyPosition.Args`
 Arguments required for executing a migration transaction:
 - `amount`: The amount to migrate.
 - `maxSharePrice`: The maximum vault share price expected (scaled by RAY).
 - `vault`: The address of the vault to migrate to.
 
-#### `IMigratableSupplyPosition`
+##### `IMigratableSupplyPosition`
 Interface for a migratable supply position:
 - `chainId`: The chain ID.
 - `protocol`: The protocol.
@@ -135,34 +139,34 @@ Interface for a migratable supply position:
 - `supplyApy`: The supply APY.
 - `max`: Migration limit and limiter.
 
-#### `IMigratableSupplyPosition_AaveV2`
+##### `IMigratableSupplyPosition_AaveV2`
 The `IMigratableSupplyPosition_AaveV2` interface extends the base `IMigratableSupplyPosition` interface, adding properties specific to the Aave V2 protocol:
 - `aToken`: `Address` - The address of the aToken associated with the user's supply position in the Aave V2 protocol.
 - `nonce`: `bigint` - The EIP-2612 nonce of the user for the specified aToken.
 
-#### `IMigratableSupplyPosition_AaveV3`
+##### `IMigratableSupplyPosition_AaveV3`
 The `IMigratableSupplyPosition_AaveV3` interface extends the base `IMigratableSupplyPosition` interface, adding properties specific to the Aave V3 protocol:
 - `aToken`: `Address` - The address of the aToken associated with the user's supply position in the Aave V3 protocol.
 - `nonce`: `bigint` - The EIP-2612 nonce of the user for the specified aToken.
 
-#### `IMigratableSupplyPosition_AaveV3Optimizer`
+##### `IMigratableSupplyPosition_AaveV3Optimizer`
 The `IMigratableSupplyPosition_AaveV3Optimizer` interface extends the base `IMigratableSupplyPosition` interface, adding properties specific to the Aave V3 Optimizer protocol:
 - `isBundlerManaging`: `boolean` - Weather the aaveV3Optimizer bundler is authorized to manage user's positions on the protocol.
 - `nonce`: `bigint` - The user's nonce on the protocol (used for manager authorization with signatures).
 
-#### `IMigratableSupplyPosition_CompoundV2`
+##### `IMigratableSupplyPosition_CompoundV2`
 The `IMigratableSupplyPosition_CompoundV2` interface extends the base `IMigratableSupplyPosition` interface, adding properties specific to the Compound V2 protocol:
 - `bundlerAllowance`: `bigint` - The allowance of the compoundV2 bundler over user's CTokens.
 - `cToken`: `Address` - The address of the cToken associated with the user's supply position in the Compound V2 protocol.
 - `cTokenBalance`: `bigint` - The user's cToken balance
 
-#### `IMigratableSupplyPosition_CompoundV3`
+##### `IMigratableSupplyPosition_CompoundV3`
 The `IMigratableSupplyPosition_CompoundV3` interface extends the base `IMigratableSupplyPosition` interface, adding properties specific to the Compound V3 protocol:
 - `nonce`: `bigint` - The user's nonce on the protocol (used for manager authorization with signatures).
 - `cometAddress`: `Address` - The address of the comet instance associated with the user's supply position in the Compound V3 protocol.
 - `cometName`: `string` - The name of the comet instance associated with the user's supply position in the Compound V3 protocol.
 
-## `MigratableBorrowPosition`
+### `MigratableBorrowPosition`
 
 An abstraction representing a borrow position that can be migrated between protocols. Each supported protocol has its own specific implementation, derived from this base class:
 
@@ -170,13 +174,13 @@ An abstraction representing a borrow position that can be migrated between proto
 - `MigratableBorrowPosition_AaveV3`
 - `MigratableBorrowPosition_CompoundV3`
 
-### Features
+#### Features
 
 - Encapsulates the details of a borrow position.
 - Abstracts the logic to generate migration transactions.
 - Supports specifying protocol, user, and migration constraints.
 
-### Creating an Instance
+#### Creating an Instance
 
 ```typescript
 import { ChainId, Address } from "@morpho-org/blue-sdk";
@@ -216,7 +220,7 @@ const positionConfig: IMigratableBorrowPosition_AaveV2 = {
 const customPosition = new MigratableBorrowPosition_AaveV2(positionConfig);
 ```
 
-### Building a migration bundle
+#### Building a migration bundle
 
 ```typescript
 const migrationArgs = {
@@ -258,9 +262,9 @@ The obtained `ActionBundle` is made of:
 
 ---
 
-### API Reference
+#### API Reference
 
-#### `MigratableBorrowPosition.Args`
+##### `MigratableBorrowPosition.Args`
 Arguments required for executing a migration transaction:
 - `collateralAmount`: The collateral amount to migrate.
 - `borrowAmount`: The borrow amount to migrate.
@@ -268,7 +272,7 @@ Arguments required for executing a migration transaction:
 - `slippageFrom`?: Slippage tolerance for the current position (optional).
 - `minSharePrice`: The maximum amount of borrow shares mint (protects the sender from unexpected slippage).
 
-#### `IMigratableBorrowPosition`
+##### `IMigratableBorrowPosition`
 - `chainId`: The chain ID where the position resides.
 - `protocol`: The protocol associated with the borrow position.
 - `user`: The user's address.
@@ -284,21 +288,21 @@ Arguments required for executing a migration transaction:
 - `isBundlerManaging`: Whether the migration adapter is authorized to manage user's position on blue
 - `morphoNonce`: User nonce on morpho contract
 
-#### `IMigratableBorrowPosition_AaveV2`
+##### `IMigratableBorrowPosition_AaveV2`
 The `IMigratableBorrowPosition_AaveV2` interface extends the base `IMigratableBorrowPosition` interface, adding properties specific to the Aave V2 protocol:
 - `aToken`: `Address` - The address of the aToken associated with the user's supply position in the Aave V2 protocol.
 - `nonce`: `bigint` - The EIP-2612 nonce of the user for the specified aToken.
 - `collateralPriceEth`: `bigint` - The aave oracle price of the loan token in Eth (8 decimals).
 - `loanPriceEth`: `bigint` - The aave oracle price of the loan token in Eth (8 decimals).
 
-#### `IMigratableBorrowPosition_AaveV3`
+##### `IMigratableBorrowPosition_AaveV3`
 The `IMigratableBorrowPosition_AaveV3` interface extends the base `IMigratableBorrowPosition` interface, adding properties specific to the Aave V3 protocol:
 - `aToken`: `Address` - The address of the aToken associated with the user's supply position in the Aave V3 protocol.
 - `nonce`: `bigint` - The EIP-2612 nonce of the user for the specified aToken.
 - `collateralPriceEth`: `bigint` - The aave oracle price of the collateral token in Eth (8 decimals).
 - `loanPriceEth`: `bigint` - The aave oracle price of the loan token in Eth (8 decimals).
 
-#### `IMigratableBorrowPosition_CompoundV3`
+##### `IMigratableBorrowPosition_CompoundV3`
 The `IMigratableBorrowPosition_CompoundV3` interface extends the base `IMigratableBorrowPosition` interface, adding properties specific to the Compound V3 protocol:
 - `nonce`: `bigint` - The user's nonce on the protocol (used for manager authorization with signatures).
 - `collateralPriceUsd`: `bigint` - The compound oracle price of the collateal token in Usd (8 decimals).
@@ -308,10 +312,10 @@ The `IMigratableBorrowPosition_CompoundV3` interface extends the base `IMigratab
 - `baseBorrowMin`: `bigint` - The minimum borrow position that should remain after a partial repay on compound V3
 
 
-## `fetchMigratablePositions`
+### `fetchMigratablePositions`
 A utility function to fetch migratable positions for a user across various DeFi protocols.
 
-### Features
+#### Features
 
 - Supports multiple DeFi protocols:
   - Aave V2 (Supply & Borrow)
@@ -322,7 +326,7 @@ A utility function to fetch migratable positions for a user across various DeFi 
 - Allows filtering by protocol.
 - Fetches data using a configurable blockchain client.
 
-### Usage
+#### Usage
 
 ```typescript
 import { fetchMigratablePositions, MigratableProtocol } from "@morpho-org/migration-sdk-viem";
@@ -338,7 +342,7 @@ protocols: [MigratableProtocol.aaveV2, MigratableProtocol.compoundV3],
 console.log("Fetched positions:", positions);
 ```
 
-#### Parameters
+##### Parameters
 
 ##### `user` (required)
 The address of the user whose positions you want to fetch.
@@ -350,13 +354,13 @@ An instance of the blockchain client to interact with.
 - `parameters`: Optional additional fetch parameters.
 - `protocols`: A list of protocols to fetch data from. Defaults to all supported protocols.
 
-#### Return Value
+##### Return Value
 
 The function returns a promise that resolves to a map where keys are protocols and values are arrays of `MigratablePosition` objects.
 
 ---
 
-### Example Output
+#### Example Output
 
 ```json
 {
@@ -367,7 +371,7 @@ The function returns a promise that resolves to a map where keys are protocols a
 
 ---
 
-### Supported Protocols
+#### Supported Protocols
 
 - Aave V2
 - Aave V3
@@ -375,22 +379,22 @@ The function returns a promise that resolves to a map where keys are protocols a
 - Compound V2
 - Compound V3
 
-## `MigratableBorrowPosition_Blue`
+### `MigratableBorrowPosition_Blue`
 
 A class representing a migratable borrow position on Morpho Blue, enabling the migration of collateral and debt between markets.
 
 > [!Note]
 > Borrow positions on Morpho Blue are not fetched when calling `fetchMigratablePositions` since they're internal to the protocol and can easily be built from an `AccrualPosition`.
 
-### Features
+#### Features
 
 - Supports migration of collateral and borrow amounts between markets.
 - Handles slippage tolerance for both source and destination markets.
 - Compatible with bundler operations for batched transaction execution.
 
-### Usage
+#### Usage
 
-#### Creating an Instance
+##### Creating an Instance
 
 ```ts
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem"
@@ -406,7 +410,7 @@ const borrowPosition = new MigratableBorrowPosition_Blue({
 
 ---
 
-#### Generating Migration Operations
+##### Generating Migration Operations
 
 ```ts
 import { ChainId } from "@morpho-org/blue-sdk";
@@ -427,9 +431,9 @@ The obtained operation is a `Blue_SupplyCollateral` operation with callbacks and
 
 ---
 
-### API Reference
+#### API Reference
 
-#### `MigratableBorrowPosition_Blue.Args`
+##### `MigratableBorrowPosition_Blue.Args`
 - `marketTo`: The target market ID for migration.
 - `collateralAssets`: The amount of collateral to supply during migration.
 - `borrowAssets`: The amount of debt to migrate.
@@ -440,10 +444,18 @@ The obtained operation is a `Blue_SupplyCollateral` operation with callbacks and
 > [!Note]
 > `borrowAssets` will be overridden by the conversion of `borrowShares` if both are non-zero.
 
-#### `IMigratableBorrowPosition_Blue`
+##### `IMigratableBorrowPosition_Blue`
 - `market`: The current market associated with the borrow position.
 - `position`: Includes:
     - `borrowShares`: The borrow shares of the user.
     - `user`: The user's address.
     - `collateral`: The user's collateral balance.
 
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

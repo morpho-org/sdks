@@ -1,18 +1,11 @@
 import {
   type Address,
+  addressesRegistry,
   ChainId,
   MathLib,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import { isDefined } from "@morpho-org/morpho-ts";
-
-import { migrationAddresses } from "../../config.js";
-import type { MigratablePosition } from "../../positions/index.js";
-import { MigratableSupplyPosition_AaveV3Optimizer } from "../../positions/supply/aaveV3Optimizer.supply.js";
-import { MigratableProtocol } from "../../types/index.js";
-import { SupplyMigrationLimiter } from "../../types/positions.js";
-
 import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
+import { isDefined } from "@morpho-org/morpho-ts";
 import {
   type Client,
   erc20Abi,
@@ -22,12 +15,18 @@ import {
 } from "viem";
 import { getBlock, getChainId, readContract } from "viem/actions";
 import { variableDebtTokenV3Abi } from "../../abis/aaveV3.js";
+import { migrationAddresses } from "../../config.js";
+import type { MigratablePosition } from "../../positions/index.js";
+import { MigratableSupplyPosition_AaveV3Optimizer } from "../../positions/supply/aaveV3Optimizer.supply.js";
+import { MigratableProtocol } from "../../types/index.js";
+import { SupplyMigrationLimiter } from "../../types/positions.js";
 import { MorphoAaveMath } from "./AaveV3.maths.js";
 import {
   P2PInterestRates,
   PoolInterestRates,
 } from "./aaveV3Optimizer.helpers.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchAaveV3OptimizerPositions(
   user: Address,
   client: Client,

@@ -1,14 +1,12 @@
-import { type Address, type Hex, getAddress, zeroAddress } from "viem";
+import { type Address, getAddress, type Hex, zeroAddress } from "viem";
 import { vi } from "vitest";
-
-import type { RawLog } from "../../types.js";
-
 import { encodeUint256, padAddress } from "../../test-helpers/index.js";
+import type { RawLog } from "../../types.js";
 import {
   DEPOSIT_TOPIC,
+  parseTransfers,
   TRANSFER_TOPIC,
   WITHDRAWAL_TOPIC,
-  parseTransfers,
 } from "./transfers.js";
 
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";

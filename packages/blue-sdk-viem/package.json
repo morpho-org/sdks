@@ -3,7 +3,9 @@
   "description": "Viem-based augmentation of `@morpho-org/blue-sdk` that exports (and optionally injects) viem-based fetch methods.",
   "version": "4.6.4",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "contributors": [
+    "Rubilmax <rmilon@gmail.com>"
+  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
@@ -13,7 +15,9 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "$npm_execpath build",
     "compile": "node ../../scripts/compile-solidity.js blue-sdk-viem",

@@ -2,10 +2,10 @@ import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import {
+  addressesRegistry,
   ChainId,
   Market,
   MarketParams,
-  addressesRegistry,
 } from "../../src/index.js";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "./abis.js";
 import { test } from "./setup.js";
@@ -23,6 +23,7 @@ const params = new MarketParams({
 });
 
 describe("Market", () => {
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   test("should borrow borrowable assets", async ({ client, expect }) => {
     const collateral = parseUnits("1", 18);
     await client.deal({

@@ -1,6 +1,5 @@
-import type { SimulationConfig, TenderlyRestConfig } from "../../types.js";
-
 import { UnsupportedChainError } from "../../errors.js";
+import type { SimulationConfig, TenderlyRestConfig } from "../../types.js";
 import { resolveChain } from "./resolve-chain.js";
 
 const TENDERLY: TenderlyRestConfig = {

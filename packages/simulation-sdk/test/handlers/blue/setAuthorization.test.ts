@@ -1,6 +1,5 @@
+import { addressesRegistry, ChainId } from "@morpho-org/blue-sdk";
 import _ from "lodash";
-
-import { ChainId, addressesRegistry } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
 import { dataFixture, userA, userB } from "../../fixtures.js";

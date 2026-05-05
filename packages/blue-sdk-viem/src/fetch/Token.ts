@@ -1,4 +1,13 @@
 import {
+  ConstantWrappedToken,
+  Eip5267Domain,
+  ExchangeRateWrappedToken,
+  getChainAddresses,
+  getUnwrappedToken,
+  NATIVE_ADDRESS,
+  Token,
+} from "@morpho-org/blue-sdk";
+import {
   type Address,
   type Client,
   erc20Abi,
@@ -6,16 +15,6 @@ import {
   hexToString,
   isHex,
 } from "viem";
-
-import {
-  ConstantWrappedToken,
-  Eip5267Domain,
-  ExchangeRateWrappedToken,
-  NATIVE_ADDRESS,
-  Token,
-  getChainAddresses,
-  getUnwrappedToken,
-} from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { erc5267Abi, wstEthAbi } from "../abis.js";
 import { abi, code } from "../queries/GetToken.js";
@@ -27,6 +26,7 @@ export const decodeBytes32String = (hexOrStr: string) => {
   return hexOrStr;
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchToken(
   address: Address,
   client: Client,
@@ -125,6 +125,7 @@ export async function fetchToken(
       .then(
         ([
           fields,
+          // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
           name,
           version,
           chainId,

@@ -41,6 +41,7 @@ export namespace AdaptiveCurveIrmLib {
    * @param x
    */
   export function wExp(x: BigIntish) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     x = BigInt(x);
 
     // If x < ln(1e-18) then exp(x) < 1e-18 so it is rounded to zero.
@@ -62,13 +63,17 @@ export namespace AdaptiveCurveIrmLib {
     return expR >> -q;
   }
 
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getBorrowRate(
     startUtilization: BigIntish,
     startRateAtTarget: BigIntish,
     elapsed: BigIntish,
   ) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     startUtilization = BigInt(startUtilization);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     startRateAtTarget = BigInt(startRateAtTarget);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     elapsed = BigInt(elapsed);
 
     const errNormFactor =
@@ -99,6 +104,7 @@ export namespace AdaptiveCurveIrmLib {
         endRateAtTarget = startRateAtTarget;
       } else {
         // Non negative because MIN_RATE_AT_TARGET > 0.
+        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
         const _newRateAtTarget = (linearAdaptation: BigIntish) =>
           MathLib.min(
             MathLib.max(
@@ -154,7 +160,9 @@ export namespace AdaptiveCurveIrmLib {
     borrowRate: BigIntish,
     rateAtTarget: BigIntish,
   ) {
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     borrowRate = BigInt(borrowRate);
+    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
     rateAtTarget = BigInt(rateAtTarget);
 
     if (borrowRate >= rateAtTarget) {

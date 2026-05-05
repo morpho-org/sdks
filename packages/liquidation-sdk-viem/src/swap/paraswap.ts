@@ -1,4 +1,4 @@
-import { SwapSide, constructSimpleSDK } from "@velora-dex/sdk";
+import { constructSimpleSDK, SwapSide } from "@velora-dex/sdk";
 
 import type { Address, Hex } from "viem";
 import type { SwapParams, SwapResponse } from "./types.js";

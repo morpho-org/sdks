@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 TypeScript package to handle all things time & format-related.
 
 ## Installation
@@ -33,7 +35,7 @@ npm install @morpho-org/morpho-ts
 yarn add @morpho-org/morpho-ts
 ```
 
-## Getting Started
+## Usage
 
 ### Format
 
@@ -325,3 +327,11 @@ import { Time } from "@morpho-org/morpho-ts";
 Time.timestamp(); // 1692671241n
 ```
 
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

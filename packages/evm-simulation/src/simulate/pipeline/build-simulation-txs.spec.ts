@@ -1,14 +1,12 @@
 import {
   type Address,
-  type Hex,
   decodeFunctionData,
   erc20Abi,
+  type Hex,
   maxUint256,
 } from "viem";
-
-import type { SimulateParams, SimulationAuthorization } from "../../types.js";
-
 import { SimulationValidationError } from "../../errors.js";
+import type { SimulateParams, SimulationAuthorization } from "../../types.js";
 import { buildSimulationTxs } from "./build-simulation-txs.js";
 
 const USER: Address = "0x1111111111111111111111111111111111111111";

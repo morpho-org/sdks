@@ -1,4 +1,4 @@
-import { type MarketParams, getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
 import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
@@ -34,14 +34,45 @@ export interface MarketV1SupplyCollateralParams {
 /**
  * Prepares a supply-collateral transaction for a Morpho Blue market.
  *
- * Routed through bundler via GeneralAdapter1.
- * When `nativeAmount` is provided, native token is wrapped via GeneralAdapter1.
- * Collateral token must be the chain's wNative when `nativeAmount` is used.
+ * Routed through bundler3 via `GeneralAdapter1`. When `nativeAmount > 0`, native ETH is wrapped
+ * via `GeneralAdapter1.wrapNative()` before the collateral supply; the collateral token must be
+ * the chain's wNative for that path.
  *
  * Zero loss: all collateral reaches Morpho. No dust left in bundler or adapter.
  *
- * @param params - Supply collateral parameters.
- * @returns Deep-frozen transaction.
+ * @param params.market.chainId - The chain the market lives on.
+ * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
+ * @param params.args.amount - Amount of ERC-20 collateral to supply. At least one of `amount` or
+ *   `nativeAmount` must be positive. Defaults to `0n`.
+ * @param params.args.onBehalf - Address whose Morpho position is credited with the collateral.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
+ *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
+ *   approved `GeneralAdapter1`.
+ * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
+ *   supply. Requires the collateral token to be the chain's wNative.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<MarketV1SupplyCollateralAction>` with `to`, `value`, `data`,
+ *   and the typed `action` discriminator the simulation layer consumes.
+ * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
+ * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
+ * @throws {ZeroCollateralAmountError} when both `amount` and `nativeAmount` resolve to zero.
+ * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
+ * @throws {NativeAmountOnNonWNativeCollateralError} when `nativeAmount > 0n` but the collateral
+ *   token is not the chain's wNative.
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed asset differs from `marketParams.collateralToken`.
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed amount differs from `args.amount`.
+ * @example
+ * ```ts
+ * import { marketV1SupplyCollateral } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = marketV1SupplyCollateral({
+ *   market: { chainId: 1, marketParams },
+ *   args: { amount: 1_000_000_000_000_000_000n, onBehalf },
+ * });
+ * // tx satisfies Readonly<Transaction<MarketV1SupplyCollateralAction>>
+ * ```
  */
 export const marketV1SupplyCollateral = ({
   market: { chainId, marketParams },

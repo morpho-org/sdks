@@ -1,9 +1,11 @@
 # @morpho-org/evm-simulation
 
+## Overview
+
 EVM transaction simulation engine for Morpho — bundle execution preview,
 transfer parsing, and compliance screening.
 
-## Install
+## Installation
 
 Add to the consuming app's `package.json`:
 
@@ -15,7 +17,7 @@ Add to the consuming app's `package.json`:
 }
 ```
 
-## Quick start
+## Usage
 
 ```ts
 import {
@@ -60,7 +62,7 @@ try {
 }
 ```
 
-## API surface
+### API surface
 
 All symbols below are re-exported from the package root.
 
@@ -70,8 +72,16 @@ All symbols below are re-exported from the package root.
 - Data types: `SimulationTransaction`, `SimulationAuthorization`, `Transfer`, `SimulateParams`, `SimulationResult`.
 - Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `AddressScreeningError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
 
-## Deeper docs
+### Deeper docs
 
 See [`CLAUDE.md`](./CLAUDE.md) in this directory for the execution flow diagram,
 backend tradeoffs, authorizations model, screening design, error-handling table,
 and recipes for adding a chain or a new backend.
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

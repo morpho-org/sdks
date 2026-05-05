@@ -1,9 +1,9 @@
 import {
   type AccrualPosition,
+  getChainAddresses,
   type MarketId,
   MathLib,
   ORACLE_PRICE_SCALE,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";

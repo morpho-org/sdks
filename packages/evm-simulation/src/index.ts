@@ -1,7 +1,17 @@
 // Public fns (via feature-folder barrels)
+
+// Errors (for instanceof checks by consumers)
+export {
+  AddressScreeningError,
+  BlacklistViolationError,
+  ExternalServiceError,
+  SimulationPackageError,
+  SimulationRevertedError,
+  SimulationValidationError,
+  UnsupportedChainError,
+} from "./errors.js";
 export { screenAddresses } from "./screen-addresses/index.js";
 export { simulate } from "./simulate/index.js";
-
 // Types
 export type {
   ChainSimulationConfig,
@@ -14,14 +24,3 @@ export type {
   TenderlyRestConfig,
   Transfer,
 } from "./types.js";
-
-// Errors (for instanceof checks by consumers)
-export {
-  SimulationPackageError,
-  SimulationRevertedError,
-  BlacklistViolationError,
-  AddressScreeningError,
-  ExternalServiceError,
-  SimulationValidationError,
-  UnsupportedChainError,
-} from "./errors.js";

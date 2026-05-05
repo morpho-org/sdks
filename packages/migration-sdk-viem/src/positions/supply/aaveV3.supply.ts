@@ -1,15 +1,7 @@
-import { type Token, getChainAddresses } from "@morpho-org/blue-sdk";
-
-import { Time } from "@morpho-org/morpho-ts";
-
-import {
-  MigratableProtocol,
-  type MigrationTransactionRequirement,
-  SupplyMigrationLimiter,
-} from "../../types/index.js";
-
+import { getChainAddresses, type Token } from "@morpho-org/blue-sdk";
 import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { type Action, ActionBundle } from "@morpho-org/bundler-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import {
   type Account,
   type Client,
@@ -20,9 +12,14 @@ import {
 import { signTypedData } from "viem/actions";
 import { aTokenV3Abi } from "../../abis/aaveV3.js";
 import {
+  MigratableProtocol,
+  type MigrationTransactionRequirement,
+  SupplyMigrationLimiter,
+} from "../../types/index.js";
+import {
   type IMigratableSupplyPosition,
   MigratableSupplyPosition,
-} from "./index.js";
+} from "./MigratableSupplyPosition.js";
 
 interface IMigratableSupplyPosition_AaveV3
   extends Omit<IMigratableSupplyPosition, "protocol"> {

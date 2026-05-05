@@ -1,7 +1,7 @@
 import {
   type AccrualPosition,
-  type MarketParams,
   getChainAddresses,
+  type MarketParams,
 } from "@morpho-org/blue-sdk";
 import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { entries } from "@morpho-org/morpho-ts";

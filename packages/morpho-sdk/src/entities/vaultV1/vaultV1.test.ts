@@ -16,11 +16,11 @@ import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
   AddressMismatchError,
   ExcessiveSlippageToleranceError,
+  isRequirementApproval,
   NativeAmountOnNonWNativeVaultError,
   NegativeNativeAmountError,
   NegativeSlippageToleranceError,
   VaultAssetMismatchError,
-  isRequirementApproval,
 } from "../../types/index.js";
 
 describe("MorphoVaultV1 entity tests", () => {

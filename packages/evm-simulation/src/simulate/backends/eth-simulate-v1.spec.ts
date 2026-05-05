@@ -1,18 +1,16 @@
 import {
   type Address,
   type Hex,
-  type SimulateCallsParameters,
   maxUint256,
+  type SimulateCallsParameters,
 } from "viem";
 import { vi } from "vitest";
-
-import type { SimulationTransaction } from "../../types.js";
-
 import {
   ExternalServiceError,
   SimulationRevertedError,
   SimulationValidationError,
 } from "../../errors.js";
+import type { SimulationTransaction } from "../../types.js";
 import { simulateV1 } from "./eth-simulate-v1.js";
 
 type MockSimulateCalls = (args: SimulateCallsParameters) => Promise<unknown>;

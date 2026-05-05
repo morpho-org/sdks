@@ -82,6 +82,7 @@ export class UnknownContractError extends UnknownDataError {
 }
 
 export class UnknownAllowanceError extends UnknownDataError {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     public readonly token: Address,
     public readonly owner: Address,
@@ -94,6 +95,7 @@ export class UnknownAllowanceError extends UnknownDataError {
 }
 
 export class NonZeroAllowanceError extends UnknownDataError {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     public readonly token: Address,
     public readonly owner: Address,
@@ -155,6 +157,7 @@ export namespace Erc20Errors {
   }
 
   export class InsufficientAllowance extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
@@ -167,6 +170,7 @@ export namespace Erc20Errors {
   }
 
   export class InvalidEIP2612Nonce extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
@@ -179,6 +183,7 @@ export namespace Erc20Errors {
   }
 
   export class ExpiredEIP2612Signature extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
@@ -191,6 +196,7 @@ export namespace Erc20Errors {
   }
 
   export class InvalidPermit2Nonce extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
@@ -203,6 +209,7 @@ export namespace Erc20Errors {
   }
 
   export class ExpiredPermit2Signature extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly token: Address,
       public readonly owner: Address,
@@ -237,6 +244,7 @@ export namespace Erc20Errors {
 
 export namespace SimulationErrors {
   export class Simulation<T extends Operation = Operation> extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly error: Error,
       public readonly index: number,
@@ -342,6 +350,7 @@ export namespace MetaMorphoErrors {
   }
 
   export class SupplyCapExceeded extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly vault: Address,
       public readonly marketId: MarketId,
@@ -365,6 +374,7 @@ export namespace MetaMorphoErrors {
   }
 
   export class InconsistentReallocation extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly vault: Address,
       public readonly totalSupplied: bigint,
@@ -394,6 +404,7 @@ export namespace PublicAllocatorErrors {
   }
 
   export class InconsistentWithdrawals extends Error {
+    // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     constructor(
       public readonly vault: Address,
       public readonly prevId: MarketId,

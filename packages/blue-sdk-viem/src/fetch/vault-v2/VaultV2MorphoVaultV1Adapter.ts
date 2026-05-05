@@ -1,9 +1,9 @@
 import {
   AccrualVaultV2MorphoVaultV1Adapter,
+  getChainAddresses,
   UnknownFactory,
   UnknownOfFactory,
   VaultV2MorphoVaultV1Adapter,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 import { getChainId, readContract } from "viem/actions";
@@ -19,6 +19,7 @@ import {
 import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchAccrualVault } from "../Vault.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultV2MorphoVaultV1Adapter(
   address: Address,
   client: Client,
@@ -92,6 +93,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
   });
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchAccrualVaultV2MorphoVaultV1Adapter(
   address: Address,
   client: Client,

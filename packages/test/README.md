@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Viem-based package that exports utilities to build Vitest & Playwright fixtures that spawn anvil forks as child processes.
 
 Heavily inspired by [`prool`](https://github.com/wevm/prool), but lighter & faster.
@@ -35,7 +37,7 @@ npm install @morpho-org/test
 yarn add @morpho-org/test
 ```
 
-## Getting Started
+## Usage
 
 ### Vitest (viem)
 
@@ -75,3 +77,11 @@ import { spawnAnvil } from "@morpho-org/test";
 
 spawnAnvil(mainnet, { forkBlockNumber: 19_750_000n });
 ```
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

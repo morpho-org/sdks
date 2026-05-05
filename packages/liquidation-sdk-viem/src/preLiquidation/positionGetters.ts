@@ -7,6 +7,7 @@ import type { PartialApiToken } from "../positions/getters.js";
 import { parseWithBigInt } from "./helpers.js";
 import type { PreLiquidationResponse } from "./types.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function getPreLiquidablePositions(
   client: Client<Transport, Chain, Account>,
   whitelistedMarkets: MarketId[],

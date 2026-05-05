@@ -2,8 +2,8 @@ import {
   type AccrualVault,
   type AccrualVaultV2,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
   getChainAddresses,
+  MathLib,
 } from "@morpho-org/blue-sdk";
 import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
 import { type Address, isAddressEqual } from "viem";
@@ -127,13 +127,14 @@ export interface VaultV1Actions {
     buildTx: (
       requirementSignature?: RequirementSignature,
     ) => Readonly<Transaction<VaultV1MigrateToV2Action>>;
-    getRequirements: (params?: {
-      useSimplePermit?: boolean;
-    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+    getRequirements: () => Promise<
+      (Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]
+    >;
   };
 }
 
 export class MorphoVaultV1 implements VaultV1Actions {
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     private readonly client: MorphoClientType,
     private readonly vault: Address,
@@ -351,13 +352,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
     );
 
     return {
-      getRequirements: async (params?: { useSimplePermit?: boolean }) =>
+      getRequirements: async () =>
         await getRequirements(this.client.viemClient, {
           address: this.vault,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
           supportDeployless: this.client.options.supportDeployless,
-          useSimplePermit: params?.useSimplePermit,
+          // V1 shares always implement EIP-2612.
+          useSimplePermit: true,
           args: {
             amount: shares,
             from: userAddress,
@@ -369,9 +371,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
           vault: {
             chainId: this.chainId,
             address: this.vault,
+            asset: sourceVault.asset,
           },
           args: {
             targetVault: targetVault.address,
+            targetAsset: targetVault.asset,
             shares,
             minSharePriceVaultV1,
             maxSharePriceVaultV2,

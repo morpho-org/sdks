@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Viem-based package that provides utilities to build viem-based liquidity bots on Morpho and examples using Flashbots and Morpho's GraphQL API.
 
 ## Installation
@@ -33,7 +35,7 @@ npm install @morpho-org/liquidity-sdk-viem
 yarn add @morpho-org/liquidity-sdk-viem
 ```
 
-## Getting Started
+## Usage
 
 ### Fetch from API or RPC
 
@@ -73,3 +75,11 @@ const [withdrawals1, withdrawals2] = await Promise.all([
   ),
 ]);
 ```
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

@@ -1,8 +1,8 @@
 import {
   DEFAULT_SLIPPAGE_TOLERANCE,
+  getChainAddresses,
   MathLib,
   type Token,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import {
@@ -31,7 +31,7 @@ import {
 import {
   type IMigratableBorrowPosition,
   MigratableBorrowPosition,
-} from "./index.js";
+} from "./MigratableBorrowPosition.js";
 
 interface IMigratableBorrowPosition_AaveV2
   extends Omit<IMigratableBorrowPosition, "protocol"> {
@@ -61,7 +61,10 @@ export class MigratableBorrowPosition_AaveV2
   getLtv({
     withdrawn = 0n,
     repaid = 0n,
-  }: { withdrawn?: bigint; repaid?: bigint } = {}): bigint | null {
+  }: {
+    withdrawn?: bigint;
+    repaid?: bigint;
+  } = {}): bigint | null {
     const totalCollateralEth =
       ((this.collateral - withdrawn) * this.collateralPriceEth) /
       parseUnits("1", this.collateralToken.decimals);

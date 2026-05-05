@@ -1,3 +1,5 @@
+import type { Address, InputMarketParams } from "@morpho-org/blue-sdk";
+import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
 import type {
   Account,
   Chain,
@@ -6,9 +8,6 @@ import type {
   TransactionRequest,
   Transport,
 } from "viem";
-
-import type { Address, InputMarketParams } from "@morpho-org/blue-sdk";
-import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
 
 export interface Authorization {
   authorizer: Address;

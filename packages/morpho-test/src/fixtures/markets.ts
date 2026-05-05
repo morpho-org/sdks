@@ -1,8 +1,8 @@
 import {
+  addressesRegistry,
   ChainId,
   type IMarketParams,
   MarketParams,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { parseEther, parseUnits } from "viem";

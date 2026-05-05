@@ -4,19 +4,17 @@
  * supply-collateral+borrow). When changing `parseTransfers`, these must stay
  * green.
  */
-import { type Address, type Hex, getAddress } from "viem";
-
-import type { RawLog } from "../../types.js";
-
+import { type Address, getAddress, type Hex } from "viem";
 import {
   encodeUint256 as enc256,
   padAddress as padAddr,
 } from "../../test-helpers/index.js";
+import type { RawLog } from "../../types.js";
 import {
   DEPOSIT_TOPIC,
+  parseTransfers,
   TRANSFER_TOPIC,
   WITHDRAWAL_TOPIC,
-  parseTransfers,
 } from "./transfers.js";
 
 describe("integration: vault V2 deposit", () => {

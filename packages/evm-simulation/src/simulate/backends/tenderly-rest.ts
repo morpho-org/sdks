@@ -1,6 +1,6 @@
 import { type Address, type BlockTag, type Hex, isAddress, isHex } from "viem";
 import { z } from "zod";
-
+import { ExternalServiceError, SimulationRevertedError } from "../../errors.js";
 import type {
   RawLog,
   RawSimulationResult,
@@ -8,8 +8,6 @@ import type {
   SimulationTransaction,
   TenderlyRestConfig,
 } from "../../types.js";
-
-import { ExternalServiceError, SimulationRevertedError } from "../../errors.js";
 
 interface TenderlySimulateRequest {
   network_id: string;
@@ -153,6 +151,7 @@ function buildBaseUrl(config: TenderlyRestConfig): string {
 }
 
 /** Build the `TenderlySimulateRequest` body for one transaction. Shared by single + bundle. */
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 function buildTxBody(
   tx: SimulationTransaction,
   chainId: number,

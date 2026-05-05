@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Viem-based augmentation of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports (and optionally injects) viem-based fetch methods.
 
 ## Installation
@@ -33,7 +35,7 @@ npm install @morpho-org/blue-sdk-viem
 yarn add @morpho-org/blue-sdk-viem
 ```
 
-## Getting Started
+## Usage
 
 ### Augment blue-sdk entity classes with fetchers
 
@@ -129,3 +131,11 @@ position.borrowAssets; // e.g. 23_500000n (in loan assets).
 [downloads-url]: https://www.npmtrends.com/@morpho-org/blue-sdk-viem
 [npm-img]: https://img.shields.io/npm/v/@morpho-org/blue-sdk-viem
 [npm-url]: https://www.npmjs.com/package/@morpho-org/blue-sdk-viem
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

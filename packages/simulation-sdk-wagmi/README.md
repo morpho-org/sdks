@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities.
 
 ## Installation
@@ -33,7 +35,7 @@ npm install @morpho-org/simulation-sdk-wagmi
 yarn add @morpho-org/simulation-sdk-wagmi
 ```
 
-## Getting Started
+## Usage
 
 ```tsx
 import { useMemo } from "react";
@@ -71,3 +73,11 @@ export function Component({
   return <h1>{simulated.getPosition(user, marketId).supplyShares}</h1>;
 }
 ```
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

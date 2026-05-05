@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`).
 
 ## Installation
@@ -32,3 +34,15 @@ npm install @morpho-org/simulation-sdk
 ```bash
 yarn add @morpho-org/simulation-sdk
 ```
+
+## Usage
+
+Use the framework-agnostic simulation state and operation helpers to model Morpho and Morpho Vault interactions before execution. Pair it with `@morpho-org/bundler-sdk-viem` for bundler transaction construction or `@morpho-org/simulation-sdk-wagmi` for React data fetching.
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

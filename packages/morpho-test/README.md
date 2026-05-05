@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Framework-agnostic extension of [`@morpho-org/blue-sdk`](../blue-sdk/) that exports test fixtures useful for E2E tests on forks.
 
 ## Installation
@@ -33,7 +35,7 @@ npm install @morpho-org/morpho-test
 yarn add @morpho-org/morpho-test
 ```
 
-## Getting Started
+## Usage
 
 ```typescript
 import { ChainId } from "@morpho-org/blue-sdk";
@@ -43,3 +45,11 @@ const { usdc_wstEth, usdc_idle, eth_wstEth } = markets[ChainId.EthMainnet];
 ```
 
 See more on its internal usage for [E2E tests here](../blue-sdk-viem/test/Market.test.ts).
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

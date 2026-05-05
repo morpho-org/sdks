@@ -1,14 +1,14 @@
 import {
   type Address,
   DEFAULT_SLIPPAGE_TOLERANCE,
+  erc20WrapperTokens,
+  getChainAddresses,
+  getUnwrappedToken,
   Holding,
   type MarketId,
   MarketUtils,
   MathLib,
   NATIVE_ADDRESS,
-  erc20WrapperTokens,
-  getChainAddresses,
-  getUnwrappedToken,
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
@@ -16,20 +16,20 @@ import { entries, getLast, getValue, keys } from "@morpho-org/morpho-ts";
 import {
   APPROVE_ONLY_ONCE_TOKENS,
   type Erc20Operations,
+  handleOperation,
+  handleOperations,
   type MaybeDraft,
   type Operation,
   type Operations,
   type PublicAllocatorOptions,
+  produceImmutable,
   type SimulationResult,
   type SimulationState,
-  handleOperation,
-  handleOperations,
-  produceImmutable,
   simulateOperation,
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
 
-import { type UnionOmit, isAddressEqual, maxUint256 } from "viem";
+import { isAddressEqual, maxUint256, type UnionOmit } from "viem";
 import { BundlerErrors } from "./errors.js";
 import type {
   BundlerOperation,
@@ -65,6 +65,7 @@ export interface BundlingOptions {
   ) => BundlerOperation[];
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const populateInputTransfer = (
   { address, args: { amount, from } }: Operations["Erc20_Transfer"],
   data: MaybeDraft<SimulationState>,
@@ -239,6 +240,7 @@ export const populateInputTransfer = (
  * @param wrapSlippage The slippage simulated during wraps. Should never be 0.
  * @return The bundle of operations to optimize and skim before being encoded.
  */
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const populateSubBundle = (
   inputOperation: InputBundlerOperation,
   data: MaybeDraft<SimulationState>,
@@ -325,7 +327,7 @@ export const populateSubBundle = (
 
   // Reallocate liquidity if necessary.
   if (
-    !!publicAllocatorOptions?.enabled &&
+    publicAllocatorOptions?.enabled &&
     (mainOperation.type === "Blue_Borrow" ||
       mainOperation.type === "Blue_Withdraw")
   ) {
@@ -472,7 +474,9 @@ export const populateSubBundle = (
     args: {
       ...mainOperation.args,
       ...(callback && {
+        // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
         callback: (data) => {
+          // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
           const operations = callback.flatMap((inputOperation) => {
             const subBundleOperations = populateSubBundle(
               {
@@ -570,6 +574,7 @@ export const populateSubBundle = (
  * @param unwrapSlippage The slippage simulated during unwraps. Should never be 0.
  * @return The optimized bundle.
  */
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const finalizeBundle = (
   operations: BundlerOperation[],
   startData: SimulationState,
@@ -735,6 +740,7 @@ export const finalizeBundle = (
     }
   });
 
+  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
   operations = [
     approvals,
     permits,
@@ -854,6 +860,7 @@ export const finalizeBundle = (
   });
 
   // Filter out useless input transfers.
+  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
   operations = operations.filter((operation, index) => {
     if (operation.type !== "Erc20_Transfer") return true;
 
@@ -997,7 +1004,7 @@ export const finalizeBundle = (
         uniqueSkimTokens.add(NATIVE_ADDRESS);
         break;
       default:
-        //@ts-ignore This is dead code but acts as a guard in case a new operation is added
+        //@ts-expect-error This is dead code but acts as a guard in case a new operation is added
         throw new BundlerErrors.MissingSkimHandler(operation.type);
     }
 
@@ -1051,6 +1058,7 @@ export const finalizeBundle = (
   return finalizedOperations;
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const populateBundle = (
   inputOperations: InputBundlerOperation[],
   data: MaybeDraft<SimulationState>,
@@ -1140,6 +1148,7 @@ export const getSimulatedBundlerOperation = (
       ...operation.args,
       ...(callback && {
         callback: () =>
+          // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
           callback.map((operation) =>
             getSimulatedBundlerOperation(operation, { slippage }),
           ),
@@ -1170,6 +1179,7 @@ export const getSimulatedBundlerOperation = (
 
 export const handleBundlerOperation =
   (options?: { slippage?: bigint }) =>
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   (
     operation: BundlerOperation,
     startData: MaybeDraft<SimulationState>,
@@ -1181,6 +1191,7 @@ export const handleBundlerOperation =
       index,
     );
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const handleBundlerOperations = (
   operations: BundlerOperation[],
   startData: MaybeDraft<SimulationState>,
@@ -1189,6 +1200,7 @@ export const handleBundlerOperations = (
 
 export const simulateBundlerOperation =
   (options?: { slippage?: bigint }) =>
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   (
     operation: BundlerOperation,
     startData: MaybeDraft<SimulationState>,
@@ -1200,6 +1212,7 @@ export const simulateBundlerOperation =
       index,
     );
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export const simulateBundlerOperations = (
   operations: BundlerOperation[],
   startData: MaybeDraft<SimulationState>,

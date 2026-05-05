@@ -1,8 +1,8 @@
 import {
   type Address,
   type ChainId,
-  MathLib,
   getChainAddresses,
+  MathLib,
 } from "@morpho-org/blue-sdk";
 import type { TypedDataDefinition } from "viem";
 

@@ -1,7 +1,7 @@
 import type { Address, MarketId } from "@morpho-org/blue-sdk";
 import type { Hex } from "viem";
-import type { SimulationState } from "./SimulationState.js";
 import type { MaybeDraft } from "./handlers/types.js";
+import type { SimulationState } from "./SimulationState.js";
 
 export interface OperationMetadata<T extends string> {
   type: T;
@@ -162,6 +162,7 @@ export interface BlueOperationArgs {
       };
 }
 export type BlueOperations = {
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   [OperationType in BlueOperationType]: Omit<
     WithOperationArgs<OperationType, BlueOperationArgs>,
     "address"
@@ -222,6 +223,7 @@ export interface MetaMorphoOperationArgs {
   };
 }
 export type MetaMorphoOperations = {
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   [OperationType in MetaMorphoOperationType]: WithOperationArgs<
     OperationType,
     MetaMorphoOperationArgs
@@ -279,6 +281,7 @@ export interface ParaswapOperationArgs {
       };
 }
 export type ParaswapOperations = {
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   [OperationType in ParaswapOperationType]: WithOperationArgs<
     OperationType,
     ParaswapOperationArgs
@@ -348,6 +351,7 @@ export interface Erc20OperationArgs {
   };
 }
 export type Erc20Operations = {
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   [OperationType in Erc20OperationType]: WithOperationArgs<
     OperationType,
     Erc20OperationArgs
@@ -388,6 +392,7 @@ export const CALLBACK_OPERATIONS = [
 
 export type CallbackOperationType = (typeof CALLBACK_OPERATIONS)[number];
 export type CallbackOperations = {
+  // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
   [OperationType in CallbackOperationType]: WithOperationArgs<
     OperationType,
     OperationArgs

@@ -3,7 +3,9 @@
   "description": "Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`).",
   "version": "5.23.1",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "contributors": [
+    "Rubilmax <rmilon@gmail.com>"
+  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
@@ -13,7 +15,9 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "$npm_execpath build",
     "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",

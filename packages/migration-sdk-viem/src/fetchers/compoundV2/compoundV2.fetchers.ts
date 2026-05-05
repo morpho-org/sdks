@@ -2,11 +2,14 @@ import {
   type Address,
   ChainId,
   ExchangeRateWrappedToken,
-  NATIVE_ADDRESS,
   getChainAddresses,
+  NATIVE_ADDRESS,
 } from "@morpho-org/blue-sdk";
-import { type Time, isDefined, values } from "@morpho-org/morpho-ts";
-
+import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
+import { isDefined, type Time, values } from "@morpho-org/morpho-ts";
+import type { Client } from "viem";
+import { getChainId, readContract } from "viem/actions";
+import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.js";
 import {
   migrationAddresses,
   migrationAddressesRegistry,
@@ -18,11 +21,6 @@ import {
   SupplyMigrationLimiter,
 } from "../../types/index.js";
 import { rateToApy } from "../../utils/rates.js";
-
-import type { FetchParameters } from "@morpho-org/blue-sdk-viem";
-import type { Client } from "viem";
-import { getChainId, readContract } from "viem/actions";
-import { cErc20Abi, cEtherAbi, mErc20Abi } from "../../abis/compoundV2.js";
 import { fetchAccruedExchangeRate } from "./compoundV2.helpers.js";
 
 export const COMPOUNDING_PERIOD: Record<number, Time.PeriodLike> = {
@@ -30,6 +28,7 @@ export const COMPOUNDING_PERIOD: Record<number, Time.PeriodLike> = {
   [ChainId.EthMainnet]: { unit: "s", duration: 12 }, // 1 block
 };
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 async function fetchCompoundV2InstancePosition(
   user: Address,
   cTokenAddress: Address,
@@ -212,6 +211,7 @@ async function fetchCompoundV2InstancePosition(
   };
 }
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchCompoundV2Positions(
   user: Address,
   client: Client,

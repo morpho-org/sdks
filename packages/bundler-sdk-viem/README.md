@@ -21,6 +21,8 @@
 <br />
 <br />
 
+## Overview
+
 Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to transform simple interactions on Morpho (such as `Blue_Borrow`) and Morpho Vaults (such as `MetaMorpho_Deposit`) into the required bundles (with ERC20 approvals, transfers, etc) to submit to the bundler onchain.
 
 ## Installation
@@ -32,3 +34,15 @@ npm install @morpho-org/bundler-sdk-viem
 ```bash
 yarn add @morpho-org/bundler-sdk-viem
 ```
+
+## Usage
+
+Use this package to turn high-level Morpho and Morpho Vault simulation operations into executable bundler transactions, including the required approvals, transfers, and bundler actions.
+
+## Development
+
+Contribute from the monorepo root. See [CONTRIBUTING.md](../../CONTRIBUTING.md) for setup, checks, and package workflow. Report vulnerabilities through [SECURITY.md](../../SECURITY.md).
+
+## License
+
+MIT. See [LICENSE](./LICENSE).

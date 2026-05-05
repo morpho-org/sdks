@@ -1,6 +1,6 @@
 import _ from "lodash";
 import { maxUint256, parseUnits } from "viem";
-
+import { describe, expect, test } from "vitest";
 import { simulateOperation } from "../../../src/index.js";
 import {
   dataFixture,
@@ -11,8 +11,6 @@ import {
   userB,
   vaultA,
 } from "../../fixtures.js";
-
-import { describe, expect, test } from "vitest";
 
 const type = "MetaMorpho_Deposit";
 

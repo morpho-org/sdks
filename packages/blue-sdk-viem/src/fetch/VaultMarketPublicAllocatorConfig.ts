@@ -1,14 +1,14 @@
-import type { Address, Client } from "viem";
-
 import {
+  getChainAddresses,
   type MarketId,
   VaultMarketPublicAllocatorConfig,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
 import { publicAllocatorAbi } from "../abis.js";
 import type { FetchParameters } from "../types.js";
 
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultMarketPublicAllocatorConfig(
   vault: Address,
   marketId: MarketId,
