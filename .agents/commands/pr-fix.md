@@ -529,16 +529,6 @@ gh api graphql -f query='
 
 Resolves fire for: actionable+fixed (incl. Mixed-purpose), praise, already-addressed. Leave unresolved for: actionable+skipped, question, discussion, stale.
 
-### Per-category sub-steps
-
-- **9a — Actionable + fixed** (incl. Mixed-purpose): Step 6 already applied the fix. Reply per the Step 5f row, then resolve.
-- **9c-skipped — Actionable + skipped** (Confidence: LOW, false positive, conflict): reply with the skip reason; do NOT resolve.
-- **9c-question — Question / Clarification**: reply per Step 5f row; do NOT resolve.
-- **9c-discussion — Discussion / Opinion**: reply per Step 5f row; do NOT resolve.
-- **9c-praise — Praise / Acknowledgment**: do NOT call the reply endpoint; resolve directly.
-- **9c-already — Already addressed**: reply per Step 5f row; resolve.
-- **9c-stale — Stale / Inapplicable**: reply per Step 5f row; do NOT resolve.
-
 Track bucket counts (`<F>`, `<SK>`, `<Q>`, `<D>`, `<P>`, `<A>`, `<ST>`, `<R>` = total resolved = `<F>` + `<P>` + `<A>`) for use in Step 9.5 and Step 11.
 
 ## Step 9.5: Reconcile All Current Open Threads
@@ -774,7 +764,7 @@ MERGEEOF
    If ${CYCLE_FAILED_CHECKS} is non-empty:
    a. set CYCLE_RUN_ID = `gh pr checks <PR_NUMBER> --json bucket,link --jq '.[] | select(.bucket == "fail") | .link | capture("/runs/(?<id>[0-9]+)") | .id' | head -1`
    b. Get logs: `gh run view "${CYCLE_RUN_ID}" --repo <OWNER>/<REPO> --log-failed`
-   c. If caused by a recent fix commit: apply corrective fix, commit "fix: address CI failure", set CYCLE_HEAD_SHA = `git rev-parse HEAD`, push (max 2 retries). If both retries fail: stop retrying, fall through to step 5 with `${CYCLE_FAILED_CHECKS}` non-empty (so Step 7h emits `ci=FAIL`); the next 2-minute cycle will re-evaluate the failure against any new state.
+   c. If caused by a recent fix commit: apply corrective fix, commit "fix: address CI failure", set CYCLE_HEAD_SHA = `git rev-parse HEAD`, push (max 2 retries). If both retries fail: stop retrying, fall through to step 5 with `${CYCLE_FAILED_CHECKS}` non-empty (so Step 7g emits `ci=FAIL`); the next 2-minute cycle will re-evaluate the failure against any new state.
    d. If pre-existing: note it, do not fix.
 
 5. FETCH UNRESOLVED REVIEW COMMENTS using gh api graphql (same query shape as Step 4 of the main flow — request `pageInfo { hasNextPage endCursor }` and abort the cycle with WATCH_TRANSIENT_ERROR if `hasNextPage` is true; pagination not implemented inline). Required field set: id, isResolved, isOutdated, comments.nodes.{databaseId, body, path, originalLine, createdAt, author.login}.

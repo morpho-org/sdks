@@ -79,7 +79,7 @@ _This is an automated parallel review. It will re-run when new commits are pushe
 
 If `<FAILED_AGENTS>` is non-zero, prepend `> WARNING: <FAILED_AGENTS> of 7 agents failed (<names>) — review may be incomplete.` to the body.
 
-If zero findings AND zero failures, submit with an empty `comments[]` and a body saying `Sentinel: REVIEW_CLEAN — no issues found in this review.`. If zero findings BUT non-zero failures, the body must instead say `Sentinel: REVIEW_INCOMPLETE — <FAILED_AGENTS> of 7 agents failed; no findings does NOT mean clean.`
+If zero findings AND zero failures, submit with an empty `comments[]` and a body saying `Sentinel: REVIEW_CLEAN — no issues found in this review.`. If zero findings BUT non-zero failures, the body must instead say `Sentinel: REVIEW_INCOMPLETE — <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.`
 
 ### Submit
 
@@ -172,7 +172,7 @@ CYCLE START:
 
 6. POST REVIEW to GitHub as a single atomic call:
    Build a JSON file at /tmp/pr-review-gh-<PR_NUMBER>-cycle.json with commit_id=${CYCLE_HEAD_SHA} (NOT a CronCreate-time SHA), event="COMMENT", body (summary table), and comments[] array.
-   If ${CYCLE_FAILED_AGENTS} > 0, prepend "> WARNING: ${CYCLE_FAILED_AGENTS} of 7 agents failed — review may be incomplete." to the body.
+   If ${CYCLE_FAILED_AGENTS} > 0, prepend "> WARNING: ${CYCLE_FAILED_AGENTS} of 7 agents failed (<names>) — review may be incomplete." to the body.
    Run: gh api repos/<OWNER>/<REPO>/pulls/<PR_NUMBER>/reviews --method POST --input /tmp/pr-review-gh-<PR_NUMBER>-cycle.json — abort cycle if non-zero exit.
    Clean up: rm -f /tmp/pr-review-gh-<PR_NUMBER>-cycle.json
 
@@ -191,14 +191,12 @@ After CronCreate returns the job ID:
 
 - **`COMMENT` event only** — never auto-approve or request changes in local PR mode. The user reviews findings and decides.
 - **`--watch` semantics**: 2-minute cron, self-contained per cycle (no CronCreate-time SHA leakage), watcher cycles re-discover project context per cycle.
-- **No Codex pass**: previous iterations included an optional fire-and-forget `codex exec` invocation. Removed in the iter-10 split — it was vestigial.
-- **Cross-skill watcher considerations**: if a user runs `/pr-review-gh <PR> --watch` AND `/pr-fix <PR> --watch` together, the two crons are independent — both fire every 2 minutes. The pairing works (review posts → fix replies → next cycle picks up new state) but neither watcher coordinates with the other. Document the loop semantics if friction emerges.
 ## Sentinel grammar
 
 | Sentinel | Owning step | Trailer grammar |
 |---|---|---|
 | `REVIEW_CLEAN` | Step 7 | `— no issues found in this review.` (zero findings, zero agent failures) |
-| `REVIEW_INCOMPLETE` | Step 7 | `— <FAILED_AGENTS> of 7 agents failed; no findings does NOT mean clean.` (zero findings BUT some agents crashed) |
+| `REVIEW_INCOMPLETE` | Step 7 | `— <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` (zero findings BUT some agents crashed) |
 | `REVIEW_DONE_PR` | Step 8 | `— PR #<PR_NUMBER>, <N> findings, mode=LocalPR, commit=<HEAD_SHA_SHORT>` |
 | `WATCH_REJECTED` | Step 9 pre-flight | `— <reason>` (empty/whitespace prompt OR un-substituted CronCreate-time placeholder) |
 | `WATCH_TRANSIENT_ERROR` | Step 9 watcher (any cycle command) | `— step <N> (<command>): <stderr>` (any non-zero exit; permanent failures recur every cycle until CronDelete) |
