@@ -1,15 +1,16 @@
+// biome-ignore-all lint/suspicious/noExplicitAny: integrator-supplied entity methods are arbitrarily typed; the runtime Proxy pass-through accepts any args.
 import {
+  type EntityConstructor,
   type ExtensionAction,
-  type ExtensionEntity,
-  type ExtensionEntityFactory,
   type ExtensionMap,
   ExtensionNameCollisionError,
   InvalidActionShapeError,
-  InvalidEntityShapeError,
+  InvalidEntityClassError,
   InvalidExtensionNameError,
   InvalidExtensionShapeError,
   InvalidRequirementShapeError,
   InvalidTransactionShapeError,
+  MorphoEntity,
 } from "../types/index.js";
 
 /**
@@ -37,16 +38,13 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
  * Validates the top-level shape of an extension map and rejects naming collisions before
  * anything is registered. Throws on the first failure.
  *
- * @param map - Raw record returned by the integrator's `extend(c => …)` callback.
+ * @param map - Raw record passed to `MorphoClient.extend()`.
  * @param takenNames - Names already in use on the target client (reserved + previously
  *   registered extensions).
  * @throws {InvalidExtensionShapeError} when `map` is not a non-empty plain object.
  * @throws {InvalidExtensionNameError} when a key does not match `/^[a-z][a-zA-Z0-9]*$/`.
  * @throws {ExtensionNameCollisionError} when a key collides with a reserved or already-used name.
- * @example
- * ```ts
- * validateExtensionMap({ myLending: () => ({}) }, RESERVED_MORPHO_CLIENT_NAMES);
- * ```
+ * @throws {InvalidEntityClassError} when a value is not a class extending `MorphoEntity`.
  */
 export function validateExtensionMap(
   map: unknown,
@@ -54,13 +52,13 @@ export function validateExtensionMap(
 ): asserts map is ExtensionMap {
   if (!isPlainObject(map)) {
     throw new InvalidExtensionShapeError(
-      "extension callback must return a plain object",
+      "extensions argument must be a plain object",
     );
   }
   const entries = Object.entries(map);
   if (entries.length === 0) {
     throw new InvalidExtensionShapeError(
-      "extension callback returned an empty object — register at least one entity factory",
+      "extensions object is empty — register at least one entity class",
     );
   }
   const taken = new Set(takenNames);
@@ -75,91 +73,69 @@ export function validateExtensionMap(
       throw new ExtensionNameCollisionError(name, "duplicate");
     }
     if (typeof value !== "function") {
-      throw new InvalidExtensionShapeError(
-        `value at key "${name}" is not a function (got ${typeof value})`,
+      throw new InvalidEntityClassError(
+        name,
+        `value is ${typeof value}, expected a class constructor`,
+      );
+    }
+    if (
+      !value.prototype ||
+      !(value.prototype instanceof MorphoEntity) ||
+      value === MorphoEntity
+    ) {
+      throw new InvalidEntityClassError(
+        name,
+        "constructor does not extend MorphoEntity",
       );
     }
   }
 }
 
 /**
- * Wraps an integrator-supplied entity factory so each call validates the returned entity, each
- * action method validates its returned action, and `buildTx` / `getRequirements` validate their
- * payloads. Validation is structural (not freeze-imposing) so the integrator keeps full control
- * of `deepFreeze` and `metadata` injection on the returned `Transaction`.
+ * Wraps an entity instance with a Proxy that lazily validates the shape of every action method
+ * call. Methods returning an `ExtensionAction`-shaped object (`{ buildTx, getRequirements? }`)
+ * have their `buildTx()` and `getRequirements()` payloads structurally checked against the
+ * `Transaction` / `Requirement` contracts; methods returning anything else (fetchers, getters)
+ * are passed through unchanged.
+ *
+ * The Proxy preserves `instanceof` against the integrator's class. Validation is non-destructive:
+ * the integrator's freeze and metadata choices on the returned `Transaction` are preserved.
  *
  * @param entityName - Name the entity is registered under (used in error messages).
- * @param factory - The integrator's raw entity factory.
- * @returns A wrapped factory with the same signature.
+ * @param instance - Freshly constructed entity instance.
+ * @returns A Proxy over `instance`.
  */
-export function wrapExtensionFactory(
+export function wrapEntityInstance<T extends MorphoEntity>(
   entityName: string,
-  factory: ExtensionEntityFactory,
-): ExtensionEntityFactory {
-  // biome-ignore lint/suspicious/noExplicitAny: pass-through of integrator-typed args.
-  return (...args: any[]): ExtensionEntity => {
-    const entity = factory(...args);
-    return wrapEntity(entityName, entity);
-  };
+  instance: T,
+): T {
+  return new Proxy(instance, {
+    // biome-ignore lint/complexity/useMaxParams: Proxy `get` trap signature is fixed by the JS spec.
+    get(target, prop, receiver) {
+      if (prop === "constructor" || typeof prop === "symbol") {
+        return Reflect.get(target, prop, receiver);
+      }
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== "function") return value;
+      const methodName = String(prop);
+      return (...args: any[]) => {
+        const result = (value as (...a: any[]) => unknown).apply(target, args);
+        if (isActionLike(result)) {
+          return wrapAction({ entityName, methodName }, result);
+        }
+        return result;
+      };
+    },
+  });
 }
 
-function wrapEntity(entityName: string, entity: unknown): ExtensionEntity {
-  if (!isPlainObject(entity)) {
-    throw new InvalidEntityShapeError(
-      entityName,
-      "entity factory must return a plain object",
-    );
-  }
-  const wrapped: Record<
-    string,
-    // biome-ignore lint/suspicious/noExplicitAny: integrator-typed action method.
-    (...args: any[]) => ExtensionAction
-  > = {};
-  for (const [methodName, method] of Object.entries(entity)) {
-    if (typeof method !== "function") {
-      throw new InvalidEntityShapeError(
-        entityName,
-        `property "${methodName}" is not a function (got ${typeof method})`,
-      );
-    }
-    wrapped[methodName] = wrapEntityMethod(
-      { entityName, methodName },
-      // biome-ignore lint/suspicious/noExplicitAny: integrator-typed action method.
-      method as (...args: any[]) => unknown,
-    );
-  }
-  return wrapped;
-}
-
-function wrapEntityMethod(
-  ctx: { entityName: string; methodName: string },
-  // biome-ignore lint/suspicious/noExplicitAny: integrator-typed action method.
-  method: (...args: any[]) => unknown,
-  // biome-ignore lint/suspicious/noExplicitAny: integrator-typed action method.
-): (...args: any[]) => ExtensionAction {
-  // biome-ignore lint/suspicious/noExplicitAny: integrator-typed args pass-through.
-  return (...args: any[]): ExtensionAction => {
-    const action = method(...args);
-    return wrapAction(ctx, action);
-  };
-}
+const isActionLike = (value: unknown): value is { buildTx: unknown } =>
+  isPlainObject(value) && typeof value.buildTx === "function";
 
 function wrapAction(
   ctx: { entityName: string; methodName: string },
-  action: unknown,
+  action: { buildTx: unknown; getRequirements?: unknown },
 ): ExtensionAction {
-  if (!isPlainObject(action)) {
-    throw new InvalidActionShapeError({
-      ...ctx,
-      reason: "action method must return a plain object",
-    });
-  }
-  if (typeof action.buildTx !== "function") {
-    throw new InvalidActionShapeError({
-      ...ctx,
-      reason: "missing required `buildTx` function",
-    });
-  }
   if (
     action.getRequirements !== undefined &&
     typeof action.getRequirements !== "function"
@@ -176,11 +152,9 @@ function wrapAction(
     | undefined;
 
   const wrapped: {
-    // biome-ignore lint/suspicious/noExplicitAny: pass-through.
     buildTx: (...args: any[]) => ReturnType<ExtensionAction["buildTx"]>;
     getRequirements?: ExtensionAction["getRequirements"];
   } = {
-    // biome-ignore lint/suspicious/noExplicitAny: pass-through.
     buildTx: (...buildArgs: any[]) => {
       const tx = buildTx(...buildArgs);
       assertValidTransactionShape(ctx, tx);
@@ -188,7 +162,6 @@ function wrapAction(
     },
   };
   if (getRequirements) {
-    // biome-ignore lint/suspicious/noExplicitAny: pass-through.
     wrapped.getRequirements = async (...reqArgs: any[]) => {
       const requirements = await getRequirements(...reqArgs);
       assertValidRequirementsShape(ctx, requirements);
@@ -257,3 +230,10 @@ const isStructuralRequirementLike = (value: unknown): boolean =>
   typeof value.sign === "function" &&
   isPlainObject(value.action) &&
   typeof (value.action as Record<string, unknown>).type === "string";
+
+/**
+ * Re-export so consumers can reference the same opaque type the validator narrows to.
+ *
+ * @internal
+ */
+export type { EntityConstructor };

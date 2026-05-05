@@ -3,16 +3,17 @@ import { describe, expect, test } from "vitest";
 import {
   ExtensionNameCollisionError,
   InvalidActionShapeError,
-  InvalidEntityShapeError,
+  InvalidEntityClassError,
   InvalidExtensionNameError,
   InvalidExtensionShapeError,
   InvalidRequirementShapeError,
   InvalidTransactionShapeError,
+  MorphoEntity,
 } from "../types/index.js";
 import {
   RESERVED_MORPHO_CLIENT_NAMES,
   validateExtensionMap,
-  wrapExtensionFactory,
+  wrapEntityInstance,
 } from "./validateExtension.js";
 
 const validTx = () => ({
@@ -22,10 +23,29 @@ const validTx = () => ({
   action: { type: "custom", args: { foo: 1 } },
 });
 
+class GoodEntity extends MorphoEntity {
+  doThing() {
+    return { buildTx: () => validTx() };
+  }
+  doThingWithReqs() {
+    return {
+      buildTx: () => validTx(),
+      getRequirements: async () => [validTx()],
+    };
+  }
+  fetchSomething() {
+    return { ok: true };
+  }
+}
+
+class BadEntity {
+  // Does NOT extend MorphoEntity.
+}
+
 describe("validateExtensionMap", () => {
   test("default", () => {
     expect(() =>
-      validateExtensionMap({ myEntity: () => ({}) }, []),
+      validateExtensionMap({ myEntity: GoodEntity }, []),
     ).not.toThrow();
   });
 
@@ -46,26 +66,17 @@ describe("validateExtensionMap", () => {
 
   test("error: invalid name", () => {
     expect(() =>
-      validateExtensionMap({ "Bad-Name": () => ({}) }, []),
+      validateExtensionMap({ "Bad-Name": GoodEntity }, []),
     ).toThrowError(InvalidExtensionNameError);
     expect(() =>
-      validateExtensionMap({ _hidden: () => ({}) }, []),
+      validateExtensionMap({ _hidden: GoodEntity }, []),
     ).toThrowError(InvalidExtensionNameError);
   });
 
   test("error: reserved name (vaultV1)", () => {
     expect(() =>
       validateExtensionMap(
-        { vaultV1: () => ({}) },
-        RESERVED_MORPHO_CLIENT_NAMES,
-      ),
-    ).toThrowError(ExtensionNameCollisionError);
-  });
-
-  test("error: reserved name (extend)", () => {
-    expect(() =>
-      validateExtensionMap(
-        { extend: () => ({}) },
+        { vaultV1: GoodEntity },
         RESERVED_MORPHO_CLIENT_NAMES,
       ),
     ).toThrowError(ExtensionNameCollisionError);
@@ -73,156 +84,127 @@ describe("validateExtensionMap", () => {
 
   test("error: collision with previously registered extension", () => {
     expect(() =>
-      validateExtensionMap({ analytics: () => ({}) }, ["analytics"]),
+      validateExtensionMap({ analytics: GoodEntity }, ["analytics"]),
     ).toThrowError(ExtensionNameCollisionError);
   });
 
-  test("error: non-function value", () => {
+  test("error: value is not a constructor", () => {
     expect(() =>
-      validateExtensionMap({ myEntity: "not a function" }, []),
-    ).toThrowError(InvalidExtensionShapeError);
+      validateExtensionMap({ myEntity: "not a class" }, []),
+    ).toThrowError(InvalidEntityClassError);
+  });
+
+  test("error: class does not extend MorphoEntity", () => {
+    expect(() =>
+      validateExtensionMap({ myEntity: BadEntity }, []),
+    ).toThrowError(InvalidEntityClassError);
+  });
+
+  test("error: passing MorphoEntity itself is rejected", () => {
+    expect(() =>
+      validateExtensionMap({ myEntity: MorphoEntity }, []),
+    ).toThrowError(InvalidEntityClassError);
   });
 });
 
-describe("wrapExtensionFactory", () => {
-  test("default: passes through valid factory", () => {
-    const factory = wrapExtensionFactory("myEntity", () => ({
-      doThing: () => ({ buildTx: () => validTx() }),
-    }));
-    const entity = factory();
-    const action = entity.doThing!();
-    expect(action.buildTx()).toMatchObject({ to: validTx().to });
+// biome-ignore lint/suspicious/noExplicitAny: client is a stand-in stub for these pure tests.
+const stubClient = {} as any;
+
+describe("wrapEntityInstance", () => {
+  test("default: validates buildTx output", () => {
+    const wrapped = wrapEntityInstance("e", new GoodEntity(stubClient));
+    expect(wrapped.doThing().buildTx()).toMatchObject({ to: validTx().to });
   });
 
-  test("default: getRequirements pass-through", async () => {
-    const factory = wrapExtensionFactory("myEntity", () => ({
-      doThing: () => ({
-        buildTx: () => validTx(),
-        getRequirements: async () => [validTx()],
-      }),
-    }));
-    const action = factory().doThing!();
-    const reqs = await action.getRequirements?.();
+  test("default: validates getRequirements output", async () => {
+    const wrapped = wrapEntityInstance("e", new GoodEntity(stubClient));
+    const reqs = await wrapped.doThingWithReqs().getRequirements();
     expect(reqs).toHaveLength(1);
   });
 
-  test("behavior: integrator can deep-freeze, validator does not refreeze", () => {
-    const frozenTx = Object.freeze(validTx());
-    const factory = wrapExtensionFactory("myEntity", () => ({
-      doThing: () => ({ buildTx: () => frozenTx }),
-    }));
-    const tx = factory().doThing!().buildTx();
+  test("behavior: non-action methods pass through", () => {
+    const wrapped = wrapEntityInstance("e", new GoodEntity(stubClient));
+    expect(wrapped.fetchSomething()).toEqual({ ok: true });
+  });
+
+  test("behavior: instanceof preserved through Proxy", () => {
+    const wrapped = wrapEntityInstance("e", new GoodEntity(stubClient));
+    expect(wrapped).toBeInstanceOf(GoodEntity);
+    expect(wrapped).toBeInstanceOf(MorphoEntity);
+  });
+
+  test("behavior: integrator-applied freeze is preserved", () => {
+    const frozen = Object.freeze(validTx());
+    class Frozen extends MorphoEntity {
+      doThing() {
+        return { buildTx: () => frozen };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Frozen(stubClient));
+    const tx = wrapped.doThing().buildTx();
     expect(Object.isFrozen(tx)).toBe(true);
-    expect(tx).toBe(frozenTx);
-  });
-
-  test("error: factory returns non-object", () => {
-    const factory = wrapExtensionFactory(
-      "myEntity",
-      // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
-      (() => "nope") as any,
-    );
-    expect(() => factory()).toThrowError(InvalidEntityShapeError);
-  });
-
-  test("error: entity property is not a function", () => {
-    const factory = wrapExtensionFactory(
-      "myEntity",
-      // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
-      (() => ({ doThing: 42 })) as any,
-    );
-    expect(() => factory()).toThrowError(InvalidEntityShapeError);
-  });
-
-  test("error: action method missing buildTx", () => {
-    const factory = wrapExtensionFactory(
-      "myEntity",
-      // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
-      (() => ({ doThing: () => ({}) })) as any,
-    );
-    expect(() => factory().doThing!()).toThrowError(InvalidActionShapeError);
-  });
-
-  test("error: getRequirements is present but not a function", () => {
-    const factory = wrapExtensionFactory(
-      "myEntity",
-      // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
-      (() => ({
-        doThing: () => ({ buildTx: () => validTx(), getRequirements: 42 }),
-      })) as any,
-    );
-    expect(() => factory().doThing!()).toThrowError(InvalidActionShapeError);
+    expect(tx).toBe(frozen);
   });
 
   test("error: buildTx returns malformed tx (missing data)", () => {
-    const factory = wrapExtensionFactory(
-      "myEntity",
-      // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
-      (() => ({
-        doThing: () => ({
+    class Broken extends MorphoEntity {
+      doThing() {
+        return {
           buildTx: () => ({
             to: "0x00",
             value: 0n,
             action: { type: "x", args: {} },
           }),
-        }),
-      })) as any,
-    );
-    expect(() => factory().doThing!().buildTx()).toThrowError(
+        };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Broken(stubClient));
+    expect(() => wrapped.doThing().buildTx()).toThrowError(
       InvalidTransactionShapeError,
     );
   });
 
-  test("error: buildTx returns malformed tx (action.type missing)", () => {
-    const factory = wrapExtensionFactory(
-      "myEntity",
-      // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
-      (() => ({
-        doThing: () => ({
-          buildTx: () => ({
-            to: "0x00",
-            value: 0n,
-            data: "0x",
-            action: { args: {} },
-          }),
-        }),
-      })) as any,
-    );
-    expect(() => factory().doThing!().buildTx()).toThrowError(
-      InvalidTransactionShapeError,
-    );
+  test("error: getRequirements is present but not a function", () => {
+    class Broken extends MorphoEntity {
+      doThing() {
+        return {
+          buildTx: () => validTx(),
+          getRequirements: 42,
+        };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Broken(stubClient));
+    expect(() => wrapped.doThing()).toThrowError(InvalidActionShapeError);
   });
 
   test("error: getRequirements resolves to non-array", async () => {
-    const factory = wrapExtensionFactory(
-      "myEntity",
-      // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
-      (() => ({
-        doThing: () => ({
+    class Broken extends MorphoEntity {
+      doThing() {
+        return {
           buildTx: () => validTx(),
           getRequirements: async () => "not an array",
-        }),
-      })) as any,
+        };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Broken(stubClient));
+    await expect(wrapped.doThing().getRequirements()).rejects.toBeInstanceOf(
+      InvalidRequirementShapeError,
     );
-    await expect(
-      factory().doThing!().getRequirements?.(),
-    ).rejects.toBeInstanceOf(InvalidRequirementShapeError);
   });
 
   test("error: getRequirements item neither tx nor requirement", async () => {
-    const factory = wrapExtensionFactory(
-      "myEntity",
-      // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
-      (() => ({
-        doThing: () => ({
+    class Broken extends MorphoEntity {
+      doThing() {
+        return {
           buildTx: () => validTx(),
           getRequirements: async () => [{ random: 1 }],
-        }),
-      })) as any,
+        };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Broken(stubClient));
+    await expect(wrapped.doThing().getRequirements()).rejects.toBeInstanceOf(
+      InvalidRequirementShapeError,
     );
-    await expect(
-      factory().doThing!().getRequirements?.(),
-    ).rejects.toBeInstanceOf(InvalidRequirementShapeError);
   });
 
   test("default: getRequirements accepts integrator-defined Requirement shape", async () => {
@@ -230,14 +212,16 @@ describe("wrapExtensionFactory", () => {
       sign: async () => ({ args: {}, action: { type: "x", args: {} } }),
       action: { type: "customPermit", args: {} },
     };
-    const factory = wrapExtensionFactory("myEntity", () => ({
-      doThing: () => ({
-        buildTx: () => validTx(),
-        // biome-ignore lint/suspicious/noExplicitAny: integrator-defined shape
-        getRequirements: async () => [customReq] as any,
-      }),
-    }));
-    const reqs = await factory().doThing!().getRequirements?.();
+    class Custom extends MorphoEntity {
+      doThing() {
+        return {
+          buildTx: () => validTx(),
+          getRequirements: async () => [customReq],
+        };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Custom(stubClient));
+    const reqs = await wrapped.doThing().getRequirements();
     expect(reqs).toHaveLength(1);
   });
 });

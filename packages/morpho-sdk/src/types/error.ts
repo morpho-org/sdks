@@ -422,12 +422,25 @@ export class InvalidExtensionNameError extends Error {
 }
 
 /**
- * Thrown by `MorphoClient.extend()` when the extension factory does not return a non-empty record
- * of entity factories (i.e. functions).
+ * Thrown by `MorphoClient.extend()` when the extension map is not a non-empty record (or has a
+ * value that is not a constructor — see {@link InvalidEntityClassError}).
  */
 export class InvalidExtensionShapeError extends Error {
   constructor(reason: string) {
     super(`Invalid extension shape: ${reason}`);
+  }
+}
+
+/**
+ * Thrown by `MorphoClient.extend()` when an extension value is not a class extending
+ * `MorphoEntity`. Every registered entity must subclass `MorphoEntity` so it inherits the
+ * standard `client`-binding contract.
+ */
+export class InvalidEntityClassError extends Error {
+  constructor(name: string, reason: string) {
+    super(
+      `Extension "${name}" is not a valid entity class: ${reason}. Pass a class that extends MorphoEntity.`,
+    );
   }
 }
 
