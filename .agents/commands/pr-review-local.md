@@ -187,4 +187,12 @@ Sentinel: FIX_DONE_LOCAL — <X> applied, <Y> skipped (Local-only, unstaged).
 - **No GitHub interaction**. The skill never calls `gh api`. All output stays in the terminal.
 - **Refuse on dirty tree** for `--fix`. The previous stash-and-pop machinery is gone — clean precondition replaces ~80 lines of stash plumbing and a class of stash-pop-conflict bugs.
 - **Drift reminder for `--fix` mechanics**: `/pr-fix` Step 6c–6d (read-then-Edit, biome check, no commit/push) implements the same apply-and-validate loop. Any change to either should be evaluated for propagation.
-- **Sentinel registry, drift conventions**: see `.agents/commands/AGENTS.md`.
+## Sentinel grammar
+
+| Sentinel | Owning step | Trailer grammar |
+|---|---|---|
+| `REVIEW_CLEAN` | Step 7 | `— no issues found in <HEAD_BRANCH> vs <BASE_BRANCH>.` (zero findings, zero agent failures) |
+| `REVIEW_INCOMPLETE` | Step 7 | `— <FAILED_AGENTS> of 7 agents failed (<names>); no findings does NOT mean clean.` |
+| `REVIEW_DONE_LOCAL` | Step 7 | `— <N> findings (X critical, Y high, Z medium, W low) on <HEAD_BRANCH> vs <BASE_BRANCH>.` |
+| `FIX_DONE_LOCAL` | Step 7b | `— <X> applied, <Y> skipped (Local-only, unstaged).` |
+| `FIX_ABORTED` | Step 7b pre-flight | `— working tree is not clean. Commit or stash before --fix.` |

@@ -193,4 +193,15 @@ After CronCreate returns the job ID:
 - **`--watch` semantics**: 2-minute cron, self-contained per cycle (no CronCreate-time SHA leakage), watcher cycles re-discover project context per cycle.
 - **No Codex pass**: previous iterations included an optional fire-and-forget `codex exec` invocation. Removed in the iter-10 split — it was vestigial.
 - **Cross-skill watcher considerations**: if a user runs `/pr-review-gh <PR> --watch` AND `/pr-fix <PR> --watch` together, the two crons are independent — both fire every 2 minutes. The pairing works (review posts → fix replies → next cycle picks up new state) but neither watcher coordinates with the other. Document the loop semantics if friction emerges.
-- **Sentinel registry, drift conventions**: see `.agents/commands/AGENTS.md`.
+## Sentinel grammar
+
+| Sentinel | Owning step | Trailer grammar |
+|---|---|---|
+| `REVIEW_CLEAN` | Step 7 | `— no issues found in this review.` (zero findings, zero agent failures) |
+| `REVIEW_INCOMPLETE` | Step 7 | `— <FAILED_AGENTS> of 7 agents failed; no findings does NOT mean clean.` (zero findings BUT some agents crashed) |
+| `REVIEW_DONE_PR` | Step 8 | `— PR #<PR_NUMBER>, <N> findings, mode=LocalPR, commit=<HEAD_SHA_SHORT>` |
+| `WATCH_REJECTED` | Step 9 pre-flight | `— <reason>` (empty/whitespace prompt OR un-substituted CronCreate-time placeholder) |
+| `WATCH_TRANSIENT_ERROR` | Step 9 watcher (any cycle command) | `— step <N> (<command>): <stderr>` (any non-zero exit; permanent failures recur every cycle until CronDelete) |
+| `WATCH_PR_CLOSED` | Step 9 watcher Step 1 | `— PR #<PR_NUMBER> state=${CYCLE_PR_STATE}, watcher exiting.` |
+| `WATCH_REVIEW_CLEAN` | Step 9 watcher Step 3 | `— PR #<PR_NUMBER> still at ${CYCLE_HEAD_SHA_SHORT}, no new commits since last review.` |
+| `WATCH_REVIEW_DONE` | Step 9 watcher Step 7 | `— PR #<PR_NUMBER> commit ${CYCLE_HEAD_SHA_SHORT}: <N> findings (X critical, Y high, Z medium, W low).` |

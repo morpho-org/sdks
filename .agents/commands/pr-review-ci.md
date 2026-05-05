@@ -165,4 +165,8 @@ Sentinel: REVIEW_DONE_PR — PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEA
 - **No `--watch`** in CI — the run is one-shot per PR push.
 - **For pre-PR review**: use `/pr-review-local` (terminal-only, no GitHub interaction).
 - **For local PR review with optional watcher**: use `/pr-review-gh`.
-- **Sentinel registry, drift conventions, deprecation flow**: see `.agents/commands/AGENTS.md`.
+## Sentinel grammar
+
+| Sentinel | Owning step | Trailer grammar |
+|---|---|---|
+| `REVIEW_DONE_PR` | Step 8 | `— PR #<PR_NUMBER>, <N> findings, mode=CI, commit=<HEAD_SHA_SHORT>` |
