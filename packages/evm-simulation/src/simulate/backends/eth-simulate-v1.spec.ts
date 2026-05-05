@@ -276,4 +276,65 @@ describe.sequential("simulateV1", () => {
 
     expect(result.logs).toEqual([]);
   });
+
+  it("returns one callResult per input transaction with data, gasUsed, and per-call logs", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        {
+          status: "success",
+          data: "0xdead" as Hex,
+          gasUsed: 21_000n,
+          logs: [
+            {
+              address: USDC,
+              topics: ["0xaaaa" as Hex],
+              data: "0xdeadbeef" as Hex,
+            },
+          ],
+        },
+        {
+          status: "success",
+          data: "0xbeef" as Hex,
+          gasUsed: 42_000n,
+          logs: [
+            { address: USDC, topics: ["0xbbbb" as Hex], data: "0xabcd" as Hex },
+          ],
+        },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX, { from: USER, to: VAULT, data: "0x34" as Hex }],
+    });
+
+    expect(result.callResults).toHaveLength(2);
+    expect(result.callResults![0]).toEqual({
+      data: "0xdead",
+      gasUsed: 21_000n,
+      logs: [{ address: USDC, topics: ["0xaaaa"], data: "0xdeadbeef" }],
+    });
+    expect(result.callResults![1]).toEqual({
+      data: "0xbeef",
+      gasUsed: 42_000n,
+      logs: [{ address: USDC, topics: ["0xbbbb"], data: "0xabcd" }],
+    });
+    // Aggregated logs still drive transfer parsing.
+    expect(result.logs).toHaveLength(2);
+  });
+
+  it("defaults missing data to 0x and missing gasUsed to 0n in callResults", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [{ status: "success" /* no data, no gasUsed, no logs */ }],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    expect(result.callResults).toEqual([{ data: "0x", gasUsed: 0n, logs: [] }]);
+  });
 });

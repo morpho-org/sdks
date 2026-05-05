@@ -1,4 +1,5 @@
 import type {
+  SimulateOptions,
   SimulateParams,
   SimulationConfig,
   SimulationResult,
@@ -33,16 +34,9 @@ import {
 export async function simulate(
   config: SimulationConfig,
   params: SimulateParams,
-  options: {
-    /**
-     * When true, persist the simulation in Tenderly and return a shareable
-     * `tenderlyUrl` in the result. Only honored when the Tenderly backend runs
-     * (not the `eth_simulateV1` fallback). Defaults to `false`.
-     */
-    shareable?: boolean;
-  } = {},
+  options: SimulateOptions = {},
 ): Promise<SimulationResult> {
-  const { shareable = false } = options;
+  const { shareable = false, includeCallResults = false } = options;
 
   validateInput(params);
 
@@ -53,6 +47,7 @@ export async function simulate(
     transactions: simulationTxs,
     blockNumber: params.blockNumber,
     shareable,
+    includeCallResults,
   });
   const transfers = parseTransfers(result.logs, config.logger);
 
@@ -67,5 +62,6 @@ export async function simulate(
     transfers,
     tenderlyUrl: result.tenderlyUrl,
     assetChanges: result.rawAssetChanges,
+    ...(includeCallResults ? { callResults: result.callResults } : {}),
   };
 }

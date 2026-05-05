@@ -3,6 +3,7 @@ import { vi } from "vitest";
 import {
   ExternalServiceError,
   SimulationRevertedError,
+  SimulationValidationError,
   UnsupportedChainError,
 } from "../../errors.js";
 import type {
@@ -64,6 +65,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
       chainId: 1,
       transactions: txs,
       shareable: true,
+      includeCallResults: false,
     });
 
     expect(result.tenderlyUrl).toContain("dashboard.tenderly.co");
@@ -79,6 +81,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
       chainId: 1,
       transactions: txs,
       shareable: true,
+      includeCallResults: false,
     });
 
     expect(mockTenderlyRest.mock.calls[0]![0].shareable).toBe(true);
@@ -97,6 +100,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
         chainId: 1,
         transactions: txs,
         shareable: false,
+        includeCallResults: false,
       });
 
       // Tenderly's AbortSignal.timeout was called with floor(10000 * 0.6) = 6000.
@@ -117,6 +121,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
       chainId: 1,
       transactions: txs,
       shareable: false,
+      includeCallResults: false,
     });
 
     expect(result.tenderlyUrl).toBeUndefined();
@@ -134,6 +139,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
         chainId: 1,
         transactions: txs,
         shareable: false,
+        includeCallResults: false,
       }),
     ).rejects.toThrow(SimulationRevertedError);
 
@@ -152,6 +158,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
         chainId: 1,
         transactions: txs,
         shareable: false,
+        includeCallResults: false,
       }),
     ).rejects.toThrow(ExternalServiceError);
   });
@@ -170,6 +177,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
       chainId: 1,
       transactions: txs,
       shareable: false,
+      includeCallResults: false,
     });
 
     expect(result).toBeDefined();
@@ -190,6 +198,7 @@ describe.sequential("executeSimulation — Tenderly only (no simulateV1Url for c
       chainId: 1,
       transactions: txs,
       shareable: false,
+      includeCallResults: false,
     });
     expect(result).toBeDefined();
     expect(mockSimulateV1).not.toHaveBeenCalled();
@@ -205,6 +214,7 @@ describe.sequential("executeSimulation — Tenderly only (no simulateV1Url for c
         chainId: 1,
         transactions: txs,
         shareable: false,
+        includeCallResults: false,
       }),
     ).rejects.toThrow(ExternalServiceError);
     expect(mockSimulateV1).not.toHaveBeenCalled();
@@ -227,6 +237,7 @@ describe.sequential("executeSimulation — simulateV1 only (chain not in Tenderl
       chainId: 1,
       transactions: txs,
       shareable: false,
+      includeCallResults: false,
     });
     expect(mockTenderlyRest).not.toHaveBeenCalled();
     expect(mockSimulateV1).toHaveBeenCalledTimes(1);
@@ -241,7 +252,81 @@ describe.sequential("executeSimulation — no backend available", () => {
         chainId: 1,
         transactions: txs,
         shareable: false,
+        includeCallResults: false,
       }),
     ).rejects.toThrow(UnsupportedChainError);
+  });
+});
+
+describe.sequential("executeSimulation — includeCallResults", () => {
+  it("bypasses Tenderly and routes to simulateV1 even when both backends are configured", async () => {
+    mockSimulateV1.mockResolvedValueOnce({
+      logs: [],
+      callResults: [{ data: "0x", gasUsed: 0n, logs: [] }],
+    });
+
+    const result = await executeSimulation({
+      config: bothBackends(),
+      chainId: 1,
+      transactions: txs,
+      shareable: false,
+      includeCallResults: true,
+    });
+
+    expect(mockTenderlyRest).not.toHaveBeenCalled();
+    expect(mockSimulateV1).toHaveBeenCalledTimes(1);
+    expect(result.callResults).toHaveLength(1);
+  });
+
+  it("forwards the full timeoutMs to simulateV1 (no Tenderly budget split)", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    try {
+      mockSimulateV1.mockResolvedValueOnce({ logs: [], callResults: [] });
+
+      await executeSimulation({
+        config: bothBackends(10_000),
+        chainId: 1,
+        transactions: txs,
+        shareable: false,
+        includeCallResults: true,
+      });
+
+      expect(timeoutSpy).toHaveBeenCalledWith(10_000);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
+  });
+
+  it("throws UnsupportedChainError when chain has no simulateV1Url", async () => {
+    const tenderlyOnly: SimulationConfig = {
+      ...bothBackends(),
+      chains: new Map([[1, {}]]),
+    };
+
+    await expect(
+      executeSimulation({
+        config: tenderlyOnly,
+        chainId: 1,
+        transactions: txs,
+        shareable: false,
+        includeCallResults: true,
+      }),
+    ).rejects.toThrow(UnsupportedChainError);
+    expect(mockTenderlyRest).not.toHaveBeenCalled();
+    expect(mockSimulateV1).not.toHaveBeenCalled();
+  });
+
+  it("rejects shareable: true with includeCallResults: true via SimulationValidationError", async () => {
+    await expect(
+      executeSimulation({
+        config: bothBackends(),
+        chainId: 1,
+        transactions: txs,
+        shareable: true,
+        includeCallResults: true,
+      }),
+    ).rejects.toThrow(SimulationValidationError);
+    expect(mockTenderlyRest).not.toHaveBeenCalled();
+    expect(mockSimulateV1).not.toHaveBeenCalled();
   });
 });

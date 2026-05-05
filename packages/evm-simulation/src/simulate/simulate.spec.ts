@@ -434,6 +434,54 @@ describe.sequential("simulate — validation", () => {
   });
 });
 
+describe.sequential("simulate — includeCallResults", () => {
+  it("does not return callResults by default", async () => {
+    mockTenderlyRest.mockResolvedValueOnce(makeSuccessResult([]));
+
+    const result = await simulate(makeConfig(), makeParams());
+
+    expect(result.callResults).toBeUndefined();
+  });
+
+  it("returns one call result per simulationTx in order when opted in", async () => {
+    const auths: SimulationAuthorization[] = [
+      { type: "signature", token: USDC, spender: SPENDER },
+    ];
+    // Two input txs (1 prepended approve + 1 main) → expect 2 callResults.
+    mockSimulateV1.mockResolvedValueOnce({
+      logs: [],
+      callResults: [
+        { data: "0x01" as Hex, gasUsed: 21_000n, logs: [] },
+        { data: "0x02" as Hex, gasUsed: 100_000n, logs: [] },
+      ],
+    });
+
+    const result = await simulate(
+      makeConfig(),
+      makeParams({ authorizations: auths }),
+      { includeCallResults: true },
+    );
+
+    expect(result.simulationTxs).toHaveLength(2);
+    expect(result.callResults).toHaveLength(2);
+    expect(result.callResults![0]!.data).toBe("0x01");
+    expect(result.callResults![1]!.data).toBe("0x02");
+    // Tenderly is bypassed when call results are requested.
+    expect(mockTenderlyRest).not.toHaveBeenCalled();
+  });
+
+  it("rejects shareable: true with includeCallResults: true via SimulationValidationError", async () => {
+    await expect(
+      simulate(makeConfig(), makeParams(), {
+        shareable: true,
+        includeCallResults: true,
+      }),
+    ).rejects.toThrow(SimulationValidationError);
+    expect(mockTenderlyRest).not.toHaveBeenCalled();
+    expect(mockSimulateV1).not.toHaveBeenCalled();
+  });
+});
+
 describe.sequential("simulate — timeout", () => {
   it("throws ExternalServiceError when simulation exceeds timeoutMs", async () => {
     mockTenderlyRest.mockImplementationOnce(async () => {

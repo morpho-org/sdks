@@ -89,6 +89,44 @@ export interface Transfer {
 }
 
 /**
+ * Per-call output of `eth_simulateV1` for a single transaction in the bundle.
+ * Returned only when the caller passes `includeCallResults: true` to
+ * `simulate()`. Indexes line up exactly with `SimulationResult.simulationTxs`.
+ */
+export interface SimulationCallResult {
+  /** Raw return data from the call. `0x` for calls that produce no output. */
+  data: Hex;
+  /** Gas consumed by this individual call. */
+  gasUsed: bigint;
+  /** Logs emitted by this individual call (also aggregated into transfer parsing). */
+  logs: RawLog[];
+}
+
+/**
+ * Per-call options for `simulate`.
+ *
+ * - `shareable` is Tenderly-only: persists the simulation and returns a `tenderlyUrl`.
+ * - `includeCallResults` returns one `SimulationCallResult` per simulated transaction
+ *   in `SimulationResult.callResults`, in input order. The two flags are mutually
+ *   exclusive — see `simulate()` for the rejection rule.
+ */
+export interface SimulateOptions {
+  /**
+   * When true, persist the simulation in Tenderly and return a shareable
+   * `tenderlyUrl` in the result. Only honored when the Tenderly backend runs
+   * (not the `eth_simulateV1` fallback). Defaults to `false`.
+   */
+  shareable?: boolean;
+  /**
+   * When true, return per-call output (return data, gas used, logs) for every
+   * simulated transaction. Forces the `eth_simulateV1` backend because Tenderly's
+   * REST shape does not expose per-call return data reliably. Mutually exclusive
+   * with `shareable: true`. Defaults to `false`.
+   */
+  includeCallResults?: boolean;
+}
+
+/**
  * Happy-path return of `simulate`. All failures throw typed errors. The same shape is
  * returned regardless of `options.shareable` — fields unused by your use case can be
  * ignored:
@@ -99,7 +137,9 @@ export interface Transfer {
  *
  * `tenderlyUrl` is set only when `shareable: true` AND the Tenderly backend ran
  * successfully (not the `eth_simulateV1` fallback). `assetChanges` is Tenderly-only
- * raw data.
+ * raw data. `callResults` is set only when `includeCallResults: true` was passed; in
+ * that case `callResults.length === simulationTxs.length` and the entries are aligned
+ * by index.
  */
 export interface SimulationResult {
   /** The full resolved transaction list (including prepended authorization txs). */
@@ -110,6 +150,11 @@ export interface SimulationResult {
   tenderlyUrl?: string;
   /** Raw Tenderly `asset_changes` payload. Opaque `unknown` — do not destructure without validation. */
   assetChanges?: unknown;
+  /**
+   * Per-call simulation outputs in `simulationTxs` order. Present only when
+   * `includeCallResults: true` was passed to `simulate()`.
+   */
+  callResults?: SimulationCallResult[];
 }
 
 /** Minimal structured logger the package calls for warnings and info. */
@@ -140,6 +185,12 @@ export interface RawSimulationResult {
   logs: RawLog[];
   tenderlyUrl?: string;
   rawAssetChanges?: unknown;
+  /**
+   * Optional per-call outputs aligned with the input transactions. Set by
+   * backends that can produce them (currently only `simulateV1`) when the
+   * caller opts in via `includeCallResults`.
+   */
+  callResults?: SimulationCallResult[];
 }
 
 export interface RawLog {

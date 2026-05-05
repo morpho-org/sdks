@@ -1,5 +1,9 @@
 import type { BlockTag } from "viem";
-import { ExternalServiceError, UnsupportedChainError } from "../../errors.js";
+import {
+  ExternalServiceError,
+  SimulationValidationError,
+  UnsupportedChainError,
+} from "../../errors.js";
 import type {
   RawSimulationResult,
   SimulationConfig,
@@ -40,6 +44,13 @@ const FALLBACK_MIN_BUDGET_MS = 1500;
  *
  * `shareable` is Tenderly-only: when true, the backend persists the simulation and
  * returns a shareable URL. `eth_simulateV1` ignores it (no persistence concept).
+ *
+ * `includeCallResults` forces the `eth_simulateV1` backend regardless of Tenderly
+ * support — Tenderly's REST shape does not expose per-call return data reliably.
+ * When the chain has no `simulateV1Url`, throws `UnsupportedChainError`. Combining
+ * `shareable: true` with `includeCallResults: true` is rejected as
+ * `SimulationValidationError` because shareable simulations are Tenderly-specific
+ * and would silently drop call results.
  */
 export async function executeSimulation(params: {
   config: SimulationConfig;
@@ -47,11 +58,38 @@ export async function executeSimulation(params: {
   transactions: SimulationTransaction[];
   blockNumber?: bigint | BlockTag;
   shareable: boolean;
+  includeCallResults: boolean;
 }): Promise<RawSimulationResult> {
-  const { config, chainId, transactions, blockNumber, shareable } = params;
+  const {
+    config,
+    chainId,
+    transactions,
+    blockNumber,
+    shareable,
+    includeCallResults,
+  } = params;
+
+  if (shareable && includeCallResults) {
+    throw new SimulationValidationError(
+      "shareable and includeCallResults cannot both be true: shareable simulations run on Tenderly, which does not expose per-call return data",
+      ["shareable", "includeCallResults"],
+    );
+  }
+
   const chain = resolveChain(config, chainId);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
+
+  if (includeCallResults) {
+    if (!chain.simulateV1Url) throw new UnsupportedChainError(chainId);
+    return await simulateV1({
+      rpcUrl: chain.simulateV1Url,
+      chainId,
+      transactions,
+      blockNumber,
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  }
 
   if (chain.tenderlySupported && config.tenderlyRest) {
     const tenderlyTimeout = Math.floor(timeoutMs * TENDERLY_BUDGET_RATIO);

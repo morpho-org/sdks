@@ -13,6 +13,7 @@ import {
 import type {
   RawLog,
   RawSimulationResult,
+  SimulationCallResult,
   SimulationTransaction,
 } from "../../types.js";
 
@@ -97,17 +98,26 @@ export async function simulateV1(params: {
     }
 
     const rawLogs: RawLog[] = [];
+    const callResults: SimulationCallResult[] = [];
     for (const r of results) {
+      const perCallLogs: RawLog[] = [];
       for (const log of r.logs ?? []) {
-        rawLogs.push({
+        const normalized: RawLog = {
           address: log.address,
           topics: [...log.topics],
           data: log.data ?? "0x",
-        });
+        };
+        rawLogs.push(normalized);
+        perCallLogs.push(normalized);
       }
+      callResults.push({
+        data: r.data ?? "0x",
+        gasUsed: r.gasUsed ?? 0n,
+        logs: perCallLogs,
+      });
     }
 
-    return { logs: rawLogs };
+    return { logs: rawLogs, callResults };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
