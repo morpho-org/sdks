@@ -4,7 +4,6 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -26,7 +25,10 @@ import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("RepayMarketV1", () => {
-  test("should create repay bundle (by assets)", async ({ client }) => {
+  test("should create repay bundle (by assets)", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
     const repayAmount = parseUnits("500", 18);
@@ -44,7 +46,7 @@ describe("RepayMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -80,6 +82,7 @@ describe("RepayMarketV1", () => {
 
   test("should create repay bundle (by shares — full repay)", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -97,7 +100,7 @@ describe("RepayMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -113,7 +116,10 @@ describe("RepayMarketV1", () => {
     expect(tx.action.args.assets).toBe(0n);
   });
 
-  test("should repay loan token (by assets)", async ({ client }) => {
+  test("should repay loan token (by assets)", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
     const repayAmount = parseUnits("500", 18);
@@ -141,9 +147,7 @@ describe("RepayMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -181,7 +185,7 @@ describe("RepayMarketV1", () => {
     );
   });
 
-  test("should full repay by shares", async ({ client }) => {
+  test("should full repay by shares", async ({ client, publicClient }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
 
@@ -199,9 +203,7 @@ describe("RepayMarketV1", () => {
     });
 
     // Deal enough loan tokens to cover the buffered transfer amount (slippage buffer)
-    const morphoClientSetup = new MorphoClient(
-      client as unknown as PublicClient,
-    );
+    const morphoClientSetup = new MorphoClient(publicClient);
     const marketSetup = morphoClientSetup.marketV1(
       WethUsdsMarketV1,
       mainnet.id,
@@ -232,9 +234,7 @@ describe("RepayMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -272,7 +272,10 @@ describe("RepayMarketV1", () => {
     );
   });
 
-  test("should throw when repay amount exceeds debt", async ({ client }) => {
+  test("should throw when repay amount exceeds debt", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
 
@@ -289,7 +292,7 @@ describe("RepayMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -304,6 +307,7 @@ describe("RepayMarketV1", () => {
 
   test("should throw when repay amount is too small to convert to shares", async ({
     client,
+    publicClient,
   }) => {
     // Construct a market where interest has diverged totalBorrowAssets from
     // totalBorrowShares enough that 1 wei converts to 0 borrow shares.
@@ -333,7 +337,7 @@ describe("RepayMarketV1", () => {
     // Verify our setup: 1 wei should round to 0 shares on this market
     expect(positionData.market.toBorrowShares(1n, "Down")).toBe(0n);
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>
@@ -347,6 +351,7 @@ describe("RepayMarketV1", () => {
 
   test("should throw when repay shares exceed borrow shares", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -364,7 +369,7 @@ describe("RepayMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -377,8 +382,11 @@ describe("RepayMarketV1", () => {
     ).toThrow(RepaySharesExceedDebtError);
   });
 
-  test("should throw when repay amount is non-positive", async ({ client }) => {
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+  test("should throw when repay amount is non-positive", async ({
+    client,
+    publicClient,
+  }) => {
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -393,8 +401,9 @@ describe("RepayMarketV1", () => {
 
   test("should revert when positionData is not provided", async ({
     client,
+    publicClient,
   }) => {
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>
@@ -406,7 +415,10 @@ describe("RepayMarketV1", () => {
     ).toThrow(MissingAccrualPositionError);
   });
 
-  test("should return deep-frozen transaction", async ({ client }) => {
+  test("should return deep-frozen transaction", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
 
@@ -423,7 +435,7 @@ describe("RepayMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 

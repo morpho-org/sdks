@@ -1,4 +1,3 @@
-import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -12,8 +11,8 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("Redeem VaultV1", () => {
-  test("should create redeem transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client as unknown as PublicClient);
+  test("should create redeem transaction", async ({ client, publicClient }) => {
+    const morpho = new MorphoClient(publicClient);
 
     const redeem = morpho
       .vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id)
@@ -38,7 +37,10 @@ describe("Redeem VaultV1", () => {
     expect(tx_1).toStrictEqual(tx_2);
   });
 
-  test("should redeem 1K shares in vaultV1", async ({ client }) => {
+  test("should redeem 1K shares in vaultV1", async ({
+    client,
+    publicClient,
+  }) => {
     const shares = parseUnits("1000", 18);
     await client.deal({
       erc20: SteakhouseUsdcVaultV1.address,
@@ -55,7 +57,7 @@ describe("Redeem VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -84,6 +86,7 @@ describe("Redeem VaultV1", () => {
 
   test("should deposit then redeem all shares in vaultV1", async ({
     client,
+    publicClient,
   }) => {
     const depositAmount = parseUnits("100", 6);
     await client.deal({
@@ -101,7 +104,7 @@ describe("Redeem VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -146,7 +149,10 @@ describe("Redeem VaultV1", () => {
     expect(finalState.userAssetBalance).toEqual(depositAmount);
   });
 
-  test("should redeem partial shares from vaultV1", async ({ client }) => {
+  test("should redeem partial shares from vaultV1", async ({
+    client,
+    publicClient,
+  }) => {
     const totalShares = parseUnits("1000", 18);
     const redeemShares = parseUnits("400", 18);
     await client.deal({
@@ -164,7 +170,7 @@ describe("Redeem VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

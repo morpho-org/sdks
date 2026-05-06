@@ -1,5 +1,4 @@
 import { Time } from "@morpho-org/morpho-ts";
-import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -11,6 +10,7 @@ import { test } from "../setup.js";
 describe("Metadata", () => {
   test("should create deposit bundle with origin and timestamp metadata", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({
@@ -28,7 +28,7 @@ describe("Metadata", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           metadata: {
             origin: "25AFEA44",
             timestamp: true,
@@ -82,6 +82,7 @@ describe("Metadata", () => {
 
   test("should not generate timestamp metadata if timestamp is not provided", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({
@@ -99,7 +100,7 @@ describe("Metadata", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           metadata: {
             origin: "25AFEA44",
           },

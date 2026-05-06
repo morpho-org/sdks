@@ -3,7 +3,6 @@ import {
   getChainAddresses,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -22,8 +21,11 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("SupplyCollateralMarketV1", () => {
-  test("should create supply collateral bundle", async ({ client }) => {
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+  test("should create supply collateral bundle", async ({
+    client,
+    publicClient,
+  }) => {
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const supplyCollateral = market.supplyCollateral({
@@ -47,7 +49,10 @@ describe("SupplyCollateralMarketV1", () => {
     expect(directTx).toStrictEqual(tx);
   });
 
-  test("should supply 1 collateral with approval", async ({ client }) => {
+  test("should supply 1 collateral with approval", async ({
+    client,
+    publicClient,
+  }) => {
     const amount = parseUnits("1", 18);
     await client.deal({
       erc20: CbbtcUsdcMarketV1.collateralToken,
@@ -64,9 +69,7 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -101,6 +104,7 @@ describe("SupplyCollateralMarketV1", () => {
 
   test("should supply collateral with approval already sufficient", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("0.5", 18);
     const {
@@ -127,9 +131,7 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -156,6 +158,7 @@ describe("SupplyCollateralMarketV1", () => {
 
   test("should supply collateral with native ETH only via wrapping", async ({
     client,
+    publicClient,
   }) => {
     const nativeAmount = parseUnits("1", 18);
 
@@ -174,9 +177,7 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -208,6 +209,7 @@ describe("SupplyCollateralMarketV1", () => {
 
   test("should supply collateral with both ERC20 WETH and native ETH via wrapping ", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
@@ -233,9 +235,7 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -274,6 +274,7 @@ describe("SupplyCollateralMarketV1", () => {
 
   test("should supply collateral with permit (EIP-2612)", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("1", 18);
     await client.deal({
@@ -291,12 +292,9 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { UsdcEurcvMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-          {
-            supportSignature: true,
-          },
-        );
+        const morphoClient = new MorphoClient(publicClient, {
+          supportSignature: true,
+        });
         const market = morphoClient.marketV1(UsdcEurcvMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -334,7 +332,10 @@ describe("SupplyCollateralMarketV1", () => {
     );
   });
 
-  test("should supply collateral with permit2", async ({ client }) => {
+  test("should supply collateral with permit2", async ({
+    client,
+    publicClient,
+  }) => {
     const {
       permit2,
       bundler3: { generalAdapter1 },
@@ -356,12 +357,9 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-          {
-            supportSignature: true,
-          },
-        );
+        const morphoClient = new MorphoClient(publicClient, {
+          supportSignature: true,
+        });
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({

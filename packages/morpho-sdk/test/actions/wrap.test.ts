@@ -1,5 +1,4 @@
 import { getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
-import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -22,7 +21,10 @@ import { testInvariants } from "../helpers/invariants.js";
 import { test } from "../setup.js";
 
 describe("WrapNative - VaultV1", () => {
-  test("should deposit native ETH only in WETH vaultV1", async ({ client }) => {
+  test("should deposit native ETH only in WETH vaultV1", async ({
+    client,
+    publicClient,
+  }) => {
     const nativeAmount = parseUnits("1000", 18);
 
     await client.setBalance({
@@ -40,7 +42,7 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -75,6 +77,7 @@ describe("WrapNative - VaultV1", () => {
 
   test("should deposit with both amount and nativeAmount in WETH vaultV1", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
@@ -109,7 +112,7 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -144,6 +147,7 @@ describe("WrapNative - VaultV1", () => {
 
   test("should deposit with permit2 signature + native wrapping in WETH vaultV1", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
@@ -169,7 +173,7 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
@@ -277,7 +281,10 @@ describe("WrapNative - VaultV1", () => {
 });
 
 describe("WrapNative - VaultV2", () => {
-  test("should deposit native ETH only in WETH vaultV2", async ({ client }) => {
+  test("should deposit native ETH only in WETH vaultV2", async ({
+    client,
+    publicClient,
+  }) => {
     const nativeAmount = parseUnits("1", 18);
 
     await client.setBalance({
@@ -295,7 +302,7 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -330,6 +337,7 @@ describe("WrapNative - VaultV2", () => {
 
   test("should deposit with both amount and nativeAmount in WETH vaultV2", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
@@ -364,7 +372,7 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -399,6 +407,7 @@ describe("WrapNative - VaultV2", () => {
 
   test("should deposit with permit2 signature + native wrapping in WETH vaultV2", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
@@ -424,7 +433,7 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);

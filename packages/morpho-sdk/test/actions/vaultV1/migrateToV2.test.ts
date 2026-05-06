@@ -1,4 +1,3 @@
-import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -14,8 +13,11 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("MigrateToV2 VaultV1", () => {
-  test("should create migration bundle via entity", async ({ client }) => {
-    const morpho = new MorphoClient(client as unknown as PublicClient);
+  test("should create migration bundle via entity", async ({
+    client,
+    publicClient,
+  }) => {
+    const morpho = new MorphoClient(publicClient);
 
     const vaultV1 = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
     const sourceVault = await vaultV1.getData();
@@ -59,6 +61,7 @@ describe("MigrateToV2 VaultV1", () => {
 
   test("should migrate full USDC position from V1 to V2", async ({
     client,
+    publicClient,
   }) => {
     const shares = parseUnits("1000", 18);
     await client.deal({
@@ -77,7 +80,7 @@ describe("MigrateToV2 VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -128,6 +131,7 @@ describe("MigrateToV2 VaultV1", () => {
 
   test("should migrate with simple permit for V1 shares", async ({
     client,
+    publicClient,
   }) => {
     const shares = parseUnits("1000", 18);
     await client.deal({
@@ -146,7 +150,7 @@ describe("MigrateToV2 VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
         const vaultV1 = morpho.vaultV1(

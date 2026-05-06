@@ -1,12 +1,12 @@
-import type { PublicClient } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { morphoViemExtension } from "../src/client/index.js";
 import { test } from "./setup.js";
 
 describe("Morpho viem extension", () => {
-  test("should extend viem client with morpho namespace", ({ client }) => {
-    const publicClient = client as unknown as PublicClient;
+  test("should extend viem client with morpho namespace", ({
+    publicClient,
+  }) => {
     const extendedClient = publicClient.extend(morphoViemExtension());
 
     expect(extendedClient).toBeDefined();
@@ -16,9 +16,8 @@ describe("Morpho viem extension", () => {
   });
 
   test("should allow accessing vaultV2 through morpho namespace", ({
-    client,
+    publicClient,
   }) => {
-    const publicClient = client as unknown as PublicClient;
     const extendedClient = publicClient.extend(morphoViemExtension());
 
     const vault = extendedClient.morpho.vaultV2(
@@ -33,9 +32,8 @@ describe("Morpho viem extension", () => {
     expect(vault.redeem).toBeDefined();
   });
 
-  test("should accept metadata parameter", ({ client }) => {
+  test("should accept metadata parameter", ({ publicClient }) => {
     const metadata = { origin: "test" };
-    const publicClient = client as unknown as PublicClient;
     const extendedClient = publicClient.extend(
       morphoViemExtension({ metadata }),
     );

@@ -3,7 +3,6 @@ import {
   getChainAddresses,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -22,8 +21,8 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("DepositVaultV1", () => {
-  test("should create deposit bundle", async ({ client }) => {
-    const morpho = new MorphoClient(client as unknown as PublicClient);
+  test("should create deposit bundle", async ({ client, publicClient }) => {
+    const morpho = new MorphoClient(publicClient);
 
     const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
     const accrualVault = await vault.getData();
@@ -55,7 +54,10 @@ describe("DepositVaultV1", () => {
     expect(accrualVault.address).toStrictEqual(SteakhouseUsdcVaultV1.address);
   });
 
-  test("should deposit 1K USDC in vaultV1", async ({ client }) => {
+  test("should deposit 1K USDC in vaultV1", async ({
+    client,
+    publicClient,
+  }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({
       erc20: SteakhouseUsdcVaultV1.asset,
@@ -72,7 +74,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -114,6 +116,7 @@ describe("DepositVaultV1", () => {
 
   test("should deposit 1K USDT in vaultV1 with reset-to-0 allowance", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({
@@ -140,7 +143,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUSDTVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUSDTVaultV1.address,
           mainnet.id,
@@ -188,6 +191,7 @@ describe("DepositVaultV1", () => {
 
   test("should deposit USDC with simple permit in vaultV1", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("10", 6);
 
@@ -206,7 +210,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
 
@@ -259,7 +263,10 @@ describe("DepositVaultV1", () => {
     expect(finalState.userSharesBalanceInAssets).toEqual(amount - 1n);
   });
 
-  test("should deposit USDC with permit2 in vaultV1", async ({ client }) => {
+  test("should deposit USDC with permit2 in vaultV1", async ({
+    client,
+    publicClient,
+  }) => {
     const {
       permit2,
       bundler3: { generalAdapter1 },
@@ -272,7 +279,7 @@ describe("DepositVaultV1", () => {
       amount,
     });
 
-    const morpho = new MorphoClient(client as unknown as PublicClient, {
+    const morpho = new MorphoClient(publicClient, {
       supportSignature: true,
     });
     const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
@@ -356,6 +363,7 @@ describe("DepositVaultV1", () => {
 
   test("should deposit WETH with approval already sufficient in vaultV1", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("0.5", 18);
 
@@ -383,7 +391,7 @@ describe("DepositVaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
@@ -416,6 +424,7 @@ describe("DepositVaultV1", () => {
 
   test("should deposit and withdraw round trip in vaultV1", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("100", 6);
     await client.deal({
@@ -433,7 +442,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

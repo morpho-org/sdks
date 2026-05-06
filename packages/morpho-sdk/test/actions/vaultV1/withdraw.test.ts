@@ -1,4 +1,3 @@
-import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -8,8 +7,11 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("Withdraw VaultV1", () => {
-  test("should create withdraw transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client as unknown as PublicClient);
+  test("should create withdraw transaction", async ({
+    client,
+    publicClient,
+  }) => {
+    const morpho = new MorphoClient(publicClient);
 
     const withdraw = morpho
       .vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id)
@@ -34,7 +36,10 @@ describe("Withdraw VaultV1", () => {
     expect(tx_1).toStrictEqual(tx_2);
   });
 
-  test("should withdraw 1K assets in vaultV1", async ({ client }) => {
+  test("should withdraw 1K assets in vaultV1", async ({
+    client,
+    publicClient,
+  }) => {
     const shares = parseUnits("1000", 18);
     const assets = parseUnits("1000", 6);
     await client.deal({
@@ -52,7 +57,7 @@ describe("Withdraw VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -78,7 +83,10 @@ describe("Withdraw VaultV1", () => {
     );
   });
 
-  test("should withdraw multiple times from vaultV1", async ({ client }) => {
+  test("should withdraw multiple times from vaultV1", async ({
+    client,
+    publicClient,
+  }) => {
     const shares = parseUnits("2000", 18);
     const firstWithdraw = parseUnits("500", 6);
     const secondWithdraw = parseUnits("300", 6);
@@ -98,7 +106,7 @@ describe("Withdraw VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

@@ -1,5 +1,4 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -15,6 +14,7 @@ describe("AuthorizationMarketV1", () => {
   describe("authorization requirements", () => {
     test("should return a setAuthorization tx with correct properties when GeneralAdapter1 is not authorized", async ({
       client,
+      publicClient,
     }) => {
       const {
         morpho,
@@ -28,7 +28,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client as unknown as PublicClient);
+      const morphoClient = new MorphoClient(publicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
@@ -50,6 +50,7 @@ describe("AuthorizationMarketV1", () => {
 
     test("should include setAuthorization in both borrow and supplyCollateralBorrow requirements", async ({
       client,
+      publicClient,
     }) => {
       await supplyCollateral({
         client,
@@ -58,7 +59,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client as unknown as PublicClient);
+      const morphoClient = new MorphoClient(publicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
@@ -87,6 +88,7 @@ describe("AuthorizationMarketV1", () => {
 
     test("should return no setAuthorization requirement when GeneralAdapter1 is already authorized", async ({
       client,
+      publicClient,
     }) => {
       await supplyCollateral({
         client,
@@ -95,7 +97,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client as unknown as PublicClient);
+      const morphoClient = new MorphoClient(publicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 

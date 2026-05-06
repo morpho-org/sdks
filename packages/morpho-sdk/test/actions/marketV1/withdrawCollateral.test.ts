@@ -1,5 +1,4 @@
 import type { AccrualPosition } from "@morpho-org/blue-sdk";
-import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -18,7 +17,10 @@ import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("WithdrawCollateralMarketV1", () => {
-  test("should create withdrawCollateral bundle", async ({ client }) => {
+  test("should create withdrawCollateral bundle", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
 
     await supplyCollateral({
@@ -28,7 +30,7 @@ describe("WithdrawCollateralMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -52,7 +54,10 @@ describe("WithdrawCollateralMarketV1", () => {
     expect(directTx).toStrictEqual(tx);
   });
 
-  test("should withdraw collateral (no debt)", async ({ client }) => {
+  test("should withdraw collateral (no debt)", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
     const withdrawAmount = parseUnits("5", 18);
 
@@ -73,9 +78,7 @@ describe("WithdrawCollateralMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -105,7 +108,10 @@ describe("WithdrawCollateralMarketV1", () => {
   });
 
   // full withdraw
-  test("should full withdraw collateral (no debt)", async ({ client }) => {
+  test("should full withdraw collateral (no debt)", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
     const withdrawAmount = collateralAmount;
 
@@ -124,9 +130,7 @@ describe("WithdrawCollateralMarketV1", () => {
       client,
       params: { markets: { WethUsdsMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -148,6 +152,7 @@ describe("WithdrawCollateralMarketV1", () => {
 
   test("should throw when withdraw makes position unhealthy", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -165,7 +170,7 @@ describe("WithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -179,7 +184,10 @@ describe("WithdrawCollateralMarketV1", () => {
     ).toThrow(WithdrawMakesPositionUnhealthyError);
   });
 
-  test("should throw when withdraw exceeds collateral", async ({ client }) => {
+  test("should throw when withdraw exceeds collateral", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
 
     await supplyCollateral({
@@ -197,7 +205,7 @@ describe("WithdrawCollateralMarketV1", () => {
       borrowAmount: parseUnits("100", 18),
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -212,8 +220,9 @@ describe("WithdrawCollateralMarketV1", () => {
 
   test("should throw when withdraw amount is non-positive", async ({
     client,
+    publicClient,
   }) => {
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -228,8 +237,9 @@ describe("WithdrawCollateralMarketV1", () => {
 
   test("should revert when positionData is not provided", async ({
     client,
+    publicClient,
   }) => {
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>
@@ -241,7 +251,10 @@ describe("WithdrawCollateralMarketV1", () => {
     ).toThrow(MissingAccrualPositionError);
   });
 
-  test("should return deep-frozen transaction", async ({ client }) => {
+  test("should return deep-frozen transaction", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 18);
 
     await supplyCollateral({
@@ -251,7 +264,7 @@ describe("WithdrawCollateralMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 

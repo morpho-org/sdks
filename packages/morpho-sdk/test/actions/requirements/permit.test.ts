@@ -1,4 +1,3 @@
-import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -8,7 +7,10 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("Permit", () => {
-  test("should deposit USDC with permit version 2", async ({ client }) => {
+  test("should deposit USDC with permit version 2", async ({
+    client,
+    publicClient,
+  }) => {
     const amount = parseUnits("10", 6);
 
     await client.deal({
@@ -26,7 +28,7 @@ describe("Permit", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
 

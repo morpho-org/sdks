@@ -4,7 +4,6 @@ import {
   getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
-import type { PublicClient } from "viem";
 
 import { encodeFunctionData, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -30,11 +29,14 @@ import { supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("SupplyCollateralBorrowMarketV1", () => {
-  test("should create supply collateral borrow bundle", async ({ client }) => {
+  test("should create supply collateral borrow bundle", async ({
+    client,
+    publicClient,
+  }) => {
     const amount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -69,6 +71,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
   test("should supply collateral and borrow with ERC20 approval and authorization", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -83,9 +86,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
       client,
       params: { markets: { WethUsdsMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -143,6 +144,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
   test("should supply collateral with native ETH only and borrow", async ({
     client,
+    publicClient,
   }) => {
     const nativeAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -160,9 +162,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
       client,
       params: { markets: { WethUsdsMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -214,6 +214,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
   test("should supply mixed collateral (ERC20 + native ETH) and borrow", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("5", 18);
     const nativeAmount = parseUnits("5", 18);
@@ -234,9 +235,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
       client,
       params: { markets: { WethUsdsMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -294,6 +293,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
   test("should require only ERC20 approval when GeneralAdapter1 is already authorized", async ({
     client,
+    publicClient,
   }) => {
     const {
       morpho,
@@ -322,9 +322,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
       client,
       params: { markets: { WethUsdsMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -367,6 +365,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
   test("should supply collateral and borrow with permit (EIP-2612) and authorization", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("1", 18);
     const borrowAmount = parseUnits("10000", 6);
@@ -384,12 +383,9 @@ describe("SupplyCollateralBorrowMarketV1", () => {
       client,
       params: { markets: { UsdcEurcvMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-          {
-            supportSignature: true,
-          },
-        );
+        const morphoClient = new MorphoClient(publicClient, {
+          supportSignature: true,
+        });
         const market = morphoClient.marketV1(UsdcEurcvMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -451,6 +447,7 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
   test("should supply collateral and borrow with permit2 and authorization", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -468,12 +465,9 @@ describe("SupplyCollateralBorrowMarketV1", () => {
       client,
       params: { markets: { WethUsdsMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-          {
-            supportSignature: true,
-          },
-        );
+        const morphoClient = new MorphoClient(publicClient, {
+          supportSignature: true,
+        });
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -544,8 +538,9 @@ describe("SupplyCollateralBorrowMarketV1", () => {
   describe("errors", () => {
     test("should throw MissingAccrualPositionError when positionData is not provided", async ({
       client,
+      publicClient,
     }) => {
-      const morphoClient = new MorphoClient(client as unknown as PublicClient);
+      const morphoClient = new MorphoClient(publicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
       expect(() =>
@@ -560,8 +555,9 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
     test("should throw BorrowExceedsSafeLtvError when borrow exceeds LLTV buffer", async ({
       client,
+      publicClient,
     }) => {
-      const morphoClient = new MorphoClient(client as unknown as PublicClient);
+      const morphoClient = new MorphoClient(publicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
@@ -577,8 +573,9 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
     test("should throw BorrowExceedsSafeLtvError when borrow exceeds LLTV buffer on existing position", async ({
       client,
+      publicClient,
     }) => {
-      const morphoClient = new MorphoClient(client as unknown as PublicClient);
+      const morphoClient = new MorphoClient(publicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
       await supplyCollateral({
@@ -604,8 +601,9 @@ describe("SupplyCollateralBorrowMarketV1", () => {
 
     test("should throw ExcessiveSlippageToleranceError for slippage above maximum", async ({
       client,
+      publicClient,
     }) => {
-      const morphoClient = new MorphoClient(client as unknown as PublicClient);
+      const morphoClient = new MorphoClient(publicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 

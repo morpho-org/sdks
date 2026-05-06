@@ -1,6 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
-import type { PublicClient } from "viem";
 
 import { type Address, encodeFunctionData, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -31,7 +30,10 @@ import { test } from "../../setup.js";
 const PA_ADMIN: Address = "0x9E9110cFd24cd851ea5bc73a27975B33E308f9e1";
 
 describe("Borrow with single vault reallocation (e2e)", () => {
-  test("should borrow with reallocation from one vault", async ({ client }) => {
+  test("should borrow with reallocation from one vault", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 8); // cbBTC 8 decimals
     const borrowAmount = parseUnits("1000", 6); // USDC 6 decimals
     const reallocationAmount = parseUnits("2000", 6);
@@ -66,9 +68,7 @@ describe("Borrow with single vault reallocation (e2e)", () => {
         markets: { CbbtcUsdcMarketV1, WbtcUsdcSourceMarket },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -114,6 +114,7 @@ describe("Borrow with single vault reallocation (e2e)", () => {
 describe("Borrow with multiple source market withdrawals", () => {
   test("should borrow with reallocation withdrawing from two source markets", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("10", 8);
     const borrowAmount = parseUnits("2000", 6);
@@ -153,9 +154,7 @@ describe("Borrow with multiple source market withdrawals", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -199,7 +198,10 @@ describe("Borrow with multiple source market withdrawals", () => {
 });
 
 describe("Borrow with reallocation fee", () => {
-  test("should borrow with non-zero reallocation fee", async ({ client }) => {
+  test("should borrow with non-zero reallocation fee", async ({
+    client,
+    publicClient,
+  }) => {
     const collateralAmount = parseUnits("10", 8);
     const borrowAmount = parseUnits("1000", 6);
     const reallocationFee = parseUnits("0.01", 18); // 0.01 ETH
@@ -256,9 +258,7 @@ describe("Borrow with reallocation fee", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -316,6 +316,7 @@ describe("Borrow with reallocation fee", () => {
 describe("SupplyCollateralBorrow with single vault reallocation", () => {
   test("should supply collateral and borrow with reallocation from one vault", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("10", 8);
     const borrowAmount = parseUnits("1000", 6);
@@ -347,9 +348,7 @@ describe("SupplyCollateralBorrow with single vault reallocation", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -407,6 +406,7 @@ describe("SupplyCollateralBorrow with single vault reallocation", () => {
 describe("SupplyCollateralBorrow with multiple source market withdrawals", () => {
   test("should supply collateral and borrow with reallocation from two source markets", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("10", 8);
     const borrowAmount = parseUnits("2000", 6);
@@ -443,9 +443,7 @@ describe("SupplyCollateralBorrow with multiple source market withdrawals", () =>
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -503,6 +501,7 @@ describe("SupplyCollateralBorrow with multiple source market withdrawals", () =>
 describe("SupplyCollateralBorrow with reallocation fee", () => {
   test("should supply collateral and borrow with non-zero reallocation fee", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("10", 8);
     const borrowAmount = parseUnits("1000", 6);
@@ -558,9 +557,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -631,6 +628,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
 describe("getReallocationData and getReallocations", () => {
   test("should compute reallocations and borrow using getReallocationData + getReallocations", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("1000", 8);
     const borrowAmount = parseUnits("50000000", 6);
@@ -652,9 +650,7 @@ describe("getReallocationData and getReallocations", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -713,6 +709,7 @@ describe("getReallocationData and getReallocations", () => {
 
   test("should compute reallocations for supplyCollateralBorrow", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("1000", 8);
     const borrowAmount = parseUnits("50000000", 6);
@@ -732,9 +729,7 @@ describe("getReallocationData and getReallocations", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -793,10 +788,11 @@ describe("getReallocationData and getReallocations", () => {
 
   test("should return empty reallocations when liquidity is sufficient", async ({
     client,
+    publicClient,
   }) => {
     const borrowAmount = parseUnits("1", 6); // tiny borrow, liquidity is sufficient
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const block = await client.getBlock();

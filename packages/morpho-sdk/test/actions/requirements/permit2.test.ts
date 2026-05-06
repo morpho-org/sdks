@@ -1,5 +1,4 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
-import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -26,6 +25,7 @@ describe("Permit2", () => {
 
   test("should deposit USDT with permit2 with prior reset", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("1000", 18);
     await client.deal({
@@ -48,7 +48,7 @@ describe("Permit2", () => {
         vaults: { Re7UsdtVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
         const vault = morpho.vaultV2(Re7UsdtVaultV2.address, mainnet.id);
@@ -121,6 +121,7 @@ describe("Permit2", () => {
 
   test("should deposit USDT with permit2 with allowance 0", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("1000", 18);
     await client.deal({
@@ -138,7 +139,7 @@ describe("Permit2", () => {
         vaults: { Re7UsdtVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
         const vault = morpho.vaultV2(Re7UsdtVaultV2.address, mainnet.id);
@@ -199,6 +200,7 @@ describe("Permit2", () => {
 
   test("should deposit WETH approval already sufficient on general adapter", async ({
     client,
+    publicClient,
   }) => {
     const { wNative } = addressesRegistry[mainnet.id];
     const amount = parseUnits("0.5", 18);
@@ -223,7 +225,7 @@ describe("Permit2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient, {
+        const morpho = new MorphoClient(publicClient, {
           supportSignature: true,
         });
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
@@ -253,7 +255,7 @@ describe("Permit2", () => {
     );
   });
 
-  test("should deposit DAI with permit2", async ({ client }) => {
+  test("should deposit DAI with permit2", async ({ client, publicClient }) => {
     const amount = parseUnits("10", 18);
 
     await client.deal({
@@ -271,7 +273,7 @@ describe("Permit2", () => {
       asset: dai,
     } as const;
 
-    const morpho = new MorphoClient(client as unknown as PublicClient, {
+    const morpho = new MorphoClient(publicClient, {
       supportSignature: true,
     });
     const vault = morpho.vaultV2(address, mainnet.id);
@@ -348,6 +350,7 @@ describe("Permit2", () => {
 
   test("should deposit USDC with permit2 with useSimplePermit to false", async ({
     client,
+    publicClient,
   }) => {
     const amount = parseUnits("1000", 6);
 
@@ -356,7 +359,7 @@ describe("Permit2", () => {
       amount,
     });
 
-    const morpho = new MorphoClient(client as unknown as PublicClient, {
+    const morpho = new MorphoClient(publicClient, {
       supportSignature: true,
     });
     const vault = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);

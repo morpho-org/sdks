@@ -4,7 +4,6 @@ import {
   MathLib,
   SharesMath,
 } from "@morpho-org/blue-sdk";
-import type { PublicClient } from "viem";
 
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -23,7 +22,7 @@ import { supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("BorrowMarketV1", () => {
-  test("should create borrow bundle", async ({ client }) => {
+  test("should create borrow bundle", async ({ client, publicClient }) => {
     const collateralAmount = parseUnits("10", 18);
     const amount = parseUnits("100", 18);
 
@@ -34,7 +33,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -66,6 +65,7 @@ describe("BorrowMarketV1", () => {
 
   test("should compute minSharePrice from real market borrow state", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("10", 18);
     await client.deal({
@@ -79,7 +79,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -103,7 +103,7 @@ describe("BorrowMarketV1", () => {
     expect(tx.action.args.minSharePrice).toBeGreaterThan(0n);
   });
 
-  test("should borrow loan token", async ({ client }) => {
+  test("should borrow loan token", async ({ client, publicClient }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
 
@@ -124,9 +124,7 @@ describe("BorrowMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(
-          client as unknown as PublicClient,
-        );
+        const morphoClient = new MorphoClient(publicClient);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -175,6 +173,7 @@ describe("BorrowMarketV1", () => {
   // Test to create a new position exceeding the LLTV buffer
   test("should throw error when creating a new position exceeding the LLTV buffer", async ({
     client,
+    publicClient,
   }) => {
     const collateralAmount = parseUnits("1", 18);
     const borrowAmount = parseUnits("10000", 18);
@@ -186,7 +185,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -201,8 +200,9 @@ describe("BorrowMarketV1", () => {
 
   test("should revert when positionData is not provided", async ({
     client,
+    publicClient,
   }) => {
-    const morphoClient = new MorphoClient(client as unknown as PublicClient);
+    const morphoClient = new MorphoClient(publicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>

@@ -1,11 +1,10 @@
-import type { PublicClient } from "viem";
 import { describe, expect } from "vitest";
 import { MorphoClient } from "../src/client/index.js";
 import { test } from "./setup.js";
 
 describe("MorphoClient", () => {
-  test("should create a morpho client", ({ client }) => {
-    const morpho = new MorphoClient(client as unknown as PublicClient);
+  test("should create a morpho client", ({ publicClient }) => {
+    const morpho = new MorphoClient(publicClient);
 
     expect(morpho).toBeDefined();
     expect(morpho.viemClient).toBeDefined();

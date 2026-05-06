@@ -1,4 +1,3 @@
-import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -12,8 +11,8 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("DepositVaultV2", () => {
-  test("should create deposit bundle", async ({ client }) => {
-    const morpho = new MorphoClient(client as unknown as PublicClient);
+  test("should create deposit bundle", async ({ client, publicClient }) => {
+    const morpho = new MorphoClient(publicClient);
 
     const vault = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
     const accrualVault = await vault.getData();
@@ -46,7 +45,10 @@ describe("DepositVaultV2", () => {
     expect(data.address).toStrictEqual(KeyrockUsdcVaultV2.address);
   });
 
-  test("should deposit 1K USDC in vaultV2", async ({ client }) => {
+  test("should deposit 1K USDC in vaultV2", async ({
+    client,
+    publicClient,
+  }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({
       erc20: KeyrockUsdcVaultV2.asset,
@@ -63,7 +65,7 @@ describe("DepositVaultV2", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
         const accrualVault = await vaultV2.getData();
         const deposit = vaultV2.deposit({

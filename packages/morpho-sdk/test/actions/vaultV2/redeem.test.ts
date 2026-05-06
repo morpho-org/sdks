@@ -1,4 +1,3 @@
-import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -8,8 +7,8 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("Redeem VaultV2", () => {
-  test("should create redeem transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client as unknown as PublicClient);
+  test("should create redeem transaction", async ({ client, publicClient }) => {
+    const morpho = new MorphoClient(publicClient);
 
     const redeem = morpho
       .vaultV2(KeyrockUsdcVaultV2.address, mainnet.id)
@@ -34,7 +33,7 @@ describe("Redeem VaultV2", () => {
     expect(tx_1).toStrictEqual(tx_2);
   });
 
-  test("should redeem 1K USDC in vaultV2", async ({ client }) => {
+  test("should redeem 1K USDC in vaultV2", async ({ client, publicClient }) => {
     const shares = parseUnits("1000", 18);
     await client.deal({
       erc20: KeyrockUsdcVaultV2.address,
@@ -51,7 +50,7 @@ describe("Redeem VaultV2", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client as unknown as PublicClient);
+        const morpho = new MorphoClient(publicClient);
         const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
         const redeem = vaultV2.redeem({
           userAddress: client.account.address,
