@@ -233,8 +233,7 @@ describe("wrapEntityInstance", () => {
     class WithSymbol extends MorphoEntity {
       [sym] = { buildTx: () => validTx() };
     }
-    const wrapped: Record<symbol, { buildTx: () => unknown }> =
-      wrapEntityInstance("e", new WithSymbol(stubClient));
+    const wrapped = wrapEntityInstance("e", new WithSymbol(stubClient));
     // Symbol-keyed read returns the raw value (no Proxy wrapping). The contained `buildTx` is
     // therefore NOT validated through `wrapAction`.
     expect(wrapped[sym].buildTx()).toMatchObject({ to: validTx().to });
