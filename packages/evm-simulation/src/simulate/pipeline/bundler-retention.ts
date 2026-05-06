@@ -61,7 +61,7 @@ function getBundlerAddresses(
 
 interface AssertNoBundlerRetentionParams {
   chainId: number;
-  transfers: readonly Transfer[];
+  transfers: Transfer[];
   logger?: SimulationLogger;
 }
 

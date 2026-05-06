@@ -224,7 +224,11 @@ async function simulateSingle(params: {
   const data = tenderlyRawResponseSchema.parse(await response.json());
   const call = parseTenderlyCall(data);
 
-  let tenderlyUrl: string | undefined;
+  let tenderlyUrl: string | undefined =
+    shareable && data.simulation.id
+      ? `https://dashboard.tenderly.co/shared/simulation/${data.simulation.id}`
+      : undefined;
+
   if (shareable && data.simulation.id) {
     const shared = await shareSimulation({
       baseUrl,
@@ -233,9 +237,7 @@ async function simulateSingle(params: {
       signal,
       logger,
     });
-    if (shared) {
-      tenderlyUrl = `https://dashboard.tenderly.co/shared/simulation/${data.simulation.id}`;
-    }
+    if (!shared) tenderlyUrl = undefined;
   }
 
   return { calls: [call], tenderlyUrl };
@@ -292,7 +294,11 @@ async function simulateBundle(params: {
   const lastSim = simulations[simulations.length - 1]!;
   const lastSimulationId = lastSim.simulation.id;
 
-  let tenderlyUrl: string | undefined;
+  let tenderlyUrl: string | undefined =
+    shareable && lastSimulationId
+      ? `https://dashboard.tenderly.co/shared/simulation/${lastSimulationId}`
+      : undefined;
+
   if (shareable && lastSimulationId) {
     const shared = await shareSimulation({
       baseUrl,
@@ -301,9 +307,7 @@ async function simulateBundle(params: {
       signal,
       logger,
     });
-    if (shared) {
-      tenderlyUrl = `https://dashboard.tenderly.co/shared/simulation/${lastSimulationId}`;
-    }
+    if (!shared) tenderlyUrl = undefined;
   }
 
   return { calls, tenderlyUrl };
@@ -313,7 +317,7 @@ async function simulateBundle(params: {
  * Try to make a simulation publicly shareable. Returns true iff Tenderly's
  * `/share` endpoint responded 2xx. On any other outcome (non-ok response,
  * abort, network error), logs via `logger` and returns false — the caller
- * does not set `tenderlyUrl`. `AbortError` is re-thrown so cancellation
+ * then clears `tenderlyUrl`. `AbortError` is re-thrown so cancellation
  * propagates cleanly instead of silently downgrading to "no URL".
  */
 async function shareSimulation(params: {
@@ -333,7 +337,7 @@ async function shareSimulation(params: {
     });
     if (!response.ok) {
       logger?.warn(
-        "Tenderly /share returned non-ok; tenderlyUrl will not be set",
+        "Tenderly /share returned non-ok; tenderlyUrl will be cleared",
         {
           simulationId,
           status: response.status,
@@ -346,7 +350,7 @@ async function shareSimulation(params: {
   } catch (error) {
     // Propagate cancellation; swallow only genuine fetch-layer failures.
     if (error instanceof Error && error.name === "AbortError") throw error;
-    logger?.warn("Tenderly /share fetch failed; tenderlyUrl will not be set", {
+    logger?.warn("Tenderly /share fetch failed; tenderlyUrl will be cleared", {
       simulationId,
       error: error instanceof Error ? error.message : String(error),
     });

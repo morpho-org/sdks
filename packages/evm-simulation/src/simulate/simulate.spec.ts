@@ -213,10 +213,19 @@ describe.sequential("simulate — success", () => {
 
 describe.sequential("simulate — authorizations", () => {
   it("resolves signature authorizations into prepended approve() calls", async () => {
-    const logs = [
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
-    ];
-    mockTenderlyRest.mockResolvedValueOnce(makeSuccessResult(logs));
+    const transferLog = makeTransferLog({
+      token: USDC,
+      from: USER,
+      to: VAULT,
+      amount: 1000000n,
+    });
+    // 2 txs: approve (no logs) + main (transfer log)
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+        { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
+      ],
+    });
 
     const auths: SimulationAuthorization[] = [
       { type: "signature", token: USDC, spender: SPENDER },
@@ -244,10 +253,20 @@ describe.sequential("simulate — authorizations", () => {
   });
 
   it("passes approval-type authorization txs through as-is (USDT-style reset)", async () => {
-    const logs = [
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
-    ];
-    mockTenderlyRest.mockResolvedValueOnce(makeSuccessResult(logs));
+    const transferLog = makeTransferLog({
+      token: USDC,
+      from: USER,
+      to: VAULT,
+      amount: 1000000n,
+    });
+    // 3 txs: reset-approve (no logs) + approve (no logs) + main (transfer log)
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+        { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
+      ],
+    });
 
     const resetApproveTx = {
       from: USER,
@@ -299,6 +318,21 @@ describe.sequential("simulate — error handling", () => {
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       ExternalServiceError,
     );
+  });
+
+  it("error: ExternalServiceError when backend returns fewer calls than transactions", async () => {
+    // Simulate a partial/malformed backend response: 1 call for 2 txs
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [{ logs: [], status: true, returnData: "0x", gasUsed: 0n }],
+    });
+
+    const auths: SimulationAuthorization[] = [
+      { type: "signature", token: USDC, spender: SPENDER },
+    ];
+
+    await expect(
+      simulate(makeConfig(), makeParams({ authorizations: auths })),
+    ).rejects.toThrow(ExternalServiceError);
   });
 
   it("throws SimulationRevertedError even when signature authorizations are present", async () => {
@@ -452,13 +486,19 @@ describe.sequential("simulate — validation", () => {
   });
 
   it("accepts mixed-case from addresses that checksum to the same address", async () => {
-    mockTenderlyRest.mockResolvedValueOnce(makeSuccessResult([]));
-
     // Real mixed-case address — checksum form vs lowercase differ byte-for-byte,
     // so the case-normalization path is actually exercised.
     const checksum: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
     const lower = checksum.toLowerCase() as Address;
     expect(checksum).not.toBe(lower); // sanity
+
+    // 2 txs — mock must return 2 calls to satisfy the length check
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+      ],
+    });
 
     await expect(
       simulate(

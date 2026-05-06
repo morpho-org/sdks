@@ -1,3 +1,4 @@
+import { ExternalServiceError } from "../errors.js";
 import type {
   SimulateParams,
   SimulationConfig,
@@ -84,6 +85,12 @@ export async function simulate(
     blockNumber: params.blockNumber,
     shareable,
   });
+  if (result.calls.length !== simulationTxs.length) {
+    throw new ExternalServiceError(
+      `Backend returned ${result.calls.length} call result(s) for ${simulationTxs.length} transaction(s) — refusing to map transfers with mismatched lengths`,
+    );
+  }
+
   const transfers = parseTransfers(result.calls, config.logger);
 
   assertNoBundlerRetention({
