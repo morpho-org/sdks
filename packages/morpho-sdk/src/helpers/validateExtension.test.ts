@@ -55,7 +55,7 @@ class BadEntity {
 describe("validateExtensionMap", () => {
   test("default", () => {
     expect(() =>
-      validateExtensionMap({ myEntity: GoodEntity }, []),
+      validateExtensionMap({ myEntity: GoodEntity }, {}),
     ).not.toThrow();
   });
 
@@ -74,13 +74,12 @@ describe("validateExtensionMap", () => {
     );
   });
 
-  test("error: invalid name", () => {
-    expect(() =>
-      validateExtensionMap({ "Bad-Name": GoodEntity }, {}),
-    ).toThrowError(InvalidExtensionNameError);
-    expect(() =>
-      validateExtensionMap({ _hidden: GoodEntity }, {}),
-    ).toThrowError(InvalidExtensionNameError);
+  test("error: invalid name (hyphen, leading underscore, uppercase, unicode, emoji, empty)", () => {
+    for (const bad of ["Bad-Name", "_hidden", "MyEntity", "café", "🚀", ""]) {
+      expect(() =>
+        validateExtensionMap({ [bad]: GoodEntity }, {}),
+      ).toThrowError(InvalidExtensionNameError);
+    }
   });
 
   test("error: collision with built-in client member (vaultV1)", () => {
@@ -281,6 +280,59 @@ describe("wrapEntityInstance", () => {
     }
     const wrapped = wrapEntityInstance("e", new Malformed(stubClient));
     expect(() => wrapped.doThing()).toThrowError(InvalidActionShapeError);
+  });
+
+  test("error: async action method throws InvalidActionShapeError (sync-only contract)", () => {
+    class Async extends MorphoEntity {
+      async deposit() {
+        return { buildTx: () => validTx() };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Async(stubClient));
+    expect(() => wrapped.deposit()).toThrowError(InvalidActionShapeError);
+  });
+
+  test("behavior: extra fields on the action object are preserved through the wrapper", () => {
+    class Rich extends MorphoEntity {
+      doThing() {
+        return {
+          buildTx: () => validTx(),
+          description: "deposit and forget",
+          version: 2,
+        };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Rich(stubClient));
+    const action = wrapped.doThing() as ReturnType<Rich["doThing"]>;
+    expect(action.description).toBe("deposit and forget");
+    expect(action.version).toBe(2);
+    expect(action.buildTx().to).toBe(validTx().to);
+  });
+
+  test("error: tx with value as number (non-bigint) throws InvalidTransactionShapeError", () => {
+    class Bad extends MorphoEntity {
+      a() {
+        return { buildTx: () => ({ ...validTx(), value: 0 }) };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Bad(stubClient));
+    expect(() => wrapped.a().buildTx()).toThrowError(
+      InvalidTransactionShapeError,
+    );
+  });
+
+  test("error: tx with non-string action.type throws", () => {
+    class Bad extends MorphoEntity {
+      a() {
+        return {
+          buildTx: () => ({ ...validTx(), action: { type: 42, args: {} } }),
+        };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Bad(stubClient));
+    expect(() => wrapped.a().buildTx()).toThrowError(
+      InvalidTransactionShapeError,
+    );
   });
 
   test("default: getRequirements accepts integrator-defined Requirement shape", async () => {

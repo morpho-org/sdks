@@ -190,8 +190,12 @@ const tx = action.buildTx();                           // validated structurally
 - `types/error.ts`: `ExtensionNameCollisionError`, `InvalidExtensionNameError`,
   `InvalidExtensionShapeError`, `InvalidEntityClassError`, `InvalidActionShapeError`,
   `InvalidTransactionShapeError`, `InvalidRequirementShapeError`.
-- `helpers/validateExtension.ts`: `RESERVED_MORPHO_CLIENT_NAMES`, `validateExtensionMap`,
-  `wrapEntityInstance`. Internal but co-tested.
+- `helpers/validateExtension.ts`: `validateExtensionMap` (delegates collision detection to
+  `name in client` against the live instance, so no hardcoded reserved list is maintained), the
+  `PROMISE_TRAP_NAMES = { "then" }` constant for thenable-hijack defence, and
+  `wrapEntityInstance` (Proxy wrapper). All `@internal`, co-tested.
+- `helpers/typeGuards.ts`: shared `isPlainObject` used by both `types/action.ts` and
+  `helpers/validateExtension.ts` (single source of truth).
 - `client/morphoClient.ts`: `extend` method, internal third constructor arg holding the
   `ReadonlyMap<string, EntityConstructor>`.
 - `types/client.ts`: `MorphoClientType.extend` declaration.
@@ -282,7 +286,10 @@ in the future, and matches the existing built-in entity pattern exactly.
 
 - **Name collision is a hard error**, not a silent override. An integrator cannot shadow
   `vaultV1`, `marketV1`, `viemClient`, `options`, or `extend` themselves. Reserved names are
-  centralised in `RESERVED_MORPHO_CLIENT_NAMES` and the list is the single source of truth.
+  detected dynamically via `name in client` against the live `MorphoClient` instance — covering
+  built-ins, `Object.prototype` members, and previously registered extensions without a
+  hardcoded list. The `then` Promise-thenable trap is reserved separately (it is not on any
+  standard prototype).
 - **Identifier whitelist**: extension names must match `/^[a-z][a-zA-Z0-9]*$/`. Rejects accidental
   prototype-pollution-style keys (`__proto__`, `constructor`, `_internal`).
 - **Inheritance check**: every registered class must extend `MorphoEntity`. Prevents arbitrary

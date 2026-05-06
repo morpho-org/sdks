@@ -1,4 +1,5 @@
 import type { Address, Client, Hex } from "viem";
+import { isPlainObject } from "../helpers/typeGuards.js";
 import type { Deallocation } from "./deallocation.js";
 
 export interface BaseAction<
@@ -289,9 +290,6 @@ export interface RequirementSignature {
   action: PermitAction | Permit2Action;
 }
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 /**
  * Strict structural type-guard for {@link Transaction}. Returns `true` when `value` matches
  * `{ to: string, value: bigint, data: string, action: { type: string, args: object } }`.
@@ -330,6 +328,12 @@ export function isTransactionShape(
  *
  * @param value - Anything (typically a candidate requirement).
  * @returns `true` if the value is structurally a requirement.
+ * @example
+ * ```ts
+ * if (isRequirementShape(item)) {
+ *   await item.sign(client, userAddress);
+ * }
+ * ```
  */
 export function isRequirementShape(value: unknown): value is Requirement {
   return (
@@ -346,6 +350,12 @@ export function isRequirementShape(value: unknown): value is Requirement {
  *
  * @param requirement - Candidate requirement (or `undefined`).
  * @returns `true` if it's a `Transaction<ERC20ApprovalAction>`.
+ * @example
+ * ```ts
+ * if (isRequirementApproval(req)) {
+ *   await wallet.sendTransaction({ to: req.to, value: req.value, data: req.data });
+ * }
+ * ```
  */
 export function isRequirementApproval(
   requirement:
@@ -365,6 +375,12 @@ export function isRequirementApproval(
  *
  * @param requirement - Candidate requirement (or `undefined`).
  * @returns `true` if it's a `Transaction<MorphoAuthorizationAction>`.
+ * @example
+ * ```ts
+ * if (isRequirementAuthorization(req)) {
+ *   await wallet.sendTransaction({ to: req.to, value: req.value, data: req.data });
+ * }
+ * ```
  */
 export function isRequirementAuthorization(
   requirement:

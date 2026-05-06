@@ -87,6 +87,31 @@ describe("MorphoClient.extend", () => {
     expect(extended).not.toBe(original);
   });
 
+  test("behavior: 3-deep chained extends all remain reachable", () => {
+    class A extends MorphoEntity {
+      go() {
+        return { buildTx: () => sampleTx("0x0a") };
+      }
+    }
+    class B extends MorphoEntity {
+      go() {
+        return { buildTx: () => sampleTx("0x0b") };
+      }
+    }
+    class C extends MorphoEntity {
+      go() {
+        return { buildTx: () => sampleTx("0x0c") };
+      }
+    }
+    const c = new MorphoClient(stubViemClient)
+      .extend({ a: A })
+      .extend({ b: B })
+      .extend({ c: C });
+    expect(c.a().go().buildTx().to).toBe("0x0a");
+    expect(c.b().go().buildTx().to).toBe("0x0b");
+    expect(c.c().go().buildTx().to).toBe("0x0c");
+  });
+
   test("behavior: chained extends accumulate", () => {
     class Other extends MorphoEntity {
       go() {
@@ -112,12 +137,17 @@ describe("MorphoClient.extend", () => {
     expect(typeof client.marketV1).toBe("function");
   });
 
-  test("behavior: extension property is non-writable", () => {
+  test("behavior: extension property descriptor is locked down", () => {
     const client = new MorphoClient(stubViemClient).extend({
       myLending: MyLending,
     });
+    expect(Object.getOwnPropertyDescriptor(client, "myLending")).toMatchObject({
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    });
     expect(() => {
-      // biome-ignore lint/suspicious/noExplicitAny: probing runtime descriptor
+      // biome-ignore lint/suspicious/noExplicitAny: deliberate — assigning to a non-writable own property via a typed surface is a TS error; cast to any to test the runtime descriptor's `writable: false` enforcement.
       (client as any).myLending = "overwritten";
     }).toThrow();
   });
@@ -154,7 +184,7 @@ describe("MorphoClient.extend", () => {
   test("error: collision with reserved name (vaultV1)", () => {
     expect(() =>
       new MorphoClient(stubViemClient).extend({
-        // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
+        // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse — registering an integrator class under the built-in factory name `vaultV1` to assert the collision guard.
         vaultV1: MyLending as any,
       }),
     ).toThrowError(ExtensionNameCollisionError);
@@ -197,7 +227,7 @@ describe("MorphoClient.extend", () => {
   test("error: value is not a class", () => {
     expect(() =>
       new MorphoClient(stubViemClient).extend({
-        // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
+        // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse — passing a non-constructor value to assert the validator rejects it before reaching the prototype check.
         oops: "not a class" as any,
       }),
     ).toThrowError(InvalidEntityClassError);
@@ -207,7 +237,7 @@ describe("MorphoClient.extend", () => {
     class Naked {}
     expect(() =>
       new MorphoClient(stubViemClient).extend({
-        // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse
+        // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse — passing a class that does not extend MorphoEntity to assert the prototype-chain guard.
         oops: Naked as any,
       }),
     ).toThrowError(InvalidEntityClassError);

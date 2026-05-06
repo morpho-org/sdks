@@ -407,31 +407,37 @@ export class ExtensionNameCollisionError extends Error {
 }
 
 /**
- * Thrown by `MorphoClient.extend()` when an extension key is not a valid identifier (must match
- * `/^[a-z][a-zA-Z0-9]*$/`).
+ * Thrown by `MorphoClient.extend()` when an extension key is not a valid identifier.
+ *
+ * @param name - The invalid extension name.
  */
 export class InvalidExtensionNameError extends Error {
   constructor(name: string) {
     super(
-      `Extension name "${name}" is invalid. Names must match /^[a-z][a-zA-Z0-9]*$/.`,
+      `Extension name "${name}" is invalid. Rename to start with a lowercase letter and use only ASCII letters/digits (must match /^[a-z][a-zA-Z0-9]*$/).`,
     );
   }
 }
 
 /**
- * Thrown by `MorphoClient.extend()` when the extension map is not a non-empty record (or has a
- * value that is not a constructor — see {@link InvalidEntityClassError}).
+ * Thrown by `MorphoClient.extend()` when the extension map is not a non-empty record.
+ *
+ * @param reason - Human-readable description of which shape rule was violated.
  */
 export class InvalidExtensionShapeError extends Error {
   constructor(reason: string) {
-    super(`Invalid extension shape: ${reason}`);
+    super(
+      `Invalid extension shape: ${reason}. Pass a non-empty record of { name: EntityClass } to .extend().`,
+    );
   }
 }
 
 /**
  * Thrown by `MorphoClient.extend()` when an extension value is not a class extending
- * `MorphoEntity`. Every registered entity must subclass `MorphoEntity` so it inherits the
- * standard `client`-binding contract.
+ * `MorphoEntity`.
+ *
+ * @param name - The extension key that carried an invalid value.
+ * @param reason - Description of why the value did not qualify as an entity class.
  */
 export class InvalidEntityClassError extends Error {
   constructor(name: string, reason: string) {
@@ -442,27 +448,18 @@ export class InvalidEntityClassError extends Error {
 }
 
 /**
- * Thrown when an integrator-provided entity factory returns something that is not a record of
- * action methods. The entity name and the offending property/reason are included.
- */
-export class InvalidEntityShapeError extends Error {
-  constructor(entityName: string, reason: string) {
-    super(`Entity "${entityName}" returned an invalid shape: ${reason}`);
-  }
-}
-
-/**
  * Thrown when an integrator-provided action method returns an object missing `buildTx` (or whose
  * `buildTx` / `getRequirements` is not a function).
+ *
+ * @param entityName - Name the entity is registered under.
+ * @param methodName - Action method whose return failed validation.
+ * @param reason - Specific shape violation.
  */
 export class InvalidActionShapeError extends Error {
-  constructor(params: {
-    entityName: string;
-    methodName: string;
-    reason: string;
-  }) {
+  // biome-ignore lint/complexity/useMaxParams: typed error mirroring the three failure dimensions.
+  constructor(entityName: string, methodName: string, reason: string) {
     super(
-      `Action "${params.entityName}.${params.methodName}" has an invalid shape: ${params.reason}`,
+      `Action "${entityName}.${methodName}" has an invalid shape: ${reason}. Return { buildTx: () => Transaction, getRequirements?: () => Promise<readonly (Transaction | Requirement)[]> }.`,
     );
   }
 }
@@ -470,32 +467,40 @@ export class InvalidActionShapeError extends Error {
 /**
  * Thrown when an integrator-provided `buildTx()` returns an object that does not match the
  * `Transaction` shape (`{ to, value, data, action: { type, args } }`).
+ *
+ * @param entityName - Name the entity is registered under.
+ * @param methodName - Action method whose `buildTx()` returned an invalid value.
+ * @param reason - Specific field that failed the structural check.
  */
 export class InvalidTransactionShapeError extends Error {
-  constructor(params: {
-    entityName: string;
-    methodName: string;
-    reason: string;
-  }) {
+  // biome-ignore lint/complexity/useMaxParams: typed error mirroring the three failure dimensions.
+  constructor(entityName: string, methodName: string, reason: string) {
     super(
-      `Transaction returned by "${params.entityName}.${params.methodName}.buildTx()" has an invalid shape: ${params.reason}`,
+      `Transaction returned by "${entityName}.${methodName}.buildTx()" has an invalid shape: ${reason}. Return { to: Address, value: bigint, data: Hex, action: { type, args } }.`,
     );
   }
 }
 
 /**
  * Thrown when an integrator-provided `getRequirements()` resolves to an array whose entries do
- * not match `Transaction` or `Requirement` shapes. The failing index is included.
+ * not match `Transaction` or `Requirement` shapes.
+ *
+ * @param entityName - Name the entity is registered under.
+ * @param methodName - Action method whose `getRequirements()` resolved with an invalid item.
+ * @param index - Position of the failing item in the resolved array (`-1` if the resolved value
+ *   was not an array at all).
+ * @param reason - Specific structural check that failed.
  */
 export class InvalidRequirementShapeError extends Error {
-  constructor(params: {
-    entityName: string;
-    methodName: string;
-    index: number;
-    reason: string;
-  }) {
+  // biome-ignore lint/complexity/useMaxParams: typed error mirroring the four failure dimensions.
+  constructor(
+    entityName: string,
+    methodName: string,
+    index: number,
+    reason: string,
+  ) {
     super(
-      `Requirement at index ${params.index} returned by "${params.entityName}.${params.methodName}.getRequirements()" has an invalid shape: ${params.reason}`,
+      `Requirement at index ${index} returned by "${entityName}.${methodName}.getRequirements()" has an invalid shape: ${reason}. Each item must be a Transaction ({ to, value, data, action }) or a Requirement ({ sign, action }).`,
     );
   }
 }

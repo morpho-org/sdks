@@ -5,5 +5,4 @@ export * from "./entity.js";
 export * from "./error.js";
 export * from "./extension.js";
 export * from "./metadata.js";
-export * from "./morphoEntity.js";
 export * from "./sharedLiquidity.js";

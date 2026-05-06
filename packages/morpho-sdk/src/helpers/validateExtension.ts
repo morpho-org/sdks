@@ -1,6 +1,5 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: integrator-supplied entity methods are arbitrarily typed; the runtime Proxy pass-through accepts any args.
 import {
-  type EntityConstructor,
   type ExtensionAction,
   type ExtensionMap,
   ExtensionNameCollisionError,
@@ -14,6 +13,7 @@ import {
   isTransactionShape,
   MorphoEntity,
 } from "../types/index.js";
+import { isPlainObject } from "./typeGuards.js";
 
 /**
  * Names that would hijack the JavaScript Promise/thenable protocol if registered as an extension.
@@ -30,9 +30,6 @@ const PROMISE_TRAP_NAMES: ReadonlySet<string> = new Set(["then"]);
 
 const VALID_NAME_REGEX = /^[a-z][a-zA-Z0-9]*$/;
 
-const isPlainObject = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
 /**
  * Validates the top-level shape of an extension map and rejects naming collisions before
  * anything is registered. Collision detection is delegated to the live client instance via the
@@ -48,6 +45,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
  * @throws {ExtensionNameCollisionError} when a key already exists on `client` (built-in or
  *   previously registered) or matches a Promise-protocol trap name (`then`).
  * @throws {InvalidEntityClassError} when a value is not a class extending `MorphoEntity`.
+ * @internal
  */
 export function validateExtensionMap(
   map: unknown,
@@ -98,11 +96,25 @@ export function validateExtensionMap(
  * are passed through unchanged.
  *
  * The Proxy preserves `instanceof` against the integrator's class. Validation is non-destructive:
- * the integrator's freeze and metadata choices on the returned `Transaction` are preserved.
+ * extra fields the integrator placed on the action object are preserved alongside the
+ * standard-contract `buildTx` / `getRequirements`, and the integrator's freeze and metadata
+ * choices on the returned `Transaction` are preserved.
+ *
+ * Trade-offs to be aware of:
+ * - **Symbol-keyed reads bypass validation.** `Symbol.iterator`, `Symbol.toPrimitive`, etc. are
+ *   meta-protocol; intercepting them would break iteration / coercion. An entity exposing an
+ *   action via a Symbol key gets no shape check.
+ * - **Method `this` binding uses the raw target, not the Proxy receiver.** Nested calls like
+ *   `this.deposit(...)` from inside another method bypass the validating Proxy on the inner call.
+ *   Validation always runs at the outer public-method boundary.
+ * - **Async actions are rejected.** A method returning `Promise<{ buildTx, … }>` cannot be
+ *   structurally validated synchronously; `InvalidActionShapeError` is raised instead, mirroring
+ *   the SDK's "actions are sync" rule (root `AGENTS.md` §1).
  *
  * @param entityName - Name the entity is registered under (used in error messages).
  * @param instance - Freshly constructed entity instance.
  * @returns A Proxy over `instance`.
+ * @internal
  */
 export function wrapEntityInstance<T extends MorphoEntity>(
   entityName: string,
@@ -122,8 +134,15 @@ export function wrapEntityInstance<T extends MorphoEntity>(
             target,
             args,
           );
+          if (isThenable(result)) {
+            throw new InvalidActionShapeError(
+              entityName,
+              methodName,
+              "action methods must be synchronous (returned a Promise / thenable)",
+            );
+          }
           if (looksLikeActionAttempt(result)) {
-            return wrapAction({ entityName, methodName }, result);
+            return wrapAction(entityName, methodName, result);
           }
           return result;
         };
@@ -132,40 +151,55 @@ export function wrapEntityInstance<T extends MorphoEntity>(
       // (`{ buildTx, … }`), wrap-and-validate so getter-based actions get the same treatment as
       // method-based ones. Plain data passes through.
       if (looksLikeActionAttempt(value)) {
-        return wrapAction({ entityName, methodName }, value);
+        return wrapAction(entityName, methodName, value);
       }
       return value;
     },
   });
 }
 
-// "Looks like an action attempt" = the integrator put a `buildTx` key on the returned object.
-// Whether the value is callable is checked by `wrapAction`, which raises `InvalidActionShapeError`
-// when `buildTx` is not a function. This separation gives the integrator a typed error for
-// `{ buildTx: 42 }` instead of a confusing `TypeError: foo.buildTx is not a function` later.
+/**
+ * "Looks like an action attempt" = the integrator put a `buildTx` key on the returned object.
+ * Whether the value is callable is checked by `wrapAction`, which raises
+ * `InvalidActionShapeError` when `buildTx` is not a function. This separation gives the
+ * integrator a typed error for `{ buildTx: 42 }` instead of a confusing native `TypeError`.
+ */
 const looksLikeActionAttempt = (
   value: unknown,
-): value is { buildTx: unknown; getRequirements?: unknown } =>
-  isPlainObject(value) && "buildTx" in value;
+): value is { buildTx: unknown; getRequirements?: unknown } & Record<
+  string,
+  unknown
+> => isPlainObject(value) && "buildTx" in value;
 
+const isThenable = (value: unknown): boolean =>
+  isPlainObject(value) &&
+  typeof (value as { then?: unknown }).then === "function";
+
+// biome-ignore lint/complexity/useMaxParams: error-context (entityName, methodName) + payload — splitting would obscure the call site.
 function wrapAction(
-  ctx: { entityName: string; methodName: string },
-  action: { buildTx: unknown; getRequirements?: unknown },
+  entityName: string,
+  methodName: string,
+  action: { buildTx: unknown; getRequirements?: unknown } & Record<
+    string,
+    unknown
+  >,
 ): ExtensionAction {
   if (typeof action.buildTx !== "function") {
-    throw new InvalidActionShapeError({
-      ...ctx,
-      reason: `\`buildTx\` must be a function (got ${typeof action.buildTx})`,
-    });
+    throw new InvalidActionShapeError(
+      entityName,
+      methodName,
+      `\`buildTx\` must be a function (got ${typeof action.buildTx})`,
+    );
   }
   if (
     action.getRequirements !== undefined &&
     typeof action.getRequirements !== "function"
   ) {
-    throw new InvalidActionShapeError({
-      ...ctx,
-      reason: "`getRequirements` must be a function when provided",
-    });
+    throw new InvalidActionShapeError(
+      entityName,
+      methodName,
+      "`getRequirements` must be a function when provided",
+    );
   }
 
   const buildTx = action.buildTx as ExtensionAction["buildTx"];
@@ -173,72 +207,107 @@ function wrapAction(
     | ExtensionAction["getRequirements"]
     | undefined;
 
-  const wrapped: {
-    buildTx: (...args: any[]) => ReturnType<ExtensionAction["buildTx"]>;
-    getRequirements?: ExtensionAction["getRequirements"];
-  } = {
-    buildTx: (...buildArgs: any[]) => {
-      const tx = buildTx(...buildArgs);
-      assertValidTransactionShape(ctx, tx);
-      return tx;
-    },
+  // Spread to preserve any extra fields the integrator put on the action (description, version,
+  // helper sub-fields, …) alongside the validated contract methods.
+  const wrappedBuildTx = (...buildArgs: any[]) => {
+    const tx = buildTx(...buildArgs);
+    assertValidTransactionShape(entityName, methodName, tx);
+    return tx;
   };
-  if (getRequirements) {
-    wrapped.getRequirements = async (...reqArgs: any[]) => {
-      const requirements = await getRequirements(...reqArgs);
-      assertValidRequirementsShape(ctx, requirements);
-      return requirements;
-    };
-  }
-  return wrapped;
+  const wrappedGetRequirements = getRequirements
+    ? async (...reqArgs: any[]) => {
+        const requirements = await getRequirements(...reqArgs);
+        assertValidRequirementsShape(entityName, methodName, requirements);
+        return requirements;
+      }
+    : undefined;
+  return {
+    ...action,
+    buildTx: wrappedBuildTx,
+    ...(wrappedGetRequirements && { getRequirements: wrappedGetRequirements }),
+  } as ExtensionAction & Record<string, unknown>;
 }
 
+// biome-ignore lint/complexity/useMaxParams: error-context (entityName, methodName) + payload.
 function assertValidTransactionShape(
-  ctx: { entityName: string; methodName: string },
+  entityName: string,
+  methodName: string,
   tx: unknown,
 ): void {
-  const fail = (reason: string) => {
-    throw new InvalidTransactionShapeError({ ...ctx, reason });
-  };
-
-  if (!isPlainObject(tx)) fail("buildTx() did not return an object");
-  else if (typeof tx.to !== "string") fail("missing or non-string `to`");
-  else if (typeof tx.value !== "bigint") fail("missing or non-bigint `value`");
-  else if (typeof tx.data !== "string") fail("missing or non-string `data`");
-  else if (!isPlainObject(tx.action)) fail("missing `action` object");
-  else if (typeof tx.action.type !== "string")
-    fail("`action.type` must be a string");
-  else if (!isPlainObject(tx.action.args))
-    fail("`action.args` must be an object");
+  if (!isPlainObject(tx)) {
+    throw new InvalidTransactionShapeError(
+      entityName,
+      methodName,
+      "buildTx() did not return an object",
+    );
+  }
+  if (typeof tx.to !== "string") {
+    throw new InvalidTransactionShapeError(
+      entityName,
+      methodName,
+      "missing or non-string `to`",
+    );
+  }
+  if (typeof tx.value !== "bigint") {
+    throw new InvalidTransactionShapeError(
+      entityName,
+      methodName,
+      "missing or non-bigint `value`",
+    );
+  }
+  if (typeof tx.data !== "string") {
+    throw new InvalidTransactionShapeError(
+      entityName,
+      methodName,
+      "missing or non-string `data`",
+    );
+  }
+  if (!isPlainObject(tx.action)) {
+    throw new InvalidTransactionShapeError(
+      entityName,
+      methodName,
+      "missing `action` object",
+    );
+  }
+  if (typeof tx.action.type !== "string") {
+    throw new InvalidTransactionShapeError(
+      entityName,
+      methodName,
+      "`action.type` must be a string",
+    );
+  }
+  if (!isPlainObject(tx.action.args)) {
+    throw new InvalidTransactionShapeError(
+      entityName,
+      methodName,
+      "`action.args` must be an object",
+    );
+  }
 }
 
+// biome-ignore lint/complexity/useMaxParams: error-context (entityName, methodName) + payload.
 function assertValidRequirementsShape(
-  ctx: { entityName: string; methodName: string },
+  entityName: string,
+  methodName: string,
   requirements: unknown,
 ): void {
   if (!Array.isArray(requirements)) {
-    throw new InvalidRequirementShapeError({
-      ...ctx,
-      index: -1,
-      reason: "getRequirements() did not resolve to an array",
-    });
+    throw new InvalidRequirementShapeError(
+      entityName,
+      methodName,
+      -1,
+      "getRequirements() did not resolve to an array",
+    );
   }
   for (let i = 0; i < requirements.length; i++) {
     const item = requirements[i];
     if (!isTransactionShape(item) && !isRequirementShape(item)) {
-      throw new InvalidRequirementShapeError({
-        ...ctx,
-        index: i,
-        reason:
-          "item is neither a Transaction (`{ to, value, data, action }`) nor a Requirement (`{ sign, action }`)",
-      });
+      throw new InvalidRequirementShapeError(
+        entityName,
+        methodName,
+        i,
+        "item is neither a Transaction (`{ to, value, data, action }`) nor a Requirement (`{ sign, action }`)",
+      );
     }
   }
 }
-
-/**
- * Re-export so consumers can reference the same opaque type the validator narrows to.
- *
- * @internal
- */
-export type { EntityConstructor };

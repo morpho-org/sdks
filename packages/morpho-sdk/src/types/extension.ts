@@ -1,7 +1,7 @@
 // biome-ignore-all lint/suspicious/noExplicitAny: variadic generic constraints in this file require `any[]` to accept arbitrarily-typed integrator constructors and action signatures (cf. viem's extend pattern).
 import type { BaseAction, Requirement, Transaction } from "./action.js";
 import type { MorphoClientType } from "./client.js";
-import type { MorphoEntity } from "./morphoEntity.js";
+import type { MorphoEntity } from "./entity.js";
 
 /**
  * Shape every action returned by an integrator-defined entity method must satisfy.

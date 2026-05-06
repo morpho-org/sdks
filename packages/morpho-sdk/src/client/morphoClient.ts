@@ -26,12 +26,15 @@ import {
  * (`vaultV1`, `vaultV2`, `marketV1`) returns a fresh entity bound to this client.
  */
 export class MorphoClient implements MorphoClientType {
-  /** SDK-wide options resolved from the constructor's `_options` argument. */
-  readonly options: {
+  /** SDK-wide options resolved from the constructor's `_options` argument. Frozen at construction. */
+  readonly options: Readonly<{
     readonly supportSignature: boolean;
     readonly supportDeployless?: boolean;
     readonly metadata?: Metadata;
-  };
+  }>;
+
+  /** Entity classes registered through `.extend()`, surfaced as enumerable factory props on each instance. */
+  readonly #extensions: ReadonlyMap<string, EntityConstructor>;
 
   /**
    * @param viemClient - Connected viem `Client`. Public reads use it as-is; signature flows use
@@ -42,6 +45,9 @@ export class MorphoClient implements MorphoClientType {
    * @param _options.supportDeployless - Whether entity fetchers may use deployless multicall.
    * @param _options.metadata - Optional analytics metadata applied to every transaction this
    *   client builds.
+   * @param extensions - Internal: entity-class map carried over by `.extend()` when cloning.
+   *   Integrators must not pass this directly — call `.extend(map)` on an existing client instead.
+   *   Re-validated against the new instance to enforce the same invariants as the public path.
    * @example
    * ```ts
    * import { createWalletClient, http } from "viem";
@@ -54,10 +60,7 @@ export class MorphoClient implements MorphoClientType {
    * );
    * ```
    */
-  /** @internal Entity classes registered through `.extend()`, surfaced as enumerable factory props. */
-  private readonly _extensions: ReadonlyMap<string, EntityConstructor>;
-
-  // biome-ignore lint/complexity/useMaxParams: third arg is `@internal`, only used by `.extend()` to clone.
+  // biome-ignore lint/complexity/useMaxParams: third arg is internal, only used by `.extend()` to clone.
   constructor(
     public readonly viemClient: Client,
     readonly _options?: {
@@ -65,20 +68,22 @@ export class MorphoClient implements MorphoClientType {
       readonly supportDeployless?: boolean;
       readonly metadata?: Metadata;
     },
-    /**
-     * @internal Used by `.extend()` to carry registered entity classes when cloning. Integrators
-     * must not pass this directly — call `.extend(map)` on an existing client instead.
-     */
     extensions?: ReadonlyMap<string, EntityConstructor>,
   ) {
-    this.options = {
+    this.options = Object.freeze({
       ..._options,
       supportSignature: _options?.supportSignature ?? false,
       supportDeployless: _options?.supportDeployless,
-    };
+    });
 
-    this._extensions = extensions ?? new Map();
-    for (const [name, EntityClass] of this._extensions) {
+    this.#extensions = extensions ?? new Map();
+    if (extensions !== undefined && extensions.size > 0) {
+      // Re-validate the supplied map against this instance even though `.extend()` validated
+      // before cloning — this guards against direct `new MorphoClient(viem, opts, handMap)`
+      // callers bypassing the public path.
+      validateExtensionMap(Object.fromEntries(extensions), this);
+    }
+    for (const [name, EntityClass] of this.#extensions) {
       const factory = (...args: unknown[]) =>
         wrapEntityInstance(name, new EntityClass(this, ...args));
       Object.defineProperty(this, name, {
@@ -230,11 +235,15 @@ export class MorphoClient implements MorphoClientType {
   ): this & ExtensionInstances<TExtension> {
     validateExtensionMap(extensions, this);
 
-    const merged = new Map(this._extensions);
+    const merged = new Map(this.#extensions);
     for (const [name, EntityClass] of Object.entries(extensions)) {
       merged.set(name, EntityClass);
     }
 
+    // `this & ExtensionInstances<…>` is required so chained `.extend({…}).extend({…})`
+    // accumulates extension types. Subclassing `MorphoClient` is not a supported pattern; on a
+    // subclass the runtime instance is a plain `MorphoClient`, so the `this`-typed return loses
+    // subclass-only fields. Keep extensions chained from a base `MorphoClient` instance.
     return new MorphoClient(this.viemClient, this._options, merged) as this &
       ExtensionInstances<TExtension>;
   }

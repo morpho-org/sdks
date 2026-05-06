@@ -14,18 +14,28 @@ import type { Metadata } from "./index.js";
  * `extend` hook integrators use to attach custom entity classes.
  */
 export interface MorphoClientType {
+  /** Underlying viem client used for reads and (when configured) signature flows. */
   readonly viemClient: Client;
-  readonly options: {
+  /** SDK-wide options resolved from the constructor; frozen at construction. */
+  readonly options: Readonly<{
     readonly supportSignature: boolean;
     readonly supportDeployless?: boolean;
     readonly metadata?: Metadata;
-  };
+  }>;
 
+  /** Returns a `MorphoVaultV1` (MetaMorpho) entity bound to this client. */
   vaultV1: (vault: Address, chainId: number) => VaultV1Actions;
+  /** Returns a `MorphoVaultV2` entity bound to this client. */
   vaultV2: (vault: Address, chainId: number) => VaultV2Actions;
+  /** Returns a `MorphoMarketV1` entity bound to this client. */
   marketV1: (marketParams: MarketParams, chainId: number) => MarketV1Actions;
 
+  /**
+   * Returns a new client carrying the integrator-supplied entity classes alongside the
+   * built-ins. Returns `this & ExtensionInstances<TExtension>` so chained `.extend(...)` calls
+   * accumulate types.
+   */
   extend: <const TExtension extends ExtensionMap>(
     extensions: TExtension,
-  ) => MorphoClientType & ExtensionInstances<TExtension>;
+  ) => this & ExtensionInstances<TExtension>;
 }
