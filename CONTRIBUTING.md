@@ -96,6 +96,12 @@ pnpm changeset --empty
 
 Commit the generated `.changeset/*.md` file with the source change. Do not update package versions manually.
 
+### Changeset filename convention
+
+Rename the changeset file to `<package-short-name>-<new-version>.md`: put the package short name first, then the version the bump will produce. Example: a `minor` bump on `@morpho-org/morpho-sdk` from `1.2.0` becomes `.changeset/morpho-sdk-1.3.0.md`. This makes `git log` and `.changeset/` browsable at a glance and avoids the random slugs `pnpm changeset` generates.
+
+When a single changeset bumps several packages, name the file after the primary (most impacted) package and its new version, and list every package in the frontmatter as usual.
+
 This repository does not keep package `CHANGELOG.md` files in source. Changesets are configured with `"changelog": false`, so contributors should not add or edit changelog files as part of normal package changes.
 
 After changes land on `main` or `next`, CI runs `pnpm run version` (the repository script for `changeset version`) and commits generated version updates directly to that branch. The next CI run publishes only package versions that have not already been published. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag.

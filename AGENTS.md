@@ -141,7 +141,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 ## 7. Releases & versioning
 
 - **SemVer, strict.** Patch: bug fixes, internal changes, doc-only. Minor: additive surface, deprecations. Major: removed/renamed/retyped public symbols.
-- **CHANGELOG via Changesets** — every user-visible change ships with a changeset (review-only today).
+- **CHANGELOG via Changesets** — every user-visible change ships with a changeset (review-only today). Name non-empty changeset files `<package-short-name>-<new-version>.md`, with the package name first and the version the bump will produce second.
 - **`main` is always releasable.** Fork suite green per chain matrix.
 - **Pin ABIs and addresses in-package.** No runtime ABI fetch; no address drift between releases.
 - **4-step deprecation flow:** introduce successor → deprecate with `@deprecated` JSDoc → maintain both for one minor → remove in the next major. No silent removals.

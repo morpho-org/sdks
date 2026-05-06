@@ -81,7 +81,7 @@ Ask the user to confirm or adjust bumps and wording.
 
 Use `pnpm changeset` (interactive) when the user prefers the prompt, or write the file directly when running non-interactively.
 
-**Direct file form** (write to `.changeset/<short-kebab-name>.md`):
+**Direct file form** (write to `.changeset/<package-short-name>-<new-version>.md`):
 
 ```markdown
 ---
@@ -104,7 +104,7 @@ For docs/chore-only PRs, write an empty changeset:
 
 (Equivalent to `pnpm changeset --empty`.)
 
-The filename should be a short kebab-case slug derived from the change (e.g. `fix-permit-domain-validation.md`). Avoid auto-generated random names — they make `git log` harder to read.
+**Filename convention.** Name the file `<package-short-name>-<new-version>.md`: package short name first, then the version the bump will produce. Read the current `version` from the package's `package.json`, apply the chosen bump, and use the result. Example: a `minor` bump on `@morpho-org/morpho-sdk` currently at `1.2.0` → `.changeset/morpho-sdk-1.3.0.md`. When a single changeset bumps several packages, name it after the primary (most impacted) package and its new version. For empty changesets, use a short kebab-case description (e.g. `docs-readmes-license.md`). Never keep the auto-generated random slugs from `pnpm changeset` — they make `git log` and `.changeset/` unreadable.
 
 ### Step 5: Commit With the Source Change
 
