@@ -39,7 +39,7 @@
     "happy-dom": "^17.0.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.4.3",
-    "semver": "^7.7.1",
+    "semver": "^7.7.4",
     "typescript": "^5.7.2",
     "viem": "^2.33.3",
     "vitest": "^3.0.5"
