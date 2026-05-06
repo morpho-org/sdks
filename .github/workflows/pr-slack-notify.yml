@@ -72,7 +72,7 @@ jobs:
 
       - name: Get PR details
         id: pr
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           TEAMS: ${{ env.GITHUB_TEAMS }}
@@ -213,7 +213,7 @@ jobs:
 
       - name: Backfill PR body with existing thread reference
         if: steps.pr.outputs.skip != 'true' && steps.slack-check.outputs.found == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const ts = '${{ steps.slack-check.outputs.thread_ts }}';
@@ -254,7 +254,7 @@ jobs:
 
       - name: Update PR with Slack thread reference
         if: steps.pr.outputs.skip != 'true' && steps.slack-check.outputs.found != 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           # There can be a race condition between job executions (e.g. due to concurrent github events)
           # which will cause this step to overwrite the PR body and remove existing thread references.
@@ -284,7 +284,7 @@ jobs:
 
       - name: Send reviewer DMs
         if: steps.pr.outputs.skip != 'true' && steps.slack-check.outputs.found != 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           CHANNEL_ID: ${{ env.SLACK_CHANNEL_ID }}
@@ -420,7 +420,7 @@ jobs:
 
       - name: Check if this is a re-review request
         id: check-re-review
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           TEAMS: ${{ env.GITHUB_TEAMS }}
@@ -503,7 +503,7 @@ jobs:
 
       - name: Send re-review DM
         if: steps.check-re-review.outputs.is_re_review == 'true' && steps.get-ts.outputs.found == 'true' && steps.check-re-review.outputs.is_team != 'true' && steps.check-re-review.outputs.slack_id != ''
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           CHANNEL_ID: ${{ env.SLACK_CHANNEL_ID }}
@@ -545,7 +545,7 @@ jobs:
 
       - name: Send team re-review DMs
         if: steps.check-re-review.outputs.is_re_review == 'true' && steps.get-ts.outputs.found == 'true' && steps.check-re-review.outputs.is_team == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           CHANNEL_ID: ${{ env.SLACK_CHANNEL_ID }}
@@ -683,7 +683,7 @@ jobs:
       - name: Get PR details
         if: steps.get-ts.outputs.found == 'true'
         id: pr
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           TEAMS: ${{ env.GITHUB_TEAMS }}
@@ -789,7 +789,7 @@ jobs:
 
       - name: Send DM for new reviewer assignment
         if: steps.get-ts.outputs.found == 'true' && github.event.action == 'review_requested' && github.event.requested_reviewer
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -837,7 +837,7 @@ jobs:
 
       - name: Send DMs for new team reviewer assignment
         if: steps.get-ts.outputs.found == 'true' && github.event.action == 'review_requested' && github.event.requested_team
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           TEAMS: ${{ env.GITHUB_TEAMS }}
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
@@ -916,7 +916,7 @@ jobs:
       # avoid race conditions where concurrent events overwrite the PR body between
       # separate steps.
       - name: Select random reviewer and send DM
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           SUBMITTER: ${{ github.event.pull_request.user.login }}
