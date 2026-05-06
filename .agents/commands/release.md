@@ -24,6 +24,11 @@ See `CONTRIBUTING.md` ("Changesets" section) for the source of truth.
 
 You are helping the user add a changeset for the changes on their current branch.
 
+There are two situations to handle:
+
+- **Branch mode** — the user is on a feature branch with package changes that haven't merged yet. Diff vs. the PR's base branch.
+- **Retroactive mode** — the user is on `main`/`next` (or a fresh branch from it) because earlier PRs merged without changesets, and now they want to publish the accumulated changes. Diff each package vs. its last release tag.
+
 ### Step 1: Identify Changed Packages
 
 Resolve the PR's base branch first — this repo releases from both `main` and `next`, so always diff against the actual target, not a hardcoded `main`:
@@ -34,19 +39,63 @@ BASE_BRANCH=$(gh pr view --json baseRefName --jq .baseRefName 2>/dev/null \
 git fetch origin "$BASE_BRANCH"
 ```
 
-Determine which packages under `packages/*` have source changes vs. that base:
+Determine whether the current branch carries any commits ahead of the base:
+
+```bash
+ahead=$(git rev-list --count "origin/$BASE_BRANCH..HEAD")
+```
+
+#### Step 1a: Branch mode (`ahead > 0`)
+
+List packages under `packages/*` whose source changed vs. the base:
 
 ```bash
 git diff --name-only "origin/$BASE_BRANCH...HEAD" -- 'packages/*' | awk -F/ '{print $2}' | sort -u
 ```
 
-For each candidate package, ignore changes that don't affect published output (tests, fixtures, internal docs). Skim the diff to confirm whether the change is publishable:
+For each candidate, ignore changes that don't affect published output (tests, fixtures, internal docs). Skim the diff:
 
 ```bash
 git diff "origin/$BASE_BRANCH...HEAD" -- packages/<name>
 ```
 
 If no package has publishable changes, this is a docs/chore PR — go to Step 4 (empty changeset).
+
+#### Step 1b: Retroactive mode (`ahead == 0`)
+
+The branch has no source diff vs. the base, so the publishable changes already merged. List packages with unreleased source commits since their last release tag:
+
+```bash
+for dir in packages/*/; do
+  pkg=$(basename "$dir")
+  [ -d "${dir}src" ] || continue
+  private=$(node -p "require('./${dir}package.json').private || false" 2>/dev/null)
+  [ "$private" = "true" ] && continue
+  last_tag=$(git tag --list "@morpho-org/${pkg}-v*" --sort=-v:refname | head -1)
+  range="origin/$BASE_BRANCH"
+  [ -n "$last_tag" ] && range="${last_tag}..origin/$BASE_BRANCH"
+  count=$(git log --oneline "$range" -- "${dir}src" 2>/dev/null | wc -l | tr -d ' ')
+  if [ "$count" != "0" ]; then
+    echo "$pkg ($count commits since ${last_tag:-import})"
+  fi
+done
+```
+
+For each candidate, inspect the unreleased commits to pick the smallest applicable bump (Step 2):
+
+```bash
+git log --oneline "${last_tag}..origin/$BASE_BRANCH" -- packages/<name>/src
+```
+
+A `!` in a commit's conventional-commit type (e.g. `refactor(foo)!:`) signals a breaking change → `major`. Any `feat:` → at least `minor`. Otherwise `patch`.
+
+If no package has unreleased commits, there's nothing to release — stop and tell the user.
+
+For retroactive mode you'll also need a working branch — `/release` on `main` itself can't open a PR. Create one before Step 5:
+
+```bash
+git switch -c release/<short-slug>
+```
 
 ### Step 2: Choose the Bump Per Package
 
@@ -108,14 +157,14 @@ The filename should be a short kebab-case slug derived from the change (e.g. `fi
 
 ### Step 5: Commit With the Source Change
 
-Stage the changeset alongside the source diff and commit. Do **not** create a release branch, do **not** edit `package.json`, do **not** add `CHANGELOG.md` entries (the repo is configured with `"changelog": false`).
+Stage the changeset alongside the source diff and commit. Do **not** edit `package.json`, do **not** add `CHANGELOG.md` entries (the repo is configured with `"changelog": false`), and do **not** push to the `changeset-release/*` branch — that's CI's job.
 
 ```bash
 git add .changeset/<filename>.md <source files>
 git commit -m "<conventional-commit message matching the change>"
 ```
 
-If the user already has a PR open, just push the new commit. If not, follow up with `/pr-create`.
+In branch mode, push the new commit on the existing branch (or follow up with `/pr-create` if no PR is open). In retroactive mode, push the working branch you created in Step 1b and open a PR back to the base.
 
 ### Step 6: Final Output
 

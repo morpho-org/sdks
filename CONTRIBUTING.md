@@ -98,7 +98,9 @@ Commit the generated `.changeset/*.md` file with the source change. Do not updat
 
 This repository does not keep package `CHANGELOG.md` files in source. Changesets are configured with `"changelog": false`, so contributors should not add or edit changelog files as part of normal package changes.
 
-After changes land on `main` or `next`, CI runs `pnpm run version` (the repository script for `changeset version`) and commits generated version updates directly to that branch. The next CI run publishes only package versions that have not already been published. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag.
+After changes land on `main` or `next`, `.github/workflows/version-pr.yml` runs `pnpm run version` (the repository script for `changeset version`) and force-pushes the resulting bumps to a `changeset-release/<base>` branch, opening or updating a release PR back to that base. Merging the release PR triggers `.github/workflows/publish.yml`, which runs `pnpm release` to publish each newly-versioned package. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag.
+
+Contributors never bump `package.json`, tag, or push to npm directly — the changeset committed alongside the source change is the only artifact required.
 
 Before merging `next` back into `main`, maintainers must run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change so stable releases on `main` cannot inherit prerelease mode.
 
