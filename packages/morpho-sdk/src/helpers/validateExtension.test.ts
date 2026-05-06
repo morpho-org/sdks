@@ -228,6 +228,62 @@ describe("wrapEntityInstance", () => {
     );
   });
 
+  test("behavior: symbol-keyed properties pass through raw (Proxy bypasses wrapping)", () => {
+    const sym = Symbol("custom");
+    class WithSymbol extends MorphoEntity {
+      [sym] = { buildTx: () => validTx() };
+    }
+    const wrapped: Record<symbol, { buildTx: () => unknown }> =
+      wrapEntityInstance("e", new WithSymbol(stubClient));
+    // Symbol-keyed read returns the raw value (no Proxy wrapping). The contained `buildTx` is
+    // therefore NOT validated through `wrapAction`.
+    expect(wrapped[sym].buildTx()).toMatchObject({ to: validTx().to });
+  });
+
+  test("behavior: getter returning an action-like object is wrapped & validated", () => {
+    class WithGetter extends MorphoEntity {
+      get instantAction() {
+        return { buildTx: () => validTx() };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new WithGetter(stubClient));
+    expect(wrapped.instantAction.buildTx()).toMatchObject({ to: validTx().to });
+  });
+
+  test("error: getter returning malformed action (non-function buildTx) throws", () => {
+    class BrokenGetter extends MorphoEntity {
+      get instantAction() {
+        return { buildTx: 42 };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new BrokenGetter(stubClient));
+    expect(() => wrapped.instantAction).toThrowError(InvalidActionShapeError);
+  });
+
+  test("behavior: method returning null/undefined passes through (no throw)", () => {
+    class NullReturner extends MorphoEntity {
+      noop(): null {
+        return null;
+      }
+      voidish(): undefined {
+        return undefined;
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new NullReturner(stubClient));
+    expect(wrapped.noop()).toBeNull();
+    expect(wrapped.voidish()).toBeUndefined();
+  });
+
+  test("error: action with `buildTx` as a non-function throws InvalidActionShapeError", () => {
+    class Malformed extends MorphoEntity {
+      doThing() {
+        return { buildTx: 42 };
+      }
+    }
+    const wrapped = wrapEntityInstance("e", new Malformed(stubClient));
+    expect(() => wrapped.doThing()).toThrowError(InvalidActionShapeError);
+  });
+
   test("default: getRequirements accepts integrator-defined Requirement shape", async () => {
     const customReq = {
       sign: async () => ({ args: {}, action: { type: "x", args: {} } }),

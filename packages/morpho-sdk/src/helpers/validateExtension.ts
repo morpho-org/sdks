@@ -113,26 +113,49 @@ export function wrapEntityInstance<T extends MorphoEntity>(
         return Reflect.get(target, prop, receiver);
       }
       const value = Reflect.get(target, prop, receiver);
-      if (typeof value !== "function") return value;
       const methodName = String(prop);
-      return (...args: any[]) => {
-        const result = (value as (...a: any[]) => unknown).apply(target, args);
-        if (isActionLike(result)) {
-          return wrapAction({ entityName, methodName }, result);
-        }
-        return result;
-      };
+      if (typeof value === "function") {
+        return (...args: any[]) => {
+          const result = (value as (...a: any[]) => unknown).apply(
+            target,
+            args,
+          );
+          if (looksLikeActionAttempt(result)) {
+            return wrapAction({ entityName, methodName }, result);
+          }
+          return result;
+        };
+      }
+      // Non-function read (data field, getter result). If it looks like an action attempt
+      // (`{ buildTx, … }`), wrap-and-validate so getter-based actions get the same treatment as
+      // method-based ones. Plain data passes through.
+      if (looksLikeActionAttempt(value)) {
+        return wrapAction({ entityName, methodName }, value);
+      }
+      return value;
     },
   });
 }
 
-const isActionLike = (value: unknown): value is { buildTx: unknown } =>
-  isPlainObject(value) && typeof value.buildTx === "function";
+// "Looks like an action attempt" = the integrator put a `buildTx` key on the returned object.
+// Whether the value is callable is checked by `wrapAction`, which raises `InvalidActionShapeError`
+// when `buildTx` is not a function. This separation gives the integrator a typed error for
+// `{ buildTx: 42 }` instead of a confusing `TypeError: foo.buildTx is not a function` later.
+const looksLikeActionAttempt = (
+  value: unknown,
+): value is { buildTx: unknown; getRequirements?: unknown } =>
+  isPlainObject(value) && "buildTx" in value;
 
 function wrapAction(
   ctx: { entityName: string; methodName: string },
   action: { buildTx: unknown; getRequirements?: unknown },
 ): ExtensionAction {
+  if (typeof action.buildTx !== "function") {
+    throw new InvalidActionShapeError({
+      ...ctx,
+      reason: `\`buildTx\` must be a function (got ${typeof action.buildTx})`,
+    });
+  }
   if (
     action.getRequirements !== undefined &&
     typeof action.getRequirements !== "function"
