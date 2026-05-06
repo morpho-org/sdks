@@ -35,6 +35,7 @@ export enum ChainId {
   EdenMainnet = 714,
   PharosMainnet = 1672,
   GensynMainnet = 685689,
+  KaiaMainnet = 8217,
 }
 
 export interface ChainMetadata {
@@ -328,6 +329,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
       explorerUrl: "https://gensyn-mainnet.explorer.alchemy.com",
       identifier: "gensyn",
+    },
+    [ChainId.KaiaMainnet]: {
+      name: "Kaia",
+      id: ChainId.KaiaMainnet,
+      nativeCurrency: { name: "Kaia", symbol: "KAIA", decimals: 18 },
+      explorerUrl: "https://kaiascan.io",
+      identifier: "kaia",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }

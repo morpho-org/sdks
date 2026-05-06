@@ -764,6 +764,22 @@ const _addressesRegistry = {
     preLiquidationFactory: "0x57C88ACAbd4Fa19257104ECCF64ccA34e5eB8961",
     wNative: "0x4200000000000000000000000000000000000006",
   },
+  [ChainId.KaiaMainnet]: {
+    morpho: "0xA8BEebdca34d83C697c302A0594f3c41f3994cd2",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundler3: {
+      bundler3: "0x27880B18ae04a05F1D603B87AEb2a27491FfaBA9",
+      generalAdapter1: "0x8e36C2c6d7771820BF14a75f725f3cf0374a7823",
+    },
+    adaptiveCurveIrm: "0xA4E2bA20Fc64D721D95BD5a28FF71844C5bb5cF2",
+    vaultV2Factory: "0xf2Aecd4a4d4C21d08770e34F392C4C271aBD9144",
+    morphoMarketV1AdapterV2Factory:
+      "0x4d04C39ca604b560c50F4045c558378FD9AEBCF4",
+    registryList: "0xfCA12228DA5fba6E9c0B57a8e8322d0eBaCa03Bc",
+    chainlinkOracleFactory: "0x3e89C1071814b2c4170c90260Fcb60B903AD4602",
+    preLiquidationFactory: "0xe8eCe452F04117e5Fe1Ea4403097215443225440",
+    wNative: "0x19Aac5f612f524B754CA7e7c41cbFa2E981A4432",
+  },
 } as const;
 
 export type ChainDeployments<Addresses = ChainAddresses> = {
@@ -1321,6 +1337,20 @@ const _deployments = {
     preLiquidationFactory: 7520548n,
     wNative: 0n,
   },
+  [ChainId.KaiaMainnet]: {
+    morpho: 208021118n,
+    permit2: 188994815n,
+    bundler3: {
+      bundler3: 208021118n,
+      generalAdapter1: 208021118n,
+    },
+    adaptiveCurveIrm: 208021118n,
+    vaultV2Factory: 213463014n,
+    morphoMarketV1AdapterV2Factory: 213463079n,
+    registryList: 213463079n,
+    chainlinkOracleFactory: 213462907n,
+    preLiquidationFactory: 213462907n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 export type AddressLabel = DottedKeys<(typeof _addressesRegistry)[ChainId]>;
@@ -1456,6 +1486,9 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.GensynMainnet]: {
     [_addressesRegistry[ChainId.GensynMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.KaiaMainnet]: {
+    [_addressesRegistry[ChainId.KaiaMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 
