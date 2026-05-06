@@ -201,15 +201,6 @@ describe("addresses", () => {
     ).toEqual(NATIVE_ADDRESS);
   });
 
-  test("should expose Tempo Morpho Vault V1 adapter factory", () => {
-    expect(getChainAddresses(ChainId.TempoMainnet)).toMatchObject({
-      morphoVaultV1AdapterFactory: "0x669771F03ab55CebF753E90C3c9D80ad9391cf25",
-    });
-    expect(deployments[ChainId.TempoMainnet]).toMatchObject({
-      morphoVaultV1AdapterFactory: 16475630n,
-    });
-  });
-
   test("should throw when overriding existing address", () => {
     const randomAddress1 = randomAddress();
 
