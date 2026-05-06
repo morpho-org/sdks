@@ -85,17 +85,14 @@ const tx = buildTx(permitSignature);
 
 ```typescript
 import { MorphoClient } from "@morpho-org/morpho-sdk";
-import { http } from "viem";
+import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 
-const morpho = new MorphoClient({
-  transports: { [mainnet.id]: http() },
-});
+const viemClient = createPublicClient({ chain: mainnet, transport: http() });
+const morpho = new MorphoClient(viemClient);
 
-const vault = morpho.vaultV2("0xVault...", mainnet.id);
+const vault = morpho.vaultV2("0xVault...", 1);
 ```
-
-`MorphoClient` takes a `MorphoConfig`: a per-chain `transports` map plus optional flags (`supportSignature`, `supportDeployless`, `metadata`). One client serves multiple chains — each entity factory resolves its transport from the supplied `chainId`.
 
 #### Deposit
 

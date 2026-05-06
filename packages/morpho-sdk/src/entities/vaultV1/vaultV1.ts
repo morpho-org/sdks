@@ -6,7 +6,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
-import { type Address, isAddressEqual, type PublicClient } from "viem";
+import { type Address, isAddressEqual } from "viem";
 import {
   getRequirements,
   vaultV1Deposit,
@@ -18,6 +18,7 @@ import {
   MAX_ABSOLUTE_SHARE_PRICE,
   MAX_SLIPPAGE_TOLERANCE,
 } from "../../helpers/constant.js";
+import { validateChainId } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainWNativeMissingError,
@@ -136,22 +137,20 @@ export interface VaultV1Actions {
 }
 
 export class MorphoVaultV1 implements VaultV1Actions {
-  private readonly viemClient: PublicClient;
-
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(
     private readonly client: MorphoClientType,
     private readonly vault: Address,
     private readonly chainId: number,
-  ) {
-    this.viemClient = client.getViemClient(chainId);
-  }
+  ) {}
 
   async getData(parameters?: FetchParameters) {
-    return fetchAccrualVault(this.vault, this.viemClient, {
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
+
+    return fetchAccrualVault(this.vault, this.client.viemClient, {
       ...parameters,
       chainId: this.chainId,
-      deployless: this.client.config.supportDeployless,
+      deployless: this.client.options.supportDeployless,
     });
   }
 
@@ -166,6 +165,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
     accrualVault: AccrualVault;
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
+
     if (!isAddressEqual(accrualVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, accrualVault.address);
     }
@@ -220,11 +221,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) =>
-        await getRequirements(this.viemClient, {
+        await getRequirements(this.client.viemClient, {
           address: accrualVault.asset,
           chainId: this.chainId,
-          supportSignature: this.client.config.supportSignature ?? false,
-          supportDeployless: this.client.config.supportDeployless,
+          supportSignature: this.client.options.supportSignature,
+          supportDeployless: this.client.options.supportDeployless,
           useSimplePermit: params?.useSimplePermit,
           args: {
             amount,
@@ -246,12 +247,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
             requirementSignature,
             nativeAmount,
           },
-          metadata: this.client.config.metadata,
+          metadata: this.client.options.metadata,
         }),
     };
   }
 
   withdraw({ amount, userAddress }: { amount: bigint; userAddress: Address }) {
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
+
     return {
       buildTx: () =>
         vaultV1Withdraw({
@@ -261,12 +264,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
             recipient: userAddress,
             onBehalf: userAddress,
           },
-          metadata: this.client.config.metadata,
+          metadata: this.client.options.metadata,
         }),
     };
   }
 
   redeem({ shares, userAddress }: { shares: bigint; userAddress: Address }) {
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
+
     return {
       buildTx: () =>
         vaultV1Redeem({
@@ -276,7 +281,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
             recipient: userAddress,
             onBehalf: userAddress,
           },
-          metadata: this.client.config.metadata,
+          metadata: this.client.options.metadata,
         }),
     };
   }
@@ -294,6 +299,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
     shares: bigint;
     slippageTolerance?: bigint;
   }) {
+    validateChainId(this.client.viemClient.chain.id, this.chainId);
+
     if (!isAddressEqual(sourceVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, sourceVault.address);
     }
@@ -337,11 +344,11 @@ export class MorphoVaultV1 implements VaultV1Actions {
 
     return {
       getRequirements: async () =>
-        await getRequirements(this.viemClient, {
+        await getRequirements(this.client.viemClient, {
           address: this.vault,
           chainId: this.chainId,
-          supportSignature: this.client.config.supportSignature ?? false,
-          supportDeployless: this.client.config.supportDeployless,
+          supportSignature: this.client.options.supportSignature,
+          supportDeployless: this.client.options.supportDeployless,
           // V1 shares always implement EIP-2612.
           useSimplePermit: true,
           args: {
@@ -366,7 +373,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
             recipient: userAddress,
             requirementSignature,
           },
-          metadata: this.client.config.metadata,
+          metadata: this.client.options.metadata,
         }),
     };
   }

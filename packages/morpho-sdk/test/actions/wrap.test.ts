@@ -5,6 +5,7 @@ import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
   isRequirementSignature,
+  MorphoClient,
   NativeAmountOnNonWNativeVaultError,
   NegativeNativeAmountError,
   vaultV1Deposit,
@@ -17,7 +18,6 @@ import {
 } from "../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2, KpkWETHVaultV2 } from "../fixtures/vaultV2.js";
 import { testInvariants } from "../helpers/invariants.js";
-import { morphoFromTestClient } from "../helpers/morphoTestClient.js";
 import { test } from "../setup.js";
 
 describe("WrapNative - VaultV1", () => {
@@ -39,7 +39,7 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = morphoFromTestClient(client);
+        const morpho = new MorphoClient(client);
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -108,7 +108,7 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = morphoFromTestClient(client);
+        const morpho = new MorphoClient(client);
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -168,7 +168,7 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = morphoFromTestClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client, { supportSignature: true });
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -292,7 +292,7 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = morphoFromTestClient(client);
+        const morpho = new MorphoClient(client);
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -361,7 +361,7 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = morphoFromTestClient(client);
+        const morpho = new MorphoClient(client);
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -421,7 +421,7 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = morphoFromTestClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client, { supportSignature: true });
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({

@@ -4,17 +4,17 @@ import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
   isRequirementSignature,
+  MorphoClient,
   vaultV1MigrateToV2,
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
-import { morphoFromTestClient } from "../../helpers/morphoTestClient.js";
 import { test } from "../../setup.js";
 
 describe("MigrateToV2 VaultV1", () => {
   test("should create migration bundle via entity", async ({ client }) => {
-    const morpho = morphoFromTestClient(client);
+    const morpho = new MorphoClient(client);
 
     const vaultV1 = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
     const sourceVault = await vaultV1.getData();
@@ -76,7 +76,7 @@ describe("MigrateToV2 VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = morphoFromTestClient(client);
+        const morpho = new MorphoClient(client);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -145,7 +145,7 @@ describe("MigrateToV2 VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = morphoFromTestClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client, { supportSignature: true });
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

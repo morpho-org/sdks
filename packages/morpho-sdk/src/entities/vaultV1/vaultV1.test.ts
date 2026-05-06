@@ -10,8 +10,8 @@ import {
   KeyrockUsdcVaultV2,
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
-import { morphoFromTestClient } from "../../../test/helpers/morphoTestClient.js";
 import { test } from "../../../test/setup.js";
+import { MorphoClient } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
   ExcessiveSlippageToleranceError,
@@ -27,7 +27,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV1(
@@ -54,7 +54,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should accept slippageTolerance of exactly MAX_SLIPPAGE_TOLERANCE", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV1(
@@ -81,7 +81,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV1(
@@ -103,7 +103,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV1(
@@ -127,7 +127,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NegativeNativeAmountError for negative nativeAmount", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV1(
@@ -149,7 +149,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vault", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV1(
@@ -173,7 +173,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should return classic approval requirements when supportSignature is false", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: false,
       });
       const vault = morphoClient.vaultV1(
@@ -201,7 +201,7 @@ describe("MorphoVaultV1 entity tests", () => {
 
   describe("migrateToV2", () => {
     test("should return buildTx and getRequirements", async ({ client }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: false,
       });
       const vault = morphoClient.vaultV1(
@@ -238,7 +238,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: false,
       });
       const vault = morphoClient.vaultV1(
@@ -267,7 +267,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: false,
       });
       const vault = morphoClient.vaultV1(
@@ -296,7 +296,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw VaultAssetMismatchError when V1 and V2 have different underlying assets", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: false,
       });
       const vault = morphoClient.vaultV1(
@@ -324,7 +324,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: false,
       });
       const vault = morphoClient.vaultV1(
@@ -355,7 +355,7 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should accept slippageTolerance of exactly MAX_SLIPPAGE_TOLERANCE", async ({
       client,
     }) => {
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: false,
       });
       const vault = morphoClient.vaultV1(
@@ -392,7 +392,7 @@ describe("MorphoVaultV1 entity tests", () => {
         amount: shares,
       });
 
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: false,
       });
       const vault = morphoClient.vaultV1(
@@ -433,7 +433,7 @@ describe("MorphoVaultV1 entity tests", () => {
         amount: shares,
       });
 
-      const morphoClient = morphoFromTestClient(client, {
+      const morphoClient = new MorphoClient(client, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV1(

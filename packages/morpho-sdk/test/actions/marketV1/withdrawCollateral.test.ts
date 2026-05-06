@@ -4,6 +4,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   MissingAccrualPositionError,
+  MorphoClient,
   marketV1WithdrawCollateral,
   NonPositiveWithdrawCollateralAmountError,
   WithdrawExceedsCollateralError,
@@ -12,7 +13,7 @@ import {
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
-import { morphoFromTestClient } from "../../helpers/morphoTestClient.js";
+
 import { test } from "../../setup.js";
 
 describe("WithdrawCollateralMarketV1", () => {
@@ -26,7 +27,7 @@ describe("WithdrawCollateralMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = morphoFromTestClient(client);
+    const morphoClient = new MorphoClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -71,7 +72,7 @@ describe("WithdrawCollateralMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = morphoFromTestClient(client);
+        const morphoClient = new MorphoClient(client);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -120,7 +121,7 @@ describe("WithdrawCollateralMarketV1", () => {
       client,
       params: { markets: { WethUsdsMarketV1 } },
       actionFn: async () => {
-        const morphoClient = morphoFromTestClient(client);
+        const morphoClient = new MorphoClient(client);
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -159,7 +160,7 @@ describe("WithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = morphoFromTestClient(client);
+    const morphoClient = new MorphoClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -191,7 +192,7 @@ describe("WithdrawCollateralMarketV1", () => {
       borrowAmount: parseUnits("100", 18),
     });
 
-    const morphoClient = morphoFromTestClient(client);
+    const morphoClient = new MorphoClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -207,7 +208,7 @@ describe("WithdrawCollateralMarketV1", () => {
   test("should throw when withdraw amount is non-positive", async ({
     client,
   }) => {
-    const morphoClient = morphoFromTestClient(client);
+    const morphoClient = new MorphoClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -223,7 +224,7 @@ describe("WithdrawCollateralMarketV1", () => {
   test("should revert when positionData is not provided", async ({
     client,
   }) => {
-    const morphoClient = morphoFromTestClient(client);
+    const morphoClient = new MorphoClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>
@@ -245,7 +246,7 @@ describe("WithdrawCollateralMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = morphoFromTestClient(client);
+    const morphoClient = new MorphoClient(client);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 

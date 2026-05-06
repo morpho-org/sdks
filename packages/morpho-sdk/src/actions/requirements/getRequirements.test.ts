@@ -1,10 +1,12 @@
 import { addressesRegistry, Holding, MathLib } from "@morpho-org/blue-sdk";
-import type { Address, PublicClient } from "viem";
+import type { Address } from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
+  ChainIdMismatchError,
   isRequirementApproval,
   isRequirementSignature,
+  type PublicClientWithChain,
 } from "../../types/index.js";
 import { getRequirements } from "./getRequirements.js";
 
@@ -30,7 +32,7 @@ describe("getRequirements", () => {
   const mockFrom: Address = "0x1234567890123456789012345678901234567890";
   const mockAmount = 1000000n;
 
-  let mockClient: PublicClient;
+  let mockClient: PublicClientWithChain;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -38,7 +40,7 @@ describe("getRequirements", () => {
       chain: {
         id: mainnet.id,
       },
-    } as unknown as PublicClient;
+    } as unknown as PublicClientWithChain;
 
     // Mock fetchToken to return token data required for permit signing
     vi.mocked(fetchToken).mockResolvedValue({
@@ -48,6 +50,25 @@ describe("getRequirements", () => {
       name: "USD Coin",
       fromUsd: () => 0n,
       toUsd: () => 0n,
+    });
+  });
+
+  describe("ChainId validation", () => {
+    test("should throw ChainIdMismatchError when chainId does not match", async () => {
+      const clientWithWrongChain = {
+        chain: {
+          id: 137, // Polygon instead of mainnet
+        },
+      } as unknown as PublicClientWithChain;
+
+      await expect(
+        getRequirements(clientWithWrongChain, {
+          supportSignature: false,
+          address: usdc,
+          chainId: mainnet.id,
+          args: { amount: mockAmount, from: mockFrom },
+        }),
+      ).rejects.toThrow(new ChainIdMismatchError(137, mainnet.id));
     });
   });
 
