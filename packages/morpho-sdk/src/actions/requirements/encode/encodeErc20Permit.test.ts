@@ -1,5 +1,6 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
+import type { PublicClient } from "viem";
 import { type Address, isHex } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -21,13 +22,16 @@ describe("encodeErc20Permit", () => {
     test("should sign permit for non-DAI token", async ({ client }) => {
       const userAddress = client.account.address;
 
-      const permit = await encodeErc20Permit(client, {
-        token: usdc,
-        spender: generalAdapter1,
-        amount: mockAmount,
-        chainId: mainnet.id,
-        nonce: mockNonce,
-      });
+      const permit = await encodeErc20Permit(
+        client as unknown as PublicClient,
+        {
+          token: usdc,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+        },
+      );
 
       const signatureRequirement = await permit.sign(client, userAddress);
 
@@ -39,13 +43,16 @@ describe("encodeErc20Permit", () => {
     test("should sign permit for DAI token", async ({ client }) => {
       const userAddress = client.account.address;
 
-      const permit = await encodeErc20Permit(client, {
-        token: dai,
-        spender: generalAdapter1,
-        amount: mockAmount,
-        chainId: mainnet.id,
-        nonce: mockNonce,
-      });
+      const permit = await encodeErc20Permit(
+        client as unknown as PublicClient,
+        {
+          token: dai,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+        },
+      );
 
       const signatureRequirement = await permit.sign(client, userAddress);
 
@@ -60,13 +67,16 @@ describe("encodeErc20Permit", () => {
       const differentAddress =
         "0x0000000000000000000000000000000000000001" as Address;
 
-      const permit = await encodeErc20Permit(client, {
-        token: usdc,
-        spender: generalAdapter1,
-        amount: mockAmount,
-        chainId: mainnet.id,
-        nonce: mockNonce,
-      });
+      const permit = await encodeErc20Permit(
+        client as unknown as PublicClient,
+        {
+          token: usdc,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+        },
+      );
 
       await expect(permit.sign(client, differentAddress)).rejects.toThrow(
         new AddressMismatchError(client.account.address, differentAddress),
@@ -78,13 +88,16 @@ describe("encodeErc20Permit", () => {
     }) => {
       const userAddress = client.account.address;
 
-      const permit = await encodeErc20Permit(client, {
-        token: usdc,
-        spender: generalAdapter1,
-        amount: mockAmount,
-        chainId: mainnet.id,
-        nonce: mockNonce,
-      });
+      const permit = await encodeErc20Permit(
+        client as unknown as PublicClient,
+        {
+          token: usdc,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+        },
+      );
 
       const signatureRequirement = await permit.sign(client, userAddress);
 
@@ -106,13 +119,16 @@ describe("encodeErc20Permit", () => {
       const userAddress = client.account.address;
       const now = Time.timestamp();
 
-      const permit = await encodeErc20Permit(client, {
-        token: usdc,
-        spender: generalAdapter1,
-        amount: mockAmount,
-        chainId: mainnet.id,
-        nonce: mockNonce,
-      });
+      const permit = await encodeErc20Permit(
+        client as unknown as PublicClient,
+        {
+          token: usdc,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+        },
+      );
 
       const signatureRequirement = await permit.sign(client, userAddress);
 
@@ -131,13 +147,16 @@ describe("encodeErc20Permit", () => {
     });
 
     test("should have correct action structure", async ({ client }) => {
-      const permit = await encodeErc20Permit(client, {
-        token: usdc,
-        spender: generalAdapter1,
-        amount: mockAmount,
-        chainId: mainnet.id,
-        nonce: mockNonce,
-      });
+      const permit = await encodeErc20Permit(
+        client as unknown as PublicClient,
+        {
+          token: usdc,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id,
+          nonce: mockNonce,
+        },
+      );
 
       expect(permit.action.type).toBe("permit");
       expect(permit.action.args).toHaveProperty("spender");

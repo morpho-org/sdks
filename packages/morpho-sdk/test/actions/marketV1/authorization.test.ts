@@ -1,4 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
+import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -27,7 +28,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = new MorphoClient(client as unknown as PublicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
@@ -57,7 +58,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = new MorphoClient(client as unknown as PublicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
@@ -94,7 +95,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = new MorphoClient(client as unknown as PublicClient);
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 

@@ -1,3 +1,4 @@
+import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -8,7 +9,7 @@ import { test } from "../../setup.js";
 
 describe("Redeem VaultV2", () => {
   test("should create redeem transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = new MorphoClient(client as unknown as PublicClient);
 
     const redeem = morpho
       .vaultV2(KeyrockUsdcVaultV2.address, mainnet.id)
@@ -50,7 +51,7 @@ describe("Redeem VaultV2", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
         const redeem = vaultV2.redeem({
           userAddress: client.account.address,

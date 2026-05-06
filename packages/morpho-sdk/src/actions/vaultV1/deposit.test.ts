@@ -1,5 +1,5 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import type { Address, PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, vi } from "vitest";
@@ -32,15 +32,18 @@ describe("depositVaultV1 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
-      address: dai,
-      chainId: mainnet.id,
-      supportSignature: true,
-      args: {
-        amount: assets,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: dai,
+        chainId: mainnet.id,
+        supportSignature: true,
+        args: {
+          amount: assets,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const approvalPermit2 = requirements[0];
     if (!isRequirementApproval(approvalPermit2)) {
@@ -90,16 +93,19 @@ describe("depositVaultV1 unit tests", () => {
     const amount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
-      address: usdc,
-      chainId: mainnet.id,
-      supportSignature: true,
-      useSimplePermit: true,
-      args: {
-        amount,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: usdc,
+        chainId: mainnet.id,
+        supportSignature: true,
+        useSimplePermit: true,
+        args: {
+          amount,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const permitRequirement = requirements[0];
     if (!isRequirementSignature(permitRequirement)) {
@@ -151,15 +157,18 @@ describe("depositVaultV1 unit tests", () => {
     const amount = parseUnits("5", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
-      address: wNative,
-      chainId: mainnet.id,
-      supportSignature: true,
-      args: {
-        amount,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: wNative,
+        chainId: mainnet.id,
+        supportSignature: true,
+        args: {
+          amount,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const approvalPermit2 = requirements[0];
     if (!isRequirementApproval(approvalPermit2)) {
@@ -247,16 +256,19 @@ describe("depositVaultV1 unit tests", () => {
     const depositAmount = parseUnits("1000", 6);
     const maxSharePrice = 1000000n;
 
-    const requirements = await getRequirements(client, {
-      address: usdc,
-      chainId: mainnet.id,
-      supportSignature: true,
-      useSimplePermit: true,
-      args: {
-        amount: signatureAmount,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: usdc,
+        chainId: mainnet.id,
+        supportSignature: true,
+        useSimplePermit: true,
+        args: {
+          amount: signatureAmount,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const permitRequirement = requirements[0];
     if (!isRequirementSignature(permitRequirement)) {
@@ -423,15 +435,18 @@ describe("depositVaultV1 unit tests", () => {
     const assets = parseUnits("100", 18);
     const maxSharePrice = 1000000000000000000n;
 
-    const requirements = await getRequirements(client, {
-      address: dai,
-      chainId: mainnet.id,
-      supportSignature: true,
-      args: {
-        amount: assets,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: dai,
+        chainId: mainnet.id,
+        supportSignature: true,
+        args: {
+          amount: assets,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const approvalPermit2 = requirements[0];
     if (!isRequirementApproval(approvalPermit2)) {

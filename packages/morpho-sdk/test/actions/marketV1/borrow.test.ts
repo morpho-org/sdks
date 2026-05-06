@@ -4,6 +4,7 @@ import {
   MathLib,
   SharesMath,
 } from "@morpho-org/blue-sdk";
+import type { PublicClient } from "viem";
 
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -33,7 +34,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -78,7 +79,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -123,7 +124,9 @@ describe("BorrowMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+        );
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -183,7 +186,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -199,7 +202,7 @@ describe("BorrowMarketV1", () => {
   test("should revert when positionData is not provided", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>

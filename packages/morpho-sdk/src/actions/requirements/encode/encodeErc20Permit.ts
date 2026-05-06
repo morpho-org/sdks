@@ -1,7 +1,7 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { verifyTypedData } from "viem";
+import { type PublicClient, verifyTypedData, type WalletClient } from "viem";
 import { signTypedData } from "viem/actions";
 import {
   validateChainId,
@@ -9,10 +9,9 @@ import {
 } from "../../../helpers/index.js";
 import {
   InvalidSignatureError,
+  MissingClientPropertyError,
   type PermitAction,
-  type PublicClientWithChain,
   type Requirement,
-  type WalletClientWithChain,
 } from "../../../types/index.js";
 
 /** Parameters for {@link encodeErc20Permit}. */
@@ -33,7 +32,7 @@ interface EncodeErc20PermitParams {
  * signature, verifies it against the connected account, and returns a `RequirementSignature`
  * the bundler action helpers can consume. Deadline defaults to two hours from `Time.timestamp()`.
  *
- * @param viemClient - Connected `PublicClientWithChain` whose `chain.id` matches `params.chainId`.
+ * @param viemClient - Connected `PublicClient` whose `chain.id` matches `params.chainId`.
  * @param params - Permit encoding parameters.
  * @param params.token - ERC-20 token address (must support EIP-2612).
  * @param params.spender - Address that will be granted the permit allowance.
@@ -42,7 +41,7 @@ interface EncodeErc20PermitParams {
  * @param params.nonce - The user's current EIP-2612 nonce on `token`.
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
- * @throws {ChainIdMismatchError} when `viemClient.chain.id !== params.chainId`, or from `sign()` when the wallet client's `chain.id` differs.
+ * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`, or from `sign()` when the wallet client's `chain.id` differs.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
@@ -63,12 +62,12 @@ interface EncodeErc20PermitParams {
  * ```
  */
 export const encodeErc20Permit = async (
-  viemClient: PublicClientWithChain,
+  viemClient: PublicClient,
   params: EncodeErc20PermitParams,
 ): Promise<Requirement> => {
   const { token, spender, amount, chainId, nonce, supportDeployless } = params;
 
-  validateChainId(viemClient.chain.id, chainId);
+  validateChainId(viemClient.chain?.id, chainId);
 
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
@@ -88,9 +87,12 @@ export const encodeErc20Permit = async (
 
   return {
     action,
-    async sign(client: WalletClientWithChain, userAddress: Address) {
-      validateChainId(client.chain.id, chainId);
+    async sign(client: WalletClient, userAddress: Address) {
+      validateChainId(client.chain?.id, chainId);
+      if (!client.account)
+        throw new MissingClientPropertyError("client.account");
       validateUserAddress(client.account.address, userAddress);
+      const account = client.account;
 
       const typedData = getPermitTypedData(
         {
@@ -106,7 +108,7 @@ export const encodeErc20Permit = async (
 
       const signature = await signTypedData(client, {
         ...typedData,
-        account: client.account,
+        account,
       });
 
       const isValid = await verifyTypedData({

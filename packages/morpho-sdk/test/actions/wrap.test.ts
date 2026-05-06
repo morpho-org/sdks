@@ -1,4 +1,5 @@
 import { getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
+import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -39,7 +40,7 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -108,7 +109,7 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -168,7 +169,9 @@ describe("WrapNative - VaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client as unknown as PublicClient, {
+          supportSignature: true,
+        });
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -292,7 +295,7 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -361,7 +364,7 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -421,7 +424,9 @@ describe("WrapNative - VaultV2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client as unknown as PublicClient, {
+          supportSignature: true,
+        });
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({

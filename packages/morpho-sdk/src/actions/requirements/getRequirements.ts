@@ -1,10 +1,10 @@
 import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { fetchHolding } from "@morpho-org/blue-sdk-viem";
 import { isDefined } from "@morpho-org/morpho-ts";
+import type { PublicClient } from "viem";
 import { validateChainId } from "../../helpers/index.js";
 import type {
   ERC20ApprovalAction,
-  PublicClientWithChain,
   Requirement,
   Transaction,
 } from "../../types/index.js";
@@ -47,10 +47,10 @@ type GetRequirementsParams =
  * 3. **`supportSignature: true`, default** — Permit2 flow: classic approval to the Permit2
  *    contract (if needed), followed by a Permit2 signature against `GeneralAdapter1`.
  *
- * @param viemClient - Connected `PublicClientWithChain` whose `chain.id` matches `params.chainId`.
+ * @param viemClient - Connected `PublicClient` whose `chain.id` matches `params.chainId`.
  * @param params - Requirement resolution parameters.
  * @param params.address - ERC-20 token address.
- * @param params.chainId - Chain id; must match `viemClient.chain.id`.
+ * @param params.chainId - Chain id; must match `viemClient.chain?.id`.
  * @param params.args.amount - Required token amount. Returns `[]` when zero.
  * @param params.args.from - Account that will grant the approval.
  * @param params.supportSignature - Whether the integrator can collect a signature; controls
@@ -83,7 +83,7 @@ type GetRequirementsParams =
  * ```
  */
 export const getRequirements = async (
-  viemClient: PublicClientWithChain,
+  viemClient: PublicClient,
   params: GetRequirementsParams,
 ): Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]> => {
   const {
@@ -92,7 +92,7 @@ export const getRequirements = async (
     supportSignature,
     args: { amount, from },
   } = params;
-  validateChainId(viemClient.chain.id, chainId);
+  validateChainId(viemClient.chain?.id, chainId);
 
   if (amount === 0n) {
     return [];

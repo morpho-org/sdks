@@ -3,6 +3,7 @@ import {
   getChainAddresses,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -22,7 +23,7 @@ import { test } from "../../setup.js";
 
 describe("DepositVaultV1", () => {
   test("should create deposit bundle", async ({ client }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = new MorphoClient(client as unknown as PublicClient);
 
     const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
     const accrualVault = await vault.getData();
@@ -71,7 +72,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -139,7 +140,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUSDTVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUSDTVaultV1.address,
           mainnet.id,
@@ -205,7 +206,9 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client as unknown as PublicClient, {
+          supportSignature: true,
+        });
 
         const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
@@ -269,7 +272,9 @@ describe("DepositVaultV1", () => {
       amount,
     });
 
-    const morpho = new MorphoClient(client, { supportSignature: true });
+    const morpho = new MorphoClient(client as unknown as PublicClient, {
+      supportSignature: true,
+    });
     const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
 
     const {
@@ -378,7 +383,9 @@ describe("DepositVaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client as unknown as PublicClient, {
+          supportSignature: true,
+        });
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const accrualVault = await vault.getData();
         const deposit = vault.deposit({
@@ -426,7 +433,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

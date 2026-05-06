@@ -1,3 +1,4 @@
+import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -14,7 +15,7 @@ import { test } from "../../setup.js";
 
 describe("MigrateToV2 VaultV1", () => {
   test("should create migration bundle via entity", async ({ client }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = new MorphoClient(client as unknown as PublicClient);
 
     const vaultV1 = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
     const sourceVault = await vaultV1.getData();
@@ -76,7 +77,7 @@ describe("MigrateToV2 VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -145,7 +146,9 @@ describe("MigrateToV2 VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client as unknown as PublicClient, {
+          supportSignature: true,
+        });
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

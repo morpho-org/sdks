@@ -1,4 +1,5 @@
 import { addressesRegistry, MarketParams } from "@morpho-org/blue-sdk";
+import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, vi } from "vitest";
@@ -115,15 +116,18 @@ describe("marketV1SupplyCollateralBorrow unit tests", () => {
     const amount = parseUnits("1", 18);
     const borrowAmount = parseUnits("1000", 6);
 
-    const requirements = await getRequirements(client, {
-      address: wNative,
-      chainId: mainnet.id,
-      supportSignature: true,
-      args: {
-        amount,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: wNative,
+        chainId: mainnet.id,
+        supportSignature: true,
+        args: {
+          amount,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const approvalPermit2 = requirements[0];
     if (!isRequirementApproval(approvalPermit2)) {

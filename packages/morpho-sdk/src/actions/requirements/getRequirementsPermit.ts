@@ -1,6 +1,5 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
-import type { PublicClientWithChain } from "../../types/index.js";
+import type { Address, PublicClient } from "viem";
 import { encodeErc20Permit } from "./encode/index.js";
 
 /**
@@ -10,7 +9,7 @@ import { encodeErc20Permit } from "./encode/index.js";
  * Returns an empty array when the existing allowance for `GeneralAdapter1` already covers
  * `amount`.
  *
- * @param viemClient - Connected `PublicClientWithChain` (used by `encodeErc20Permit` for `fetchToken`). Signing happens via the returned `Requirement.sign(walletClient, userAddress)`.
+ * @param viemClient - Connected `PublicClient` (used by `encodeErc20Permit` for `fetchToken`). Signing happens via the returned `Requirement.sign(walletClient, userAddress)`.
  * @param params.token - ERC-20 token address (must support EIP-2612).
  * @param params.chainId - The chain the bundle targets.
  * @param params.args.amount - Required token amount.
@@ -38,7 +37,7 @@ import { encodeErc20Permit } from "./encode/index.js";
  * ```
  */
 export const getRequirementsPermit = async (
-  viemClient: PublicClientWithChain,
+  viemClient: PublicClient,
   params: {
     token: Address;
     chainId: number;

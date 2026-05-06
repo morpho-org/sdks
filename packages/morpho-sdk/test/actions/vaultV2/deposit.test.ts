@@ -1,3 +1,4 @@
+import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -12,7 +13,7 @@ import { test } from "../../setup.js";
 
 describe("DepositVaultV2", () => {
   test("should create deposit bundle", async ({ client }) => {
-    const morpho = new MorphoClient(client);
+    const morpho = new MorphoClient(client as unknown as PublicClient);
 
     const vault = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
     const accrualVault = await vault.getData();
@@ -62,7 +63,7 @@ describe("DepositVaultV2", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = new MorphoClient(client as unknown as PublicClient);
         const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
         const accrualVault = await vaultV2.getData();
         const deposit = vaultV2.deposit({

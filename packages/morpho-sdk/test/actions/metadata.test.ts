@@ -1,4 +1,5 @@
 import { Time } from "@morpho-org/morpho-ts";
+import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -27,7 +28,7 @@ describe("Metadata", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, {
+        const morpho = new MorphoClient(client as unknown as PublicClient, {
           metadata: {
             origin: "25AFEA44",
             timestamp: true,
@@ -98,7 +99,7 @@ describe("Metadata", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, {
+        const morpho = new MorphoClient(client as unknown as PublicClient, {
           metadata: {
             origin: "25AFEA44",
           },

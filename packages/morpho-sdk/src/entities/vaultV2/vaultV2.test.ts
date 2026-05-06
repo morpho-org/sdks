@@ -1,3 +1,4 @@
+import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -20,7 +21,7 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
+      const morphoClient = new MorphoClient(client as unknown as PublicClient, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV2(
@@ -47,7 +48,7 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should accept slippageTolerance of exactly MAX_SLIPPAGE_TOLERANCE", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
+      const morphoClient = new MorphoClient(client as unknown as PublicClient, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV2(
@@ -74,7 +75,7 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
+      const morphoClient = new MorphoClient(client as unknown as PublicClient, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV2(
@@ -96,7 +97,7 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
+      const morphoClient = new MorphoClient(client as unknown as PublicClient, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV2(
@@ -120,7 +121,7 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw NegativeNativeAmountError for negative nativeAmount", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
+      const morphoClient = new MorphoClient(client as unknown as PublicClient, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV2(KpkWETHVaultV2.address, mainnet.id);
@@ -139,7 +140,7 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vault", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
+      const morphoClient = new MorphoClient(client as unknown as PublicClient, {
         supportSignature: true,
       });
       const vault = morphoClient.vaultV2(

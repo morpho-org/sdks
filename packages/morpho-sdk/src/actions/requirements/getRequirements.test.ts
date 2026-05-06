@@ -1,12 +1,11 @@
 import { addressesRegistry, Holding, MathLib } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import type { Address, PublicClient } from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   ChainIdMismatchError,
   isRequirementApproval,
   isRequirementSignature,
-  type PublicClientWithChain,
 } from "../../types/index.js";
 import { getRequirements } from "./getRequirements.js";
 
@@ -32,7 +31,7 @@ describe("getRequirements", () => {
   const mockFrom: Address = "0x1234567890123456789012345678901234567890";
   const mockAmount = 1000000n;
 
-  let mockClient: PublicClientWithChain;
+  let mockClient: PublicClient;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -40,7 +39,7 @@ describe("getRequirements", () => {
       chain: {
         id: mainnet.id,
       },
-    } as unknown as PublicClientWithChain;
+    } as unknown as PublicClient;
 
     // Mock fetchToken to return token data required for permit signing
     vi.mocked(fetchToken).mockResolvedValue({
@@ -59,7 +58,7 @@ describe("getRequirements", () => {
         chain: {
           id: 137, // Polygon instead of mainnet
         },
-      } as unknown as PublicClientWithChain;
+      } as unknown as PublicClient;
 
       await expect(
         getRequirements(clientWithWrongChain, {

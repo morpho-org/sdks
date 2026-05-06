@@ -3,6 +3,7 @@ import {
   getChainAddresses,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -22,7 +23,7 @@ import { test } from "../../setup.js";
 
 describe("SupplyCollateralMarketV1", () => {
   test("should create supply collateral bundle", async ({ client }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const supplyCollateral = market.supplyCollateral({
@@ -63,7 +64,9 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+        );
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -124,7 +127,9 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+        );
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -169,7 +174,9 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+        );
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -226,7 +233,9 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+        );
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -282,9 +291,12 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { UsdcEurcvMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: true,
-        });
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+          {
+            supportSignature: true,
+          },
+        );
         const market = morphoClient.marketV1(UsdcEurcvMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({
@@ -344,9 +356,12 @@ describe("SupplyCollateralMarketV1", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: true,
-        });
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+          {
+            supportSignature: true,
+          },
+        );
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
         const supplyCollateral = market.supplyCollateral({

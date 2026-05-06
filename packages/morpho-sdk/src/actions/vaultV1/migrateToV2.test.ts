@@ -1,3 +1,4 @@
+import type { PublicClient } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, vi } from "vitest";
 import {
@@ -121,16 +122,19 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
-    const requirements = await getRequirements(client, {
-      address: SteakhouseUsdcVaultV1.address,
-      chainId: mainnet.id,
-      supportSignature: true,
-      useSimplePermit: true,
-      args: {
-        amount: shares,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: SteakhouseUsdcVaultV1.address,
+        chainId: mainnet.id,
+        supportSignature: true,
+        useSimplePermit: true,
+        args: {
+          amount: shares,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const permitRequirement = requirements[0];
     if (!isRequirementSignature(permitRequirement)) {
@@ -184,15 +188,18 @@ describe("vaultV1MigrateToV2 unit tests", () => {
   }) => {
     const shares = 5000000000000000000n; // 5 shares (18 decimals)
 
-    const requirements = await getRequirements(client, {
-      address: GauntletWethVaultV1.address,
-      chainId: mainnet.id,
-      supportSignature: true,
-      args: {
-        amount: shares,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: GauntletWethVaultV1.address,
+        chainId: mainnet.id,
+        supportSignature: true,
+        args: {
+          amount: shares,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const approvalPermit2 = requirements[0];
     if (!isRequirementApproval(approvalPermit2)) {
@@ -275,16 +282,19 @@ describe("vaultV1MigrateToV2 unit tests", () => {
     const shares = 1000000000000000000000n; // 1000 shares (18 decimals)
 
     // Sign permit for WETH vault shares
-    const requirements = await getRequirements(client, {
-      address: GauntletWethVaultV1.address,
-      chainId: mainnet.id,
-      supportSignature: true,
-      useSimplePermit: true,
-      args: {
-        amount: shares,
-        from: client.account.address,
+    const requirements = await getRequirements(
+      client as unknown as PublicClient,
+      {
+        address: GauntletWethVaultV1.address,
+        chainId: mainnet.id,
+        supportSignature: true,
+        useSimplePermit: true,
+        args: {
+          amount: shares,
+          from: client.account.address,
+        },
       },
-    });
+    );
 
     const permitRequirement = requirements[0];
     if (!isRequirementSignature(permitRequirement)) {

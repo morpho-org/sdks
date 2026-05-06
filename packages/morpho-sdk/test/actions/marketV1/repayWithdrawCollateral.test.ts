@@ -4,6 +4,7 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import type { PublicClient } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -48,7 +49,7 @@ describe("RepayWithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -115,9 +116,12 @@ describe("RepayWithdrawCollateralMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: false,
-        });
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+          {
+            supportSignature: false,
+          },
+        );
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -174,7 +178,9 @@ describe("RepayWithdrawCollateralMarketV1", () => {
     });
 
     // Deal enough loan tokens for the full repay (with slippage buffer for interest accrual)
-    const morphoClientSetup = new MorphoClient(client);
+    const morphoClientSetup = new MorphoClient(
+      client as unknown as PublicClient,
+    );
     const marketSetup = morphoClientSetup.marketV1(
       WethUsdsMarketV1,
       mainnet.id,
@@ -205,9 +211,12 @@ describe("RepayWithdrawCollateralMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client, {
-          supportSignature: false,
-        });
+        const morphoClient = new MorphoClient(
+          client as unknown as PublicClient,
+          {
+            supportSignature: false,
+          },
+        );
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -266,7 +275,7 @@ describe("RepayWithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -298,7 +307,7 @@ describe("RepayWithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -341,7 +350,7 @@ describe("RepayWithdrawCollateralMarketV1", () => {
 
     expect(positionData.market.toBorrowShares(1n, "Down")).toBe(0n);
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>
@@ -355,7 +364,7 @@ describe("RepayWithdrawCollateralMarketV1", () => {
   });
 
   test("should throw when repay amount is non-positive", async ({ client }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -388,7 +397,7 @@ describe("RepayWithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -405,7 +414,7 @@ describe("RepayWithdrawCollateralMarketV1", () => {
   test("should revert when positionData is not provided", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>
@@ -435,7 +444,7 @@ describe("RepayWithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = new MorphoClient(client as unknown as PublicClient);
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 

@@ -1,3 +1,4 @@
+import type { PublicClient } from "viem";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -25,7 +26,9 @@ describe("Permit", () => {
         vaults: { KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = new MorphoClient(client as unknown as PublicClient, {
+          supportSignature: true,
+        });
 
         const vault = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
         const accrualVault = await vault.getData();
