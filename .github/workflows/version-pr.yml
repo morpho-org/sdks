@@ -2,6 +2,11 @@ name: Version PR
 
 on:
   workflow_call:
+    secrets:
+      VERSION_APP_ID:
+        required: true
+      VERSION_APP_PRIVATE_KEY:
+        required: true
 
 permissions:
   contents: read
@@ -23,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -88,13 +93,67 @@ jobs:
       - name: Push release branch
         id: version-commit
         if: steps.pending-changesets.outputs.has_changesets == 'true'
+        shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          git add .
+
+          is_allowed_version_path() {
+            [[ "$1" =~ ^packages/[^/]+/package\.json$ ]] ||
+            [[ "$1" =~ ^\.changeset/[^/]+\.md$ ]] ||
+            [[ "$1" == ".changeset/pre.json" ]]
+          }
+
+          allowed_changed=()
+          while IFS= read -r -d '' path; do
+            if is_allowed_version_path "$path"; then
+              allowed_changed+=("$path")
+            fi
+          done < <(git diff --name-only -z)
+
+          while IFS= read -r -d '' path; do
+            if is_allowed_version_path "$path"; then
+              allowed_changed+=("$path")
+            fi
+          done < <(git ls-files --others --exclude-standard -z)
+
+          if [ "${#allowed_changed[@]}" -gt 0 ]; then
+            git add -- "${allowed_changed[@]}"
+          fi
+
+          staged_violations=()
+          while IFS= read -r -d '' path; do
+            if ! is_allowed_version_path "$path"; then
+              staged_violations+=("$path")
+            fi
+          done < <(git diff --cached --name-only -z)
+
+          if [ "${#staged_violations[@]}" -gt 0 ]; then
+            echo "::error::Versioning staged files outside the release allowlist:"
+            printf '  %s\n' "${staged_violations[@]}"
+            exit 1
+          fi
+
+          unstaged=()
+          while IFS= read -r -d '' path; do
+            unstaged+=("$path")
+          done < <(git diff --name-only -z)
+
+          untracked=()
+          while IFS= read -r -d '' path; do
+            untracked+=("$path")
+          done < <(git ls-files --others --exclude-standard -z)
+
+          if [ "${#unstaged[@]}" -gt 0 ] || [ "${#untracked[@]}" -gt 0 ]; then
+            echo "::error::Versioning produced files outside the release allowlist:"
+            printf '  %s\n' "${unstaged[@]}" "${untracked[@]}"
+            exit 1
+          fi
 
           if git diff --cached --quiet; then
             echo "No version changes to commit."
@@ -103,15 +162,28 @@ jobs:
           fi
 
           git commit -m "chore: version packages"
-          git push --force origin "HEAD:refs/heads/${RELEASE_BRANCH}"
+
+          remote_release_ref="refs/heads/${RELEASE_BRANCH}"
+          local_release_ref="refs/remotes/origin/${RELEASE_BRANCH}"
+          if git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
+            git fetch origin "+${remote_release_ref}:${local_release_ref}"
+            expected_sha="$(git rev-parse "${local_release_ref}")"
+            git push --force-with-lease="${remote_release_ref}:${expected_sha}" origin "HEAD:${remote_release_ref}"
+          else
+            git push origin "HEAD:${remote_release_ref}"
+          fi
+
           echo "has_version_changes=true" >> "$GITHUB_OUTPUT"
 
       - name: Open or update release PR
         if: steps.version-commit.outputs.has_version_changes == 'true'
+        shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           BASE_BRANCH: ${{ github.ref_name }}
         run: |
+          set -euo pipefail
+
           title="chore: version packages (${BASE_BRANCH})"
           body="$(cat <<BODY
           This PR applies the pending changesets for ${BASE_BRANCH}.
@@ -125,7 +197,7 @@ jobs:
             --head "${RELEASE_BRANCH}" \
             --state open \
             --json number \
-            --jq '.[0].number')"
+            --jq '.[0].number // empty')"
 
           if [ -n "${pr_number}" ]; then
             gh pr edit "${pr_number}" --title "${title}" --body "${body}"

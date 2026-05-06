@@ -1,2 +1,10 @@
-/.github/CODEOWNERS @morpho-org/security
-/.github/workflows/ @morpho-org/security
+/.github/ @morpho-org/security
+/.changeset/config.json @morpho-org/security
+/.changeset/pre.json @morpho-org/security
+/package.json @morpho-org/sdk-engineers
+/packages/*/package.json @morpho-org/sdk-engineers
+/pnpm-lock.yaml @morpho-org/sdk-engineers
+/pnpm-workspace.yaml @morpho-org/sdk-engineers
+/.npmrc @morpho-org/sdk-engineers
+/.nvmrc @morpho-org/sdk-engineers
+/scripts/ @morpho-org/sdk-engineers
