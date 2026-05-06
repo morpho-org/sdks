@@ -39,6 +39,7 @@ interface EncodeErc20Permit2Params {
  * @param params.expiration - Permit2-managed allowance expiration timestamp.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} from `sign()` when the wallet client's `chain.id !== params.chainId`.
+ * @throws {MissingClientPropertyError} from `sign()` when the wallet client has no `account`.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example

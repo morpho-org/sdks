@@ -42,6 +42,7 @@ interface EncodeErc20PermitParams {
  * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`, or from `sign()` when the wallet client's `chain.id` differs.
+ * @throws {MissingClientPropertyError} from `sign()` when the wallet client has no `account`.
  * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
  * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
