@@ -8,23 +8,35 @@ import {
 import { encodeErc20Approval } from "./encode/encodeErc20Approval.js";
 
 /**
- * Get token "requirement" for approval.
+ * Computes classic ERC-20 approval transactions for a spender, given the existing allowance.
  *
- * Verify if the allowance is enough on the spender contract.
- * => If not, approve the token to the spender contract with classic approval transaction on the required amount.
- * => If the allowance is enough, return an empty array.
+ * Returns an empty array when the allowance already covers `spendAmount`. When the token is in
+ * `APPROVE_ONLY_ONCE_TOKENS` (e.g. USDT) and the existing allowance is non-zero, prepends a
+ * `approve(spender, 0)` reset transaction to satisfy those tokens' allowance-must-be-zero rule
+ * before re-approving.
  *
- * Handle logic for reset approval before approving (if needed).
+ * @param params.address - ERC-20 token address.
+ * @param params.chainId - The chain the bundle targets.
+ * @param params.args.spendAmount - The amount the bundle will actually pull.
+ * @param params.args.approvalAmount - The amount to approve (often equal to `spendAmount`, but
+ *   may be `MAX_UINT_160` for Permit2 prerequisites).
+ * @param params.args.spender - Address that will be granted the approval.
+ * @param params.allowances - The user's current allowance of `address` for `spender`.
+ * @returns Up to two deep-frozen `Transaction<ERC20ApprovalAction>` entries: an optional reset
+ *   followed by the new approval. Empty when no approval is needed.
+ * @throws {ApprovalAmountLessThanSpendAmountError} when `approvalAmount < spendAmount`.
+ * @example
+ * ```ts
+ * import { getRequirementsApproval } from "@morpho-org/morpho-sdk";
  *
- * @param params - Destructured object with:
- * @param params.address - ERC20 token address.
- * @param params.chainId - Chain/network id.
- * @param params.args - Object with:
- * @param params.args.spendAmount - Spend amount required for the action.
- * @param params.args.approvalAmount - Approval amount to be approved.
- * @param params.args.spender - Spender contract address.
- * @param params.allowances - Allowance for the spender contract.
- * @returns An array of requirement transaction object.
+ * const txs = getRequirementsApproval({
+ *   address: USDC,
+ *   chainId: 1,
+ *   args: { approvalAmount: 1_000_000n, spendAmount: 1_000_000n, spender: generalAdapter1 },
+ *   allowances: 0n,
+ * });
+ * // txs satisfies Readonly<Transaction<ERC20ApprovalAction>>[]
+ * ```
  */
 export const getRequirementsApproval = (params: {
   address: Address;

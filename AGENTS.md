@@ -125,6 +125,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 ## 6. Documentation
 
 - **JSDoc is required on every exported symbol** — class, function, type, constant. Review-only today (Biome doesn't enforce); contributors and reviewing agents apply this. Internal locals and test helpers don't need JSDoc.
+- **Canonical shape and copy-pasteable template:** [`docs/jsdoc-style.md`](./docs/jsdoc-style.md). Backfill rollout sequence: [`docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md`](./docs/tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md). Coverage burndown: `pnpm jsdoc:coverage`.
 - **Required tags** on exported functions and methods:
   - Short description (what it does, what it reads on-chain if anything).
   - `@param` for each parameter.

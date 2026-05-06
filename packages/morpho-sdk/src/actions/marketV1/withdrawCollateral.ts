@@ -27,13 +27,34 @@ export interface MarketV1WithdrawCollateralParams {
 /**
  * Prepares a withdraw-collateral transaction for a Morpho Blue market.
  *
- * Direct call to `morpho.withdrawCollateral`. No bundler needed — collateral
- * flows out of Morpho, so there is no attack surface requiring the bundler.
+ * Direct call to `Morpho.withdrawCollateral` — no bundler needed. Collateral flows out of Morpho,
+ * so there is no inflation-attack surface requiring the bundler.
  *
- * The caller (`msg.sender`) must be `onBehalf` or be authorized by them.
+ * The caller (`msg.sender`) must be `onBehalf` or be authorized by them on Morpho.
  *
- * @param params - Withdraw collateral parameters.
- * @returns Deep-frozen transaction.
+ * @param params.market.chainId - The chain the market lives on.
+ * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
+ * @param params.args.amount - Amount of collateral to withdraw.
+ * @param params.args.onBehalf - Address whose Morpho position the collateral is withdrawn from.
+ * @param params.args.receiver - Address that receives the withdrawn collateral.
+ * @param params.metadata - Optional analytics metadata attached to the transaction.
+ * @returns A deep-frozen `Transaction<MarketV1WithdrawCollateralAction>` with `to`, `value`,
+ *   `data`, and the typed `action` discriminator the simulation layer consumes.
+ * @throws {NonPositiveWithdrawCollateralAmountError} when `amount <= 0n`.
+ * @example
+ * ```ts
+ * import { marketV1WithdrawCollateral } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = marketV1WithdrawCollateral({
+ *   market: { chainId: 1, marketParams },
+ *   args: {
+ *     amount: 1_000_000_000_000_000_000n,
+ *     onBehalf: borrower,
+ *     receiver: borrower,
+ *   },
+ * });
+ * // tx satisfies Readonly<Transaction<MarketV1WithdrawCollateralAction>>
+ * ```
  */
 export const marketV1WithdrawCollateral = ({
   market: { chainId, marketParams },
