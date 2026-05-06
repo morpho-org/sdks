@@ -80,8 +80,7 @@ export class MorphoClient implements MorphoClientType {
 
     this._extensions = extensions ?? new Map();
     for (const [name, EntityClass] of this._extensions) {
-      // biome-ignore lint/suspicious/noExplicitAny: integrator-typed factory args.
-      const factory = (...args: any[]) =>
+      const factory = (...args: unknown[]) =>
         wrapEntityInstance(name, new EntityClass(this, ...args));
       Object.defineProperty(this, name, {
         value: factory,
