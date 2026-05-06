@@ -1,12 +1,12 @@
 # `client/`
 
-Entry point of the SDK. `MorphoClient` wraps a viem **`PublicClientWithChain`** (exported from this package: `Client<Transport, Chain>`) and exposes vault/market accessors. Inherits the rules in [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
+Entry point of the SDK. `MorphoClient` wraps a viem **`PublicClient`** and exposes vault/market accessors. Inherits the rules in [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
 
 ## Client contract
 
-- Input is `PublicClientWithChain` (alias for `Client<Transport, Chain>` — chain mandatory). Account is not read.
+- Input is viem's `PublicClient`. Chain is checked at runtime (`validateChainId(viemClient.chain?.id, chainId)`); account is never read.
 - Used for: on-chain reads, building transactions, fetching nonces / token data.
-- Signing happens elsewhere: pass a `WalletClientWithChain` to `Requirement.sign(client, userAddress)` (see [`src/actions/AGENTS.md`](../actions/AGENTS.md)).
+- Signing happens elsewhere: pass a viem `WalletClient` to `Requirement.sign(client, userAddress)` (see [`src/actions/AGENTS.md`](../actions/AGENTS.md)).
 
 ## Responsibilities
 
