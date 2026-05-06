@@ -169,6 +169,25 @@ describe("MorphoClient.extend", () => {
     );
   });
 
+  test("error: collision with Object.prototype member (toString) — auto-protected", () => {
+    expect(() =>
+      new MorphoClient(stubViemClient).extend({
+        // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse — registering a name that exists on Object.prototype to assert the dynamic `name in client` guard catches it.
+        toString: MyLending as any,
+      }),
+    ).toThrowError(ExtensionNameCollisionError);
+  });
+
+  test("error: registering `then` is blocked (Promise thenable hijack guard)", () => {
+    expect(() =>
+      new MorphoClient(stubViemClient).extend({
+        // biome-ignore lint/suspicious/noExplicitAny: deliberate misuse — `then` would make the client thenable; the validator must reject.
+        // biome-ignore lint/suspicious/noThenProperty: deliberate — this test pins the validator's rejection of the `then` thenable trap.
+        then: MyLending as any,
+      }),
+    ).toThrowError(ExtensionNameCollisionError);
+  });
+
   test("error: empty extension map", () => {
     expect(() => new MorphoClient(stubViemClient).extend({})).toThrowError(
       InvalidExtensionShapeError,

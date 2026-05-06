@@ -11,10 +11,20 @@ import {
   MorphoEntity,
 } from "../types/index.js";
 import {
-  RESERVED_MORPHO_CLIENT_NAMES,
   validateExtensionMap,
   wrapEntityInstance,
 } from "./validateExtension.js";
+
+// Stand-in client carrying the names the real MorphoClient surfaces. Tests use this to assert
+// the validator's `name in client` lookup without depending on the full client construction.
+const stubClientWithReserved = {
+  viemClient: undefined,
+  options: undefined,
+  vaultV1: () => undefined,
+  vaultV2: () => undefined,
+  marketV1: () => undefined,
+  extend: () => undefined,
+};
 
 const validTx = () => ({
   to: "0x0000000000000000000000000000000000000000" as Address,
@@ -50,59 +60,70 @@ describe("validateExtensionMap", () => {
   });
 
   test("error: not an object", () => {
-    expect(() => validateExtensionMap(null, [])).toThrowError(
+    expect(() => validateExtensionMap(null, {})).toThrowError(
       InvalidExtensionShapeError,
     );
-    expect(() => validateExtensionMap("oops", [])).toThrowError(
+    expect(() => validateExtensionMap("oops", {})).toThrowError(
       InvalidExtensionShapeError,
     );
   });
 
   test("error: empty object", () => {
-    expect(() => validateExtensionMap({}, [])).toThrowError(
+    expect(() => validateExtensionMap({}, {})).toThrowError(
       InvalidExtensionShapeError,
     );
   });
 
   test("error: invalid name", () => {
     expect(() =>
-      validateExtensionMap({ "Bad-Name": GoodEntity }, []),
+      validateExtensionMap({ "Bad-Name": GoodEntity }, {}),
     ).toThrowError(InvalidExtensionNameError);
     expect(() =>
-      validateExtensionMap({ _hidden: GoodEntity }, []),
+      validateExtensionMap({ _hidden: GoodEntity }, {}),
     ).toThrowError(InvalidExtensionNameError);
   });
 
-  test("error: reserved name (vaultV1)", () => {
+  test("error: collision with built-in client member (vaultV1)", () => {
     expect(() =>
-      validateExtensionMap(
-        { vaultV1: GoodEntity },
-        RESERVED_MORPHO_CLIENT_NAMES,
-      ),
+      validateExtensionMap({ vaultV1: GoodEntity }, stubClientWithReserved),
     ).toThrowError(ExtensionNameCollisionError);
   });
 
   test("error: collision with previously registered extension", () => {
+    const client = { ...stubClientWithReserved, analytics: () => undefined };
     expect(() =>
-      validateExtensionMap({ analytics: GoodEntity }, ["analytics"]),
+      validateExtensionMap({ analytics: GoodEntity }, client),
+    ).toThrowError(ExtensionNameCollisionError);
+  });
+
+  test("error: collision with Object.prototype member (toString)", () => {
+    expect(() =>
+      validateExtensionMap({ toString: GoodEntity }, {}),
+    ).toThrowError(ExtensionNameCollisionError);
+  });
+
+  test("error: collision with Promise trap (then) — thenable hijack guard", () => {
+    expect(() =>
+      // biome-ignore lint/suspicious/noThenProperty: deliberate — this is the test that pins the validator's rejection of the `then` thenable trap.
+      validateExtensionMap({ then: GoodEntity }, {}),
     ).toThrowError(ExtensionNameCollisionError);
   });
 
   test("error: value is not a constructor", () => {
     expect(() =>
-      validateExtensionMap({ myEntity: "not a class" }, []),
+      validateExtensionMap({ myEntity: "not a class" }, {}),
     ).toThrowError(InvalidEntityClassError);
   });
 
   test("error: class does not extend MorphoEntity", () => {
     expect(() =>
-      validateExtensionMap({ myEntity: BadEntity }, []),
+      validateExtensionMap({ myEntity: BadEntity }, {}),
     ).toThrowError(InvalidEntityClassError);
   });
 
   test("error: passing MorphoEntity itself is rejected", () => {
     expect(() =>
-      validateExtensionMap({ myEntity: MorphoEntity }, []),
+      validateExtensionMap({ myEntity: MorphoEntity }, {}),
     ).toThrowError(InvalidEntityClassError);
   });
 });

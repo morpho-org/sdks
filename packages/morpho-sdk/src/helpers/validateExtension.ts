@@ -14,20 +14,17 @@ import {
 } from "../types/index.js";
 
 /**
- * Member names a `MorphoClient.extend()` call must not collide with. Covers the public surface
- * (constructor-set fields, built-in entity factories, the `extend` method itself).
+ * Names that would hijack the JavaScript Promise/thenable protocol if registered as an extension.
+ *
+ * Only `then` matters: any object exposing a `.then` function is treated as a thenable by
+ * `Promise.resolve`, `await`, returning from `async` functions, etc. — the runtime would call
+ * `client.then(resolve, reject)` and silently invoke the integrator factory with promise
+ * callbacks as constructor args. `catch` / `finally` are NOT part of the thenable protocol and
+ * pose no automatic-invocation risk.
  *
  * @internal
  */
-export const RESERVED_MORPHO_CLIENT_NAMES: readonly string[] = [
-  "viemClient",
-  "options",
-  "_options",
-  "vaultV1",
-  "vaultV2",
-  "marketV1",
-  "extend",
-];
+const PROMISE_TRAP_NAMES: ReadonlySet<string> = new Set(["then"]);
 
 const VALID_NAME_REGEX = /^[a-z][a-zA-Z0-9]*$/;
 
@@ -36,19 +33,23 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> =>
 
 /**
  * Validates the top-level shape of an extension map and rejects naming collisions before
- * anything is registered. Throws on the first failure.
+ * anything is registered. Collision detection is delegated to the live client instance via the
+ * `name in client` operator, so any field/method declared on `MorphoClient` (built-in or
+ * previously registered via `.extend()`) — plus everything inherited from `Object.prototype`
+ * (`constructor`, `toString`, `valueOf`, …) — is rejected without a hardcoded reserved list.
+ * The `then` thenable trap is reserved separately because it is not on any standard prototype.
  *
  * @param map - Raw record passed to `MorphoClient.extend()`.
- * @param takenNames - Names already in use on the target client (reserved + previously
- *   registered extensions).
+ * @param client - The live client instance the extension would attach to.
  * @throws {InvalidExtensionShapeError} when `map` is not a non-empty plain object.
  * @throws {InvalidExtensionNameError} when a key does not match `/^[a-z][a-zA-Z0-9]*$/`.
- * @throws {ExtensionNameCollisionError} when a key collides with a reserved or already-used name.
+ * @throws {ExtensionNameCollisionError} when a key already exists on `client` (built-in or
+ *   previously registered) or matches a Promise-protocol trap name (`then`).
  * @throws {InvalidEntityClassError} when a value is not a class extending `MorphoEntity`.
  */
 export function validateExtensionMap(
   map: unknown,
-  takenNames: readonly string[],
+  client: object,
 ): asserts map is ExtensionMap {
   if (!isPlainObject(map)) {
     throw new InvalidExtensionShapeError(
@@ -61,16 +62,12 @@ export function validateExtensionMap(
       "extensions object is empty — register at least one entity class",
     );
   }
-  const taken = new Set(takenNames);
   for (const [name, value] of entries) {
     if (!VALID_NAME_REGEX.test(name)) {
       throw new InvalidExtensionNameError(name);
     }
-    if (RESERVED_MORPHO_CLIENT_NAMES.includes(name)) {
-      throw new ExtensionNameCollisionError(name, "reserved");
-    }
-    if (taken.has(name)) {
-      throw new ExtensionNameCollisionError(name, "duplicate");
+    if (PROMISE_TRAP_NAMES.has(name) || name in client) {
+      throw new ExtensionNameCollisionError(name);
     }
     if (typeof value !== "function") {
       throw new InvalidEntityClassError(

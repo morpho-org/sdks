@@ -6,7 +6,6 @@ import {
   MorphoVaultV2,
 } from "../entities/index.js";
 import {
-  RESERVED_MORPHO_CLIENT_NAMES,
   validateExtensionMap,
   wrapEntityInstance,
 } from "../helpers/validateExtension.js";
@@ -229,10 +228,7 @@ export class MorphoClient implements MorphoClientType {
   public extend<const TExtension extends ExtensionMap>(
     extensions: TExtension,
   ): this & ExtensionInstances<TExtension> {
-    validateExtensionMap(extensions, [
-      ...RESERVED_MORPHO_CLIENT_NAMES,
-      ...this._extensions.keys(),
-    ]);
+    validateExtensionMap(extensions, this);
 
     const merged = new Map(this._extensions);
     for (const [name, EntityClass] of Object.entries(extensions)) {

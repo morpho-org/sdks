@@ -393,18 +393,15 @@ export class NegativeMinSharePriceError extends Error {
 }
 
 /**
- * Thrown by `MorphoClient.extend()` when an extension key collides with a reserved client member
- * (`viemClient`, `options`, `vaultV1`, `vaultV2`, `marketV1`, `extend`, …) or with a previously
- * registered extension. Pick a different name, or remove the prior extension.
+ * Thrown by `MorphoClient.extend()` when an extension key collides with an existing client
+ * member — built-in (`viemClient`, `options`, `vaultV1`, `vaultV2`, `marketV1`, `extend`, …),
+ * inherited from `Object.prototype` (`constructor`, `toString`, …), a previously registered
+ * extension, or the `then` Promise-thenable trap. Pick a different name.
  */
 export class ExtensionNameCollisionError extends Error {
-  constructor(name: string, kind: "reserved" | "duplicate") {
+  constructor(name: string) {
     super(
-      `Extension name "${name}" collides with ${
-        kind === "reserved"
-          ? "a reserved MorphoClient member"
-          : "a previously registered extension"
-      }. Pick a different name.`,
+      `Extension name "${name}" collides with an existing client member. Pick a different name.`,
     );
   }
 }
