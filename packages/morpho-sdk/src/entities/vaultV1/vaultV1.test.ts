@@ -36,11 +36,11 @@ describe("MorphoVaultV1 entity tests", () => {
         mainnet.id,
       );
 
-      const accrualVault = await vault.getData();
+      const vaultData = await vault.getData();
       const result = vault.deposit({
         amount: parseUnits("100", 6),
         userAddress: client.account.address,
-        accrualVault,
+        vaultData,
         slippageTolerance: 0n,
       });
 
@@ -63,11 +63,11 @@ describe("MorphoVaultV1 entity tests", () => {
         mainnet.id,
       );
 
-      const accrualVault = await vault.getData();
+      const vaultData = await vault.getData();
       const result = vault.deposit({
         amount: parseUnits("100", 6),
         userAddress: client.account.address,
-        accrualVault,
+        vaultData,
         slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
       });
 
@@ -90,12 +90,12 @@ describe("MorphoVaultV1 entity tests", () => {
         mainnet.id,
       );
 
-      const accrualVault = await vault.getData();
+      const vaultData = await vault.getData();
       expect(() =>
         vault.deposit({
           amount: parseUnits("100", 6),
           userAddress: client.account.address,
-          accrualVault,
+          vaultData,
           slippageTolerance: MAX_SLIPPAGE_TOLERANCE + 1n,
         }),
       ).toThrow(ExcessiveSlippageToleranceError);
@@ -112,12 +112,12 @@ describe("MorphoVaultV1 entity tests", () => {
         mainnet.id,
       );
 
-      const accrualVault = await vault.getData();
+      const vaultData = await vault.getData();
       expect(() =>
         vault.deposit({
           amount: parseUnits("100", 6),
           userAddress: client.account.address,
-          accrualVault,
+          vaultData,
           slippageTolerance: -1n,
         }),
       ).toThrow(NegativeSlippageToleranceError);
@@ -136,13 +136,13 @@ describe("MorphoVaultV1 entity tests", () => {
         mainnet.id,
       );
 
-      const accrualVault = await vault.getData();
+      const vaultData = await vault.getData();
       expect(() =>
         vault.deposit({
           amount: 0n,
           nativeAmount: -1n,
           userAddress: client.account.address,
-          accrualVault,
+          vaultData,
         }),
       ).toThrow(NegativeNativeAmountError);
     });
@@ -158,13 +158,13 @@ describe("MorphoVaultV1 entity tests", () => {
         mainnet.id,
       );
 
-      const accrualVault = await vault.getData();
+      const vaultData = await vault.getData();
       expect(() =>
         vault.deposit({
           amount: 0n,
           nativeAmount: parseUnits("1", 18),
           userAddress: client.account.address,
-          accrualVault,
+          vaultData,
         }),
       ).toThrow(NativeAmountOnNonWNativeVaultError);
     });
@@ -182,11 +182,11 @@ describe("MorphoVaultV1 entity tests", () => {
         mainnet.id,
       );
 
-      const accrualVault = await vault.getData();
+      const vaultData = await vault.getData();
       const { getRequirements } = vault.deposit({
         amount: parseUnits("100", 6),
         userAddress: client.account.address,
-        accrualVault,
+        vaultData,
       });
 
       const requirements = await getRequirements();

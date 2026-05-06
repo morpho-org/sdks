@@ -71,11 +71,11 @@ export class MorphoClient implements MorphoClientType {
    * @example
    * ```ts
    * const vault = client.vaultV1(vaultAddress, 1);
-   * const accrualVault = await vault.getData();
+   * const vaultData = await vault.getData();
    * const { buildTx } = vault.deposit({
    *   amount: 1_000_000n,
    *   userAddress: depositor,
-   *   accrualVault,
+   *   vaultData,
    * });
    * const tx = buildTx();
    * ```
@@ -93,11 +93,11 @@ export class MorphoClient implements MorphoClientType {
    * @example
    * ```ts
    * const vault = client.vaultV2(vaultAddress, 1);
-   * const accrualVault = await vault.getData();
+   * const vaultData = await vault.getData();
    * const { buildTx } = vault.deposit({
    *   amount: 1_000_000n,
    *   userAddress: depositor,
-   *   accrualVault,
+   *   vaultData,
    * });
    * const tx = buildTx();
    * ```
