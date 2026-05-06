@@ -26,7 +26,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@noble/hashes": "^1.6.1",
+    "@noble/hashes": "^2.2.0",
     "@types/lodash.isplainobject": "^4.0.9",
     "@types/lodash.mergewith": "^4.6.9",
     "lodash.isplainobject": "^4.0.6",
