@@ -1,6 +1,5 @@
-import { keys } from "../src";
-
 import { describe, expect, test } from "vitest";
+import { keys } from "../src";
 
 describe("utils", () => {
   test("should list keys of object", async () => {

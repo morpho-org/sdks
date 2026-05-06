@@ -3,7 +3,9 @@
   "description": "Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`).",
   "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "contributors": [
+    "Rubilmax <rmilon@gmail.com>"
+  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
@@ -12,7 +14,9 @@
   },
   "license": "MIT",
   "main": "src/index.ts",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "$npm_execpath build",
     "build": "tsc --noEmit && tsc --build tsconfig.build.json"

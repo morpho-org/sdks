@@ -1,15 +1,13 @@
-import { describe, expect } from "vitest";
-import { test } from "./setup";
-
 import {
+  addressesRegistry,
   ChainId,
   VaultMarketPublicAllocatorConfig,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
-
 import { markets, vaults } from "@morpho-org/morpho-test";
+import { describe, expect } from "vitest";
 import { metaMorphoAbi, publicAllocatorAbi } from "../src";
 import { VaultMarketConfig } from "../src/augment/VaultMarketConfig";
+import { test } from "./setup";
 
 const { usdc_wstEth } = markets[ChainId.EthMainnet];
 const { steakUsdc } = vaults[ChainId.EthMainnet];

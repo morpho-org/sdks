@@ -1,17 +1,16 @@
-import { type Address, erc20Abi, maxUint256, parseEther } from "viem";
-import {
-  MigratableProtocol,
-  SupplyMigrationLimiter,
-  fetchMigratablePositions,
-} from "../../../src/index.js";
-
-import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId, MathLib } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import type { AnvilTestClient } from "@morpho-org/test";
+import { type Address, erc20Abi, maxUint256, parseEther } from "viem";
 import { sendTransaction, writeContract } from "viem/actions";
 import { describe, expect } from "vitest";
 import { migrationAddressesRegistry } from "../../../src/config.js";
+import {
+  fetchMigratablePositions,
+  MigratableProtocol,
+  SupplyMigrationLimiter,
+} from "../../../src/index.js";
 import { MigratableSupplyPosition_AaveV3Optimizer } from "../../../src/positions/supply/aaveV3Optimizer.supply.js";
 import { test } from "../setup.js";
 

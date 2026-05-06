@@ -1,15 +1,14 @@
-import { describe, expect } from "vitest";
-import { test } from "./setup";
-
 import {
+  addressesRegistry,
   ChainId,
   Eip5267Domain,
   ExchangeRateWrappedToken,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { zeroHash } from "viem";
+import { describe, expect } from "vitest";
 import { Token } from "../src/augment/Token";
+import { test } from "./setup";
 
 const { mkr, usdc, stEth, wstEth } = addressesRegistry[ChainId.EthMainnet];
 

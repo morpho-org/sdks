@@ -1,15 +1,15 @@
 import {
   AccrualVaultV2,
+  getChainAddresses,
   type IVaultV2Allocation,
   VaultV2,
   VaultV2MorphoVaultV1Adapter,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import {
   type Address,
   type Client,
-  type Hash,
   erc20Abi,
+  type Hash,
   zeroAddress,
 } from "viem";
 import { getChainId, readContract } from "viem/actions";

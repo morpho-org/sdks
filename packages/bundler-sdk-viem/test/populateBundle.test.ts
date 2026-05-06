@@ -1,10 +1,10 @@
 import {
+  addressesRegistry,
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
   MarketParams,
   MathLib,
   NATIVE_ADDRESS,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import {

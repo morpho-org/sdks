@@ -25,4 +25,4 @@ Position.fetch = fetchPosition;
 AccrualPosition.fetch = fetchAccrualPosition;
 AccrualPosition.fetchPreLiquidation = fetchPreLiquidationPosition;
 
-export { Position, AccrualPosition, PreLiquidationPosition };
+export { AccrualPosition, Position, PreLiquidationPosition };

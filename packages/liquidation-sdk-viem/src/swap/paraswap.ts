@@ -1,4 +1,4 @@
-import { SwapSide, constructSimpleSDK } from "@paraswap/sdk";
+import { constructSimpleSDK, SwapSide } from "@paraswap/sdk";
 
 import type { Address, Hex } from "viem";
 import type { SwapParams, SwapResponse } from "./types.js";

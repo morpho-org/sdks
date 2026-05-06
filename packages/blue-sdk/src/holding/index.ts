@@ -1,2 +1,2 @@
-export * from "./Holding.js";
 export * from "./AssetBalances.js";
+export * from "./Holding.js";

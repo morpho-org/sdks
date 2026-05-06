@@ -4,8 +4,8 @@ import { useRef } from "react";
 import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 import {
-  type VaultV2AdapterParameters,
   fetchVaultV2AdapterQueryOptions,
+  type VaultV2AdapterParameters,
 } from "../queries/fetchVaultV2Adapter.js";
 import type { UseIndexedQueriesReturnType } from "../types/index.js";
 import { replaceDeepEqual } from "../utils/index.js";

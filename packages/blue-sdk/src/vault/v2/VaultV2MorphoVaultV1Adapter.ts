@@ -1,4 +1,4 @@
-import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
+import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 
 import { VaultV2Adapter } from "./VaultV2Adapter";
 

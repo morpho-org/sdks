@@ -3,7 +3,9 @@
   "description": "GraphQL SDK that exports types from the [API's GraphQL schema](https://blue-api.morpho.org/graphql) and a useful Apollo cache controller.",
   "version": "2.0.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": ["Rubilmax <rmilon@gmail.com>"],
+  "contributors": [
+    "Rubilmax <rmilon@gmail.com>"
+  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
@@ -11,7 +13,9 @@
     "email": "contact@morpho.org"
   },
   "main": "src/index.ts",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "$npm_execpath build",
     "codegen": "graphql-codegen --config codegen.ts",

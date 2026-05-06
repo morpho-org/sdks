@@ -1,6 +1,5 @@
+import { getChainAddresses, User } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
-
-import { User, getChainAddresses } from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { blueAbi } from "../abis";
 import type { FetchParameters } from "../types";

@@ -1,14 +1,14 @@
 import {
   type Address,
   DEFAULT_SLIPPAGE_TOLERANCE,
+  erc20WrapperTokens,
+  getChainAddresses,
+  getUnwrappedToken,
   Holding,
   type MarketId,
   MarketUtils,
   MathLib,
   NATIVE_ADDRESS,
-  erc20WrapperTokens,
-  getChainAddresses,
-  getUnwrappedToken,
   permissionedBackedTokens,
   permissionedWrapperTokens,
 } from "@morpho-org/blue-sdk";
@@ -22,20 +22,20 @@ import {
 import {
   APPROVE_ONLY_ONCE_TOKENS,
   type Erc20Operations,
+  handleOperation,
+  handleOperations,
   type MaybeDraft,
   type Operation,
   type Operations,
   type PublicAllocatorOptions,
+  produceImmutable,
   type SimulationResult,
   type SimulationState,
-  handleOperation,
-  handleOperations,
-  produceImmutable,
   simulateOperation,
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
 
-import { type UnionOmit, isAddressEqual, maxUint256 } from "viem";
+import { isAddressEqual, maxUint256, type UnionOmit } from "viem";
 import { BundlerErrors } from "./errors.js";
 import type {
   BundlerOperation,
@@ -331,7 +331,7 @@ export const populateSubBundle = (
 
   // Reallocate liquidity if necessary.
   if (
-    !!publicAllocatorOptions?.enabled &&
+    publicAllocatorOptions?.enabled &&
     (mainOperation.type === "Blue_Borrow" ||
       mainOperation.type === "Blue_Withdraw")
   ) {
@@ -1003,7 +1003,7 @@ export const finalizeBundle = (
         uniqueSkimTokens.add(NATIVE_ADDRESS);
         break;
       default:
-        //@ts-ignore This is dead code but acts as a guard in case a new operation is added
+        //@ts-expect-error This is dead code but acts as a guard in case a new operation is added
         throw new BundlerErrors.MissingSkimHandler(operation.type);
     }
 

@@ -1,4 +1,5 @@
 import {
+  _try,
   AccrualPosition,
   AccrualVault,
   AccrualVaultV2,
@@ -6,6 +7,7 @@ import {
   type Address,
   AssetBalances,
   ChainId,
+  getChainAddresses,
   type Holding,
   type Market,
   type MarketId,
@@ -28,17 +30,15 @@ import {
   type VaultV2Adapter,
   VaultV2MorphoVaultV1Adapter,
   WrappedToken,
-  _try,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import {
-  Time,
-  ZERO_ADDRESS,
   bigIntComparator,
   isDefined,
   keys,
+  Time,
   values,
+  ZERO_ADDRESS,
 } from "@morpho-org/morpho-ts";
 import {
   UnknownHoldingError,

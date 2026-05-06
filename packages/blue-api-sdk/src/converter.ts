@@ -14,7 +14,7 @@ import {
   VaultMarketPublicAllocatorConfig,
   VaultUtils,
 } from "@morpho-org/blue-sdk";
-import { ZERO_ADDRESS, isDefined } from "@morpho-org/morpho-ts";
+import { isDefined, ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 
 import type {
   Chain as ApiChain,

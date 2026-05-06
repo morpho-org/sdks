@@ -1,8 +1,8 @@
 import {
+  addressesRegistry,
   ChainId,
   Market,
   MathLib,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { markets, vaults } from "@morpho-org/morpho-test";
 import {

@@ -2,14 +2,13 @@ import type { VaultUser } from "@morpho-org/blue-sdk";
 import type { ReadContractErrorType } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 import { type UseQueryReturnType, useQuery } from "wagmi/query";
-import { replaceDeepEqual } from "../utils/index.js";
-
 import {
   type FetchVaultUserParameters,
   type FetchVaultUserQueryKey,
   fetchVaultUserQueryOptions,
 } from "../queries/fetchVaultUser.js";
 import type { ConfigParameter, QueryParameter } from "../types/index.js";
+import { replaceDeepEqual } from "../utils/index.js";
 import { useChainId } from "./useChainId.js";
 
 export type UseVaultUserParameters<

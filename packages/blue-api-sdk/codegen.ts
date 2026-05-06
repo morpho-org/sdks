@@ -22,6 +22,7 @@ const config: CodegenConfig = {
           },
           HexString: {
             input: "string",
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: codegen output type, not a template literal
             output: "`0x${string}`",
           },
           Address: {

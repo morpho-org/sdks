@@ -1,18 +1,11 @@
 import {
-  BorrowMigrationLimiter,
-  MigratableProtocol,
-  SupplyMigrationLimiter,
-  fetchMigratablePositions,
-  migrationAddressesRegistry,
-} from "../../../src/index.js";
-
-import {
+  addressesRegistry,
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
   type MarketParams,
   MathLib,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
+import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 
 import { markets } from "@morpho-org/morpho-test";
 import { entries } from "@morpho-org/morpho-ts";
@@ -24,11 +17,16 @@ import {
   parseEther,
   parseUnits,
 } from "viem";
-import { type TestAPI, describe, expect } from "vitest";
-
-import { fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { sendTransaction } from "viem/actions";
+import { describe, expect, type TestAPI } from "vitest";
 import { cometAbi, cometExtAbi } from "../../../src/abis/compoundV3.js";
+import {
+  BorrowMigrationLimiter,
+  fetchMigratablePositions,
+  MigratableProtocol,
+  migrationAddressesRegistry,
+  SupplyMigrationLimiter,
+} from "../../../src/index.js";
 import { MigratableBorrowPosition_CompoundV3 } from "../../../src/positions/borrow/compoundV3.borrow.js";
 import { test } from "../setup.js";
 

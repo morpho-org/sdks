@@ -1,14 +1,13 @@
 import { makeCreator } from "mutative";
-
-import type { SimulationState } from "../SimulationState.js";
 import { SimulationErrors } from "../errors.js";
 import {
-  type Operation,
   isBlueOperation,
   isErc20Operation,
   isMetaMorphoOperation,
   isParaswapOperation,
+  type Operation,
 } from "../operations.js";
+import type { SimulationState } from "../SimulationState.js";
 
 import { handleBlueOperation } from "./blue/index.js";
 import { handleErc20Operation } from "./erc20/index.js";

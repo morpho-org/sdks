@@ -1,20 +1,20 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  configure,
   type Queries,
+  type queries,
   type RenderHookOptions,
   type RenderOptions,
-  configure,
-  type queries,
   render as rtl_render,
   renderHook as rtl_renderHook,
   waitFor as rtl_waitFor,
   type waitForOptions,
 } from "@testing-library/react";
 import {
+  createElement,
   type FunctionComponent,
   type ReactElement,
   type ReactNode,
-  createElement,
 } from "react";
 import type { Chain, Transport } from "viem";
 import { type Config, WagmiProvider } from "wagmi";

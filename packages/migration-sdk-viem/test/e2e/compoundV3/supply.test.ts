@@ -1,17 +1,17 @@
-import { ChainId, MathLib, addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId, MathLib } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { vaults } from "@morpho-org/morpho-test";
 import { entries } from "@morpho-org/morpho-ts";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
 import { type Address, maxUint256, parseUnits } from "viem";
 import { sendTransaction } from "viem/actions";
-import { type TestAPI, describe, expect } from "vitest";
+import { describe, expect, type TestAPI } from "vitest";
 import { cometAbi } from "../../../src/abis/compoundV3.js";
 import { migrationAddressesRegistry } from "../../../src/config.js";
 import {
+  fetchMigratablePositions,
   MigratableProtocol,
   SupplyMigrationLimiter,
-  fetchMigratablePositions,
 } from "../../../src/index.js";
 import { MigratableSupplyPosition_CompoundV3 } from "../../../src/positions/supply/compoundV3.supply.js";
 import { test } from "../setup.js";

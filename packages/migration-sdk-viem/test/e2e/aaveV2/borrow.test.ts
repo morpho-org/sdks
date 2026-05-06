@@ -1,19 +1,10 @@
 import {
-  BorrowMigrationLimiter,
-  MigratableProtocol,
-  SupplyMigrationLimiter,
-  fetchMigratablePositions,
-  migrationAddressesRegistry,
-} from "../../../src/index.js";
-
-import {
+  addressesRegistry,
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
   type MarketParams,
   MathLib,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
-
 import { blueAbi, fetchAccrualPosition } from "@morpho-org/blue-sdk-viem";
 import { markets } from "@morpho-org/morpho-test";
 import { testAccount } from "@morpho-org/test";
@@ -27,11 +18,18 @@ import {
   parseUnits,
 } from "viem";
 import { readContract, sendTransaction } from "viem/actions";
-import { type TestAPI, describe, expect } from "vitest";
+import { describe, expect, type TestAPI } from "vitest";
 import {
   aTokenV2Abi,
   variableDebtTokenV2Abi,
 } from "../../../src/abis/aaveV2.js";
+import {
+  BorrowMigrationLimiter,
+  fetchMigratablePositions,
+  MigratableProtocol,
+  migrationAddressesRegistry,
+  SupplyMigrationLimiter,
+} from "../../../src/index.js";
 import { MigratableBorrowPosition_AaveV2 } from "../../../src/positions/borrow/aaveV2.borrow.js";
 import { MigratableSupplyPosition_AaveV2 } from "../../../src/positions/supply/aaveV2.supply.js";
 import { test } from "../setup.js";

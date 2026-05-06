@@ -4,8 +4,8 @@ import { useRef } from "react";
 import type { Address, UnionOmit } from "viem";
 import { type Config, type ResolvedRegister, useConfig } from "wagmi";
 import {
-  type VaultMarketConfigParameters,
   fetchVaultMarketConfigQueryOptions,
+  type VaultMarketConfigParameters,
 } from "../queries/fetchVaultMarketConfig.js";
 import type { UseCompositeQueriesReturnType } from "../types/index.js";
 import { replaceDeepEqual, uniqBy } from "../utils/index.js";

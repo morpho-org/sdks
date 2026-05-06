@@ -1,8 +1,8 @@
 import {
   type Address,
-  ChainId,
   addresses,
   addressesRegistry,
+  ChainId,
   registerCustomAddresses,
 } from "@morpho-org/blue-sdk";
 import type { MidasConfig } from "./tokens/midas";

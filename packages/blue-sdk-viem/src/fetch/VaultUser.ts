@@ -1,12 +1,10 @@
+import { VaultUser } from "@morpho-org/blue-sdk";
 import { type Address, type Client, erc20Abi } from "viem";
 
-import { VaultUser } from "@morpho-org/blue-sdk";
-
 import { getChainId, readContract } from "viem/actions";
-import type { DeploylessFetchParameters } from "../types";
-
 import { metaMorphoAbi } from "../abis";
 import { abi, code } from "../queries/GetVaultUser";
+import type { DeploylessFetchParameters } from "../types";
 import { fetchVaultConfig } from "./VaultConfig";
 
 export async function fetchVaultUser(

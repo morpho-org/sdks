@@ -1,5 +1,5 @@
 import { test } from "@playwright/test";
-import { http, type Chain, formatUnits } from "viem";
+import { type Chain, formatUnits, http } from "viem";
 import { type AnvilArgs, spawnAnvil } from "./anvil";
 import { type AnvilTestClient, createAnvilTestClient } from "./client";
 
@@ -53,7 +53,7 @@ export const expect = test.expect.extend({
     const expectedNumber = Number(formatUnits(expected, decimals));
 
     let pass: boolean;
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: matcher result shape comes from external test runner
     let matcherResult: any;
     try {
       test.expect(receivedNumber).toBeCloseTo(expectedNumber, numDigits);

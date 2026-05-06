@@ -1,14 +1,18 @@
 import {
-  UnsupportedVaultV2AdapterError,
   getChainAddresses,
+  UnsupportedVaultV2AdapterError,
 } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { getChainId, readContract } from "viem/actions";
-import { morphoVaultV1AdapterFactoryAbi } from "../../abis";
-import { morphoMarketV1AdapterFactoryAbi } from "../../abis";
+import {
+  morphoMarketV1AdapterFactoryAbi,
+  morphoVaultV1AdapterFactoryAbi,
+} from "../../abis";
 import type { DeploylessFetchParameters } from "../../types";
-import { fetchVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter";
-import { fetchAccrualVaultV2MorphoMarketV1Adapter } from "./VaultV2MorphoMarketV1Adapter";
+import {
+  fetchAccrualVaultV2MorphoMarketV1Adapter,
+  fetchVaultV2MorphoMarketV1Adapter,
+} from "./VaultV2MorphoMarketV1Adapter";
 import {
   fetchAccrualVaultV2MorphoVaultV1Adapter,
   fetchVaultV2MorphoVaultV1Adapter,

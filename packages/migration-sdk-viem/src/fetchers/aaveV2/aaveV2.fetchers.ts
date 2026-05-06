@@ -1,7 +1,19 @@
-import { type Address, MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
+import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
+import {
+  blueAbi,
+  type FetchParameters,
+  fetchToken,
+} from "@morpho-org/blue-sdk-viem";
 import { isDefined, values } from "@morpho-org/morpho-ts";
-
+import { type Client, erc20Abi, parseUnits } from "viem";
+import { getChainId, readContract } from "viem/actions";
+import {
+  aaveV2OracleAbi,
+  aTokenV2Abi,
+  variableDebtTokenV2Abi,
+} from "../../abis/aaveV2.js";
 import { migrationAddresses } from "../../config.js";
+import { MigratableBorrowPosition_AaveV2 } from "../../positions/borrow/aaveV2.borrow.js";
 import type { MigratablePosition } from "../../positions/index.js";
 import { MigratableSupplyPosition_AaveV2 } from "../../positions/supply/aaveV2.supply.js";
 import {
@@ -9,21 +21,6 @@ import {
   MigratableProtocol,
   SupplyMigrationLimiter,
 } from "../../types/index.js";
-
-import {
-  type FetchParameters,
-  blueAbi,
-  fetchToken,
-} from "@morpho-org/blue-sdk-viem";
-
-import { type Client, erc20Abi, parseUnits } from "viem";
-import { getChainId, readContract } from "viem/actions";
-import {
-  aTokenV2Abi,
-  aaveV2OracleAbi,
-  variableDebtTokenV2Abi,
-} from "../../abis/aaveV2.js";
-import { MigratableBorrowPosition_AaveV2 } from "../../positions/borrow/aaveV2.borrow.js";
 import { rateToApy } from "../../utils/rates.js";
 
 export async function fetchAaveV2Positions(

@@ -2,10 +2,10 @@ import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import {
+  addressesRegistry,
   ChainId,
   Market,
   MarketParams,
-  addressesRegistry,
 } from "../../src/index.js";
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "./abis.js";
 import { test } from "./setup.js";

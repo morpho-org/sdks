@@ -15,4 +15,4 @@ declare module "@morpho-org/blue-sdk" {
 Vault.fetch = fetchVault;
 AccrualVault.fetch = fetchAccrualVault;
 
-export { Vault, AccrualVault };
+export { AccrualVault, Vault };

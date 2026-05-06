@@ -1,4 +1,29 @@
 import {
+  convexWrapperTokens,
+  DEFAULT_SLIPPAGE_TOLERANCE,
+  erc20WrapperTokens,
+  getChainAddresses,
+  getUnwrappedToken,
+  MathLib,
+  NATIVE_ADDRESS,
+} from "@morpho-org/blue-sdk";
+import {
+  blueAbi,
+  getAuthorizationTypedData,
+  getDaiPermitTypedData,
+  getPermit2PermitTypedData,
+  getPermitTypedData,
+} from "@morpho-org/blue-sdk-viem";
+import { getValue, Time } from "@morpho-org/morpho-ts";
+import {
+  getCurrent,
+  MAX_TOKEN_APPROVALS,
+  type MaybeDraft,
+  type Operation,
+  type SimulationState,
+  simulateOperation,
+} from "@morpho-org/simulation-sdk";
+import {
   type Account,
   type Address,
   type Client,
@@ -10,33 +35,6 @@ import {
   verifyTypedData,
   zeroAddress,
 } from "viem";
-
-import {
-  DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
-  NATIVE_ADDRESS,
-  convexWrapperTokens,
-  erc20WrapperTokens,
-  getChainAddresses,
-  getUnwrappedToken,
-} from "@morpho-org/blue-sdk";
-import { Time, getValue } from "@morpho-org/morpho-ts";
-import {
-  MAX_TOKEN_APPROVALS,
-  type MaybeDraft,
-  type Operation,
-  type SimulationState,
-  getCurrent,
-  simulateOperation,
-} from "@morpho-org/simulation-sdk";
-
-import {
-  blueAbi,
-  getAuthorizationTypedData,
-  getDaiPermitTypedData,
-  getPermit2PermitTypedData,
-  getPermitTypedData,
-} from "@morpho-org/blue-sdk-viem";
 import { signTypedData } from "viem/actions";
 import { ActionBundle, ActionBundleRequirements } from "./ActionBundle.js";
 import { BundlerErrors } from "./errors.js";

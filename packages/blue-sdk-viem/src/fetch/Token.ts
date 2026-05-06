@@ -1,4 +1,13 @@
 import {
+  ConstantWrappedToken,
+  Eip5267Domain,
+  ExchangeRateWrappedToken,
+  getChainAddresses,
+  getUnwrappedToken,
+  NATIVE_ADDRESS,
+  Token,
+} from "@morpho-org/blue-sdk";
+import {
   type Address,
   type Client,
   erc20Abi,
@@ -6,16 +15,6 @@ import {
   hexToString,
   isHex,
 } from "viem";
-
-import {
-  ConstantWrappedToken,
-  Eip5267Domain,
-  ExchangeRateWrappedToken,
-  NATIVE_ADDRESS,
-  Token,
-  getChainAddresses,
-  getUnwrappedToken,
-} from "@morpho-org/blue-sdk";
 import { getChainId, readContract } from "viem/actions";
 import { erc5267Abi, wstEthAbi } from "../abis";
 import { abi, code } from "../queries/GetToken";

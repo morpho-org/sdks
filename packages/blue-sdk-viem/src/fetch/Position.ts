@@ -1,10 +1,10 @@
 import {
   AccrualPosition,
+  getChainAddresses,
   type MarketId,
   Position,
   PreLiquidationParams,
   PreLiquidationPosition,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 
 import type { Address, Client } from "viem";

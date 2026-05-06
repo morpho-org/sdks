@@ -1,5 +1,5 @@
 import type { InputMarketParams, MarketId } from "@morpho-org/blue-sdk";
-import { type Address, type Hex, encodeFunctionData } from "viem";
+import { type Address, encodeFunctionData, type Hex } from "viem";
 import { metaMorphoAbi } from "./abis";
 
 export type MetaMorphoCall = Hex;

@@ -1,6 +1,3 @@
-import { renderHook, waitFor } from "@morpho-org/test-wagmi";
-import { describe, expect } from "vitest";
-
 import { ChainId } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";
@@ -9,7 +6,9 @@ import {
   type MinimalBlock,
   simulateOperations,
 } from "@morpho-org/simulation-sdk";
+import { renderHook, waitFor } from "@morpho-org/test-wagmi";
 import { parseUnits } from "viem";
+import { describe, expect } from "vitest";
 import { useSimulationState } from "../../../src/index.js";
 import { test } from "../../setup.js";
 

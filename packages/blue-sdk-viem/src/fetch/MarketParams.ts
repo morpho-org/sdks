@@ -1,9 +1,9 @@
 import {
+  _try,
+  getChainAddresses,
   type MarketId,
   MarketParams,
   UnknownMarketParamsError,
-  _try,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import type { Client } from "viem";
 import { getChainId } from "viem/actions";

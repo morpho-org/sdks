@@ -1,17 +1,15 @@
-import { type Client, zeroAddress } from "viem";
-
 import {
+  getChainAddresses,
   Market,
   type MarketId,
   MarketParams,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { type Client, zeroAddress } from "viem";
 
 import { getChainId, readContract } from "viem/actions";
-import type { DeploylessFetchParameters } from "../types";
-
 import { adaptiveCurveIrmAbi, blueAbi, blueOracleAbi } from "../abis";
 import { abi, code } from "../queries/GetMarket";
+import type { DeploylessFetchParameters } from "../types";
 import { readContractRestructured } from "../utils";
 
 export async function fetchMarket(

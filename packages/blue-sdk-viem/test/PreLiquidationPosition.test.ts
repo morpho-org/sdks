@@ -1,13 +1,12 @@
-import { maxUint256, parseUnits } from "viem";
-
 import {
   ChainId,
+  getChainAddresses,
   PreLiquidationParams,
   PreLiquidationPosition,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
 import { markets } from "@morpho-org/morpho-test";
 import { testAccount } from "@morpho-org/test";
+import { maxUint256, parseUnits } from "viem";
 import { describe, expect } from "vitest";
 import {
   blueAbi,

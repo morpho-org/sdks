@@ -1,4 +1,4 @@
-import { type Address, type Hex, encodeAbiParameters, keccak256 } from "viem";
+import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
 import {
   type IMarketParams,
   MarketParams,
@@ -7,8 +7,8 @@ import {
 import type { AccrualPosition } from "../../position";
 import type { BigIntish } from "../../types";
 import { CapacityLimitReason } from "../../utils";
-import { VaultV2Adapter } from "./VaultV2Adapter";
 import type { IAccrualVaultV2Adapter, IVaultV2Adapter } from "./VaultV2Adapter";
+import { VaultV2Adapter } from "./VaultV2Adapter";
 
 export interface IVaultV2MorphoMarketV1Adapter
   extends Omit<IVaultV2Adapter, "adapterId"> {

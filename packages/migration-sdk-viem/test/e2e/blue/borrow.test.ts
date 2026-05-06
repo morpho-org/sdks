@@ -1,20 +1,11 @@
 import {
+  addressesRegistry,
   ChainId,
   DEFAULT_SLIPPAGE_TOLERANCE,
+  getChainAddresses,
   MarketParams,
   MathLib,
-  addressesRegistry,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
-
-import {
-  getAddress,
-  maxUint256,
-  parseEther,
-  parseUnits,
-  zeroAddress,
-} from "viem";
-
 import {
   blueAbi,
   fetchAccrualPosition,
@@ -33,8 +24,15 @@ import { markets } from "@morpho-org/morpho-test";
 import { fromEntries } from "@morpho-org/morpho-ts";
 import { SimulationState } from "@morpho-org/simulation-sdk";
 import type { ViemTestContext } from "@morpho-org/test/vitest";
+import {
+  getAddress,
+  maxUint256,
+  parseEther,
+  parseUnits,
+  zeroAddress,
+} from "viem";
 import { sendTransaction } from "viem/actions";
-import { type TestAPI, describe, expect } from "vitest";
+import { describe, expect, type TestAPI } from "vitest";
 import { MigratableBorrowPosition_Blue } from "../../../src/index.js";
 import { test } from "../setup.js";
 

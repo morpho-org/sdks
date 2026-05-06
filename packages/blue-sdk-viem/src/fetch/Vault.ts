@@ -1,22 +1,20 @@
-import { type Address, type Client, zeroAddress } from "viem";
-
 import {
   AccrualVault,
   Eip5267Domain,
+  getChainAddresses,
   type MarketId,
   Vault,
   VaultConfig,
   type VaultPublicAllocatorConfig,
-  getChainAddresses,
 } from "@morpho-org/blue-sdk";
+import { type Address, type Client, zeroAddress } from "viem";
 
 import { getChainId, readContract } from "viem/actions";
 import { metaMorphoAbi, publicAllocatorAbi } from "../abis";
-import type { DeploylessFetchParameters } from "../types";
-import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
-
 import { abi, code } from "../queries/GetVault";
+import type { DeploylessFetchParameters } from "../types";
 import { fetchVaultConfig } from "./VaultConfig";
+import { fetchVaultMarketAllocation } from "./VaultMarketAllocation";
 
 export async function fetchVault(
   address: Address,

@@ -23,8 +23,8 @@ import {
   mkrSkyConverterAbi,
   preLiquidationAbi,
   redemptionVaultAbi,
-  sUsdsAbi,
   spectraPrincipalTokenAbi,
+  sUsdsAbi,
 } from "./abis.js";
 import { curvePools, mainnetAddresses } from "./addresses.js";
 import { fetchBestSwap } from "./swap/index.js";

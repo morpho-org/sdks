@@ -1,8 +1,8 @@
 import {
+  addressesRegistry,
   ChainId,
   type InputMarketParams,
   NATIVE_ADDRESS,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 import { metaMorphoAbi, publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 import { markets, vaults } from "@morpho-org/morpho-test";

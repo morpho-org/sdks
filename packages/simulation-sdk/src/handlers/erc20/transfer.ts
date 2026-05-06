@@ -1,4 +1,4 @@
-import { MathLib, getChainAddresses } from "@morpho-org/blue-sdk";
+import { getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { Erc20Errors, UnknownHoldingError } from "../../errors.js";

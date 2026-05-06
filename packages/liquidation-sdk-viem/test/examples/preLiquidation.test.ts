@@ -1,17 +1,13 @@
 import nock from "nock";
 import "evm-maths";
-import fetchMock from "fetch-mock";
 
 import {
   type Address,
+  addressesRegistry,
   ChainId,
   type MarketId,
   PreLiquidationPosition,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
-import { format } from "@morpho-org/morpho-ts";
-import type { BuildTxInput } from "@paraswap/sdk";
-
 import {
   blueAbi,
   fetchAccrualPosition,
@@ -23,7 +19,10 @@ import {
   type LiquidationEncoder,
   preLiquidationFactoryAbi,
 } from "@morpho-org/liquidation-sdk-viem";
+import { format } from "@morpho-org/morpho-ts";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test";
+import type { BuildTxInput } from "@paraswap/sdk";
+import fetchMock from "fetch-mock";
 import { encodeFunctionData, erc20Abi, maxUint256, parseUnits } from "viem";
 import type { mainnet } from "viem/chains";
 import { afterEach, beforeEach, describe, expect, vi } from "vitest";

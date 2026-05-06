@@ -1,7 +1,7 @@
 import {
+  addressesRegistry,
   ChainId,
   type InputMarketParams,
-  addressesRegistry,
 } from "@morpho-org/blue-sdk";
 
 import { blueAbi } from "@morpho-org/blue-sdk-viem";

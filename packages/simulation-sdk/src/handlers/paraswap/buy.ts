@@ -1,11 +1,10 @@
-import type { ParaswapOperations } from "../../operations.js";
-import type { OperationHandler } from "../types.js";
-
 import { MathLib } from "@morpho-org/blue-sdk";
 import { ZERO_ADDRESS } from "@morpho-org/morpho-ts";
 import { hexToBigInt, size, slice } from "viem";
 import { ParaswapErrors } from "../../errors.js";
+import type { ParaswapOperations } from "../../operations.js";
 import { handleErc20Operation } from "../erc20/index.js";
+import type { OperationHandler } from "../types.js";
 
 export const handleParaswapBuyOperation: OperationHandler<
   ParaswapOperations["Paraswap_Buy"]

@@ -1,24 +1,22 @@
 import {
   type Address,
-  NATIVE_ADDRESS,
   getChainAddresses,
   getUnwrappedToken,
+  NATIVE_ADDRESS,
 } from "@morpho-org/blue-sdk";
-import { isDefined, keys, values } from "@morpho-org/morpho-ts";
-
-import {
-  type BundlingOptions,
-  type InputBundlerOperation,
-  setupBundle,
-} from "../src/index.js";
-
 import { blueAbi, permit2Abi } from "@morpho-org/blue-sdk-viem";
 import { withSimplePermit } from "@morpho-org/morpho-test";
+import { isDefined, keys, values } from "@morpho-org/morpho-ts";
 import type { SimulationState } from "@morpho-org/simulation-sdk";
 import { type AnvilTestClient, testAccount } from "@morpho-org/test";
 import { type Account, type Chain, zeroAddress } from "viem";
 import { parseAccount } from "viem/accounts";
 import { expect } from "vitest";
+import {
+  type BundlingOptions,
+  type InputBundlerOperation,
+  setupBundle,
+} from "../src/index.js";
 
 export const donator = testAccount(9);
 
@@ -122,7 +120,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
 
   for (const tx of bundle.txs()) {
     await client.sendTransaction(
-      // @ts-ignore
+      // @ts-expect-error
       { ...tx, account, gasPrice },
     );
   }

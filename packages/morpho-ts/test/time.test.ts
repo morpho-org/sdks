@@ -1,6 +1,5 @@
-import { Time } from "../src";
-
 import { describe, expect, test } from "vitest";
+import { Time } from "../src";
 
 describe("time", () => {
   test("Should resolve after 1 second", async () => {

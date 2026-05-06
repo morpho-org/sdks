@@ -1,10 +1,10 @@
 import { randomAddress } from "@morpho-org/test/fixtures";
 import { describe, expect, test } from "vitest";
 import {
-  type ChainAddresses,
-  ChainId,
   addresses,
   addressesRegistry,
+  type ChainAddresses,
+  ChainId,
   getChainAddresses,
   getUnwrappedToken,
   registerCustomAddresses,

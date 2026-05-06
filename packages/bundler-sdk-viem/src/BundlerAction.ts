@@ -1,4 +1,26 @@
 import {
+  ChainId,
+  getChainAddresses,
+  type InputMarketParams,
+} from "@morpho-org/blue-sdk";
+import {
+  blueAbi,
+  erc2612Abi,
+  permit2Abi,
+  publicAllocatorAbi,
+} from "@morpho-org/blue-sdk-viem";
+import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
+import {
+  type Address,
+  encodeAbiParameters,
+  encodeFunctionData,
+  type Hex,
+  keccak256,
+  maxUint256,
+  parseSignature,
+  zeroHash,
+} from "viem";
+import {
   aaveV2MigrationAdapterAbi,
   aaveV3MigrationAdapterAbi,
   aaveV3OptimizerMigrationAdapterAbi,
@@ -12,29 +34,6 @@ import {
   paraswapAdapterAbi,
   universalRewardsDistributorAbi,
 } from "./abis.js";
-
-import {
-  ChainId,
-  type InputMarketParams,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
-import {
-  blueAbi,
-  erc2612Abi,
-  permit2Abi,
-  publicAllocatorAbi,
-} from "@morpho-org/blue-sdk-viem";
-import type { ParaswapOffsets } from "@morpho-org/simulation-sdk";
-import {
-  type Address,
-  type Hex,
-  encodeAbiParameters,
-  encodeFunctionData,
-  keccak256,
-  maxUint256,
-  parseSignature,
-  zeroHash,
-} from "viem";
 import { BundlerErrors } from "./errors.js";
 import type {
   Action,
