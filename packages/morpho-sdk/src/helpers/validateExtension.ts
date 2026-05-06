@@ -10,6 +10,8 @@ import {
   InvalidExtensionShapeError,
   InvalidRequirementShapeError,
   InvalidTransactionShapeError,
+  isRequirementShape,
+  isTransactionShape,
   MorphoEntity,
 } from "../types/index.js";
 
@@ -223,10 +225,7 @@ function assertValidRequirementsShape(
   }
   for (let i = 0; i < requirements.length; i++) {
     const item = requirements[i];
-    if (
-      !isStructuralTransactionLike(item) &&
-      !isStructuralRequirementLike(item)
-    ) {
+    if (!isTransactionShape(item) && !isRequirementShape(item)) {
       throw new InvalidRequirementShapeError({
         ...ctx,
         index: i,
@@ -236,20 +235,6 @@ function assertValidRequirementsShape(
     }
   }
 }
-
-const isStructuralTransactionLike = (value: unknown): boolean =>
-  isPlainObject(value) &&
-  typeof value.to === "string" &&
-  typeof value.value === "bigint" &&
-  typeof value.data === "string" &&
-  isPlainObject(value.action) &&
-  typeof (value.action as Record<string, unknown>).type === "string";
-
-const isStructuralRequirementLike = (value: unknown): boolean =>
-  isPlainObject(value) &&
-  typeof value.sign === "function" &&
-  isPlainObject(value.action) &&
-  typeof (value.action as Record<string, unknown>).type === "string";
 
 /**
  * Re-export so consumers can reference the same opaque type the validator narrows to.

@@ -289,6 +289,64 @@ export interface RequirementSignature {
   action: PermitAction | Permit2Action;
 }
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+/**
+ * Strict structural type-guard for {@link Transaction}. Returns `true` when `value` matches
+ * `{ to: string, value: bigint, data: string, action: { type: string, args: object } }`.
+ * Accepts any `action.type` literal — useful both for SDK code that needs to discriminate a
+ * union of returns and for integrators pattern-matching on transactions built by their own
+ * extension entities.
+ *
+ * @param value - Anything (typically a candidate transaction or requirement).
+ * @returns `true` if the value is structurally a transaction.
+ * @example
+ * ```ts
+ * if (isTransactionShape(maybeTx)) {
+ *   void maybeTx.to;
+ *   void maybeTx.action.type;
+ * }
+ * ```
+ */
+export function isTransactionShape(
+  value: unknown,
+): value is Transaction<BaseAction> {
+  return (
+    isPlainObject(value) &&
+    typeof value.to === "string" &&
+    typeof value.value === "bigint" &&
+    typeof value.data === "string" &&
+    isPlainObject(value.action) &&
+    typeof (value.action as Record<string, unknown>).type === "string" &&
+    isPlainObject((value.action as Record<string, unknown>).args)
+  );
+}
+
+/**
+ * Strict structural type-guard for {@link Requirement}. Returns `true` when `value` matches
+ * `{ sign: function, action: { type: string, args: object } }`. Stricter than
+ * {@link isRequirementSignature}, which only checks for the presence of `sign`.
+ *
+ * @param value - Anything (typically a candidate requirement).
+ * @returns `true` if the value is structurally a requirement.
+ */
+export function isRequirementShape(value: unknown): value is Requirement {
+  return (
+    isPlainObject(value) &&
+    typeof value.sign === "function" &&
+    isPlainObject(value.action) &&
+    typeof (value.action as Record<string, unknown>).type === "string" &&
+    isPlainObject((value.action as Record<string, unknown>).args)
+  );
+}
+
+/**
+ * Returns `true` when the given requirement is an ERC-20 approval transaction.
+ *
+ * @param requirement - Candidate requirement (or `undefined`).
+ * @returns `true` if it's a `Transaction<ERC20ApprovalAction>`.
+ */
 export function isRequirementApproval(
   requirement:
     | Transaction<ERC20ApprovalAction>
@@ -297,15 +355,17 @@ export function isRequirementApproval(
     | undefined,
 ): requirement is Transaction<ERC20ApprovalAction> {
   return (
-    requirement !== undefined &&
-    "to" in requirement &&
-    "value" in requirement &&
-    "data" in requirement &&
-    "action" in requirement &&
+    isTransactionShape(requirement) &&
     requirement.action.type === "erc20Approval"
   );
 }
 
+/**
+ * Returns `true` when the given requirement is a Morpho `setAuthorization` transaction.
+ *
+ * @param requirement - Candidate requirement (or `undefined`).
+ * @returns `true` if it's a `Transaction<MorphoAuthorizationAction>`.
+ */
 export function isRequirementAuthorization(
   requirement:
     | Transaction<ERC20ApprovalAction>
@@ -314,15 +374,18 @@ export function isRequirementAuthorization(
     | undefined,
 ): requirement is Transaction<MorphoAuthorizationAction> {
   return (
-    requirement !== undefined &&
-    "to" in requirement &&
-    "value" in requirement &&
-    "data" in requirement &&
-    "action" in requirement &&
+    isTransactionShape(requirement) &&
     requirement.action.type === "morphoAuthorization"
   );
 }
 
+/**
+ * Returns `true` when the given requirement carries a `sign` function (permit / permit2 flow).
+ * Looser than {@link isRequirementShape}: only checks for `sign` presence and callability.
+ *
+ * @param requirement - Candidate requirement (or `undefined`).
+ * @returns `true` if it has a callable `sign` property.
+ */
 export function isRequirementSignature(
   requirement:
     | Transaction<ERC20ApprovalAction>
