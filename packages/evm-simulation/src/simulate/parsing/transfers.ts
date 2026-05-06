@@ -1,7 +1,7 @@
 import { getAddress, type Hex, zeroAddress, zeroHash } from "viem";
 
 import type {
-  RawCallResult,
+  RawCall,
   RawLog,
   SimulationLogger,
   Transfer,
@@ -23,7 +23,7 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
 /**
  * Parse raw EVM logs into individual Transfer events.
  *
- * Iterates over per-tx `callResults` and stamps each emitted `Transfer.txIdx`
+ * Iterates over per-tx `calls` and stamps each emitted `Transfer.txIdx`
  * with the index of the originating call. WETH9 wrap/unwrap dedup is scoped
  * to the same tx — wrap/unwrap pairs always emit in the same call.
  *
@@ -40,13 +40,13 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * `txIdx` is attached but does not influence sort order.
  */
 export function parseTransfers(
-  callResults: readonly RawCallResult[],
+  calls: readonly RawCall[],
   logger?: SimulationLogger,
 ): Transfer[] {
   const transfers: Transfer[] = [];
 
-  for (let txIdx = 0; txIdx < callResults.length; txIdx++) {
-    const logs = callResults[txIdx]!.logs;
+  for (let txIdx = 0; txIdx < calls.length; txIdx++) {
+    const logs = calls[txIdx]!.logs;
     for (const log of logs) {
       try {
         const topic0 = log.topics[0];

@@ -188,11 +188,11 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
     expect(result.tenderlyUrl).toBe(
       "https://dashboard.tenderly.co/shared/simulation/sim-xyz",
     );
-    expect(result.callResults).toHaveLength(1);
-    expect(result.callResults[0]!.logs).toHaveLength(1);
-    expect(result.callResults[0]!.logs[0]!.address).toBe(USDC);
-    expect(result.callResults[0]!.returnData).toBe("0xfeed");
-    expect(result.callResults[0]!.gasUsed).toBe(21_000n);
+    expect(result.calls).toHaveLength(1);
+    expect(result.calls[0]!.logs).toHaveLength(1);
+    expect(result.calls[0]!.logs[0]!.address).toBe(USDC);
+    expect(result.calls[0]!.returnData).toBe("0xfeed");
+    expect(result.calls[0]!.gasUsed).toBe(21_000n);
   });
 
   it("clears tenderlyUrl when /share endpoint call fails", async () => {
@@ -282,7 +282,7 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
       shareable: false,
     });
 
-    expect(result.callResults[0]!.assetChanges).toEqual({ foo: "bar" });
+    expect(result.calls[0]!.assetChanges).toEqual({ foo: "bar" });
   });
 });
 
@@ -313,7 +313,7 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
     expect(simulations[1]!.to).toBe(USDC);
   });
 
-  it("emits one callResults entry per bundle step with that step's logs", async () => {
+  it("emits one call entry per bundle step with that step's logs", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
@@ -352,9 +352,9 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
       shareable: false,
     });
 
-    expect(result.callResults).toHaveLength(2);
-    expect(result.callResults[0]!.logs[0]!.topics[0]).toBe("0x1111");
-    expect(result.callResults[1]!.logs[0]!.topics[0]).toBe("0x2222");
+    expect(result.calls).toHaveLength(2);
+    expect(result.calls[0]!.logs[0]!.topics[0]).toBe("0x1111");
+    expect(result.calls[1]!.logs[0]!.topics[0]).toBe("0x2222");
   });
 
   it("only creates a shareable URL from the LAST bundle step", async () => {

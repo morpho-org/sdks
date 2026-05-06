@@ -2,7 +2,7 @@ import { type Address, getAddress, type Hex, zeroAddress } from "viem";
 import { vi } from "vitest";
 import {
   encodeUint256,
-  makeCallResult,
+  makeCall,
   padAddress,
 } from "../../test-helpers/index.js";
 import type { RawLog } from "../../types.js";
@@ -29,7 +29,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCallResult(logs)]);
+    const result = parseTransfers([makeCall(logs)]);
 
     expect(result).toHaveLength(1);
     expect(result[0]).toEqual({
@@ -42,12 +42,12 @@ describe("parseTransfers", () => {
   });
 
   it("returns empty array for empty logs", () => {
-    expect(parseTransfers([makeCallResult([])])).toEqual([]);
+    expect(parseTransfers([makeCall([])])).toEqual([]);
   });
 
   it("skips logs with undefined topic0", () => {
     const logs: RawLog[] = [{ address: USDC, topics: [], data: "0x" as Hex }];
-    expect(parseTransfers([makeCallResult(logs)])).toEqual([]);
+    expect(parseTransfers([makeCall(logs)])).toEqual([]);
   });
 
   it("skips Transfer logs with wrong number of topics", () => {
@@ -58,7 +58,7 @@ describe("parseTransfers", () => {
         data: encodeUint256(1000n),
       },
     ];
-    expect(parseTransfers([makeCallResult(logs)])).toEqual([]);
+    expect(parseTransfers([makeCall(logs)])).toEqual([]);
   });
 
   it("skips Transfer logs with short-topic (hex length < 66)", () => {
@@ -70,7 +70,7 @@ describe("parseTransfers", () => {
         data: encodeUint256(1000n),
       },
     ];
-    expect(parseTransfers([makeCallResult(logs)], logger)).toEqual([]);
+    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
     expect(logger.warn).toHaveBeenCalledOnce();
   });
 
@@ -83,7 +83,7 @@ describe("parseTransfers", () => {
         data: "0x" as Hex, // empty — would throw on BigInt('0x')
       },
     ];
-    expect(parseTransfers([makeCallResult(logs)], logger)).toEqual([]);
+    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
     expect(logger.warn).toHaveBeenCalledOnce();
   });
 
@@ -96,7 +96,7 @@ describe("parseTransfers", () => {
         data: encodeUint256(1n),
       },
     ];
-    expect(parseTransfers([makeCallResult(logs)], logger)).toEqual([]);
+    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
     expect(logger.warn).toHaveBeenCalledOnce();
   });
 
@@ -119,7 +119,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCallResult(logs)]);
+    const result = parseTransfers([makeCall(logs)]);
 
     // Only the Withdrawal-derived transfer remains (the burn Transfer is deduped)
     expect(result).toHaveLength(1);
@@ -146,7 +146,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCallResult(logs)]);
+    const result = parseTransfers([makeCall(logs)]);
 
     expect(result).toHaveLength(1);
     expect(result[0]!.from).toBe(zeroAddress);
@@ -167,7 +167,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCallResult(logs)]);
+    const result = parseTransfers([makeCall(logs)]);
     expect(result).toHaveLength(2);
   });
 
@@ -185,7 +185,7 @@ describe("parseTransfers", () => {
       },
     ];
 
-    const result = parseTransfers([makeCallResult(logs)]);
+    const result = parseTransfers([makeCall(logs)]);
     expect(result).toHaveLength(2);
     // DAI's hex value is lexicographically less than USDC's, so DAI sorts first.
     expect(result[0]!.token.toLowerCase()).toBe(DAI.toLowerCase());
@@ -206,26 +206,23 @@ describe("parseTransfers", () => {
       data: "0xinvalid" as Hex, // wrong length
     };
 
-    const result = parseTransfers(
-      [makeCallResult([validLog, malformedLog])],
-      logger,
-    );
+    const result = parseTransfers([makeCall([validLog, malformedLog])], logger);
 
     expect(result).toHaveLength(1);
     expect(result[0]!.amount).toBe(1000000n);
     expect(logger.warn).toHaveBeenCalledOnce();
   });
 
-  test("behavior: stamps txIdx according to originating callResult index", () => {
-    const callResults = [
-      makeCallResult([
+  test("behavior: stamps txIdx according to originating call index", () => {
+    const calls = [
+      makeCall([
         {
           address: USDC,
           topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
           data: encodeUint256(100n),
         },
       ]),
-      makeCallResult([
+      makeCall([
         {
           address: USDC,
           topics: [TRANSFER_TOPIC, padAddress(VAULT), padAddress(USER)],
@@ -234,7 +231,7 @@ describe("parseTransfers", () => {
       ]),
     ];
 
-    const result = parseTransfers(callResults);
+    const result = parseTransfers(calls);
     const tx0 = result.find((t) => t.amount === 100n);
     const tx1 = result.find((t) => t.amount === 200n);
 
@@ -247,15 +244,15 @@ describe("parseTransfers", () => {
     // Tx 0 has the Withdrawal; tx 1 has a same-amount Transfer to zero on the
     // same WETH contract. Under the old flat dedup these would have collided;
     // per-tx scoping now keeps both as distinct events.
-    const callResults = [
-      makeCallResult([
+    const calls = [
+      makeCall([
         {
           address: WETH,
           topics: [WITHDRAWAL_TOPIC, padAddress(USER)],
           data: encodeUint256(amount),
         },
       ]),
-      makeCallResult([
+      makeCall([
         {
           address: WETH,
           topics: [
@@ -268,7 +265,7 @@ describe("parseTransfers", () => {
       ]),
     ];
 
-    const result = parseTransfers(callResults);
+    const result = parseTransfers(calls);
     expect(result).toHaveLength(2);
     expect(result.map((t) => t.txIdx).sort()).toEqual([0, 1]);
   });

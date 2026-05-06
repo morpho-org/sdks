@@ -2,7 +2,7 @@ import { type Address, type BlockTag, type Hex, isAddress, isHex } from "viem";
 import { z } from "zod";
 import { ExternalServiceError, SimulationRevertedError } from "../../errors.js";
 import type {
-  RawCallResult,
+  RawCall,
   RawLog,
   RawSimulationResult,
   SimulationLogger,
@@ -222,7 +222,7 @@ async function simulateSingle(params: {
   }
 
   const data = tenderlyRawResponseSchema.parse(await response.json());
-  const callResult = parseTenderlyCallResult(data);
+  const call = parseTenderlyCall(data);
 
   let tenderlyUrl: string | undefined;
   if (shareable && data.simulation.id) {
@@ -238,7 +238,7 @@ async function simulateSingle(params: {
     }
   }
 
-  return { callResults: [callResult], tenderlyUrl };
+  return { calls: [call], tenderlyUrl };
 }
 
 async function simulateBundle(params: {
@@ -287,9 +287,7 @@ async function simulateBundle(params: {
   const data = tenderlyBundleRawResponseSchema.parse(await response.json());
   const simulations = data.simulation_results;
 
-  const callResults: RawCallResult[] = simulations.map((sim) =>
-    parseTenderlyCallResult(sim),
-  );
+  const calls: RawCall[] = simulations.map((sim) => parseTenderlyCall(sim));
 
   const lastSim = simulations[simulations.length - 1]!;
   const lastSimulationId = lastSim.simulation.id;
@@ -308,7 +306,7 @@ async function simulateBundle(params: {
     }
   }
 
-  return { callResults, tenderlyUrl };
+  return { calls, tenderlyUrl };
 }
 
 /**
@@ -357,12 +355,12 @@ async function shareSimulation(params: {
 }
 
 /**
- * Parse one Tenderly simulation response into a `RawCallResult`. The caller
+ * Parse one Tenderly simulation response into a `RawCall`. The caller
  * (single-sim or bundle) assembles the `RawSimulationResult` around it.
  *
  * Throws `SimulationRevertedError` if `simulation.status !== true`.
  */
-function parseTenderlyCallResult(data: TenderlyRawResponse): RawCallResult {
+function parseTenderlyCall(data: TenderlyRawResponse): RawCall {
   const { simulation, transaction } = data;
 
   if (simulation.status !== true) {

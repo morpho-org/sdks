@@ -42,7 +42,7 @@ const BASIC_TX: SimulationTransaction = {
 beforeEach(() => vi.clearAllMocks());
 
 describe.sequential("simulateV1", () => {
-  it("returns one callResults entry per tx with logs, status, returnData, gasUsed", async () => {
+  it("returns one calls entry per tx with logs, status, returnData, gasUsed", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         {
@@ -74,14 +74,14 @@ describe.sequential("simulateV1", () => {
       transactions: [BASIC_TX, BASIC_TX],
     });
 
-    expect(result.callResults).toHaveLength(2);
-    expect(result.callResults[0]!.status).toBe(true);
-    expect(result.callResults[0]!.returnData).toBe("0xfeed");
-    expect(result.callResults[0]!.gasUsed).toBe(21_000n);
-    expect(result.callResults[0]!.logs).toHaveLength(1);
-    expect(result.callResults[0]!.logs[0]!.address).toBe(USDC);
-    expect(result.callResults[1]!.gasUsed).toBe(42_000n);
-    expect(result.callResults[1]!.logs[0]!.topics[0]).toBe("0xbbbb");
+    expect(result.calls).toHaveLength(2);
+    expect(result.calls[0]!.status).toBe(true);
+    expect(result.calls[0]!.returnData).toBe("0xfeed");
+    expect(result.calls[0]!.gasUsed).toBe(21_000n);
+    expect(result.calls[0]!.logs).toHaveLength(1);
+    expect(result.calls[0]!.logs[0]!.address).toBe(USDC);
+    expect(result.calls[1]!.gasUsed).toBe(42_000n);
+    expect(result.calls[1]!.logs[0]!.topics[0]).toBe("0xbbbb");
     expect(result.tenderlyUrl).toBeUndefined();
   });
 
@@ -285,7 +285,7 @@ describe.sequential("simulateV1", () => {
       transactions: [BASIC_TX],
     });
 
-    expect(result.callResults[0]!.logs[0]!.data).toBe("0x");
+    expect(result.calls[0]!.logs[0]!.data).toBe("0x");
   });
 
   it("does not crash when a result has no logs array", async () => {
@@ -301,6 +301,6 @@ describe.sequential("simulateV1", () => {
       transactions: [BASIC_TX],
     });
 
-    expect(result.callResults[0]!.logs).toEqual([]);
+    expect(result.calls[0]!.logs).toEqual([]);
   });
 });

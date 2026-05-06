@@ -18,7 +18,7 @@ export type {
   RawLog,
   SimulateParams,
   SimulationAuthorization,
-  SimulationCallResult,
+  SimulationCall,
   SimulationConfig,
   SimulationLogger,
   SimulationResult,

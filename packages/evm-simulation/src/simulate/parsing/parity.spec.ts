@@ -7,7 +7,7 @@
 import { type Address, getAddress, type Hex } from "viem";
 import {
   encodeUint256 as enc256,
-  makeCallResult,
+  makeCall,
   padAddress as padAddr,
 } from "../../test-helpers/index.js";
 import type { RawLog } from "../../types.js";
@@ -47,7 +47,7 @@ describe("integration: vault V2 deposit", () => {
   ];
 
   it("emits three transfers with the expected token/from/to/amount triples", () => {
-    const transfers = parseTransfers([makeCallResult(depositLogs)]);
+    const transfers = parseTransfers([makeCall(depositLogs)]);
     expect(transfers).toHaveLength(3);
 
     const byRole = {
@@ -93,7 +93,7 @@ describe("integration: WETH wrap/unwrap", () => {
       },
     ];
 
-    const transfers = parseTransfers([makeCallResult(logs)]);
+    const transfers = parseTransfers([makeCall(logs)]);
     expect(transfers).toHaveLength(1);
     expect(transfers[0]!.to).toBe(getAddress(USER));
     expect(transfers[0]!.amount).toBe(amount);
@@ -114,7 +114,7 @@ describe("integration: WETH wrap/unwrap", () => {
       },
     ];
 
-    const transfers = parseTransfers([makeCallResult(logs)]);
+    const transfers = parseTransfers([makeCall(logs)]);
     expect(transfers).toHaveLength(1);
     expect(transfers[0]!.from).toBe(getAddress(USER));
     expect(transfers[0]!.amount).toBe(amount);
@@ -143,7 +143,7 @@ describe("integration: multi-token market operation", () => {
       },
     ];
 
-    const transfers = parseTransfers([makeCallResult(logs)]);
+    const transfers = parseTransfers([makeCall(logs)]);
     expect(transfers).toHaveLength(2);
 
     const wethIn = transfers.find((t) => t.token === getAddress(WETH));
@@ -179,7 +179,7 @@ describe("integration: determinism", () => {
       },
     ];
 
-    const result = parseTransfers([makeCallResult(logs)]);
+    const result = parseTransfers([makeCall(logs)]);
     expect(result).toHaveLength(2);
     // DAI (0x6B) sorts before USDC (0xA0) in canonical order.
     expect(result[0]!.token.toLowerCase()).toBe(DAI.toLowerCase());
@@ -202,8 +202,8 @@ describe("integration: determinism", () => {
       data: enc256(200n),
     };
 
-    expect(parseTransfers([makeCallResult([log1, log2])])).toEqual(
-      parseTransfers([makeCallResult([log2, log1])]),
+    expect(parseTransfers([makeCall([log1, log2])])).toEqual(
+      parseTransfers([makeCall([log2, log1])]),
     );
   });
 });

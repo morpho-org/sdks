@@ -2,7 +2,7 @@ import type { Address } from "viem";
 
 import { TRANSFER_TOPIC } from "../simulate/parsing/transfers.js";
 import { encodeUint256 } from "./encode-uint256.js";
-import { makeCallResult } from "./make-call-result.js";
+import { makeCall } from "./make-call.js";
 import { makeTransferLog } from "./make-transfer-log.js";
 import { padAddress } from "./pad-address.js";
 
@@ -61,7 +61,7 @@ describe("makeTransferLog", () => {
       to: VAULT,
       amount: 42n,
     });
-    const parsed = parseTransfers([makeCallResult([log])]);
+    const parsed = parseTransfers([makeCall([log])]);
 
     expect(parsed).toHaveLength(1);
     expect(parsed[0]).toEqual({

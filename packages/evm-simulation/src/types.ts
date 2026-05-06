@@ -100,7 +100,7 @@ export interface Transfer {
  *
  * - `simulationTxs` is the full resolved transaction list (including
  *   prepended authorization txs).
- * - `callResults[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
+ * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
  *   status, returnData/gasUsed, and (Tenderly only) assetChanges per tx.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
@@ -111,11 +111,11 @@ export interface SimulationResult {
   /** The full resolved transaction list (including prepended authorization txs). */
   readonly simulationTxs: readonly SimulationTransaction[];
   /**
-   * Per-transaction normalized output. `callResults[i]` corresponds 1:1 with
+   * Per-transaction normalized output. `calls[i]` corresponds 1:1 with
    * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas
    * used, and (Tenderly only) asset changes per transaction.
    */
-  readonly callResults: readonly SimulationCallResult[];
+  readonly calls: readonly SimulationCall[];
   /** Parsed ERC-20 / WETH9 transfers from the simulation. */
   readonly transfers: readonly Transfer[];
   /** Shareable Tenderly URL. Present only when `shareable: true` and Tenderly ran (not fallback). */
@@ -144,11 +144,11 @@ export interface SimulateParams {
 
 /**
  * Internal raw result from a simulation adapter before normalization.
- * `callResults[i]` corresponds 1:1 with the i-th transaction passed to the
+ * `calls[i]` corresponds 1:1 with the i-th transaction passed to the
  * backend.
  */
 export interface RawSimulationResult {
-  callResults: RawCallResult[];
+  calls: RawCall[];
   tenderlyUrl?: string;
 }
 
@@ -159,10 +159,10 @@ export interface RawLog {
 }
 
 /**
- * Internal mirror of `SimulationCallResult`, mutable during construction by
+ * Internal mirror of `SimulationCall`, mutable during construction by
  * the simulation backends.
  */
-export interface RawCallResult {
+export interface RawCall {
   logs: RawLog[];
   status: boolean;
   returnData: Hex;
@@ -174,11 +174,11 @@ export interface RawCallResult {
 /**
  * Per-transaction normalized output from the simulation backend.
  *
- * `SimulationResult.callResults[i]` corresponds 1:1 with
+ * `SimulationResult.calls[i]` corresponds 1:1 with
  * `SimulationResult.simulationTxs[i]`. Use this to read raw logs, status,
  * return data, gas used, and (Tenderly only) asset changes per transaction.
  */
-export interface SimulationCallResult {
+export interface SimulationCall {
   readonly logs: readonly RawLog[];
   /**
    * True iff the call succeeded. The bundle as a whole reverts via

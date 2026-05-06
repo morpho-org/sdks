@@ -1,14 +1,14 @@
-import type { RawCallResult, RawLog } from "../types.js";
+import type { RawCall, RawLog } from "../types.js";
 
 /**
- * Wrap a list of `RawLog` into a `RawCallResult` for spec fixtures. Defaults
+ * Wrap a list of `RawLog` into a `RawCall` for spec fixtures. Defaults
  * to a successful call with no gas, no return data, and no asset changes.
  * Pass `overrides` to set status/returnData/gasUsed/assetChanges per fixture.
  */
-export function makeCallResult(
+export function makeCall(
   logs: RawLog[],
-  overrides?: Partial<RawCallResult>,
-): RawCallResult {
+  overrides?: Partial<RawCall>,
+): RawCall {
   return {
     logs,
     status: true,

@@ -84,7 +84,7 @@ export async function simulate(
     blockNumber: params.blockNumber,
     shareable,
   });
-  const transfers = parseTransfers(result.callResults, config.logger);
+  const transfers = parseTransfers(result.calls, config.logger);
 
   assertNoBundlerRetention({
     chainId: params.chainId,
@@ -94,7 +94,7 @@ export async function simulate(
 
   return {
     simulationTxs,
-    callResults: result.callResults,
+    calls: result.calls,
     transfers,
     tenderlyUrl: result.tenderlyUrl,
   };

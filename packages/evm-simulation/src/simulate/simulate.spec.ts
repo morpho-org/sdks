@@ -41,13 +41,13 @@ const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const SPENDER: Address = "0x3333333333333333333333333333333333333333";
 
 // `makeSuccessResult` is a single-tx convenience. For multi-tx, build
-// `callResults` inline (see "attributes Transfer.txIdx" below).
+// `calls` inline (see "attributes Transfer.txIdx" below).
 function makeSuccessResult(
   logs: RawLog[] = [],
   tenderlyUrl?: string,
 ): RawSimulationResult {
   return {
-    callResults: [
+    calls: [
       {
         logs,
         status: true,
@@ -134,10 +134,10 @@ describe.sequential("simulate — success", () => {
     const APPROVE_AMOUNT = 1_000_000n;
     const TRANSFER_AMOUNT = 500_000n;
 
-    // Two callResults: tx 0 emits a Transfer of APPROVE_AMOUNT, tx 1 emits a
+    // Two calls: tx 0 emits a Transfer of APPROVE_AMOUNT, tx 1 emits a
     // Transfer of TRANSFER_AMOUNT. The emitting index must round-trip.
     mockTenderlyRest.mockResolvedValueOnce({
-      callResults: [
+      calls: [
         {
           logs: [
             makeTransferLog({
@@ -177,7 +177,7 @@ describe.sequential("simulate — success", () => {
       }),
     );
 
-    expect(result.callResults).toHaveLength(2);
+    expect(result.calls).toHaveLength(2);
     const approveTransfer = result.transfers.find(
       (t) => t.amount === APPROVE_AMOUNT,
     );

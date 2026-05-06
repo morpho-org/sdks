@@ -8,7 +8,7 @@ vi.mock("@morpho-org/blue-sdk", async (importOriginal) => {
 });
 
 import { BlacklistViolationError } from "../../errors.js";
-import { makeCallResult, makeTransferLog } from "../../test-helpers/index.js";
+import { makeCall, makeTransferLog } from "../../test-helpers/index.js";
 import { parseTransfers } from "../parsing/transfers.js";
 import { assertNoBundlerRetention } from "./bundler-retention.js";
 
@@ -22,7 +22,7 @@ const BUNDLER = getAddress(getChainAddresses(1).bundler3.bundler3) as Address;
 describe("assertNoBundlerRetention", () => {
   it("does not throw for transfers to non-blacklisted addresses", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
@@ -38,7 +38,7 @@ describe("assertNoBundlerRetention", () => {
 
   it("does not throw for dust amounts to blacklisted addresses", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 50n }),
       ]),
     ]);
@@ -55,7 +55,7 @@ describe("assertNoBundlerRetention", () => {
 
   it("does not throw for unsupported chain (no blacklist)", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
@@ -75,7 +75,7 @@ describe("assertNoBundlerRetention", () => {
     });
 
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
@@ -92,7 +92,7 @@ describe("assertNoBundlerRetention", () => {
 
   it("does not throw when bundler passes tokens through (net zero)", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
@@ -114,7 +114,7 @@ describe("assertNoBundlerRetention", () => {
 
   it("throws when bundler retains tokens above dust threshold", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
@@ -130,7 +130,7 @@ describe("assertNoBundlerRetention", () => {
 
   it("throws when bundler retains partial amount above dust", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({
           token: USDC,
           from: USER,
@@ -153,7 +153,7 @@ describe("assertNoBundlerRetention", () => {
 
   it("does not throw when bundler retention is below dust threshold", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({ token: USDC, from: USER, to: BUNDLER, amount: 150n }),
         makeTransferLog({
           token: USDC,
@@ -173,7 +173,7 @@ describe("assertNoBundlerRetention", () => {
     // Bundler sends more than it receives in this bundle — implies a
     // pre-existing balance is being drawn down. Red flag.
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({
           token: USDC,
           from: BUNDLER,
@@ -190,7 +190,7 @@ describe("assertNoBundlerRetention", () => {
 
   it("flags retention per (bundler,token) pair — tokenA retained, tokenB clean", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         // USDC retained: 1M in, 0 out
         makeTransferLog({
           token: USDC,
@@ -229,7 +229,7 @@ describe("assertNoBundlerRetention", () => {
 
   it("BlacklistViolationError.assetChanges includes {address, token, netRetained}", () => {
     const transfers = parseTransfers([
-      makeCallResult([
+      makeCall([
         makeTransferLog({ token: USDC, from: USER, to: BUNDLER, amount: 777n }),
       ]),
     ]);
