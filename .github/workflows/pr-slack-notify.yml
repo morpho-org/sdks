@@ -242,7 +242,7 @@ jobs:
       - name: Send Slack notification
         if: steps.pr.outputs.skip != 'true' && steps.slack-check.outputs.found != 'true'
         id: slack
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -376,7 +376,7 @@ jobs:
 
       - name: Send review update to Slack thread
         if: steps.get-ts.outputs.found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -387,7 +387,7 @@ jobs:
 
       - name: Send review update to quick-win DM thread
         if: steps.get-ts.outputs.found == 'true' && steps.get-ts.outputs.quick_win_found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -492,7 +492,7 @@ jobs:
 
       - name: Send re-review request to Slack thread
         if: steps.check-re-review.outputs.is_re_review == 'true' && steps.get-ts.outputs.found == 'true' && steps.check-re-review.outputs.is_team != 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -534,7 +534,7 @@ jobs:
 
       - name: Send team re-review request to Slack thread
         if: steps.check-re-review.outputs.is_re_review == 'true' && steps.get-ts.outputs.found == 'true' && steps.check-re-review.outputs.is_team == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -601,7 +601,7 @@ jobs:
 
       - name: Send notification to Slack thread
         if: steps.get-ts.outputs.found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -613,7 +613,7 @@ jobs:
       - name: Add reaction to original message
         if: steps.get-ts.outputs.found == 'true'
         continue-on-error: true
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: reactions.add
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -624,7 +624,7 @@ jobs:
 
       - name: Send notification to quick-win DM thread
         if: steps.get-ts.outputs.quick_win_found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -636,7 +636,7 @@ jobs:
       - name: Add reaction to quick-win DM
         if: steps.get-ts.outputs.quick_win_found == 'true'
         continue-on-error: true
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: reactions.add
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -776,7 +776,7 @@ jobs:
 
       - name: Update Slack message
         if: steps.get-ts.outputs.found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3.0.3
         with:
           method: chat.update
           token: ${{ secrets.SLACK_BOT_TOKEN }}
