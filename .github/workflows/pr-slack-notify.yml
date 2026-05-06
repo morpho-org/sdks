@@ -40,9 +40,13 @@ jobs:
     # that requires the numeric timestamp payload; a bare HTML comment or
     # a PR description that *mentions* the marker (e.g. this workflow's
     # own docs/PRs) must not trip the guard.
+    # Skip fork PRs: secrets/vars aren't passed to workflows triggered from
+    # forks, so SLACK_BOT_TOKEN/SLACK_CHANNEL_ID would be empty and the Slack
+    # action would fail. Use pull_request_target if you want to support forks.
     if: |
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
        (github.event.action == 'opened' ||
         github.event.action == 'ready_for_review' ||
         github.event.action == 'review_requested'))
@@ -317,7 +321,10 @@ jobs:
             }
 
   notify-review:
-    if: github.event_name == 'pull_request_review' && github.event.review.user.type != 'Bot'
+    if: |
+      github.event_name == 'pull_request_review' &&
+      github.event.review.user.type != 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -390,7 +397,10 @@ jobs:
             text: "${{ steps.review-status.outputs.emoji }} ${{ steps.reviewer.outputs.name }} <${{ github.event.review.html_url }}|${{ steps.review-status.outputs.text }}>"
 
   notify-re-review-requested:
-    if: github.event_name == 'pull_request' && github.event.action == 'review_requested'
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'review_requested' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -568,7 +578,10 @@ jobs:
             }
 
   notify-pr-closed:
-    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    if: |
+      github.event_name == 'pull_request' &&
+      github.event.action == 'closed' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -637,6 +650,7 @@ jobs:
   notify-pr-updated:
     if: |
       github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
       (
         (github.event.action == 'edited' && github.event.changes.title != null) ||
         ((github.event.action == 'labeled' || github.event.action == 'unlabeled') && startsWith(github.event.label.name, 'criticality:')) ||
@@ -880,7 +894,8 @@ jobs:
     if: |
       github.event_name == 'pull_request' &&
       github.event.action == 'labeled' &&
-      github.event.label.name == 'quick win'
+      github.event.label.name == 'quick win' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
