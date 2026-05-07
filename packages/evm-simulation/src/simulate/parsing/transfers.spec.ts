@@ -240,10 +240,14 @@ describe("parseTransfers", () => {
   });
 
   test("behavior: WETH9 unwrap dedup is scoped to the same tx (cross-tx not deduped)", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     const amount = 1_000_000_000_000_000_000n;
     // Tx 0 has the Withdrawal; tx 1 has a same-amount Transfer to zero on the
     // same WETH contract. Under the old flat dedup these would have collided;
-    // per-tx scoping now keeps both as distinct events.
+    // per-tx scoping now keeps both as distinct events. The token is
+    // wnative-shaped (it emitted a Withdrawal somewhere in the bundle), so the
+    // dedup miss surfaces a warn — giving us observability before
+    // assertNoBundlerRetention can false-positive.
     const calls = [
       makeCall([
         {
@@ -265,8 +269,70 @@ describe("parseTransfers", () => {
       ]),
     ];
 
-    const result = parseTransfers(calls);
+    const result = parseTransfers(calls, logger);
     expect(result).toHaveLength(2);
     expect(result.map((t) => t.txIdx).sort()).toEqual([0, 1]);
+    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("WETH9 dedup miss"),
+      expect.objectContaining({ kind: "burn", txIdx: 1 }),
+    );
+  });
+
+  test("behavior: WETH9 wrap dedup miss across txs warns (split Deposit + mint Transfer)", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const amount = 1_000_000_000_000_000_000n;
+    const calls = [
+      makeCall([
+        {
+          address: WETH,
+          topics: [DEPOSIT_TOPIC, padAddress(USER)],
+          data: encodeUint256(amount),
+        },
+      ]),
+      makeCall([
+        {
+          address: WETH,
+          topics: [
+            TRANSFER_TOPIC,
+            `0x${"0".repeat(64)}` as Hex,
+            padAddress(USER),
+          ],
+          data: encodeUint256(amount),
+        },
+      ]),
+    ];
+
+    const result = parseTransfers(calls, logger);
+    expect(result).toHaveLength(2);
+    expect(logger.warn).toHaveBeenCalledOnce();
+    expect(logger.warn).toHaveBeenCalledWith(
+      expect.stringContaining("WETH9 dedup miss"),
+      expect.objectContaining({ kind: "mint", txIdx: 1 }),
+    );
+  });
+
+  test("behavior: zero-address Transfer on non-wnative token does not warn", () => {
+    // Plain ERC20 mint — no Deposit/Withdrawal anywhere in the bundle, so
+    // USDC is not wnative-shaped and the burn-shaped Transfer is just a
+    // legitimate mint. No warning should fire (otherwise we'd spam logs on
+    // every real ERC20 mint/burn).
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: USDC,
+        topics: [
+          TRANSFER_TOPIC,
+          `0x${"0".repeat(64)}` as Hex,
+          padAddress(USER),
+        ],
+        data: encodeUint256(1000n),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)], logger);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.from).toBe(zeroAddress);
+    expect(logger.warn).not.toHaveBeenCalled();
   });
 });

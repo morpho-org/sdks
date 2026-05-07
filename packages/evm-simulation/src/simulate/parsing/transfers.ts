@@ -24,14 +24,29 @@ const UINT256_HEX_LENGTH = 66; // "0x" + 32 bytes
  * Parse raw EVM logs into individual Transfer events.
  *
  * Iterates over per-tx `calls` and stamps each emitted `Transfer.txIdx`
- * with the index of the originating call. WETH9 wrap/unwrap dedup is scoped
- * to the same tx — wrap/unwrap pairs always emit in the same call.
+ * with the index of the originating call.
  *
  * **Supported event types:** ERC20 `Transfer(from, to, amount)` and WETH9
  * `Deposit(to, amount)` / `Withdrawal(from, amount)`. WETH9 mint/burn Transfer
  * events paired with their Deposit/Withdrawal are deduplicated. ERC721 and
  * ERC1155 transfer events are **not** parsed — consumers with NFT flows will
  * see an incomplete transfer list.
+ *
+ * **WETH9 dedup assumption — canonical atomic emission.** Dedup is scoped to
+ * the same tx: a zero-address `Transfer` is suppressed only if its paired
+ * `Deposit`/`Withdrawal` appears in the same `calls[txIdx].logs` slice. This
+ * is correct for canonical WETH9, which always emits the `Deposit`/
+ * `Withdrawal` and the matching `Transfer(0x0, …)` / `Transfer(…, 0x0)`
+ * atomically inside a single call frame. A **non-canonical wrapped-native**
+ * that splits these emissions across two txs in the same bundle would leave
+ * a phantom zero-address `Transfer` in the parsed output, which can be summed
+ * by `assertNoBundlerRetention` and produce a false `BlacklistViolationError`.
+ * When a zero-address `Transfer` misses same-tx dedup *and* its token has
+ * emitted a `Deposit`/`Withdrawal` somewhere else in the bundle (i.e. it
+ * looks wnative-shaped), the parser emits a `warn` so the assumption break
+ * is observable before it reaches retention. None of `morpho-sdk`'s currently
+ * supported chains require cross-tx dedup; the assumption is rechecked when
+ * onboarding a new chain (see `evm-simulation/CLAUDE.md`).
  *
  * **Failure mode:** on a per-log parse failure (malformed topic length,
  * non-hex data), the log is skipped and a `warn` is emitted via the logger.
@@ -44,6 +59,12 @@ export function parseTransfers(
   logger?: SimulationLogger,
 ): Transfer[] {
   const transfers: Transfer[] = [];
+
+  // Tokens that emit `Deposit` or `Withdrawal` somewhere in the bundle look
+  // wnative-shaped. If a zero-address `Transfer` for one of these tokens
+  // misses same-tx dedup, the contract is likely emitting non-canonically
+  // (split across txs) and a phantom transfer would leak into retention.
+  const wnativeShapedTokens = collectWnativeShapedTokens(calls);
 
   for (let txIdx = 0; txIdx < calls.length; txIdx++) {
     const logs = calls[txIdx]!.logs;
@@ -116,33 +137,37 @@ export function parseTransfers(
 
             // WETH9 unwrap dedup: Transfer to zero paired with a Withdrawal of
             // equal amount in the SAME tx.
-            if (
-              toTopic === zeroHash &&
-              logs.some(
+            if (toTopic === zeroHash) {
+              const paired = logs.some(
                 (other) =>
                   other.topics[0] === WITHDRAWAL_TOPIC &&
                   other.address === log.address &&
                   other.data === log.data &&
                   other.topics.length === 2 &&
                   other.topics[1] === fromTopic,
-              )
-            )
-              continue;
+              );
+              if (paired) continue;
+              if (wnativeShapedTokens.has(log.address.toLowerCase())) {
+                warnNonCanonicalWnative(logger, log, "burn", txIdx);
+              }
+            }
 
             // WETH9 wrap dedup: Transfer from zero paired with a Deposit of
             // equal amount in the SAME tx.
-            if (
-              fromTopic === zeroHash &&
-              logs.some(
+            if (fromTopic === zeroHash) {
+              const paired = logs.some(
                 (other) =>
                   other.topics[0] === DEPOSIT_TOPIC &&
                   other.address === log.address &&
                   other.data === log.data &&
                   other.topics.length === 2 &&
                   other.topics[1] === toTopic,
-              )
-            )
-              continue;
+              );
+              if (paired) continue;
+              if (wnativeShapedTokens.has(log.address.toLowerCase())) {
+                warnNonCanonicalWnative(logger, log, "mint", txIdx);
+              }
+            }
 
             transfers.push({
               token: getAddress(log.address),
@@ -188,6 +213,44 @@ function warnMalformed(
     topics: log.topics,
     reason,
   });
+}
+
+/**
+ * Collect token addresses (lowercased) that emit `Deposit` or `Withdrawal`
+ * anywhere in the bundle. Used to detect when a zero-address `Transfer` that
+ * misses same-tx dedup is on a wnative-shaped contract — a strong signal
+ * that the contract is emitting non-canonically and a phantom transfer is
+ * about to leak into bundler retention.
+ */
+function collectWnativeShapedTokens(calls: readonly RawCall[]): Set<string> {
+  const set = new Set<string>();
+  for (const c of calls) {
+    for (const l of c.logs) {
+      const t0 = l.topics[0];
+      if (t0 === WITHDRAWAL_TOPIC || t0 === DEPOSIT_TOPIC) {
+        set.add(l.address.toLowerCase());
+      }
+    }
+  }
+  return set;
+}
+
+// biome-ignore lint/complexity/useMaxParams: structured warn with full context
+function warnNonCanonicalWnative(
+  logger: SimulationLogger | undefined,
+  log: RawLog,
+  kind: "mint" | "burn",
+  txIdx: number,
+): void {
+  logger?.warn(
+    "WETH9 dedup miss: zero-address Transfer on wnative-shaped token without paired same-tx Deposit/Withdrawal — possible non-canonical wrapped-native, may cause bundler retention false positive",
+    {
+      token: log.address,
+      kind,
+      txIdx,
+      data: log.data,
+    },
+  );
 }
 
 /**
