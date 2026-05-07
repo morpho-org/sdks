@@ -223,21 +223,14 @@ async function simulateSingle(params: {
   const data = tenderlyRawResponseSchema.parse(await response.json());
   const call = parseTenderlyCall(data);
 
-  let tenderlyUrl: string | undefined =
-    shareable && data.simulation.id
-      ? `https://dashboard.tenderly.co/shared/simulation/${data.simulation.id}`
-      : undefined;
-
-  if (shareable && data.simulation.id) {
-    const shared = await shareSimulation({
-      baseUrl,
-      config,
-      simulationId: data.simulation.id,
-      signal,
-      logger,
-    });
-    if (!shared) tenderlyUrl = undefined;
-  }
+  const tenderlyUrl = await resolveTenderlyUrl({
+    baseUrl,
+    config,
+    simulationId: data.simulation.id,
+    shareable,
+    signal,
+    logger,
+  });
 
   return { calls: [call], tenderlyUrl };
 }
@@ -291,25 +284,47 @@ async function simulateBundle(params: {
   const calls: RawCall[] = simulations.map((sim) => parseTenderlyCall(sim));
 
   const lastSim = simulations[simulations.length - 1]!;
-  const lastSimulationId = lastSim.simulation.id;
-
-  let tenderlyUrl: string | undefined =
-    shareable && lastSimulationId
-      ? `https://dashboard.tenderly.co/shared/simulation/${lastSimulationId}`
-      : undefined;
-
-  if (shareable && lastSimulationId) {
-    const shared = await shareSimulation({
-      baseUrl,
-      config,
-      simulationId: lastSimulationId,
-      signal,
-      logger,
-    });
-    if (!shared) tenderlyUrl = undefined;
-  }
+  const tenderlyUrl = await resolveTenderlyUrl({
+    baseUrl,
+    config,
+    simulationId: lastSim.simulation.id,
+    shareable,
+    signal,
+    logger,
+  });
 
   return { calls, tenderlyUrl };
+}
+
+/**
+ * Build the shareable Tenderly dashboard URL for the given simulation, if
+ * `shareable=true` and `/share` succeeds. Returns `undefined` otherwise.
+ *
+ * Mirrors the legacy "build optimistically, clear on failure" pattern: the
+ * URL is constructed up-front and cleared if `shareSimulation` returns false.
+ */
+async function resolveTenderlyUrl(params: {
+  baseUrl: string;
+  config: TenderlyRestConfig;
+  simulationId: string | undefined;
+  shareable: boolean;
+  signal?: AbortSignal;
+  logger?: SimulationLogger;
+}): Promise<string | undefined> {
+  const { baseUrl, config, simulationId, shareable, signal, logger } = params;
+  if (!shareable || !simulationId) return undefined;
+
+  let tenderlyUrl: string | undefined =
+    `https://dashboard.tenderly.co/shared/simulation/${simulationId}`;
+  const shared = await shareSimulation({
+    baseUrl,
+    config,
+    simulationId,
+    signal,
+    logger,
+  });
+  if (!shared) tenderlyUrl = undefined;
+  return tenderlyUrl;
 }
 
 /**
