@@ -60,13 +60,44 @@ export interface VaultV1Actions {
    *
    * **The tx MUST be broadcast by `userAddress`.** Assets are pulled from `msg.sender` (broadcaster) but vault shares are minted to `userAddress`.
    *
-   * @param {Object} params - The deposit parameters.
-   * @param {bigint} params.amount - Amount of assets to deposit.
-   * @param {Address} params.userAddress - User address initiating the deposit.
-   * @param {AccrualVault} params.accrualVault - Pre-fetched vault data with asset address and share conversion.
-   * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
-   * @param {bigint} [params.nativeAmount] - Amount of native ETH to wrap into WETH. Vault asset must be wNative.
-   * @returns {Object} Object with `buildTx` and `getRequirements`.
+   * @param params - Deposit parameters including pre-fetched `accrualVault`.
+   * @param params.userAddress - User address that will own the minted shares.
+   * @param params.accrualVault - Pre-fetched vault data (asset address + share conversion).
+   * @param params.amount - Optional ERC-20 asset amount to deposit. At least one of `amount` / `nativeAmount` must be positive.
+   * @param params.nativeAmount - Optional native amount to wrap into wNative; vault asset must be wNative.
+   * @param params.slippageTolerance - Optional slippage tolerance in WAD (default `DEFAULT_SLIPPAGE_TOLERANCE` = 0.03%, max 10%).
+   * @returns Object with `buildTx` (deep-frozen `Transaction<VaultV1DepositAction>`) and `getRequirements` (ERC20 approval / permit / permit2 requirements for the asset).
+   * @throws {ChainIdMismatchError} when the underlying `PublicClient`'s `chain.id` differs from the entity's `chainId`.
+   * @throws {VaultAddressMismatchError} when `accrualVault.address !== this.vault`.
+   * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
+   * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
+   * @throws {ChainWNativeMissingError} when `nativeAmount` is set but the chain has no wNative.
+   * @throws {NativeAmountOnNonWNativeVaultError} when `nativeAmount` is set but `accrualVault.asset !== wNative`.
+   * @throws {NegativeSlippageToleranceError} when `slippageTolerance < 0n`.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance > MAX_SLIPPAGE_TOLERANCE`.
+   * @throws {NonPositiveSharesAmountError} when the computed shares are non-positive.
+   * @example
+   * ```ts
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { MorphoClient } from "@morpho-org/morpho-sdk";
+   *
+   * const client = new MorphoClient(
+   *   createPublicClient({ chain: mainnet, transport: http() }),
+   * );
+   *
+   * const vault = client.vaultV1(vaultAddress, mainnet.id);
+   * const accrualVault = await vault.getData();
+   *
+   * const { buildTx, getRequirements } = vault.deposit({
+   *   userAddress: depositor,
+   *   accrualVault,
+   *   amount: 1_000_000n,
+   * });
+   * const requirements = await getRequirements();
+   * const tx = buildTx();
+   * // tx satisfies Readonly<Transaction<VaultV1DepositAction>>
+   * ```
    */
   deposit: (
     params: {
@@ -112,13 +143,44 @@ export interface VaultV1Actions {
    *
    * **The tx MUST be broadcast by `userAddress`.** V1 shares are pulled from `msg.sender` (broadcaster) and V2 shares are minted to `userAddress`. A mismatch silently transfers the broadcaster's V1 position to `userAddress` on V2.
    *
-   * @param {Object} params - The migration parameters.
-   * @param {Address} params.userAddress - User address initiating the migration.
-   * @param {AccrualVault} params.sourceVault - Pre-fetched V1 vault data.
-   * @param {AccrualVaultV2} params.targetVault - Pre-fetched V2 vault data.
-   * @param {bigint} params.shares - User's V1 share balance to migrate.
-   * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
-   * @returns {Object} Object with `buildTx` and `getRequirements`.
+   * @param params - Migration parameters including pre-fetched source/target vault data.
+   * @param params.userAddress - User address that will own the minted V2 shares.
+   * @param params.sourceVault - Pre-fetched V1 vault data.
+   * @param params.targetVault - Pre-fetched V2 vault data; must share `asset` with `sourceVault`.
+   * @param params.shares - User's V1 share balance to migrate (must be positive).
+   * @param params.slippageTolerance - Optional slippage tolerance in WAD (default `DEFAULT_SLIPPAGE_TOLERANCE` = 0.03%, max 10%) — applied to both legs.
+   * @returns Object with `buildTx` (deep-frozen `Transaction<VaultV1MigrateToV2Action>`) and `getRequirements` (V1 share permit/approval requirements).
+   * @throws {ChainIdMismatchError} when the underlying `PublicClient`'s `chain.id` differs from the entity's `chainId`.
+   * @throws {VaultAddressMismatchError} when `sourceVault.address !== this.vault`.
+   * @throws {VaultAssetMismatchError} when `sourceVault.asset !== targetVault.asset`.
+   * @throws {NonPositiveSharesAmountError} when `shares <= 0n` or when the computed V2 shares are non-positive.
+   * @throws {NegativeSlippageToleranceError} when `slippageTolerance < 0n`.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance > MAX_SLIPPAGE_TOLERANCE`.
+   * @example
+   * ```ts
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { MorphoClient } from "@morpho-org/morpho-sdk";
+   *
+   * const client = new MorphoClient(
+   *   createPublicClient({ chain: mainnet, transport: http() }),
+   * );
+   *
+   * const sourceVault = await client.vaultV1(v1Vault, mainnet.id).getData();
+   * const targetVault = await client.vaultV2(v2Vault, mainnet.id).getData();
+   *
+   * const { buildTx, getRequirements } = client
+   *   .vaultV1(v1Vault, mainnet.id)
+   *   .migrateToV2({
+   *     userAddress: holder,
+   *     sourceVault,
+   *     targetVault,
+   *     shares: sourceVault.toShares(holderBalance),
+   *   });
+   * const requirements = await getRequirements();
+   * const tx = buildTx();
+   * // tx satisfies Readonly<Transaction<VaultV1MigrateToV2Action>>
+   * ```
    */
   migrateToV2: (params: {
     userAddress: Address;

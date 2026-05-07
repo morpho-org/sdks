@@ -53,24 +53,52 @@ export interface VaultV2Actions {
     parameters?: FetchParameters,
   ) => Promise<Awaited<ReturnType<typeof fetchAccrualVaultV2>>>;
   /**
-   * Prepares a deposit transaction for the VaultV2 contract.
+   * Prepares a deposit into a VaultV2 contract.
    *
-   * This function constructs the transaction data required to deposit a specified amount of assets into the vault.
-   * Uses pre-fetched accrual vault data for accurate calculations of slippage and asset address,
-   * then returns the prepared deposit transaction and a function for retrieving all required approval transactions.
-   * Bundler Integration: This flow uses the bundler to atomically execute the user's asset transfer and vault deposit in a single transaction for slippage protection.
+   * Routed through bundler3 so the asset transfer and vault deposit run atomically
+   * with slippage protection. Uses pre-fetched accrual vault data to compute
+   * `maxSharePrice` from `slippageTolerance`.
    *
    * **The tx MUST be broadcast by `userAddress`.** Assets are pulled from `msg.sender` (broadcaster) but vault shares are minted to `userAddress`.
    *
-   * @param {Object} params - The deposit parameters.
-   * @param {bigint} [params.amount=0n] - Amount of ERC-20 assets to deposit. At least one of amount or nativeAmount must be provided.
-   * @param {Address} params.userAddress - User address initiating the deposit.
-   * @param {AccrualVaultV2} params.accrualVault - Pre-fetched vault data with asset address and share conversion.
-   * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Optional slippage tolerance value. Default is 0.03%. Slippage tolerance must be less than 10%.
-   * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
-   * @returns {Object} The result object.
-   * @returns {Readonly<Transaction<VaultV2DepositAction>>} returns.tx The prepared deposit transaction.
-   * @returns {Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>} returns.getRequirements The function for retrieving all required approval transactions.
+   * @param params - Deposit parameters including pre-fetched `accrualVault`.
+   * @param params.userAddress - User address that will own the minted shares.
+   * @param params.accrualVault - Pre-fetched V2 vault data (asset address + share conversion).
+   * @param params.amount - Optional ERC-20 asset amount to deposit. At least one of `amount` / `nativeAmount` must be positive.
+   * @param params.nativeAmount - Optional native amount to wrap into wNative; vault asset must be wNative.
+   * @param params.slippageTolerance - Optional slippage tolerance in WAD (default `DEFAULT_SLIPPAGE_TOLERANCE` = 0.03%, max 10%).
+   * @returns Object with `buildTx` (deep-frozen `Transaction<VaultV2DepositAction>`) and `getRequirements` (ERC20 approval / permit / permit2 requirements for the asset).
+   * @throws {ChainIdMismatchError} when the underlying `PublicClient`'s `chain.id` differs from the entity's `chainId`.
+   * @throws {VaultAddressMismatchError} when `accrualVault.address !== this.vault`.
+   * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
+   * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
+   * @throws {ChainWNativeMissingError} when `nativeAmount` is set but the chain has no wNative.
+   * @throws {NativeAmountOnNonWNativeVaultError} when `nativeAmount` is set but `accrualVault.asset !== wNative`.
+   * @throws {NegativeSlippageToleranceError} when `slippageTolerance < 0n`.
+   * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance > MAX_SLIPPAGE_TOLERANCE`.
+   * @throws {NonPositiveSharesAmountError} when the computed shares are non-positive.
+   * @example
+   * ```ts
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { MorphoClient } from "@morpho-org/morpho-sdk";
+   *
+   * const client = new MorphoClient(
+   *   createPublicClient({ chain: mainnet, transport: http() }),
+   * );
+   *
+   * const vault = client.vaultV2(vaultAddress, mainnet.id);
+   * const accrualVault = await vault.getData();
+   *
+   * const { buildTx, getRequirements } = vault.deposit({
+   *   userAddress: depositor,
+   *   accrualVault,
+   *   amount: 1_000_000n,
+   * });
+   * const requirements = await getRequirements();
+   * const tx = buildTx();
+   * // tx satisfies Readonly<Transaction<VaultV2DepositAction>>
+   * ```
    */
   deposit: (
     params: {
