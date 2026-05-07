@@ -1,10 +1,9 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, createWalletClient, custom, isHex } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { mainnet, optimism } from "viem/chains";
 import { describe, expect } from "vitest";
-import { TEST_PRIVATE_KEY } from "../../../../test/fixtures/accounts.js";
+import { TEST_ACCOUNT_ADDRESS } from "../../../../test/fixtures/accounts.js";
 import { test } from "../../../../test/setup.js";
 import {
   AddressMismatchError,
@@ -103,8 +102,10 @@ describe("encodeErc20Permit", () => {
       // Wallet client on a different chain than the permit was built for.
       // Reuses the Anvil transport so no real RPC is required — the
       // chainId guard fires before any signing.
+      // JSON-RPC account: just an address, no key — the chainId guard fires
+      // before any signing path is reached.
       const walletClientOnWrongChain = createWalletClient({
-        account: privateKeyToAccount(TEST_PRIVATE_KEY),
+        account: TEST_ACCOUNT_ADDRESS,
         chain: optimism,
         transport: custom({ request: client.request }),
       });
