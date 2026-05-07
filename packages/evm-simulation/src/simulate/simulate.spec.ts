@@ -178,6 +178,18 @@ describe.sequential("simulate — success", () => {
     );
 
     expect(result.calls).toHaveLength(2);
+
+    // Pin calls↔txs 1:1 ordering directly so a regression in either contract
+    // (ordering vs. txIdx attribution) surfaces independently.
+    expect(result.calls[0]!.logs).toHaveLength(1);
+    expect(result.calls[0]!.logs[0]!.topics[0]).toBe(
+      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+    );
+    expect(result.calls[1]!.logs).toHaveLength(1);
+    expect(result.calls[1]!.logs[0]!.topics[0]).toBe(
+      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+    );
+
     const approveTransfer = result.transfers.find(
       (t) => t.amount === APPROVE_AMOUNT,
     );
