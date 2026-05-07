@@ -17,14 +17,13 @@ import { MorphoClient } from "./morphoClient.js";
  *   `client.morpho`.
  * @example
  * ```ts
- * import { createWalletClient, http } from "viem";
+ * import { createPublicClient, http } from "viem";
  * import { mainnet } from "viem/chains";
  * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
  *
- * const client = createWalletClient({
+ * const client = createPublicClient({
  *   chain: mainnet,
  *   transport: http(),
- *   account: user,
  * }).extend(morphoViemExtension({ supportSignature: true }));
  *
  * const vault = client.morpho.vaultV1(vaultAddress, 1);

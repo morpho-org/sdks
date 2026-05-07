@@ -1,12 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import {
-  type Address,
-  encodeFunctionData,
-  type PublicClient,
-  publicActions,
-} from "viem";
+import { type Address, encodeFunctionData, type PublicClient } from "viem";
 import { validateChainId } from "../../helpers/index.js";
 import type {
   MorphoAuthorizationAction,
@@ -56,8 +51,7 @@ export const getMorphoAuthorizationRequirement = async (params: {
     bundler3: { generalAdapter1 },
   } = getChainAddresses(chainId);
 
-  const pc = viemClient.extend(publicActions);
-  const isAuthorized = await pc.readContract({
+  const isAuthorized = await viemClient.readContract({
     address: morpho,
     abi: blueAbi,
     functionName: "isAuthorized",

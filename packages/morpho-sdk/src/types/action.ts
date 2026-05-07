@@ -12,10 +12,6 @@ export interface BaseAction<
 export interface ERC20ApprovalAction
   extends BaseAction<"erc20Approval", { spender: Address; amount: bigint }> {}
 
-export interface ERC20PermitAction {
-  sign: (client: WalletClient, userAddress: Address) => Promise<Hex>;
-}
-
 export interface VaultV2DepositAction
   extends BaseAction<
     "vaultV2Deposit",
@@ -249,30 +245,51 @@ export type DepositAmountArgs =
   | { nativeAmount: bigint; amount?: bigint };
 
 export interface PermitArgs {
-  owner: Address;
-  nonce: bigint;
-  asset: Address;
-  signature: Hex;
-  amount: bigint;
-  deadline: bigint;
+  readonly owner: Address;
+  readonly nonce: bigint;
+  readonly asset: Address;
+  readonly signature: Hex;
+  readonly amount: bigint;
+  readonly deadline: bigint;
 }
 
 export interface Permit2Args {
-  owner: Address;
-  nonce: bigint;
-  asset: Address;
-  signature: Hex;
-  amount: bigint;
-  deadline: bigint;
-  expiration: bigint;
+  readonly owner: Address;
+  readonly nonce: bigint;
+  readonly asset: Address;
+  readonly signature: Hex;
+  readonly amount: bigint;
+  readonly deadline: bigint;
+  readonly expiration: bigint;
 }
 
+/**
+ * A pending permit / permit2 signature that the integrator must produce off-chain before
+ * broadcasting a bundle. Returned from `getRequirements()` when `supportSignature` is enabled
+ * and the user lacks the necessary allowance.
+ */
 export interface Requirement {
-  sign: (
+  /**
+   * Produces the EIP-712 signature for this requirement.
+   *
+   * Validates `client.chain?.id === chainId`, then `client.account?.address === userAddress`
+   * (via `validateUserAddress`), signs the typed data, and re-verifies the signature against
+   * `userAddress` before returning a deep-frozen `RequirementSignature`.
+   *
+   * @param client - Connected viem `WalletClient` whose `chain.id` matches and whose
+   *   `account.address` equals `userAddress`.
+   * @param userAddress - The permit's `owner` (the holder of the tokens being approved).
+   * @returns A deep-frozen {@link RequirementSignature} ready to feed into `buildTx(...)`.
+   * @throws {ChainIdMismatchError} when `client.chain?.id !== chainId`.
+   * @throws {MissingClientPropertyError} when `client.account` is unset.
+   * @throws {AddressMismatchError} when `client.account.address !== userAddress`.
+   * @throws {InvalidSignatureError} when EIP-712 verification fails after signing.
+   */
+  readonly sign: (
     client: WalletClient,
     userAddress: Address,
   ) => Promise<RequirementSignature>;
-  action: PermitAction | Permit2Action;
+  readonly action: PermitAction | Permit2Action;
 }
 
 export interface PermitAction
@@ -288,8 +305,8 @@ export interface Permit2Action
   > {}
 
 export interface RequirementSignature {
-  args: PermitArgs | Permit2Args;
-  action: PermitAction | Permit2Action;
+  readonly args: PermitArgs | Permit2Args;
+  readonly action: PermitAction | Permit2Action;
 }
 
 export function isRequirementApproval(

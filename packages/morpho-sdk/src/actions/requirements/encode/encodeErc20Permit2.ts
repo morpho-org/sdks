@@ -9,7 +9,6 @@ import {
 } from "../../../helpers/index.js";
 import {
   InvalidSignatureError,
-  MissingClientPropertyError,
   type Permit2Action,
   type Requirement,
 } from "../../../types/index.js";
@@ -88,10 +87,8 @@ export const encodeErc20Permit2 = (
     action,
     async sign(client: WalletClient, userAddress: Address) {
       validateChainId(client.chain?.id, chainId);
-      if (!client.account)
-        throw new MissingClientPropertyError("client.account");
-      validateUserAddress(client.account.address, userAddress);
-      const account = client.account;
+      validateUserAddress(client.account?.address, userAddress);
+      const account = client.account!;
 
       const typedData = getPermit2PermitTypedData(
         {

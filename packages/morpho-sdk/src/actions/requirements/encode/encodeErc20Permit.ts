@@ -9,7 +9,6 @@ import {
 } from "../../../helpers/index.js";
 import {
   InvalidSignatureError,
-  MissingClientPropertyError,
   type PermitAction,
   type Requirement,
 } from "../../../types/index.js";
@@ -29,8 +28,9 @@ interface EncodeErc20PermitParams {
  * `token`.
  *
  * Reads token metadata via `fetchToken`. The returned `Requirement.sign()` produces the EIP-712
- * signature, verifies it against the connected account, and returns a `RequirementSignature`
- * the bundler action helpers can consume. Deadline defaults to two hours from `Time.timestamp()`.
+ * signature, verifies it against `userAddress` (the permit's owner), and returns a
+ * `RequirementSignature` the bundler action helpers can consume. Deadline defaults to two hours
+ * from `Time.timestamp()`.
  *
  * @param viemClient - Connected `PublicClient` whose `chain.id` matches `params.chainId`.
  * @param params - Permit encoding parameters.
@@ -90,10 +90,8 @@ export const encodeErc20Permit = async (
     action,
     async sign(client: WalletClient, userAddress: Address) {
       validateChainId(client.chain?.id, chainId);
-      if (!client.account)
-        throw new MissingClientPropertyError("client.account");
-      validateUserAddress(client.account.address, userAddress);
-      const account = client.account;
+      validateUserAddress(client.account?.address, userAddress);
+      const account = client.account!;
 
       const typedData = getPermitTypedData(
         {

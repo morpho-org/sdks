@@ -130,6 +130,8 @@ export interface MarketV1Actions {
    *
    * **Stale `positionData` may cause unexpected health.**
    *
+   * **The tx MUST be broadcast by `userAddress`.** The `setAuthorization` requirement authorizes GA1 for `msg.sender`; broadcasting it from another address silently grants GA1 control over the broadcaster's Morpho account. The `morphoBorrow` action also runs on behalf of `msg.sender`, so broadcaster mismatch routes the borrow to the wrong account.
+   *
    * @param params - Borrow parameters including pre-fetched `positionData` for health validation.
    * @returns Object with `buildTx` and `getRequirements`.
    */

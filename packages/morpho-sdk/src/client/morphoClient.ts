@@ -12,8 +12,8 @@ import {
 } from "../types/index.js";
 
 /**
- * Stateless entry point of the SDK. Wraps a viem `Client` plus a frozen options bag and exposes
- * factory methods for the protocol entities.
+ * Stateless entry point of the SDK. Wraps a viem `PublicClient` plus a frozen options bag and
+ * exposes factory methods for the protocol entities.
  *
  * Holds no state beyond configuration: no cache, no `init()`, no warm-up. Each factory call
  * (`vaultV1`, `vaultV2`, `marketV1`) returns a fresh entity bound to this client.
@@ -27,8 +27,9 @@ export class MorphoClient implements MorphoClientType {
   };
 
   /**
-   * @param viemClient - Connected viem public `Client` whose `chain` is set. Used for on-chain
-   *   reads only; signature flows take a `WalletClient` directly via `Requirement.sign(...)`.
+   * @param viemClient - Connected `PublicClient` whose `chain.id` matches the entity's `chainId`.
+   *   Used for on-chain reads only; `account` is ignored — pass a `WalletClient` to
+   *   `Requirement.sign(...)` for permit / permit2 signing.
    * @param _options - SDK-wide options.
    * @param _options.supportSignature - Whether the integrator can collect EIP-712 signatures for
    *   permit / permit2. Defaults to `false` (classic approvals only).

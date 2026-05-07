@@ -38,33 +38,36 @@ import {
 import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 
 /**
- * Validates that the client has a connected account AND that it matches
+ * Asserts that the wallet client has a connected account AND that it matches
  * the provided user address.
  *
- * Enforces the builder = executor invariant: `userAddress` MUST equal the
- * connected client account. Some bundle actions (e.g. `erc20TransferFrom`,
- * `morphoWithdrawCollateral`) act implicitly on the initiator rather than
- * on `userAddress`, so a divergence can produce mixed-account bundles.
+ * Enforces the signer = `userAddress` invariant inside `Requirement.sign(...)`:
+ * `userAddress` MUST equal the wallet client's connected account. The
+ * surrounding bundle actions (e.g. `erc20TransferFrom`,
+ * `morphoWithdrawCollateral`) act implicitly on the initiator rather than on
+ * `userAddress`, so a divergence between signer and `userAddress` can produce
+ * mixed-account bundles.
  *
- * Throws {@link MissingClientPropertyError} if the client has no account.
- * Throws {@link AddressMismatchError} if the client account differs from
- * `userAddress`.
+ * Declared as a TypeScript assertion function: after a successful call,
+ * `clientAccountAddress` is narrowed from `Address | undefined` to `Address`.
  *
- * @param clientAccountAddress - The client's account address; if undefined,
- *   `MissingClientPropertyError` is thrown.
+ * @param clientAccountAddress - The wallet client's account address; if
+ *   undefined, `MissingClientPropertyError("account")` is thrown.
  * @param userAddress - The user address provided by the caller.
+ * @throws {MissingClientPropertyError} when `clientAccountAddress` is undefined.
+ * @throws {AddressMismatchError} when the addresses differ.
  */
-export const validateUserAddress = (
+export function validateUserAddress(
   clientAccountAddress: Address | undefined,
   userAddress: Address,
-): void => {
+): asserts clientAccountAddress is Address {
   if (clientAccountAddress === undefined) {
     throw new MissingClientPropertyError("account");
   }
   if (!isAddressEqual(clientAccountAddress, userAddress)) {
     throw new AddressMismatchError(clientAccountAddress, userAddress);
   }
-};
+}
 
 /**
  * Validates that the accrual position belongs to the expected market and user.
