@@ -712,6 +712,7 @@ const _addressesRegistry = {
     vaultV2Factory: "0x3DE400E3F79113194fa5AF6Ae5C474947E0C82Db",
     morphoMarketV1AdapterV2Factory:
       "0xF85aD5f14cC903533FC409B8098B58b4C2f36697",
+    morphoVaultV1AdapterFactory: "0x669771F03ab55CebF753E90C3c9D80ad9391cf25",
     registryList: "0xB118227C728b5ce52445a5aAee48C8a281C429E0",
     chainlinkOracleFactory: "0xc2c167BC5cBD833ce58239e85073258F10aD4DF6",
     preLiquidationFactory: "0xB83d2D5CAE5Fc64a408cA82447445442Fe249fe3",
@@ -1288,6 +1289,7 @@ const _deployments = {
     adaptiveCurveIrm: 2375313n,
     vaultV2Factory: 2375650n,
     morphoMarketV1AdapterV2Factory: 2375701n,
+    morphoVaultV1AdapterFactory: 16475630n,
     registryList: 2375601n,
     chainlinkOracleFactory: 2375626n,
     preLiquidationFactory: 2375010n,
