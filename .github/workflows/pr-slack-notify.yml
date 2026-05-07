@@ -379,7 +379,7 @@ jobs:
             };
             const status = STATUS[state] || { emoji: ':eyes:', text: 'reviewed' };
 
-            async function slack(method, body) {
+            async function slackPost(method, body) {
               const res = await fetch(`https://slack.com/api/${method}`, {
                 method: 'POST',
                 headers: {
@@ -387,6 +387,16 @@ jobs:
                   'Content-Type': 'application/json',
                 },
                 body: JSON.stringify(body),
+              });
+              return res.json();
+            }
+
+            // Slack's read-style methods (conversations.history/.replies)
+            // reject POST + JSON with `invalid_arguments`; use GET + query.
+            async function slackGet(method, params) {
+              const qs = new URLSearchParams(params).toString();
+              const res = await fetch(`https://slack.com/api/${method}?${qs}`, {
+                headers: { 'Authorization': `Bearer ${token}` },
               });
               return res.json();
             }
@@ -403,10 +413,10 @@ jobs:
 
             async function postOrBatch(channel, threadTs) {
               if (state === 'commented') {
-                const replies = await slack('conversations.replies', {
+                const replies = await slackGet('conversations.replies', {
                   channel,
                   ts: threadTs,
-                  limit: 200,
+                  limit: '200',
                 });
                 if (replies.ok && Array.isArray(replies.messages)) {
                   const re = buildCommentedRegex(reviewer);
@@ -417,7 +427,7 @@ jobs:
                     const match = existing.text.match(re);
                     const nextCount = match[1] ? parseInt(match[1], 10) + 1 : 2;
                     const newText = `${status.emoji} ${reviewer} <${reviewUrl}|commented> (×${nextCount})`;
-                    const upd = await slack('chat.update', {
+                    const upd = await slackPost('chat.update', {
                       channel,
                       ts: existing.ts,
                       text: newText,
@@ -434,7 +444,7 @@ jobs:
                 }
               }
 
-              const post = await slack('chat.postMessage', {
+              const post = await slackPost('chat.postMessage', {
                 channel,
                 thread_ts: threadTs,
                 text: `${status.emoji} ${reviewer} <${reviewUrl}|${status.text}>`,
