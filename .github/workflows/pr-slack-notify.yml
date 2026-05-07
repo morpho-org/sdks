@@ -5,7 +5,10 @@ name: PR Slack Notifications
 # Setup (one-time, repo settings):
 #   - secrets.SLACK_BOT_TOKEN — bot token for the Slack app posting messages.
 #     The bot must be invited to #sdks-reviews and needs scopes:
-#       chat:write, channels:history, reactions:write, im:write.
+#       chat:write, channels:history, reactions:write, im:write, im:history.
+#     (im:history is used to batch repeated "commented" reviews in the
+#      quick-win DM thread; without it that thread falls back to one reply
+#      per review.)
 #   - vars.SLACK_CHANNEL_ID — channel ID for #sdks-reviews
 #     (right-click the channel → "View channel details" → copy the ID at the bottom).
 
@@ -342,59 +345,110 @@ jobs:
           pr-number: ${{ github.event.pull_request.number }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Get reviewer name
+      # Posts to the PR thread (and the quick-win DM thread when present).
+      # `commented` reviews are batched in-place: instead of stacking N
+      # ":speech_balloon: <reviewer> commented" replies, we look for an
+      # existing one from the same reviewer in the thread, bump a counter,
+      # and `chat.update` it with a fresh link to the latest review.
+      # `approved` / `changes_requested` are always posted as new replies —
+      # they're signal we want to keep distinct.
+      - name: Send review update to Slack thread(s)
         if: steps.get-ts.outputs.found == 'true'
-        id: reviewer
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
-          REVIEWER_LOGIN: ${{ github.event.review.user.login }}
-        run: echo "name=$REVIEWER_LOGIN" >> $GITHUB_OUTPUT
-
-      - name: Determine review status emoji and text
-        if: steps.get-ts.outputs.found == 'true'
-        id: review-status
-        env:
+          SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          MAIN_CHANNEL_ID: ${{ env.SLACK_CHANNEL_ID }}
+          MAIN_THREAD_TS: ${{ steps.get-ts.outputs.thread_ts }}
+          QUICK_WIN_FOUND: ${{ steps.get-ts.outputs.quick_win_found }}
+          QUICK_WIN_CHANNEL: ${{ steps.get-ts.outputs.quick_win_channel }}
+          QUICK_WIN_TS: ${{ steps.get-ts.outputs.quick_win_ts }}
+          REVIEWER: ${{ github.event.review.user.login }}
           REVIEW_STATE: ${{ github.event.review.state }}
-        run: |
-          case "$REVIEW_STATE" in
-            "approved")
-              echo "emoji=:white_check_mark:" >> $GITHUB_OUTPUT
-              echo "text=approved" >> $GITHUB_OUTPUT
-              ;;
-            "changes_requested")
-              echo "emoji=:warning:" >> $GITHUB_OUTPUT
-              echo "text=requested changes" >> $GITHUB_OUTPUT
-              ;;
-            "commented")
-              echo "emoji=:speech_balloon:" >> $GITHUB_OUTPUT
-              echo "text=commented" >> $GITHUB_OUTPUT
-              ;;
-            *)
-              echo "emoji=:eyes:" >> $GITHUB_OUTPUT
-              echo "text=reviewed" >> $GITHUB_OUTPUT
-              ;;
-          esac
-
-      - name: Send review update to Slack thread
-        if: steps.get-ts.outputs.found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+          REVIEW_URL: ${{ github.event.review.html_url }}
         with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ env.SLACK_CHANNEL_ID }}
-            thread_ts: "${{ steps.get-ts.outputs.thread_ts }}"
-            text: "${{ steps.review-status.outputs.emoji }} ${{ steps.reviewer.outputs.name }} <${{ github.event.review.html_url }}|${{ steps.review-status.outputs.text }}>"
+          script: |
+            const token = process.env.SLACK_TOKEN;
+            const reviewer = process.env.REVIEWER;
+            const state = process.env.REVIEW_STATE;
+            const reviewUrl = process.env.REVIEW_URL;
 
-      - name: Send review update to quick-win DM thread
-        if: steps.get-ts.outputs.found == 'true' && steps.get-ts.outputs.quick_win_found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
-        with:
-          method: chat.postMessage
-          token: ${{ secrets.SLACK_BOT_TOKEN }}
-          payload: |
-            channel: ${{ steps.get-ts.outputs.quick_win_channel }}
-            thread_ts: "${{ steps.get-ts.outputs.quick_win_ts }}"
-            text: "${{ steps.review-status.outputs.emoji }} ${{ steps.reviewer.outputs.name }} <${{ github.event.review.html_url }}|${{ steps.review-status.outputs.text }}>"
+            const STATUS = {
+              approved: { emoji: ':white_check_mark:', text: 'approved' },
+              changes_requested: { emoji: ':warning:', text: 'requested changes' },
+              commented: { emoji: ':speech_balloon:', text: 'commented' },
+            };
+            const status = STATUS[state] || { emoji: ':eyes:', text: 'reviewed' };
+
+            async function slack(method, body) {
+              const res = await fetch(`https://slack.com/api/${method}`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(body),
+              });
+              return res.json();
+            }
+
+            const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+            // Match either the first-post shape ":speech_balloon: <reviewer> <url|commented>"
+            // or the bumped shape "... <url|commented> (×N)". Anchored so an unrelated
+            // reply mentioning the reviewer can't accidentally match.
+            const buildCommentedRegex = (reviewerName) =>
+              new RegExp(
+                `^:speech_balloon: ${escapeRegex(reviewerName)} <[^|>]+\\|commented>(?: \\(×(\\d+)\\))?$`
+              );
+
+            async function postOrBatch(channel, threadTs) {
+              if (state === 'commented') {
+                const replies = await slack('conversations.replies', {
+                  channel,
+                  ts: threadTs,
+                  limit: 200,
+                });
+                if (replies.ok && Array.isArray(replies.messages)) {
+                  const re = buildCommentedRegex(reviewer);
+                  const existing = replies.messages.find(
+                    (m) => m.ts !== threadTs && typeof m.text === 'string' && re.test(m.text)
+                  );
+                  if (existing) {
+                    const match = existing.text.match(re);
+                    const nextCount = match[1] ? parseInt(match[1], 10) + 1 : 2;
+                    const newText = `${status.emoji} ${reviewer} <${reviewUrl}|commented> (×${nextCount})`;
+                    const upd = await slack('chat.update', {
+                      channel,
+                      ts: existing.ts,
+                      text: newText,
+                    });
+                    if (!upd.ok) {
+                      core.warning(`chat.update failed for ${channel}/${existing.ts}: ${upd.error}`);
+                    } else {
+                      core.info(`Batched ${reviewer}'s commented review in ${channel} (×${nextCount})`);
+                    }
+                    return;
+                  }
+                } else if (!replies.ok) {
+                  core.warning(`conversations.replies failed for ${channel}/${threadTs}: ${replies.error}`);
+                }
+              }
+
+              const post = await slack('chat.postMessage', {
+                channel,
+                thread_ts: threadTs,
+                text: `${status.emoji} ${reviewer} <${reviewUrl}|${status.text}>`,
+              });
+              if (!post.ok) {
+                core.warning(`chat.postMessage failed for ${channel}/${threadTs}: ${post.error}`);
+              }
+            }
+
+            await postOrBatch(process.env.MAIN_CHANNEL_ID, process.env.MAIN_THREAD_TS);
+
+            if (process.env.QUICK_WIN_FOUND === 'true') {
+              await postOrBatch(process.env.QUICK_WIN_CHANNEL, process.env.QUICK_WIN_TS);
+            }
 
   notify-re-review-requested:
     if: |
