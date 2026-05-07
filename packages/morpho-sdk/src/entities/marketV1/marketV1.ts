@@ -193,6 +193,10 @@ export interface MarketV1Actions {
    * No `getRequirements` — no ERC20 approval or GeneralAdapter1 authorization needed
    * (collateral flows out of Morpho, not in).
    *
+   * **The tx MUST be broadcast by `userAddress` (or by an account it has authorized
+   * via `setAuthorization`)** — Morpho's `_isSenderAuthorized(onBehalf)` enforces
+   * this on-chain, so a misroute reverts loudly rather than corrupting state.
+   *
    * **No on-chain slippage guard — stale `positionData` risks liquidation.**
    *
    * @param params - Withdraw collateral parameters including pre-fetched `positionData` for health validation.

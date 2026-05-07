@@ -1,4 +1,4 @@
-import { type Address, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
+import { type Address, getChainAddresses } from "@morpho-org/blue-sdk";
 import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { verifyTypedData, type WalletClient } from "viem";
@@ -58,13 +58,7 @@ interface EncodeErc20Permit2Params {
 export const encodeErc20Permit2 = (
   params: EncodeErc20Permit2Params,
 ): Requirement => {
-  const {
-    token,
-    amount,
-    chainId,
-    nonce,
-    expiration = MathLib.MAX_UINT_48,
-  } = params;
+  const { token, amount, chainId, nonce, expiration } = params;
 
   const now = Time.timestamp();
   const deadline = now + Time.s.from.h(2n);
@@ -87,8 +81,8 @@ export const encodeErc20Permit2 = (
     action,
     async sign(client: WalletClient, userAddress: Address) {
       validateChainId(client.chain?.id, chainId);
-      validateUserAddress(client.account?.address, userAddress);
-      const account = client.account!;
+      validateUserAddress(client.account, userAddress);
+      const { account } = client;
 
       const typedData = getPermit2PermitTypedData(
         {

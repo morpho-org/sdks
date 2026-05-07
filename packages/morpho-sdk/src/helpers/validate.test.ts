@@ -5,7 +5,7 @@ import {
   MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import type { Account, Address } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -89,12 +89,15 @@ function makePosition(overrides?: {
 // validateUserAddress
 // ---------------------------------------------------------------------------
 
+/** Minimal viem-`Account`-shaped stub — only `address` is read by the helper. */
+const accountFor = (address: Address) => ({ address }) as Account;
+
 describe("validateUserAddress", () => {
   test("should pass when addresses match", () => {
-    expect(() => validateUserAddress(USER_A, USER_A)).not.toThrow();
+    expect(() => validateUserAddress(accountFor(USER_A), USER_A)).not.toThrow();
   });
 
-  test("should throw MissingClientPropertyError when clientAccountAddress is undefined", () => {
+  test("should throw MissingClientPropertyError when account is undefined", () => {
     expect(() => validateUserAddress(undefined, USER_A)).toThrow(
       MissingClientPropertyError,
     );
@@ -104,7 +107,7 @@ describe("validateUserAddress", () => {
   });
 
   test("should throw AddressMismatchError when addresses differ", () => {
-    expect(() => validateUserAddress(USER_A, USER_B)).toThrow(
+    expect(() => validateUserAddress(accountFor(USER_A), USER_B)).toThrow(
       AddressMismatchError,
     );
   });

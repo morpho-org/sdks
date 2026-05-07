@@ -90,8 +90,8 @@ export const encodeErc20Permit = async (
     action,
     async sign(client: WalletClient, userAddress: Address) {
       validateChainId(client.chain?.id, chainId);
-      validateUserAddress(client.account?.address, userAddress);
-      const account = client.account!;
+      validateUserAddress(client.account, userAddress);
+      const { account } = client;
 
       const typedData = getPermitTypedData(
         {

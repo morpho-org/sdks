@@ -1,10 +1,15 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
-import { type Address, isHex } from "viem";
-import { mainnet } from "viem/chains";
+import { type Address, createWalletClient, custom, isHex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+import { mainnet, optimism } from "viem/chains";
 import { describe, expect } from "vitest";
 import { test } from "../../../../test/setup.js";
-import { AddressMismatchError } from "../../../types/index.js";
+import {
+  AddressMismatchError,
+  ChainIdMismatchError,
+  MissingClientPropertyError,
+} from "../../../types/index.js";
 import { encodeErc20Permit2 } from "./encodeErc20Permit2.js";
 
 describe("encodeErc20Permit2", () => {
@@ -53,6 +58,58 @@ describe("encodeErc20Permit2", () => {
       await expect(permit.sign(client, differentAddress)).rejects.toThrow(
         new AddressMismatchError(client.account.address, differentAddress),
       );
+    });
+
+    test("should throw ChainIdMismatchError if wallet client is on wrong chain", async ({
+      client,
+    }) => {
+      const userAddress = client.account.address;
+
+      const permit = encodeErc20Permit2({
+        token: usdc,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+        expiration: mockExpiration,
+      });
+
+      // Wallet client on a different chain than the permit was built for.
+      // The chainId guard fires before any signing, pinning the permit's
+      // chain-binding security property.
+      const walletClientOnWrongChain = createWalletClient({
+        account: privateKeyToAccount(
+          "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
+        ),
+        chain: optimism,
+        transport: custom({ request: client.request }),
+      });
+
+      await expect(
+        permit.sign(walletClientOnWrongChain, userAddress),
+      ).rejects.toBeInstanceOf(ChainIdMismatchError);
+    });
+
+    test("should throw MissingClientPropertyError if wallet client has no account", async ({
+      client,
+    }) => {
+      const userAddress = client.account.address;
+
+      const permit = encodeErc20Permit2({
+        token: usdc,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+        expiration: mockExpiration,
+      });
+
+      const walletClientWithoutAccount = createWalletClient({
+        chain: mainnet,
+        transport: custom({ request: client.request }),
+      });
+
+      await expect(
+        permit.sign(walletClientWithoutAccount, userAddress),
+      ).rejects.toBeInstanceOf(MissingClientPropertyError);
     });
 
     test("should return all expected properties in signature args", async ({

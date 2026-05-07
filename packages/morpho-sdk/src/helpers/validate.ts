@@ -6,7 +6,7 @@ import {
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import { isDefined } from "@morpho-org/morpho-ts";
-import { type Address, isAddressEqual } from "viem";
+import { type Account, type Address, isAddressEqual } from "viem";
 import {
   AccrualPositionUserMismatchError,
   AddressMismatchError,
@@ -49,23 +49,25 @@ import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
  * mixed-account bundles.
  *
  * Declared as a TypeScript assertion function: after a successful call,
- * `clientAccountAddress` is narrowed from `Address | undefined` to `Address`.
+ * `account` is narrowed from `Account | undefined` to `Account`. Pass
+ * `client.account` directly so the narrowing propagates back to the caller and
+ * removes the need for a non-null assertion.
  *
- * @param clientAccountAddress - The wallet client's account address; if
- *   undefined, `MissingClientPropertyError("account")` is thrown.
+ * @param account - The wallet client's connected account; if undefined,
+ *   `MissingClientPropertyError("account")` is thrown.
  * @param userAddress - The user address provided by the caller.
- * @throws {MissingClientPropertyError} when `clientAccountAddress` is undefined.
- * @throws {AddressMismatchError} when the addresses differ.
+ * @throws {MissingClientPropertyError} when `account` is undefined.
+ * @throws {AddressMismatchError} when `account.address` differs from `userAddress`.
  */
 export function validateUserAddress(
-  clientAccountAddress: Address | undefined,
+  account: Account | undefined,
   userAddress: Address,
-): asserts clientAccountAddress is Address {
-  if (clientAccountAddress === undefined) {
+): asserts account is Account {
+  if (account === undefined) {
     throw new MissingClientPropertyError("account");
   }
-  if (!isAddressEqual(clientAccountAddress, userAddress)) {
-    throw new AddressMismatchError(clientAccountAddress, userAddress);
+  if (!isAddressEqual(account.address, userAddress)) {
+    throw new AddressMismatchError(account.address, userAddress);
   }
 }
 

@@ -27,7 +27,7 @@ async function main() {
     throw new Error("USER_ADDRESS is required");
   }
 
-  // Create wallet client
+  // Create public client
   const publicClient = createPublicClient({
     chain: mainnet,
     transport: http(MAINNET_RPC_URL),
