@@ -31,6 +31,7 @@ pnpm add @morpho-org/morpho-sdk
 | **VaultV1**  | `deposit`                 | Bundler (general adapter) | Same ERC-4626 inflation attack prevention as V2. Supports native token wrapping.                    |
 |              | `withdraw`                | Direct vault call         | No attack surface                                                                                   |
 |              | `redeem`                  | Direct vault call         | No attack surface                                                                                   |
+|              | `migrateToV2`             | Bundler (general adapter) | Atomic V1 → V2 migration: redeem V1 shares + deposit into V2 in one tx. Slippage-protected.         |
 | **MarketV1** | `supplyCollateral`        | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
 |              | `borrow`                  | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `supplyCollateralBorrow`  | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
@@ -66,20 +67,9 @@ const requirements = await getRequirements();
 const tx = buildTx(permitSignature);
 ```
 
-| Entity       | Action                   | Route                     | Why                                                                                                 |
-| ------------ | ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------- |
-| **VaultV2**  | `deposit`                | Bundler (general adapter) | Enforces `maxSharePrice` — inflation attack prevention. Supports native token wrapping.             |
-|              | `withdraw`               | Direct vault call         | No attack surface, no bundler overhead needed                                                       |
-|              | `redeem`                 | Direct vault call         | No attack surface, no bundler overhead needed                                                       |
-|              | `forceWithdraw`          | Vault `multicall`         | N `forceDeallocate` + 1 `withdraw` in a single tx                                                   |
-|              | `forceRedeem`            | Vault `multicall`         | N `forceDeallocate` + 1 `redeem` in a single tx                                                     |
-| **VaultV1**  | `deposit`                | Bundler (general adapter) | Same ERC-4626 inflation attack prevention as V2. Supports native token wrapping.                    |
-|              | `withdraw`               | Direct vault call         | No attack surface                                                                                   |
-|              | `redeem`                 | Direct vault call         | No attack surface                                                                                   |
-|              | `migrateToV2`            | Bundler (general adapter) | Atomic V1 → V2 migration: redeem V1 shares + deposit into V2 in one tx. Slippage-protected.         |
-| **MarketV1** | `supplyCollateral`       | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
-|              | `borrow`                 | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
-|              | `supplyCollateralBorrow` | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
+### Integrator-owned invariant — `userAddress` = signer/initiator
+
+`userAddress` MUST equal the wallet that signs and broadcasts the resulting transaction. The SDK enforces this **only on permit/permit2 signing paths** (`Requirement.sign(walletClient, userAddress)` throws `AddressMismatchError` if `walletClient.account.address !== userAddress`). Outside that — `supportSignature: false`, sufficient pre-existing allowance, `setAuthorization`-only requirements — no SDK check fires; the integrator owns the invariant. Misrouting is silent and on-chain: `repayWithdrawCollateral` would repay one account's debt while pulling tokens from and withdrawing collateral against the signer; a `setAuthorization` tx broadcast by the wrong wallet leaves a stray authorization for `GeneralAdapter1`. See [BUNDLER3.md](./BUNDLER3.md#other-pitfalls).
 
 ### VaultV2
 
