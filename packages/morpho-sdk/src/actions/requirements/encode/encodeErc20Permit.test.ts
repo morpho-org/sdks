@@ -4,6 +4,7 @@ import { type Address, createWalletClient, custom, isHex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { mainnet, optimism } from "viem/chains";
 import { describe, expect } from "vitest";
+import { TEST_PRIVATE_KEY } from "../../../../test/fixtures/accounts.js";
 import { test } from "../../../../test/setup.js";
 import {
   AddressMismatchError,
@@ -11,11 +12,6 @@ import {
   MissingClientPropertyError,
 } from "../../../types/index.js";
 import { encodeErc20Permit } from "./encodeErc20Permit.js";
-
-// First Anvil default private key (account 0xf39Fd6…) — pinned for tests that
-// only need a wallet client to exercise sign-time validation, never to sign.
-const TEST_PRIVATE_KEY =
-  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 
 describe("encodeErc20Permit", () => {
   const {
