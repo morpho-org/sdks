@@ -14,17 +14,20 @@ import {
 } from "./pipeline/index.js";
 
 /**
- * Simulates a bundle of EVM transactions on a configured chain.
+ * Simulate a bundle of EVM transactions.
  *
- * Pipeline: validates input → resolves authorizations into prepended approve transactions →
- * runs the bundle through Tenderly REST (primary) or `eth_simulateV1` (fallback) within a
- * shared timeout budget → parses ERC-20 / WETH transfers from logs → asserts no funds are
- * retained by `bundler3` → returns the full result set. The caller reads whichever fields they
- * need:
+ * Validates input → resolves authorizations into prepended approve txs → runs the bundle
+ * through Tenderly REST (primary) or `eth_simulateV1` (fallback) with a shared timeout
+ * budget → parses ERC20/WETH transfers from per-tx logs → asserts no funds are retained
+ * by `bundler3` → returns the full result set. The caller reads whichever fields they need:
  *
- * - **Preview** (`shareable: true`): `transfers` + `tenderlyUrl`.
- * - **Verify** (default): `simulationTxs` + `transfers`, then pass both to {@link screenAddresses}
- *   for compliance.
+ * - `transfers` + `tenderlyUrl` → user-facing preview.
+ * - `simulationTxs` + `transfers` → server-side verification before broadcast, then pass
+ *   both to `screenAddresses` for compliance.
+ * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`, `gasUsed`,
+ *   and Tenderly-only `assetChanges`). Aligned 1:1 with `simulationTxs[i]`.
+ * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
+ *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *
  * @param config - Backend configuration: Tenderly credentials, per-chain RPC URLs, optional
  *   logger, and the overall timeout budget.
@@ -39,13 +42,16 @@ import {
  * @param options.shareable - When `true`, persists the simulation in Tenderly and returns a
  *   shareable `tenderlyUrl`. Honored only on the Tenderly backend, not on the `eth_simulateV1`
  *   fallback. Defaults to `false`.
- * @returns A `SimulationResult` carrying the resolved `simulationTxs`, parsed `transfers`, the
- *   optional `tenderlyUrl`, and the opaque Tenderly `assetChanges` payload.
- * @throws {SimulationValidationError} when `params` fails input validation.
- * @throws {UnsupportedChainError} when no backend is configured for `chainId`.
- * @throws {SimulationRevertedError} when the bundle reverts on-chain.
- * @throws {BlacklistViolationError} when bundler retention is detected after parsing transfers.
- * @throws {ExternalServiceError} when both backends are unavailable within the timeout budget.
+ * @throws {SimulationValidationError} for invalid input (mixed senders, bad addresses,
+ *   empty transactions, malformed authorizations).
+ * @throws {UnsupportedChainError} when the chain is not configured for any backend.
+ * @throws {SimulationRevertedError} when the bundle reverts on either backend.
+ * @throws {BlacklistViolationError} when the simulation leaves value retained by or
+ *   drained from a `bundler3` address beyond the dust threshold.
+ * @throws {ExternalServiceError} (a) when both backends are unavailable within the
+ *   timeout budget, or (b) when a backend returns a `calls` array whose length does
+ *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched
+ *   per-tx output.
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";

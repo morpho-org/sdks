@@ -152,6 +152,12 @@ export interface RawSimulationResult {
   tenderlyUrl?: string;
 }
 
+/**
+ * Normalized EVM log emitted by a single simulated call. The shape is the
+ * common subset both backends (`eth_simulateV1` via viem and Tenderly REST)
+ * produce after schema validation. Returned indirectly via
+ * `SimulationCall.logs` and consumed by the SDK's transfer parser.
+ */
 export interface RawLog {
   readonly address: Address;
   readonly topics: readonly Hex[];
@@ -159,8 +165,10 @@ export interface RawLog {
 }
 
 /**
- * Internal mirror of `SimulationCall`, mutable during construction by
- * the simulation backends.
+ * Internal mirror of `SimulationCall`, mutable during construction by the
+ * simulation backends.
+ *
+ * @internal
  */
 export interface RawCall {
   logs: RawLog[];
