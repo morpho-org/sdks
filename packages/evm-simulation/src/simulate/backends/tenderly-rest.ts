@@ -47,7 +47,7 @@ const tenderlyRawResponseSchema = z
     transaction: z
       .object({
         error_message: z.string().optional(),
-        gas_used: z.number().optional(),
+        gas_used: z.number(),
         transaction_info: z
           .object({
             logs: z
@@ -69,10 +69,9 @@ const tenderlyRawResponseSchema = z
             asset_changes: z.unknown().optional(),
             call_trace: z
               .object({
-                output: hexSchema.optional(),
+                output: hexSchema,
               })
-              .passthrough()
-              .optional(),
+              .passthrough(),
           })
           .passthrough(),
       })
@@ -393,8 +392,8 @@ function parseTenderlyCall(data: TenderlyRawResponse): RawCall {
   return {
     logs: rawLogs,
     status: true,
-    returnData: transaction.transaction_info.call_trace?.output ?? "0x",
-    gasUsed: BigInt(transaction.gas_used ?? 0),
+    returnData: transaction.transaction_info.call_trace.output,
+    gasUsed: BigInt(transaction.gas_used),
     assetChanges: transaction.transaction_info.asset_changes,
   };
 }
