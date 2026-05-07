@@ -52,6 +52,9 @@ import {
  *   timeout budget, or (b) when a backend returns a `calls` array whose length does
  *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched
  *   per-tx output.
+ * @returns A {@link SimulationResult} carrying the resolved `simulationTxs`, per-tx
+ *   `calls` (aligned 1:1 with `simulationTxs`), parsed `transfers` (each stamped with
+ *   `txIdx`), and the optional `tenderlyUrl`.
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
