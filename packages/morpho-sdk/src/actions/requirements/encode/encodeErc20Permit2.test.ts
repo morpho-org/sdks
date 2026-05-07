@@ -12,6 +12,11 @@ import {
 } from "../../../types/index.js";
 import { encodeErc20Permit2 } from "./encodeErc20Permit2.js";
 
+// First Anvil default private key (account 0xf39Fd6…) — pinned for tests that
+// only need a wallet client to exercise sign-time validation, never to sign.
+const TEST_PRIVATE_KEY =
+  "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
+
 describe("encodeErc20Permit2", () => {
   const {
     usdc,
@@ -77,9 +82,7 @@ describe("encodeErc20Permit2", () => {
       // The chainId guard fires before any signing, pinning the permit's
       // chain-binding security property.
       const walletClientOnWrongChain = createWalletClient({
-        account: privateKeyToAccount(
-          "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80",
-        ),
+        account: privateKeyToAccount(TEST_PRIVATE_KEY),
         chain: optimism,
         transport: custom({ request: client.request }),
       });
