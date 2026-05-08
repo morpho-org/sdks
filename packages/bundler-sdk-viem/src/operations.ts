@@ -847,7 +847,7 @@ export const finalizeBundle = (
         candidate.args.to === generalAdapter1 &&
         candidate.args.amount >= shares,
     );
-    if (inputTransferIndex <= 0) return;
+    if (inputTransferIndex < 0) return;
 
     const inputTransfer = operations[
       inputTransferIndex
