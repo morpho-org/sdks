@@ -15,8 +15,10 @@ export { simulate } from "./simulate/index.js";
 // Types
 export type {
   ChainSimulationConfig,
+  RawLog,
   SimulateParams,
   SimulationAuthorization,
+  SimulationCall,
   SimulationConfig,
   SimulationLogger,
   SimulationResult,
