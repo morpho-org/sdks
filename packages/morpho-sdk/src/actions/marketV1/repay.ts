@@ -130,9 +130,9 @@ export const marketV1Repay = ({
   if (requirementSignature) {
     actions.push(
       ...getRequirementsAction({
-        chainId,
         asset: marketParams.loanToken,
         amount: transferAmount,
+        generalAdapter1,
         requirementSignature,
       }),
     );

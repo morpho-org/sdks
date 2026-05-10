@@ -143,9 +143,9 @@ export const vaultV1Deposit = ({
     if (requirementSignature) {
       actions.push(
         ...getRequirementsAction({
-          chainId,
           asset,
           amount,
+          generalAdapter1,
           requirementSignature,
         }),
       );
