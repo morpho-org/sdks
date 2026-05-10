@@ -11,7 +11,7 @@ import {
 interface GetRequirementsActionParams {
   asset: Address;
   amount: bigint;
-  generalAdapter1: Address;
+  recipient: Address;
   requirementSignature: {
     args: PermitArgs;
     action: PermitAction | Permit2Action;
@@ -30,8 +30,8 @@ interface GetRequirementsActionParams {
  *
  * @param params.asset - The ERC-20 to pull into the adapter.
  * @param params.amount - The amount to pull, in the asset's smallest unit.
- * @param params.generalAdapter1 - The bundler `GeneralAdapter1` address that receives the
- *   transfer. Resolved by the caller from `getChainAddresses(chainId)`.
+ * @param params.recipient - The address that receives the transfer (the bundler
+ *   `GeneralAdapter1`, resolved by the caller from `getChainAddresses(chainId)`).
  * @param params.requirementSignature - The signed permit / permit2 to apply before the transfer.
  * @returns A pair of bundler `Action`s: a permit / approve2 followed by the transfer.
  * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
@@ -41,7 +41,7 @@ interface GetRequirementsActionParams {
 export const getRequirementsAction = ({
   asset,
   amount,
-  generalAdapter1,
+  recipient,
   requirementSignature,
 }: GetRequirementsActionParams): Action[] => {
   if (!isAddressEqual(requirementSignature.args.asset, asset)) {
@@ -79,7 +79,7 @@ export const getRequirementsAction = ({
       },
       {
         type: "transferFrom2",
-        args: [asset, amount, generalAdapter1, false /* skipRevert */],
+        args: [asset, amount, recipient, false /* skipRevert */],
       },
     ];
   }
@@ -98,7 +98,7 @@ export const getRequirementsAction = ({
     },
     {
       type: "erc20TransferFrom",
-      args: [asset, amount, generalAdapter1, false /* skipRevert */],
+      args: [asset, amount, recipient, false /* skipRevert */],
     },
   ];
 };

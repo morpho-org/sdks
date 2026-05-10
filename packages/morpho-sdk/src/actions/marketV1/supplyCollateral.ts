@@ -122,7 +122,7 @@ export const marketV1SupplyCollateral = ({
         ...getRequirementsAction({
           asset: marketParams.collateralToken,
           amount,
-          generalAdapter1,
+          recipient: generalAdapter1,
           requirementSignature,
         }),
       );

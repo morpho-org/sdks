@@ -132,7 +132,7 @@ export const marketV1Repay = ({
       ...getRequirementsAction({
         asset: marketParams.loanToken,
         amount: transferAmount,
-        generalAdapter1,
+        recipient: generalAdapter1,
         requirementSignature,
       }),
     );

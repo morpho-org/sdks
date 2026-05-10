@@ -145,7 +145,7 @@ export const vaultV1Deposit = ({
         ...getRequirementsAction({
           asset,
           amount,
-          generalAdapter1,
+          recipient: generalAdapter1,
           requirementSignature,
         }),
       );
