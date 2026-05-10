@@ -1,4 +1,3 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
 import type { Action } from "@morpho-org/bundler-sdk-viem";
 import { type Address, isAddressEqual } from "viem";
 import {
@@ -10,9 +9,9 @@ import {
 } from "../../types/index.js";
 
 interface GetRequirementsActionParams {
-  chainId: number;
   asset: Address;
   amount: bigint;
+  generalAdapter1: Address;
   requirementSignature: {
     args: PermitArgs;
     action: PermitAction | Permit2Action;
@@ -29,9 +28,10 @@ interface GetRequirementsActionParams {
  * wider-than-expected approval. Internal helper — consumed only by the action builders that
  * accept a `requirementSignature`; not re-exported on the public surface.
  *
- * @param params.chainId - The chain the bundle targets (used to resolve `GeneralAdapter1`).
  * @param params.asset - The ERC-20 to pull into the adapter.
  * @param params.amount - The amount to pull, in the asset's smallest unit.
+ * @param params.generalAdapter1 - The bundler `GeneralAdapter1` address that receives the
+ *   transfer. Resolved by the caller from `getChainAddresses(chainId)`.
  * @param params.requirementSignature - The signed permit / permit2 to apply before the transfer.
  * @returns A pair of bundler `Action`s: a permit / approve2 followed by the transfer.
  * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
@@ -39,9 +39,9 @@ interface GetRequirementsActionParams {
  * @internal
  */
 export const getRequirementsAction = ({
-  chainId,
   asset,
   amount,
+  generalAdapter1,
   requirementSignature,
 }: GetRequirementsActionParams): Action[] => {
   if (!isAddressEqual(requirementSignature.args.asset, asset)) {
@@ -54,10 +54,6 @@ export const getRequirementsAction = ({
       requirementSignature.args.amount,
     );
   }
-
-  const {
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
 
   if (requirementSignature.action.type === "permit2") {
     if (!("expiration" in requirementSignature.args)) {

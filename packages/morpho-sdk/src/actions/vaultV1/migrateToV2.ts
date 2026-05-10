@@ -142,9 +142,9 @@ export const vaultV1MigrateToV2 = ({
   if (requirementSignature) {
     actions.push(
       ...getRequirementsAction({
-        chainId,
         asset: sourceVault,
         amount: shares,
+        generalAdapter1,
         requirementSignature,
       }),
     );

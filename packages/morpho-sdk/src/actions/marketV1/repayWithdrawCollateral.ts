@@ -152,9 +152,9 @@ export const marketV1RepayWithdrawCollateral = ({
   if (requirementSignature) {
     actions.push(
       ...getRequirementsAction({
-        chainId,
         asset: marketParams.loanToken,
         amount: transferAmount,
+        generalAdapter1,
         requirementSignature,
       }),
     );
