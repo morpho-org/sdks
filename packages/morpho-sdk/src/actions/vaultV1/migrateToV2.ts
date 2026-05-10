@@ -144,7 +144,7 @@ export const vaultV1MigrateToV2 = ({
       ...getRequirementsAction({
         asset: sourceVault,
         amount: shares,
-        generalAdapter1,
+        recipient: generalAdapter1,
         requirementSignature,
       }),
     );

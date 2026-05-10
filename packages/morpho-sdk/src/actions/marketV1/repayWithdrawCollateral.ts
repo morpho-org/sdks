@@ -154,7 +154,7 @@ export const marketV1RepayWithdrawCollateral = ({
       ...getRequirementsAction({
         asset: marketParams.loanToken,
         amount: transferAmount,
-        generalAdapter1,
+        recipient: generalAdapter1,
         requirementSignature,
       }),
     );
