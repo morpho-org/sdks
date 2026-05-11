@@ -34,11 +34,11 @@ describe("Metadata", () => {
           },
         });
         const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
-        const accrualVault = await vaultV2.getData();
+        const vaultData = await vaultV2.getData();
         const deposit = vaultV2.deposit({
           userAddress: client.account.address,
           amount: amount,
-          accrualVault,
+          vaultData,
         });
 
         const tx_1 = deposit.buildTx();
@@ -104,11 +104,11 @@ describe("Metadata", () => {
           },
         });
         const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
-        const accrualVault = await vaultV2.getData();
+        const vaultData = await vaultV2.getData();
         const deposit = vaultV2.deposit({
           userAddress: client.account.address,
           amount: amount,
-          accrualVault,
+          vaultData,
         });
 
         const tx = deposit.buildTx();
