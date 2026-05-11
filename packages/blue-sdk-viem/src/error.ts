@@ -43,3 +43,26 @@ export function isUnknownOfFactoryError(error: unknown): boolean {
     revertError.data?.errorName === "UnknownOfFactory"
   );
 }
+
+/**
+ * Checks if an error is a contract revert with the "UnsupportedVaultV2Adapter"
+ * error name, returning the offending adapter address if so. Used to propagate
+ * adapter validation errors from the deployless `GetVaultV2.query` to the
+ * caller as a typed {@link UnsupportedVaultV2AdapterError}.
+ */
+export function getUnsupportedVaultV2Adapter(error: unknown): Address | null {
+  if (!(error instanceof BaseError)) return null;
+
+  const revertError = error.walk(
+    (err) => err instanceof ContractFunctionRevertedError,
+  );
+
+  if (
+    !(revertError instanceof ContractFunctionRevertedError) ||
+    revertError.data?.errorName !== "UnsupportedVaultV2Adapter"
+  )
+    return null;
+
+  const [adapter] = revertError.data.args ?? [];
+  return typeof adapter === "string" ? (adapter as Address) : null;
+}

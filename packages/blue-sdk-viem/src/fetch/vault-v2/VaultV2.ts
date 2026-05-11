@@ -24,7 +24,10 @@ import {
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "../../abis.js";
-import { isUnknownOfFactoryError } from "../../error.js";
+import {
+  getUnsupportedVaultV2Adapter,
+  isUnknownOfFactoryError,
+} from "../../error.js";
 import { abi, code } from "../../queries/vault-v2/GetVaultV2.js";
 import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchToken } from "../Token.js";
@@ -64,20 +67,6 @@ export async function fetchVaultV2(
           ],
         });
 
-      if (
-        vault.liquidityData !== "0x" &&
-        morphoVaultV1AdapterFactory != null &&
-        vault.liquidityAdapter !== zeroAddress &&
-        (await readContract(client, {
-          ...parameters,
-          address: morphoVaultV1AdapterFactory,
-          abi: morphoVaultV1AdapterFactoryAbi,
-          functionName: "isMorphoVaultV1Adapter",
-          args: [vault.liquidityAdapter],
-        }))
-      )
-        throw new UnsupportedVaultV2AdapterError(vault.liquidityAdapter);
-
       return new VaultV2({
         ...token,
         ...vault,
@@ -88,9 +77,12 @@ export async function fetchVaultV2(
           : undefined,
       });
     } catch (error) {
+      const unsupportedAdapter = getUnsupportedVaultV2Adapter(error);
+      if (unsupportedAdapter != null)
+        throw new UnsupportedVaultV2AdapterError(unsupportedAdapter);
+
       if (deployless === "force") throw error;
       if (isUnknownOfFactoryError(error)) throw error;
-      if (error instanceof UnsupportedVaultV2AdapterError) throw error;
       // Fallback to multicall if deployless call fails.
     }
   }
