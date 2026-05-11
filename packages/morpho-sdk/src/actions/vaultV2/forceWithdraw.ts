@@ -79,7 +79,9 @@ export const vaultV2ForceWithdraw = ({
     throw new EmptyDeallocationsError(vaultAddress);
   }
 
-  if (withdraw.amount <= 0n) {
+  const { amount: withdrawAmount, recipient: withdrawRecipient } = withdraw;
+
+  if (withdrawAmount <= 0n) {
     throw new NonPositiveAssetAmountError(vaultAddress);
   }
 
@@ -93,7 +95,7 @@ export const vaultV2ForceWithdraw = ({
     encodeFunctionData({
       abi: vaultV2Abi,
       functionName: "withdraw",
-      args: [withdraw.amount, withdraw.recipient, onBehalf],
+      args: [withdrawAmount, withdrawRecipient, onBehalf],
     }),
   );
 
@@ -119,8 +121,8 @@ export const vaultV2ForceWithdraw = ({
         vault: vaultAddress,
         deallocations: deallocations.map((d) => ({ ...d })),
         withdraw: {
-          amount: withdraw.amount,
-          recipient: withdraw.recipient,
+          amount: withdrawAmount,
+          recipient: withdrawRecipient,
         },
         onBehalf,
       },
