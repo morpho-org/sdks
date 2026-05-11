@@ -19,96 +19,150 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  release-lint:
-    name: Lint (${{ matrix.branch }})
+  lint-main:
+    if: github.event_name == 'schedule' || inputs.branch == 'main'
+    name: Lint (main)
 
     permissions:
       contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        branch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.branch)) || fromJSON('["main","next"]') }}
 
     uses: ./.github/workflows/lint.yml
     with:
-      checkout_ref: ${{ matrix.branch }}
+      checkout_ref: main
 
-  release-build:
-    name: Build (${{ matrix.branch }})
+  build-main:
+    if: github.event_name == 'schedule' || inputs.branch == 'main'
+    name: Build (main)
 
     permissions:
       contents: read
-
-    strategy:
-      fail-fast: false
-      matrix:
-        branch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.branch)) || fromJSON('["main","next"]') }}
 
     uses: ./.github/workflows/build.yml
     with:
-      checkout_ref: ${{ matrix.branch }}
+      checkout_ref: main
 
-  release-test:
-    name: Test (${{ matrix.branch }})
+  test-main:
+    if: github.event_name == 'schedule' || inputs.branch == 'main'
+    name: Test (main)
 
     permissions:
       contents: read
 
-    strategy:
-      fail-fast: false
-      matrix:
-        branch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.branch)) || fromJSON('["main","next"]') }}
-
     uses: ./.github/workflows/test.yml
     with:
-      checkout_ref: ${{ matrix.branch }}
+      checkout_ref: main
     secrets:
       MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
       ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
 
-  version-pr:
-    name: Version PR (${{ matrix.branch }})
+  version-pr-main:
+    if: github.event_name == 'schedule' || inputs.branch == 'main'
+    name: Version PR (main)
 
     permissions:
       contents: read
 
     needs:
-      - release-lint
-      - release-build
-      - release-test
-
-    strategy:
-      fail-fast: false
-      matrix:
-        branch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.branch)) || fromJSON('["main","next"]') }}
+      - lint-main
+      - build-main
+      - test-main
 
     uses: ./.github/workflows/version-pr.yml
     with:
-      target_branch: ${{ matrix.branch }}
+      target_branch: main
     secrets:
       VERSION_APP_ID: ${{ secrets.VERSION_APP_ID }}
       VERSION_APP_PRIVATE_KEY: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
 
-  publish:
-    name: Publish (${{ matrix.branch }})
+  publish-main:
+    if: github.event_name == 'schedule' || inputs.branch == 'main'
+    name: Publish (main)
 
     permissions:
       contents: write
       id-token: write
 
     needs:
-      - release-lint
-      - release-build
-      - release-test
-      - version-pr
-
-    strategy:
-      fail-fast: false
-      matrix:
-        branch: ${{ github.event_name == 'workflow_dispatch' && fromJSON(format('["{0}"]', inputs.branch)) || fromJSON('["main","next"]') }}
+      - lint-main
+      - build-main
+      - test-main
+      - version-pr-main
 
     uses: ./.github/workflows/publish.yml
     with:
-      target_branch: ${{ matrix.branch }}
+      target_branch: main
+
+  lint-next:
+    if: github.event_name == 'schedule' || inputs.branch == 'next'
+    name: Lint (next)
+
+    permissions:
+      contents: read
+
+    uses: ./.github/workflows/lint.yml
+    with:
+      checkout_ref: next
+
+  build-next:
+    if: github.event_name == 'schedule' || inputs.branch == 'next'
+    name: Build (next)
+
+    permissions:
+      contents: read
+
+    uses: ./.github/workflows/build.yml
+    with:
+      checkout_ref: next
+
+  test-next:
+    if: github.event_name == 'schedule' || inputs.branch == 'next'
+    name: Test (next)
+
+    permissions:
+      contents: read
+
+    uses: ./.github/workflows/test.yml
+    with:
+      checkout_ref: next
+    secrets:
+      MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
+      BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
+      ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
+
+  version-pr-next:
+    if: github.event_name == 'schedule' || inputs.branch == 'next'
+    name: Version PR (next)
+
+    permissions:
+      contents: read
+
+    needs:
+      - lint-next
+      - build-next
+      - test-next
+
+    uses: ./.github/workflows/version-pr.yml
+    with:
+      target_branch: next
+    secrets:
+      VERSION_APP_ID: ${{ secrets.VERSION_APP_ID }}
+      VERSION_APP_PRIVATE_KEY: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
+
+  publish-next:
+    if: github.event_name == 'schedule' || inputs.branch == 'next'
+    name: Publish (next)
+
+    permissions:
+      contents: write
+      id-token: write
+
+    needs:
+      - lint-next
+      - build-next
+      - test-next
+      - version-pr-next
+
+    uses: ./.github/workflows/publish.yml
+    with:
+      target_branch: next
