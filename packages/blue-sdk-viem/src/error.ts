@@ -27,6 +27,22 @@ export class InvalidPermitDomainVerifyingContractError extends Error {
   }
 }
 
+/** Thrown when a permit domain advertises unsupported EIP-5267 extensions. */
+export class UnsupportedPermitDomainExtensionsError extends Error {
+  public readonly extensions: readonly bigint[];
+
+  constructor(
+    public readonly token: Address,
+    extensions: readonly bigint[],
+  ) {
+    super(
+      `Unsupported EIP-5267 domain extensions for token "${token}": expected no extensions, got "${extensions.join(", ")}". Use another approval path instead of signing this permit.`,
+    );
+
+    this.extensions = [...extensions];
+  }
+}
+
 /**
  * Checks if an error is a contract revert with the "UnknownOfFactory" error name.
  * Used to propagate factory validation errors instead of falling back to multicall.

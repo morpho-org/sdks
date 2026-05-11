@@ -1,3 +1,4 @@
+import type { MarketId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 
 /** Thrown when an asset amount is required to be positive but is zero or negative. */
@@ -365,6 +366,27 @@ export class MissingPublicAllocatorConfigError extends Error {
   constructor(vault: string) {
     super(
       `Vault ${vault} has no public allocator configured but was selected for reallocation`,
+    );
+  }
+}
+
+/**
+ * Thrown when shared liquidity selected by `computeReallocations` cannot cover
+ * the absolute borrow shortfall on the target market — the resulting
+ * `morphoBorrow` would still revert onchain.
+ *
+ * Pattern-match on the class and inspect `params` to surface the gap to users.
+ */
+export class InsufficientSharedLiquidityError extends Error {
+  constructor(
+    public readonly params: {
+      readonly marketId: MarketId;
+      readonly shortfall: bigint;
+      readonly available: bigint;
+    },
+  ) {
+    super(
+      `Shared liquidity is insufficient to cover the borrow on market ${params.marketId}: shortfall "${params.shortfall}", available "${params.available}". Reduce the borrow amount or wait for additional vault liquidity.`,
     );
   }
 }
