@@ -88,19 +88,38 @@ export namespace MarketUtils {
   /**
    * Returns the interest accrued on both sides of the given market
    * as well as the supply shares minted to the fee recipient.
+   *
+   * Fee shares are converted from the fee amount against post-interest supply assets minus the fee amount,
+   * matching Morpho Blue's onchain accrual.
+   *
    * @param borrowRate The average borrow rate since the last market update (scaled by WAD).
-   * @param market The market state.
+   * @param market.totalSupplyAssets The market's total supplied assets before accrual.
+   * @param market.totalBorrowAssets The market's total borrowed assets before accrual.
+   * @param market.totalSupplyShares The market's total supply shares before fee shares are minted.
+   * @param market.fee The market fee percentage, scaled by WAD.
    * @param elapsed The time elapsed since the last market update (in seconds).
+   * @returns The accrued interest and the supply shares minted to the fee recipient.
+   * @example
+   * ```ts
+   * import { MarketUtils, MathLib } from "@morpho-org/blue-sdk";
+   *
+   * const { interest, feeShares } = MarketUtils.getAccruedInterest(
+   *   5_0000000000000000n,
+   *   {
+   *     totalSupplyAssets: 1_000_000n * MathLib.WAD,
+   *     totalBorrowAssets: 800_000n * MathLib.WAD,
+   *     totalSupplyShares: 1_100_000n * MathLib.WAD,
+   *     fee: 10_0000000000000000n,
+   *   },
+   *   1n,
+   * );
+   * // { interest, feeShares } satisfies { interest: bigint; feeShares: bigint }
+   * ```
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function getAccruedInterest(
     borrowRate: BigIntish,
-    {
-      totalSupplyAssets,
-      totalBorrowAssets,
-      totalSupplyShares,
-      fee,
-    }: {
+    market: {
       totalSupplyAssets: BigIntish;
       totalBorrowAssets: BigIntish;
       totalSupplyShares: BigIntish;
@@ -108,6 +127,9 @@ export namespace MarketUtils {
     },
     elapsed = 0n,
   ) {
+    const { totalSupplyAssets, totalBorrowAssets, totalSupplyShares, fee } =
+      market;
+
     const interest = MathLib.wMulDown(
       totalBorrowAssets,
       MathLib.wTaylorCompounded(borrowRate, elapsed),

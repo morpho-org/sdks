@@ -334,6 +334,9 @@ describe("Market", () => {
       args: [params.id],
     });
 
+    expect(onchainTotalBorrowAssets).toBeGreaterThan(totalBorrowAssets);
+    expect(onchainTotalSupplyShares).toBeGreaterThan(totalSupplyShares);
+
     expect(market.totalSupplyAssets).toBe(onchainTotalSupplyAssets);
     expect(market.totalSupplyShares).toBe(onchainTotalSupplyShares);
     expect(market.totalBorrowAssets).toBe(onchainTotalBorrowAssets);
