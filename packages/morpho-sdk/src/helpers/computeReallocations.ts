@@ -3,6 +3,7 @@ import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "@morpho-org/bundler-sdk-viem"
 import type { SimulationState } from "@morpho-org/simulation-sdk";
 import type { Address } from "viem";
 import {
+  InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
   type ReallocationComputeOptions,
   type VaultReallocation,
@@ -21,6 +22,7 @@ import {
  * @param params.borrowAmount - The intended borrow amount (used to compute post-borrow utilization).
  * @param params.options - Optional reallocation computation options.
  * @returns Array of vault reallocations, sorted with withdrawals in ascending market id order.
+ * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the borrow shortfall on the target market — preventing fee-bearing reallocations from being attached to a borrow that would still revert onchain.
  */
 export const computeReallocations = ({
   reallocationData: data,
@@ -87,9 +89,16 @@ export const computeReallocations = ({
 
   if (requiredAssets <= 0n) return [];
 
+  // Liquidity strictly required for `morphoBorrow` to succeed onchain.
+  const absoluteShortfall =
+    newTotalBorrowAssets > newTotalSupplyAssets
+      ? newTotalBorrowAssets - newTotalSupplyAssets
+      : 0n;
+
   // Group withdrawals by vault, capping total at requiredAssets.
   const reallocationsMap: Record<Address, { id: MarketId; assets: bigint }[]> =
     {};
+  let totalReallocated = 0n;
 
   for (const { vault, ...withdrawal } of withdrawals) {
     const vaultReallocations = (reallocationsMap[vault] ??= []);
@@ -110,7 +119,17 @@ export const computeReallocations = ({
     }
 
     requiredAssets -= reallocatedAssets;
+    totalReallocated += reallocatedAssets;
     if (requiredAssets === 0n) break;
+  }
+
+  // Refuse fee-bearing partial plans for an unreachable borrow.
+  if (totalReallocated < absoluteShortfall) {
+    throw new InsufficientSharedLiquidityError({
+      marketId,
+      shortfall: absoluteShortfall,
+      available: totalReallocated,
+    });
   }
 
   // Transform into VaultReallocation[] format.
