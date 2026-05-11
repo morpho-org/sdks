@@ -67,7 +67,7 @@ export function useVaultV2s<
       const { data, error, isFetching } = orderedResults[index]!;
 
       result.data[vaultV2] = data;
-      result.error[vaultV2] = error;
+      result.error[vaultV2] = error as UseVaultV2ReturnType["error"];
       result.isFetching[vaultV2] = isFetching;
 
       if (isFetching) result.isFetchingAny = true;

@@ -297,7 +297,7 @@ export const spawnAnvil = async (
       const dataStr = data.toString();
 
       const listenMatch = dataStr.match(/Listening on 127.0.0.1:(\d+)/);
-      if (listenMatch) port = Number.parseInt(listenMatch[1]);
+      if (listenMatch) port = Number.parseInt(listenMatch[1], 10);
 
       // console.debug(`[port ${port || "??"}] ${dataStr}`);
 
