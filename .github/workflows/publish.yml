@@ -23,8 +23,9 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          ref: ${{ github.ref_name }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
 
@@ -75,9 +76,12 @@ jobs:
           exit 1
 
       - name: Publish packages
+        id: publish-packages
         if: steps.pending-changesets.outputs.has_changesets == 'false'
         shell: bash
         run: |
+          set -euo pipefail
+
           publish_tag="latest"
           if [ "${GITHUB_REF_NAME}" = "next" ]; then
             publish_tag="next"
@@ -85,21 +89,34 @@ jobs:
 
           before_tags="$(mktemp)"
           after_tags="$(mktemp)"
-          new_tags="$(mktemp)"
-          trap 'rm -f "$before_tags" "$after_tags" "$new_tags"' EXIT
+          new_tags="${RUNNER_TEMP}/new-package-tags.txt"
+          trap 'rm -f "$before_tags" "$after_tags"' EXIT
 
-          git tag --list | sort > "$before_tags"
+          git tag --list | LC_ALL=C sort > "$before_tags"
           pnpm release --tag "$publish_tag"
-          git tag --list | sort > "$after_tags"
+          git tag --list | LC_ALL=C sort > "$after_tags"
 
-          comm -13 "$before_tags" "$after_tags" > "$new_tags"
+          LC_ALL=C comm -13 "$before_tags" "$after_tags" > "$new_tags"
           if [ -s "$new_tags" ]; then
-            mapfile -t tags < "$new_tags"
-            refs=()
-
-            for tag in "${tags[@]}"; do
-              refs+=("refs/tags/${tag}")
-            done
-
-            git push --atomic origin "${refs[@]}"
+            echo "has_tags=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_tags=false" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Push package tags
+        if: steps.publish-packages.outputs.has_tags == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t tags < "${RUNNER_TEMP}/new-package-tags.txt"
+          refs=()
+
+          for tag in "${tags[@]}"; do
+            refs+=("refs/tags/${tag}")
+          done
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git push --atomic origin "${refs[@]}"
