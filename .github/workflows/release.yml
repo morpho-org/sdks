@@ -19,6 +19,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  resolve-main:
+    if: github.event_name == 'schedule' || inputs.branch == 'main'
+    name: Resolve main
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      sha: ${{ steps.ref.outputs.sha }}
+
+    steps:
+      - id: ref
+        shell: bash
+        env:
+          BRANCH: main
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          sha="$(git ls-remote "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/heads/${BRANCH}" | cut -f1)"
+          if [ -z "${sha}" ]; then
+            echo "::error::Could not resolve ${BRANCH}"
+            exit 1
+          fi
+
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
+
   lint-main:
     if: github.event_name == 'schedule' || inputs.branch == 'main'
     name: Lint (main)
@@ -26,9 +54,12 @@ jobs:
     permissions:
       contents: read
 
+    needs:
+      - resolve-main
+
     uses: ./.github/workflows/lint.yml
     with:
-      checkout_ref: main
+      checkout_ref: ${{ needs.resolve-main.outputs.sha }}
 
   build-main:
     if: github.event_name == 'schedule' || inputs.branch == 'main'
@@ -37,9 +68,12 @@ jobs:
     permissions:
       contents: read
 
+    needs:
+      - resolve-main
+
     uses: ./.github/workflows/build.yml
     with:
-      checkout_ref: main
+      checkout_ref: ${{ needs.resolve-main.outputs.sha }}
 
   test-main:
     if: github.event_name == 'schedule' || inputs.branch == 'main'
@@ -48,9 +82,12 @@ jobs:
     permissions:
       contents: read
 
+    needs:
+      - resolve-main
+
     uses: ./.github/workflows/test.yml
     with:
-      checkout_ref: main
+      checkout_ref: ${{ needs.resolve-main.outputs.sha }}
     secrets:
       MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
@@ -64,6 +101,7 @@ jobs:
       contents: read
 
     needs:
+      - resolve-main
       - lint-main
       - build-main
       - test-main
@@ -71,6 +109,7 @@ jobs:
     uses: ./.github/workflows/version-pr.yml
     with:
       target_branch: main
+      checkout_ref: ${{ needs.resolve-main.outputs.sha }}
     secrets:
       VERSION_APP_ID: ${{ secrets.VERSION_APP_ID }}
       VERSION_APP_PRIVATE_KEY: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
@@ -84,6 +123,7 @@ jobs:
       id-token: write
 
     needs:
+      - resolve-main
       - lint-main
       - build-main
       - test-main
@@ -92,6 +132,35 @@ jobs:
     uses: ./.github/workflows/publish.yml
     with:
       target_branch: main
+      checkout_ref: ${{ needs.resolve-main.outputs.sha }}
+
+  resolve-next:
+    if: github.event_name == 'schedule' || inputs.branch == 'next'
+    name: Resolve next
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    outputs:
+      sha: ${{ steps.ref.outputs.sha }}
+
+    steps:
+      - id: ref
+        shell: bash
+        env:
+          BRANCH: next
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          sha="$(git ls-remote "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "refs/heads/${BRANCH}" | cut -f1)"
+          if [ -z "${sha}" ]; then
+            echo "::error::Could not resolve ${BRANCH}"
+            exit 1
+          fi
+
+          echo "sha=${sha}" >> "$GITHUB_OUTPUT"
 
   lint-next:
     if: github.event_name == 'schedule' || inputs.branch == 'next'
@@ -100,9 +169,12 @@ jobs:
     permissions:
       contents: read
 
+    needs:
+      - resolve-next
+
     uses: ./.github/workflows/lint.yml
     with:
-      checkout_ref: next
+      checkout_ref: ${{ needs.resolve-next.outputs.sha }}
 
   build-next:
     if: github.event_name == 'schedule' || inputs.branch == 'next'
@@ -111,9 +183,12 @@ jobs:
     permissions:
       contents: read
 
+    needs:
+      - resolve-next
+
     uses: ./.github/workflows/build.yml
     with:
-      checkout_ref: next
+      checkout_ref: ${{ needs.resolve-next.outputs.sha }}
 
   test-next:
     if: github.event_name == 'schedule' || inputs.branch == 'next'
@@ -122,9 +197,12 @@ jobs:
     permissions:
       contents: read
 
+    needs:
+      - resolve-next
+
     uses: ./.github/workflows/test.yml
     with:
-      checkout_ref: next
+      checkout_ref: ${{ needs.resolve-next.outputs.sha }}
     secrets:
       MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
@@ -138,6 +216,7 @@ jobs:
       contents: read
 
     needs:
+      - resolve-next
       - lint-next
       - build-next
       - test-next
@@ -145,6 +224,7 @@ jobs:
     uses: ./.github/workflows/version-pr.yml
     with:
       target_branch: next
+      checkout_ref: ${{ needs.resolve-next.outputs.sha }}
     secrets:
       VERSION_APP_ID: ${{ secrets.VERSION_APP_ID }}
       VERSION_APP_PRIVATE_KEY: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
@@ -158,6 +238,7 @@ jobs:
       id-token: write
 
     needs:
+      - resolve-next
       - lint-next
       - build-next
       - test-next
@@ -166,3 +247,4 @@ jobs:
     uses: ./.github/workflows/publish.yml
     with:
       target_branch: next
+      checkout_ref: ${{ needs.resolve-next.outputs.sha }}
