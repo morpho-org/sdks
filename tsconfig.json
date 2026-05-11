@@ -5,6 +5,7 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
+    "ignoreDeprecations": "6.0",
     "skipLibCheck": true,
     "strict": true,
     "noImplicitAny": true,
@@ -18,6 +19,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "experimentalDecorators": true,
-    "jsx": "preserve"
+    "jsx": "preserve",
+    "types": ["node", "vitest/globals"]
   }
 }

@@ -100,6 +100,31 @@ describe("preLiquidationPosition", () => {
     expect(preLiquidationPosition.liquidationPrice).toBe(null);
   });
 
+  test("should preserve pre-liquidation semantics when accruing interest", () => {
+    const preLiquidationPosition = new PreLiquidationPosition(
+      { ...position, collateral: 100000000000n },
+      market,
+    );
+    const timestamp = market.lastUpdate + 100n;
+    const expectedMarket = market.accrueInterest(timestamp);
+
+    const accruedPosition = preLiquidationPosition.accrueInterest(timestamp);
+
+    expect(accruedPosition).toBeInstanceOf(PreLiquidationPosition);
+    expect(accruedPosition.preLiquidationParams).toStrictEqual(
+      preLiquidationParams,
+    );
+    expect(accruedPosition.preLiquidation).toEqual(preLiquidationAddress);
+    expect(accruedPosition.preLiquidationOraclePrice).toEqual(market.price);
+    expect(accruedPosition.market).toStrictEqual(expectedMarket);
+    expect(accruedPosition.borrowAssets).toEqual(
+      expectedMarket.toBorrowAssets(position.borrowShares),
+    );
+    expect(accruedPosition.isHealthy).toBe(undefined);
+    expect(accruedPosition.isLiquidatable).toBe(false);
+    expect(accruedPosition.seizableCollateral).toBe(0n);
+  });
+
   test("should not be pre-liquidatable because the position may be liquidatable", () => {
     const preLiquidationPosition = new PreLiquidationPosition(
       { ...position, collateral: 100000000000n },
