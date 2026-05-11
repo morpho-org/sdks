@@ -117,7 +117,7 @@ export namespace MarketUtils {
     const feeShares = toSupplyShares(
       feeAmount,
       {
-        totalSupplyAssets: BigInt(totalSupplyAssets) - feeAmount,
+        totalSupplyAssets: BigInt(totalSupplyAssets) + interest - feeAmount,
         totalSupplyShares,
       },
       "Down",

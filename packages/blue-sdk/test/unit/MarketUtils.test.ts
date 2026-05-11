@@ -1,6 +1,11 @@
 import { parseUnits } from "viem";
 import { describe, expect, test } from "vitest";
-import { MarketUtils, MathLib, SECONDS_PER_YEAR } from "../../src/index.js";
+import {
+  MarketUtils,
+  MathLib,
+  SECONDS_PER_YEAR,
+  SharesMath,
+} from "../../src/index.js";
 
 const market = {
   loanToken: "0x0000000000000000000000000000000000000001",
@@ -120,5 +125,41 @@ describe("MarketUtils", () => {
     expect(
       MarketUtils.rateToApy(parseUnits("500", 16) / SECONDS_PER_YEAR),
     ).toEqual(147.41315909872503);
+  });
+
+  test("should accrue fee shares against post-interest supply assets", () => {
+    const totalSupplyAssets = 1_000_000n * MathLib.WAD;
+    const totalBorrowAssets = 800_000n * MathLib.WAD;
+    const totalSupplyShares = 1_100_000n * MathLib.WAD;
+    const fee = 10_0000000000000000n;
+    const { interest, feeShares } = MarketUtils.getAccruedInterest(
+      5_0000000000000000n,
+      {
+        totalSupplyAssets,
+        totalBorrowAssets,
+        totalSupplyShares,
+        fee,
+      },
+      1n,
+    );
+
+    const feeAmount = MathLib.wMulDown(interest, fee);
+
+    expect(feeShares).toEqual(
+      SharesMath.toShares(
+        feeAmount,
+        totalSupplyAssets + interest - feeAmount,
+        totalSupplyShares,
+        "Down",
+      ),
+    );
+    expect(feeShares).toBeLessThan(
+      SharesMath.toShares(
+        feeAmount,
+        totalSupplyAssets - feeAmount,
+        totalSupplyShares,
+        "Down",
+      ),
+    );
   });
 });

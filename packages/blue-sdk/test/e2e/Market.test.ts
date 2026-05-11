@@ -253,4 +253,92 @@ describe("Market", () => {
 
     expect(receipt.status).toBe("success");
   });
+
+  test("should match onchain accrual on a fee-bearing market", async ({
+    client,
+  }) => {
+    const owner = await client.readContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "owner",
+    });
+    const fee = parseUnits("10", 16);
+
+    await client.setBalance({ address: owner, value: parseUnits("1", 18) });
+    await client.writeContract({
+      account: owner,
+      abi: blueAbi,
+      address: morpho,
+      functionName: "setFee",
+      args: [{ ...params }, fee],
+    });
+
+    const timestamp = (await client.timestamp()) + Time.s.from.d(1n);
+
+    const [
+      totalSupplyAssets,
+      totalSupplyShares,
+      totalBorrowAssets,
+      totalBorrowShares,
+      lastUpdate,
+      marketFee,
+    ] = await client.readContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "market",
+      args: [params.id],
+    });
+
+    expect(marketFee).toBe(fee);
+
+    const market = new Market({
+      params,
+      totalSupplyAssets,
+      totalSupplyShares,
+      totalBorrowAssets,
+      totalBorrowShares,
+      lastUpdate,
+      fee: marketFee,
+      price: await client.readContract({
+        abi: blueOracleAbi,
+        address: params.oracle,
+        functionName: "price",
+      }),
+      rateAtTarget: await client.readContract({
+        abi: adaptiveCurveIrmAbi,
+        address: params.irm,
+        functionName: "rateAtTarget",
+        args: [params.id],
+      }),
+    }).accrueInterest(timestamp);
+
+    await client.setNextBlockTimestamp({ timestamp });
+    await client.writeContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "accrueInterest",
+      args: [{ ...params }],
+    });
+
+    const [
+      onchainTotalSupplyAssets,
+      onchainTotalSupplyShares,
+      onchainTotalBorrowAssets,
+      onchainTotalBorrowShares,
+      onchainLastUpdate,
+      onchainFee,
+    ] = await client.readContract({
+      abi: blueAbi,
+      address: morpho,
+      functionName: "market",
+      args: [params.id],
+    });
+
+    expect(market.totalSupplyAssets).toBe(onchainTotalSupplyAssets);
+    expect(market.totalSupplyShares).toBe(onchainTotalSupplyShares);
+    expect(market.totalBorrowAssets).toBe(onchainTotalBorrowAssets);
+    expect(market.totalBorrowShares).toBe(onchainTotalBorrowShares);
+    expect(market.lastUpdate).toBe(onchainLastUpdate);
+    expect(market.fee).toBe(onchainFee);
+  });
 });
