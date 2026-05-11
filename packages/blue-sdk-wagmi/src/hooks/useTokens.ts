@@ -62,7 +62,7 @@ export function useTokens<config extends Config = ResolvedRegister["config"]>({
       const { data, error, isFetching } = orderedResults[index]!;
 
       result.data[token] = data;
-      result.error[token] = error;
+      result.error[token] = error as UseTokenReturnType["error"];
       result.isFetching[token] = isFetching;
 
       if (isFetching) result.isFetchingAny = true;
