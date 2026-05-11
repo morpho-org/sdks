@@ -11,7 +11,7 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type {
-  RawLog,
+  RawCall,
   RawSimulationResult,
   SimulationTransaction,
 } from "../../types.js";
@@ -96,18 +96,18 @@ export async function simulateV1(params: {
       );
     }
 
-    const rawLogs: RawLog[] = [];
-    for (const r of results) {
-      for (const log of r.logs ?? []) {
-        rawLogs.push({
-          address: log.address,
-          topics: [...log.topics],
-          data: log.data ?? "0x",
-        });
-      }
-    }
+    const rawCalls: RawCall[] = results.map((r) => ({
+      logs: (r.logs ?? []).map((log) => ({
+        address: log.address,
+        topics: [...log.topics],
+        data: log.data ?? "0x",
+      })),
+      status: r.status === "success",
+      returnData: r.data ?? "0x",
+      gasUsed: r.gasUsed,
+    }));
 
-    return { logs: rawLogs };
+    return { calls: rawCalls };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;

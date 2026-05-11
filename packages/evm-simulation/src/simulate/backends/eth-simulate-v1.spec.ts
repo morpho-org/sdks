@@ -42,11 +42,13 @@ const BASIC_TX: SimulationTransaction = {
 beforeEach(() => vi.clearAllMocks());
 
 describe.sequential("simulateV1", () => {
-  it("returns logs collected from all result entries on success", async () => {
+  it("returns one calls entry per tx with logs, status, returnData, gasUsed", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         {
           status: "success",
+          gasUsed: 21_000n,
+          data: "0xfeed" as Hex,
           logs: [
             {
               address: USDC,
@@ -57,6 +59,8 @@ describe.sequential("simulateV1", () => {
         },
         {
           status: "success",
+          gasUsed: 42_000n,
+          data: "0x" as Hex,
           logs: [
             { address: USDC, topics: ["0xbbbb" as Hex], data: "0xabcd" as Hex },
           ],
@@ -67,11 +71,17 @@ describe.sequential("simulateV1", () => {
     const result = await simulateV1({
       rpcUrl: "http://rpc.local",
       chainId: 1,
-      transactions: [BASIC_TX],
+      transactions: [BASIC_TX, BASIC_TX],
     });
 
-    expect(result.logs).toHaveLength(2);
-    expect(result.logs[0]!.address).toBe(USDC);
+    expect(result.calls).toHaveLength(2);
+    expect(result.calls[0]!.status).toBe(true);
+    expect(result.calls[0]!.returnData).toBe("0xfeed");
+    expect(result.calls[0]!.gasUsed).toBe(21_000n);
+    expect(result.calls[0]!.logs).toHaveLength(1);
+    expect(result.calls[0]!.logs[0]!.address).toBe(USDC);
+    expect(result.calls[1]!.gasUsed).toBe(42_000n);
+    expect(result.calls[1]!.logs[0]!.topics[0]).toBe("0xbbbb");
     expect(result.tenderlyUrl).toBeUndefined();
   });
 
@@ -96,7 +106,10 @@ describe.sequential("simulateV1", () => {
 
   it("normalizes senders case-insensitively before comparing", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
-      results: [{ status: "success", logs: [] }],
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
     });
 
     // Real mixed-case address — not palindromic — so checksum and lowercase
@@ -121,9 +134,11 @@ describe.sequential("simulateV1", () => {
   it("throws SimulationRevertedError when a result has status != success", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
-        { status: "success", logs: [] },
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
         {
           status: "failure",
+          gasUsed: 0n,
+          data: "0x" as Hex,
           error: { message: "ERC20: insufficient balance" },
           logs: [],
         },
@@ -141,7 +156,9 @@ describe.sequential("simulateV1", () => {
 
   it("sets sender ETH balance to maxUint256 via stateOverride", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
-      results: [{ status: "success", logs: [] }],
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
     });
 
     await simulateV1({
@@ -158,7 +175,9 @@ describe.sequential("simulateV1", () => {
 
   it("passes blockNumber as bigint when provided", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
-      results: [{ status: "success", logs: [] }],
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
     });
 
     await simulateV1({
@@ -175,7 +194,9 @@ describe.sequential("simulateV1", () => {
 
   it("passes blockTag when a tag string is provided", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
-      results: [{ status: "success", logs: [] }],
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
     });
 
     await simulateV1({
@@ -192,7 +213,9 @@ describe.sequential("simulateV1", () => {
 
   it("omits both block params when blockNumber is undefined", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
-      results: [{ status: "success", logs: [] }],
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
     });
 
     await simulateV1({
@@ -249,6 +272,8 @@ describe.sequential("simulateV1", () => {
       results: [
         {
           status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
           logs: [{ address: USDC, topics: ["0xaaaa" as Hex] /* no data */ }],
         },
       ],
@@ -260,12 +285,14 @@ describe.sequential("simulateV1", () => {
       transactions: [BASIC_TX],
     });
 
-    expect(result.logs[0]!.data).toBe("0x");
+    expect(result.calls[0]!.logs[0]!.data).toBe("0x");
   });
 
   it("does not crash when a result has no logs array", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
-      results: [{ status: "success" /* no logs */ }],
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex /* no logs */ },
+      ],
     });
 
     const result = await simulateV1({
@@ -274,6 +301,6 @@ describe.sequential("simulateV1", () => {
       transactions: [BASIC_TX],
     });
 
-    expect(result.logs).toEqual([]);
+    expect(result.calls[0]!.logs).toEqual([]);
   });
 });

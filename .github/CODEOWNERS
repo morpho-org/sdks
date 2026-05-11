@@ -1,3 +1,4 @@
+* @morpho-org/sdk-engineers
 /.github/ @morpho-org/security
 /.changeset/config.json @morpho-org/security
 /.changeset/pre.json @morpho-org/security
