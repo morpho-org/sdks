@@ -2,28 +2,33 @@ name: Publish
 
 on:
   workflow_call:
+    inputs:
+      target_branch:
+        required: false
+        type: string
 
 permissions:
   contents: write
   id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-publish
+  group: ${{ github.workflow }}-${{ inputs.target_branch || github.ref }}-publish
   cancel-in-progress: false
 
 jobs:
   publish:
-    if: github.ref_name == 'main' || github.ref_name == 'next'
+    if: ${{ (inputs.target_branch || github.ref_name) == 'main' || (inputs.target_branch || github.ref_name) == 'next' }}
     name: Publish
     runs-on: ubuntu-latest
     env:
       CI: true
       HUSKY: 0
+      TARGET_BRANCH: ${{ inputs.target_branch || github.ref_name }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.target_branch || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -70,7 +75,7 @@ jobs:
           echo "Pending changesets are present. The version PR workflow will prepare a release branch; skipping publish."
 
       - name: Refuse prerelease mode on main
-        if: github.ref_name == 'main' && hashFiles('.changeset/pre.json') != ''
+        if: env.TARGET_BRANCH == 'main' && hashFiles('.changeset/pre.json') != ''
         run: |
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
@@ -83,7 +88,7 @@ jobs:
           set -euo pipefail
 
           publish_tag="latest"
-          if [ "${GITHUB_REF_NAME}" = "next" ]; then
+          if [ "${TARGET_BRANCH}" = "next" ]; then
             publish_tag="next"
           fi
 

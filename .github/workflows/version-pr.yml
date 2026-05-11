@@ -2,6 +2,10 @@ name: Version PR
 
 on:
   workflow_call:
+    inputs:
+      target_branch:
+        required: false
+        type: string
     secrets:
       VERSION_APP_ID:
         required: true
@@ -12,23 +16,24 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-version-pr
+  group: ${{ github.workflow }}-${{ inputs.target_branch || github.ref }}-version-pr
   cancel-in-progress: false
 
 jobs:
   version-pr:
-    if: github.ref_name == 'main' || github.ref_name == 'next'
+    if: ${{ (inputs.target_branch || github.ref_name) == 'main' || (inputs.target_branch || github.ref_name) == 'next' }}
     name: Version PR
     runs-on: ubuntu-latest
     env:
       CI: true
       HUSKY: 0
-      RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
+      TARGET_BRANCH: ${{ inputs.target_branch || github.ref_name }}
+      RELEASE_BRANCH: changeset-release/${{ inputs.target_branch || github.ref_name }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.target_branch || github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -67,11 +72,11 @@ jobs:
         run: echo "No pending changesets; no version PR needed."
 
       - name: Enter next prerelease mode
-        if: github.ref_name == 'next' && steps.pending-changesets.outputs.has_changesets == 'true' && hashFiles('.changeset/pre.json') == ''
+        if: env.TARGET_BRANCH == 'next' && steps.pending-changesets.outputs.has_changesets == 'true' && hashFiles('.changeset/pre.json') == ''
         run: pnpm changeset pre enter next
 
       - name: Refuse prerelease mode on main
-        if: github.ref_name == 'main' && hashFiles('.changeset/pre.json') != ''
+        if: env.TARGET_BRANCH == 'main' && hashFiles('.changeset/pre.json') != ''
         run: |
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
@@ -180,7 +185,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          BASE_BRANCH: ${{ github.ref_name }}
+          BASE_BRANCH: ${{ inputs.target_branch || github.ref_name }}
         run: |
           set -euo pipefail
 

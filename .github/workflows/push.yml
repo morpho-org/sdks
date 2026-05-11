@@ -1,4 +1,4 @@
-name: Release
+name: Push
 
 on:
   push:
@@ -33,34 +33,3 @@ jobs:
       MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
       BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
       ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
-
-  version-pr:
-    if: github.ref_name == 'main' || github.ref_name == 'next'
-
-    permissions:
-      contents: read
-
-    needs:
-      - lint
-      - build
-      - test
-
-    uses: ./.github/workflows/version-pr.yml
-    secrets:
-      VERSION_APP_ID: ${{ secrets.VERSION_APP_ID }}
-      VERSION_APP_PRIVATE_KEY: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
-
-  publish:
-    if: github.ref_name == 'main' || github.ref_name == 'next'
-
-    permissions:
-      contents: write
-      id-token: write
-
-    needs:
-      - lint
-      - build
-      - test
-      - version-pr
-
-    uses: ./.github/workflows/publish.yml
