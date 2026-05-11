@@ -33,7 +33,7 @@ export const handleBlueOperation: OperationHandler<BlueOperation> = (
   if ("slippage" in operation.args) {
     const { slippage = 0n } = operation.args;
 
-    if (slippage < 0n || slippage > MathLib.WAD)
+    if (slippage < 0n || slippage >= MathLib.WAD)
       throw new SimulationErrors.InvalidInput({ slippage });
   }
 

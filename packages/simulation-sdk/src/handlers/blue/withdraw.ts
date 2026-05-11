@@ -6,6 +6,22 @@ import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
 import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
+/**
+ * Simulates a `Blue_Withdraw` operation on the provided draft state.
+ *
+ * Books the worst-case shares burned / assets received allowed by
+ * `GeneralAdapter1.morphoWithdraw`'s `minSharePrice = WAD - slippage` floor
+ * (asset mode: `wDivUp` shares; share mode: `wMulDown` assets) so the simulator
+ * never under-debits the position.
+ *
+ * @throws {BlueSimulationErrors.UnauthorizedBundler} If routed through GA1 and
+ *   `onBehalf` has not authorized the bundler.
+ * @throws {BlueSimulationErrors.ZeroShares} If `shares === maxUint256` resolves
+ *   to a zero supply position.
+ * @throws {BlueErrors.InconsistentInput} If neither or both of `assets` and `shares` are set.
+ * @throws {BlueErrors.InsufficientLiquidity} If the market lacks liquidity.
+ * @throws {BlueErrors.InsufficientPosition} If the supply position cannot cover the withdrawal.
+ */
 export const handleBlueWithdrawOperation: OperationHandler<
   BlueOperations["Blue_Withdraw"]
 > = (
@@ -48,13 +64,13 @@ export const handleBlueWithdrawOperation: OperationHandler<
   const market = data.getMarket(id);
 
   if (shares === 0n)
-    shares = MathLib.wMulUp(
+    shares = MathLib.wDivUp(
       market.toSupplyShares(assets),
-      MathLib.WAD + slippage,
+      MathLib.WAD - slippage,
     );
   else
     assets = market.toSupplyAssets(
-      MathLib.wDivDown(shares, MathLib.WAD + slippage),
+      MathLib.wMulDown(shares, MathLib.WAD - slippage),
     );
 
   market.totalSupplyAssets -= assets;

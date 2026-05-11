@@ -1,12 +1,26 @@
 import { BlueErrors, getChainAddresses, MathLib } from "@morpho-org/blue-sdk";
 
-import { BlueSimulationErrors, SimulationErrors } from "../../errors.js";
+import { BlueSimulationErrors } from "../../errors.js";
 import type { BlueOperations } from "../../operations.js";
 import { handleErc20Operation } from "../erc20/index.js";
 import type { OperationHandler } from "../types.js";
 
 import { handleBlueAccrueInterestOperation } from "./accrueInterest.js";
 
+/**
+ * Simulates a `Blue_Borrow` operation on the provided draft state.
+ *
+ * Books the worst-case shares/assets allowed by `GeneralAdapter1.morphoBorrow`'s
+ * `minSharePrice = WAD - slippage` floor (asset mode: `wDivUp` shares; share mode:
+ * `wMulDown` assets) so the simulator never under-credits the resulting debt.
+ *
+ * @throws {BlueSimulationErrors.UnauthorizedBundler} If routed through GA1 and
+ *   `onBehalf` has not authorized the bundler.
+ * @throws {BlueErrors.InconsistentInput} If neither or both of `assets` and `shares` are set.
+ * @throws {BlueErrors.UnknownOraclePrice} If the market oracle price is unknown.
+ * @throws {BlueErrors.InsufficientLiquidity} If the market lacks liquidity.
+ * @throws {BlueErrors.InsufficientCollateral} If the resulting position is unhealthy.
+ */
 export const handleBlueBorrowOperation: OperationHandler<
   BlueOperations["Blue_Borrow"]
 > = (
@@ -30,9 +44,6 @@ export const handleBlueBorrowOperation: OperationHandler<
 
   if ((assets === 0n) === (shares === 0n))
     throw new BlueErrors.InconsistentInput(assets, shares);
-
-  if (slippage >= MathLib.WAD)
-    throw new SimulationErrors.InvalidInput({ slippage });
 
   handleBlueAccrueInterestOperation(
     {

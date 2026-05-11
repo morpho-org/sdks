@@ -10,7 +10,7 @@
 - Wrap handler failures in `SimulationErrors.Simulation(error, index, operation)`.
 - Use `produceImmutable` for public simulation, and `handleOperation` for in-place draft updates.
 - Callback operations recurse through `handleOperations` so nested operations get the same error wrapping.
-- Encode slippage as WAD-scaled `bigint`, e.g. `MathLib.WAD + slippage`.
+- Encode slippage as a WAD-scaled `bigint` in `[0, WAD)`. Sign mirrors the onchain bound: borrow / withdraw enforce `minSharePrice = WAD - slippage`; supply / repay enforce `maxSharePrice = WAD + slippage`.
 
 ## Continuous Improvement
 
