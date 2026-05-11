@@ -8,6 +8,7 @@ import { isAddressEqual, type TypedDataDefinition } from "viem";
 import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
+  UnsupportedPermitDomainExtensionsError,
 } from "../error.js";
 
 export interface PermitArgs {
@@ -34,6 +35,27 @@ const permitTypes = {
  * Fails closed when fetched EIP-5267 metadata is not bound to the token and chain.
  * Consumers should use another approval path instead of signing an unsafe domain.
  * Docs: https://eips.ethereum.org/EIPS/eip-2612
+ * @param args The permit message fields and ERC20 token metadata.
+ * @param chainId The expected chain ID for the permit domain.
+ * @returns Typed data ready to pass to a wallet for signing.
+ * @throws InvalidPermitDomainChainIdError when fetched EIP-5267 metadata targets another chain or omits `chainId`.
+ * @throws InvalidPermitDomainVerifyingContractError when fetched EIP-5267 metadata targets another token or omits `verifyingContract`.
+ * @throws UnsupportedPermitDomainExtensionsError when fetched EIP-5267 metadata advertises extension fields unsupported by this helper.
+ * @example
+ * import { getPermitTypedData } from "@morpho-org/blue-sdk-viem";
+ *
+ * const typedData = getPermitTypedData(
+ *   {
+ *     erc20: token,
+ *     owner,
+ *     spender,
+ *     allowance: 1_000000n,
+ *     nonce,
+ *     deadline,
+ *   },
+ *   ChainId.EthMainnet,
+ * );
+ * const signature = await walletClient.signTypedData(typedData);
  */
 export const getPermitTypedData = (
   { deadline, owner, nonce, spender, erc20, allowance }: PermitArgs,
@@ -41,7 +63,16 @@ export const getPermitTypedData = (
 ): TypedDataDefinition<typeof permitTypes, "Permit"> => {
   const { usdc, eurc } = getChainAddresses(chainId);
 
-  const domain = erc20.eip5267Domain?.eip712Domain;
+  const eip5267Domain = erc20.eip5267Domain;
+
+  if (eip5267Domain?.extensions.length) {
+    throw new UnsupportedPermitDomainExtensionsError(
+      erc20.address,
+      eip5267Domain.extensions,
+    );
+  }
+
+  const domain = eip5267Domain?.eip712Domain;
 
   if (domain != null) {
     if (domain.chainId !== chainId) {
