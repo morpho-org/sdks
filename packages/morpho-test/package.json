@@ -34,8 +34,8 @@
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "typescript": "^5.9.3",
-    "viem": "^2.41.2"
+    "typescript": "^6.0.3",
+    "viem": "^2.48.11"
   },
   "publishConfig": {
     "exports": {

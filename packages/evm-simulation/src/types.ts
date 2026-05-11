@@ -82,34 +82,44 @@ export type SimulationAuthorization =
  * `SimulationResult.transfers`.
  */
 export interface Transfer {
-  token: Address;
-  from: Address;
-  to: Address;
-  amount: bigint;
+  readonly token: Address;
+  readonly from: Address;
+  readonly to: Address;
+  readonly amount: bigint;
+  /**
+   * Index into `SimulationResult.simulationTxs` of the transaction that
+   * emitted the underlying log. For bundles with prepended authorization
+   * approvals, indices `[0, simulationTxs.length - params.transactions.length)`
+   * are authorization txs; the remainder are caller-supplied.
+   */
+  readonly txIdx: number;
 }
 
 /**
- * Happy-path return of `simulate`. All failures throw typed errors. The same shape is
- * returned regardless of `options.shareable` — fields unused by your use case can be
- * ignored:
+ * Happy-path return of `simulate`. All failures throw typed errors.
  *
- * - Preview (`shareable: true`): read `transfers` + `tenderlyUrl`.
- * - Verify (`shareable: false`, default): read `simulationTxs` + `transfers`, pass both
- *   to `screenAddresses`.
- *
- * `tenderlyUrl` is set only when `shareable: true` AND the Tenderly backend ran
- * successfully (not the `eth_simulateV1` fallback). `assetChanges` is Tenderly-only
- * raw data.
+ * - `simulationTxs` is the full resolved transaction list (including
+ *   prepended authorization txs).
+ * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
+ *   status, returnData/gasUsed, and (Tenderly only) assetChanges per tx.
+ * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
+ *   transfer to its emitting transaction.
+ * - `tenderlyUrl` is set only when `shareable: true` AND the Tenderly backend
+ *   ran successfully (not the `eth_simulateV1` fallback).
  */
 export interface SimulationResult {
   /** The full resolved transaction list (including prepended authorization txs). */
-  simulationTxs: SimulationTransaction[];
+  readonly simulationTxs: readonly SimulationTransaction[];
+  /**
+   * Per-transaction normalized output. `calls[i]` corresponds 1:1 with
+   * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas
+   * used, and (Tenderly only) asset changes per transaction.
+   */
+  readonly calls: readonly SimulationCall[];
   /** Parsed ERC-20 / WETH9 transfers from the simulation. */
-  transfers: Transfer[];
+  readonly transfers: readonly Transfer[];
   /** Shareable Tenderly URL. Present only when `shareable: true` and Tenderly ran (not fallback). */
-  tenderlyUrl?: string;
-  /** Raw Tenderly `asset_changes` payload. Opaque `unknown` — do not destructure without validation. */
-  assetChanges?: unknown;
+  readonly tenderlyUrl?: string;
 }
 
 /** Minimal structured logger the package calls for warnings and info. */
@@ -134,16 +144,64 @@ export interface SimulateParams {
 
 /**
  * Internal raw result from a simulation adapter before normalization.
- * Both Tenderly and simulateV1 produce this.
+ * `calls[i]` corresponds 1:1 with the i-th transaction passed to the
+ * backend.
  */
 export interface RawSimulationResult {
-  logs: RawLog[];
+  calls: RawCall[];
   tenderlyUrl?: string;
-  rawAssetChanges?: unknown;
 }
 
+/**
+ * Normalized EVM log emitted by a single simulated call. The shape is the
+ * common subset both backends (`eth_simulateV1` via viem and Tenderly REST)
+ * produce after schema validation. Returned indirectly via
+ * `SimulationCall.logs` and consumed by the SDK's transfer parser.
+ */
 export interface RawLog {
-  address: Address;
-  topics: Hex[];
-  data: Hex;
+  readonly address: Address;
+  readonly topics: readonly Hex[];
+  readonly data: Hex;
+}
+
+/**
+ * Internal mirror of `SimulationCall`, mutable during construction by the
+ * simulation backends.
+ *
+ * @internal
+ */
+export interface RawCall {
+  logs: RawLog[];
+  status: boolean;
+  returnData: Hex;
+  gasUsed: bigint;
+  /** Tenderly-only `asset_changes` payload. Absent on `eth_simulateV1`. */
+  assetChanges?: unknown;
+}
+
+/**
+ * Per-transaction normalized output from the simulation backend.
+ *
+ * `SimulationResult.calls[i]` corresponds 1:1 with
+ * `SimulationResult.simulationTxs[i]`. Use this to read raw logs, status,
+ * return data, gas used, and (Tenderly only) asset changes per transaction.
+ */
+export interface SimulationCall {
+  readonly logs: readonly RawLog[];
+  /**
+   * True iff the call succeeded. The bundle as a whole reverts via
+   * `SimulationRevertedError` before the result is returned, so on a
+   * successful `simulate()` every entry is `true` today. Field kept for
+   * forward-compatibility with backends that may surface per-call status.
+   */
+  readonly status: boolean;
+  /** Return data from the top-level call. */
+  readonly returnData: Hex;
+  /** Gas used by this call (root frame). */
+  readonly gasUsed: bigint;
+  /**
+   * Tenderly-only `asset_changes` payload for this tx. Opaque `unknown` —
+   * do not destructure without validation. Absent on `eth_simulateV1`.
+   */
+  readonly assetChanges?: unknown;
 }

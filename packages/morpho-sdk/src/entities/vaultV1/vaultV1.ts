@@ -48,7 +48,7 @@ export interface VaultV1Actions {
    * Fetches the latest vault data with accrued interest.
    *
    * @param {FetchParameters} [parameters] - Optional fetch parameters (block number, state overrides, etc.).
-   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The latest accrued vault data.
+   * @returns {Promise<Awaited<ReturnType<typeof fetchAccrualVault>>>} The latest vault data.
    */
   getData: (
     parameters?: FetchParameters,
@@ -56,13 +56,13 @@ export interface VaultV1Actions {
   /**
    * Prepares a deposit into a VaultV1 (MetaMorpho) contract.
    *
-   * Uses pre-fetched accrual vault data to compute `maxSharePrice` with slippage tolerance,
+   * Uses pre-fetched vault data to compute `maxSharePrice` with slippage tolerance,
    * then returns `buildTx` and `getRequirements` for lazy evaluation.
    *
    * @param {Object} params - The deposit parameters.
    * @param {bigint} params.amount - Amount of assets to deposit.
    * @param {Address} params.userAddress - User address initiating the deposit.
-   * @param {AccrualVault} params.accrualVault - Pre-fetched vault data with asset address and share conversion.
+   * @param {AccrualVault} params.vaultData - Pre-fetched vault data with asset address and share conversion.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Slippage tolerance (default 0.03%, max 10%).
    * @param {bigint} [params.nativeAmount] - Amount of native ETH to wrap into WETH. Vault asset must be wNative.
    * @returns {Object} Object with `buildTx` and `getRequirements`.
@@ -70,7 +70,7 @@ export interface VaultV1Actions {
   deposit: (
     params: {
       userAddress: Address;
-      accrualVault: AccrualVault;
+      vaultData: AccrualVault;
       slippageTolerance?: bigint;
     } & DepositAmountArgs,
   ) => {
@@ -162,12 +162,12 @@ export class MorphoVaultV1 implements VaultV1Actions {
   deposit({
     amount = 0n,
     userAddress,
-    accrualVault,
+    vaultData,
     slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     nativeAmount,
   }: {
     userAddress: Address;
-    accrualVault: AccrualVault;
+    vaultData: AccrualVault;
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
     if (this.client.viemClient.chain?.id !== this.chainId) {
@@ -177,8 +177,8 @@ export class MorphoVaultV1 implements VaultV1Actions {
       );
     }
 
-    if (!isAddressEqual(accrualVault.address, this.vault)) {
-      throw new VaultAddressMismatchError(this.vault, accrualVault.address);
+    if (!isAddressEqual(vaultData.address, this.vault)) {
+      throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
 
     if (amount < 0n) {
@@ -205,17 +205,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
     }
 
     if (nativeAmount && wNative) {
-      if (!isAddressEqual(accrualVault.asset, wNative)) {
-        throw new NativeAmountOnNonWNativeVaultError(
-          accrualVault.asset,
-          wNative,
-        );
+      if (!isAddressEqual(vaultData.asset, wNative)) {
+        throw new NativeAmountOnNonWNativeVaultError(vaultData.asset, wNative);
       }
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
 
-    const shares = accrualVault.toShares(totalAssets);
+    const shares = vaultData.toShares(totalAssets);
     if (shares <= 0n) {
       throw new NonPositiveSharesAmountError(this.vault);
     }
@@ -232,7 +229,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) =>
         await getRequirements(this.client.viemClient, {
-          address: accrualVault.asset,
+          address: vaultData.asset,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
           supportDeployless: this.client.options.supportDeployless,
@@ -248,7 +245,7 @@ export class MorphoVaultV1 implements VaultV1Actions {
           vault: {
             chainId: this.chainId,
             address: this.vault,
-            asset: accrualVault.asset,
+            asset: vaultData.asset,
           },
           args: {
             amount,

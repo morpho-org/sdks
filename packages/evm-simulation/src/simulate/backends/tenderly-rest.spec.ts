@@ -49,10 +49,19 @@ function requestBody(call: Parameters<MockFetch>) {
 }
 
 /** Successful Tenderly single-simulation response body. */
-function successBody(options: { id?: string; logs?: unknown[] } = {}) {
+function successBody(
+  options: {
+    id?: string;
+    logs?: unknown[];
+    gasUsed?: number;
+    output?: Hex;
+    assetChanges?: unknown;
+  } = {},
+) {
   return {
     simulation: { id: options.id ?? "sim-abc", status: true },
     transaction: {
+      gas_used: options.gasUsed ?? 21_000,
       transaction_info: {
         logs: options.logs ?? [
           {
@@ -63,7 +72,8 @@ function successBody(options: { id?: string; logs?: unknown[] } = {}) {
             },
           },
         ],
-        asset_changes: { foo: "bar" },
+        asset_changes: options.assetChanges ?? { foo: "bar" },
+        call_trace: { output: options.output ?? ("0xfeed" as Hex) },
       },
     },
   };
@@ -79,7 +89,11 @@ function revertBody() {
     },
     transaction: {
       error_message: "ERC20: revert",
-      transaction_info: { logs: [] },
+      gas_used: 21_000,
+      transaction_info: {
+        logs: [],
+        call_trace: { output: "0x" as Hex },
+      },
     },
   };
 }
@@ -186,8 +200,11 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
     expect(result.tenderlyUrl).toBe(
       "https://dashboard.tenderly.co/shared/simulation/sim-xyz",
     );
-    expect(result.logs).toHaveLength(1);
-    expect(result.logs[0]!.address).toBe(USDC);
+    expect(result.calls).toHaveLength(1);
+    expect(result.calls[0]!.logs).toHaveLength(1);
+    expect(result.calls[0]!.logs[0]!.address).toBe(USDC);
+    expect(result.calls[0]!.returnData).toBe("0xfeed");
+    expect(result.calls[0]!.gasUsed).toBe(21_000n);
   });
 
   it("clears tenderlyUrl when /share endpoint call fails", async () => {
@@ -264,7 +281,7 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
     expect(body.block_number).toBe("latest");
   });
 
-  it("returns assetChanges from transaction_info", async () => {
+  it("returns per-tx assetChanges from transaction_info", async () => {
     const fetchMock = vi
       .fn<MockFetch>()
       .mockResolvedValueOnce({ ok: true, json: async () => successBody() });
@@ -277,7 +294,7 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
       shareable: false,
     });
 
-    expect(result.rawAssetChanges).toEqual({ foo: "bar" });
+    expect(result.calls[0]!.assetChanges).toEqual({ foo: "bar" });
   });
 });
 
@@ -308,12 +325,13 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
     expect(simulations[1]!.to).toBe(USDC);
   });
 
-  it("collects logs from every bundle step", async () => {
+  it("emits one call entry per bundle step with that step's logs, gas, returnData, and assetChanges", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,
       json: async () => ({
         simulation_results: [
           successBody({
+            id: "sim-1",
             logs: [
               {
                 raw: {
@@ -323,8 +341,12 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
                 },
               },
             ],
+            gasUsed: 11_000,
+            output: "0x1111" as Hex,
+            assetChanges: { step: 1 },
           }),
           successBody({
+            id: "sim-2",
             logs: [
               {
                 raw: {
@@ -334,6 +356,9 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
                 },
               },
             ],
+            gasUsed: 22_000,
+            output: "0x2222" as Hex,
+            assetChanges: { step: 2 },
           }),
         ],
       }),
@@ -347,8 +372,17 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
       shareable: false,
     });
 
-    expect(result.logs).toHaveLength(2);
-    expect(result.logs.map((l) => l.topics[0])).toEqual(["0x1111", "0x2222"]);
+    expect(result.calls).toHaveLength(2);
+
+    expect(result.calls[0]!.logs[0]!.topics[0]).toBe("0x1111");
+    expect(result.calls[0]!.gasUsed).toBe(11_000n);
+    expect(result.calls[0]!.returnData).toBe("0x1111");
+    expect(result.calls[0]!.assetChanges).toEqual({ step: 1 });
+
+    expect(result.calls[1]!.logs[0]!.topics[0]).toBe("0x2222");
+    expect(result.calls[1]!.gasUsed).toBe(22_000n);
+    expect(result.calls[1]!.returnData).toBe("0x2222");
+    expect(result.calls[1]!.assetChanges).toEqual({ step: 2 });
   });
 
   it("only creates a shareable URL from the LAST bundle step", async () => {
@@ -549,6 +583,7 @@ describe.sequential("simulateTenderlyRest — errors", () => {
       json: async () => ({
         simulation: { id: "sim-bad", status: true },
         transaction: {
+          gas_used: 21_000,
           transaction_info: {
             logs: [
               {
@@ -559,6 +594,64 @@ describe.sequential("simulateTenderlyRest — errors", () => {
                 },
               },
             ],
+            call_trace: { output: "0x" as Hex },
+          },
+        },
+      }),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRest({
+        config: CONFIG,
+        chainId: 1,
+        transactions: [TX1],
+        shareable: false,
+      }),
+    ).rejects.toThrow(ExternalServiceError);
+  });
+
+  it("throws ExternalServiceError when a successful Tenderly response omits gas_used", async () => {
+    // The schema requires `gas_used` on every successful sim. Tenderly always
+    // populates it; absence is treated as a contract violation, not silently
+    // defaulted to 0n.
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        simulation: { id: "sim-no-gas", status: true },
+        transaction: {
+          transaction_info: {
+            logs: [],
+            asset_changes: { foo: "bar" },
+            call_trace: { output: "0x" as Hex },
+          },
+          // gas_used omitted
+        },
+      }),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRest({
+        config: CONFIG,
+        chainId: 1,
+        transactions: [TX1],
+        shareable: false,
+      }),
+    ).rejects.toThrow(ExternalServiceError);
+  });
+
+  it("throws ExternalServiceError when a successful Tenderly response omits call_trace.output", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        simulation: { id: "sim-no-output", status: true },
+        transaction: {
+          gas_used: 21_000,
+          transaction_info: {
+            logs: [],
+            asset_changes: { foo: "bar" },
+            // call_trace omitted
           },
         },
       }),

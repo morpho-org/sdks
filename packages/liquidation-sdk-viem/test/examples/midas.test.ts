@@ -18,10 +18,6 @@ import { check } from "../../examples/whitelistedMarkets.js";
 import { type LiquidationTestContext, midasTest } from "../setup.js";
 import { nockBlueApi } from "./helpers.js";
 
-fetchMock.config.fallbackToNetwork = true;
-fetchMock.config.overwriteRoutes = false;
-fetchMock.config.warnOnFallback = false;
-
 const healthyDiffSlot =
   "0x0000000000000000000000000000000000000000000000000000000000000034";
 
@@ -31,6 +27,7 @@ const borrower = testAccount(1);
 
 describe("midas liquidation", () => {
   beforeEach<LiquidationTestContext<typeof mainnet>>(async ({ client }) => {
+    fetchMock.spyGlobal();
     vi.spyOn(Flashbots, "sendRawBundle").mockImplementation(async (txs) => {
       for (const serializedTransaction of txs) {
         await client.sendRawTransaction({ serializedTransaction });
@@ -41,7 +38,7 @@ describe("midas liquidation", () => {
   afterEach(async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    fetchMock.restore();
+    fetchMock.hardReset();
   });
 
   const syncTimestamp = async (client: AnvilTestClient, timestamp?: bigint) => {

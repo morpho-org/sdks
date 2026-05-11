@@ -56,14 +56,14 @@ export interface VaultV2Actions {
    * Prepares a deposit transaction for the VaultV2 contract.
    *
    * This function constructs the transaction data required to deposit a specified amount of assets into the vault.
-   * Uses pre-fetched accrual vault data for accurate calculations of slippage and asset address,
+   * Uses pre-fetched vault data for accurate calculations of slippage and asset address,
    * then returns the prepared deposit transaction and a function for retrieving all required approval transactions.
    * Bundler Integration: This flow uses the bundler to atomically execute the user's asset transfer and vault deposit in a single transaction for slippage protection.
    *
    * @param {Object} params - The deposit parameters.
    * @param {bigint} [params.amount=0n] - Amount of ERC-20 assets to deposit. At least one of amount or nativeAmount must be provided.
    * @param {Address} params.userAddress - User address initiating the deposit.
-   * @param {AccrualVaultV2} params.accrualVault - Pre-fetched vault data with asset address and share conversion.
+   * @param {AccrualVaultV2} params.vaultData - Pre-fetched vault data with asset address and share conversion.
    * @param {bigint} [params.slippageTolerance=DEFAULT_SLIPPAGE_TOLERANCE] - Optional slippage tolerance value. Default is 0.03%. Slippage tolerance must be less than 10%.
    * @param {bigint} [params.nativeAmount] - Amount of native token to wrap into wNative. Vault asset must be wNative.
    * @returns {Object} The result object.
@@ -73,7 +73,7 @@ export interface VaultV2Actions {
   deposit: (
     params: {
       userAddress: Address;
-      accrualVault: AccrualVaultV2;
+      vaultData: AccrualVaultV2;
       slippageTolerance?: bigint;
     } & DepositAmountArgs,
   ) => {
@@ -194,12 +194,12 @@ export class MorphoVaultV2 implements VaultV2Actions {
   deposit({
     amount = 0n,
     userAddress,
-    accrualVault,
+    vaultData,
     slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
     nativeAmount,
   }: {
     userAddress: Address;
-    accrualVault: AccrualVaultV2;
+    vaultData: AccrualVaultV2;
     slippageTolerance?: bigint;
   } & DepositAmountArgs) {
     if (this.client.viemClient.chain?.id !== this.chainId) {
@@ -209,8 +209,8 @@ export class MorphoVaultV2 implements VaultV2Actions {
       );
     }
 
-    if (!isAddressEqual(accrualVault.address, this.vault)) {
-      throw new VaultAddressMismatchError(this.vault, accrualVault.address);
+    if (!isAddressEqual(vaultData.address, this.vault)) {
+      throw new VaultAddressMismatchError(this.vault, vaultData.address);
     }
 
     if (amount < 0n) {
@@ -237,17 +237,14 @@ export class MorphoVaultV2 implements VaultV2Actions {
     }
 
     if (nativeAmount && wNative) {
-      if (!isAddressEqual(accrualVault.asset, wNative)) {
-        throw new NativeAmountOnNonWNativeVaultError(
-          accrualVault.asset,
-          wNative,
-        );
+      if (!isAddressEqual(vaultData.asset, wNative)) {
+        throw new NativeAmountOnNonWNativeVaultError(vaultData.asset, wNative);
       }
     }
 
     const totalAssets = amount + (nativeAmount ?? 0n);
 
-    const shares = accrualVault.toShares(totalAssets);
+    const shares = vaultData.toShares(totalAssets);
     if (shares <= 0n) {
       throw new NonPositiveSharesAmountError(this.vault);
     }
@@ -264,7 +261,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     return {
       getRequirements: async (params?: { useSimplePermit?: boolean }) =>
         await getRequirements(this.client.viemClient, {
-          address: accrualVault.asset,
+          address: vaultData.asset,
           chainId: this.chainId,
           supportSignature: this.client.options.supportSignature,
           supportDeployless: this.client.options.supportDeployless,
@@ -280,7 +277,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
           vault: {
             chainId: this.chainId,
             address: this.vault,
-            asset: accrualVault.asset,
+            asset: vaultData.asset,
           },
           args: {
             amount,

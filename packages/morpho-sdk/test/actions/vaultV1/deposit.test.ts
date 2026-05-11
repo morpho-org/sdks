@@ -25,11 +25,11 @@ describe("DepositVaultV1", () => {
     const morpho = new MorphoClient(client);
 
     const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
-    const accrualVault = await vault.getData();
+    const vaultData = await vault.getData();
     const deposit = vault.deposit({
       userAddress: client.account.address,
       amount: 1000000000000000000n,
-      accrualVault,
+      vaultData,
     });
     const requirements_1 = await deposit.getRequirements();
     const tx_1 = deposit.buildTx();
@@ -50,8 +50,8 @@ describe("DepositVaultV1", () => {
     expect(deposit).toBeDefined();
     expect(requirements_1).toBeDefined();
     expect(tx_1).toStrictEqual(tx_2);
-    expect(accrualVault.asset).toStrictEqual(SteakhouseUsdcVaultV1.asset);
-    expect(accrualVault.address).toStrictEqual(SteakhouseUsdcVaultV1.address);
+    expect(vaultData.asset).toStrictEqual(SteakhouseUsdcVaultV1.asset);
+    expect(vaultData.address).toStrictEqual(SteakhouseUsdcVaultV1.address);
   });
 
   test("should deposit 1K USDC in vaultV1", async ({ client }) => {
@@ -76,11 +76,11 @@ describe("DepositVaultV1", () => {
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
         );
-        const accrualVault = await vaultV1.getData();
+        const vaultData = await vaultV1.getData();
         const deposit = vaultV1.deposit({
           userAddress: client.account.address,
           amount: amount,
-          accrualVault,
+          vaultData,
         });
 
         const tx = deposit.buildTx();
@@ -144,11 +144,11 @@ describe("DepositVaultV1", () => {
           SteakhouseUSDTVaultV1.address,
           mainnet.id,
         );
-        const accrualVault = await vaultV1.getData();
+        const vaultData = await vaultV1.getData();
         const deposit = vaultV1.deposit({
           userAddress: client.account.address,
           amount: amount,
-          accrualVault,
+          vaultData,
         });
 
         const tx = deposit.buildTx();
@@ -208,11 +208,11 @@ describe("DepositVaultV1", () => {
         const morpho = new MorphoClient(client, { supportSignature: true });
 
         const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
-        const accrualVault = await vault.getData();
+        const vaultData = await vault.getData();
         const deposit = vault.deposit({
           userAddress: client.account.address,
           amount: amount,
-          accrualVault,
+          vaultData,
         });
         const requirements = await deposit.getRequirements({
           useSimplePermit: true,
@@ -282,11 +282,11 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const accrualVault = await vault.getData();
+        const vaultData = await vault.getData();
         const deposit = vault.deposit({
           userAddress: client.account.address,
           amount: amount,
-          accrualVault,
+          vaultData,
         });
 
         const requirements = await deposit.getRequirements({
@@ -380,11 +380,11 @@ describe("DepositVaultV1", () => {
       actionFn: async () => {
         const morpho = new MorphoClient(client, { supportSignature: true });
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
-        const accrualVault = await vault.getData();
+        const vaultData = await vault.getData();
         const deposit = vault.deposit({
           userAddress: client.account.address,
           amount: amount,
-          accrualVault,
+          vaultData,
         });
 
         const requirements = await deposit.getRequirements();
@@ -432,11 +432,11 @@ describe("DepositVaultV1", () => {
           mainnet.id,
         );
 
-        const accrualVault = await vaultV1.getData();
+        const vaultData = await vaultV1.getData();
         const deposit = vaultV1.deposit({
           userAddress: client.account.address,
           amount: amount,
-          accrualVault,
+          vaultData,
         });
         const requirements = await deposit.getRequirements();
         const approveTx = requirements[0];

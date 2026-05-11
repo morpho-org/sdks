@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-sdk",
   "description": "Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`).",
-  "version": "5.23.1",
+  "version": "5.23.2",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -26,7 +26,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@noble/hashes": "^1.6.1",
+    "@noble/hashes": "^2.2.0",
     "@types/lodash.isplainobject": "^4.0.9",
     "@types/lodash.mergewith": "^4.6.9",
     "lodash.isplainobject": "^4.0.6",
@@ -38,9 +38,9 @@
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "typescript": "^5.9.3",
-    "viem": "^2.41.2",
-    "vitest": "^4.1.4"
+    "typescript": "^6.0.3",
+    "viem": "^2.48.11",
+    "vitest": "^4.1.5"
   },
   "publishConfig": {
     "exports": {
