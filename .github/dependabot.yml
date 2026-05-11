@@ -5,21 +5,25 @@ updates:
     schedule:
       interval: weekly
     target-branch: main
+    open-pull-requests-limit: 0
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     target-branch: main
+    open-pull-requests-limit: 0
 
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
     target-branch: next
+    open-pull-requests-limit: 0
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     target-branch: next
+    open-pull-requests-limit: 0
