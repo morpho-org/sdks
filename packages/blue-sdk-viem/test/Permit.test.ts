@@ -1,10 +1,16 @@
-import { ChainId, Eip5267Domain, Token } from "@morpho-org/blue-sdk";
+import {
+  type Address,
+  ChainId,
+  Eip5267Domain,
+  Token,
+} from "@morpho-org/blue-sdk";
 import { randomAddress } from "@morpho-org/test";
 import { zeroHash } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   InvalidPermitDomainChainIdError,
   InvalidPermitDomainVerifyingContractError,
+  UnsupportedPermitDomainExtensionsError,
 } from "../src/error.js";
 import { getPermitTypedData } from "../src/signatures/permit.js";
 
@@ -21,13 +27,19 @@ const permitArgs = (token: Token) => ({
   deadline: 1n,
 });
 
-// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
-const tokenWithDomain = (
+const tokenWithDomain = ({
   address = randomAddress(),
-  fields: `0x${string}` = "0x0f",
+  fields = "0x0f",
   chainId = BigInt(ChainId.EthMainnet),
   verifyingContract = address,
-) =>
+  extensions = [],
+}: {
+  address?: Address;
+  fields?: `0x${string}`;
+  chainId?: bigint;
+  verifyingContract?: Address;
+  extensions?: readonly bigint[];
+} = {}) =>
   new Token({
     address,
     name: "Token",
@@ -38,7 +50,7 @@ const tokenWithDomain = (
       chainId,
       verifyingContract,
       salt: zeroHash,
-      extensions: [],
+      extensions,
     }),
   });
 
@@ -59,12 +71,11 @@ describe("getPermitTypedData", () => {
   test("throws when fetched EIP-5267 domain points to another token", () => {
     const token = tokenWithDomain();
     const verifyingContract = randomAddress();
-    const tokenWithForeignDomain = tokenWithDomain(
-      token.address,
-      "0x0f",
-      BigInt(ChainId.EthMainnet),
+    const tokenWithForeignDomain = tokenWithDomain({
+      address: token.address,
+      chainId: BigInt(ChainId.EthMainnet),
       verifyingContract,
-    );
+    });
 
     expect(() =>
       getPermitTypedData(
@@ -80,11 +91,10 @@ describe("getPermitTypedData", () => {
   });
 
   test("throws when fetched EIP-5267 domain points to another chain", () => {
-    const token = tokenWithDomain(
-      randomAddress(),
-      "0x0f",
-      BigInt(ChainId.PolygonMainnet),
-    );
+    const token = tokenWithDomain({
+      address: randomAddress(),
+      chainId: BigInt(ChainId.PolygonMainnet),
+    });
 
     expect(() =>
       getPermitTypedData(permitArgs(token), ChainId.EthMainnet),
@@ -98,7 +108,10 @@ describe("getPermitTypedData", () => {
   });
 
   test("throws when fetched EIP-5267 domain does not bind to a token address", () => {
-    const token = tokenWithDomain(randomAddress(), "0x07");
+    const token = tokenWithDomain({
+      address: randomAddress(),
+      fields: "0x07",
+    });
 
     expect(() =>
       getPermitTypedData(permitArgs(token), ChainId.EthMainnet),
@@ -108,7 +121,10 @@ describe("getPermitTypedData", () => {
   });
 
   test("throws when fetched EIP-5267 domain does not bind to a chain", () => {
-    const token = tokenWithDomain(randomAddress(), "0x0b");
+    const token = tokenWithDomain({
+      address: randomAddress(),
+      fields: "0x0b",
+    });
 
     expect(() =>
       getPermitTypedData(permitArgs(token), ChainId.EthMainnet),
@@ -119,5 +135,13 @@ describe("getPermitTypedData", () => {
         undefined,
       ),
     );
+  });
+
+  test("throws when fetched EIP-5267 domain advertises extensions", () => {
+    const token = tokenWithDomain({ extensions: [5267n] });
+
+    expect(() =>
+      getPermitTypedData(permitArgs(token), ChainId.EthMainnet),
+    ).toThrow(UnsupportedPermitDomainExtensionsError);
   });
 });
