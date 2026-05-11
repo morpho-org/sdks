@@ -6,6 +6,7 @@ import {IMorphoVaultV1AdapterFactory} from "./interfaces/IMorphoVaultV1AdapterFa
 import {IMorphoMarketV1AdapterV2Factory} from "./interfaces/IMorphoMarketV1AdapterV2Factory.sol";
 import {IVaultV2Factory} from "./interfaces/IVaultV2Factory.sol";
 error UnknownOfFactory(address factory, address vault);
+error UnsupportedVaultV2Adapter(address adapter);
 import {IMorphoMarketV1AdapterV2} from "./interfaces/IMorphoMarketV1AdapterV2.sol";
 import {MarketParams} from "../interfaces/IMorpho.sol";
 
@@ -81,6 +82,10 @@ contract GetVaultV2 {
             && morphoVaultV1AdapterFactory.isMorphoVaultV1Adapter(res.liquidityAdapter);
         bool isMorphoMarketV1AdapterV2 = address(morphoMarketV1AdapterV2Factory) != address(0)
             && morphoMarketV1AdapterV2Factory.isMorphoMarketV1AdapterV2(res.liquidityAdapter);
+
+        if (isMorphoVaultV1Adapter && res.liquidityData.length > 0) {
+            revert UnsupportedVaultV2Adapter(res.liquidityAdapter);
+        }
 
         res.isLiquidityAdapterKnown = isMorphoVaultV1Adapter || isMorphoMarketV1AdapterV2;
 
