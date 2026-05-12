@@ -87,6 +87,8 @@ jobs:
       - name: Version packages
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         run: pnpm run version
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Generate GitHub App Token
         if: steps.pending-changesets.outputs.has_changesets == 'true'
@@ -113,6 +115,7 @@ jobs:
 
           is_allowed_version_path() {
             [[ "$1" =~ ^packages/[^/]+/package\.json$ ]] ||
+            [[ "$1" =~ ^packages/[^/]+/CHANGELOG\.md$ ]] ||
             [[ "$1" =~ ^\.changeset/[^/]+\.md$ ]] ||
             [[ "$1" == ".changeset/pre.json" ]]
           }
