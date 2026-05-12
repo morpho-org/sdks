@@ -1,4 +1,4 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
+import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 
 /** Thrown when an asset amount is required to be positive but is zero or negative. */
@@ -388,6 +388,47 @@ export class InsufficientSharedLiquidityError extends Error {
     super(
       `Shared liquidity is insufficient to cover the borrow on market ${params.marketId}: shortfall "${params.shortfall}", available "${params.available}". Reduce the borrow amount or wait for additional vault liquidity.`,
     );
+  }
+}
+
+export class UnknownReallocationMarketError extends UnknownDataError {
+  constructor(public readonly marketId: MarketId) {
+    super(`unknown reallocation market "${marketId}"`);
+  }
+}
+
+export class UnknownReallocationVaultError extends UnknownDataError {
+  constructor(public readonly vault: Address) {
+    super(`unknown reallocation vault "${vault}"`);
+  }
+}
+
+export class UnknownReallocationVaultMarketConfigError extends UnknownDataError {
+  constructor(
+    public readonly vault: Address,
+    public readonly marketId: MarketId,
+  ) {
+    super(
+      `unknown reallocation config for vault "${vault}" on market "${marketId}"`,
+    );
+  }
+}
+
+export class UnknownReallocationPositionError extends UnknownDataError {
+  constructor(
+    public readonly user: Address,
+    public readonly marketId: MarketId,
+  ) {
+    super(`unknown reallocation position of "${user}" on market "${marketId}"`);
+  }
+}
+
+export class UnknownReallocationHoldingError extends UnknownDataError {
+  constructor(
+    public readonly user: Address,
+    public readonly token: Address,
+  ) {
+    super(`unknown reallocation holding of "${user}" for token "${token}"`);
   }
 }
 

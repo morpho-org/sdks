@@ -19,7 +19,6 @@ import {
   fetchVaultMarketConfig,
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
 import type { Address } from "viem";
 import {
   getMorphoAuthorizationRequirement,
@@ -32,6 +31,7 @@ import {
   marketV1WithdrawCollateral,
 } from "../../actions/index.js";
 import {
+  ReallocationData,
   computeMaxRepaySharePrice,
   computeMinBorrowSharePrice,
   computeReallocations,
@@ -54,6 +54,7 @@ import {
   type MarketV1SupplyCollateralAction,
   type MarketV1SupplyCollateralBorrowAction,
   type MarketV1WithdrawCollateralAction,
+  type MinimalBlock,
   MissingAccrualPositionError,
   type MorphoAuthorizationAction,
   type MorphoClientType,
@@ -280,7 +281,7 @@ export interface MarketV1Actions {
   };
 
   /**
-   * Fetches all on-chain data needed to construct a {@link SimulationState}
+   * Fetches all on-chain data needed to construct a {@link ReallocationData}
    * for computing vault reallocations via the public allocator.
    *
    * The target market is refetched internally at `block.number` so the
@@ -289,7 +290,7 @@ export interface MarketV1Actions {
    * inject unnecessary `reallocateTo` actions (and their PublicAllocator
    * fees) into the resulting bundle.
    *
-   * The returned simulation state can be passed to {@link getReallocations}
+   * The returned reallocation data can be passed to {@link getReallocations}
    * to compute the `VaultReallocation[]` array for `borrow()` or
    * `supplyCollateralBorrow()`.
    *
@@ -297,12 +298,12 @@ export interface MarketV1Actions {
    *
    * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
    * @param params.block - The block to fetch data at (number and timestamp).
-   * @returns A SimulationState populated with all required data.
+   * @returns A ReallocationData instance populated with all required data.
    */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
     block: MinimalBlock;
-  }) => Promise<SimulationState>;
+  }) => Promise<ReallocationData>;
 
   /**
    * Computes vault reallocations for a borrow on this market.
@@ -314,12 +315,13 @@ export interface MarketV1Actions {
    * @param params.reallocationData - The current on-chain state (from {@link getReallocationData}).
    * @param params.borrowAmount - The intended borrow amount.
    * @param params.options - Optional reallocation computation options
-   *        (utilization targets, reallocatable vaults filter, etc.).
+   *        (timestamp, utilization targets, reallocatable vaults filter, etc.).
+   *        Pass the fetched block timestamp to compute reallocations at the same block.
    * @returns Array of vault reallocations ready to pass to `borrow()` or
    *          `supplyCollateralBorrow()`. Empty array if no reallocation is needed.
    */
   getReallocations: (params: {
-    reallocationData: SimulationState;
+    reallocationData: ReallocationData;
     borrowAmount: bigint;
     options?: ReallocationComputeOptions;
   }) => readonly VaultReallocation[];
@@ -920,7 +922,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
   }: {
     vaultAddresses: readonly Address[];
     block: MinimalBlock;
-  }): Promise<SimulationState> {
+  }): Promise<ReallocationData> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const client = this.client.viemClient;
@@ -991,7 +993,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
       ),
     ]);
 
-    // Assemble records for SimulationState.
+    // Assemble records for ReallocationData.
     const marketsRecord: Record<MarketId, Market | undefined> = {
       [targetMarketId]: targetMarket,
     };
@@ -1028,9 +1030,8 @@ export class MorphoMarketV1 implements MarketV1Actions {
       (holdingsRecord[holding.user] ??= {})[holding.token] = holding;
     }
 
-    return new SimulationState({
+    return new ReallocationData({
       chainId: this.chainId,
-      block,
       markets: marketsRecord,
       vaults: vaultsRecord,
       vaultMarketConfigs: vaultMarketConfigsRecord,
@@ -1044,7 +1045,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     borrowAmount,
     options,
   }: {
-    reallocationData: SimulationState;
+    reallocationData: ReallocationData;
     borrowAmount: bigint;
     options?: ReallocationComputeOptions;
   }): readonly VaultReallocation[] {

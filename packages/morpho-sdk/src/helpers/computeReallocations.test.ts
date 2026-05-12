@@ -4,7 +4,6 @@ import {
   MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import type { SimulationState } from "@morpho-org/simulation-sdk";
 import type { Address } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -18,6 +17,7 @@ import {
   MissingPublicAllocatorConfigError,
 } from "../types/index.js";
 import { computeReallocations } from "./computeReallocations.js";
+import type { ReallocationData } from "./reallocationData.js";
 
 // --- Constants ---
 
@@ -76,10 +76,10 @@ interface MockStateParams {
 }
 
 /**
- * Creates a minimal mock SimulationState.
+ * Creates a minimal mock ReallocationData.
  *
  * Only implements the methods computeReallocations actually calls:
- * `getMarket`, `getMarketPublicReallocations`, `getVault`, `block`.
+ * `getMarket`, `getMarketPublicReallocations`, and `getVault`.
  */
 function makeMockState({
   targetMarket: tm = defaultTarget,
@@ -87,7 +87,7 @@ function makeMockState({
   friendlyTargetMarket,
   aggressiveWithdrawals = [],
   vaultFees = {},
-}: MockStateParams = {}): SimulationState {
+}: MockStateParams = {}): ReallocationData {
   const markets = new Map<string, Market>();
   markets.set(tm.id, tm);
   markets.set(sourceA.id, sourceA);
@@ -101,12 +101,11 @@ function makeMockState({
         : markets.get(id)!,
     getMarketPublicReallocations: () => ({
       withdrawals: [...aggressiveWithdrawals],
-      data: {} as SimulationState,
+      data: {} as ReallocationData,
     }),
   };
 
   return {
-    block: { number: 0n, timestamp: TIMESTAMP },
     getMarket: (id: MarketId) => {
       const m = markets.get(id);
       if (m == null) throw new Error(`Mock: unknown market ${id}`);
@@ -121,7 +120,7 @@ function makeMockState({
         ? { admin: vault, fee: vaultFees[vault]!, accruedFee: 0n }
         : undefined,
     }),
-  } as unknown as SimulationState;
+  } as unknown as ReallocationData;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,7 +131,7 @@ describe("computeReallocations", () => {
   describe("early returns", () => {
     test("should return empty when enabled is false", () => {
       const result = computeReallocations({
-        reallocationData: {} as SimulationState,
+        reallocationData: {} as ReallocationData,
         marketId: targetParams.id,
         borrowAmount: MathLib.WAD,
         options: { enabled: false },

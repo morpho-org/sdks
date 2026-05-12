@@ -655,6 +655,7 @@ describe("getReallocationData and getReallocations", () => {
         const reallocations = market.getReallocations({
           reallocationData,
           borrowAmount,
+          options: { timestamp: block.timestamp },
         });
 
         expect(reallocations.length).toBeGreaterThan(0);
@@ -733,6 +734,7 @@ describe("getReallocationData and getReallocations", () => {
         const reallocations = market.getReallocations({
           reallocationData,
           borrowAmount,
+          options: { timestamp: block.timestamp },
         });
 
         expect(reallocations.length).toBeGreaterThan(0);
@@ -792,6 +794,7 @@ describe("getReallocationData and getReallocations", () => {
     const reallocations = market.getReallocations({
       reallocationData,
       borrowAmount,
+      options: { timestamp: block.timestamp },
     });
 
     expect(reallocations).toEqual([]);

@@ -1,6 +1,4 @@
 import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
-import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "@morpho-org/bundler-sdk-viem";
-import type { SimulationState } from "@morpho-org/simulation-sdk";
 import type { Address } from "viem";
 import {
   InsufficientSharedLiquidityError,
@@ -8,6 +6,8 @@ import {
   type ReallocationComputeOptions,
   type VaultReallocation,
 } from "../types/index.js";
+import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
+import type { ReallocationData } from "./reallocationData.js";
 
 /**
  * Computes vault reallocations for a borrow operation on a target market.
@@ -17,7 +17,7 @@ import {
  * respecting withdrawal utilization targets, then falls back to aggressive
  * reallocations (100% withdrawal utilization) if liquidity is still insufficient.
  *
- * @param params.reallocationData - The simulation state containing market, vault, and position data.
+ * @param params.reallocationData - The local state containing market, vault, and position data.
  * @param params.marketId - The target market to reallocate liquidity into.
  * @param params.borrowAmount - The intended borrow amount (used to compute post-borrow utilization).
  * @param params.options - Optional reallocation computation options.
@@ -30,14 +30,14 @@ export const computeReallocations = ({
   borrowAmount,
   options,
 }: {
-  readonly reallocationData: SimulationState;
+  readonly reallocationData: ReallocationData;
   readonly marketId: MarketId;
   readonly borrowAmount: bigint;
   readonly options?: ReallocationComputeOptions;
 }): readonly VaultReallocation[] => {
   if (options?.enabled === false) return [];
 
-  const market = data.getMarket(marketId).accrueInterest(data.block.timestamp);
+  const market = data.getMarket(marketId).accrueInterest(options?.timestamp);
 
   const newTotalBorrowAssets = market.totalBorrowAssets + borrowAmount;
   const newTotalSupplyAssets = market.totalSupplyAssets;
@@ -64,7 +64,7 @@ export const computeReallocations = ({
 
   // Phase 1: "friendly" reallocations respecting withdrawal utilization targets.
   const { withdrawals: friendlyWithdrawals, data: friendlyReallocationData } =
-    data.getMarketPublicReallocations(market.id, options);
+    data.getMarketPublicReallocations(market.id, options?.timestamp, options);
 
   const withdrawals = [...friendlyWithdrawals];
 
@@ -79,11 +79,15 @@ export const computeReallocations = ({
     // Phase 2: "aggressive" — fully withdraw from every market (100% utilization).
     requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
     withdrawals.push(
-      ...friendlyReallocationData.getMarketPublicReallocations(market.id, {
-        ...options,
-        defaultMaxWithdrawalUtilization: MathLib.WAD,
-        maxWithdrawalUtilization: {},
-      }).withdrawals,
+      ...friendlyReallocationData.getMarketPublicReallocations(
+        market.id,
+        options?.timestamp,
+        {
+          ...options,
+          defaultMaxWithdrawalUtilization: MathLib.WAD,
+          maxWithdrawalUtilization: {},
+        },
+      ).withdrawals,
     );
   }
 
