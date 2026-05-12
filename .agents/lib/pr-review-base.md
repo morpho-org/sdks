@@ -185,7 +185,7 @@ Prompt must include:
 - No edits to build output under `lib/`
 - Reuse of SDK types (`Address`, `MarketId`, `ChainId`, `BigIntish`) over local re-declarations
 - Reference the root `AGENTS.md`, the package's `AGENTS.md`, and `biome.json`
-- Changeset relevance: verify `.changeset/*.md` files are present only when the PR changes published package source in a semver-relevant way, and verify one is present when such source changes exist. Flag unnecessary changesets for repo metadata, documentation-only, fixture-only, generated-output-only, or tests-only diffs; flag missing changesets for behavior-affecting published package source changes.
+- Changeset relevance: verify `.changeset/*.md` files are present when the PR changes published package source in a semver-relevant way. Allow patch changesets for JSDoc-only changes to published package source. Flag unnecessary changesets for repo metadata, non-API documentation-only, fixture-only, generated-output-only, or tests-only diffs; flag missing changesets for behavior-affecting published package source changes.
 
 ### Agent 6: Documentation Analyzer
 

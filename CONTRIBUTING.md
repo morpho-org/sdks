@@ -88,7 +88,7 @@ Choose the smallest semver bump that describes the public impact:
 - `minor`: new backwards-compatible APIs or behavior
 - `major`: breaking changes
 
-Do not generate a changeset when the diff is not semver-relevant for a published package. Repo metadata, documentation-only, fixture-only, generated-output-only, and tests-only changes do not need a changeset.
+Do not generate a changeset when the diff is not semver-relevant for a published package. JSDoc-only changes to published package source may still include a patch changeset when maintainers want them visible in package release notes. Repo metadata, non-API documentation-only, fixture-only, generated-output-only, and tests-only changes do not need a changeset.
 
 Commit the generated `.changeset/*.md` file with the source change. Do not update package versions or package changelogs manually in the feature PR.
 
