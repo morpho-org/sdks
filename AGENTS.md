@@ -64,7 +64,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 7. Edits to generated outputs (`src/api/sdk.ts`, anything under `lib/`). Edit the input.
 8. Framework imports (`react`, `wagmi`, `redux`, `ethers`) in core packages.
 9. New runtime dependencies without a package-level reason and a written justification in the PR description.
-10. PRs that ship without their tests, JSDoc, and changeset.
+10. PRs that ship behavior-affecting package source changes without their tests, JSDoc, and semver-relevant changeset.
 
 ---
 
@@ -140,8 +140,8 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 ## 7. Releases & versioning
 
-- **SemVer, strict.** Patch: bug fixes, internal changes, doc-only. Minor: additive surface, deprecations. Major: removed/renamed/retyped public symbols.
-- **CHANGELOG via Changesets** — every user-visible change ships with a changeset (review-only today).
+- **SemVer, strict.** Patch: bug fixes and internal source maintenance changes. Minor: additive surface, deprecations. Major: removed/renamed/retyped public symbols.
+- **CHANGELOG via Changesets** — every semver-relevant change to published package source ships with a changeset (review-only today). Do not generate a changeset for repo metadata, documentation-only, fixture-only, generated-output-only, or tests-only changes; those do not change the published package contract.
 - **`main` is always releasable.** Fork suite green per chain matrix.
 - **Pin ABIs and addresses in-package.** No runtime ABI fetch; no address drift between releases.
 - **4-step deprecation flow:** introduce successor → deprecate with `@deprecated` JSDoc → maintain both for one minor → remove in the next major. No silent removals.
@@ -158,7 +158,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - NodeNext module resolution; relative imports include `.js` (`export * from "./market/index.js"`).
 - Type-only imports where possible (`import type { Address } from "viem"`).
 - Generated code: change generated inputs (`graphql/*.gql`), never edit generated outputs (`src/api/sdk.ts`). Never edit `lib/`.
-- One concern per PR. Tests, JSDoc, and changeset land with the change — not as a follow-up.
+- One concern per PR. Tests, JSDoc, and any required semver-relevant changeset land with the change — not as a follow-up.
 
 ---
 

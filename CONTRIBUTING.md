@@ -70,13 +70,13 @@ Run `pnpm lint` before pushing. The repository also runs Biome through lint-stag
 2. Make the smallest coherent change for the PR.
 3. Add or update tests when behavior changes.
 4. Run `pnpm lint` and `pnpm test`.
-5. Add a changeset for release-impacting package changes.
+5. Add a changeset only for semver-relevant published package changes.
 
 ## Changesets
 
 This repository uses [Changesets](https://github.com/changesets/changesets) to decide which packages are released and how their versions are bumped.
 
-When a PR changes a package in a way that should be released, run:
+When a PR changes published package source in a way that should be released, run:
 
 ```bash
 pnpm changeset
@@ -88,11 +88,7 @@ Choose the smallest semver bump that describes the public impact:
 - `minor`: new backwards-compatible APIs or behavior
 - `major`: breaking changes
 
-If no release is needed, add an empty changeset:
-
-```bash
-pnpm changeset --empty
-```
+Do not generate a changeset when the diff is not semver-relevant for a published package. Repo metadata, documentation-only, fixture-only, generated-output-only, and tests-only changes do not need a changeset.
 
 Commit the generated `.changeset/*.md` file with the source change. Do not update package versions or package changelogs manually in the feature PR.
 
