@@ -30,7 +30,6 @@
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/bundler-sdk-viem": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
     "zod": "^4.4.3"
   },
   "peerDependencies": {

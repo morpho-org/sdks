@@ -1,7 +1,7 @@
 import { type Address, MathLib } from "@morpho-org/blue-sdk";
 import { deepFreeze } from "@morpho-org/morpho-ts";
-import { MAX_TOKEN_APPROVALS } from "@morpho-org/simulation-sdk";
 import { encodeFunctionData, erc20Abi, maxUint256 } from "viem";
+import { MAX_TOKEN_APPROVALS } from "../../../helpers/constant.js";
 import type { ERC20ApprovalAction, Transaction } from "../../../types/index.js";
 
 /** Parameters for {@link encodeErc20Approval}. */
