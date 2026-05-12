@@ -427,10 +427,7 @@ export class ReallocationData implements InputReallocationData {
     const sourceConfig = data.getVaultMarketConfig(vault, withdrawal.id);
     const sourcePublicAllocatorConfig = sourceConfig.publicAllocatorConfig;
     if (sourcePublicAllocatorConfig == null)
-      throw new UnknownReallocationVaultMarketConfigError(
-        vault,
-        withdrawal.id,
-      );
+      throw new UnknownReallocationVaultMarketConfigError(vault, withdrawal.id);
 
     const supplyConfig = data.getVaultMarketConfig(vault, supplyMarketId);
     const supplyPublicAllocatorConfig = supplyConfig.publicAllocatorConfig;
