@@ -2,10 +2,6 @@ name: Test
 
 on:
   workflow_call:
-    inputs:
-      checkout_ref:
-        required: false
-        type: string
     secrets:
       MAINNET_RPC_URL:
         required: true
@@ -24,7 +20,6 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.checkout_ref || github.sha }}
           persist-credentials: false
 
       - uses: pnpm/action-setup@91ab88e2619ed1f46221f0ba42d1492c02baf788 # v6

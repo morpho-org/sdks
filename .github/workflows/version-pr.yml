@@ -2,13 +2,6 @@ name: Version PR
 
 on:
   workflow_call:
-    inputs:
-      target_branch:
-        required: false
-        type: string
-      checkout_ref:
-        required: false
-        type: string
     secrets:
       VERSION_APP_ID:
         required: true
@@ -17,26 +10,27 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.target_branch || github.ref }}-version-pr
+  group: ${{ github.workflow }}-${{ github.ref_name }}-version-pr
   cancel-in-progress: false
 
 jobs:
   version-pr:
-    if: ${{ (inputs.target_branch || github.ref_name) == 'main' || (inputs.target_branch || github.ref_name) == 'next' }}
+    if: github.ref_name == 'main' || github.ref_name == 'next'
     name: Version PR
     runs-on: ubuntu-latest
     env:
       CI: true
       HUSKY: 0
-      TARGET_BRANCH: ${{ inputs.target_branch || github.ref_name }}
-      RELEASE_BRANCH: changeset-release/${{ inputs.target_branch || github.ref_name }}
+      TARGET_BRANCH: ${{ github.ref_name }}
+      RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.checkout_ref || inputs.target_branch || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -191,7 +185,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          BASE_BRANCH: ${{ inputs.target_branch || github.ref_name }}
+          BASE_BRANCH: ${{ github.ref_name }}
         run: |
           set -euo pipefail
 

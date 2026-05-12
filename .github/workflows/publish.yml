@@ -2,36 +2,29 @@ name: Publish
 
 on:
   workflow_call:
-    inputs:
-      target_branch:
-        required: false
-        type: string
-      checkout_ref:
-        required: false
-        type: string
 
 permissions:
   contents: write
   id-token: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ inputs.target_branch || github.ref }}-publish
+  group: ${{ github.workflow }}-${{ github.ref }}-publish
   cancel-in-progress: false
 
 jobs:
   publish:
-    if: ${{ (inputs.target_branch || github.ref_name) == 'main' || (inputs.target_branch || github.ref_name) == 'next' }}
+    if: github.ref_name == 'main' || github.ref_name == 'next'
     name: Publish
     runs-on: ubuntu-latest
     env:
       CI: true
       HUSKY: 0
-      TARGET_BRANCH: ${{ inputs.target_branch || github.ref_name }}
+      TARGET_BRANCH: ${{ github.ref_name }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
-          ref: ${{ inputs.checkout_ref || inputs.target_branch || github.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -129,6 +122,8 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --atomic origin "${refs[@]}"
 
+      # This only creates releases for tags made by this publish run. If npm and
+      # tag push succeed but release creation fails, reruns need manual repair.
       - name: Create GitHub releases
         if: steps.publish-packages.outputs.has_tags == 'true'
         shell: bash
