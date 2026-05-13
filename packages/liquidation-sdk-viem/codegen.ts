@@ -2,6 +2,8 @@ import type { CodegenConfig } from "@graphql-codegen/cli";
 
 import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
 
+const hexStringScalar = "`0x$" + "{string}`";
+
 const config: CodegenConfig = {
   overwrite: true,
   schema: BLUE_API_GRAPHQL_URL,
@@ -22,7 +24,7 @@ const config: CodegenConfig = {
           },
           HexString: {
             input: "string",
-            output: "`0x${string}`",
+            output: hexStringScalar,
           },
           Address: {
             input: "string",

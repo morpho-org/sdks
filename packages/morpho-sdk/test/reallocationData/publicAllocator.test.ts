@@ -113,6 +113,7 @@ const marketB2 = makeMarket({
   rateAtTarget: parseEther("0.05") / SECONDS_PER_YEAR,
 });
 
+// biome-ignore lint/complexity/useMaxParams: fixture rows are clearer with the position tuple fields inline.
 const makePosition = (
   user: Address,
   marketId: MarketId,
@@ -342,18 +343,18 @@ describe("ReallocationData public allocator integration", () => {
     }
   });
 
-  test.each([marketB1.id, marketB2.id])(
-    "returns no withdrawals for non-reallocatable market %s",
-    (marketId) => {
-      const { withdrawals, data } = makeFixture().getMarketPublicReallocations(
-        marketId,
-        { defaultMaxWithdrawalUtilization: parseEther("1") },
-      );
+  test.each([
+    marketB1.id,
+    marketB2.id,
+  ])("returns no withdrawals for non-reallocatable market %s", (marketId) => {
+    const { withdrawals, data } = makeFixture().getMarketPublicReallocations(
+      marketId,
+      { defaultMaxWithdrawalUtilization: parseEther("1") },
+    );
 
-      expect(withdrawals).toEqual([]);
-      expect(liquidity(data, marketId)).toEqual(parseEther("10000"));
-    },
-  );
+    expect(withdrawals).toEqual([]);
+    expect(liquidity(data, marketId)).toEqual(parseEther("10000"));
+  });
 
   test("moves idle-market liquidity when the target utilization is 0%", () => {
     const idleMarket = new Market({
@@ -490,25 +491,26 @@ describe("ReallocationData public allocator integration", () => {
     }
   });
 
-  test.each([marketA1.id, marketA2.id, marketA3.id])(
-    "returns no withdrawals with near-zero target utilization for %s",
-    (marketId) => {
-      const fixture = makeFixture();
-      const { withdrawals, data } = fixture.getMarketPublicReallocations(
-        marketId,
-        { defaultMaxWithdrawalUtilization: 1n },
-      );
+  test.each([
+    marketA1.id,
+    marketA2.id,
+    marketA3.id,
+  ])("returns no withdrawals with near-zero target utilization for %s", (marketId) => {
+    const fixture = makeFixture();
+    const { withdrawals, data } = fixture.getMarketPublicReallocations(
+      marketId,
+      { defaultMaxWithdrawalUtilization: 1n },
+    );
 
-      expect(withdrawals).toEqual([]);
-      expect(liquidity(data, marketA1.id)).toEqual(
-        liquidity(fixture, marketA1.id),
-      );
-      expect(liquidity(data, marketA2.id)).toEqual(
-        liquidity(fixture, marketA2.id),
-      );
-      expect(liquidity(data, marketA3.id)).toEqual(
-        liquidity(fixture, marketA3.id),
-      );
-    },
-  );
+    expect(withdrawals).toEqual([]);
+    expect(liquidity(data, marketA1.id)).toEqual(
+      liquidity(fixture, marketA1.id),
+    );
+    expect(liquidity(data, marketA2.id)).toEqual(
+      liquidity(fixture, marketA2.id),
+    );
+    expect(liquidity(data, marketA3.id)).toEqual(
+      liquidity(fixture, marketA3.id),
+    );
+  });
 });
