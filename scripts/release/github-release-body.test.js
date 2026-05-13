@@ -6,7 +6,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import {
@@ -43,12 +43,12 @@ describe("readReleasePackages", () => {
 
     expect(readReleasePackages({ packagesDir })).toEqual([
       {
-        changelogPath: join(packagesDir, "alpha", "CHANGELOG.md"),
+        changelogPath: resolve(packagesDir, "alpha", "CHANGELOG.md"),
         name: "@morpho-org/alpha",
         version: "1.0.0",
       },
       {
-        changelogPath: join(packagesDir, "beta", "CHANGELOG.md"),
+        changelogPath: resolve(packagesDir, "beta", "CHANGELOG.md"),
         name: "@morpho-org/beta",
         version: "2.0.0",
       },
@@ -271,6 +271,28 @@ describe("buildGitHubReleaseBody", () => {
 
     expect(() =>
       buildGitHubReleaseBody({
+        packagesDir,
+        tag: "@morpho-org/blue-sdk@1.2.3",
+      }),
+    ).toThrow('Cannot find a changelog for "@morpho-org/blue-sdk".');
+  });
+
+  test("error: changelog path outside packages directory", () => {
+    const root = createTempDir();
+    const packagesDir = join(root, "packages");
+    const outsideChangelog = join(root, "CHANGELOG.md");
+    mkdirSync(packagesDir);
+    writeFileSync(outsideChangelog, changelogFor("1.2.3", "- leaked\n"));
+
+    expect(() =>
+      buildGitHubReleaseBody({
+        packages: [
+          releasePackage({
+            changelogPath: outsideChangelog,
+            name: "@morpho-org/blue-sdk",
+            version: "1.2.3",
+          }),
+        ],
         packagesDir,
         tag: "@morpho-org/blue-sdk@1.2.3",
       }),

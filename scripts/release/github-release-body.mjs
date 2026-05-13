@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_PACKAGES_DIR = "packages";
@@ -11,12 +11,14 @@ const VERSION_HEADING_RE =
 
 export function readReleasePackages(options = {}) {
   const packagesDir = options.packagesDir ?? DEFAULT_PACKAGES_DIR;
+  const packagesRoot = resolve(packagesDir);
   const packages = [];
 
-  for (const entry of readdirSync(packagesDir, { withFileTypes: true })) {
+  for (const entry of readdirSync(packagesRoot, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
 
-    const packageJsonPath = join(packagesDir, entry.name, "package.json");
+    const packageJsonPath = resolve(packagesRoot, entry.name, "package.json");
+    if (!isPathInside(packagesRoot, packageJsonPath)) continue;
     if (!existsSync(packageJsonPath)) continue;
 
     const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
@@ -25,10 +27,13 @@ export function readReleasePackages(options = {}) {
     if (typeof packageJson.version !== "string" || packageJson.version === "")
       continue;
 
+    const changelogPath = resolve(packagesRoot, entry.name, "CHANGELOG.md");
+    if (!isPathInside(packagesRoot, changelogPath)) continue;
+
     packages.push({
       name: packageJson.name,
       version: packageJson.version,
-      changelogPath: join(packagesDir, entry.name, "CHANGELOG.md"),
+      changelogPath,
     });
   }
 
@@ -81,13 +86,18 @@ export function extractVersionSection(options) {
 
 export function buildGitHubReleaseBody(options) {
   const packages = options.packages ?? readReleasePackages(options);
+  const packagesRoot = resolve(options.packagesDir ?? DEFAULT_PACKAGES_DIR);
   const releasePackage = matchReleaseTag({ tag: options.tag, packages });
+  const changelogPath = resolve(releasePackage.changelogPath);
 
-  if (!existsSync(releasePackage.changelogPath)) {
+  if (
+    !isPathInside(packagesRoot, changelogPath) ||
+    !existsSync(changelogPath)
+  ) {
     throw new Error(`Cannot find a changelog for "${releasePackage.name}".`);
   }
 
-  const changelog = readFileSync(releasePackage.changelogPath, "utf8");
+  const changelog = readFileSync(changelogPath, "utf8");
   const section = extractVersionSection({
     changelog,
     version: releasePackage.version,
@@ -95,7 +105,7 @@ export function buildGitHubReleaseBody(options) {
 
   if (section == null) {
     throw new Error(
-      `Cannot find version "${releasePackage.version}" in ${releasePackage.changelogPath}.`,
+      `Cannot find version "${releasePackage.version}" in ${changelogPath}.`,
     );
   }
 
@@ -128,6 +138,14 @@ function findNextVersionHeading(options) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isPathInside(basePath, candidatePath) {
+  const relativePath = relative(basePath, candidatePath);
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !isAbsolute(relativePath))
+  );
 }
 
 if (
