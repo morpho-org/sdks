@@ -46,24 +46,7 @@ jobs:
 
       - name: Detect pending changesets
         id: pending-changesets
-        shell: bash
-        run: |
-          shopt -s nullglob
-
-          pending=()
-          for changeset in .changeset/*.md; do
-            if [ "$(basename "$changeset")" != "README.md" ]; then
-              pending+=("$changeset")
-            fi
-          done
-
-          if [ "${#pending[@]}" -gt 0 ]; then
-            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
-            echo "Pending changesets:"
-            printf '%s\n' "${pending[@]}"
-          else
-            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/release/detect-pending-changesets.mjs
 
       - name: Skip until version PR is merged
         if: steps.pending-changesets.outputs.has_changesets == 'true'
@@ -144,73 +127,7 @@ jobs:
           for tag in "${tags[@]}"; do
             body_file="${releases_dir}/${tag//\//__}.md"
 
-            node --input-type=module - "${tag}" "${body_file}" <<'NODE'
-          import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
-          import { join } from "node:path";
-
-          const [, , tag, bodyFile] = process.argv;
-          const packages = [];
-
-          for (const entry of readdirSync("packages", { withFileTypes: true })) {
-            if (!entry.isDirectory()) continue;
-
-            const packageJsonPath = join("packages", entry.name, "package.json");
-            if (!existsSync(packageJsonPath)) continue;
-
-            const packageJson = JSON.parse(readFileSync(packageJsonPath, "utf8"));
-            packages.push({
-              name: packageJson.name,
-              changelogPath: join("packages", entry.name, "CHANGELOG.md"),
-            });
-          }
-
-          packages.sort((left, right) => right.name.length - left.name.length);
-
-          let matchedPackage;
-          let version;
-          for (const candidate of packages) {
-            for (const separator of ["@", "-v"]) {
-              const prefix = `${candidate.name}${separator}`;
-              if (tag.startsWith(prefix)) {
-                matchedPackage = candidate;
-                version = tag.slice(prefix.length);
-                break;
-              }
-            }
-
-            if (matchedPackage != null) break;
-          }
-
-          if (matchedPackage == null || version == null) {
-            throw new Error(`Cannot map tag "${tag}" to a package.`);
-          }
-
-          if (!existsSync(matchedPackage.changelogPath)) {
-            throw new Error(`Cannot find a changelog for "${matchedPackage.name}".`);
-          }
-
-          const changelog = readFileSync(matchedPackage.changelogPath, "utf8");
-          const heading = new RegExp(`^##\\s+${escapeRegExp(version)}(?:\\s|$).*`, "m");
-          const match = heading.exec(changelog);
-          if (match == null) {
-            throw new Error(`Cannot find version "${version}" in ${matchedPackage.changelogPath}.`);
-          }
-
-          const sectionStart = match.index;
-          const sectionTail = changelog.slice(sectionStart + match[0].length);
-          const nextSection = sectionTail.search(/^##\s+/m);
-          const sectionEnd =
-            nextSection === -1
-              ? changelog.length
-              : sectionStart + match[0].length + nextSection;
-          const section = changelog.slice(sectionStart, sectionEnd).trim();
-
-          writeFileSync(bodyFile, `${section}\n`);
-
-          function escapeRegExp(value) {
-            return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-          }
-          NODE
+            node scripts/release/github-release-body.mjs "${tag}" "${body_file}"
 
             if gh release view "${tag}" >/dev/null 2>&1; then
               gh release edit "${tag}" --title "${tag}" --notes-file "${body_file}" "${prerelease_args[@]}"

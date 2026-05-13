@@ -44,24 +44,7 @@ jobs:
 
       - name: Detect pending changesets
         id: pending-changesets
-        shell: bash
-        run: |
-          shopt -s nullglob
-
-          pending=()
-          for changeset in .changeset/*.md; do
-            if [ "$(basename "$changeset")" != "README.md" ]; then
-              pending+=("$changeset")
-            fi
-          done
-
-          if [ "${#pending[@]}" -gt 0 ]; then
-            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
-            echo "Pending changesets:"
-            printf '%s\n' "${pending[@]}"
-          else
-            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/release/detect-pending-changesets.mjs
 
       - name: Stop if there is nothing to version
         if: steps.pending-changesets.outputs.has_changesets == 'false'
