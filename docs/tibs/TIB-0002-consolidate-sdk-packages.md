@@ -42,6 +42,8 @@ explicitly unsupported.
   maintained packages, while making them direct dependencies of `morpho-sdk` only.
 - Re-export every fetcher from `blue-sdk-viem` and the classes from `blue-sdk` through
   `morpho-sdk`.
+- Re-export every public utility from `morpho-ts` through `@morpho-org/morpho-sdk/utils`, with
+  grouped utility subpaths where the source package already has a cohesive domain.
 - Move selected bundler helpers and narrow reallocation helpers behind `morpho-sdk`.
 - Deprecate legacy packages only after replacement APIs exist or the no-replacement decision is
   documented.
@@ -117,6 +119,8 @@ direct dependencies. Other packages keep their peer dependency model.
 - re-exporting every fetcher from `blue-sdk-viem` through `@morpho-org/morpho-sdk/fetch`;
 - depending directly on `morpho-ts` where shared TypeScript utilities are part of its runtime or
   public API implementation;
+- re-exporting every public `morpho-ts` utility through `@morpho-org/morpho-sdk/utils`, with
+  grouped subpaths for cohesive utility domains rather than one package subpath per helper;
 - exposing selected bundler action and bundle encoding APIs currently required by `morpho-sdk` and
   migration flows;
 - owning narrow public allocator reallocation types and helpers currently depending on
@@ -126,9 +130,9 @@ direct dependencies. Other packages keep their peer dependency model.
 
 Keep all consolidated consumer imports under the single `@morpho-org/morpho-sdk` package name.
 Do not create package-name variants such as `@morpho-org/morpho-sdk-*` for these surfaces. Minimize
-package subpaths: thin value, type, utility, action, client, and entity domains are re-exported from
-the package root, while only fetch utilities, ABI literals, and side-effecting augmentation keep
-dedicated public subpaths.
+package subpaths: thin value, type, action, client, and entity domains are re-exported from the
+package root, while fetch utilities, ABI literals, grouped utility domains, and side-effecting
+augmentation keep dedicated public subpaths.
 
 - `@morpho-org/morpho-sdk`: the primary application import surface. Re-export current
   `morpho-sdk` client, action, entity, helper, and type APIs from the root, and add root re-exports
@@ -140,15 +144,23 @@ dedicated public subpaths.
 - `@morpho-org/morpho-sdk/abis`: expose `blue-sdk-viem` ABI literals and the complete
   `bundler-sdk-viem` ABI barrel. This remains a dedicated subpath because ABI arrays are large,
   specialized constants that many root consumers do not need.
+- `@morpho-org/morpho-sdk/utils`: re-export every public utility from `morpho-ts`, including
+  `time`, `format`, `utils`, `types`, and `urls`, plus current `morpho-sdk` helper functions and
+  the thin utility exports from `blue-sdk` and `blue-sdk-viem`. This is the canonical utility import
+  path.
+- `@morpho-org/morpho-sdk/utils/time`: mirror `packages/morpho-ts/src/time/index.ts`.
+- `@morpho-org/morpho-sdk/utils/format`: mirror `packages/morpho-ts/src/format/index.ts`.
 - `@morpho-org/morpho-sdk/augment`: expose the optional side-effecting module augmentation
   entrypoint. This is the only side-effecting public subpath.
 
 Example imports after consolidation:
 
 ```ts
-import { ChainId, Market, Token, Vault, safeParseUnits } from "@morpho-org/morpho-sdk";
+import { ChainId, Market, Token, Vault } from "@morpho-org/morpho-sdk";
 import { fetchMarket, fetchToken, fetchVault } from "@morpho-org/morpho-sdk/fetch";
 import { bundler3Abi } from "@morpho-org/morpho-sdk/abis";
+import { Time, deepFreeze, format, safeParseUnits } from "@morpho-org/morpho-sdk/utils";
+import { formatLongString } from "@morpho-org/morpho-sdk/utils/format";
 import "@morpho-org/morpho-sdk/augment";
 ```
 
@@ -178,27 +190,53 @@ Implement the package export map exactly with these public subpaths:
         "types": "./lib/esm/fetch/index.d.ts",
         "import": "./lib/esm/fetch/index.js",
         "require": "./lib/cjs/fetch/index.js"
+      },
+      "./utils": {
+        "types": "./lib/esm/utils/index.d.ts",
+        "import": "./lib/esm/utils/index.js",
+        "require": "./lib/cjs/utils/index.js"
+      },
+      "./utils/format": {
+        "types": "./lib/esm/utils/format/index.d.ts",
+        "import": "./lib/esm/utils/format/index.js",
+        "require": "./lib/cjs/utils/format/index.js"
+      },
+      "./utils/time": {
+        "types": "./lib/esm/utils/time/index.d.ts",
+        "import": "./lib/esm/utils/time/index.js",
+        "require": "./lib/cjs/utils/time/index.js"
       }
     }
   }
 }
 ```
 
-Implement only `src/fetch/index.ts`, `src/abis/index.ts`, and `src/augment/index.ts` as package
+Implement only `src/fetch/index.ts`, `src/abis/index.ts`, `src/utils/index.ts`,
+`src/utils/format/index.ts`, `src/utils/time/index.ts`, and `src/augment/index.ts` as package
 subpath barrels. All other new barrels are internal source organization and are re-exported from
-`packages/morpho-sdk/src/index.ts`.
+`packages/morpho-sdk/src/index.ts` or `packages/morpho-sdk/src/utils/index.ts`.
 Do not add public package subpaths such as `./actions`, `./client`, `./entities`, `./helpers`,
-`./utils`, `./types`, `./math`, `./constants`, `./addresses`, `./errors`, or `./signatures`.
+`./types`, `./math`, `./constants`, `./addresses`, `./errors`, `./signatures`, or one-off utility
+subpaths such as `./utils/deepFreeze`.
 
 - `src/index.ts` re-exports the current `morpho-sdk` action, client, entity, helper, and type
   barrels, plus the new internal barrels for root-level `blue-sdk` and `blue-sdk-viem` surfaces.
 - `src/entities/index.ts` is an internal root barrel that re-exports public `blue-sdk` market,
   token, holding, user, position, and vault entity entrypoints rather than a hand-maintained class
   list, so abstract/base entities such as vault adapter classes are not silently omitted.
-- `src/utils/index.ts` is an internal root barrel. It re-exports current `morpho-sdk` helper
-  functions from `src/helpers/index.ts`, `CapacityLimitReason` and `CapacityLimit` from `blue-sdk`,
-  and `safeParseNumber`, `safeParseUnits`, `safeGetAddress`, `restructure`, and
+- `src/utils/index.ts` is the public utility barrel. It re-exports every public export from
+  `morpho-ts` root, including `Time`, `format`, formatter classes, format helpers, URL constants,
+  utility functions, and utility types. It also re-exports current `morpho-sdk` helper functions
+  from `src/helpers/index.ts`, `CapacityLimitReason` and `CapacityLimit` from `blue-sdk`, and
+  `safeParseNumber`, `safeParseUnits`, `safeGetAddress`, `restructure`, and
   `readContractRestructured` from `blue-sdk-viem`.
+- `src/utils/time/index.ts` and `src/utils/format/index.ts` are grouped utility subpaths that
+  mirror the existing `morpho-ts` `time` and `format` barrels. Add more `utils/*` package subpaths
+  only when a source package exposes a cohesive utility domain; do not create one subpath per
+  utility import.
+- Before `format` is re-exported through `morpho-sdk`, remove the current `String.prototype`
+  mutation from the `morpho-ts` formatter implementation and replace it with a local helper. The
+  `utils` entrypoints must stay side-effect free.
 - `src/types/index.ts` remains the merged root type barrel. It keeps the existing `morpho-sdk` type
   exports, except that the public `FetchParameters` name is owned by `blue-sdk-viem` and includes
   optional `chainId`. It also adds `Address`, `MarketId`, `BigIntish`, `Loadable`, `Failable`,
@@ -217,11 +255,14 @@ or side-effecting augmentation code.
 - Set `package.json#sideEffects` to the narrow augmentation whitelist shown in the export map
   snippet. This marks every non-augmentation artifact as side-effect free while preserving the
   explicit `@morpho-org/morpho-sdk/augment` side effect.
+- Do not add `utils` or `utils/format` to the `sideEffects` whitelist. If a re-exported
+  `morpho-ts` utility currently has a top-level mutation, refactor that utility before exposing it
+  through `morpho-sdk`.
 - Do not set package-wide `sideEffects` to `true`; the whitelist is the side-effect-free posture
   with only augmentation opted back in.
 - If augmentation is removed in a later TIB, replace the whitelist with `"sideEffects": false`.
-- `src/index.ts`, `src/fetch/index.ts`, and `src/abis/index.ts` must never top-level import
-  `src/augment/index.ts` or any module that mutates `blue-sdk` prototypes.
+- `src/index.ts`, `src/fetch/index.ts`, `src/abis/index.ts`, and `src/utils/**` must never
+  top-level import `src/augment/index.ts` or any module that mutates `blue-sdk` prototypes.
 - Root imports from `blue-sdk-viem` must target pure source modules directly, such as signatures,
   types, or utils. The `morpho-sdk` root must not import the `blue-sdk-viem` root barrel because
   that barrel also re-exports fetchers and ABIs.
@@ -233,8 +274,9 @@ or side-effecting augmentation code.
   explicit for older bundlers' dead-code elimination.
 - Phase 2 must include a bundle-impact verification step that compares the consolidated branch
   against `origin/main` using the same bundler configuration. The check must cover at least a root
-  import, a `/fetch` import, a `/abis` import, and an `/augment` import, and report whether root
-  imports accidentally retain fetch, ABI, or augmentation code.
+  import, a `/fetch` import, a `/abis` import, a `/utils` import, a grouped utility subpath import,
+  and an `/augment` import, and report whether root imports accidentally retain fetch, ABI, utility,
+  or augmentation code.
 
 ### Developer Experience Preservation
 
@@ -390,10 +432,11 @@ deprecation campaign.
   comparisons across package boundaries.
 - **Phase 2 -- Re-export dependency surfaces:** Re-export every fetcher from `blue-sdk-viem`
   through `@morpho-org/morpho-sdk/fetch`, the classes and thin utility/type surfaces from
-  `blue-sdk` through the `morpho-sdk` root, and the full ABI surface through
-  `@morpho-org/morpho-sdk/abis`, so application code can keep a single Morpho package entrypoint.
-  Add `package.json#sideEffects`, isolate augmentation under `@morpho-org/morpho-sdk/augment`, and
-  run the bundle-impact verification against `origin/main`.
+  `blue-sdk` through the `morpho-sdk` root, every public utility from `morpho-ts` through
+  `@morpho-org/morpho-sdk/utils` and grouped `utils/*` subpaths where relevant, and the full ABI
+  surface through `@morpho-org/morpho-sdk/abis`, so application code can keep a single Morpho
+  package entrypoint. Add `package.json#sideEffects`, isolate augmentation under
+  `@morpho-org/morpho-sdk/augment`, and run the bundle-impact verification against `origin/main`.
 - **Phase 3 -- Preserve peer dependencies elsewhere:** Keep `blue-sdk`, `blue-sdk-viem`, and
   `morpho-ts` as peer dependencies for packages other than `morpho-sdk` unless a separate package
   decision changes that relationship.
