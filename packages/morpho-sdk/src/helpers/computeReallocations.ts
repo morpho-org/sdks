@@ -37,6 +37,8 @@ export const computeReallocations = ({
 }): readonly VaultReallocation[] => {
   if (options?.enabled === false) return [];
 
+  // ReallocationData does not retain the fetch block; pass that block timestamp
+  // to compute against the same accrued state, otherwise Market defaults to lastUpdate.
   const market = data.getMarket(marketId).accrueInterest(options?.timestamp);
 
   const newTotalBorrowAssets = market.totalBorrowAssets + borrowAmount;
