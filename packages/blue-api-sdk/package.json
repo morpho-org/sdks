@@ -26,12 +26,12 @@
     "@morpho-org/morpho-ts": "workspace:^"
   },
   "devDependencies": {
-    "@graphql-codegen/cli": "^5.0.3",
+    "@graphql-codegen/cli": "^7.0.0",
     "@graphql-codegen/typescript": "^6.0.1",
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "graphql": "^16.14.0",
-    "typescript": "^5.7.2"
+    "typescript": "^6.0.3"
   },
   "publishConfig": {
     "main": "lib/index.js",

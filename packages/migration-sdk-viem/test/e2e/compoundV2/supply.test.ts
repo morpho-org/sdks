@@ -48,7 +48,7 @@ const TEST_CONFIGS: {
 }[ChainId.EthMainnet][] = [
   {
     chainId: ChainId.EthMainnet,
-    testFn: test[ChainId.EthMainnet],
+    testFn: test[ChainId.EthMainnet] as unknown as TestAPI<ViemTestContext>,
     markets: {
       cEth: {
         vault: vaults[ChainId.EthMainnet].steakEth.address,
@@ -73,7 +73,7 @@ const TEST_CONFIGS: {
   // {
   //   chainId: ChainId.BaseMainnet,
   //   //@ts-expect-error
-  //   testFn: test[ChainId.BaseMainnet],
+  //   testFn: test[ChainId.BaseMainnet] as unknown as TestAPI<ViemTestContext>,
   //   markets: {
   //     mWeth: {
   //       vault: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1" as Address,

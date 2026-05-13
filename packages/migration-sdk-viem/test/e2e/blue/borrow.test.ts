@@ -46,7 +46,7 @@ const TEST_CONFIGS: {
 }[] = [
   {
     chainId: ChainId.EthMainnet,
-    testFn: test[ChainId.EthMainnet],
+    testFn: test[ChainId.EthMainnet] as unknown as TestAPI<ViemTestContext>,
     marketFrom: markets[ChainId.EthMainnet].eth_wstEth_2,
     marketTo: new MarketParams({
       ...markets[ChainId.EthMainnet].eth_wstEth_2,
@@ -55,8 +55,7 @@ const TEST_CONFIGS: {
   },
   {
     chainId: ChainId.BaseMainnet,
-    //@ts-expect-error
-    testFn: test[ChainId.BaseMainnet],
+    testFn: test[ChainId.BaseMainnet] as unknown as TestAPI<ViemTestContext>,
     marketFrom: new MarketParams({
       collateralToken: "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452",
       loanToken: "0x4200000000000000000000000000000000000006",

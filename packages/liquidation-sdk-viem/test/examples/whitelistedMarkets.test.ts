@@ -47,10 +47,6 @@ interface SwapAmountConfig {
   dstAmount: string;
 }
 
-fetchMock.config.fallbackToNetwork = true;
-fetchMock.config.overwriteRoutes = false;
-fetchMock.config.warnOnFallback = false;
-
 const oneInchSwapApiMatcher = new RegExp(`${OneInch.getSwapApiUrl(1)}.*`);
 const paraSwapPriceApiMatcher = new RegExp(`${Paraswap.API_URL}/prices.*`);
 const paraSwapTxApiMatcher = new RegExp(`${Paraswap.API_URL}/transactions.*`);
@@ -67,6 +63,7 @@ describe("whitelisted markets", () => {
   let swapMockAddress: Address;
 
   beforeEach<LiquidationTestContext<typeof mainnet>>(async ({ client }) => {
+    fetchMock.spyGlobal();
     swapMockAddress = (await client.deployContractWait(swapMock))
       .contractAddress;
 
@@ -86,7 +83,8 @@ describe("whitelisted markets", () => {
   afterEach(async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    fetchMock.restore();
+    fetchMock.hardReset();
+    fetchMock.unmockGlobal();
   });
 
   const syncTimestamp = async (client: AnvilTestClient, timestamp?: bigint) => {
@@ -111,8 +109,8 @@ describe("whitelisted markets", () => {
     for (const config of configs) {
       chain = chain.get(
         oneInchSwapApiMatcher,
-        async (uri) => {
-          const url = new URL(uri);
+        async ({ url: requestUrl }) => {
+          const url = new URL(requestUrl);
           const dstToken = url.searchParams.get("dst") as Address;
 
           const amount = await encoder.client.readContract({
@@ -160,7 +158,7 @@ describe("whitelisted markets", () => {
       );
     }
 
-    chain.mock(oneInchSwapApiMatcher, 404);
+    chain.route(oneInchSwapApiMatcher, 404);
   };
 
   const mockParaSwap = (
@@ -173,8 +171,8 @@ describe("whitelisted markets", () => {
     for (const config of configs) {
       priceChain = priceChain.get(
         paraSwapPriceApiMatcher,
-        async (uri) => {
-          const url = new URL(uri);
+        async ({ url: requestUrl }) => {
+          const url = new URL(requestUrl);
           const srcToken = url.searchParams.get("srcToken") as Address;
           const destToken = url.searchParams.get("destToken") as Address;
 
@@ -236,8 +234,10 @@ describe("whitelisted markets", () => {
         },
       );
 
-      txChain = txChain.post(paraSwapTxApiMatcher, async (_uri, body) => {
-        const { srcToken, destToken } = body as BuildTxInput;
+      txChain = txChain.post(paraSwapTxApiMatcher, async ({ options }) => {
+        const { srcToken, destToken } = JSON.parse(
+          options.body as string,
+        ) as BuildTxInput;
 
         const amount = await encoder.client.readContract({
           address: destToken as Address,
@@ -276,8 +276,8 @@ describe("whitelisted markets", () => {
       });
     }
 
-    priceChain.mock(paraSwapPriceApiMatcher, 404);
-    txChain.mock(paraSwapTxApiMatcher, 404);
+    priceChain.route(paraSwapPriceApiMatcher, 404);
+    txChain.route(paraSwapTxApiMatcher, 404);
   };
 
   const mockPendleOperations = (
@@ -289,9 +289,9 @@ describe("whitelisted markets", () => {
     fetchMock
       .get(
         pendleSwapApiMatcher,
-        async (url) => {
-          const parsedUrl = new URL(url);
-          const marketSegment = url.split("/markets/")[1];
+        async ({ url: requestUrl }) => {
+          const parsedUrl = new URL(requestUrl);
+          const marketSegment = requestUrl.split("/markets/")[1];
           if (!marketSegment)
             throw new Error("Market segment is undefined in the URL.");
           const market = marketSegment.split("/swap")[0];
@@ -375,13 +375,13 @@ describe("whitelisted markets", () => {
           },
         },
       )
-      .mock(pendleSwapApiMatcher, 404);
+      .route(pendleSwapApiMatcher, 404);
 
     fetchMock
       .get(
         pendleRedeemApiMatcher,
-        async (url) => {
-          const parsedUrl = new URL(url);
+        async ({ url: requestUrl }) => {
+          const parsedUrl = new URL(requestUrl);
           const receiver = parsedUrl.searchParams.get("receiver");
           const yt = parsedUrl.searchParams.get("yt") as Address;
           const amountIn = BigInt(parsedUrl.searchParams.get("amountIn")!);
@@ -449,7 +449,7 @@ describe("whitelisted markets", () => {
           },
         },
       )
-      .mock(pendleRedeemApiMatcher, 404);
+      .route(pendleRedeemApiMatcher, 404);
   };
 
   // Cannot run concurrently because `fetch` is mocked globally.

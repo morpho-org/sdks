@@ -30,8 +30,8 @@
   },
   "dependencies": {
     "lodash.kebabcase": "^4.1.1",
-    "viem-deal": "^2.0.3",
-    "viem-tracer": "^1.7.1"
+    "viem-deal": "^2.0.4",
+    "viem-tracer": "^1.8.0"
   },
   "peerDependencies": {
     "@playwright/test": "^1.48.1",
@@ -47,13 +47,13 @@
     }
   },
   "devDependencies": {
-    "@playwright/test": "^1.48.1",
+    "@playwright/test": "^1.60.0",
     "@types/lodash.kebabcase": "^4.1.9",
-    "@types/node": "^22.13.1",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
-    "vitest": "^3.0.5",
-    "wagmi": "^2.14.10"
+    "@types/node": "^25.7.0",
+    "typescript": "^6.0.3",
+    "viem": "^2.48.11",
+    "vitest": "^4.1.6",
+    "wagmi": "^3.6.14"
   },
   "publishConfig": {
     "exports": {

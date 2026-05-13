@@ -32,10 +32,6 @@ interface SwapAmountConfig {
   dstAmount: string;
 }
 
-fetchMock.config.fallbackToNetwork = true;
-fetchMock.config.overwriteRoutes = false;
-fetchMock.config.warnOnFallback = false;
-
 const oneInchSwapApiMatcher = new RegExp(`${OneInch.getSwapApiUrl(1)}.*`);
 const paraSwapPriceApiMatcher = new RegExp(`${Paraswap.API_URL}/prices.*`);
 const paraSwapTxApiMatcher = new RegExp(`${Paraswap.API_URL}/transactions.*`);
@@ -48,6 +44,7 @@ describe("should liquidate Spectra Tokens", () => {
   let swapMockAddress: Address;
 
   beforeEach<LiquidationTestContext<typeof mainnet>>(async ({ client }) => {
+    fetchMock.spyGlobal();
     swapMockAddress = (await client.deployContractWait(swapMock))
       .contractAddress;
 
@@ -63,7 +60,8 @@ describe("should liquidate Spectra Tokens", () => {
   afterEach(async () => {
     vi.useRealTimers();
     vi.restoreAllMocks();
-    fetchMock.restore();
+    fetchMock.hardReset();
+    fetchMock.unmockGlobal();
   });
 
   const syncTimestamp = async (client: AnvilTestClient, timestamp?: bigint) => {
@@ -88,8 +86,8 @@ describe("should liquidate Spectra Tokens", () => {
     for (const config of configs) {
       chain = chain.get(
         oneInchSwapApiMatcher,
-        async (uri) => {
-          const url = new URL(uri);
+        async ({ url: requestUrl }) => {
+          const url = new URL(requestUrl);
           const dstToken = url.searchParams.get("dst") as Address;
 
           const amount = await encoder.client.readContract({
@@ -137,7 +135,7 @@ describe("should liquidate Spectra Tokens", () => {
       );
     }
 
-    chain.mock(oneInchSwapApiMatcher, 404);
+    chain.route(oneInchSwapApiMatcher, 404);
   };
 
   const mockParaSwap = (
@@ -150,8 +148,8 @@ describe("should liquidate Spectra Tokens", () => {
     for (const config of configs) {
       priceChain = priceChain.get(
         paraSwapPriceApiMatcher,
-        async (uri) => {
-          const url = new URL(uri);
+        async ({ url: requestUrl }) => {
+          const url = new URL(requestUrl);
           const srcToken = url.searchParams.get("srcToken") as Address;
           const destToken = url.searchParams.get("destToken") as Address;
 
@@ -213,8 +211,10 @@ describe("should liquidate Spectra Tokens", () => {
         },
       );
 
-      txChain = txChain.post(paraSwapTxApiMatcher, async (_uri, body) => {
-        const { srcToken, destToken } = body as BuildTxInput;
+      txChain = txChain.post(paraSwapTxApiMatcher, async ({ options }) => {
+        const { srcToken, destToken } = JSON.parse(
+          options.body as string,
+        ) as BuildTxInput;
 
         const amount = await encoder.client.readContract({
           address: destToken as Address,
@@ -253,8 +253,8 @@ describe("should liquidate Spectra Tokens", () => {
       });
     }
 
-    priceChain.mock(paraSwapPriceApiMatcher, 404);
-    txChain.mock(paraSwapTxApiMatcher, 404);
+    priceChain.route(paraSwapPriceApiMatcher, 404);
+    txChain.route(paraSwapTxApiMatcher, 404);
   };
 
   // Cannot run concurrently because `fetch` is mocked globally.

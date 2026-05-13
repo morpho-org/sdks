@@ -79,7 +79,7 @@ export function useVaultMarketConfigs<
     const { data, error, isFetching } = orderedResults[index]!;
 
     (result.data[vault] ??= {})[marketId] = data;
-    (result.error[vault] ??= {})[marketId] = error;
+    (result.error[vault] ??= {})[marketId] = error as never;
     (result.isFetching[vault] ??= {})[marketId] = isFetching;
 
     if (isFetching) result.isFetchingAny = true;

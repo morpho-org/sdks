@@ -23,7 +23,7 @@
     "test": "vitest"
   },
   "dependencies": {
-    "@noble/hashes": "^1.6.1",
+    "@noble/hashes": "^2.2.0",
     "@types/lodash.isplainobject": "^4.0.9",
     "@types/lodash.mergewith": "^4.6.9",
     "lodash.isplainobject": "^4.0.6",
@@ -35,9 +35,9 @@
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
-    "vitest": "^3.0.5"
+    "typescript": "^6.0.3",
+    "viem": "^2.48.11",
+    "vitest": "^4.1.6"
   },
   "publishConfig": {
     "main": "lib/index.js",

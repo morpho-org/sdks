@@ -1,4 +1,9 @@
-import type { Abi, ContractFunctionArgs, ContractFunctionName } from "viem";
+import type {
+  Abi,
+  ContractFunctionArgs,
+  ContractFunctionName,
+  Hex,
+} from "viem";
 import { type ReadContractData, readContractQueryOptions } from "wagmi/query";
 import { replaceDeepEqual } from "../utils/index.js";
 
@@ -86,6 +91,6 @@ export function useReadContracts<
         enabled,
         structuralSharing: query.structuralSharing ?? replaceDeepEqual,
       };
-    }),
-  });
+    }) as never,
+  }) as UseReadContractsReturnType<abi, functionName, args, selectData>;
 }

@@ -73,7 +73,7 @@ export function useVaultUsers<
     const { data, error, isFetching } = orderedResults[index]!;
 
     (result.data[vault] ??= {})[user] = data;
-    (result.error[vault] ??= {})[user] = error;
+    (result.error[vault] ??= {})[user] = error as never;
     (result.isFetching[vault] ??= {})[user] = isFetching;
 
     if (isFetching) result.isFetchingAny = true;

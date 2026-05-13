@@ -56,7 +56,7 @@ const TEST_CONFIGS: {
 }[ChainId.EthMainnet | ChainId.BaseMainnet][] = [
   {
     chainId: ChainId.EthMainnet,
-    testFn: test[ChainId.EthMainnet],
+    testFn: test[ChainId.EthMainnet] as unknown as TestAPI<ViemTestContext>,
     markets: {
       weth: {
         marketTo: markets[ChainId.EthMainnet].eth_wstEth_2,
@@ -82,8 +82,7 @@ const TEST_CONFIGS: {
   },
   {
     chainId: ChainId.BaseMainnet,
-    //@ts-expect-error
-    testFn: test[ChainId.BaseMainnet],
+    testFn: test[ChainId.BaseMainnet] as unknown as TestAPI<ViemTestContext>,
     markets: {
       weth: {
         marketTo: markets[ChainId.BaseMainnet].eth_wstEth,

@@ -38,11 +38,11 @@
     "@morpho-org/simulation-sdk-wagmi": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
-    "@types/lodash": "^4.17.12",
-    "lodash": "^4.17.21",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
-    "vitest": "^3.0.5"
+    "@types/lodash": "^4.17.24",
+    "lodash": "^4.18.1",
+    "typescript": "^6.0.3",
+    "viem": "^2.48.11",
+    "vitest": "^4.1.6"
   },
   "publishConfig": {
     "main": "lib/index.js",

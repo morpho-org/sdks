@@ -22,21 +22,23 @@ const TEST_CONFIGS = [
   {
     chainId: ChainId.EthMainnet,
     aWNative: "0x4d5F47FA6A74757f35C14fD3a6Ef8E3C9BC514E8",
-    testFn: test[ChainId.EthMainnet] as TestAPI<ViemTestContext>,
+    testFn: test[ChainId.EthMainnet] as unknown as TestAPI<ViemTestContext>,
     mmWNative: vaults[ChainId.EthMainnet].steakEth.address,
     wNativeMinPrice: 2000,
   },
   {
     chainId: ChainId.BaseMainnet,
     aWNative: "0xD4a0e0b9149BCee3C920d2E00b5dE09138fd8bb7",
-    testFn: test[ChainId.BaseMainnet] as TestAPI<ViemTestContext>,
+    testFn: test[ChainId.BaseMainnet] as unknown as TestAPI<ViemTestContext>,
     mmWNative: "0xa0E430870c4604CcfC7B38Ca7845B1FF653D0ff1",
     wNativeMinPrice: 2000,
   },
   {
     chainId: ChainId.ArbitrumMainnet,
     aWNative: "0xe50fA9b3c56FfB159cB0FCA61F5c9D750e8128c8",
-    testFn: test[ChainId.ArbitrumMainnet] as TestAPI<ViemTestContext>,
+    testFn: test[
+      ChainId.ArbitrumMainnet
+    ] as unknown as TestAPI<ViemTestContext>,
     mmWNative: "0xBD14bEa2eCECeCD5F32149B0f84BE7f7F446B964",
     wNativeMinPrice: 2000,
   },

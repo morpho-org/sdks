@@ -32,10 +32,10 @@
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
-    "hardhat": "^2.22.18",
-    "typescript": "^5.7.2",
-    "viem": "^2.33.3",
-    "vitest": "^3.0.5"
+    "hardhat": "^3.4.5",
+    "typescript": "^6.0.3",
+    "viem": "^2.48.11",
+    "vitest": "^4.1.6"
   },
   "publishConfig": {
     "main": "lib/index.js",
