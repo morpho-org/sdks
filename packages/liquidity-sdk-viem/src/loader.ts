@@ -6,24 +6,17 @@ import {
   fetchVault,
   fetchVaultMarketConfig,
 } from "@morpho-org/blue-sdk-viem";
-import { entries, fromEntries, isDefined } from "@morpho-org/morpho-ts";
 import {
-  type MaybeDraft,
   type PublicReallocation,
-  SimulationState,
-} from "@morpho-org/simulation-sdk";
+  ReallocationData,
+} from "@morpho-org/morpho-sdk";
+import { entries, fromEntries, isDefined } from "@morpho-org/morpho-ts";
 import DataLoader from "dataloader";
 import type { Chain, Client, Transport } from "viem";
 import { getBlock } from "viem/actions";
 import { apiSdk } from "./api/index.js";
 
 export interface LiquidityParameters {
-  /**
-   * The delay to consider between the moment reallocations are calculated and the moment they are committed onchain.
-   * Defaults to 1h.
-   */
-  delay?: bigint;
-
   /**
    * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
    */
@@ -40,9 +33,9 @@ export class LiquidityLoader<chain extends Chain = Chain> {
   protected readonly dataLoader: DataLoader<
     MarketId,
     {
-      startState: SimulationState;
-      endState: MaybeDraft<SimulationState>;
-      withdrawals: PublicReallocation[];
+      startState: ReallocationData;
+      endState: ReallocationData;
+      withdrawals: readonly PublicReallocation[];
       targetBorrowUtilization: bigint;
     }
   >;
@@ -177,9 +170,8 @@ export class LiquidityLoader<chain extends Chain = Chain> {
             ),
           ]);
 
-        const startState = new SimulationState({
+        const startState = new ReallocationData({
           chainId,
-          block,
           markets: fromEntries(markets.map((market) => [market.id, market])),
           vaults: fromEntries(vaults.map((vault) => [vault.address, vault])),
           holdings: fromEntries(
@@ -231,6 +223,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
             const { data: endState, withdrawals } =
               startState.getMarketPublicReallocations(uniqueKey, {
                 ...parameters,
+                timestamp: block.timestamp,
                 maxWithdrawalUtilization,
                 enabled: true,
               });
