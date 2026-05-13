@@ -1,5 +1,4 @@
 export { computeReallocations } from "./computeReallocations.js";
-export { addTransactionMetadata } from "./metadata.js";
 export {
   APPROVE_ONLY_ONCE_TOKENS,
   DEFAULT_LLTV_BUFFER,
@@ -9,6 +8,7 @@ export {
   MAX_SLIPPAGE_TOLERANCE,
   MAX_TOKEN_APPROVALS,
 } from "./constant.js";
+export { addTransactionMetadata } from "./metadata.js";
 export {
   type InputReallocationData,
   ReallocationData,

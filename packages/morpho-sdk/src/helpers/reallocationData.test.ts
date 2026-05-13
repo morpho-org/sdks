@@ -252,24 +252,24 @@ const makeInput = ({
 });
 
 type ReallocationDataInternals = {
-  applyPublicReallocation(
-    vault: Address,
-    supplyMarketId: MarketId,
-    withdrawal: PublicReallocation,
-    timestamp: bigint,
-  ): ReallocationData;
+  applyPublicReallocation(params: {
+    readonly vault: Address;
+    readonly supplyMarketId: MarketId;
+    readonly withdrawal: PublicReallocation;
+    readonly timestamp: bigint;
+  }): ReallocationData;
 };
 
 const applyPublicReallocation = (
   data: ReallocationData,
   withdrawal: PublicReallocation,
 ) =>
-  (data as unknown as ReallocationDataInternals).applyPublicReallocation(
-    withdrawal.vault,
-    targetParams.id,
+  (data as unknown as ReallocationDataInternals).applyPublicReallocation({
+    vault: withdrawal.vault,
+    supplyMarketId: targetParams.id,
     withdrawal,
-    TIMESTAMP,
-  );
+    timestamp: TIMESTAMP,
+  });
 
 describe("ReallocationData unit coverage", () => {
   test("clones inputs and exposes getters without sharing mutable entity instances", () => {
