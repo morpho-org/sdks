@@ -10,7 +10,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref_name }}-version-pr
@@ -78,13 +77,26 @@ jobs:
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
 
+      - name: Generate Changelog GitHub App Token
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        id: changelog-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
+        with:
+          app-id: ${{ secrets.VERSION_APP_ID }}
+          private-key: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-pull-requests: read
+
       - name: Version packages
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         run: pnpm run version
         env:
-          GITHUB_TOKEN: ${{ github.token }}
+          # @changesets/changelog-github reads GitHub PR metadata through
+          # GITHUB_TOKEN. Keep this token read-only; anything loaded by
+          # `pnpm run version` can read it from process.env.
+          GITHUB_TOKEN: ${{ steps.changelog-token.outputs.token }}
 
-      - name: Generate GitHub App Token
+      - name: Generate Release GitHub App Token
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
