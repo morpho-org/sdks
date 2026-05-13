@@ -11,15 +11,17 @@ import {
 } from "@morpho-org/blue-sdk";
 import { type Address, parseEther, parseUnits, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
-import { ReallocationData } from "../../src/helpers/reallocationData.js";
-import type { InputReallocationData } from "../../src/types/index.js";
+import {
+  type InputReallocationData,
+  ReallocationData,
+} from "../../src/helpers/reallocationData.js";
 
 const timestamp = 12345n;
 
 const tokenA: Address = "0x1111111111111111111111111111111111111111";
 const tokenB: Address = "0x2222222222222222222222222222222222222222";
-const vaultA: Address = "0x000000000000000000000000000000000000000a";
-const vaultC: Address = "0x000000000000000000000000000000000000000c";
+const vaultA: Address = "0x000000000000000000000000000000000000000A";
+const vaultC: Address = "0x000000000000000000000000000000000000000C";
 
 const makeParams = (suffix: string, loanToken: Address) =>
   new MarketParams({

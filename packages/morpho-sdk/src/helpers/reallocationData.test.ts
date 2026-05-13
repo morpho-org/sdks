@@ -4,37 +4,24 @@ import {
   Market,
   type MarketId,
   MarketParams,
-  MarketUtils,
   MathLib,
   Position,
   Vault,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
-import {
-  type InputSimulationState,
-  SimulationState,
-} from "@morpho-org/simulation-sdk";
 import type { Address } from "viem";
 import { maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  type InputReallocationData,
   MissingPublicAllocatorConfigError,
   type PublicReallocation,
-  type ReallocationComputeOptions,
   UnknownReallocationHoldingError,
   UnknownReallocationMarketError,
   UnknownReallocationPositionError,
   UnknownReallocationVaultError,
   UnknownReallocationVaultMarketConfigError,
-  type VaultReallocation,
 } from "../types/index.js";
-import { computeReallocations } from "./computeReallocations.js";
-import {
-  DEFAULT_SUPPLY_TARGET_UTILIZATION,
-  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
-} from "./constant.js";
 import { ReallocationData } from "./reallocationData.js";
 
 const TIMESTAMP = 1_700_000_000n;
@@ -60,7 +47,7 @@ const sourceParams = new MarketParams({
 
 const alternateSourceParams = new MarketParams({
   loanToken: LOAN_TOKEN,
-  collateralToken: "0xae78736cd615f374d3085123a210448e74fc6393",
+  collateralToken: "0xae78736Cd615f374D3085123A210448E74Fc6393",
   oracle: "0x0000000000000000000000000000000000000004",
   irm: "0x0000000000000000000000000000000000000002",
   lltv: 860000000000000000n,
@@ -263,137 +250,6 @@ const makeInput = ({
   },
 });
 
-const makeLegacyState = (input: InputReallocationData) =>
-  new SimulationState({
-    chainId: input.chainId,
-    block: { number: 1n, timestamp: TIMESTAMP },
-    markets: input.markets as InputSimulationState["markets"],
-    vaults: input.vaults as InputSimulationState["vaults"],
-    positions: input.positions as InputSimulationState["positions"],
-    holdings: input.holdings as InputSimulationState["holdings"],
-    vaultMarketConfigs:
-      input.vaultMarketConfigs as InputSimulationState["vaultMarketConfigs"],
-  });
-
-const toLegacyOptions = (options?: ReallocationComputeOptions) =>
-  options == null
-    ? undefined
-    : {
-        ...options,
-        reallocatableVaults:
-          options.reallocatableVaults == null
-            ? undefined
-            : [...options.reallocatableVaults],
-      };
-
-const computeLegacyReallocations = ({
-  reallocationData: data,
-  marketId,
-  borrowAmount,
-  options,
-}: {
-  readonly reallocationData: SimulationState;
-  readonly marketId: MarketId;
-  readonly borrowAmount: bigint;
-  readonly options?: ReallocationComputeOptions;
-}): readonly VaultReallocation[] => {
-  if (options?.enabled === false) return [];
-
-  const timestamp =
-    options?.timestamp == null
-      ? data.block.timestamp
-      : BigInt(options.timestamp);
-  const market = data.getMarket(marketId).accrueInterest(timestamp);
-  const newTotalBorrowAssets = market.totalBorrowAssets + borrowAmount;
-  const newTotalSupplyAssets = market.totalSupplyAssets;
-  const supplyTargetUtilization =
-    options?.supplyTargetUtilization?.[market.params.id] ??
-    options?.defaultSupplyTargetUtilization ??
-    DEFAULT_SUPPLY_TARGET_UTILIZATION;
-
-  if (
-    MarketUtils.getUtilization({
-      totalSupplyAssets: newTotalSupplyAssets,
-      totalBorrowAssets: newTotalBorrowAssets,
-    }) <= supplyTargetUtilization
-  )
-    return [];
-
-  let requiredAssets =
-    supplyTargetUtilization === 0n
-      ? MathLib.MAX_UINT_160
-      : MathLib.wDivDown(newTotalBorrowAssets, supplyTargetUtilization) -
-        newTotalSupplyAssets;
-
-  const { withdrawals, data: friendlyReallocationData } =
-    data.getMarketPublicReallocations(market.id, toLegacyOptions(options));
-  const friendlyReallocationMarket = friendlyReallocationData.getMarket(
-    market.id,
-  );
-
-  if (
-    friendlyReallocationMarket.totalBorrowAssets + borrowAmount >
-    friendlyReallocationMarket.totalSupplyAssets
-  ) {
-    requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
-    withdrawals.push(
-      ...friendlyReallocationData.getMarketPublicReallocations(market.id, {
-        ...toLegacyOptions(options),
-        defaultMaxWithdrawalUtilization: MathLib.WAD,
-        maxWithdrawalUtilization: {},
-      }).withdrawals,
-    );
-  }
-
-  const reallocations = new Map<
-    Address,
-    { readonly id: MarketId; assets: bigint }[]
-  >();
-
-  for (const { vault, ...withdrawal } of withdrawals) {
-    const vaultReallocations = reallocations.get(vault) ?? [];
-    reallocations.set(vault, vaultReallocations);
-
-    const existing = vaultReallocations.find(
-      (item) => item.id === withdrawal.id,
-    );
-    const reallocatedAssets = MathLib.min(withdrawal.assets, requiredAssets);
-
-    if (reallocatedAssets <= 0n) continue;
-
-    if (existing != null) existing.assets += reallocatedAssets;
-    else vaultReallocations.push({ ...withdrawal, assets: reallocatedAssets });
-
-    requiredAssets -= reallocatedAssets;
-    if (requiredAssets === 0n) break;
-  }
-
-  return [...reallocations.entries()]
-    .filter(([, vaultWithdrawals]) => vaultWithdrawals.length > 0)
-    .map(([vault, vaultWithdrawals]) => ({
-      vault,
-      fee: data.getVault(vault).publicAllocatorConfig!.fee,
-      withdrawals: vaultWithdrawals
-        .sort(({ id: idA }, { id: idB }) =>
-          idA > idB ? 1 : idA < idB ? -1 : 0,
-        )
-        .map(({ id, assets }) => ({
-          marketParams: data.getMarket(id).params,
-          amount: assets,
-        })),
-    }));
-};
-
-const serializeReallocations = (reallocations: readonly VaultReallocation[]) =>
-  reallocations.map(({ vault, fee, withdrawals }) => ({
-    vault,
-    fee,
-    withdrawals: withdrawals.map(({ marketParams, amount }) => ({
-      marketId: marketParams.id,
-      amount,
-    })),
-  }));
-
 type ReallocationDataInternals = {
   applyPublicReallocation(
     vault: Address,
@@ -413,71 +269,6 @@ const applyPublicReallocation = (
     withdrawal,
     TIMESTAMP,
   );
-
-describe("ReallocationData parity", () => {
-  test("matches SimulationState for friendly public allocator reallocations", () => {
-    const input = makeInput({
-      targetSupply: 1000n * MathLib.WAD,
-      targetBorrow: 500n * MathLib.WAD,
-      sourceSupply: 1000n * MathLib.WAD,
-      sourceBorrow: 500n * MathLib.WAD,
-    });
-    const options = {
-      enabled: true,
-      timestamp: TIMESTAMP,
-      defaultMaxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
-    } satisfies ReallocationComputeOptions;
-
-    const actual = computeReallocations({
-      reallocationData: new ReallocationData(input),
-      marketId: targetParams.id,
-      borrowAmount: 500n * MathLib.WAD,
-      options,
-    });
-    const expected = computeLegacyReallocations({
-      reallocationData: makeLegacyState(input),
-      marketId: targetParams.id,
-      borrowAmount: 500n * MathLib.WAD,
-      options,
-    });
-
-    expect(serializeReallocations(actual)).toEqual(
-      serializeReallocations(expected),
-    );
-  });
-
-  test("matches SimulationState for aggressive public allocator fallback", () => {
-    const input = makeInput({
-      targetSupply: 850n * MathLib.WAD,
-      targetBorrow: 500n * MathLib.WAD,
-      sourceSupply: 1000n * MathLib.WAD,
-      sourceBorrow: 828n * MathLib.WAD,
-    });
-    const options = {
-      enabled: true,
-      timestamp: TIMESTAMP,
-      defaultMaxWithdrawalUtilization: DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
-    } satisfies ReallocationComputeOptions;
-
-    const actual = computeReallocations({
-      reallocationData: new ReallocationData(input),
-      marketId: targetParams.id,
-      borrowAmount: 500n * MathLib.WAD,
-      options,
-    });
-    const expected = computeLegacyReallocations({
-      reallocationData: makeLegacyState(input),
-      marketId: targetParams.id,
-      borrowAmount: 500n * MathLib.WAD,
-      options,
-    });
-
-    expect(serializeReallocations(actual)).toEqual(
-      serializeReallocations(expected),
-    );
-    expect(actual[0]!.withdrawals[0]!.amount).toBe(150n * MathLib.WAD);
-  });
-});
 
 describe("ReallocationData unit coverage", () => {
   test("clones inputs and exposes getters without sharing mutable entity instances", () => {

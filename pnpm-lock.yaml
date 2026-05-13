@@ -452,9 +452,6 @@ importers:
         specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
-      '@morpho-org/simulation-sdk':
-        specifier: workspace:^
-        version: link:../simulation-sdk
       '@morpho-org/test':
         specifier: workspace:^
         version: link:../test

@@ -15,7 +15,6 @@ import {
 import { bigIntComparator } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import type {
-  InputReallocationData,
   PublicAllocatorOptions,
   PublicReallocation,
 } from "../types/index.js";
@@ -30,6 +29,35 @@ import {
 import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "./constant.js";
 
 const DEFAULT_PUBLIC_ALLOCATOR_DELAY = 60n * 60n;
+
+/**
+ * Input state required to construct {@link ReallocationData}.
+ */
+export interface InputReallocationData {
+  /** Chain id associated with the fetched state. */
+  readonly chainId: number;
+
+  /** Markets indexed by market id. */
+  readonly markets?: Readonly<Record<MarketId, Market | undefined>>;
+
+  /** Vaults indexed by vault address. */
+  readonly vaults?: Readonly<Record<Address, Vault | undefined>>;
+
+  /** Positions indexed by user or vault address, then by market id. */
+  readonly positions?: Readonly<
+    Record<Address, Readonly<Record<MarketId, Position | undefined>>>
+  >;
+
+  /** Holdings indexed by user or vault address, then by token address. */
+  readonly holdings?: Readonly<
+    Record<Address, Readonly<Record<Address, Holding | undefined>>>
+  >;
+
+  /** Vault market configs indexed by vault address, then by market id. */
+  readonly vaultMarketConfigs?: Readonly<
+    Record<Address, Readonly<Record<MarketId, VaultMarketConfig | undefined>>>
+  >;
+}
 
 /**
  * Clones a market so simulated interest and liquidity changes never mutate caller input.

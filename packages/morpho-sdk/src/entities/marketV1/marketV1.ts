@@ -54,7 +54,6 @@ import {
   type MarketV1SupplyCollateralAction,
   type MarketV1SupplyCollateralBorrowAction,
   type MarketV1WithdrawCollateralAction,
-  type MinimalBlock,
   MissingAccrualPositionError,
   type MorphoAuthorizationAction,
   type MorphoClientType,
@@ -302,7 +301,10 @@ export interface MarketV1Actions {
    */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
-    block: MinimalBlock;
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
   }) => Promise<ReallocationData>;
 
   /**
@@ -921,18 +923,19 @@ export class MorphoMarketV1 implements MarketV1Actions {
    *
    * @param params - Reallocation data fetch parameters.
    * @param params.vaultAddresses - Vaults to inspect for source-market liquidity.
-   * @param params.market - Target market state fetched at `params.block`.
    * @param params.block - Block number and timestamp used for consistent RPC reads.
    * @returns Reallocation data ready for {@link getReallocations}.
    * @throws When the client chain does not match this market.
-   * @throws {@link MarketIdMismatchError} when `params.market` is not this market.
    */
   async getReallocationData({
     vaultAddresses,
     block,
   }: {
     vaultAddresses: readonly Address[];
-    block: MinimalBlock;
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
   }): Promise<ReallocationData> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
