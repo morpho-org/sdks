@@ -1,4 +1,5 @@
 import {
+  _try,
   AccrualPosition,
   type BigIntish,
   Holding,
@@ -10,7 +11,6 @@ import {
   Vault,
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
-  _try,
 } from "@morpho-org/blue-sdk";
 import { bigIntComparator } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
@@ -371,6 +371,7 @@ export class ReallocationData implements InputReallocationData {
    * @returns Computed source-market withdrawals and the post-reallocation state.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    */
+  // biome-ignore lint/complexity/useMaxParams: preserves the timestamp/options overload used by callers.
   public getMarketPublicReallocations(
     marketId: MarketId,
     timestampOrOptions?: BigIntish | PublicAllocatorOptions,
@@ -415,9 +416,9 @@ export class ReallocationData implements InputReallocationData {
 
     while (true) {
       const vaultWithdrawals = vaults
-        .map((vault) =>
+        .map((vaultAddress) =>
           data.getLargestVaultWithdrawal({
-            vault,
+            vault: vaultAddress,
             marketId,
             withdrawals,
             defaultMaxWithdrawalUtilization,
@@ -439,12 +440,12 @@ export class ReallocationData implements InputReallocationData {
 
       const { vault, largestWithdrawal } = largestVaultWithdrawal;
       withdrawals.push({ ...largestWithdrawal, vault });
-      data = data.applyPublicReallocation(
+      data = data.applyPublicReallocation({
         vault,
-        marketId,
-        largestWithdrawal,
-        accrualTimestamp,
-      );
+        supplyMarketId: marketId,
+        withdrawal: largestWithdrawal,
+        timestamp: accrualTimestamp,
+      });
     }
   }
 
@@ -557,12 +558,17 @@ export class ReallocationData implements InputReallocationData {
    *
    * @internal
    */
-  private applyPublicReallocation(
-    vault: Address,
-    supplyMarketId: MarketId,
-    withdrawal: { readonly id: MarketId; readonly assets: bigint },
-    timestamp: bigint,
-  ) {
+  private applyPublicReallocation({
+    vault,
+    supplyMarketId,
+    withdrawal,
+    timestamp,
+  }: {
+    readonly vault: Address;
+    readonly supplyMarketId: MarketId;
+    readonly withdrawal: { readonly id: MarketId; readonly assets: bigint };
+    readonly timestamp: bigint;
+  }) {
     const data = this.clone();
 
     const vaultPublicAllocatorConfig =
@@ -602,7 +608,7 @@ export class ReallocationData implements InputReallocationData {
     data.markets[supplyMarketId] = cloneMarket(supplyPosition.market);
     data.positions[vault]![supplyMarketId] = clonePosition(supplyPosition);
 
-    _try(() => {
+    void _try(() => {
       const vaultData = data.getVault(vault);
       vaultData.totalAssets = vaultData.withdrawQueue.reduce(
         (total, marketId) =>
