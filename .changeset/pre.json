@@ -1,0 +1,30 @@
+{
+  "mode": "pre",
+  "tag": "next",
+  "initialVersions": {
+    "@morpho-org/blue-sdk": "5.23.2",
+    "@morpho-org/blue-sdk-viem": "4.6.5",
+    "@morpho-org/blue-sdk-wagmi": "4.0.1",
+    "@morpho-org/bundler-sdk-viem": "4.3.3",
+    "@morpho-org/evm-simulation": "1.0.0",
+    "@morpho-org/liquidation-sdk-viem": "2.22.0",
+    "@morpho-org/liquidity-sdk-viem": "1.4.1",
+    "@morpho-org/migration-sdk-viem": "2.3.2",
+    "@morpho-org/morpho-sdk": "1.2.1",
+    "@morpho-org/morpho-test": "2.5.0",
+    "@morpho-org/morpho-ts": "2.5.1",
+    "@morpho-org/simulation-sdk": "3.4.3",
+    "@morpho-org/simulation-sdk-wagmi": "4.0.1",
+    "@morpho-org/test": "2.7.2",
+    "@morpho-org/test-wagmi": "2.1.1"
+  },
+  "changesets": [
+    "bright-vaults-rename",
+    "deprecate-morpho-client",
+    "evm-simulation-calls",
+    "fix-blue-fee-accrual",
+    "get-requirements-action-general-adapter-param",
+    "tame-permit-domain-extensions",
+    "weekly-sdk-dependency-refresh"
+  ]
+}
