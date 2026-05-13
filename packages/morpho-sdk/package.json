@@ -15,6 +15,7 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
+  "sideEffects": false,
   "files": [
     "lib"
   ],
@@ -28,7 +29,6 @@
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/bundler-sdk-viem": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "zod": "^4.4.3"
   },
@@ -36,9 +36,11 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@morpho-org/bundler-sdk-viem": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
+    "fast-check": "^4.8.0",
     "typescript": "^6.0.3",
     "viem": "^2.49.3",
     "vitest": "^4.1.6"
@@ -49,6 +51,16 @@
         "types": "./lib/esm/index.d.ts",
         "import": "./lib/esm/index.js",
         "require": "./lib/cjs/index.js"
+      },
+      "./abis": {
+        "types": "./lib/esm/abis.d.ts",
+        "import": "./lib/esm/abis.js",
+        "require": "./lib/cjs/abis.js"
+      },
+      "./bundler": {
+        "types": "./lib/esm/bundler/index.d.ts",
+        "import": "./lib/esm/bundler/index.js",
+        "require": "./lib/cjs/bundler/index.js"
       }
     }
   }

@@ -1,6 +1,77 @@
 import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 
+/**
+ * Typed errors thrown while encoding supported Bundler3 actions.
+ *
+ * @remarks
+ * Import these classes through `@morpho-org/morpho-sdk` when handling
+ * failures from `BundlerAction`.
+ */
+export namespace BundlerErrors {
+  /**
+   * Thrown when an action that requires an offchain signature is encoded before
+   * the signature has been attached.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.MissingSignature) {
+   *   // Attach the missing permit or Permit2 signature, then encode again.
+   * }
+   * ```
+   */
+  export class MissingSignature extends Error {
+    constructor() {
+      super("missing signature");
+    }
+  }
+
+  /**
+   * Thrown when an action is unsupported on the requested chain.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.UnexpectedAction) {
+   *   // Remove or replace the action for the selected chain.
+   * }
+   * ```
+   */
+  export class UnexpectedAction extends Error {
+    /**
+     * @param type - Unsupported Bundler3 action discriminator or name.
+     * @param chainId - Chain where the action was requested.
+     */
+    constructor(type: string, chainId: number) {
+      super(`unexpected action "${type}" on chain "${chainId}"`);
+    }
+  }
+
+  /**
+   * Thrown when a signature would authorize an unsafe consumer.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.UnexpectedSignature) {
+   *   // Ask the user to sign a payload for the expected spender.
+   * }
+   * ```
+   */
+  export class UnexpectedSignature extends Error {
+    /**
+     * @param spender - Address unexpectedly authorized by the signature.
+     */
+    constructor(spender: Address) {
+      super(`unexpected signature consumer "${spender}"`);
+    }
+  }
+}
+
 /** Thrown when an asset amount is required to be positive but is zero or negative. */
 export class NonPositiveAssetAmountError extends Error {
   constructor(origin: Address) {

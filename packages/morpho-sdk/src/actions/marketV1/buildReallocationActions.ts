@@ -1,5 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import type { Action } from "@morpho-org/bundler-sdk-viem";
+import type { Action } from "../../bundler/index.js";
 import { validateReallocations } from "../../helpers/index.js";
 import type { VaultReallocation } from "../../types/index.js";
 

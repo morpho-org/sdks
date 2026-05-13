@@ -1,7 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze, isDefined } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
+import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   ChainWNativeMissingError,

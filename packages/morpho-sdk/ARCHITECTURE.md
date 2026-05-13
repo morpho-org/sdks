@@ -157,8 +157,7 @@ This also makes the UX simpler, since users only need to approve the general ada
 
 **Security invariant:** Never bypass the general adapter for deposits.
 
-The bundle is encoded via `BundlerAction.encodeBundle(chainId, actions)` from
-`@morpho-org/bundler-sdk-viem`. The `to` address of the resulting transaction is always the
+The bundle is encoded via the local `BundlerAction.encodeBundle(chainId, actions)` helper. The `to` address of the resulting transaction is always the
 Bundler3 contract address for the target chain.
 
 ### Withdrawals and Redeems: Direct vault calls
@@ -196,7 +195,6 @@ The SDK builds on the Morpho TypeScript ecosystem. Each dependency has a specifi
 morpho-sdk
 ├── @morpho-org/blue-sdk           Core protocol constants and math
 ├── @morpho-org/blue-sdk-viem      On-chain data fetching and ABIs
-├── @morpho-org/bundler-sdk-viem   Bundle encoding for deposits
 ├── @morpho-org/morpho-ts          Shared utilities (deepFreeze, Time)
 └── viem                           Ethereum client and ABI encoding
 ```
@@ -225,7 +223,7 @@ On-chain data fetching and contract ABIs:
 - **Typed data helpers**: `getPermitTypedData`, `getPermit2PermitTypedData` — used to build
   EIP-712 signing payloads for permit flows.
 
-### `@morpho-org/bundler-sdk-viem`
+### Local Bundler Encoding
 
 Deposit bundle encoding:
 
