@@ -34,12 +34,6 @@ export interface PublicAllocatorOptions {
    * @default 92% (920000000000000000n)
    */
   readonly defaultMaxWithdrawalUtilization?: bigint;
-
-  /**
-   * Delay to consider between computing reallocations and committing them onchain.
-   * @default 1 hour
-   */
-  readonly delay?: bigint;
 }
 
 /**

@@ -308,25 +308,24 @@ describe("ReallocationData public allocator integration", () => {
     {
       marketId: marketA2.id,
       expectedWithdrawals: [
-        { vault: vaultC, id: marketA3.id, assets: 199_999627n },
+        { vault: vaultC, id: marketA3.id, assets: 200_000000n },
         { vault: vaultA, id: marketA1.id, assets: 40_000000n },
       ],
       expectedLiquidity: {
         [marketA1.id]: 710_000000n,
-        [marketA2.id]: 10439_999627n,
-        [marketA3.id]: 100_000373n,
+        [marketA2.id]: 10440_000000n,
+        [marketA3.id]: 100_000000n,
       },
     },
     {
       marketId: marketA3.id,
       expectedWithdrawals: [
-        { vault: vaultC, id: marketA2.id, assets: 99_990072n },
-        { vault: vaultC, id: marketA1.id, assets: 1654n },
+        { vault: vaultC, id: marketA2.id, assets: 100_000000n },
       ],
       expectedLiquidity: {
-        [marketA1.id]: 749_998346n,
-        [marketA2.id]: 10100_009928n,
-        [marketA3.id]: 399_991726n,
+        [marketA1.id]: 750_000000n,
+        [marketA2.id]: 10100_000000n,
+        [marketA3.id]: 400_000000n,
       },
     },
   ])("matches 100% target utilization for $marketId", (scenario) => {
@@ -469,12 +468,12 @@ describe("ReallocationData public allocator integration", () => {
       marketId: marketA3.id,
       options: { defaultMaxWithdrawalUtilization: parseEther("0.9") },
       expectedWithdrawals: [
-        { vault: vaultC, id: marketA2.id, assets: 99_990072n },
+        { vault: vaultC, id: marketA2.id, assets: 100_000000n },
       ],
       expectedLiquidity: {
         [marketA1.id]: marketA1.liquidity,
-        [marketA2.id]: 10100_009928n,
-        [marketA3.id]: 399_990072n,
+        [marketA2.id]: 10100_000000n,
+        [marketA3.id]: 400_000000n,
       },
     },
   ])("matches custom target utilization for $marketId", (scenario) => {

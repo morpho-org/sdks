@@ -385,7 +385,6 @@ describe("ReallocationData unit coverage", () => {
     const { withdrawals, data: reallocatedData } =
       data.getMarketPublicReallocations(targetParams.id, {
         timestamp: TIMESTAMP,
-        delay: 0n,
         defaultMaxWithdrawalUtilization: MathLib.WAD,
       });
 
@@ -399,7 +398,6 @@ describe("ReallocationData unit coverage", () => {
     expect(
       reallocatedData.getMarketPublicReallocations(targetParams.id, {
         timestamp: TIMESTAMP,
-        delay: 0n,
         defaultMaxWithdrawalUtilization: MathLib.WAD,
       }).withdrawals,
     ).toEqual([]);
@@ -496,7 +494,6 @@ describe("ReallocationData unit coverage", () => {
         targetParams.id,
         {
           timestamp: TIMESTAMP,
-          delay: 0n,
           defaultMaxWithdrawalUtilization: MathLib.WAD,
         },
       ).withdrawals,
@@ -555,7 +552,6 @@ describe("ReallocationData unit coverage", () => {
         },
       }).getMarketPublicReallocations(targetParams.id, {
         timestamp: TIMESTAMP,
-        delay: 0n,
         defaultMaxWithdrawalUtilization: MathLib.WAD,
       }).withdrawals,
     ).toEqual([

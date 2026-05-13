@@ -28,8 +28,6 @@ import {
 } from "../types/index.js";
 import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "./constant.js";
 
-const DEFAULT_PUBLIC_ALLOCATOR_DELAY = 60n * 60n;
-
 /**
  * Input state required to construct {@link ReallocationData}.
  */
@@ -394,7 +392,6 @@ export class ReallocationData implements InputReallocationData {
       reallocatableVaults,
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
-      delay = DEFAULT_PUBLIC_ALLOCATOR_DELAY,
     } = options;
     const accrualTimestamp = BigInt(
       timestampInput ?? this.getMarket(marketId).lastUpdate,
@@ -425,7 +422,6 @@ export class ReallocationData implements InputReallocationData {
             withdrawals,
             defaultMaxWithdrawalUtilization,
             maxWithdrawalUtilization,
-            delay,
             timestamp: accrualTimestamp,
           }),
         )
@@ -466,7 +462,6 @@ export class ReallocationData implements InputReallocationData {
     withdrawals,
     defaultMaxWithdrawalUtilization,
     maxWithdrawalUtilization,
-    delay,
     timestamp,
   }: {
     readonly vault: Address;
@@ -476,7 +471,6 @@ export class ReallocationData implements InputReallocationData {
     readonly maxWithdrawalUtilization: Readonly<
       Record<MarketId, bigint | undefined>
     >;
-    readonly delay: bigint;
     readonly timestamp: bigint;
   }):
     | {
@@ -498,9 +492,8 @@ export class ReallocationData implements InputReallocationData {
 
       const suppliable = MathLib.zeroFloorSub(
         validCap,
-        this.getAccrualPosition(vault, marketId).accrueInterest(
-          timestamp + delay,
-        ).supplyAssets,
+        this.getAccrualPosition(vault, marketId).accrueInterest(timestamp)
+          .supplyAssets,
       );
 
       const marketWithdrawals = this.getVault(vault)
