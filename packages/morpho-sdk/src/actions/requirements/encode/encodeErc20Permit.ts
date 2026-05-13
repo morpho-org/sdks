@@ -4,6 +4,7 @@ import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { type Client, verifyTypedData, type WalletClient } from "viem";
 import { signTypedData } from "viem/actions";
 import {
+  AddressMismatchError,
   ChainIdMismatchError,
   InvalidSignatureError,
   MissingClientPropertyError,
@@ -40,8 +41,8 @@ interface EncodeErc20PermitParams {
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
- * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails (e.g. when the
- *   signing account differs from `userAddress`).
+ * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
+ * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
  * import { createWalletClient, http } from "viem";
@@ -90,6 +91,9 @@ export const encodeErc20Permit = async (
     async sign(client: WalletClient, userAddress: Address) {
       if (!client.account?.address) {
         throw new MissingClientPropertyError("client.account.address");
+      }
+      if (client.account.address !== userAddress) {
+        throw new AddressMismatchError(client.account.address, userAddress);
       }
       const typedData = getPermitTypedData(
         {

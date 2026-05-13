@@ -4,6 +4,7 @@ import { deepFreeze, Time } from "@morpho-org/morpho-ts";
 import { verifyTypedData, type WalletClient } from "viem";
 import { signTypedData } from "viem/actions";
 import {
+  AddressMismatchError,
   InvalidSignatureError,
   MissingClientPropertyError,
   type Permit2Action,
@@ -35,8 +36,8 @@ interface EncodeErc20Permit2Params {
  * @param params.expiration - Permit2-managed allowance expiration timestamp.
  * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
  * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
- * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails (e.g. when the
- *   signing account differs from `userAddress`).
+ * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
+ * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
  * @example
  * ```ts
  * import { encodeErc20Permit2 } from "@morpho-org/morpho-sdk";
@@ -84,6 +85,9 @@ export const encodeErc20Permit2 = (
     async sign(client: WalletClient, userAddress: Address) {
       if (!client.account?.address) {
         throw new MissingClientPropertyError("client.account.address");
+      }
+      if (client.account.address !== userAddress) {
+        throw new AddressMismatchError(client.account.address, userAddress);
       }
 
       const typedData = getPermit2PermitTypedData(

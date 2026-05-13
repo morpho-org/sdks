@@ -68,7 +68,7 @@ const tx = buildTx(permitSignature);
 
 ### Integration invariant — builder = signer
 
-**`userAddress` MUST equal the account that ends up signing/executing the tx.** Critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls). The SDK no longer hard-enforces this invariant at build time; callers are responsible for keeping `userAddress` and the signing account aligned.
+**`userAddress` MUST equal the account that ends up signing/executing the tx.** Critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls). Transaction builders no longer enforce this at build time, so callers must keep `userAddress` and the signing account aligned themselves; the signature requirements (`encodeErc20Permit` / `encodeErc20Permit2`) still reject a `sign(client, userAddress)` call where `client.account.address !== userAddress` with `MissingClientPropertyError` / `AddressMismatchError`.
 
 | Entity       | Action                   | Route                     | Why                                                                                                 |
 | ------------ | ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------- |

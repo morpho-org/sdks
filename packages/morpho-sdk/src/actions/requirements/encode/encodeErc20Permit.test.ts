@@ -4,7 +4,7 @@ import { type Address, isHex } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { test } from "../../../../test/setup.js";
-import { InvalidSignatureError } from "../../../types/index.js";
+import { AddressMismatchError } from "../../../types/index.js";
 import { encodeErc20Permit } from "./encodeErc20Permit.js";
 
 describe("encodeErc20Permit", () => {
@@ -54,7 +54,7 @@ describe("encodeErc20Permit", () => {
       expect(signatureRequirement.args.signature.length).toBe(132);
     });
 
-    test("should reject signature when client account differs from userAddress (verifyTypedData fails)", async ({
+    test("should throw error if client account address does not match user address", async ({
       client,
     }) => {
       const differentAddress =
@@ -68,9 +68,9 @@ describe("encodeErc20Permit", () => {
         nonce: mockNonce,
       });
 
-      await expect(
-        permit.sign(client, differentAddress),
-      ).rejects.toBeInstanceOf(InvalidSignatureError);
+      await expect(permit.sign(client, differentAddress)).rejects.toThrow(
+        new AddressMismatchError(client.account.address, differentAddress),
+      );
     });
 
     test("should return all expected properties in signature args", async ({
