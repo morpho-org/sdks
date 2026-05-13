@@ -375,7 +375,11 @@ deprecation campaign.
 
 - **Phase 1 -- Add canonical consumer path:** Update `morpho-sdk` to depend directly on
   `blue-sdk-viem`, `blue-sdk`, and `morpho-ts` where needed, and update docs to present
-  `pnpm add @morpho-org/morpho-sdk` as the primary Morpho application install path.
+  `pnpm add @morpho-org/morpho-sdk` as the primary Morpho application install path. Update package
+  READMEs and public docs to warn that installing `morpho-sdk` together with incompatible direct
+  versions of `blue-sdk`, `blue-sdk-viem`, or `morpho-ts` is unsupported after this consolidation,
+  because duplicate runtime copies can create distinct class identities and break `instanceof`
+  comparisons across package boundaries.
 - **Phase 2 -- Re-export dependency surfaces:** Re-export every fetcher from `blue-sdk-viem`
   through `@morpho-org/morpho-sdk/fetch`, the classes and thin utility/type surfaces from
   `blue-sdk` through the `morpho-sdk` root, and the full ABI surface through
@@ -404,7 +408,8 @@ deprecation campaign.
 - **Phase 9 -- Deprecation:** Run npm deprecation notices only for packages whose public surfaces
   are replaced or explicitly unsupported, while keeping `morpho-ts`, `blue-sdk`, and
   `blue-sdk-viem` maintained. There is no compatibility window and no wrapper release. Remove
-  deprecated workspace packages after downstream migration. Deprecate every package in the
+  deprecated workspace packages after the source-code deletion delay defined by
+  [TIB-0003](./TIB-0003-sdk-package-deprecation-lifecycle.md). Deprecate every package in the
   workspace deprecation scope and every package in the `@morpho-labs/*` npm deprecation scope with
   the exact messages above.
 
@@ -470,6 +475,11 @@ still allowing explicit helper imports for consumers who prefer side-effect-free
 - `@morpho-org/blue-sdk-viem` keeps `@morpho-org/blue-sdk` as a peer dependency.
 - Packages other than `morpho-sdk` keep `morpho-ts`, `blue-sdk`, and `blue-sdk-viem` as peer
   dependencies when they need those packages.
+- README and documentation updates must explicitly warn that applications installing `morpho-sdk`
+  alongside incompatible direct versions of `blue-sdk`, `blue-sdk-viem`, or `morpho-ts` are not
+  supported after this consolidation. Mixed incompatible versions can produce duplicate class
+  definitions, so `instanceof` and other identity-sensitive checks may fail even when structural
+  data is equivalent.
 - Published packages do not bundle internal dependencies; they publish dependency ranges. The
   changeset author owns cross-package version-bump coordination.
 - Changeset cascade rule: when `@morpho-org/morpho-sdk` gets a minor changeset because it
@@ -519,6 +529,7 @@ Track migration success through:
 ## References
 
 - [morpho-sdk architecture](../../packages/morpho-sdk/ARCHITECTURE.md)
+- [SDK package deprecation lifecycle](./TIB-0003-sdk-package-deprecation-lifecycle.md)
 - [blue-sdk package](../../packages/blue-sdk/)
 - [blue-sdk-viem package](../../packages/blue-sdk-viem/)
 - [bundler-sdk-viem package](../../packages/bundler-sdk-viem/)
