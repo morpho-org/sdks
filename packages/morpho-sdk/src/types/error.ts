@@ -400,19 +400,32 @@ export class InsufficientSharedLiquidityError extends Error {
   }
 }
 
+/** Thrown when reallocation state does not contain a requested market. */
 export class UnknownReallocationMarketError extends UnknownDataError {
+  /**
+   * @param marketId - Missing market id.
+   */
   constructor(public readonly marketId: MarketId) {
     super(`unknown reallocation market "${marketId}"`);
   }
 }
 
+/** Thrown when reallocation state does not contain a requested vault. */
 export class UnknownReallocationVaultError extends UnknownDataError {
+  /**
+   * @param vault - Missing vault address.
+   */
   constructor(public readonly vault: Address) {
     super(`unknown reallocation vault "${vault}"`);
   }
 }
 
+/** Thrown when reallocation state does not contain a requested vault-market config. */
 export class UnknownReallocationVaultMarketConfigError extends UnknownDataError {
+  /**
+   * @param vault - Vault address for the missing config.
+   * @param marketId - Market id for the missing config.
+   */
   constructor(
     public readonly vault: Address,
     public readonly marketId: MarketId,
@@ -423,7 +436,12 @@ export class UnknownReallocationVaultMarketConfigError extends UnknownDataError 
   }
 }
 
+/** Thrown when reallocation state does not contain a requested market position. */
 export class UnknownReallocationPositionError extends UnknownDataError {
+  /**
+   * @param user - Position owner address.
+   * @param marketId - Market id for the missing position.
+   */
   constructor(
     public readonly user: Address,
     public readonly marketId: MarketId,
@@ -432,7 +450,12 @@ export class UnknownReallocationPositionError extends UnknownDataError {
   }
 }
 
+/** Thrown when reallocation state does not contain a requested token holding. */
 export class UnknownReallocationHoldingError extends UnknownDataError {
+  /**
+   * @param user - Holding owner address.
+   * @param token - Token address for the missing holding.
+   */
   constructor(
     public readonly user: Address,
     public readonly token: Address,
