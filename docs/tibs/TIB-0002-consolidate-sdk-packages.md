@@ -95,7 +95,7 @@ The dependency graph shows that several target packages are still consumed indep
 | `@morpho-org/blue-sdk-viem` | Yes. Runtime use in `liquidity-sdk-viem`, `liquidation-sdk-viem`, `migration-sdk-viem`, and `morpho-sdk`. | Keep as a maintained viem integration package. `morpho-sdk` depends on it directly and re-exports every fetcher; other packages keep their existing peer dependency model. |
 | `@morpho-org/bundler-sdk-viem` | Yes. Runtime use in `migration-sdk-viem` and `morpho-sdk`. | Move selected action/bundle APIs into `morpho-sdk`; migrate or deprecate `migration-sdk-viem` before removal. |
 | `@morpho-org/migration-sdk-viem` | No maintained monorepo runtime consumers outside its own package, tests, and documentation. | Deprecate as a public package. Retain no migration APIs under `morpho-sdk`; document that migration SDK workflows are no longer a supported public SDK surface. |
-| `@morpho-org/simulation-sdk` | Yes. Runtime use in `bundler-sdk-viem`, `liquidity-sdk-viem`, `migration-sdk-viem`, and `morpho-sdk`. | Deprecate broad simulation engine, but first move required constants/types/helpers into owning packages. |
+| `@morpho-org/simulation-sdk` | Yes. Runtime use in `bundler-sdk-viem`, `liquidity-sdk-viem`, `migration-sdk-viem`, and `morpho-sdk`. | Deprecate broad simulation engine only after all maintained monorepo runtime consumers have migrated away from it. First move required constants/types/helpers into owning packages. |
 | `@morpho-org/blue-sdk-wagmi` | Only consumed by deprecated `simulation-sdk-wagmi`. | Deprecate directly; no first-party replacement hooks in this TIB. |
 | `@morpho-org/simulation-sdk-wagmi` | Runtime only for itself; otherwise dev/test use. | Deprecate directly after internal consumers migrate. |
 | `@morpho-org/test-wagmi` | Test-only helper for Wagmi package tests and some package test suites. | Deprecate public package; move any needed test helper internally or into `@morpho-org/test`. |
@@ -335,6 +335,14 @@ Deprecate replaced `@morpho-org/*` workspace packages only after the implementat
 their replacement paths or document that no replacement exists. There is no compatibility window and
 no wrapper release for deprecated packages.
 
+Do not publish the `@morpho-org/simulation-sdk` npm deprecation notice while any maintained
+monorepo runtime consumer still depends on it. At the time of this TIB, `morpho-sdk`,
+`bundler-sdk-viem`, `liquidity-sdk-viem`, and `migration-sdk-viem` must either migrate away from
+`simulation-sdk` or themselves become deprecated, unsupported public surfaces before
+`simulation-sdk` is deprecated. Source-code deletion follows
+[TIB-0003](./TIB-0003-sdk-package-deprecation-lifecycle.md) only after no maintained workspace
+package imports `simulation-sdk` or declares it in its dependency ranges.
+
 Use these npm deprecation messages:
 
 | Package | Replacement | npm deprecation message |
@@ -394,7 +402,9 @@ deprecation campaign.
   reviewer sign-off on extracted behavior before any deprecation notice is published.
 - **Phase 5 -- Simplify simulation and reallocations:** Replace `morpho-sdk`'s `SimulationState`
   dependency with local reallocation helpers. Move approval constants, public allocator option
-  types, and other narrow constants out of `simulation-sdk` into their owning APIs.
+  types, and other narrow constants out of `simulation-sdk` into their owning APIs. This removes
+  `morpho-sdk`'s dependency only; `simulation-sdk` deprecation still waits for every maintained
+  monorepo runtime consumer to migrate away from it.
 - **Phase 6 -- Add migrated-code test coverage:** Require high coverage for code migrated into
   `morpho-sdk`, with focused unit tests for extracted helpers and package-boundary coverage for
   newly re-exported or side-effecting entrypoints. The exact fixture shape is an implementation
