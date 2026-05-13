@@ -511,6 +511,48 @@ describe("computeReallocations", () => {
       expect(result[0]!.withdrawals[0]!.amount).toBe(300n * MathLib.WAD);
     });
 
+    test("should return empty when required assets is non-positive", () => {
+      const result = computeReallocations({
+        reallocationData: makeMockState(),
+        marketId: targetParams.id,
+        borrowAmount: 500n * MathLib.WAD,
+        options: {
+          enabled: true,
+          defaultSupplyTargetUtilization: -MathLib.WAD,
+        },
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    test("should skip zero-sized withdrawals before grouping reallocations", () => {
+      const borrowAmount = 500n * MathLib.WAD;
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const data = makeMockState({
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: 0n },
+          { id: sourceB.id, vault: VAULT_A, assets: 10n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 0n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        borrowAmount,
+        options: { enabled: true },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.withdrawals).toEqual([
+        { marketParams: sourceB.params, amount: 10n * MathLib.WAD },
+      ]);
+    });
+
     test("should respect per-market supplyTargetUtilization override", () => {
       const borrowAmount = 500n * MathLib.WAD;
 

@@ -150,9 +150,7 @@ export const computeReallocations = ({
       })(),
       withdrawals: vaultWithdrawals
         // Reallocation withdrawals must be sorted by market id in ascending order.
-        .sort(({ id: idA }, { id: idB }) =>
-          idA > idB ? 1 : idA < idB ? -1 : 0,
-        )
+        .sort(({ id: idA }, { id: idB }) => idA.localeCompare(idB))
         .map(({ id, assets }) => ({
           marketParams: data.getMarket(id).params,
           amount: assets,
