@@ -74,6 +74,7 @@ const makeMarket = (
     price: 10n ** 36n,
   });
 
+// biome-ignore lint/complexity/useMaxParams: compact fixture helper for market/user position rows.
 const makePosition = (
   marketId: MarketId,
   supplyShares: bigint,
