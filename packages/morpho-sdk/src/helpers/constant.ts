@@ -20,6 +20,9 @@ export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 92_0000000000000000n;
  */
 export const DEFAULT_SUPPLY_TARGET_UTILIZATION = 90_5000000000000000n;
 
+/**
+ * Tokens that require setting allowance from zero before changing approval.
+ */
 export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<number, Address[]>> = {
   [ChainId.EthMainnet]: [
     "0xdAC17F958D2ee523a2206206994597C13D831ec7", // USDT
@@ -27,6 +30,9 @@ export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<number, Address[]>> = {
   ],
 };
 
+/**
+ * Token-specific maximum approval amounts for tokens that cannot use uint256 max.
+ */
 export const MAX_TOKEN_APPROVALS: Partial<
   Record<number, Record<Address, bigint>>
 > = {

@@ -916,6 +916,17 @@ export class MorphoMarketV1 implements MarketV1Actions {
     };
   }
 
+  /**
+   * Fetches all on-chain inputs needed to compute public allocator reallocations.
+   *
+   * @param params - Reallocation data fetch parameters.
+   * @param params.vaultAddresses - Vaults to inspect for source-market liquidity.
+   * @param params.market - Target market state fetched at `params.block`.
+   * @param params.block - Block number and timestamp used for consistent RPC reads.
+   * @returns Reallocation data ready for {@link getReallocations}.
+   * @throws When the client chain does not match this market.
+   * @throws {@link MarketIdMismatchError} when `params.market` is not this market.
+   */
   async getReallocationData({
     vaultAddresses,
     block,
@@ -1040,6 +1051,15 @@ export class MorphoMarketV1 implements MarketV1Actions {
     });
   }
 
+  /**
+   * Computes public allocator reallocations for a borrow on this market.
+   *
+   * @param params - Reallocation computation parameters.
+   * @param params.reallocationData - State returned by {@link getReallocationData}.
+   * @param params.borrowAmount - Borrow amount to test against post-borrow utilization.
+   * @param params.options - Optional allocator and utilization options.
+   * @returns Vault reallocations ready to pass to `borrow` or `supplyCollateralBorrow`.
+   */
   getReallocations({
     reallocationData,
     borrowAmount,

@@ -31,12 +31,32 @@ import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "./constant.js";
 
 const DEFAULT_PUBLIC_ALLOCATOR_DELAY = 60n * 60n;
 
+/**
+ * Clones a market so simulated interest and liquidity changes never mutate caller input.
+ *
+ * @internal
+ */
 const cloneMarket = (market: Market) => new Market(market);
 
+/**
+ * Clones a market position before simulated supply or withdrawal changes are applied.
+ *
+ * @internal
+ */
 const clonePosition = (position: Position) => new Position(position);
 
+/**
+ * Clones a token holding before local state transitions update balances or allowances.
+ *
+ * @internal
+ */
 const cloneHolding = (holding: Holding): Holding => new Holding(holding);
 
+/**
+ * Clones vault state, including queue arrays and public allocator accounting.
+ *
+ * @internal
+ */
 const cloneVault = (vault: Vault) =>
   new Vault({
     address: vault.address,
@@ -68,6 +88,11 @@ const cloneVault = (vault: Vault) =>
         : { ...vault.publicAllocatorConfig },
   });
 
+/**
+ * Clones a vault-market config, including nested public allocator limits.
+ *
+ * @internal
+ */
 const cloneVaultMarketConfig = (config: VaultMarketConfig) =>
   new VaultMarketConfig({
     vault: config.vault,
@@ -85,35 +110,56 @@ const cloneVaultMarketConfig = (config: VaultMarketConfig) =>
 /**
  * Narrow state container for computing public allocator reallocations.
  *
- * It owns only the market, vault, position, holding, vault-market-config, and
- * data needed by the shared-liquidity algorithm. Simulation steps return cloned
- * `ReallocationData` instances so fetched caller inputs are not mutated.
+ * @remarks
+ * The class owns only the market, vault, position, holding, vault-market-config,
+ * and chain data needed by the shared-liquidity algorithm. Constructor inputs
+ * are cloned, and simulation steps return cloned `ReallocationData` instances
+ * so fetched caller inputs are not mutated.
  */
 export class ReallocationData implements InputReallocationData {
+  /** Chain id associated with the fetched reallocation data. */
   public readonly chainId: number;
+
+  /** Markets indexed by market id. */
   public readonly markets: Record<MarketId, Market | undefined>;
+
+  /** Vaults indexed by vault address. */
   public readonly vaults: Record<Address, Vault | undefined>;
+
+  /** Positions indexed by user or vault address, then by market id. */
   public readonly positions: Record<
     Address,
     Record<MarketId, Position | undefined>
   >;
+
+  /** Holdings indexed by user or vault address, then by token address. */
   public readonly holdings: Record<
     Address,
     Record<Address, Holding | undefined>
   >;
+
+  /** Vault market configs indexed by vault address, then by market id. */
   public readonly vaultMarketConfigs: Record<
     Address,
     Record<MarketId, VaultMarketConfig | undefined>
   >;
 
-  constructor({
-    chainId,
-    markets,
-    vaults,
-    positions,
-    holdings,
-    vaultMarketConfigs,
-  }: InputReallocationData) {
+  /**
+   * Creates a cloned reallocation state from fetched market, vault, position,
+   * holding, and vault-market-config data.
+   *
+   * @param input - Reallocation input data fetched at a consistent chain state.
+   */
+  constructor(input: InputReallocationData) {
+    const {
+      chainId,
+      markets,
+      vaults,
+      positions,
+      holdings,
+      vaultMarketConfigs,
+    } = input;
+
     this.chainId = chainId;
     this.markets = {};
     this.vaults = {};
@@ -180,10 +226,22 @@ export class ReallocationData implements InputReallocationData {
     }
   }
 
+  /**
+   * Creates a deep clone of this reallocation state.
+   *
+   * @returns A new `ReallocationData` instance with cloned entity objects.
+   */
   public clone() {
     return new ReallocationData(this);
   }
 
+  /**
+   * Gets a market by id.
+   *
+   * @param marketId - Market id to read.
+   * @returns The cloned market data.
+   * @throws {@link UnknownReallocationMarketError} when the market is absent.
+   */
   public getMarket(marketId: MarketId) {
     const market = this.markets[marketId];
 
@@ -192,6 +250,13 @@ export class ReallocationData implements InputReallocationData {
     return market;
   }
 
+  /**
+   * Gets a vault by address.
+   *
+   * @param vault - Vault address to read.
+   * @returns The cloned vault data.
+   * @throws {@link UnknownReallocationVaultError} when the vault is absent.
+   */
   public getVault(vault: Address) {
     const data = this.vaults[vault];
 
@@ -200,6 +265,14 @@ export class ReallocationData implements InputReallocationData {
     return data;
   }
 
+  /**
+   * Gets a raw market position.
+   *
+   * @param user - Position owner address, usually a MetaMorpho vault.
+   * @param marketId - Market id for the position.
+   * @returns The cloned position data.
+   * @throws {@link UnknownReallocationPositionError} when the position is absent.
+   */
   public getPosition(user: Address, marketId: MarketId) {
     const position = this.positions[user]?.[marketId];
 
@@ -209,6 +282,15 @@ export class ReallocationData implements InputReallocationData {
     return position;
   }
 
+  /**
+   * Gets a position wrapped with its market accrual helpers.
+   *
+   * @param user - Position owner address, usually a MetaMorpho vault.
+   * @param marketId - Market id for the position.
+   * @returns Accrual-aware position data.
+   * @throws {@link UnknownReallocationPositionError} when the position is absent.
+   * @throws {@link UnknownReallocationMarketError} when the market is absent.
+   */
   public getAccrualPosition(user: Address, marketId: MarketId) {
     return new AccrualPosition(
       this.getPosition(user, marketId),
@@ -216,6 +298,14 @@ export class ReallocationData implements InputReallocationData {
     );
   }
 
+  /**
+   * Gets a token holding for a user or vault.
+   *
+   * @param user - Holding owner address.
+   * @param token - Token address.
+   * @returns The cloned holding data.
+   * @throws {@link UnknownReallocationHoldingError} when the holding is absent.
+   */
   public getHolding(user: Address, token: Address) {
     const holding = this.holdings[user]?.[token];
 
@@ -224,6 +314,14 @@ export class ReallocationData implements InputReallocationData {
     return holding;
   }
 
+  /**
+   * Gets a vault-market config.
+   *
+   * @param vault - Vault address.
+   * @param marketId - Market id configured by the vault.
+   * @returns The cloned vault-market config.
+   * @throws {@link UnknownReallocationVaultMarketConfigError} when the config is absent.
+   */
   public getVaultMarketConfig(vault: Address, marketId: MarketId) {
     const config = this.vaultMarketConfigs[vault]?.[marketId];
 
@@ -236,9 +334,16 @@ export class ReallocationData implements InputReallocationData {
   /**
    * Calculates public reallocations that can supply liquidity to `marketId`.
    *
+   * @remarks
    * The algorithm repeatedly chooses the single largest currently available
    * source-market withdrawal across reallocatable vaults, applies that
    * withdrawal to a cloned state, and repeats until no valid withdrawal remains.
+   *
+   * @param marketId - Target market to supply with shared liquidity.
+   * @param timestampOrOptions - Optional accrual timestamp or allocator options.
+   * @param maybeOptions - Allocator options when the timestamp is passed separately.
+   * @returns Computed source-market withdrawals and the post-reallocation state.
+   * @throws {@link UnknownReallocationMarketError} when the target market is absent.
    */
   public getMarketPublicReallocations(
     marketId: MarketId,
@@ -319,6 +424,14 @@ export class ReallocationData implements InputReallocationData {
     }
   }
 
+  /**
+   * Gets the largest currently valid source-market withdrawal for a vault.
+   *
+   * @param params - Candidate vault, target market, prior withdrawals, and allocator limits.
+   * @returns The largest withdrawal candidate, or `undefined` if required data is missing.
+   *
+   * @internal
+   */
   private getLargestVaultWithdrawal({
     vault,
     marketId,
@@ -410,6 +523,19 @@ export class ReallocationData implements InputReallocationData {
     }, UnknownDataError);
   }
 
+  /**
+   * Applies one public allocator withdrawal and corresponding target-market supply.
+   *
+   * @param vault - Vault performing the public reallocation.
+   * @param supplyMarketId - Target market that receives the withdrawn assets.
+   * @param withdrawal - Source market id and asset amount to withdraw.
+   * @param timestamp - Timestamp used to accrue source and target positions.
+   * @returns A cloned state after applying the simulated reallocation.
+   * @throws {@link MissingPublicAllocatorConfigError} when the vault allocator config is absent.
+   * @throws {@link UnknownReallocationVaultMarketConfigError} when source or target allocator limits are absent.
+   *
+   * @internal
+   */
   private applyPublicReallocation(
     vault: Address,
     supplyMarketId: MarketId,
