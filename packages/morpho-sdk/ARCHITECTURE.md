@@ -198,7 +198,6 @@ morpho-sdk
 ├── @morpho-org/blue-sdk-viem      On-chain data fetching and ABIs
 ├── @morpho-org/bundler-sdk-viem   Bundle encoding for deposits
 ├── @morpho-org/morpho-ts          Shared utilities (deepFreeze, Time)
-├── @morpho-org/simulation-sdk     Token approval constants
 └── viem                           Ethereum client and ABI encoding
 ```
 
@@ -242,14 +241,6 @@ Shared utilities:
 - **`deepFreeze`** — recursively freezes objects. Applied to every returned `Transaction`.
 - **`Time`** — timestamp helpers used for permit deadlines and metadata timestamps.
 - **`isDefined`** — type-narrowing utility used in the requirements decision tree.
-
-### `@morpho-org/simulation-sdk`
-
-Token approval constants:
-
-- **`MAX_TOKEN_APPROVALS`** — per-chain/token cap for approval amounts in `encodeErc20Approval`.
-- **`APPROVE_ONLY_ONCE_TOKENS`** — tokens (like USDT) that require resetting allowance to zero
-  before setting a new value. Used in `getRequirementsApproval` to prepend a reset transaction.
 
 ## Requirements System
 

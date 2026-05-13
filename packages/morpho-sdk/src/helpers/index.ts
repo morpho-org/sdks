@@ -9,7 +9,10 @@ export {
   MAX_SLIPPAGE_TOLERANCE,
   MAX_TOKEN_APPROVALS,
 } from "./constant.js";
-export { ReallocationData } from "./reallocationData.js";
+export {
+  type InputReallocationData,
+  ReallocationData,
+} from "./reallocationData.js";
 export {
   computeMaxRepaySharePrice,
   computeMinBorrowSharePrice,
