@@ -68,10 +68,7 @@ export type AnvilTestClient<chain extends Chain = Chain> = Client<
       }): Promise<bigint>;
 
       maxWithdraw(args: { erc4626: Address; owner?: Address }): Promise<bigint>;
-      previewMint(args: {
-        erc4626: Address;
-        shares: bigint;
-      }): Promise<bigint>;
+      previewMint(args: { erc4626: Address; shares: bigint }): Promise<bigint>;
       convertToShares(args: {
         erc4626: Address;
         assets: bigint;
@@ -160,13 +157,16 @@ export const createAnvilTestClient = <chain extends Chain>(
           args.abi = erc20Abi;
           args.functionName = "approve";
 
-          // @ts-ignore
+          // @ts-expect-error
           return this.writeContract(args);
         },
         async balanceOf({
           erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
           owner = client.account.address,
-        }: { erc20?: Address; owner?: Address } = {}) {
+        }: {
+          erc20?: Address;
+          owner?: Address;
+        } = {}) {
           if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
             return client.getBalance({ address: owner });
 
@@ -181,7 +181,11 @@ export const createAnvilTestClient = <chain extends Chain>(
           erc20 = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE",
           owner = client.account.address,
           spender,
-        }: { erc20?: Address; owner?: Address; spender: Address }) {
+        }: {
+          erc20?: Address;
+          owner?: Address;
+          spender: Address;
+        }) {
           if (erc20 === "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE")
             return maxUint256;
 
@@ -196,7 +200,10 @@ export const createAnvilTestClient = <chain extends Chain>(
         async maxWithdraw({
           erc4626,
           owner = client.account.address,
-        }: { erc4626: Address; owner?: Address }) {
+        }: {
+          erc4626: Address;
+          owner?: Address;
+        }) {
           return client.readContract({
             address: erc4626,
             abi: erc4626Abi,
@@ -207,7 +214,10 @@ export const createAnvilTestClient = <chain extends Chain>(
         async previewMint({
           erc4626,
           shares,
-        }: { erc4626: Address; shares: bigint }) {
+        }: {
+          erc4626: Address;
+          shares: bigint;
+        }) {
           return client.readContract({
             address: erc4626,
             abi: erc4626Abi,
@@ -218,7 +228,10 @@ export const createAnvilTestClient = <chain extends Chain>(
         async convertToShares({
           erc4626,
           assets,
-        }: { erc4626: Address; assets: bigint }) {
+        }: {
+          erc4626: Address;
+          assets: bigint;
+        }) {
           return client.readContract({
             address: erc4626,
             abi: erc4626Abi,
@@ -229,7 +242,10 @@ export const createAnvilTestClient = <chain extends Chain>(
         async convertToAssets({
           erc4626,
           shares,
-        }: { erc4626: Address; shares: bigint }) {
+        }: {
+          erc4626: Address;
+          shares: bigint;
+        }) {
           return client.readContract({
             address: erc4626,
             abi: erc4626Abi,
@@ -243,7 +259,7 @@ export const createAnvilTestClient = <chain extends Chain>(
           args.abi = erc4626Abi;
           args.functionName = "deposit";
 
-          // @ts-ignore
+          // @ts-expect-error
           return this.writeContract(args);
         },
 

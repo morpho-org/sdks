@@ -3,7 +3,9 @@
   "description": "Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to build migration bundles to migrate lending positions (on aave, compound, morpho-aaveV3-optimizer, ...) to the morpho protocol.",
   "version": "1.0.0",
   "author": "Morpho Association <contact@morpho.org>",
-  "contributors": ["oumar-fall"],
+  "contributors": [
+    "oumar-fall"
+  ],
   "repository": "github:morpho-org/sdks",
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
@@ -12,7 +14,9 @@
   },
   "license": "MIT",
   "main": "src/index.ts",
-  "files": ["lib"],
+  "files": [
+    "lib"
+  ],
   "scripts": {
     "prepublish": "$npm_execpath build",
     "build": "tsc --noEmit && tsc --build tsconfig.build.json"

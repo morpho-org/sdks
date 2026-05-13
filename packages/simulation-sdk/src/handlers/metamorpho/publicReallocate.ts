@@ -58,7 +58,7 @@ export const handleMetaMorphoPublicReallocateOperation: OperationHandler<
     );
 
   let totalWithdrawn = 0n;
-  let prevId: MarketId | undefined = undefined;
+  let prevId: MarketId | undefined;
 
   const allocations: { id: MarketId; assets: bigint }[] = [];
   for (const { id, assets } of withdrawals) {

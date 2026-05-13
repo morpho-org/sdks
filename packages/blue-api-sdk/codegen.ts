@@ -22,6 +22,7 @@ const config: CodegenConfig = {
           },
           HexString: {
             input: "string",
+            // biome-ignore lint/suspicious/noTemplateCurlyInString: GraphQL Codegen expects a TypeScript template-literal type as a string.
             output: "`0x${string}`",
           },
           Address: {

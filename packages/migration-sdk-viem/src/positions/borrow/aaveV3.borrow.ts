@@ -61,7 +61,10 @@ export class MigratableBorrowPosition_AaveV3
   getLtv({
     withdrawn = 0n,
     repaid = 0n,
-  }: { withdrawn?: bigint; repaid?: bigint } = {}): bigint | null {
+  }: {
+    withdrawn?: bigint;
+    repaid?: bigint;
+  } = {}): bigint | null {
     const totalCollateralEth =
       ((this.collateral - withdrawn) * this.collateralPrice) /
       parseUnits("1", this.collateralToken.decimals);

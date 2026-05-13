@@ -122,7 +122,7 @@ export const setupTestBundle = async <chain extends Chain = Chain>(
 
   for (const tx of bundle.txs()) {
     await client.sendTransaction(
-      // @ts-ignore
+      // @ts-expect-error
       { ...tx, account, gasPrice },
     );
   }

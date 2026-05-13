@@ -18,7 +18,7 @@ type P = {
 
 type Converters = { from: P; fromPeriod(period: Time.PeriodLike): number };
 
-// biome-ignore lint/complexity/noStaticOnlyClass:
+// biome-ignore lint/complexity/noStaticOnlyClass: Time exposes static unit converters as public API.
 export class Time {
   static ms: Converters;
   static s: Converters;

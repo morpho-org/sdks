@@ -53,7 +53,7 @@ export const expect = test.expect.extend({
     const expectedNumber = Number(formatUnits(expected, decimals));
 
     let pass: boolean;
-    // biome-ignore lint/suspicious/noExplicitAny: <explanation>
+    // biome-ignore lint/suspicious/noExplicitAny: Playwright matcherResult has no exported public type.
     let matcherResult: any;
     try {
       test.expect(receivedNumber).toBeCloseTo(expectedNumber, numDigits);

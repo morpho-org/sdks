@@ -213,7 +213,7 @@ describe(type, () => {
       ),
     ).toThrowErrorMatchingInlineSnapshot(
       `
-    [Error: unknown holding of user "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB\" of token \"0x0000000000000000000000000000000000000009"
+    [Error: unknown holding of user "0xbBbBBBBbbBBBbbbBbbBbbbbBBbBbbbbBbBbbBBbB" of token "0x0000000000000000000000000000000000000009"
 
     when simulating operation:
     {

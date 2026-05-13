@@ -331,7 +331,7 @@ export const populateSubBundle = (
 
   // Reallocate liquidity if necessary.
   if (
-    !!publicAllocatorOptions?.enabled &&
+    publicAllocatorOptions?.enabled &&
     (mainOperation.type === "Blue_Borrow" ||
       mainOperation.type === "Blue_Withdraw")
   ) {
@@ -1003,7 +1003,7 @@ export const finalizeBundle = (
         uniqueSkimTokens.add(NATIVE_ADDRESS);
         break;
       default:
-        //@ts-ignore This is dead code but acts as a guard in case a new operation is added
+        //@ts-expect-error This is dead code but acts as a guard in case a new operation is added
         throw new BundlerErrors.MissingSkimHandler(operation.type);
     }
 

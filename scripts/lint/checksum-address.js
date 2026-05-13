@@ -3,6 +3,13 @@ import { join } from "node:path";
 import { getAddress } from "viem";
 import config from "../../biome.json" with { type: "json" };
 
+const ignoredPaths =
+  config.files.ignore ??
+  config.files.includes
+    ?.filter((include) => include.startsWith("!**/"))
+    .map((include) => include.slice("!**/".length)) ??
+  [];
+
 const lint = (path) => {
   const files = readdirSync(path, { encoding: "utf-8" });
 
@@ -17,7 +24,7 @@ const lint = (path) => {
 
     if (
       (!file.endsWith(".ts") && !file.endsWith(".js")) ||
-      config.files.ignore.some((ignored) => file.includes(ignored))
+      ignoredPaths.some((ignored) => filePath.includes(ignored))
     )
       continue;
 

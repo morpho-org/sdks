@@ -63,11 +63,11 @@ export function useReadContracts<
   return useQueries({
     queries: allParameters.map((parameters) => {
       const { abi, address, functionName, query = {} } = parameters;
-      // @ts-ignore
+      // @ts-expect-error
       const code = parameters.code as Hex | undefined;
 
       const options = readContractQueryOptions<config, abi, functionName, args>(
-        // @ts-ignore
+        // @ts-expect-error
         parameters.config ?? config,
         {
           // biome-ignore lint/suspicious/noExplicitAny: compatible default type
