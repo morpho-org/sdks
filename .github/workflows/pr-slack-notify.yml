@@ -61,7 +61,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           sparse-checkout: |
             .github/actions
@@ -75,7 +75,7 @@ jobs:
 
       - name: Get PR details
         id: pr
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           TEAMS: ${{ env.GITHUB_TEAMS }}
@@ -216,7 +216,7 @@ jobs:
 
       - name: Backfill PR body with existing thread reference
         if: steps.pr.outputs.skip != 'true' && steps.slack-check.outputs.found == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           script: |
             const ts = '${{ steps.slack-check.outputs.thread_ts }}';
@@ -245,7 +245,7 @@ jobs:
       - name: Send Slack notification
         if: steps.pr.outputs.skip != 'true' && steps.slack-check.outputs.found != 'true'
         id: slack
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -257,7 +257,7 @@ jobs:
 
       - name: Update PR with Slack thread reference
         if: steps.pr.outputs.skip != 'true' && steps.slack-check.outputs.found != 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         with:
           # There can be a race condition between job executions (e.g. due to concurrent github events)
           # which will cause this step to overwrite the PR body and remove existing thread references.
@@ -287,7 +287,7 @@ jobs:
 
       - name: Send reviewer DMs
         if: steps.pr.outputs.skip != 'true' && steps.slack-check.outputs.found != 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           CHANNEL_ID: ${{ env.SLACK_CHANNEL_ID }}
@@ -333,7 +333,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           sparse-checkout: .github/actions
           sparse-checkout-cone-mode: false
@@ -354,7 +354,7 @@ jobs:
       # they're signal we want to keep distinct.
       - name: Send review update to Slack thread(s)
         if: steps.get-ts.outputs.found == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           MAIN_CHANNEL_ID: ${{ env.SLACK_CHANNEL_ID }}
@@ -470,7 +470,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           sparse-checkout: |
             .github/actions
@@ -484,7 +484,7 @@ jobs:
 
       - name: Check if this is a re-review request
         id: check-re-review
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           TEAMS: ${{ env.GITHUB_TEAMS }}
@@ -556,7 +556,7 @@ jobs:
 
       - name: Send re-review request to Slack thread
         if: steps.check-re-review.outputs.is_re_review == 'true' && steps.get-ts.outputs.found == 'true' && steps.check-re-review.outputs.is_team != 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -567,7 +567,7 @@ jobs:
 
       - name: Send re-review DM
         if: steps.check-re-review.outputs.is_re_review == 'true' && steps.get-ts.outputs.found == 'true' && steps.check-re-review.outputs.is_team != 'true' && steps.check-re-review.outputs.slack_id != ''
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           CHANNEL_ID: ${{ env.SLACK_CHANNEL_ID }}
@@ -598,7 +598,7 @@ jobs:
 
       - name: Send team re-review request to Slack thread
         if: steps.check-re-review.outputs.is_re_review == 'true' && steps.get-ts.outputs.found == 'true' && steps.check-re-review.outputs.is_team == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -609,7 +609,7 @@ jobs:
 
       - name: Send team re-review DMs
         if: steps.check-re-review.outputs.is_re_review == 'true' && steps.get-ts.outputs.found == 'true' && steps.check-re-review.outputs.is_team == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           CHANNEL_ID: ${{ env.SLACK_CHANNEL_ID }}
@@ -651,7 +651,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           sparse-checkout: .github/actions
           sparse-checkout-cone-mode: false
@@ -665,7 +665,7 @@ jobs:
 
       - name: Send notification to Slack thread
         if: steps.get-ts.outputs.found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -677,7 +677,7 @@ jobs:
       - name: Add reaction to original message
         if: steps.get-ts.outputs.found == 'true'
         continue-on-error: true
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3
         with:
           method: reactions.add
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -688,7 +688,7 @@ jobs:
 
       - name: Send notification to quick-win DM thread
         if: steps.get-ts.outputs.quick_win_found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -700,7 +700,7 @@ jobs:
       - name: Add reaction to quick-win DM
         if: steps.get-ts.outputs.quick_win_found == 'true'
         continue-on-error: true
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3
         with:
           method: reactions.add
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -725,7 +725,7 @@ jobs:
       contents: read
       pull-requests: read
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           sparse-checkout: |
             .github/actions
@@ -747,7 +747,7 @@ jobs:
       - name: Get PR details
         if: steps.get-ts.outputs.found == 'true'
         id: pr
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           TEAMS: ${{ env.GITHUB_TEAMS }}
@@ -840,7 +840,7 @@ jobs:
 
       - name: Update Slack message
         if: steps.get-ts.outputs.found == 'true'
-        uses: slackapi/slack-github-action@b0fa283ad8fea605de13dc3f449259339835fc52 # v2.1.0
+        uses: slackapi/slack-github-action@45a88b9581bfab2566dc881e2cd66d334e621e2c # v3
         with:
           method: chat.update
           token: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -853,7 +853,7 @@ jobs:
 
       - name: Send DM for new reviewer assignment
         if: steps.get-ts.outputs.found == 'true' && github.event.action == 'review_requested' && github.event.requested_reviewer
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           SLACK_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
@@ -901,7 +901,7 @@ jobs:
 
       - name: Send DMs for new team reviewer assignment
         if: steps.get-ts.outputs.found == 'true' && github.event.action == 'review_requested' && github.event.requested_team
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           TEAMS: ${{ env.GITHUB_TEAMS }}
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
@@ -965,7 +965,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           sparse-checkout: .github/team-members.json
           sparse-checkout-cone-mode: false
@@ -980,7 +980,7 @@ jobs:
       # avoid race conditions where concurrent events overwrite the PR body between
       # separate steps.
       - name: Select random reviewer and send DM
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           MAPPING: ${{ env.GITHUB_TO_SLACK_MAPPING }}
           SUBMITTER: ${{ github.event.pull_request.user.login }}
