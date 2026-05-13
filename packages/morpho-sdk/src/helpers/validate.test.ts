@@ -14,13 +14,11 @@ import {
 } from "../../test/fixtures/marketV1.js";
 import {
   AccrualPositionUserMismatchError,
-  AddressMismatchError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
   MarketIdMismatchError,
-  MissingClientPropertyError,
   MissingMarketPriceError,
   NativeAmountOnNonWNativeCollateralError,
   NegativeReallocationFeeError,
@@ -44,7 +42,6 @@ import {
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
-  validateUserAddress,
 } from "./validate.js";
 
 const USER_A: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -84,31 +81,6 @@ function makePosition(overrides?: {
     m,
   );
 }
-
-// ---------------------------------------------------------------------------
-// validateUserAddress
-// ---------------------------------------------------------------------------
-
-describe("validateUserAddress", () => {
-  test("should pass when addresses match", () => {
-    expect(() => validateUserAddress(USER_A, USER_A)).not.toThrow();
-  });
-
-  test("should throw MissingClientPropertyError when clientAccountAddress is undefined", () => {
-    expect(() => validateUserAddress(undefined, USER_A)).toThrow(
-      MissingClientPropertyError,
-    );
-    // Also lock in that the error names the missing property (`account`), so
-    // a refactor swapping to e.g. `MissingClientPropertyError("chain")` fails.
-    expect(() => validateUserAddress(undefined, USER_A)).toThrow(/account/);
-  });
-
-  test("should throw AddressMismatchError when addresses differ", () => {
-    expect(() => validateUserAddress(USER_A, USER_B)).toThrow(
-      AddressMismatchError,
-    );
-  });
-});
 
 // ---------------------------------------------------------------------------
 // validateAccrualPosition

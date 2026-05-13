@@ -18,7 +18,7 @@ import {
   MAX_ABSOLUTE_SHARE_PRICE,
   MAX_SLIPPAGE_TOLERANCE,
 } from "../../helpers/constant.js";
-import { validateChainId, validateUserAddress } from "../../helpers/index.js";
+import { validateChainId } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
   ChainIdMismatchError,
@@ -317,7 +317,6 @@ export class MorphoVaultV1 implements VaultV1Actions {
     slippageTolerance?: bigint;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (!isAddressEqual(sourceVault.address, this.vault)) {
       throw new VaultAddressMismatchError(this.vault, sourceVault.address);
