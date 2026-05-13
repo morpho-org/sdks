@@ -7,10 +7,6 @@ permissions:
   contents: write
   id-token: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-publish
-  cancel-in-progress: false
-
 jobs:
   publish:
     if: github.ref_name == 'main' || github.ref_name == 'next'
@@ -65,6 +61,8 @@ jobs:
         id: publish-packages
         if: steps.pending-changesets.outputs.has_changesets == 'false'
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
@@ -73,17 +71,70 @@ jobs:
             publish_tag="next"
           fi
 
-          before_tags="$(mktemp)"
-          after_tags="$(mktemp)"
-          new_tags="${RUNNER_TEMP}/new-package-tags.txt"
-          trap 'rm -f "$before_tags" "$after_tags"' EXIT
+          local_tags="$(mktemp)"
+          remote_tags="$(mktemp)"
+          pending_tags="${RUNNER_TEMP}/pending-package-tags.txt"
+          trap 'rm -f "$local_tags" "$remote_tags"' EXIT
 
-          git tag --list | LC_ALL=C sort > "$before_tags"
           pnpm release --tag "$publish_tag"
-          git tag --list | LC_ALL=C sort > "$after_tags"
 
-          LC_ALL=C comm -13 "$before_tags" "$after_tags" > "$new_tags"
-          if [ -s "$new_tags" ]; then
+          reset_origin_url() {
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          }
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap 'rm -f "$local_tags" "$remote_tags"; reset_origin_url' EXIT
+
+          # Recover reruns after npm publish succeeded but tag push failed.
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            while IFS= read -r -d '' manifest; do
+              tag="$(
+                node -e '
+                  const { execFileSync } = require("node:child_process");
+                  const { readFileSync } = require("node:fs");
+                  const manifest = JSON.parse(readFileSync(process.argv[1], "utf8"));
+                  let previousManifest;
+                  try {
+                    previousManifest = JSON.parse(
+                      execFileSync("git", ["show", `HEAD^:${process.argv[1]}`], {
+                        encoding: "utf8",
+                      }),
+                    );
+                  } catch {
+                    previousManifest = undefined;
+                  }
+
+                  if (previousManifest?.version === manifest.version) {
+                    process.exit(0);
+                  }
+
+                  process.stdout.write(`${manifest.name}@${manifest.version}`);
+                ' "$manifest"
+              )"
+
+              if [ -z "$tag" ]; then
+                continue
+              fi
+
+              if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+                continue
+              fi
+
+              if git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
+                continue
+              fi
+
+              git tag "$tag" -m "$tag"
+            done < <(git diff --name-only -z --diff-filter=ACMRT HEAD^ HEAD -- 'packages/*/package.json')
+          fi
+
+          git tag --list | LC_ALL=C sort > "$local_tags"
+          git ls-remote --tags --refs origin |
+            sed 's#.*refs/tags/##' |
+            LC_ALL=C sort > "$remote_tags"
+
+          LC_ALL=C comm -23 "$local_tags" "$remote_tags" > "$pending_tags"
+          if [ -s "$pending_tags" ]; then
             echo "has_tags=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_tags=false" >> "$GITHUB_OUTPUT"
@@ -97,22 +148,27 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t tags < "${RUNNER_TEMP}/new-package-tags.txt"
+          mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           refs=()
 
           for tag in "${tags[@]}"; do
             refs+=("refs/tags/${tag}")
           done
 
+          reset_origin_url() {
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          }
+
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap reset_origin_url EXIT
           git push --atomic origin "${refs[@]}"
 
       - name: Upload package tag list
         if: steps.publish-packages.outputs.has_tags == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: new-package-tags
-          path: ${{ runner.temp }}/new-package-tags.txt
+          name: pending-package-tags
+          path: ${{ runner.temp }}/pending-package-tags.txt
           if-no-files-found: error
 
   github-releases:
@@ -120,6 +176,8 @@ jobs:
     name: GitHub releases
     needs: publish
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     env:
       CI: true
       HUSKY: 0
@@ -138,7 +196,7 @@ jobs:
       - name: Download package tag list
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: new-package-tags
+          name: pending-package-tags
           path: ${{ runner.temp }}
 
       - name: Create GitHub releases
@@ -148,7 +206,7 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t tags < "${RUNNER_TEMP}/new-package-tags.txt"
+          mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           releases_dir="${RUNNER_TEMP}/github-releases"
           mkdir -p "${releases_dir}"
 

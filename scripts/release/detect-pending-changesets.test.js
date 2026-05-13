@@ -80,6 +80,25 @@ describe("reportPendingChangesets", () => {
     expect(stdout).toHaveBeenCalledWith("Pending changesets:\n");
     expect(stdout).toHaveBeenCalledWith(`${join(changesetDir, "alpha.md")}\n`);
   });
+
+  test("behavior: sanitizes logged changeset filenames", () => {
+    const root = createTempDir();
+    const changesetDir = join(root, ".changeset");
+    const outputFile = join(root, "github-output.txt");
+    mkdirSync(changesetDir);
+    writeFileSync(join(changesetDir, "\n::add-mask::secret\t.md"), "---\n");
+    const stdout = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    expect(reportPendingChangesets({ changesetDir, outputFile })).toEqual([
+      join(changesetDir, "\n::add-mask::secret\t.md"),
+    ]);
+    expect(stdout).toHaveBeenCalledWith("Pending changesets:\n");
+    expect(stdout).toHaveBeenCalledWith(
+      `${join(changesetDir, "?::add-mask::secret?.md")}\n`,
+    );
+  });
 });
 
 function createTempDir() {

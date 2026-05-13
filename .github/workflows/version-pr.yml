@@ -11,10 +11,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref_name }}-version-pr
-  cancel-in-progress: false
-
 jobs:
   version-pr:
     if: github.ref_name == 'main' || github.ref_name == 'next'
@@ -100,7 +96,13 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          reset_origin_url() {
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          }
+
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap reset_origin_url EXIT
 
           is_allowed_version_path() {
             [[ "$1" =~ ^packages/[^/]+/package\.json$ ]] ||
