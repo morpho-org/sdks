@@ -16,6 +16,8 @@ jobs:
     if: github.ref_name == 'main' || github.ref_name == 'next'
     name: Publish
     runs-on: ubuntu-latest
+    outputs:
+      has_tags: ${{ steps.publish-packages.outputs.has_tags }}
     env:
       CI: true
       HUSKY: 0
@@ -105,10 +107,41 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           git push --atomic origin "${refs[@]}"
 
-      # This only creates releases for tags made by this publish run. If npm and
-      # tag push succeed but release creation fails, reruns need manual repair.
-      - name: Create GitHub releases
+      - name: Upload package tag list
         if: steps.publish-packages.outputs.has_tags == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: new-package-tags
+          path: ${{ runner.temp }}/new-package-tags.txt
+          if-no-files-found: error
+
+  github-releases:
+    if: always() && needs.publish.result == 'success' && needs.publish.outputs.has_tags == 'true'
+    name: GitHub releases
+    needs: publish
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download package tag list
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: new-package-tags
+          path: ${{ runner.temp }}
+
+      - name: Create GitHub releases
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
