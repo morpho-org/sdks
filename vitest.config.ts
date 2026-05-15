@@ -4,12 +4,16 @@ export default defineConfig({
   test: {
     coverage: {
       reporter: ["text-summary", "lcov"],
-      include: ["packages/**/src/**/*.{ts,tsx}"],
+      include: [
+        "packages/**/src/**/*.{ts,tsx}",
+        "scripts/release/**/*.{js,mjs}",
+      ],
       exclude: [
         "packages/test/**",
         "packages/test-wagmi/**",
         "packages/morpho-test/**",
         "packages/**/*.md",
+        "scripts/**/*.test.{js,mjs}",
       ],
     },
     sequence: {
@@ -19,6 +23,14 @@ export default defineConfig({
     retry: process.env.CI ? 2 : 0,
     testTimeout: 30_000,
     projects: [
+      {
+        extends: true,
+        test: {
+          name: "scripts",
+          include: ["scripts/**/*.test.{js,mjs}"],
+          environment: "node",
+        },
+      },
       {
         extends: true,
         test: {

@@ -11,10 +11,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-version-pr
-  cancel-in-progress: false
-
 jobs:
   version-pr:
     if: github.ref_name == 'main' || github.ref_name == 'next'
@@ -23,6 +19,7 @@ jobs:
     env:
       CI: true
       HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
       RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
 
     steps:
@@ -43,44 +40,42 @@ jobs:
 
       - name: Detect pending changesets
         id: pending-changesets
-        shell: bash
-        run: |
-          shopt -s nullglob
-
-          pending=()
-          for changeset in .changeset/*.md; do
-            if [ "$(basename "$changeset")" != "README.md" ]; then
-              pending+=("$changeset")
-            fi
-          done
-
-          if [ "${#pending[@]}" -gt 0 ]; then
-            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
-            echo "Pending changesets:"
-            printf '%s\n' "${pending[@]}"
-          else
-            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/release/detect-pending-changesets.mjs
 
       - name: Stop if there is nothing to version
         if: steps.pending-changesets.outputs.has_changesets == 'false'
         run: echo "No pending changesets; no version PR needed."
 
       - name: Enter next prerelease mode
-        if: github.ref_name == 'next' && steps.pending-changesets.outputs.has_changesets == 'true' && hashFiles('.changeset/pre.json') == ''
+        if: env.TARGET_BRANCH == 'next' && steps.pending-changesets.outputs.has_changesets == 'true' && hashFiles('.changeset/pre.json') == ''
         run: pnpm changeset pre enter next
 
       - name: Refuse prerelease mode on main
-        if: github.ref_name == 'main' && hashFiles('.changeset/pre.json') != ''
+        if: env.TARGET_BRANCH == 'main' && hashFiles('.changeset/pre.json') != ''
         run: |
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
 
+      - name: Generate Changelog GitHub App Token
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        id: changelog-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
+        with:
+          app-id: ${{ secrets.VERSION_APP_ID }}
+          private-key: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
+          permission-contents: read
+          permission-pull-requests: read
+
       - name: Version packages
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         run: pnpm run version
+        env:
+          # @changesets/changelog-github reads GitHub PR metadata through
+          # GITHUB_TOKEN. Keep this token read-only; anything loaded by
+          # `pnpm run version` can read it from process.env.
+          GITHUB_TOKEN: ${{ steps.changelog-token.outputs.token }}
 
-      - name: Generate GitHub App Token
+      - name: Generate Release GitHub App Token
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
@@ -101,10 +96,17 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          reset_origin_url() {
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          }
+
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap reset_origin_url EXIT
 
           is_allowed_version_path() {
             [[ "$1" =~ ^packages/[^/]+/package\.json$ ]] ||
+            [[ "$1" =~ ^packages/[^/]+/CHANGELOG\.md$ ]] ||
             [[ "$1" =~ ^\.changeset/[^/]+\.md$ ]] ||
             [[ "$1" == ".changeset/pre.json" ]]
           }
