@@ -35,18 +35,18 @@
   },
   "devDependencies": {
     "@morpho-org/test": "workspace:^",
-    "@tanstack/react-query": "^5.100.9",
+    "@tanstack/react-query": "^5.100.10",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@wagmi/core": "^3.4.9",
+    "@wagmi/core": "^3.4.11",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "typescript": "^6.0.3",
     "viem": "^2.48.11",
-    "vitest": "^4.1.5",
-    "wagmi": "^3.1.0"
+    "vitest": "^4.1.6",
+    "wagmi": "^3.6.14"
   },
   "publishConfig": {
     "exports": {

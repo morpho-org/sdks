@@ -15,9 +15,9 @@
   "license": "MIT",
   "type": "module",
   "private": true,
-  "packageManager": "pnpm@10.27.0+sha512.72d699da16b1179c14ba9e64dc71c9a40988cbdc65c264cb0e489db7de917f20dcf4d64d8723625f2969ba52d4b7e2a1170682d9ac2a5dcaeaab732b7e16f04a",
+  "packageManager": "pnpm@11.1.1+sha512.d1fdf5f73c617b64fa1a56a81c3c8dfe0e966e33a6010aa256b517ae77be21d93e05affc0de1a83b0e4f29d569f68b446ae8f068cd7247c0bb3df0fb4d7bdf9a",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13"
   },
   "scripts": {
     "prepare": "husky",
@@ -35,48 +35,25 @@
     "release": "changeset publish"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.14",
+    "@biomejs/biome": "^2.4.15",
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
-    "@commitlint/cli": "^20.2.0",
-    "@commitlint/config-conventional": "^20.2.0",
-    "@types/node": "^25.6.2",
-    "@vitest/coverage-v8": "^4.1.5",
-    "@vitest/ui": "^4.1.5",
+    "@commitlint/cli": "^21.0.0",
+    "@commitlint/config-conventional": "^21.0.0",
+    "@types/node": "^25.7.0",
+    "@vitest/coverage-v8": "^4.1.6",
+    "@vitest/ui": "^4.1.6",
     "dotenv-cli": "^11.0.0",
     "happy-dom": "^20.9.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.4.3",
+    "lint-staged": "^17.0.4",
     "solc": "0.8.35",
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3",
     "undici": "^8.2.0",
-    "vite": "^8.0.12",
     "viem": "^2.48.11",
-    "vitest": "^4.1.5"
-  },
-  "pnpm": {
-    "overrides": {
-      "@babel/helpers": "7.29.2",
-      "@graphql-codegen/client-preset": "5.2.4",
-      "ajv": "8.18.0",
-      "axios": "1.15.0",
-      "flatted": "3.4.2",
-      "follow-redirects": "1.16.0",
-      "handlebars": "4.7.9",
-      "js-yaml": "4.1.1",
-      "lodash": "4.18.1",
-      "micromatch>picomatch": "2.3.2",
-      "postcss": "8.5.12",
-      "read-yaml-file": "2.1.0",
-      "rollup": "4.60.1",
-      "tinyglobby>picomatch": "4.0.4",
-      "tmp": "0.2.4",
-      "undici": "6.24.1",
-      "vite": "8.0.8",
-      "vitest>picomatch": "4.0.4",
-      "yaml": "2.8.3"
-    }
+    "vite": "^8.0.12",
+    "vitest": "^4.1.6"
   },
   "lint-staged": {
     "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
