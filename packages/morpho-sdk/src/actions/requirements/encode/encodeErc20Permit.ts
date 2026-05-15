@@ -1,7 +1,7 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type Client, verifyTypedData, type WalletClient } from "viem";
+import { type Client, verifyTypedData } from "viem";
 import { signTypedData } from "viem/actions";
 import {
   AddressMismatchError,
@@ -88,7 +88,7 @@ export const encodeErc20Permit = async (
 
   return {
     action,
-    async sign(client: WalletClient, userAddress: Address) {
+    async sign(client: Client, userAddress: Address) {
       if (!client.account?.address) {
         throw new MissingClientPropertyError("client.account.address");
       }

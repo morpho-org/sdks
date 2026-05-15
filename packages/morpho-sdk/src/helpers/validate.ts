@@ -9,12 +9,14 @@ import { isDefined } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import {
   AccrualPositionUserMismatchError,
+  AddressMismatchError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
   MarketIdMismatchError,
+  MissingClientPropertyError,
   MissingMarketPriceError,
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeCollateralError,
@@ -34,6 +36,37 @@ import {
   WithdrawMakesPositionUnhealthyError,
 } from "../types/index.js";
 import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
+
+/**
+ * Validates that the client has a connected account AND that it matches
+ * the provided user address.
+ *
+ * Throws {@link MissingClientPropertyError} if the client has no account.
+ * Throws {@link AddressMismatchError} if the client account differs from
+ * `userAddress`.
+ *
+ * @param clientAccountAddress - The client's account address; if undefined,
+ *   `MissingClientPropertyError` is thrown.
+ * @param userAddress - The user address provided by the caller.
+ *
+ * @deprecated The SDK no longer enforces the builder = signer invariant on
+ *   transaction builders; callers are responsible for keeping `userAddress`
+ *   aligned with the signing account. This helper is kept for backwards
+ *   compatibility and will be removed in the next major release. The
+ *   signature requirements (`encodeErc20Permit`, `encodeErc20Permit2`) still
+ *   enforce the check internally at `sign()` time.
+ */
+export const validateUserAddress = (
+  clientAccountAddress: Address | undefined,
+  userAddress: Address,
+): void => {
+  if (clientAccountAddress === undefined) {
+    throw new MissingClientPropertyError("account");
+  }
+  if (!isAddressEqual(clientAccountAddress, userAddress)) {
+    throw new AddressMismatchError(clientAccountAddress, userAddress);
+  }
+};
 
 /**
  * Validates that the accrual position belongs to the expected market and user.

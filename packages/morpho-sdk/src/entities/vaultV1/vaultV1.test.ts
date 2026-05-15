@@ -1,5 +1,5 @@
 import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
-import { parseUnits } from "viem";
+import { type Address, createPublicClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
@@ -458,6 +458,73 @@ describe("MorphoVaultV1 entity tests", () => {
       const requirements = await getRequirements();
 
       expect(requirements.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // Regression: migrateToV2 previously called validateUserAddress; the SDK no
+  // longer enforces builder = signer, so a divergent userAddress and a
+  // public client with no connected account must still produce a valid tx.
+  describe("migrateToV2 builder = signer freedom", () => {
+    const OTHER_USER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+
+    test("builds tx with userAddress different from client.account", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client, {
+        supportSignature: false,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+
+      const sourceVault = await vault.getData();
+      const targetVault = await fetchAccrualVaultV2(
+        KeyrockUsdcVaultV2.address,
+        client,
+        { chainId: mainnet.id },
+      );
+
+      const result = vault.migrateToV2({
+        userAddress: OTHER_USER,
+        sourceVault,
+        targetVault,
+        shares: parseUnits("1000", 18),
+      });
+
+      const tx = result.buildTx();
+      expect(tx.action.args.recipient).toBe(OTHER_USER);
+    });
+
+    test("builds tx with public client (no account)", async ({ client }) => {
+      const publicClient = createPublicClient({
+        chain: mainnet,
+        transport: http(client.transport.url),
+      });
+      const morphoClient = new MorphoClient(publicClient, {
+        supportSignature: false,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+
+      const sourceVault = await vault.getData();
+      const targetVault = await fetchAccrualVaultV2(
+        KeyrockUsdcVaultV2.address,
+        publicClient,
+        { chainId: mainnet.id },
+      );
+
+      const result = vault.migrateToV2({
+        userAddress: OTHER_USER,
+        sourceVault,
+        targetVault,
+        shares: parseUnits("1000", 18),
+      });
+
+      const tx = result.buildTx();
+      expect(tx.action.args.recipient).toBe(OTHER_USER);
     });
   });
 });
