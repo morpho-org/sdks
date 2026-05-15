@@ -40,8 +40,8 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
-    "@tanstack/query-core": "^5.100.9",
-    "@tanstack/react-query": "^5.100.9",
+    "@tanstack/query-core": "^5.100.10",
+    "@tanstack/react-query": "^5.100.10",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.14",
@@ -50,8 +50,8 @@
     "react-dom": "^19.2.6",
     "typescript": "^6.0.3",
     "viem": "^2.48.11",
-    "vitest": "^4.1.5",
-    "wagmi": "^3.1.0"
+    "vitest": "^4.1.6",
+    "wagmi": "^3.6.14"
   },
   "publishConfig": {
     "exports": {

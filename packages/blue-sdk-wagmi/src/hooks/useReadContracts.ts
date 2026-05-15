@@ -1,5 +1,10 @@
 import { useQueries } from "@tanstack/react-query";
-import type { Abi, ContractFunctionArgs, ContractFunctionName } from "viem";
+import type {
+  Abi,
+  ContractFunctionArgs,
+  ContractFunctionName,
+  Hex,
+} from "viem";
 import {
   type Config,
   type ResolvedRegister,
@@ -85,6 +90,6 @@ export function useReadContracts<
         enabled,
         structuralSharing: query.structuralSharing ?? replaceDeepEqual,
       };
-    }),
-  });
+    }) as never,
+  }) as UseReadContractsReturnType<abi, functionName, args, selectData>;
 }

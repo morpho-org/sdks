@@ -7,29 +7,28 @@ permissions:
   contents: write
   id-token: write
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}-publish
-  cancel-in-progress: false
-
 jobs:
   publish:
     if: github.ref_name == 'main' || github.ref_name == 'next'
     name: Publish
     runs-on: ubuntu-latest
+    outputs:
+      has_tags: ${{ steps.publish-packages.outputs.has_tags }}
     env:
       CI: true
       HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -45,24 +44,7 @@ jobs:
 
       - name: Detect pending changesets
         id: pending-changesets
-        shell: bash
-        run: |
-          shopt -s nullglob
-
-          pending=()
-          for changeset in .changeset/*.md; do
-            if [ "$(basename "$changeset")" != "README.md" ]; then
-              pending+=("$changeset")
-            fi
-          done
-
-          if [ "${#pending[@]}" -gt 0 ]; then
-            echo "has_changesets=true" >> "$GITHUB_OUTPUT"
-            echo "Pending changesets:"
-            printf '%s\n' "${pending[@]}"
-          else
-            echo "has_changesets=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: node scripts/release/detect-pending-changesets.mjs
 
       - name: Skip until version PR is merged
         if: steps.pending-changesets.outputs.has_changesets == 'true'
@@ -70,7 +52,7 @@ jobs:
           echo "Pending changesets are present. The version PR workflow will prepare a release branch; skipping publish."
 
       - name: Refuse prerelease mode on main
-        if: github.ref_name == 'main' && hashFiles('.changeset/pre.json') != ''
+        if: env.TARGET_BRANCH == 'main' && hashFiles('.changeset/pre.json') != ''
         run: |
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
@@ -79,25 +61,80 @@ jobs:
         id: publish-packages
         if: steps.pending-changesets.outputs.has_changesets == 'false'
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
 
           publish_tag="latest"
-          if [ "${GITHUB_REF_NAME}" = "next" ]; then
+          if [ "${TARGET_BRANCH}" = "next" ]; then
             publish_tag="next"
           fi
 
-          before_tags="$(mktemp)"
-          after_tags="$(mktemp)"
-          new_tags="${RUNNER_TEMP}/new-package-tags.txt"
-          trap 'rm -f "$before_tags" "$after_tags"' EXIT
+          local_tags="$(mktemp)"
+          remote_tags="$(mktemp)"
+          pending_tags="${RUNNER_TEMP}/pending-package-tags.txt"
+          trap 'rm -f "$local_tags" "$remote_tags"' EXIT
 
-          git tag --list | LC_ALL=C sort > "$before_tags"
           pnpm release --tag "$publish_tag"
-          git tag --list | LC_ALL=C sort > "$after_tags"
 
-          LC_ALL=C comm -13 "$before_tags" "$after_tags" > "$new_tags"
-          if [ -s "$new_tags" ]; then
+          reset_origin_url() {
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          }
+
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap 'rm -f "$local_tags" "$remote_tags"; reset_origin_url' EXIT
+
+          # Recover reruns after npm publish succeeded but tag push failed.
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            while IFS= read -r -d '' manifest; do
+              tag="$(
+                node -e '
+                  const { execFileSync } = require("node:child_process");
+                  const { readFileSync } = require("node:fs");
+                  const manifest = JSON.parse(readFileSync(process.argv[1], "utf8"));
+                  let previousManifest;
+                  try {
+                    previousManifest = JSON.parse(
+                      execFileSync("git", ["show", `HEAD^:${process.argv[1]}`], {
+                        encoding: "utf8",
+                      }),
+                    );
+                  } catch {
+                    previousManifest = undefined;
+                  }
+
+                  if (previousManifest?.version === manifest.version) {
+                    process.exit(0);
+                  }
+
+                  process.stdout.write(`${manifest.name}@${manifest.version}`);
+                ' "$manifest"
+              )"
+
+              if [ -z "$tag" ]; then
+                continue
+              fi
+
+              if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+                continue
+              fi
+
+              if git ls-remote --exit-code --tags --refs origin "refs/tags/${tag}" >/dev/null 2>&1; then
+                continue
+              fi
+
+              git tag "$tag" -m "$tag"
+            done < <(git diff --name-only -z --diff-filter=ACMRT HEAD^ HEAD -- 'packages/*/package.json')
+          fi
+
+          git tag --list | LC_ALL=C sort > "$local_tags"
+          git ls-remote --tags --refs origin |
+            sed 's#.*refs/tags/##' |
+            LC_ALL=C sort > "$remote_tags"
+
+          LC_ALL=C comm -23 "$local_tags" "$remote_tags" > "$pending_tags"
+          if [ -s "$pending_tags" ]; then
             echo "has_tags=true" >> "$GITHUB_OUTPUT"
           else
             echo "has_tags=false" >> "$GITHUB_OUTPUT"
@@ -111,12 +148,81 @@ jobs:
         run: |
           set -euo pipefail
 
-          mapfile -t tags < "${RUNNER_TEMP}/new-package-tags.txt"
+          mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           refs=()
 
           for tag in "${tags[@]}"; do
             refs+=("refs/tags/${tag}")
           done
 
+          reset_origin_url() {
+            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          }
+
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          trap reset_origin_url EXIT
           git push --atomic origin "${refs[@]}"
+
+      - name: Upload package tag list
+        if: steps.publish-packages.outputs.has_tags == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pending-package-tags
+          path: ${{ runner.temp }}/pending-package-tags.txt
+          if-no-files-found: error
+
+  github-releases:
+    if: always() && needs.publish.result == 'success' && needs.publish.outputs.has_tags == 'true'
+    name: GitHub releases
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CI: true
+      HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download package tag list
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: pending-package-tags
+          path: ${{ runner.temp }}
+
+      - name: Create GitHub releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
+          releases_dir="${RUNNER_TEMP}/github-releases"
+          mkdir -p "${releases_dir}"
+
+          prerelease_args=()
+          if [ "${TARGET_BRANCH}" = "next" ]; then
+            prerelease_args=(--prerelease)
+          fi
+
+          for tag in "${tags[@]}"; do
+            body_file="${releases_dir}/${tag//\//__}.md"
+
+            node scripts/release/github-release-body.mjs "${tag}" "${body_file}"
+
+            if gh release view "${tag}" >/dev/null 2>&1; then
+              gh release edit "${tag}" --title "${tag}" --notes-file "${body_file}" "${prerelease_args[@]}"
+            else
+              gh release create "${tag}" --title "${tag}" --notes-file "${body_file}" "${prerelease_args[@]}"
+            fi
+          done

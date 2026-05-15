@@ -240,6 +240,6 @@ Copy from those files when in doubt.
 ## Operational rules
 
 - **One concern per PR** ([`AGENTS.md`](../AGENTS.md) §8): JSDoc backfill PRs do not mix in feature work or refactors.
-- **Doc-only changesets** are `patch` per [`AGENTS.md`](../AGENTS.md) §7 when the PR's behavior-affecting changes touch a published package. JSDoc-only changes inside `packages/*/src/` — and repo-meta-only PRs (TIB, style guide, root tooling) — may omit a changeset.
+- **Changesets follow semver relevance** per [`AGENTS.md`](../AGENTS.md) §7. JSDoc-only changes to published package source may ship a patch changeset when maintainers want them visible in package release notes. Repo-meta-only PRs (TIB, style guide, root tooling) and tests-only changes do not need a changeset unless they accompany a behavior-affecting published package source change.
 - **Coverage is observable**: run `pnpm jsdoc:coverage` to print the per-package burndown table. Backfill PRs paste the new table into their PR description so reviewers see progress without reading the diff.
 - **Automated enforcement is deferred** — see [TIB-2026-05-04](./tibs/TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md) Considered Alternative 6. Reviewers and the burndown signal hold the line until Biome ships JSDoc rules (or a lighter in-repo gate emerges).

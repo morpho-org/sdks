@@ -17,6 +17,42 @@ import {
  *
  * Holds no state beyond configuration: no cache, no `init()`, no warm-up. Each factory call
  * (`vaultV1`, `vaultV2`, `marketV1`) returns a fresh entity bound to this client.
+ *
+ * @deprecated Use {@link morphoViemExtension} instead. Extending your viem client keeps a single
+ *   transport / chain / account on the integrator side and exposes the same factories under
+ *   `client.morpho`, so reads and writes share one client. `MorphoClient` will be removed in the
+ *   next major release.
+ *
+ * @example
+ * ```ts
+ * // Before — wrapping a viem client in MorphoClient:
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { MorphoClient } from "@morpho-org/morpho-sdk";
+ *
+ * const publicClient = createPublicClient({ chain: mainnet, transport: http() });
+ * const morpho = new MorphoClient(publicClient);
+ *
+ * const vault = morpho.vaultV1(vaultAddress, 1);
+ * const vaultData = await vault.getData();
+ * ```
+ *
+ * @example
+ * ```ts
+ * // After — extend the public client directly:
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() }).extend(
+ *   morphoViemExtension(),
+ * );
+ *
+ * // Native viem reads and Morpho factories share the same client:
+ * const block = await client.getBlockNumber();
+ * const vault = client.morpho.vaultV1(vaultAddress, 1);
+ * const vaultData = await vault.getData();
+ * ```
  */
 export class MorphoClient implements MorphoClientType {
   /** SDK-wide options resolved from the constructor's `_options` argument. */
@@ -35,16 +71,19 @@ export class MorphoClient implements MorphoClientType {
    * @param _options.supportDeployless - Whether entity fetchers may use deployless multicall.
    * @param _options.metadata - Optional analytics metadata applied to every transaction this
    *   client builds.
+   * @deprecated Prefer {@link morphoViemExtension} so the SDK rides on top of a viem client the
+   *   integrator already owns (public or wallet). Will be removed in the next major release.
    * @example
    * ```ts
-   * import { createWalletClient, http } from "viem";
+   * import { createPublicClient, http } from "viem";
    * import { mainnet } from "viem/chains";
-   * import { MorphoClient } from "@morpho-org/morpho-sdk";
+   * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
    *
-   * const client = new MorphoClient(
-   *   createWalletClient({ chain: mainnet, transport: http(), account: user }),
-   *   { supportSignature: true },
+   * const client = createPublicClient({ chain: mainnet, transport: http() }).extend(
+   *   morphoViemExtension({ supportSignature: true }),
    * );
+   *
+   * const vault = client.morpho.vaultV1(vaultAddress, 1);
    * ```
    */
   constructor(

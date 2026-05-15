@@ -5,6 +5,7 @@ import {
   MarketParams,
   UnknownFactory,
   UnknownOfFactory,
+  UnsupportedVaultV2AdapterError,
   VaultV2,
   VaultV2MorphoMarketV1AdapterV2,
   VaultV2MorphoVaultV1Adapter,
@@ -23,7 +24,10 @@ import {
   vaultV2Abi,
   vaultV2FactoryAbi,
 } from "../../abis.js";
-import { isUnknownOfFactoryError } from "../../error.js";
+import {
+  getUnsupportedVaultV2Adapter,
+  isUnknownOfFactoryError,
+} from "../../error.js";
 import { abi, code } from "../../queries/vault-v2/GetVaultV2.js";
 import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchToken } from "../Token.js";
@@ -73,6 +77,10 @@ export async function fetchVaultV2(
           : undefined,
       });
     } catch (error) {
+      const unsupportedAdapter = getUnsupportedVaultV2Adapter(error);
+      if (unsupportedAdapter != null)
+        throw new UnsupportedVaultV2AdapterError(unsupportedAdapter);
+
       if (deployless === "force") throw error;
       if (isUnknownOfFactoryError(error)) throw error;
       // Fallback to multicall if deployless call fails.
@@ -229,6 +237,9 @@ export async function fetchVaultV2(
       }),
     ),
   ]);
+
+  if (hasMorphoVaultV1LiquidityAdapter && liquidityData !== "0x")
+    throw new UnsupportedVaultV2AdapterError(liquidityAdapter);
 
   let liquidityAdapterIds: Hash[] | undefined;
   if (hasMorphoVaultV1LiquidityAdapter)
