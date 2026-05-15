@@ -70,13 +70,13 @@ Run `pnpm lint` before pushing. The repository also runs Biome through lint-stag
 2. Make the smallest coherent change for the PR.
 3. Add or update tests when behavior changes.
 4. Run `pnpm lint` and `pnpm test`.
-5. Add a changeset for release-impacting package changes.
+5. Add a changeset only for semver-relevant published package changes.
 
 ## Changesets
 
 This repository uses [Changesets](https://github.com/changesets/changesets) to decide which packages are released and how their versions are bumped.
 
-When a PR changes a package in a way that should be released, run:
+When a PR changes published package source in a way that should be released, run:
 
 ```bash
 pnpm changeset
@@ -88,17 +88,15 @@ Choose the smallest semver bump that describes the public impact:
 - `minor`: new backwards-compatible APIs or behavior
 - `major`: breaking changes
 
-If no release is needed, add an empty changeset:
+Do not generate a changeset when the diff is not semver-relevant for a published package. JSDoc-only changes to published package source may still include a patch changeset when maintainers want them visible in package release notes. Repo metadata, non-API documentation-only, fixture-only, generated-output-only, and tests-only changes do not need a changeset.
 
-```bash
-pnpm changeset --empty
-```
+Commit the generated `.changeset/*.md` file with the source change. Do not update package versions or package changelogs manually in the feature PR.
 
-Commit the generated `.changeset/*.md` file with the source change. Do not update package versions manually.
+Changesets generates package `CHANGELOG.md` entries during the versioning step. Contributors should not add or edit changelog files as part of normal package changes; the generated release PR owns those edits.
 
-This repository does not keep package `CHANGELOG.md` files in source. Changesets are configured with `"changelog": false`, so contributors should not add or edit changelog files as part of normal package changes.
+After changes land on `main` or `next`, the push workflow runs lint, build, and tests. If pending changesets exist, CI runs `pnpm run version` (the repository script for `changeset version`), pushes `changeset-release/<branch>`, and opens or updates the `chore: version packages (<branch>)` release PR. That PR contains consumed changesets, package version bumps, generated package changelogs, and `.changeset/pre.json` when applicable.
 
-After changes land on `main` or `next`, CI runs `pnpm run version` (the repository script for `changeset version`) and commits generated version updates directly to that branch. The next CI run publishes only package versions that have not already been published. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag.
+Publishing waits until the generated release PR is merged. The release PR merge triggers the same push workflow; with no pending changesets left, CI publishes only package versions that have not already been published. Releases from `main` use the `latest` npm tag; releases from `next` use Changesets prerelease mode and publish with the `next` npm tag. The publish job also pushes package git tags and creates one GitHub Release per published package from its generated changelog section.
 
 Before merging `next` back into `main`, maintainers must run `pnpm changeset pre exit` and commit the resulting `.changeset/pre.json` change so stable releases on `main` cannot inherit prerelease mode.
 
