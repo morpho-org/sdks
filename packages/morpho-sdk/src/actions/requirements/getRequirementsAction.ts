@@ -4,6 +4,7 @@ import {
   DepositAmountMismatchError,
   DepositAssetMismatchError,
   type Permit2Action,
+  Permit2ExpirationMissingError,
   type PermitAction,
   type PermitArgs,
 } from "../../types/index.js";
@@ -34,6 +35,7 @@ interface GetRequirementsActionParams {
  * @returns A pair of bundler `Action`s: a permit / approve2 followed by the transfer.
  * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
+ * @throws {Permit2ExpirationMissingError} when `action.type === "permit2"` but `args.expiration` is missing.
  */
 export const getRequirementsAction = ({
   asset,
@@ -54,7 +56,7 @@ export const getRequirementsAction = ({
 
   if (requirementSignature.action.type === "permit2") {
     if (!("expiration" in requirementSignature.args)) {
-      throw new Error("Expiration is not defined");
+      throw new Permit2ExpirationMissingError();
     }
     return [
       {
