@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -104,6 +110,22 @@ describe("collectVersionChanges", () => {
       disallowedPaths: ["README.md"],
       paths: ["README.md"],
     });
+  });
+
+  test("behavior: rejects symlinked version files", () => {
+    const root = createGitRepo();
+    const externalRoot = mkdtempSync(join(tmpdir(), "version-external-"));
+    tempDirs.push(externalRoot);
+    writeFileSync(join(externalRoot, "package.json"), '{"private":true}\n');
+    rmSync(join(root, "packages/morpho-sdk/package.json"));
+    symlinkSync(
+      join(externalRoot, "package.json"),
+      join(root, "packages/morpho-sdk/package.json"),
+    );
+
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      'Versioning produced non-file path "packages/morpho-sdk/package.json".',
+    );
   });
 });
 

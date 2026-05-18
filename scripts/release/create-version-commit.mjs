@@ -2,8 +2,8 @@
 
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { appendFileSync, existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { appendFileSync, lstatSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
@@ -68,16 +68,29 @@ export function collectVersionChanges(options = {}) {
   const deletions = [];
 
   for (const path of paths) {
-    const absolutePath = join(cwd, path);
+    const { absolutePath, basePath } = resolveWorktreePath(cwd, path);
+    let stats;
 
-    if (!existsSync(absolutePath)) {
-      deletions.push({ path });
-      continue;
+    try {
+      stats = lstatSync(absolutePath);
+    } catch (error) {
+      if (isNotFoundError(error)) {
+        deletions.push({ path });
+        continue;
+      }
+
+      throw error;
     }
 
-    if (!statSync(absolutePath).isFile()) {
+    if (!stats.isFile()) {
       throw new Error(`Versioning produced non-file path "${path}".`);
     }
+
+    assertPathInsideBase({
+      absolutePath: realpathSync(absolutePath),
+      basePath,
+      path,
+    });
 
     additions.push({
       contents: readFileSync(absolutePath).toString("base64"),
@@ -464,6 +477,31 @@ function readNullSeparatedGitOutput(output) {
     .toString("utf8")
     .split("\0")
     .filter((path) => path !== "");
+}
+
+function resolveWorktreePath(cwd, path) {
+  const basePath = realpathSync(cwd);
+  const absolutePath = resolve(basePath, path);
+  assertPathInsideBase({ absolutePath, basePath, path });
+
+  return { absolutePath, basePath };
+}
+
+function assertPathInsideBase(options) {
+  const relativePath = relative(options.basePath, options.absolutePath);
+
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error(`Invalid path "${options.path}".`);
+  }
+}
+
+function isNotFoundError(error) {
+  return (
+    typeof error === "object" &&
+    error != null &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
 function hasRemoteBranch(options) {
