@@ -632,6 +632,24 @@ describe("ReallocationData SimulationState parity", () => {
       options: { reallocatableVaults: [VAULT.toLowerCase() as Address] },
     },
     {
+      name: "duplicate caller-provided vaults are normalized and deduped",
+      input: makeBaseInput,
+      options: {
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+        reallocatableVaults: [VAULT, VAULT.toLowerCase() as Address],
+      },
+    },
+    {
+      name: "source-specific withdrawal utilization override",
+      input: makeBaseInput,
+      options: {
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+        maxWithdrawalUtilization: {
+          [sourceParams.id]: 51_0000000000000000n,
+        },
+      },
+    },
+    {
       name: "pending cap and repeated withdrawals",
       input: () => {
         const input = makeBaseInput();
@@ -650,6 +668,41 @@ describe("ReallocationData SimulationState parity", () => {
             maxIn: 0n,
             maxOut: 10n * MathLib.WAD,
           });
+
+        return input;
+      },
+      options: { defaultMaxWithdrawalUtilization: MathLib.WAD },
+    },
+    {
+      name: "disabled target vault-market config filters the vault",
+      input: () => {
+        const input = makeBaseInput();
+        input.vaultMarketConfigs[VAULT]![targetParams.id] =
+          makeVaultMarketConfig({
+            marketId: targetParams.id,
+            cap: 10_000n * MathLib.WAD,
+            enabled: false,
+            maxIn: 10_000n * MathLib.WAD,
+            maxOut: 0n,
+          });
+
+        return input;
+      },
+    },
+    {
+      name: "configured vault missing from vault map is skipped",
+      input: () => {
+        const input = makeBaseInput();
+        delete input.vaults[VAULT];
+
+        return input;
+      },
+    },
+    {
+      name: "missing source position is skipped",
+      input: () => {
+        const input = makeBaseInput();
+        delete input.positions[VAULT]![sourceParams.id];
 
         return input;
       },
