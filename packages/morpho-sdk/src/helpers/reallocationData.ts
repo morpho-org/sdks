@@ -400,8 +400,16 @@ export class ReallocationData implements InputReallocationData {
 
     if (!enabled) return { withdrawals: [], data: this };
 
-    const vaults = (
-      reallocatableVaults ?? (Object.keys(this.vaultMarketConfigs) as Address[])
+    const configuredVaults = Object.keys(this.vaultMarketConfigs) as Address[];
+    const vaultKeyByLower = new Map<string, Address>(
+      configuredVaults.map((vault) => [vault.toLowerCase(), vault]),
+    );
+    const vaults = Array.from(
+      new Set(
+        (reallocatableVaults ?? configuredVaults)
+          .map((vault) => vaultKeyByLower.get(vault.toLowerCase()))
+          .filter((vault): vault is Address => vault != null),
+      ),
     ).filter((vault) => {
       const vaultMarketConfig = this.vaultMarketConfigs[vault]?.[marketId];
 
