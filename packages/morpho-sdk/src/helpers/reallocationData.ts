@@ -24,7 +24,10 @@ import {
   UnknownReallocationVaultError,
   UnknownReallocationVaultMarketConfigError,
 } from "../types/index.js";
-import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "./constant.js";
+import {
+  DEFAULT_PUBLIC_ALLOCATOR_DELAY,
+  DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
+} from "./constant.js";
 
 /**
  * Input state required to construct {@link ReallocationData}.
@@ -32,6 +35,12 @@ import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "./constant.js";
 export interface InputReallocationData {
   /** Chain id associated with the fetched state. */
   readonly chainId: number;
+
+  /** Block at which the input state was fetched, when known. */
+  readonly block?: {
+    readonly number: bigint;
+    readonly timestamp: bigint;
+  };
 
   /** Markets indexed by market id. */
   readonly markets?: Readonly<Record<MarketId, Market | undefined>>;
@@ -132,6 +141,12 @@ export class ReallocationData implements InputReallocationData {
   /** Chain id associated with the fetched reallocation data. */
   public readonly chainId: number;
 
+  /** Block at which the reallocation data was fetched, when known. */
+  public readonly block?: {
+    readonly number: bigint;
+    readonly timestamp: bigint;
+  };
+
   /** Markets indexed by market id. */
   public readonly markets: Record<MarketId, Market | undefined>;
 
@@ -157,9 +172,14 @@ export class ReallocationData implements InputReallocationData {
    * @param input - Reallocation input data fetched at a consistent chain state.
    */
   constructor(input: InputReallocationData) {
-    const { chainId, markets, vaults, positions, vaultMarketConfigs } = input;
+    const { block, chainId, markets, vaults, positions, vaultMarketConfigs } =
+      input;
 
     this.chainId = chainId;
+    this.block =
+      block == null
+        ? undefined
+        : { number: block.number, timestamp: block.timestamp };
     this.markets = {};
     this.vaults = {};
     this.positions = {};
@@ -330,14 +350,18 @@ export class ReallocationData implements InputReallocationData {
         ? options.timestamp
         : (timestampOrOptions ?? options.timestamp);
     const {
+      delay = DEFAULT_PUBLIC_ALLOCATOR_DELAY,
       enabled = true,
       reallocatableVaults,
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
     } = options;
     const accrualTimestamp = BigInt(
-      timestampInput ?? this.getMarket(marketId).lastUpdate,
+      timestampInput ??
+        this.block?.timestamp ??
+        this.getMarket(marketId).lastUpdate,
     );
+    const capAccrualTimestamp = accrualTimestamp + BigInt(delay);
 
     if (!enabled) return { withdrawals: [], data: this };
 
@@ -373,6 +397,7 @@ export class ReallocationData implements InputReallocationData {
             defaultMaxWithdrawalUtilization,
             maxWithdrawalUtilization,
             timestamp: accrualTimestamp,
+            capTimestamp: capAccrualTimestamp,
           }),
         )
         .filter((withdrawal) => withdrawal?.largestWithdrawal != null)
@@ -413,6 +438,7 @@ export class ReallocationData implements InputReallocationData {
     defaultMaxWithdrawalUtilization,
     maxWithdrawalUtilization,
     timestamp,
+    capTimestamp,
   }: {
     readonly vault: Address;
     readonly marketId: MarketId;
@@ -422,6 +448,7 @@ export class ReallocationData implements InputReallocationData {
       Record<MarketId, bigint | undefined>
     >;
     readonly timestamp: bigint;
+    readonly capTimestamp: bigint;
   }):
     | {
         readonly vault: Address;
@@ -442,7 +469,7 @@ export class ReallocationData implements InputReallocationData {
 
       const suppliable = MathLib.zeroFloorSub(
         validCap,
-        this.getAccrualPosition(vault, marketId).accrueInterest(timestamp)
+        this.getAccrualPosition(vault, marketId).accrueInterest(capTimestamp)
           .supplyAssets,
       );
 

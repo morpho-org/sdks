@@ -92,9 +92,11 @@ const makeMarket = (
   {
     supply,
     borrow,
+    rateAtTarget,
   }: {
     readonly supply: bigint;
     readonly borrow: bigint;
+    readonly rateAtTarget?: bigint;
   },
 ) =>
   new Market({
@@ -106,6 +108,7 @@ const makeMarket = (
     lastUpdate: TIMESTAMP,
     fee: 0n,
     price: 10n ** 36n,
+    rateAtTarget,
   });
 
 // biome-ignore lint/complexity/useMaxParams: compact fixture helper for market/user position rows.
@@ -221,6 +224,7 @@ const makeLegacyHolding = (user: Address) =>
 
 type MutableReallocationInput = {
   readonly chainId: number;
+  readonly block?: { readonly number: bigint; readonly timestamp: bigint };
   markets: Record<MarketId, Market | undefined>;
   vaults: Record<Address, Vault | undefined>;
   positions: Record<Address, Record<MarketId, Position | undefined>>;
@@ -791,12 +795,15 @@ describe("ReallocationData unit coverage", () => {
     expect(emptyData.positions).toEqual({});
     expect(emptyData.vaultMarketConfigs).toEqual({});
 
-    const input = makeInput({
-      targetSupply: 1000n * MathLib.WAD,
-      targetBorrow: 500n * MathLib.WAD,
-      sourceSupply: 1000n * MathLib.WAD,
-      sourceBorrow: 500n * MathLib.WAD,
-    });
+    const input = {
+      ...makeInput({
+        targetSupply: 1000n * MathLib.WAD,
+        targetBorrow: 500n * MathLib.WAD,
+        sourceSupply: 1000n * MathLib.WAD,
+        sourceBorrow: 500n * MathLib.WAD,
+      }),
+      block: { number: 123n, timestamp: TIMESTAMP + 12n },
+    };
     const data = new ReallocationData({
       ...input,
       markets: { ...input.markets, ["0x00" as MarketId]: undefined },
@@ -813,6 +820,9 @@ describe("ReallocationData unit coverage", () => {
     const clone = data.clone();
 
     expect(data.chainId).toBe(ChainId.EthMainnet);
+    expect(data.block).toEqual(input.block);
+    expect(data.block).not.toBe(input.block);
+    expect(clone.block).toEqual(input.block);
     expect(data.getMarket(targetParams.id)).not.toBe(
       input.markets![targetParams.id],
     );
@@ -912,6 +922,61 @@ describe("ReallocationData unit coverage", () => {
     expect(
       reallocatedData.getVault(VAULT).publicAllocatorConfig?.accruedFee,
     ).toBe(13n);
+  });
+
+  test("uses stored block timestamp and delay for target cap headroom", () => {
+    const blockTimestamp = TIMESTAMP + 60n;
+    const input = {
+      ...makeInput({
+        targetSupply: 1000n * MathLib.WAD,
+        targetBorrow: 900n * MathLib.WAD,
+        sourceSupply: 1000n * MathLib.WAD,
+        sourceBorrow: 100n * MathLib.WAD,
+      }),
+      block: { number: 123n, timestamp: blockTimestamp },
+    };
+    input.markets[targetParams.id] = makeMarket(targetParams, {
+      supply: 1000n * MathLib.WAD,
+      borrow: 900n * MathLib.WAD,
+      rateAtTarget: 100_000_000_000_000n,
+    });
+    input.positions[VAULT]![targetParams.id] = makePosition(
+      targetParams.id,
+      1000n * MathLib.WAD,
+    );
+    input.vaultMarketConfigs[VAULT]![targetParams.id] = makeVaultMarketConfig({
+      marketId: targetParams.id,
+      cap: 1100n * MathLib.WAD,
+      maxIn: 1000n * MathLib.WAD,
+      maxOut: 0n,
+    });
+
+    const data = new ReallocationData(input);
+    const assets = (withdrawals: readonly PublicReallocation[]) =>
+      withdrawals[0]?.assets ?? 0n;
+
+    const noDelayAssets = assets(
+      data.getMarketPublicReallocations(targetParams.id, {
+        timestamp: blockTimestamp,
+        delay: 0n,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      }).withdrawals,
+    );
+    const delayedAssets = assets(
+      data.getMarketPublicReallocations(targetParams.id, {
+        timestamp: blockTimestamp,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      }).withdrawals,
+    );
+    const defaultAssets = assets(
+      data.getMarketPublicReallocations(targetParams.id, {
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      }).withdrawals,
+    );
+
+    expect(noDelayAssets).toBeGreaterThan(0n);
+    expect(delayedAssets).toBeLessThan(noDelayAssets);
+    expect(defaultAssets).toBe(delayedAssets);
   });
 
   test("skips unusable source markets and missing public allocator limits", () => {

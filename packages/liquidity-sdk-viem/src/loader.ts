@@ -145,6 +145,10 @@ export class LiquidityLoader<chain extends Chain = Chain> {
 
         const startState = new ReallocationData({
           chainId,
+          block: {
+            number: block.number,
+            timestamp: block.timestamp,
+          },
           markets: fromEntries(markets.map((market) => [market.id, market])),
           vaults: fromEntries(vaults.map((vault) => [vault.address, vault])),
           positions: fromEntries(

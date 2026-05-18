@@ -21,6 +21,11 @@ export const DEFAULT_WITHDRAWAL_TARGET_UTILIZATION = 92_0000000000000000n;
 export const DEFAULT_SUPPLY_TARGET_UTILIZATION = 90_5000000000000000n;
 
 /**
+ * Default look-ahead used when checking target-market cap headroom for public reallocations.
+ */
+export const DEFAULT_PUBLIC_ALLOCATOR_DELAY = 60n * 60n;
+
+/**
  * Tokens that require setting allowance from zero before changing approval.
  */
 export const APPROVE_ONLY_ONCE_TOKENS: Partial<Record<number, Address[]>> = {

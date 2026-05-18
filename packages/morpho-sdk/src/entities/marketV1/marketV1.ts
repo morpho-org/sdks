@@ -315,8 +315,8 @@ export interface MarketV1Actions {
    * @param params.reallocationData - The current on-chain state (from {@link getReallocationData}).
    * @param params.borrowAmount - The intended borrow amount.
    * @param params.options - Optional reallocation computation options
-   *        (timestamp, utilization targets, reallocatable vaults filter, etc.).
-   *        Pass the fetched block timestamp to compute reallocations at the same block.
+   *        (timestamp, delay, utilization targets, reallocatable vaults filter, etc.).
+   *        Defaults to the timestamp captured by {@link getReallocationData}.
    * @returns Array of vault reallocations ready to pass to `borrow()` or
    *          `supplyCollateralBorrow()`. Empty array if no reallocation is needed.
    */
@@ -1029,6 +1029,10 @@ export class MorphoMarketV1 implements MarketV1Actions {
 
     return new ReallocationData({
       chainId: this.chainId,
+      block: {
+        number: block.number,
+        timestamp: block.timestamp,
+      },
       markets: marketsRecord,
       vaults: vaultsRecord,
       vaultMarketConfigs: vaultMarketConfigsRecord,

@@ -34,6 +34,14 @@ export interface PublicAllocatorOptions {
    * @default 92% (920000000000000000n)
    */
   readonly defaultMaxWithdrawalUtilization?: bigint;
+
+  /**
+   * Look-ahead applied only to target-market cap headroom, in seconds.
+   * Source withdrawals still use `timestamp` so this preserves the onchain
+   * snapshot used for max-out/liquidity checks.
+   * @default 1 hour (3600n)
+   */
+  readonly delay?: BigIntish;
 }
 
 /**

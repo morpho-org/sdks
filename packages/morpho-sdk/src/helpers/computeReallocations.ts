@@ -107,9 +107,8 @@ export const computeReallocations = ({
 }): readonly VaultReallocation[] => {
   if (options?.enabled === false) return [];
 
-  // ReallocationData does not retain the fetch block; pass that block timestamp
-  // to compute against the same accrued state, otherwise Market defaults to lastUpdate.
-  const market = data.getMarket(marketId).accrueInterest(options?.timestamp);
+  const timestamp = options?.timestamp ?? data.block?.timestamp;
+  const market = data.getMarket(marketId).accrueInterest(timestamp);
 
   const newTotalBorrowAssets = market.totalBorrowAssets + borrowAmount;
   const newTotalSupplyAssets = market.totalSupplyAssets;
@@ -136,7 +135,7 @@ export const computeReallocations = ({
 
   // Phase 1: "friendly" reallocations respecting withdrawal utilization targets.
   const { withdrawals: friendlyWithdrawals, data: friendlyReallocationData } =
-    data.getMarketPublicReallocations(market.id, options?.timestamp, options);
+    data.getMarketPublicReallocations(market.id, timestamp, options);
 
   const withdrawals = [...friendlyWithdrawals];
 
@@ -153,7 +152,7 @@ export const computeReallocations = ({
     withdrawals.push(
       ...friendlyReallocationData.getMarketPublicReallocations(
         market.id,
-        options?.timestamp,
+        timestamp,
         {
           ...options,
           defaultMaxWithdrawalUtilization: MathLib.WAD,
