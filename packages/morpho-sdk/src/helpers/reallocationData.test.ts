@@ -14,6 +14,7 @@ import type { Address } from "viem";
 import { maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
+  DisabledReallocationMarketError,
   MissingPublicAllocatorConfigError,
   type PublicAllocatorOptions,
   type PublicReallocation,
@@ -1063,6 +1064,33 @@ describe("ReallocationData unit coverage", () => {
         assets: 20n * MathLib.WAD,
       },
     ]);
+
+    expect(
+      new ReallocationData({
+        ...input,
+        vaultMarketConfigs: {
+          [VAULT]: {
+            ...input.vaultMarketConfigs![VAULT]!,
+            [sourceParams.id]: makeVaultMarketConfig({
+              marketId: sourceParams.id,
+              cap: 10_000n * MathLib.WAD,
+              enabled: false,
+              maxIn: 0n,
+              maxOut: 10n * MathLib.WAD,
+            }),
+          },
+        },
+      }).getMarketPublicReallocations(targetParams.id, {
+        timestamp: TIMESTAMP,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+      }).withdrawals,
+    ).toEqual([
+      {
+        vault: VAULT,
+        id: alternateSourceParams.id,
+        assets: 20n * MathLib.WAD,
+      },
+    ]);
   });
 
   test("throws typed errors for impossible direct apply states", () => {
@@ -1131,5 +1159,47 @@ describe("ReallocationData unit coverage", () => {
         withdrawal,
       ),
     ).toThrow(UnknownReallocationVaultMarketConfigError);
+
+    expect(() =>
+      applyPublicReallocation(
+        new ReallocationData({
+          ...baseInput,
+          vaultMarketConfigs: {
+            [VAULT]: {
+              ...baseInput.vaultMarketConfigs![VAULT]!,
+              [sourceParams.id]: makeVaultMarketConfig({
+                marketId: sourceParams.id,
+                cap: 10_000n * MathLib.WAD,
+                enabled: false,
+                maxIn: 0n,
+                maxOut: 10_000n * MathLib.WAD,
+              }),
+            },
+          },
+        }),
+        withdrawal,
+      ),
+    ).toThrow(DisabledReallocationMarketError);
+
+    expect(() =>
+      applyPublicReallocation(
+        new ReallocationData({
+          ...baseInput,
+          vaultMarketConfigs: {
+            [VAULT]: {
+              ...baseInput.vaultMarketConfigs![VAULT]!,
+              [targetParams.id]: makeVaultMarketConfig({
+                marketId: targetParams.id,
+                cap: 10_000n * MathLib.WAD,
+                enabled: false,
+                maxIn: 10_000n * MathLib.WAD,
+                maxOut: 0n,
+              }),
+            },
+          },
+        }),
+        withdrawal,
+      ),
+    ).toThrow(DisabledReallocationMarketError);
   });
 });

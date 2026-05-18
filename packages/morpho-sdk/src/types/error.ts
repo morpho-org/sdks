@@ -379,6 +379,18 @@ export class MissingPublicAllocatorConfigError extends Error {
   }
 }
 
+/** Thrown when a reallocation attempts to use a disabled vault market. */
+export class DisabledReallocationMarketError extends Error {
+  constructor(
+    public readonly vault: Address,
+    public readonly marketId: MarketId,
+  ) {
+    super(
+      `Vault ${vault} has disabled market ${marketId}. Remove it from reallocations or re-enable the market before reallocating.`,
+    );
+  }
+}
+
 /**
  * Thrown when shared liquidity selected by `computeReallocations` cannot cover
  * the absolute borrow shortfall on the target market — the resulting

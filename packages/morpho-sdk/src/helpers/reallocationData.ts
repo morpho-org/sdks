@@ -18,6 +18,7 @@ import type {
   PublicReallocation,
 } from "../types/index.js";
 import {
+  DisabledReallocationMarketError,
   MissingPublicAllocatorConfigError,
   UnknownReallocationMarketError,
   UnknownReallocationPositionError,
@@ -468,10 +469,8 @@ export class ReallocationData implements InputReallocationData {
                   defaultMaxWithdrawalUtilization,
               );
 
-            const srcPublicAllocatorConfig = this.getVaultMarketConfig(
-              vault,
-              srcMarketId,
-            ).publicAllocatorConfig;
+            const srcConfig = this.getVaultMarketConfig(vault, srcMarketId);
+            if (!srcConfig.enabled) return { id: srcMarketId, assets: 0n };
 
             return {
               id: srcMarketId,
@@ -480,7 +479,7 @@ export class ReallocationData implements InputReallocationData {
                 targetUtilizationLiquidity,
                 suppliable,
                 publicAllocatorConfig?.maxIn ?? 0n,
-                srcPublicAllocatorConfig?.maxOut ?? 0n,
+                srcConfig.publicAllocatorConfig?.maxOut ?? 0n,
               ),
             };
           }, UnknownDataError);
@@ -527,11 +526,17 @@ export class ReallocationData implements InputReallocationData {
     vaultPublicAllocatorConfig.accruedFee += vaultPublicAllocatorConfig.fee;
 
     const sourceConfig = data.getVaultMarketConfig(vault, withdrawal.id);
+    if (!sourceConfig.enabled)
+      throw new DisabledReallocationMarketError(vault, withdrawal.id);
+
     const sourcePublicAllocatorConfig = sourceConfig.publicAllocatorConfig;
     if (sourcePublicAllocatorConfig == null)
       throw new UnknownReallocationVaultMarketConfigError(vault, withdrawal.id);
 
     const supplyConfig = data.getVaultMarketConfig(vault, supplyMarketId);
+    if (!supplyConfig.enabled)
+      throw new DisabledReallocationMarketError(vault, supplyMarketId);
+
     const supplyPublicAllocatorConfig = supplyConfig.publicAllocatorConfig;
     if (supplyPublicAllocatorConfig == null)
       throw new UnknownReallocationVaultMarketConfigError(
