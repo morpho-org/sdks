@@ -115,10 +115,26 @@ This keeps the adapter free of the cross-layer leaks §1 forbids. The WDK module
 ### Tooling migration
 
 - Replace `standard` with Biome (root config already applies).
-- Replace `jest` with Vitest; reuse `@morpho-org/test` for fork-based integration tests (Anvil pinned per chain per §5).
+- Replace `jest` with Vitest. Native ESM removes the `NODE_OPTIONS=--experimental-vm-modules` requirement.
 - Migrate hand-written `types/*.d.ts` into co-located TypeScript source. The published `.d.ts` files come from `tsc`, not from a hand-maintained `types/` folder.
-- Replace `scripts/check-vault-v2-only.js` with a Vitest invariant test inside the new package.
-- Convert the existing `jest` suites to Vitest one-to-one (no behavior changes). Where the original tests mocked a viem client, replace with an Anvil fork per §5 — no mocked viem clients on RPC paths.
+- Replace `scripts/check-vault-v2-only.js` with a Vitest invariant test inside the new package (test fails if a non-V2 vault preset is added).
+- Add the package to the root `pnpm-workspace.yaml` packages glob.
+
+### Test migration
+
+Upstream ships two suites that are wired into the same `pnpm test` script today:
+
+- `tests/morpho-protocol-evm.test.js` — 43 unit tests across 8 describe blocks (supply / quoteSupply / withdraw / borrow / repay / collateral / erc-4337 / read methods / read-only accounts). It mocks `viem`, `@morpho-org/morpho-sdk`, and `@morpho-org/blue-sdk-viem` via `jest.unstable_mockModule`. No network, no Anvil.
+- `tests/integration/module.test.js` — 1 end-to-end flow against an Anvil fork (mainnet, `MAINNET_RPC_URL`, no block pin) using a hardcoded BIP44 mnemonic and an impersonated whale (USDT). Run separately via `pnpm test:fork`.
+
+Two §5 violations make the suite unfit for CI as-is: **mocked viem clients on RPC paths**, and an **unpinned fork block**. The migration handles them as follows.
+
+- **Unit tests (mocked module path) → split.** Tests that exercise pure helpers (preset resolution, requirement translation, parameter normalization, error mapping, the V2-only invariant) become colocated Vitest unit tests next to source (`src/**/*.test.ts`) with no client mocks. Tests that today only assert "the SDK action was called with X" by mocking `morpho-sdk` are **rewritten as fork tests**: the assertion target moves from "SDK called with X" to "the WDK account received a `Transaction` whose `to`/`data`/`value` decode to the expected Morpho action". Drop the `jest.unstable_mockModule('viem', …)` and `jest.unstable_mockModule('@morpho-org/morpho-sdk', …)` calls entirely — they are exactly what §5 forbids and they prevent the suite from catching SDK regressions.
+- **Integration test → harden.** Migrate `tests/integration/module.test.js` to a fork test built on `createViemTest` / `createAnvilTestClient` from `@morpho-org/test`. Pin the block number per chain (mainnet first; matches the convention used by `morpho-sdk`, `migration-sdk-viem`, `liquidity-sdk-viem`). Replace the hardcoded mnemonic with the harness's prefunded test accounts; replace the impersonated USDT whale with `anvil_setBalance` + `anvil_setStorageAt` for ERC-20 balance seeding (already in the test package). Required env vars are read through `morpho-sdk`'s existing zod-validated `env()` helper or its package-local equivalent — `MAINNET_RPC_URL` reuses the root `.env` contract; no new secret surface.
+- **ERC-4337 flow.** Currently a single test that mocks the bundler. Keep it as a Vitest unit test with the bundler API stubbed (bundler infrastructure is not a Morpho protocol concern), and add a fork test that exercises the ERC-4337 account's call delegation against an Anvil-deployed EntryPoint when one is available in `@morpho-org/test`. If no EntryPoint fixture exists yet, leave the fork-side ERC-4337 coverage as Phase 6 follow-up rather than expanding the test harness in this TIB.
+- **Coverage parity gate.** Phase 1 keeps the suite running under its original jest configuration so the package lands in-tree with a green baseline. Phase 2 then ports tests in two PRs — unit tests first (fast, no infra), fork tests second (Anvil-bound). No test deletion until its Vitest equivalent is green; line/branch coverage on the migrated package source must not drop below the pre-migration jest report attached to the Phase 1 PR.
+- **CI surface.** Unit tests run inline on every push via the root Vitest project. Fork tests run on the same workflow paths the other fork-test packages already use (`migration-sdk-viem`, `liquidity-sdk-viem`, `morpho-sdk`), gated on `MAINNET_RPC_URL` being present so PRs from forks don't fail on missing secrets. Re-running fork tests on every dependency bump of `morpho-sdk` / `blue-sdk-viem` is automatic via the workspace dep graph.
+- **Property-based tests.** §5 calls for fast-check on calldata encoders. This package does not encode calldata itself (it forwards `morpho-sdk` outputs), so property-based coverage targets the WDK requirement translator instead: arbitrary `Requirement[]` shapes must round-trip to WDK signer calls without dropping items, reordering, or merging approvals that target different spenders. Add this as Phase 2 PR scope, not a follow-up.
 
 ### Public API preservation
 
@@ -143,11 +159,13 @@ The legacy versions are not unpublished. The standalone source repo is archived 
 
 ### Implementation Phases
 
-- **Phase 1 — Drop in source.** Copy `src/`, `tests/`, `bare.js`, `index.js`, and `types/` into `packages/morpho-sdk-wdk/`. Add a minimal `package.json` with name `@morpho-org/morpho-sdk-wdk`, workspace deps, and the dual-export map. CI runs the existing `jest` suite untouched to confirm parity. No public-API changes.
-- **Phase 2 — Toolchain alignment.** Convert source to TypeScript (NodeNext, strict). Convert `jest` to Vitest, migrating fork-relevant tests onto `@morpho-org/test`. Replace `standard` with Biome. Delete hand-maintained `types/`; generated `.d.ts` ships from `tsc`. Add `@morpho-org/morpho-sdk-wdk/bare` subpath export; remove root-level `bare.js` / `index.js`. JSDoc backfill on every exported symbol per §6 (initial tier slot; coverage measured by `pnpm jsdoc:coverage`).
-- **Phase 3 — First release under new name.** Changesets entry sets the initial version of `@morpho-org/morpho-sdk-wdk` to `1.0.0-beta.2` (continuation of the legacy beta series) and bundles the changelog of upstream `1.0.0-beta.1` for traceability. Trusted-publish via the monorepo release flow.
-- **Phase 4 — Deprecate legacy name.** Run the `npm deprecate` command above on every published version of `@morpho-org/wdk-protocol-lending-morpho-evm`. Archive the standalone GitHub repo with a README redirect to `packages/morpho-sdk-wdk` in this monorepo.
-- **Phase 5 — Audit alignment.** Include `morpho-sdk-wdk` in the next Cantina audit scope per §7. Document any findings in the package's CHANGELOG at the next major.
+- **Phase 1 — Drop in source.** Copy `src/`, `tests/`, `bare.js`, `index.js`, and `types/` into `packages/morpho-sdk-wdk/`. Add a minimal `package.json` with name `@morpho-org/morpho-sdk-wdk`, workspace deps, the dual-export map, and a package-local `jest` config so the original suite still runs unchanged. CI invokes it via `pnpm --filter @morpho-org/morpho-sdk-wdk test` to confirm parity. No public-API changes.
+- **Phase 2a — TS + lint + build.** Convert source to TypeScript (NodeNext, strict). Replace `standard` with Biome. Delete hand-maintained `types/`; generated `.d.ts` ships from `tsc`. Add `@morpho-org/morpho-sdk-wdk/bare` subpath export; remove root-level `bare.js` / `index.js`. JSDoc backfill on every exported symbol per §6 (coverage measured by `pnpm jsdoc:coverage`).
+- **Phase 2b — Test migration to Vitest.** Port the unit suite first: colocate as `src/**/*.test.ts`, drop every `jest.unstable_mockModule('viem' | '@morpho-org/morpho-sdk' | …)` call, and rewrite "SDK called with X" assertions as `Transaction` decode assertions. Then port the integration suite onto `@morpho-org/test` (`createViemTest` / `createAnvilTestClient`), pin the mainnet block, swap the hardcoded mnemonic for the harness's prefunded accounts and ERC-20 storage seeding helpers. Add fast-check property tests on the requirement translator. Retire the original jest config only when the Vitest replacement is green and coverage does not regress versus the Phase 1 baseline.
+- **Phase 3 — Wire fork tests into root CI.** Add the package to the existing fork-test job (gated on `MAINNET_RPC_URL`), shared with `morpho-sdk`, `migration-sdk-viem`, `liquidity-sdk-viem`. Unit tests already run via the root Vitest project after Phase 2b.
+- **Phase 4 — First release under new name.** Changesets entry sets the initial version of `@morpho-org/morpho-sdk-wdk` to `1.0.0-beta.2` (continuation of the legacy beta series) and bundles the changelog of upstream `1.0.0-beta.1` for traceability. Trusted-publish via the monorepo release flow.
+- **Phase 5 — Deprecate legacy name.** Run the `npm deprecate` command above on every published version of `@morpho-org/wdk-protocol-lending-morpho-evm`. Archive the standalone GitHub repo with a README redirect to `packages/morpho-sdk-wdk` in this monorepo.
+- **Phase 6 — Audit + ERC-4337 fork coverage.** Include `morpho-sdk-wdk` in the next Cantina audit scope per §7. Add Anvil-side ERC-4337 fork coverage once an EntryPoint fixture lands in `@morpho-org/test`. Document audit findings in the package's CHANGELOG at the next major.
 
 ## Considered Alternatives
 
