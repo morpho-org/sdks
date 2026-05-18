@@ -152,7 +152,7 @@ export async function createSignedVersionCommit(options) {
       variables: {
         input: {
           branch: {
-            refName: tempBranch,
+            branchName: tempBranch,
             repositoryNameWithOwner: options.repository,
           },
           expectedHeadOid: options.baseSha,

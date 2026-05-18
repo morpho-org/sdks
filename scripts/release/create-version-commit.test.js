@@ -209,7 +209,7 @@ describe("createSignedVersionCommit", () => {
           variables: {
             input: {
               branch: {
-                refName: "tmp-release",
+                branchName: "tmp-release",
                 repositoryNameWithOwner: "morpho-org/sdks",
               },
               expectedHeadOid: "base-sha",
