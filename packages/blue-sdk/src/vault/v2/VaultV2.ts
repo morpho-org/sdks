@@ -16,11 +16,6 @@ export interface IVaultV2Allocation {
 export interface IVaultV2 extends IToken {
   asset: Address;
   /**
-   * Post-accrue total assets. Optional at construction — defaults to `_totalAssets` (pre-accrue).
-   * Set to the projected value by `AccrualVaultV2.accrueInterest`.
-   */
-  totalAssets?: bigint;
-  /**
    * Stored total assets at `lastUpdate`, excluding virtually accrued interest.
    */
   _totalAssets: bigint;
@@ -44,7 +39,6 @@ export interface IVaultV2 extends IToken {
 export class VaultV2 extends WrappedToken implements IVaultV2 {
   public readonly asset: Address;
 
-  public totalAssets;
   public _totalAssets;
   public totalSupply;
   public virtualShares;
@@ -64,7 +58,6 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
 
   constructor({
     asset,
-    totalAssets,
     _totalAssets,
     totalSupply,
     virtualShares,
@@ -83,7 +76,6 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     super(config, asset);
 
     this.asset = asset;
-    this.totalAssets = totalAssets ?? _totalAssets;
     this._totalAssets = _totalAssets;
     this.totalSupply = totalSupply;
     this.virtualShares = virtualShares;
@@ -177,9 +169,9 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
         };
 
       if (relativeCap !== MathLib.WAD) {
-        // `relativeCap` can be set lower than `allocation / totalAssets`.
+        // `relativeCap` can be set lower than `allocation / _totalAssets`.
         const relativeMaxDeposit = MathLib.zeroFloorSub(
-          MathLib.wMulDown(this.totalAssets, relativeCap),
+          MathLib.wMulDown(this._totalAssets, relativeCap),
           allocation,
         );
         if (liquidityAdapterLimit.value > relativeMaxDeposit)
@@ -281,7 +273,6 @@ export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
       newTotalAssetsWithoutFees + 1n,
     );
 
-    vault.totalAssets = newTotalAssets;
     vault._totalAssets = newTotalAssets;
     if (performanceFeeShares) vault.totalSupply += performanceFeeShares;
     if (managementFeeShares) vault.totalSupply += managementFeeShares;
