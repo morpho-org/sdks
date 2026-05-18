@@ -441,20 +441,6 @@ export class UnknownReallocationPositionError extends UnknownDataError {
   }
 }
 
-/** Thrown when reallocation state does not contain a requested token holding. */
-export class UnknownReallocationHoldingError extends UnknownDataError {
-  /**
-   * @param user - Holding owner address.
-   * @param token - Token address for the missing holding.
-   */
-  constructor(
-    public readonly user: Address,
-    public readonly token: Address,
-  ) {
-    super(`unknown reallocation holding of "${user}" for token "${token}"`);
-  }
-}
-
 /** Thrown when a market borrow's `minSharePrice` slippage bound is negative. */
 export class NonPositiveMinBorrowSharePriceError extends Error {
   constructor(market: string) {
