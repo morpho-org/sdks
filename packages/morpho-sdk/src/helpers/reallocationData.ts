@@ -2,7 +2,6 @@ import {
   _try,
   AccrualPosition,
   type BigIntish,
-  Holding,
   Market,
   type MarketId,
   MathLib,
@@ -20,7 +19,6 @@ import type {
 } from "../types/index.js";
 import {
   MissingPublicAllocatorConfigError,
-  UnknownReallocationHoldingError,
   UnknownReallocationMarketError,
   UnknownReallocationPositionError,
   UnknownReallocationVaultError,
@@ -46,11 +44,6 @@ export interface InputReallocationData {
     Record<Address, Readonly<Record<MarketId, Position | undefined>>>
   >;
 
-  /** Holdings indexed by user or vault address, then by token address. */
-  readonly holdings?: Readonly<
-    Record<Address, Readonly<Record<Address, Holding | undefined>>>
-  >;
-
   /** Vault market configs indexed by vault address, then by market id. */
   readonly vaultMarketConfigs?: Readonly<
     Record<Address, Readonly<Record<MarketId, VaultMarketConfig | undefined>>>
@@ -70,13 +63,6 @@ const cloneMarket = (market: Market) => new Market(market);
  * @internal
  */
 const clonePosition = (position: Position) => new Position(position);
-
-/**
- * Clones a token holding before local state transitions update balances or allowances.
- *
- * @internal
- */
-const cloneHolding = (holding: Holding): Holding => new Holding(holding);
 
 /**
  * Clones vault state, including queue arrays and public allocator accounting.
@@ -137,7 +123,7 @@ const cloneVaultMarketConfig = (config: VaultMarketConfig) =>
  * Narrow state container for computing public allocator reallocations.
  *
  * @remarks
- * The class owns only the market, vault, position, holding, vault-market-config,
+ * The class owns only the market, vault, position, vault-market-config,
  * and chain data needed by the shared-liquidity algorithm. Constructor inputs
  * are cloned, and simulation steps return cloned `ReallocationData` instances
  * so fetched caller inputs are not mutated.
@@ -158,12 +144,6 @@ export class ReallocationData implements InputReallocationData {
     Record<MarketId, Position | undefined>
   >;
 
-  /** Holdings indexed by user or vault address, then by token address. */
-  public readonly holdings: Record<
-    Address,
-    Record<Address, Holding | undefined>
-  >;
-
   /** Vault market configs indexed by vault address, then by market id. */
   public readonly vaultMarketConfigs: Record<
     Address,
@@ -172,25 +152,17 @@ export class ReallocationData implements InputReallocationData {
 
   /**
    * Creates a cloned reallocation state from fetched market, vault, position,
-   * holding, and vault-market-config data.
+   * and vault-market-config data.
    *
    * @param input - Reallocation input data fetched at a consistent chain state.
    */
   constructor(input: InputReallocationData) {
-    const {
-      chainId,
-      markets,
-      vaults,
-      positions,
-      holdings,
-      vaultMarketConfigs,
-    } = input;
+    const { chainId, markets, vaults, positions, vaultMarketConfigs } = input;
 
     this.chainId = chainId;
     this.markets = {};
     this.vaults = {};
     this.positions = {};
-    this.holdings = {};
     this.vaultMarketConfigs = {};
 
     for (const [id, market] of Object.entries(markets ?? {}) as [
@@ -219,21 +191,6 @@ export class ReallocationData implements InputReallocationData {
       ][]) {
         this.positions[user]![id] =
           position == null ? undefined : clonePosition(position);
-      }
-    }
-
-    for (const [user, byToken] of Object.entries(holdings ?? {}) as [
-      Address,
-      Record<Address, Holding | undefined>,
-    ][]) {
-      this.holdings[user] = {};
-
-      for (const [token, holding] of Object.entries(byToken) as [
-        Address,
-        Holding | undefined,
-      ][]) {
-        this.holdings[user]![token] =
-          holding == null ? undefined : cloneHolding(holding);
       }
     }
 
@@ -322,22 +279,6 @@ export class ReallocationData implements InputReallocationData {
       this.getPosition(user, marketId),
       this.getMarket(marketId),
     );
-  }
-
-  /**
-   * Gets a token holding for a user or vault.
-   *
-   * @param user - Holding owner address.
-   * @param token - Token address.
-   * @returns The cloned holding data.
-   * @throws {@link UnknownReallocationHoldingError} when the holding is absent.
-   */
-  public getHolding(user: Address, token: Address) {
-    const holding = this.holdings[user]?.[token];
-
-    if (holding == null) throw new UnknownReallocationHoldingError(user, token);
-
-    return holding;
   }
 
   /**

@@ -1,6 +1,5 @@
 import {
   ChainId,
-  Holding,
   Market,
   type MarketId,
   MarketParams,
@@ -11,12 +10,11 @@ import {
   VaultMarketPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
-import { maxUint256, zeroAddress } from "viem";
+import { zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   MissingPublicAllocatorConfigError,
   type PublicReallocation,
-  UnknownReallocationHoldingError,
   UnknownReallocationMarketError,
   UnknownReallocationPositionError,
   UnknownReallocationVaultError,
@@ -168,29 +166,11 @@ const makeVault = ({
   });
 };
 
-const makeHolding = () =>
-  new Holding({
-    user: VAULT,
-    token: LOAN_TOKEN,
-    erc20Allowances: {
-      morpho: maxUint256,
-      permit2: 0n,
-      "bundler3.generalAdapter1": 0n,
-    },
-    permit2BundlerAllowance: {
-      amount: 0n,
-      expiration: 0n,
-      nonce: 0n,
-    },
-    balance: 0n,
-  });
-
 type MutableReallocationInput = {
   readonly chainId: number;
   markets: Record<MarketId, Market | undefined>;
   vaults: Record<Address, Vault | undefined>;
   positions: Record<Address, Record<MarketId, Position | undefined>>;
-  holdings: Record<Address, Record<Address, Holding | undefined>>;
   vaultMarketConfigs: Record<
     Address,
     Record<MarketId, VaultMarketConfig | undefined>
@@ -226,11 +206,6 @@ const makeInput = ({
     [VAULT]: {
       [targetParams.id]: makePosition(targetParams.id, 0n),
       [sourceParams.id]: makePosition(sourceParams.id, sourceSupply),
-    },
-  },
-  holdings: {
-    [VAULT]: {
-      [LOAN_TOKEN]: makeHolding(),
     },
   },
   vaultMarketConfigs: {
@@ -277,7 +252,6 @@ describe("ReallocationData unit coverage", () => {
     expect(emptyData.markets).toEqual({});
     expect(emptyData.vaults).toEqual({});
     expect(emptyData.positions).toEqual({});
-    expect(emptyData.holdings).toEqual({});
     expect(emptyData.vaultMarketConfigs).toEqual({});
 
     const input = makeInput({
@@ -294,10 +268,6 @@ describe("ReallocationData unit coverage", () => {
         ...input.positions,
         [zeroAddress]: { ["0x00" as MarketId]: undefined },
       },
-      holdings: {
-        ...input.holdings,
-        [zeroAddress]: { [zeroAddress]: undefined },
-      },
       vaultMarketConfigs: {
         ...input.vaultMarketConfigs,
         [zeroAddress]: { ["0x00" as MarketId]: undefined },
@@ -312,9 +282,6 @@ describe("ReallocationData unit coverage", () => {
     expect(data.getVault(VAULT)).not.toBe(input.vaults![VAULT]);
     expect(data.getPosition(VAULT, sourceParams.id)).not.toBe(
       input.positions![VAULT]![sourceParams.id],
-    );
-    expect(data.getHolding(VAULT, LOAN_TOKEN)).not.toBe(
-      input.holdings![VAULT]![LOAN_TOKEN],
     );
     expect(data.getVaultMarketConfig(VAULT, sourceParams.id)).not.toBe(
       input.vaultMarketConfigs![VAULT]![sourceParams.id],
@@ -337,9 +304,6 @@ describe("ReallocationData unit coverage", () => {
     );
     expect(() => data.getPosition(missingAddress, missingMarket)).toThrow(
       UnknownReallocationPositionError,
-    );
-    expect(() => data.getHolding(missingAddress, missingAddress)).toThrow(
-      UnknownReallocationHoldingError,
     );
     expect(() =>
       data.getVaultMarketConfig(missingAddress, missingMarket),

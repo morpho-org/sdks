@@ -1,6 +1,5 @@
 import type { MarketId } from "@morpho-org/blue-sdk";
 import {
-  fetchHolding,
   fetchMarket,
   fetchPosition,
   fetchVault,
@@ -100,88 +99,54 @@ export class LiquidityLoader<chain extends Chain = Chain> {
           ),
         );
 
-        const [markets, vaults, vaultsTokens, vaultsMarkets] =
-          await Promise.all([
-            Promise.all(
-              [...allMarketIds].map((marketId) =>
-                fetchMarket(marketId, client, { blockNumber: block.number }),
-              ),
+        const [markets, vaults, vaultsMarkets] = await Promise.all([
+          Promise.all(
+            [...allMarketIds].map((marketId) =>
+              fetchMarket(marketId, client, { blockNumber: block.number }),
             ),
-            Promise.all(
-              [...allVaults].map((vault) =>
-                fetchVault(vault, client, { blockNumber: block.number }),
-              ),
+          ),
+          Promise.all(
+            [...allVaults].map((vault) =>
+              fetchVault(vault, client, { blockNumber: block.number }),
             ),
-            Promise.all(
-              allVaultsMarkets.map(
-                // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
-                async ([vault, markets]) =>
-                  [
-                    vault,
-                    await Promise.all(
-                      markets.map(
-                        async ({ loanAsset }) =>
-                          [
-                            loanAsset.address,
-                            {
-                              holding: await fetchHolding(
-                                vault,
-                                loanAsset.address,
-                                client,
-                                { blockNumber: block.number },
-                              ),
-                            },
-                          ] as const,
-                      ),
+          ),
+          Promise.all(
+            allVaultsMarkets.map(
+              // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
+              async ([vault, markets]) =>
+                [
+                  vault,
+                  await Promise.all(
+                    markets.map(
+                      async (market) =>
+                        [
+                          market.uniqueKey,
+                          {
+                            position: await fetchPosition(
+                              vault,
+                              market.uniqueKey,
+                              client,
+                              { blockNumber: block.number },
+                            ),
+                            vaultMarketConfig: await fetchVaultMarketConfig(
+                              vault,
+                              market.uniqueKey,
+                              client,
+                              { blockNumber: block.number },
+                            ),
+                          },
+                        ] as const,
                     ),
-                  ] as const,
-              ),
+                  ),
+                ] as const,
             ),
-            Promise.all(
-              allVaultsMarkets.map(
-                // biome-ignore lint/nursery/noShadow: TODO rename to avoid shadowing
-                async ([vault, markets]) =>
-                  [
-                    vault,
-                    await Promise.all(
-                      markets.map(
-                        async (market) =>
-                          [
-                            market.uniqueKey,
-                            {
-                              position: await fetchPosition(
-                                vault,
-                                market.uniqueKey,
-                                client,
-                                { blockNumber: block.number },
-                              ),
-                              vaultMarketConfig: await fetchVaultMarketConfig(
-                                vault,
-                                market.uniqueKey,
-                                client,
-                                { blockNumber: block.number },
-                              ),
-                            },
-                          ] as const,
-                      ),
-                    ),
-                  ] as const,
-              ),
-            ),
-          ]);
+          ),
+        ]);
 
         const startState = new ReallocationData({
           chainId,
           markets: fromEntries(markets.map((market) => [market.id, market])),
           vaults: fromEntries(vaults.map((vault) => [vault.address, vault])),
-          holdings: fromEntries(
-            vaultsTokens.map(([vault, vaultTokens]) => [
-              vault,
-              fromEntries(
-                vaultTokens.map(([token, { holding }]) => [token, holding]),
-              ),
-            ]),
-          ),
           positions: fromEntries(
             vaultsMarkets.map(([vault, vaultMarkets]) => [
               vault,
