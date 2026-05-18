@@ -40,7 +40,7 @@
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
     "typescript": "^6.0.3",
-    "viem": "^2.48.11",
+    "viem": "^2.49.3",
     "vitest": "^4.1.6"
   },
   "publishConfig": {
