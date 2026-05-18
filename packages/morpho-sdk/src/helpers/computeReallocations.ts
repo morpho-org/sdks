@@ -3,19 +3,89 @@ import type { Address } from "viem";
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
+  type PublicReallocation,
   type ReallocationComputeOptions,
   type VaultReallocation,
 } from "../types/index.js";
 import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
 import type { ReallocationData } from "./reallocationData.js";
 
+type VaultWithdrawalGroup = {
+  readonly vault: Address;
+  readonly firstIndex: number;
+  totalAssets: bigint;
+  readonly withdrawals: { readonly id: MarketId; readonly assets: bigint }[];
+};
+
+const groupWithdrawalsByVault = (
+  withdrawals: readonly PublicReallocation[],
+) => {
+  const groups: VaultWithdrawalGroup[] = [];
+  const groupsByVault = new Map<Address, VaultWithdrawalGroup>();
+
+  for (const [index, { vault, id, assets }] of withdrawals.entries()) {
+    if (assets <= 0n) continue;
+
+    let group = groupsByVault.get(vault);
+    if (group == null) {
+      group = {
+        vault,
+        firstIndex: index,
+        totalAssets: 0n,
+        withdrawals: [],
+      };
+      groupsByVault.set(vault, group);
+      groups.push(group);
+    }
+
+    group.totalAssets += assets;
+    group.withdrawals.push({ id, assets });
+  }
+
+  return groups.sort((a, b) => {
+    if (a.totalAssets > b.totalAssets) return -1;
+    if (a.totalAssets < b.totalAssets) return 1;
+
+    return a.firstIndex - b.firstIndex;
+  });
+};
+
+const capVaultWithdrawals = (
+  withdrawals: readonly { readonly id: MarketId; readonly assets: bigint }[],
+  assets: bigint,
+) => {
+  const cappedWithdrawals: { id: MarketId; assets: bigint }[] = [];
+  let remainingAssets = assets;
+
+  for (const withdrawal of withdrawals) {
+    const cappedAssets = MathLib.min(withdrawal.assets, remainingAssets);
+    if (cappedAssets <= 0n) continue;
+
+    const existing = cappedWithdrawals.find(
+      (item) => item.id === withdrawal.id,
+    );
+    if (existing != null) {
+      existing.assets += cappedAssets;
+    } else {
+      cappedWithdrawals.push({
+        id: withdrawal.id,
+        assets: cappedAssets,
+      });
+    }
+
+    remainingAssets -= cappedAssets;
+    if (remainingAssets === 0n) break;
+  }
+
+  return cappedWithdrawals;
+};
+
 /**
  * Computes vault reallocations for a borrow operation on a target market.
  *
- * Replicates the shared liquidity algorithm from `populateSubBundle` in
- * `@morpho-org/bundler-sdk-viem`. First attempts "friendly" reallocations
- * respecting withdrawal utilization targets, then falls back to aggressive
- * reallocations (100% withdrawal utilization) if liquidity is still insufficient.
+ * First attempts "friendly" reallocations respecting withdrawal utilization
+ * targets, then falls back to aggressive reallocations (100% withdrawal
+ * utilization) if liquidity is still insufficient.
  *
  * @param params.reallocationData - The local state containing market, vault, and position data.
  * @param params.marketId - The target market to reallocate liquidity into.
@@ -101,32 +171,29 @@ export const computeReallocations = ({
       ? newTotalBorrowAssets - newTotalSupplyAssets
       : 0n;
 
-  // Group withdrawals by vault, capping total at requiredAssets.
-  const reallocationsMap: Record<Address, { id: MarketId; assets: bigint }[]> =
-    {};
+  const reallocations: {
+    readonly vault: Address;
+    readonly withdrawals: { readonly id: MarketId; readonly assets: bigint }[];
+  }[] = [];
   let totalReallocated = 0n;
+  let remainingRequiredAssets = requiredAssets;
 
-  for (const { vault, ...withdrawal } of withdrawals) {
-    const vaultReallocations = (reallocationsMap[vault] ??= []);
-    const existing = vaultReallocations.find(
-      (item) => item.id === withdrawal.id,
+  for (const group of groupWithdrawalsByVault(withdrawals)) {
+    const reallocatedAssets = MathLib.min(
+      group.totalAssets,
+      remainingRequiredAssets,
     );
-    const reallocatedAssets = MathLib.min(withdrawal.assets, requiredAssets);
 
     if (reallocatedAssets <= 0n) continue;
 
-    if (existing != null) {
-      existing.assets += reallocatedAssets;
-    } else {
-      vaultReallocations.push({
-        ...withdrawal,
-        assets: reallocatedAssets,
-      });
-    }
+    reallocations.push({
+      vault: group.vault,
+      withdrawals: capVaultWithdrawals(group.withdrawals, reallocatedAssets),
+    });
 
-    requiredAssets -= reallocatedAssets;
+    remainingRequiredAssets -= reallocatedAssets;
     totalReallocated += reallocatedAssets;
-    if (requiredAssets === 0n) break;
+    if (remainingRequiredAssets === 0n) break;
   }
 
   // Refuse fee-bearing partial plans for an unreachable borrow.
@@ -139,12 +206,12 @@ export const computeReallocations = ({
   }
 
   // Transform into VaultReallocation[] format.
-  return Object.entries(reallocationsMap)
-    .filter(([, vaultWithdrawals]) => vaultWithdrawals.length > 0)
-    .map(([vault, vaultWithdrawals]) => ({
-      vault: vault as Address,
+  return reallocations
+    .filter(({ withdrawals: vaultWithdrawals }) => vaultWithdrawals.length > 0)
+    .map(({ vault, withdrawals: vaultWithdrawals }) => ({
+      vault,
       fee: (() => {
-        const config = data.getVault(vault as Address).publicAllocatorConfig;
+        const config = data.getVault(vault).publicAllocatorConfig;
         if (config == null) {
           throw new MissingPublicAllocatorConfigError(vault);
         }
