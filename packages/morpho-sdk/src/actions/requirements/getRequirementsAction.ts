@@ -36,6 +36,31 @@ interface GetRequirementsActionParams {
  * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
  * @throws {Permit2ExpirationMissingError} when `action.type === "permit2"` but `args.expiration` is missing.
+ * @example
+ * ```ts
+ * import { createWalletClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { getRequirementsAction } from "@morpho-org/morpho-sdk";
+ *
+ * const walletClient = createWalletClient({
+ *   chain: mainnet,
+ *   transport: http(),
+ *   account: borrower,
+ * });
+ *
+ * // `requirement` comes from `getRequirements*` helpers; signing produces a `RequirementSignature`.
+ * const requirementSignature = await requirement.sign(walletClient, borrower);
+ *
+ * const actions = getRequirementsAction({
+ *   asset: loanToken,
+ *   amount: 1_000_000n,
+ *   recipient: generalAdapter1,
+ *   requirementSignature,
+ * });
+ * // actions satisfies Action[]
+ * // - permit2 path: [{ type: "approve2", ... }, { type: "transferFrom2", ... }]
+ * // - classic permit path: [{ type: "permit", ... }, { type: "erc20TransferFrom", ... }]
+ * ```
  */
 export const getRequirementsAction = ({
   asset,
