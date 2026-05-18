@@ -1,5 +1,5 @@
 import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
-import { parseUnits } from "viem";
+import { type Address, createPublicClient, http, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
@@ -14,7 +14,6 @@ import { test } from "../../../test/setup.js";
 import { MorphoClient } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
-  AddressMismatchError,
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
   NativeAmountOnNonWNativeVaultError,
@@ -294,38 +293,6 @@ describe("MorphoVaultV1 entity tests", () => {
       ).toThrow(ExcessiveSlippageToleranceError);
     });
 
-    test("should throw AddressMismatchError when userAddress differs from connected client account (SDK-101)", async ({
-      client,
-    }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
-      const vault = morphoClient.vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id,
-      );
-
-      const sourceVault = await vault.getData();
-      const targetVault = await fetchAccrualVaultV2(
-        KeyrockUsdcVaultV2.address,
-        client,
-        { chainId: mainnet.id },
-      );
-
-      const attacker = "0x000000000000000000000000000000000000dEaD";
-
-      const buildAttackerMigration = () =>
-        vault.migrateToV2({
-          userAddress: attacker,
-          sourceVault,
-          targetVault,
-          shares: parseUnits("1000", 18),
-        });
-      expect(buildAttackerMigration).toThrow(AddressMismatchError);
-      // Lock in the message so a rename of the error text still fails the test.
-      expect(buildAttackerMigration).toThrow(/address.*mismatch/i);
-    });
-
     test("should throw VaultAssetMismatchError when V1 and V2 have different underlying assets", async ({
       client,
     }) => {
@@ -491,6 +458,73 @@ describe("MorphoVaultV1 entity tests", () => {
       const requirements = await getRequirements();
 
       expect(requirements.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // Regression: migrateToV2 previously called validateUserAddress; the SDK no
+  // longer enforces builder = signer, so a divergent userAddress and a
+  // public client with no connected account must still produce a valid tx.
+  describe("migrateToV2 builder = signer freedom", () => {
+    const OTHER_USER: Address = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+
+    test("builds tx with userAddress different from client.account", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client, {
+        supportSignature: false,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+
+      const sourceVault = await vault.getData();
+      const targetVault = await fetchAccrualVaultV2(
+        KeyrockUsdcVaultV2.address,
+        client,
+        { chainId: mainnet.id },
+      );
+
+      const result = vault.migrateToV2({
+        userAddress: OTHER_USER,
+        sourceVault,
+        targetVault,
+        shares: parseUnits("1000", 18),
+      });
+
+      const tx = result.buildTx();
+      expect(tx.action.args.recipient).toBe(OTHER_USER);
+    });
+
+    test("builds tx with public client (no account)", async ({ client }) => {
+      const publicClient = createPublicClient({
+        chain: mainnet,
+        transport: http(client.transport.url),
+      });
+      const morphoClient = new MorphoClient(publicClient, {
+        supportSignature: false,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+
+      const sourceVault = await vault.getData();
+      const targetVault = await fetchAccrualVaultV2(
+        KeyrockUsdcVaultV2.address,
+        publicClient,
+        { chainId: mainnet.id },
+      );
+
+      const result = vault.migrateToV2({
+        userAddress: OTHER_USER,
+        sourceVault,
+        targetVault,
+        shares: parseUnits("1000", 18),
+      });
+
+      const tx = result.buildTx();
+      expect(tx.action.args.recipient).toBe(OTHER_USER);
     });
   });
 });
