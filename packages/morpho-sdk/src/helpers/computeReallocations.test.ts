@@ -395,6 +395,55 @@ describe("computeReallocations", () => {
       expect(vaultBResult!.fee).toBe(2000n);
     });
 
+    test("should group by vault before capping to avoid an unnecessary second vault fee", () => {
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: 800n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const borrowAmount = 500n * MathLib.WAD;
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1060n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        targetMarket: tm,
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: 150n * MathLib.WAD },
+          { id: sourceB.id, vault: VAULT_B, assets: 60n * MathLib.WAD },
+          { id: sourceC.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 1000n, [VAULT_B]: 2000n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        borrowAmount,
+        options: {
+          enabled: true,
+          supplyTargetUtilization: { [targetParams.id]: MathLib.WAD },
+        },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.vault).toBe(VAULT_A);
+      expect(result[0]!.fee).toBe(1000n);
+      expect(result[0]!.withdrawals).toEqual(
+        expect.arrayContaining([
+          { marketParams: sourceA.params, amount: 150n * MathLib.WAD },
+          { marketParams: sourceC.params, amount: 50n * MathLib.WAD },
+        ]),
+      );
+      expect(
+        result[0]!.withdrawals.some(
+          ({ marketParams }) => marketParams.id === sourceB.id,
+        ),
+      ).toBe(false);
+    });
+
     test("should deduplicate same-market withdrawals within a vault", () => {
       const tm = makeMarket(targetParams, {
         totalSupplyAssets: 800n * MathLib.WAD,
