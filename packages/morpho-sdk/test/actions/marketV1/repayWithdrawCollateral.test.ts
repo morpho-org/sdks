@@ -5,16 +5,14 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
-import { createPublicClient, http, parseUnits } from "viem";
+import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  AddressMismatchError,
   computeMaxRepaySharePrice,
   isRequirementApproval,
   isRequirementAuthorization,
   MissingAccrualPositionError,
-  MissingClientPropertyError,
   MorphoClient,
   marketV1RepayWithdrawCollateral,
   NonPositiveRepayAmountError,
@@ -493,46 +491,6 @@ describe("RepayWithdrawCollateralMarketV1", () => {
         positionData: undefined as unknown as AccrualPosition,
       }),
     ).toThrow(MissingAccrualPositionError);
-  });
-
-  test("should throw MissingClientPropertyError when client has no account", () => {
-    // Public client (no account) — building any market action that takes a
-    // userAddress must fail loudly rather than silently produce a tx that
-    // could be signed by an unrelated account.
-    const publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http(),
-    });
-    const morphoClient = new MorphoClient(publicClient);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-
-    expect(() =>
-      market.repayWithdrawCollateral({
-        userAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-        assets: parseUnits("100", 18),
-        withdrawAmount: parseUnits("1", 18),
-        positionData: undefined as unknown as AccrualPosition,
-      }),
-    ).toThrow(MissingClientPropertyError);
-  });
-
-  test("should throw AddressMismatchError when userAddress differs from client account", async ({
-    client,
-  }) => {
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-
-    // Anvil's second default account — guaranteed distinct from client.account.
-    const otherAddress = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-
-    expect(() =>
-      market.repayWithdrawCollateral({
-        userAddress: otherAddress,
-        assets: parseUnits("100", 18),
-        withdrawAmount: parseUnits("1", 18),
-        positionData: undefined as unknown as AccrualPosition,
-      }),
-    ).toThrow(AddressMismatchError);
   });
 
   test("should return deep-frozen transaction", async ({ client }) => {

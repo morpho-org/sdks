@@ -43,7 +43,6 @@ import {
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
-  validateUserAddress,
 } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
@@ -368,7 +367,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     nativeAmount,
   }: { userAddress: Address } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (amount < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
@@ -429,7 +427,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     reallocations?: readonly VaultReallocation[];
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (amount <= 0n) {
       throw new NonPositiveBorrowAmountError(this.marketParams.id);
@@ -495,10 +492,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     } & RepayAmountArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(
-      this.client.viemClient.account?.address,
-      params.userAddress,
-    );
 
     const {
       userAddress,
@@ -614,7 +607,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     positionData: AccrualPosition;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (amount <= 0n) {
       throw new NonPositiveWithdrawCollateralAmountError(this.marketParams.id);
@@ -671,10 +663,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     } & RepayAmountArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(
-      this.client.viemClient.account?.address,
-      params.userAddress,
-    );
 
     const {
       userAddress,
@@ -833,7 +821,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     reallocations?: readonly VaultReallocation[];
   } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (amount < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);

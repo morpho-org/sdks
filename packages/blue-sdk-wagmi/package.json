@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-sdk-wagmi",
   "description": "Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities.",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -49,9 +49,9 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "typescript": "^6.0.3",
-    "viem": "^2.48.11",
+    "viem": "^2.49.3",
     "vitest": "^4.1.6",
-    "wagmi": "^3.6.14"
+    "wagmi": "^3.6.15"
   },
   "publishConfig": {
     "exports": {

@@ -38,13 +38,17 @@ import {
 import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 
 /**
- * Validates that the client has a connected account AND that it matches
+ * Asserts that the client has a connected account AND that it matches
  * the provided user address.
  *
- * Enforces the builder = executor invariant: `userAddress` MUST equal the
- * connected client account. Some bundle actions (e.g. `erc20TransferFrom`,
- * `morphoWithdrawCollateral`) act implicitly on the initiator rather than
- * on `userAddress`, so a divergence can produce mixed-account bundles.
+ * Used internally by the signature requirements (`encodeErc20Permit`,
+ * `encodeErc20Permit2`) to enforce builder = signer at `sign()` time:
+ * the signing flow is the only path where an account/address mismatch
+ * is a real security concern (rather than just an integrator footgun).
+ *
+ * Transaction builders no longer call this helper — callers are
+ * responsible for keeping `userAddress` aligned with the signing account
+ * at the builder layer.
  *
  * Throws {@link MissingClientPropertyError} if the client has no account.
  * Throws {@link AddressMismatchError} if the client account differs from
@@ -54,17 +58,17 @@ import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
  *   `MissingClientPropertyError` is thrown.
  * @param userAddress - The user address provided by the caller.
  */
-export const validateUserAddress = (
+export function validateUserAddress(
   clientAccountAddress: Address | undefined,
   userAddress: Address,
-): void => {
+): asserts clientAccountAddress is Address {
   if (clientAccountAddress === undefined) {
     throw new MissingClientPropertyError("account");
   }
   if (!isAddressEqual(clientAccountAddress, userAddress)) {
     throw new AddressMismatchError(clientAccountAddress, userAddress);
   }
-};
+}
 
 /**
  * Validates that the accrual position belongs to the expected market and user.
