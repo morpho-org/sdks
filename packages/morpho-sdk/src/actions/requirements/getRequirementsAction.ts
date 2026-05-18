@@ -27,10 +27,6 @@ interface GetRequirementsActionParams {
  * `amount` exactly, otherwise the function throws so the caller does not silently spend a
  * wider-than-expected approval.
  *
- * Exposed on the public surface so action builders outside this package (e.g. the Aave V3
- * → Vault V2 migration builder in `morpho-apps`) can route the pulled asset to a non-default
- * `recipient` such as the `AaveV3CoreMigrationAdapter` rather than `GeneralAdapter1`.
- *
  * @param params.asset - The ERC-20 to pull.
  * @param params.amount - The amount to pull, in the asset's smallest unit.
  * @param params.recipient - The address that receives the transfer.
