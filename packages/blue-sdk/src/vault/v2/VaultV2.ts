@@ -107,10 +107,16 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   }
 
   protected _wrap(amount: BigIntish, rounding: RoundingDirection) {
+    // Pair stored `_totalAssets` with stored `totalSupply`: both are pre-accrue
+    // (totalSupply excludes pending mgmt/perf fee shares), so using post-accrue
+    // `totalAssets` here would overstate share->assets conversions. Call
+    // `AccrualVaultV2.accrueInterest(t)` first when post-accrue math is needed —
+    // it rolls forward `_totalAssets` and mints the pending fee shares into
+    // `totalSupply` atomically, keeping the pair consistent.
     return MathLib.mulDiv(
       amount,
       this.totalSupply + this.virtualShares,
-      this.totalAssets + 1n,
+      this._totalAssets + 1n,
       rounding,
     );
   }
@@ -118,7 +124,7 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   protected _unwrap(amount: BigIntish, rounding: RoundingDirection) {
     return MathLib.mulDiv(
       amount,
-      this.totalAssets + 1n,
+      this._totalAssets + 1n,
       this.totalSupply + this.virtualShares,
       rounding,
     );
