@@ -25,8 +25,11 @@ interface GetRequirementsActionParams {
  * Permit2 path emits `approve2` + `transferFrom2`; classic permit path emits `permit` +
  * `erc20TransferFrom`. The signed `asset` and `amount` must match the pulled `asset` and
  * `amount` exactly, otherwise the function throws so the caller does not silently spend a
- * wider-than-expected approval. Internal helper — consumed only by the action builders that
- * accept a `requirementSignature`; not re-exported on the public surface.
+ * wider-than-expected approval.
+ *
+ * Exposed on the public surface so action builders outside this package (e.g. the Aave V3
+ * → Vault V2 migration builder in `morpho-apps`) can route the pulled asset to a non-default
+ * `recipient` such as the `AaveV3CoreMigrationAdapter` rather than `GeneralAdapter1`.
  *
  * @param params.asset - The ERC-20 to pull.
  * @param params.amount - The amount to pull, in the asset's smallest unit.
@@ -35,7 +38,6 @@ interface GetRequirementsActionParams {
  * @returns A pair of bundler `Action`s: a permit / approve2 followed by the transfer.
  * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
  * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
- * @internal
  */
 export const getRequirementsAction = ({
   asset,
