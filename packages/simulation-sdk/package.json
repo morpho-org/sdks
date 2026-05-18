@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/simulation-sdk",
   "description": "Framework-agnostic package that defines methods to simulate interactions on Morpho (such as `Supply`, `Borrow`) and Morpho Vaults (such as `Deposit`, `Withdraw`).",
-  "version": "3.4.3",
+  "version": "3.4.4",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -39,7 +39,7 @@
     "@types/lodash": "^4.17.24",
     "lodash": "^4.18.1",
     "typescript": "^6.0.3",
-    "viem": "^2.48.11",
+    "viem": "^2.49.3",
     "vitest": "^4.1.6"
   },
   "publishConfig": {
