@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - '**'
+      # create-version-commit.mjs uses a short-lived API staging branch because
+      # GitHub's createCommitOnBranch mutation needs a branch ref to create the
+      # GitHub-signed version commit. The workflow moves the real release branch
+      # to that commit afterward, so skip CI/release runs for the staging branch.
       - '!changeset-release/**-api-commit-*'
     tags-ignore:
       - '**'
