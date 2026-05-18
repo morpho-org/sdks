@@ -7,7 +7,7 @@ import {
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   computeMaxRepaySharePrice,
   isRequirementApproval,
@@ -28,6 +28,10 @@ import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("RepayWithdrawCollateralMarketV1", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("should create repayWithdrawCollateral bundle (by assets)", async ({
     client,
   }) => {
@@ -270,9 +274,14 @@ describe("RepayWithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    const currentTimestamp = await client.timestamp();
-    await client.setNextBlockTimestamp({
-      timestamp: currentTimestamp + Time.s.from.d(30n),
+    const fastForwardedTimestamp =
+      (await client.timestamp()) + Time.s.from.d(30n);
+    await client.setNextBlockTimestamp({ timestamp: fastForwardedTimestamp });
+    // Align wall-clock with chain time so the SDK's `Time.timestamp()` projection
+    // matches the block the repay tx will execute on.
+    vi.useFakeTimers({
+      now: Number(fastForwardedTimestamp) * 1000,
+      toFake: ["Date"],
     });
 
     await client.deal({

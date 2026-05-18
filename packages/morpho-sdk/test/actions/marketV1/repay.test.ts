@@ -7,7 +7,7 @@ import {
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   computeMaxRepaySharePrice,
   isRequirementApproval,
@@ -26,6 +26,10 @@ import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("RepayMarketV1", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("should create repay bundle (by assets)", async ({ client }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -293,9 +297,14 @@ describe("RepayMarketV1", () => {
     // 30 days of accrual is far larger than DEFAULT_SLIPPAGE_TOLERANCE on any
     // realistic market, so the stale-sized transfer cannot cover the on-chain
     // repay amount without the accrual fix.
-    const currentTimestamp = await client.timestamp();
-    await client.setNextBlockTimestamp({
-      timestamp: currentTimestamp + Time.s.from.d(30n),
+    const fastForwardedTimestamp =
+      (await client.timestamp()) + Time.s.from.d(30n);
+    await client.setNextBlockTimestamp({ timestamp: fastForwardedTimestamp });
+    // Align wall-clock with chain time so the SDK's `Time.timestamp()` projection
+    // matches the block the repay tx will execute on.
+    vi.useFakeTimers({
+      now: Number(fastForwardedTimestamp) * 1000,
+      toFake: ["Date"],
     });
 
     // Pre-fund a generous loan-token balance; the bundle skim returns any
