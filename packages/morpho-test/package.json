@@ -35,7 +35,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "typescript": "^6.0.3",
-    "viem": "^2.48.11"
+    "viem": "^2.49.3"
   },
   "publishConfig": {
     "exports": {

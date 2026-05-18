@@ -58,9 +58,9 @@
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "typescript": "^6.0.3",
-    "viem": "^2.48.11",
+    "viem": "^2.49.3",
     "vitest": "^4.1.6",
-    "wagmi": "^3.6.14"
+    "wagmi": "^3.6.15"
   },
   "publishConfig": {
     "exports": {
