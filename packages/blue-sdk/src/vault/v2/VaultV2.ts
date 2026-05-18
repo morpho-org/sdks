@@ -16,11 +16,12 @@ export interface IVaultV2Allocation {
 export interface IVaultV2 extends IToken {
   asset: Address;
   /**
-   * The total assets, *including* virtually accrued interest.
+   * Post-accrue total assets. Optional at construction — defaults to `_totalAssets` (pre-accrue).
+   * Set to the projected value by `AccrualVaultV2.accrueInterest`.
    */
-  totalAssets: bigint;
+  totalAssets?: bigint;
   /**
-   * The total assets, *excluding* virtually accrued interest.
+   * Stored total assets at `lastUpdate`, excluding virtually accrued interest.
    */
   _totalAssets: bigint;
   /**
@@ -82,7 +83,7 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
     super(config, asset);
 
     this.asset = asset;
-    this.totalAssets = totalAssets;
+    this.totalAssets = totalAssets ?? _totalAssets;
     this._totalAssets = _totalAssets;
     this.totalSupply = totalSupply;
     this.virtualShares = virtualShares;
@@ -107,12 +108,7 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   }
 
   protected _wrap(amount: BigIntish, rounding: RoundingDirection) {
-    // Pair stored `_totalAssets` with stored `totalSupply`: both are pre-accrue
-    // (totalSupply excludes pending mgmt/perf fee shares), so using post-accrue
-    // `totalAssets` here would overstate share->assets conversions. Call
-    // `AccrualVaultV2.accrueInterest(t)` first when post-accrue math is needed —
-    // it rolls forward `_totalAssets` and mints the pending fee shares into
-    // `totalSupply` atomically, keeping the pair consistent.
+    // Pair pre-accrue `_totalAssets` with pre-accrue `totalSupply`; call `AccrualVaultV2.accrueInterest` for post-accrue math.
     return MathLib.mulDiv(
       amount,
       this.totalSupply + this.virtualShares,

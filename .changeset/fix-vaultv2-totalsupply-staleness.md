@@ -1,5 +1,6 @@
 ---
 "@morpho-org/blue-sdk": patch
+"@morpho-org/blue-sdk-viem": patch
 ---
 
-Fix `VaultV2._wrap` / `_unwrap` (and the public `toAssets` / `toShares` / `maxWithdraw` paths layered on them) overstating available assets when management or performance fees are pending. The conversion math previously paired post-accrue `totalAssets` (from the contract's `accrueInterestView`) with the stored `totalSupply`, which excludes pending fee shares — making share→assets conversions overshoot by `~ 1 + pendingFeeShares / totalSupply`. The math now pairs the stored `_totalAssets` with the stored `totalSupply`: both are pre-accrue and internally consistent. Call `AccrualVaultV2.accrueInterest(timestamp)` first when post-accrue math is needed — it rolls `_totalAssets` forward and mints pending fee shares into `totalSupply` atomically. Field names stay aligned with the onchain contract: `totalAssets` (post-accrue, `accrueInterestView`) and `_totalAssets` (stored, pre-accrue).
+Fix `VaultV2._wrap` / `_unwrap` (and `toAssets` / `toShares` / `maxWithdraw`) overstating assets when fees are pending: pair stored `_totalAssets` with stored `totalSupply` (both pre-accrue) instead of post-accrue `totalAssets` with pre-accrue `totalSupply`. Call `AccrualVaultV2.accrueInterest(timestamp)` for post-accrue math. Drop the unused `totalAssets` fetch from `fetchVaultV2` (deployless and multicall); `totalAssets` on the entity now defaults to `_totalAssets` at construction.
