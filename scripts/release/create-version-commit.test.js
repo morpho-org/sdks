@@ -9,6 +9,7 @@ import {
   createSignedVersionCommit,
   getGitHubOutput,
   isAllowedVersionPath,
+  pushReleaseBranchWithLease,
 } from "./create-version-commit.mjs";
 
 const tempDirs = [];
@@ -109,6 +110,7 @@ describe("collectVersionChanges", () => {
 describe("createSignedVersionCommit", () => {
   test("default", async () => {
     const requests = [];
+    const pushReleaseBranch = vi.fn();
     const fetchImpl = vi.fn(async (url, init) => {
       requests.push({
         body: init.body == null ? null : JSON.parse(init.body),
@@ -137,20 +139,10 @@ describe("createSignedVersionCommit", () => {
       }
 
       if (requests.length === 4) {
-        return jsonResponse(
-          { ref: "refs/heads/changeset-release/main" },
-          { status: 200 },
-        );
+        return jsonResponse(null, { status: 204 });
       }
 
-      if (requests.length === 5) {
-        return jsonResponse(
-          { ref: "refs/heads/changeset-release/main" },
-          { status: 200 },
-        );
-      }
-
-      return jsonResponse(null, { status: 204 });
+      throw new Error(`Unexpected request ${requests.length}.`);
     });
 
     await expect(
@@ -164,6 +156,7 @@ describe("createSignedVersionCommit", () => {
           ],
           deletions: [{ path: ".changeset/alpha.md" }],
         },
+        pushReleaseBranch,
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
         tempBranch: "tmp-release",
@@ -218,19 +211,6 @@ describe("createSignedVersionCommit", () => {
       },
       {
         body: null,
-        method: "GET",
-        url: "https://api.github.test/repos/morpho-org/sdks/git/ref/heads/changeset-release/main",
-      },
-      {
-        body: {
-          force: true,
-          sha: "signed-commit",
-        },
-        method: "PATCH",
-        url: "https://api.github.test/repos/morpho-org/sdks/git/refs/heads/changeset-release/main",
-      },
-      {
-        body: null,
         method: "DELETE",
         url: "https://api.github.test/repos/morpho-org/sdks/git/refs/heads/tmp-release",
       },
@@ -241,6 +221,67 @@ describe("createSignedVersionCommit", () => {
     expect(JSON.stringify(requests[2].body.variables.input)).not.toContain(
       "committer",
     );
+    expect(pushReleaseBranch).toHaveBeenCalledWith({
+      commitOid: "signed-commit",
+      cwd: process.cwd(),
+      releaseBranch: "changeset-release/main",
+      remoteUrl: undefined,
+      repository: "morpho-org/sdks",
+      tempBranch: "tmp-release",
+      token: "token",
+    });
+  });
+});
+
+describe("pushReleaseBranchWithLease", () => {
+  test("default", () => {
+    const fixture = createReleaseRemoteFixture();
+
+    pushReleaseBranchWithLease({
+      commitOid: fixture.tempCommit,
+      cwd: fixture.root,
+      releaseBranch: "changeset-release/main",
+      remoteUrl: fixture.remote,
+      repository: "morpho-org/sdks",
+      tempBranch: "tmp-release",
+      token: "token",
+    });
+
+    expect(readRemoteBranchSha(fixture.remote, "changeset-release/main")).toBe(
+      fixture.tempCommit,
+    );
+    expect(
+      runGit(["remote", "get-url", "origin"], fixture.root).toString(),
+    ).toBe(`${fixture.originalOriginUrl}\n`);
+  });
+
+  test("behavior: refuses stale release branch lease", () => {
+    const fixture = createReleaseRemoteFixture();
+    const raceCommit = createRemoteRaceCommit(fixture);
+
+    writeFileSync(
+      join(fixture.root, ".git/hooks/pre-push"),
+      `#!/bin/sh\ngit --git-dir="${fixture.remote}" update-ref refs/heads/changeset-release/main "${raceCommit}"\n`,
+      { mode: 0o755 },
+    );
+
+    expect(() =>
+      pushReleaseBranchWithLease({
+        commitOid: fixture.tempCommit,
+        cwd: fixture.root,
+        releaseBranch: "changeset-release/main",
+        remoteUrl: fixture.remote,
+        repository: "morpho-org/sdks",
+        tempBranch: "tmp-release",
+        token: "token",
+      }),
+    ).toThrow();
+    expect(readRemoteBranchSha(fixture.remote, "changeset-release/main")).toBe(
+      raceCommit,
+    );
+    expect(
+      runGit(["remote", "get-url", "origin"], fixture.root).toString(),
+    ).toBe(`${fixture.originalOriginUrl}\n`);
   });
 });
 
@@ -272,6 +313,77 @@ function createGitRepo() {
   );
 
   return root;
+}
+
+function createReleaseRemoteFixture() {
+  const root = createGitRepo();
+  const remote = mkdtempSync(join(tmpdir(), "version-remote-"));
+  const originalOriginUrl = "https://github.com/morpho-org/sdks.git";
+  tempDirs.push(remote);
+
+  runGit(["init", "--bare"], remote);
+  runGit(["remote", "add", "origin", remote], root);
+  runGit(["push", "origin", "main"], root);
+
+  runGit(["checkout", "-b", "changeset-release/main"], root);
+  writeFileSync(join(root, "packages/morpho-sdk/CHANGELOG.md"), "# 1.0.0\n");
+  commitAll(root, "release branch");
+  runGit(["push", "origin", "changeset-release/main"], root);
+
+  runGit(["checkout", "main"], root);
+  runGit(["checkout", "-b", "tmp-release"], root);
+  writeFileSync(
+    join(root, "packages/morpho-sdk/package.json"),
+    `${JSON.stringify({ name: "@morpho-org/morpho-sdk", version: "1.1.0" })}\n`,
+  );
+  commitAll(root, "version packages");
+  const tempCommit = runGit(["rev-parse", "HEAD"], root).toString().trim();
+  runGit(["push", "origin", "tmp-release"], root);
+
+  runGit(["checkout", "main"], root);
+  runGit(["remote", "set-url", "origin", originalOriginUrl], root);
+
+  return { originalOriginUrl, remote, root, tempCommit };
+}
+
+function createRemoteRaceCommit(fixture) {
+  runGit(["checkout", "-b", "race-release", "main"], fixture.root);
+  writeFileSync(join(fixture.root, "README.md"), "# Race\n");
+  commitAll(fixture.root, "race release");
+  const raceCommit = runGit(["rev-parse", "HEAD"], fixture.root)
+    .toString()
+    .trim();
+  runGit(
+    ["push", fixture.remote, `${raceCommit}:refs/heads/race-release`],
+    fixture.root,
+  );
+  runGit(["checkout", "main"], fixture.root);
+
+  return raceCommit;
+}
+
+function commitAll(root, message) {
+  runGit(["add", "."], root);
+  runGit(
+    [
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@example.com",
+      "commit",
+      "-m",
+      message,
+    ],
+    root,
+  );
+}
+
+function readRemoteBranchSha(remote, branch) {
+  return runGit(["--git-dir", remote, "rev-parse", `refs/heads/${branch}`])
+    .toString()
+    .trim();
 }
 
 function runGit(args, cwd) {

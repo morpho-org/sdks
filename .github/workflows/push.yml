@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - '**'
+      - '!changeset-release/**-api-commit-*'
     tags-ignore:
       - '**'
 

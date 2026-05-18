@@ -91,7 +91,7 @@ export function collectVersionChanges(options = {}) {
 /**
  * Creates a GitHub-signed release commit through the GitHub App token.
  *
- * @param {{ apiBaseUrl?: string, baseSha: string, commitMessage?: string, fetchImpl?: typeof fetch, fileChanges: { additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }> }, releaseBranch: string, repository: string, tempBranch?: string, token: string }} options Commit options.
+ * @param {{ apiBaseUrl?: string, baseSha: string, commitMessage?: string, cwd?: string, fetchImpl?: typeof fetch, fileChanges: { additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }> }, gitRemoteUrl?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, releaseBranch: string, repository: string, tempBranch?: string, token: string }} options Commit options.
  * @returns {Promise<{ commitOid: string, tempBranch: string }>} The created commit metadata.
  */
 export async function createSignedVersionCommit(options) {
@@ -102,7 +102,10 @@ export async function createSignedVersionCommit(options) {
 
   const apiBaseUrl = options.apiBaseUrl ?? DEFAULT_API_BASE_URL;
   const commitMessage = options.commitMessage ?? DEFAULT_COMMIT_MESSAGE;
+  const cwd = options.cwd ?? process.cwd();
   const fetchImpl = options.fetchImpl ?? fetch;
+  const pushReleaseBranch =
+    options.pushReleaseBranch ?? pushReleaseBranchWithLease;
   const tempBranch =
     options.tempBranch ??
     `${options.releaseBranch}-api-commit-${randomUUID().slice(0, 8)}`;
@@ -149,13 +152,13 @@ export async function createSignedVersionCommit(options) {
     });
     const commitOid = data.createCommitOnBranch.commit.oid;
 
-    await createOrUpdateBranchRef({
-      apiBaseUrl,
-      branch: options.releaseBranch,
-      fetchImpl,
-      owner,
-      repo,
-      sha: commitOid,
+    pushReleaseBranch({
+      commitOid,
+      cwd,
+      releaseBranch: options.releaseBranch,
+      remoteUrl: options.gitRemoteUrl,
+      repository: options.repository,
+      tempBranch,
       token: options.token,
     });
 
@@ -172,6 +175,69 @@ export async function createSignedVersionCommit(options) {
       process.stderr.write(
         `Warning: failed to delete temporary branch "${tempBranch}": ${getErrorMessage(error)}\n`,
       );
+    });
+  }
+}
+
+/**
+ * Pushes the signed temporary-branch commit to the release branch with lease protection.
+ *
+ * @param {{ commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }} options Push options.
+ * @returns {void}
+ */
+export function pushReleaseBranchWithLease(options) {
+  const originalOriginUrl = runGit(["remote", "get-url", "origin"], {
+    cwd: options.cwd,
+  })
+    .toString("utf8")
+    .trim();
+  const authenticatedOriginUrl =
+    options.remoteUrl ??
+    `https://x-access-token:${encodeURIComponent(
+      options.token,
+    )}@github.com/${options.repository}.git`;
+  const remoteReleaseRef = `refs/heads/${options.releaseBranch}`;
+  const localReleaseRef = `refs/remotes/origin/${options.releaseBranch}`;
+  const localTempRef = `refs/remotes/origin/${options.tempBranch}`;
+
+  runGit(["remote", "set-url", "origin", authenticatedOriginUrl], {
+    cwd: options.cwd,
+  });
+
+  try {
+    runGit(
+      ["fetch", "origin", `+refs/heads/${options.tempBranch}:${localTempRef}`],
+      { cwd: options.cwd },
+    );
+
+    if (hasRemoteBranch({ branch: options.releaseBranch, cwd: options.cwd })) {
+      runGit(["fetch", "origin", `+${remoteReleaseRef}:${localReleaseRef}`], {
+        cwd: options.cwd,
+      });
+      const expectedSha = runGit(["rev-parse", localReleaseRef], {
+        cwd: options.cwd,
+      })
+        .toString("utf8")
+        .trim();
+
+      runGit(
+        [
+          "push",
+          `--force-with-lease=${remoteReleaseRef}:${expectedSha}`,
+          "origin",
+          `${options.commitOid}:${remoteReleaseRef}`,
+        ],
+        { cwd: options.cwd },
+      );
+      return;
+    }
+
+    runGit(["push", "origin", `${options.commitOid}:${remoteReleaseRef}`], {
+      cwd: options.cwd,
+    });
+  } finally {
+    runGit(["remote", "set-url", "origin", originalOriginUrl], {
+      cwd: options.cwd,
     });
   }
 }
@@ -400,8 +466,33 @@ function readNullSeparatedGitOutput(output) {
     .filter((path) => path !== "");
 }
 
+function hasRemoteBranch(options) {
+  try {
+    runGit(["ls-remote", "--exit-code", "--heads", "origin", options.branch], {
+      cwd: options.cwd,
+      stdio: "ignore",
+    });
+    return true;
+  } catch (error) {
+    if (hasExitStatus(error, 2)) return false;
+    throw error;
+  }
+}
+
+function hasExitStatus(error, status) {
+  return (
+    typeof error === "object" &&
+    error != null &&
+    "status" in error &&
+    error.status === status
+  );
+}
+
 function runGit(args, options) {
-  return execFileSync("git", args, { cwd: options.cwd });
+  return execFileSync("git", args, {
+    cwd: options.cwd,
+    stdio: options.stdio,
+  });
 }
 
 function formatIndentedList(paths) {
