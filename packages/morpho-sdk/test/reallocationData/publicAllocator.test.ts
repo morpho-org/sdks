@@ -343,6 +343,24 @@ describe("ReallocationData public allocator integration", () => {
     }
   });
 
+  test("matches caller-provided reallocatable vaults regardless of address casing", () => {
+    const expected = makeFixture().getMarketPublicReallocations(marketA1.id, {
+      defaultMaxWithdrawalUtilization: parseEther("1"),
+    });
+    const lowerCased = makeFixture().getMarketPublicReallocations(marketA1.id, {
+      defaultMaxWithdrawalUtilization: parseEther("1"),
+      reallocatableVaults: [
+        vaultA.toLowerCase() as Address,
+        vaultC.toLowerCase() as Address,
+      ],
+    });
+
+    expect(lowerCased.withdrawals).toEqual(expected.withdrawals);
+    expect(liquidity(lowerCased.data, marketA1.id)).toEqual(
+      liquidity(expected.data, marketA1.id),
+    );
+  });
+
   test.each([
     marketB1.id,
     marketB2.id,
