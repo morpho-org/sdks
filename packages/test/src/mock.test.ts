@@ -208,6 +208,49 @@ describe("mockRead", () => {
     ).toBe(6);
   });
 
+  test("encodes per-overload when overloads have different return types", async () => {
+    // Two `counter` overloads with DIFFERENT return types — the regression
+    // this test pins: encoding once against the ambiguous `functionName`
+    // would store uint256-encoded bytes under the bool overload's selector
+    // (or vice versa), producing wrong values at decode time.
+    const overloadedAbi = parseAbi([
+      "function counter(uint256 a) view returns (uint256)",
+      "function counter(address b) view returns (bool)",
+    ]);
+    const handle = createMockClient(mainnet);
+    // Register the bool overload — `true` would fail to encode against
+    // the uint256 overload's output ABI shape if encoding were ambiguous.
+    mockRead(handle, {
+      address: TOKEN,
+      abi: overloadedAbi,
+      functionName: "counter",
+      result: true,
+    });
+    const boolResult = await readContract(handle.client, {
+      address: TOKEN,
+      abi: overloadedAbi,
+      functionName: "counter",
+      args: [HOLDER],
+    });
+    expect(boolResult).toBe(true);
+
+    // Now register the uint256 overload — without per-overload encoding,
+    // the bool result above would overwrite the same key for both selectors.
+    mockRead(handle, {
+      address: TOKEN,
+      abi: overloadedAbi,
+      functionName: "counter",
+      result: 99n,
+    });
+    const uintResult = await readContract(handle.client, {
+      address: TOKEN,
+      abi: overloadedAbi,
+      functionName: "counter",
+      args: [42n],
+    });
+    expect(uintResult).toBe(99n);
+  });
+
   test("matches every view/pure overload of a function name", async () => {
     // Two view overloads of `counter` with different argument lists.
     const overloadedAbi = parseAbi([

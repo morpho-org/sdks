@@ -218,19 +218,43 @@ export function mockRead<
       `[mockRead] function ${String(options.functionName)} not found in abi`,
     );
 
-  const params = {
-    abi: options.abi,
-    functionName: options.functionName,
-    result: options.result,
-  } as EncodeFunctionResultParameters<abi, fn>;
-  const encoded = encodeFunctionResult(params);
-
+  // Encode the result **per overload** using a single-item ABI containing
+  // only that overload. If we encoded once against the full ABI under the
+  // ambiguous `functionName`, viem would resolve to one overload and we
+  // would store those same bytes under every overload's selector —
+  // overloads with different return types (e.g. `counter(uint256) returns
+  // (uint256)` vs `counter(address) returns (bool)`) would then receive
+  // bytes encoded against the wrong output ABI, producing wrong values
+  // or decode failures at the call site.
+  //
+  // When overloads share a return shape, encoding succeeds for all of
+  // them and we register every selector. When they don't, the caller's
+  // `result` only fits one overload's return shape; encoding fails for
+  // the others. We collect successes and throw if none match — that's a
+  // clear signal that `result` does not match any overload's declared
+  // return type, and the caller should fix the result shape.
+  let registered = 0;
   for (const item of fnAbiItems) {
     const selector = toFunctionSelector(
       toFunctionSignature(item),
     ).toLowerCase();
-    dispatch.set(`${target}|${selector}`, encoded);
+    try {
+      const encoded = encodeFunctionResult({
+        abi: [item],
+        functionName: options.functionName as string,
+        result: options.result,
+      } as EncodeFunctionResultParameters<abi, fn>);
+      dispatch.set(`${target}|${selector}`, encoded);
+      registered++;
+    } catch {
+      // Encoding failed for this overload — the result doesn't match
+      // its return shape. Skip; another overload may still accept it.
+    }
   }
+  if (registered === 0)
+    throw new Error(
+      `[mockRead] options.result does not match any return-type shape of overloads of ${String(options.functionName)} (${fnAbiItems.length} overload(s) tried)`,
+    );
 }
 
 /**

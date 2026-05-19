@@ -13,6 +13,7 @@
     "src/**/*.test-d.ts",
     "src/**/__test-utils__/**",
     "src/**/__mocks__/**",
-    "src/**/__fixtures__/**"
+    "src/**/__fixtures__/**",
+    "src/mock.ts"
   ]
 }
