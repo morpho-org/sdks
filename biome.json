@@ -9,7 +9,8 @@
       "!**/coverage",
       "!**/artifacts",
       "!**/packages/liquidation-sdk-viem/src/api/sdk.ts",
-      "!**/packages/liquidity-sdk-viem/src/api/sdk.ts"
+      "!**/packages/liquidity-sdk-viem/src/api/sdk.ts",
+      "!**/packages/wdk-protocol-lending-morpho-evm"
     ]
   },
   "formatter": {

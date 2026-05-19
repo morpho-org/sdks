@@ -1,11 +1,11 @@
 # TIB-2026-05-18: Migrate `wdk-protocol-lending-morpho-evm` into the SDK monorepo
 
-| Field      | Value                                |
-| ---------- | ------------------------------------ |
-| **Status** | Proposed                             |
-| **Date**   | 2026-05-18                           |
-| **Author** | @foulques                            |
-| **Scope**  | Repo-wide / Package: `morpho-sdk-wdk` |
+| Field      | Value                                                  |
+| ---------- | ------------------------------------------------------ |
+| **Status** | Accepted                                               |
+| **Date**   | 2026-05-18 (updated 2026-05-19)                        |
+| **Author** | @foulques                                              |
+| **Scope**  | Repo-wide / Package: `wdk-protocol-lending-morpho-evm` |
 
 ---
 
@@ -21,21 +21,19 @@ Morpho Labs has agreed to take ownership of the module — maintenance, security
 
 **Goals**
 
-- Move `wdk-protocol-lending-morpho-evm` source, tests, and Bare entrypoint into `packages/morpho-sdk-wdk` in this monorepo.
-- Adopt the monorepo's conventions: TypeScript strict, Biome lint/format, Vitest, Changesets, dual ESM/CJS publish, NodeNext resolution per [`AGENTS.md`](../../AGENTS.md) §4 / §8.
-- Inherit the monorepo release flow ([TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)) and security review cadence ([`AGENTS.md`](../../AGENTS.md) §7 Cantina audit).
+- Move `wdk-protocol-lending-morpho-evm` source, tests, and Bare entrypoint into `packages/wdk-protocol-lending-morpho-evm` in this monorepo, **keeping the published name `@morpho-org/wdk-protocol-lending-morpho-evm`** to avoid breaking existing WDK consumers.
+- Inherit the monorepo release flow ([TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)) and security review cadence ([`AGENTS.md`](../../AGENTS.md) §7 Cantina audit) from day one.
 - Replace pinned `^x.y.z` ranges to `morpho-sdk` / `blue-sdk*` with `workspace:^`.
-- Publish the renamed package under `@morpho-org/morpho-sdk-wdk` going forward; deprecate the legacy npm name with a redirect message.
-- Preserve the existing WDK-facing public API (method names, requirement-based flow, preset names, return shapes) so existing WDK consumers can migrate by changing the install name only.
+- Preserve the existing WDK-facing public API (method names, requirement-based flow, preset names, return shapes) so existing consumers see only an org/maintenance change.
 - Preserve the Bare runtime entry (`bare` export condition).
+- Plan a phased convergence on the monorepo's conventions (TypeScript strict, Biome lint/format, Vitest, dual ESM/CJS publish, NodeNext resolution per [`AGENTS.md`](../../AGENTS.md) §4 / §8) **without blocking the migration on a full rewrite**. Phase 1 lands the source verbatim; later phases align tooling.
 
 **Non-Goals**
 
 - Redesigning the WDK-facing API surface in this TIB. API changes are a follow-up once the package is in-tree and covered by the monorepo's test harness.
 - Adding a new framework adapter (React / wagmi) on top of WDK.
 - Migrating other `wdk-protocol-*-morpho-*` modules (if/when they exist). This TIB only covers the EVM lending module.
-- Unpublishing the legacy `@morpho-org/wdk-protocol-lending-morpho-evm` versions on npm. They get an `npm deprecate` notice only.
-- Archiving the source repo before the first `@morpho-org/morpho-sdk-wdk` release ships.
+- Renaming the published package. Earlier drafts of this TIB proposed `@morpho-org/morpho-sdk-wdk`; that rename is dropped in this revision. Existing consumers continue to install `@morpho-org/wdk-protocol-lending-morpho-evm`, and the original npm name keeps publishing from the monorepo.
 
 ## Current Solution
 
@@ -56,38 +54,43 @@ This is incompatible with several rules from [`AGENTS.md`](../../AGENTS.md):
 
 ## Proposed Solution
 
-Move the codebase into `packages/morpho-sdk-wdk` and align it with the monorepo conventions in a single PR per phase. The package's job (one reason to exist per §1 Modularity) is: **adapter between WDK accounts and `morpho-sdk` lending flows**. It is a framework adapter in the §1 sense — kept in an explicitly named package, never imported by `morpho-sdk` or other core packages.
+Move the codebase into `packages/wdk-protocol-lending-morpho-evm` and align it with the monorepo conventions over phased PRs. The package's job (one reason to exist per §1 Modularity) is: **adapter between WDK accounts and `morpho-sdk` lending flows**. It is a framework adapter in the §1 sense — kept in an explicitly named package, never imported by `morpho-sdk` or other core packages.
 
 ### Package name
 
-Rename `@morpho-org/wdk-protocol-lending-morpho-evm` → **`@morpho-org/morpho-sdk-wdk`**.
+**Keep `@morpho-org/wdk-protocol-lending-morpho-evm`.** No rename.
 
-Rationale:
+Rationale (revised 2026-05-19):
 
-- Mirrors the `morpho-sdk-<framework>` naming used by other framework adapters in this monorepo (`blue-sdk-viem`, `blue-sdk-wagmi`, `simulation-sdk-wagmi`, `test-wagmi`). The leading scope identifies the SDK family; the trailing token identifies the framework adapter.
-- Shorter than the upstream name (44 → 28 chars including scope).
-- Drops `protocol-lending-morpho-evm` since "protocol-lending" is the implicit domain of every Morpho SDK package and `evm` is implied by the WDK EVM adapter target. If a non-EVM WDK module is added later, it gets its own package (`morpho-sdk-wdk-<chain-family>`).
-- The published package name change requires the legacy name to be deprecated on npm with replacement guidance.
+- The upstream package already shipped a `1.0.0-beta.1` to npm under this name. Renaming would force every WDK consumer to update their `package.json` and re-publish; that cost outweighs the naming-consistency win the original draft proposed.
+- The name encodes useful information for WDK consumers searching npm: it pairs the upstream WDK protocol naming convention (`wdk-protocol-<domain>-<provider>-<chain>`) with the Morpho scope.
+- A future second WDK adapter (e.g. for a non-EVM chain) follows the same `wdk-protocol-lending-morpho-<chain-family>` pattern rather than the previously-considered `morpho-sdk-wdk-<chain-family>`.
 
 ### Source location
 
 ```
-packages/morpho-sdk-wdk/
+packages/wdk-protocol-lending-morpho-evm/
+  index.js              # Node entry (Phase 1 verbatim, becomes src/index.ts in Phase 2a)
+  bare.js               # Bare runtime entry
   src/
-    index.ts
-    actions/                  # WDK-facing operation methods
-    helpers/                  # preset resolution, requirement encoding
-    types/                    # WDK adapter types
-  test/                       # initial fork tests via @morpho-org/test
+    morpho-protocol-evm.js
+    morpho-presets.js
+  types/
+    index.d.ts          # hand-maintained today; auto-generated after Phase 2a
+    src/*.d.ts
+  tests/
+    morpho-protocol-evm.test.js   # unit suite (jest)
+    integration/module.test.js    # e2e fork suite (jest)
+  scripts/
+    check-vault-v2-only.js
   package.json
   tsconfig.json
-  vitest.config.ts
-  CHANGELOG.md                # generated by Changesets
-  AGENTS.md                   # symlink to CLAUDE.md, package-scoped refinements
+  CHANGELOG.md          # generated by Changesets
   README.md
+  LICENSE
 ```
 
-`packages/morpho-sdk-wdk/AGENTS.md` documents WDK-specific terms (`WdkAccount`, `Erc4337Account`, preset registry, requirement objects) and any rule refinements per [`AGENTS.md`](../../AGENTS.md) §6.
+A package-level `AGENTS.md` is added during Phase 2a to capture WDK-specific terminology and any rule refinements per [`AGENTS.md`](../../AGENTS.md) §6.
 
 ### Layering
 
@@ -101,24 +104,27 @@ This keeps the adapter free of the cross-layer leaks §1 forbids. The WDK module
 
 ### Build, publish, dependencies
 
-- `package.json#type: "module"`, NodeNext resolution, dual ESM/CJS publish from `lib/esm` / `lib/cjs` per §4. Build script: `tsc --noEmit && pnpm build:cjs && pnpm build:esm`.
-- Public exports: `.` (Node), `./bare` (Bare runtime). The `bare` condition is preserved to keep WDK Bare consumers working. No deep imports.
-- `"sideEffects": false` per §4. The Bare entry is a separate subpath, not a top-level side effect.
+- `package.json#type: "module"`. Phase 1 keeps the upstream's single ESM build (`tsc --emitDeclarationOnly` for `.d.ts` generation only); dual ESM/CJS publish from `lib/esm` / `lib/cjs` per §4 lands in Phase 2a once the source is TypeScript.
+- Public exports: `.` (Node) and an inline `bare` condition pointing at `bare.js` (mirrors the upstream's existing `exports` map). The `bare` condition is preserved to keep WDK Bare consumers working. No deep imports.
+- `"sideEffects": false` per §4. The Bare condition is selected by the resolver, not a top-level import.
 - Workspace ranges replace pinned versions:
   - `@morpho-org/morpho-sdk: workspace:^`
   - `@morpho-org/blue-sdk: workspace:^`
   - `@morpho-org/blue-sdk-viem: workspace:^`
-- `viem` stays a peer dependency.
+- `viem` moves from a direct dependency to a peer dependency (matches the rest of the monorepo's framework adapters).
 - `@tetherto/wdk-wallet*` stay as direct runtime dependencies. WDK is the package's reason to exist; it is not a peer.
-- Changesets entry on every behavior-affecting source change per §7.
+- The published package inherits the monorepo's Changesets-driven release flow ([TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)) automatically — it is added to `pnpm-workspace.yaml`'s `packages/*` glob, is not `private: true`, and ships under the `@morpho-org` scope, so the `Version PR` and `Publish` workflows pick it up with no extra wiring. The Phase 1 PR includes a `patch` changeset documenting the org/maintenance change so the first monorepo release publishes a version under the same `@morpho-org/wdk-protocol-lending-morpho-evm` name.
 
 ### Tooling migration
 
-- Replace `standard` with Biome (root config already applies).
+Phase 1 (this PR) lands the source verbatim. The package is added to the root `pnpm-workspace.yaml` packages glob and uses workspace ranges; everything else stays on the upstream tooling so we land a green baseline before refactoring.
+
+Phase 2a then converges on the monorepo conventions:
+
+- Replace `standard` with Biome (root config already applies). Until then, `packages/wdk-protocol-lending-morpho-evm/{index.js,bare.js,src,tests,types,scripts}` are added to `biome.json#files.includes` exclusions so the upstream `standard`-formatted JS source is not reformatted on commit.
 - Replace `jest` with Vitest. Native ESM removes the `NODE_OPTIONS=--experimental-vm-modules` requirement.
 - Migrate hand-written `types/*.d.ts` into co-located TypeScript source. The published `.d.ts` files come from `tsc`, not from a hand-maintained `types/` folder.
 - Replace `scripts/check-vault-v2-only.js` with a Vitest invariant test inside the new package (test fails if a non-V2 vault preset is added).
-- Add the package to the root `pnpm-workspace.yaml` packages glob.
 
 ### Test migration
 
@@ -133,39 +139,19 @@ Two §5 violations make the suite unfit for CI as-is: **mocked viem clients on R
 - **Integration test → harden.** Migrate `tests/integration/module.test.js` to a fork test built on `createViemTest` / `createAnvilTestClient` from `@morpho-org/test`. Pin the block number per chain (mainnet first; matches the convention used by `morpho-sdk`, `migration-sdk-viem`, `liquidity-sdk-viem`). Replace the hardcoded mnemonic with the harness's prefunded test accounts; replace the impersonated USDT whale with `anvil_setBalance` + `anvil_setStorageAt` for ERC-20 balance seeding (already in the test package). Required env vars are read through `morpho-sdk`'s existing zod-validated `env()` helper or its package-local equivalent — `MAINNET_RPC_URL` reuses the root `.env` contract; no new secret surface.
 - **ERC-4337 flow.** Currently a single test that mocks the bundler. Keep it as a Vitest unit test with the bundler API stubbed (bundler infrastructure is not a Morpho protocol concern), and add a fork test that exercises the ERC-4337 account's call delegation against an Anvil-deployed EntryPoint when one is available in `@morpho-org/test`. If no EntryPoint fixture exists yet, leave the fork-side ERC-4337 coverage as Phase 6 follow-up rather than expanding the test harness in this TIB.
 - **Coverage parity gate.** Phase 1 keeps the suite running under its original jest configuration so the package lands in-tree with a green baseline. Phase 2 then ports tests in two PRs — unit tests first (fast, no infra), fork tests second (Anvil-bound). No test deletion until its Vitest equivalent is green; line/branch coverage on the migrated package source must not drop below the pre-migration jest report attached to the Phase 1 PR.
-- **CI surface.** Unit tests run inline on every push via the root Vitest project. Fork tests run on the same workflow paths the other fork-test packages already use (`migration-sdk-viem`, `liquidity-sdk-viem`, `morpho-sdk`), gated on `MAINNET_RPC_URL` being present so PRs from forks don't fail on missing secrets. Re-running fork tests on every dependency bump of `morpho-sdk` / `blue-sdk-viem` is automatic via the workspace dep graph.
+- **CI surface (Phase 1).** Because the package still runs jest in Phase 1, the root Vitest project does not pick its tests up. The migration adds a dedicated step to `.github/workflows/test.yml` that runs `pnpm --filter @morpho-org/wdk-protocol-lending-morpho-evm test` after the root `pnpm test --coverage` step. The same step runs the e2e fork suite (`tests/integration/module.test.js`) since the upstream wires it into the default `pnpm test` glob; `MAINNET_RPC_URL` is already exported in this job and the existing `maybeDescribe = process.env.MAINNET_RPC_URL ? describe : describe.skip` guard short-circuits gracefully when the secret is missing on fork PRs. After Phase 2b the package's tests fold into the root Vitest project and share the same fork-test path as `morpho-sdk`, `migration-sdk-viem`, `liquidity-sdk-viem`. Re-running fork tests on every dependency bump of `morpho-sdk` / `blue-sdk-viem` is automatic via the workspace dep graph.
 - **Property-based tests.** §5 calls for fast-check on calldata encoders. This package does not encode calldata itself (it forwards `morpho-sdk` outputs), so property-based coverage targets the WDK requirement translator instead: arbitrary `Requirement[]` shapes must round-trip to WDK signer calls without dropping items, reordering, or merging approvals that target different spenders. Add this as Phase 2 PR scope, not a follow-up.
 
 ### Public API preservation
 
-The exported WDK adapter surface is preserved one-for-one across the rename so external consumers migrate by changing the install name and import path only:
-
-```
-@morpho-org/wdk-protocol-lending-morpho-evm  →  @morpho-org/morpho-sdk-wdk
-```
-
-Method names, parameter shapes, return shapes, preset registry, and requirement-based flow stay identical to `1.0.0-beta.1`. Any divergence ships in a separate, post-migration PR with its own changeset.
-
-### Legacy npm deprecation
-
-After `@morpho-org/morpho-sdk-wdk@1.0.0` ships, run on every published version of `@morpho-org/wdk-protocol-lending-morpho-evm`:
-
-```
-npm deprecate @morpho-org/wdk-protocol-lending-morpho-evm \
-  "Deprecated: renamed to @morpho-org/morpho-sdk-wdk. Install @morpho-org/morpho-sdk-wdk for the maintained Morpho WDK lending adapter."
-```
-
-The legacy versions are not unpublished. The standalone source repo is archived (read-only) once the rename is announced.
+The exported WDK adapter surface is preserved one-for-one so external consumers see only an org/maintenance change. Method names, parameter shapes, return shapes, preset registry, and requirement-based flow stay identical to `1.0.0-beta.1`. Any divergence ships in a separate, post-migration PR with its own changeset.
 
 ### Implementation Phases
 
-- **Phase 1 — Drop in source.** Copy `src/`, `tests/`, `bare.js`, `index.js`, and `types/` into `packages/morpho-sdk-wdk/`. Add a minimal `package.json` with name `@morpho-org/morpho-sdk-wdk`, workspace deps, the dual-export map, and a package-local `jest` config so the original suite still runs unchanged. CI invokes it via `pnpm --filter @morpho-org/morpho-sdk-wdk test` to confirm parity. No public-API changes.
-- **Phase 2a — TS + lint + build.** Convert source to TypeScript (NodeNext, strict). Replace `standard` with Biome. Delete hand-maintained `types/`; generated `.d.ts` ships from `tsc`. Add `@morpho-org/morpho-sdk-wdk/bare` subpath export; remove root-level `bare.js` / `index.js`. JSDoc backfill on every exported symbol per §6 (coverage measured by `pnpm jsdoc:coverage`).
-- **Phase 2b — Test migration to Vitest.** Port the unit suite first: colocate as `src/**/*.test.ts`, drop every `jest.unstable_mockModule('viem' | '@morpho-org/morpho-sdk' | …)` call, and rewrite "SDK called with X" assertions as `Transaction` decode assertions. Then port the integration suite onto `@morpho-org/test` (`createViemTest` / `createAnvilTestClient`), pin the mainnet block, swap the hardcoded mnemonic for the harness's prefunded accounts and ERC-20 storage seeding helpers. Add fast-check property tests on the requirement translator. Retire the original jest config only when the Vitest replacement is green and coverage does not regress versus the Phase 1 baseline.
-- **Phase 3 — Wire fork tests into root CI.** Add the package to the existing fork-test job (gated on `MAINNET_RPC_URL`), shared with `morpho-sdk`, `migration-sdk-viem`, `liquidity-sdk-viem`. Unit tests already run via the root Vitest project after Phase 2b.
-- **Phase 4 — First release under new name.** Changesets entry sets the initial version of `@morpho-org/morpho-sdk-wdk` to `1.0.0-beta.2` (continuation of the legacy beta series) and bundles the changelog of upstream `1.0.0-beta.1` for traceability. Trusted-publish via the monorepo release flow.
-- **Phase 5 — Deprecate legacy name.** Run the `npm deprecate` command above on every published version of `@morpho-org/wdk-protocol-lending-morpho-evm`. Archive the standalone GitHub repo with a README redirect to `packages/morpho-sdk-wdk` in this monorepo.
-- **Phase 6 — Audit + ERC-4337 fork coverage.** Include `morpho-sdk-wdk` in the next Cantina audit scope per §7. Add Anvil-side ERC-4337 fork coverage once an EntryPoint fixture lands in `@morpho-org/test`. Document audit findings in the package's CHANGELOG at the next major.
+- **Phase 1 — Drop in source (this PR).** Copy `src/`, `tests/`, `bare.js`, `index.js`, `types/`, and `scripts/` into `packages/wdk-protocol-lending-morpho-evm/` keeping the upstream layout verbatim. Add a `package.json` that uses workspace ranges for the `@morpho-org/*` deps, removes `viem` from runtime deps in favour of a peer dep, and keeps the upstream `jest` + `cross-env` test runner so the original suite still runs unchanged. Add a step to `.github/workflows/test.yml` that runs `pnpm --filter @morpho-org/wdk-protocol-lending-morpho-evm test` so both the unit and the fork suites execute on every push. Add a changeset entry. The package keeps its published name `@morpho-org/wdk-protocol-lending-morpho-evm`. No public-API changes.
+- **Phase 2a — TS + lint + build.** Convert source to TypeScript (NodeNext, strict). Replace `standard` with Biome (drop the `biome.json` exclusions added in Phase 1). Delete hand-maintained `types/`; generated `.d.ts` ships from `tsc`. Dual ESM/CJS publish from `lib/esm` / `lib/cjs` per §4. JSDoc backfill on every exported symbol per §6 (coverage measured by `pnpm jsdoc:coverage`).
+- **Phase 2b — Test migration to Vitest.** Port the unit suite first: colocate as `src/**/*.test.ts`, drop every `jest.unstable_mockModule('viem' | '@morpho-org/morpho-sdk' | …)` call, and rewrite "SDK called with X" assertions as `Transaction` decode assertions. Then port the integration suite onto `@morpho-org/test` (`createViemTest` / `createAnvilTestClient`), pin the mainnet block, swap the hardcoded mnemonic for the harness's prefunded accounts and ERC-20 storage seeding helpers. Add fast-check property tests on the requirement translator. Add a vitest project entry for the package in the root `vitest.config.ts`, then retire the Phase-1 jest step from `test.yml`.
+- **Phase 3 — Audit + ERC-4337 fork coverage.** Include `wdk-protocol-lending-morpho-evm` in the next Cantina audit scope per §7. Add Anvil-side ERC-4337 fork coverage once an EntryPoint fixture lands in `@morpho-org/test`. Document audit findings in the package's CHANGELOG at the next major.
 
 ## Considered Alternatives
 
@@ -175,11 +161,11 @@ Leave the codebase in `morpho-org/wdk-protocol-lending-morpho-evm` and replicate
 
 **Why rejected:** Duplicates every release-flow concern, every CI investment from [TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md), and the audit cadence from §7 for a single package. Dependency-range coupling with `morpho-sdk` would still require manual lockstep updates that the monorepo's Changesets cascade ([TIB-0002](./TIB-0002-consolidate-sdk-packages.md) Dependencies §) handles automatically.
 
-### Alternative 2: Keep the package name
+### Alternative 2: Rename to `@morpho-org/morpho-sdk-wdk`
 
-Keep `@morpho-org/wdk-protocol-lending-morpho-evm` after the move. No npm rename, no deprecation campaign.
+Rename the package on the move to match the monorepo's `<scope>/<sdk>-<framework>` adapter naming and shorten the install name (44 → 28 chars including scope).
 
-**Why rejected:** The name does not match any other package naming pattern in the monorepo and is the longest published name in the `@morpho-org` scope. The rename cost is paid once; the name appears in every consumer's `package.json` indefinitely.
+**Why rejected (2026-05-19, supersedes the original draft):** The upstream package already shipped a `1.0.0-beta.1` to npm under the existing name. A rename forces every WDK consumer to update their `package.json`, and the longer name is the one that already appears in WDK documentation, examples, and partner integrations. The naming-consistency win does not outweigh the consumer migration cost. If a non-EVM WDK adapter is added later, it follows the upstream `wdk-protocol-lending-morpho-<chain-family>` pattern instead of the previously-proposed `morpho-sdk-wdk-<chain-family>`.
 
 ### Alternative 3: Fold the adapter into `morpho-sdk`
 
@@ -191,17 +177,17 @@ Move the WDK methods directly into `@morpho-org/morpho-sdk` as a `wdk` subpath.
 
 Discard the upstream source and rewrite the adapter inside the monorepo.
 
-**Why rejected:** Throws away functioning code, tested presets, and the WDK-shaped API that existing beta consumers already use. The migration is a port, not a rewrite; rewriting also delays the release of a maintained `@morpho-org/morpho-sdk-wdk` for no incremental safety gain over Phase-2 TypeScript conversion.
+**Why rejected:** Throws away functioning code, tested presets, and the WDK-shaped API that existing beta consumers already use. The migration is a port, not a rewrite; rewriting also delays the release of a maintained `@morpho-org/wdk-protocol-lending-morpho-evm` for no incremental safety gain over Phase-2 TypeScript conversion.
 
 ## Assumptions & Constraints
 
-- Morpho Labs takes maintenance ownership for `@morpho-org/morpho-sdk-wdk` going forward (releases, security review, issue triage).
+- Morpho Labs takes maintenance ownership for `@morpho-org/wdk-protocol-lending-morpho-evm` going forward (releases, security review, issue triage).
 - The Tether WDK packages (`@tetherto/wdk-wallet*`) remain published on the public npm registry. If they move, this package's dependency graph follows them.
-- Bare runtime support is part of the public contract. Any change to the `./bare` entry condition is a breaking change per §7.
-- `@morpho-org/morpho-sdk-wdk` is a framework adapter, not a core SDK. It is never imported by `morpho-sdk`, `blue-sdk`, `blue-sdk-viem`, or any other core package.
-- The legacy `@morpho-org/wdk-protocol-lending-morpho-evm` versions on npm stay published and are reachable via `npm deprecate` redirection only.
-- Apache-2.0 is preserved through the move (matches the rest of the monorepo).
-- Source migration includes `git log` history preservation via `git filter-repo` or `git subtree`, not a clean copy. PR description must record the merge command used.
+- Bare runtime support is part of the public contract. Any change to the `bare` export condition is a breaking change per §7.
+- `@morpho-org/wdk-protocol-lending-morpho-evm` is a framework adapter, not a core SDK. It is never imported by `morpho-sdk`, `blue-sdk`, `blue-sdk-viem`, or any other core package.
+- The published npm name is preserved across the move. The first monorepo release continues the upstream version series (`1.0.0-beta.x` → `1.0.0-beta.x+1`).
+- Apache-2.0 is preserved through the move (this is the only Apache-2.0 package in the monorepo today; the rest are MIT, which is acknowledged but does not block the migration).
+- The Phase 1 PR copies the source from the upstream repo as a clean import rather than a `git subtree` / `git filter-repo` merge. History remains accessible in the archived upstream repo; the PR description links to the upstream commit hash at the time of import for traceability.
 
 ## Dependencies
 
@@ -213,21 +199,19 @@ Discard the upstream source and rewrite the adapter inside the monorepo.
 
 ## Security
 
-- Cantina audit scope expands to include `morpho-sdk-wdk` at the next major release per §7.
-- The package never re-encodes Morpho calldata; it forwards `morpho-sdk` action outputs. Reviewers must enforce that no encoded calldata, permit signature, or authorization is constructed inside `morpho-sdk-wdk` — only translated to the WDK account API.
+- Cantina audit scope expands to include `wdk-protocol-lending-morpho-evm` at the next major release per §7.
+- The package never re-encodes Morpho calldata; it forwards `morpho-sdk` action outputs. Reviewers must enforce that no encoded calldata, permit signature, or authorization is constructed inside `wdk-protocol-lending-morpho-evm` — only translated to the WDK account API.
 - Bare runtime entry must not bypass approval, signature, or authorization requirement objects. The Bare and Node paths share the same requirement flow.
-- npm trusted publishing applies once the package is in this monorepo's release workflow ([TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)).
-- The deprecation message on legacy versions is the only post-rename signal external users get; it must be unambiguous (`renamed to @morpho-org/morpho-sdk-wdk`) per the Phase 4 command.
+- npm trusted publishing applies as soon as the package is published from this monorepo's release workflow ([TIB-2026-05-12](./TIB-2026-05-12-release-pr-publish-on-push.md)).
 
 ## Observability
 
-- Track npm download trends for `@morpho-org/morpho-sdk-wdk` versus deprecated `@morpho-org/wdk-protocol-lending-morpho-evm` as the migration signal.
-- Track support issues mentioning the old package name to gauge when the deprecation message has propagated.
-- JSDoc coverage of the migrated surface is measured by `pnpm jsdoc:coverage` per [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md).
+- Track npm download trends for `@morpho-org/wdk-protocol-lending-morpho-evm` after the org/maintenance change to confirm no regression at the rollover.
+- JSDoc coverage of the migrated surface is measured by `pnpm jsdoc:coverage` once Phase 2a converts the source to TypeScript, per [TIB-2026-05-04](./TIB-2026-05-04-jsdoc-coverage-on-exported-symbols.md).
 
 ## Future Considerations
 
-- Non-EVM WDK adapters (`morpho-sdk-wdk-<chain-family>`) follow the same naming and packaging conventions if and when they are needed.
+- Non-EVM WDK adapters follow the upstream `wdk-protocol-lending-morpho-<chain-family>` naming.
 - WDK-side smart-account features (gas sponsorship, paymaster integrations) could ship as additional subpaths once the base adapter is stable.
 - React / wagmi hook coverage of WDK accounts is out of scope here and gated on a separate TIB.
 
