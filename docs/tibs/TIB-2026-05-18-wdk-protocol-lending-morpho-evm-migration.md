@@ -186,7 +186,7 @@ Discard the upstream source and rewrite the adapter inside the monorepo.
 - Bare runtime support is part of the public contract. Any change to the `bare` export condition is a breaking change per §7.
 - `@morpho-org/wdk-protocol-lending-morpho-evm` is a framework adapter, not a core SDK. It is never imported by `morpho-sdk`, `blue-sdk`, `blue-sdk-viem`, or any other core package.
 - The published npm name is preserved across the move. The first monorepo release continues the upstream version series (`1.0.0-beta.x` → `1.0.0-beta.x+1`).
-- Apache-2.0 is preserved through the move (this is the only Apache-2.0 package in the monorepo today; the rest are MIT, which is acknowledged but does not block the migration).
+- The monorepo (`LICENSE` at the root) and every other package in `packages/*` are MIT-licensed. `wdk-protocol-lending-morpho-evm` keeps its upstream Apache-2.0 license through the move and is the **only Apache-2.0 package in the repo**; the per-package `LICENSE` file and `package.json#license` field are the authoritative signal for downstream consumers. This is an intentional, scoped license exception — not a drift toward changing the monorepo's MIT default — and it carries through to the published npm tarball. Any future relicensing (either way) needs its own TIB.
 - The Phase 1 PR copies the source from the upstream repo as a clean import rather than a `git subtree` / `git filter-repo` merge. History remains accessible in the archived upstream repo; the PR description links to the upstream commit hash at the time of import for traceability.
 
 ## Dependencies
