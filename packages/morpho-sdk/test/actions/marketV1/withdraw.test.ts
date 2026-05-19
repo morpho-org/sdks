@@ -229,8 +229,11 @@ describe("WithdrawMarketV1", () => {
   });
 
   test("should withdraw with single-vault reallocation", async ({ client }) => {
-    const supplyAmount = parseUnits("100", 6);
-    const withdrawAmount = parseUnits("100", 6);
+    // Withdraw < supply: `AccrualPosition.supplyAssets` rounds down via
+    // `toSupplyAssets` so a full-supply withdraw trips `WithdrawExceedsSupplyError`
+    // by 1 wei. Leave a buffer instead of stressing the rounding edge.
+    const supplyAmount = parseUnits("200", 6);
+    const withdrawAmount = parseUnits("50", 6);
     const reallocationAmount = parseUnits("2000", 6);
 
     await supplyLoan({

@@ -540,10 +540,10 @@ export class MorphoMarketV1 implements MarketV1Actions {
       reallocations,
     } = params;
 
-    // Value-based mode detection guards against JS callers passing `{ assets: undefined }`
-    // or `{ shares: undefined }` — TS prevents this but the runtime check seals the gap.
-    const assets = "assets" in params ? params.assets : 0n;
-    const shares = "shares" in params ? params.shares : 0n;
+    // Mode normalization: a missing or undefined `assets`/`shares` key collapses to `0n`
+    // so the mutual-exclusion and positivity checks below are pure value comparisons.
+    const assets = ("assets" in params ? params.assets : undefined) ?? 0n;
+    const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
 
     if (assets > 0n && shares > 0n) {
       throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
