@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/morpho-sdk",
   "description": "Abstraction layer for Morpho's complexity.",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Foulks-Plb <https://x.com/FoulkPlb>"
