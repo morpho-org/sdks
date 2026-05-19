@@ -4,6 +4,7 @@ kind: baseline
 applies: AGENTS.md §1 Architecture (Action layer), §2 Forbidden patterns (signing in builders), §5 Testing (security invariants — chainId validation, authorization, accounting)
 out-of-scope:
   - General type-safety inside function bodies — see code-quality.
+  - Morpho protocol accounting, operation routing, and ABI/source-of-truth drift — see protocol-engineer.
   - Hardcoded secrets / shell injection / `eval` — see code-quality (it owns the §2 security primitives).
   - Changeset / publish-flow rules — see style-conventions and ci-release-security.
   - Test coverage for the Web3 paths — see test-coverage.
@@ -71,6 +72,7 @@ The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS
 ## Out-of-scope reminders (for the sub-agent)
 
 - Do NOT flag generic type-safety, magic numbers, or naming drift in non-Web3 code — that's `code-quality`'s job.
+- Do NOT flag Morpho protocol accounting, operation routing, or ABI/source-of-truth drift except where it directly creates a wallet/signature/transaction-security issue — that's `protocol-engineer`'s job.
 - Do NOT flag generic error swallowing (`catch (_) {}`) — `silent-failure-hunter`. This persona owns **Web3-specific** failure handling (failed-tx surfacing, revert decoding, user-rejection paths).
 - Do NOT flag changeset relevance or publish-flow concerns — `style-conventions` and `ci-release-security`.
 - Do NOT propose new test coverage on Web3 paths — `test-coverage`. This persona reviews whether the *source* is correct; coverage is the other persona.
