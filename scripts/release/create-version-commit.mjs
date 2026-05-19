@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { randomUUID } from "node:crypto";
 import { appendFileSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -9,6 +8,7 @@ import { pathToFileURL } from "node:url";
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_COMMIT_MESSAGE = "chore: version packages";
 const RELEASE_BRANCH_RE = /^changeset-release\/(?:main|next)$/;
+const TEMP_BRANCH_RE = /^changeset-release\/(?:main|next)-api-commit-[^/]+$/;
 const USER_AGENT = "morpho-sdks-release-version-commit";
 
 /**
@@ -106,7 +106,7 @@ export function collectVersionChanges(options = {}) {
 /**
  * Creates a GitHub-signed release commit through the GitHub App token.
  *
- * @param {{ apiBaseUrl?: string, baseSha: string, commitMessage?: string, cwd?: string, fetchImpl?: typeof fetch, fileChanges: { additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }> }, gitRemoteUrl?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, releaseBranch: string, repository: string, tempBranch?: string, token: string, writeWarning?: (message: string) => void }} options Commit options.
+ * @param {{ apiBaseUrl?: string, baseSha: string, commitMessage?: string, cwd?: string, fetchImpl?: typeof fetch, fileChanges: { additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }> }, gitRemoteUrl?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, releaseBranch: string, repository: string, runAttempt?: string, runId?: string, tempBranch?: string, token: string, writeWarning?: (message: string) => void }} options Commit options.
  * @returns {Promise<{ commitOid: string, tempBranch: string }>} The created commit metadata.
  */
 export async function createSignedVersionCommit(options) {
@@ -125,11 +125,16 @@ export async function createSignedVersionCommit(options) {
     options.writeWarning ?? ((message) => process.stderr.write(message));
   const tempBranch =
     options.tempBranch ??
-    `${options.releaseBranch}-api-commit-${randomUUID().slice(0, 8)}`;
+    buildTempBranchName({
+      releaseBranch: options.releaseBranch,
+      runAttempt: options.runAttempt,
+      runId: options.runId,
+    });
 
   if (tempBranch === options.releaseBranch) {
     throw new Error("Temporary branch must differ from the release branch.");
   }
+  assertTempBranch(tempBranch);
 
   await createOrUpdateBranchRef({
     apiBaseUrl,
@@ -297,12 +302,6 @@ export async function main(options = {}) {
   const baseSha = runGit(["rev-parse", "HEAD"], { cwd })
     .toString("utf8")
     .trim();
-  const tempBranch = [
-    releaseBranch,
-    "api-commit",
-    env.GITHUB_RUN_ID ?? "local",
-    env.GITHUB_RUN_ATTEMPT ?? "0",
-  ].join("-");
   const result = await createSignedVersionCommit({
     apiBaseUrl: options.apiBaseUrl,
     baseSha,
@@ -315,7 +314,8 @@ export async function main(options = {}) {
     releaseBranch,
     repository,
     pushReleaseBranch: options.pushReleaseBranch,
-    tempBranch,
+    runAttempt: env.GITHUB_RUN_ATTEMPT,
+    runId: env.GITHUB_RUN_ID,
     token,
     writeWarning: options.writeWarning,
   });
@@ -492,6 +492,23 @@ function readReleaseBranch(env) {
   }
 
   return releaseBranch;
+}
+
+function buildTempBranchName(options) {
+  return [
+    options.releaseBranch,
+    "api-commit",
+    options.runId ?? "local",
+    options.runAttempt ?? "0",
+  ].join("-");
+}
+
+function assertTempBranch(tempBranch) {
+  if (!TEMP_BRANCH_RE.test(tempBranch)) {
+    throw new Error(
+      `Invalid temporary branch "${tempBranch}". Expected "changeset-release/main-api-commit-*" or "changeset-release/next-api-commit-*".`,
+    );
+  }
 }
 
 function readNullSeparatedGitOutput(output) {

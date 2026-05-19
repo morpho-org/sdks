@@ -333,7 +333,10 @@ describe("createSignedVersionCommit", () => {
       }
 
       if (requests.length === 2) {
-        return jsonResponse({ ref: "refs/heads/tmp-release" }, { status: 201 });
+        return jsonResponse(
+          { ref: "refs/heads/changeset-release/main-api-commit-100-2" },
+          { status: 201 },
+        );
       }
 
       if (requests.length === 3) {
@@ -369,23 +372,24 @@ describe("createSignedVersionCommit", () => {
         pushReleaseBranch,
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        runAttempt: "2",
+        runId: "100",
         token: "token",
       }),
     ).resolves.toEqual({
       commitOid: "signed-commit",
-      tempBranch: "tmp-release",
+      tempBranch: "changeset-release/main-api-commit-100-2",
     });
 
     expect(requests).toEqual([
       {
         body: null,
         method: "GET",
-        url: "https://api.github.test/repos/morpho-org/sdks/git/ref/heads/tmp-release",
+        url: "https://api.github.test/repos/morpho-org/sdks/git/ref/heads/changeset-release/main-api-commit-100-2",
       },
       {
         body: {
-          ref: "refs/heads/tmp-release",
+          ref: "refs/heads/changeset-release/main-api-commit-100-2",
           sha: "base-sha",
         },
         method: "POST",
@@ -397,7 +401,7 @@ describe("createSignedVersionCommit", () => {
           variables: {
             input: {
               branch: {
-                branchName: "tmp-release",
+                branchName: "changeset-release/main-api-commit-100-2",
                 repositoryNameWithOwner: "morpho-org/sdks",
               },
               expectedHeadOid: "base-sha",
@@ -422,7 +426,7 @@ describe("createSignedVersionCommit", () => {
       {
         body: null,
         method: "DELETE",
-        url: "https://api.github.test/repos/morpho-org/sdks/git/refs/heads/tmp-release",
+        url: "https://api.github.test/repos/morpho-org/sdks/git/refs/heads/changeset-release/main-api-commit-100-2",
       },
     ]);
     expect(JSON.stringify(requests[2].body.variables.input)).not.toContain(
@@ -437,7 +441,7 @@ describe("createSignedVersionCommit", () => {
       releaseBranch: "changeset-release/main",
       remoteUrl: undefined,
       repository: "morpho-org/sdks",
-      tempBranch: "tmp-release",
+      tempBranch: "changeset-release/main-api-commit-100-2",
       token: "token",
     });
   });
@@ -450,7 +454,7 @@ describe("createSignedVersionCommit", () => {
         fileChanges: { additions: [], deletions: [] },
         releaseBranch: "changeset-release/main",
         repository: "morpho-org",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).rejects.toThrow('Invalid GitHub repository "morpho-org".');
@@ -470,6 +474,44 @@ describe("createSignedVersionCommit", () => {
     ).rejects.toThrow("Temporary branch must differ from the release branch.");
   });
 
+  test("error: temporary branch outside release staging namespace", async () => {
+    const fetchImpl = vi.fn();
+
+    await expect(
+      createSignedVersionCommit({
+        baseSha: "base-sha",
+        fetchImpl,
+        fileChanges: { additions: [], deletions: [] },
+        releaseBranch: "changeset-release/main",
+        repository: "morpho-org/sdks",
+        tempBranch: "main-api-commit-test",
+        token: "token",
+      }),
+    ).rejects.toThrow(
+      'Invalid temporary branch "main-api-commit-test". Expected "changeset-release/main-api-commit-*" or "changeset-release/next-api-commit-*".',
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  test("error: temporary branch outside ignored release staging branches", async () => {
+    const fetchImpl = vi.fn();
+
+    await expect(
+      createSignedVersionCommit({
+        baseSha: "base-sha",
+        fetchImpl,
+        fileChanges: { additions: [], deletions: [] },
+        releaseBranch: "changeset-release/main",
+        repository: "morpho-org/sdks",
+        tempBranch: "changeset-release/feature-api-commit-test",
+        token: "token",
+      }),
+    ).rejects.toThrow(
+      'Invalid temporary branch "changeset-release/feature-api-commit-test". Expected "changeset-release/main-api-commit-*" or "changeset-release/next-api-commit-*".',
+    );
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   test("error: GraphQL errors", async () => {
     const requests = [];
     const fetchImpl = createSignedCommitFetch({
@@ -485,7 +527,7 @@ describe("createSignedVersionCommit", () => {
         fileChanges: { additions: [], deletions: [] },
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).rejects.toThrow(
@@ -517,11 +559,11 @@ describe("createSignedVersionCommit", () => {
         fileChanges: { additions: [], deletions: [] },
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).rejects.toThrow(
-      "GitHub API GET /repos/morpho-org/sdks/git/ref/heads/tmp-release failed with 503: server unavailable",
+      "GitHub API GET /repos/morpho-org/sdks/git/ref/heads/changeset-release/main-api-commit-test failed with 503: server unavailable",
     );
     expect(requests).toHaveLength(1);
   });
@@ -541,7 +583,7 @@ describe("createSignedVersionCommit", () => {
         fileChanges: { additions: [], deletions: [] },
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).rejects.toThrow(
@@ -554,7 +596,9 @@ describe("createSignedVersionCommit", () => {
     const requests = [];
     const pushReleaseBranch = vi.fn();
     const fetchImpl = createSignedCommitFetch({
-      getRefResponse: jsonResponse({ ref: "refs/heads/tmp-release" }),
+      getRefResponse: jsonResponse({
+        ref: "refs/heads/changeset-release/main-api-commit-test",
+      }),
       requests,
     });
 
@@ -568,12 +612,12 @@ describe("createSignedVersionCommit", () => {
         pushReleaseBranch,
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).resolves.toEqual({
       commitOid: "signed-commit",
-      tempBranch: "tmp-release",
+      tempBranch: "changeset-release/main-api-commit-test",
     });
     expect(requests.map((request) => request.method)).toEqual([
       "GET",
@@ -590,7 +634,9 @@ describe("createSignedVersionCommit", () => {
   test("error: update existing ref failure", async () => {
     const requests = [];
     const fetchImpl = createSignedCommitFetch({
-      getRefResponse: jsonResponse({ ref: "refs/heads/tmp-release" }),
+      getRefResponse: jsonResponse({
+        ref: "refs/heads/changeset-release/main-api-commit-test",
+      }),
       patchRefResponse: jsonResponse(
         { message: "patch failed" },
         { status: 500 },
@@ -606,11 +652,11 @@ describe("createSignedVersionCommit", () => {
         fileChanges: { additions: [], deletions: [] },
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).rejects.toThrow(
-      "GitHub API PATCH /repos/morpho-org/sdks/git/refs/heads/tmp-release failed with 500: patch failed",
+      "GitHub API PATCH /repos/morpho-org/sdks/git/refs/heads/changeset-release/main-api-commit-test failed with 500: patch failed",
     );
     expect(requests.map((request) => request.method)).toEqual(["GET", "PATCH"]);
   });
@@ -631,13 +677,13 @@ describe("createSignedVersionCommit", () => {
         pushReleaseBranch,
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).rejects.toThrow("push failed");
     expect(requests.at(-1)).toMatchObject({
       method: "DELETE",
-      url: "https://api.github.test/repos/morpho-org/sdks/git/refs/heads/tmp-release",
+      url: "https://api.github.test/repos/morpho-org/sdks/git/refs/heads/changeset-release/main-api-commit-test",
     });
   });
 
@@ -661,16 +707,16 @@ describe("createSignedVersionCommit", () => {
         pushReleaseBranch: vi.fn(),
         releaseBranch: "changeset-release/main",
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
         writeWarning,
       }),
     ).resolves.toEqual({
       commitOid: "signed-commit",
-      tempBranch: "tmp-release",
+      tempBranch: "changeset-release/main-api-commit-test",
     });
     expect(writeWarning).toHaveBeenCalledWith(
-      'Warning: failed to delete temporary branch "tmp-release": GitHub API DELETE /repos/morpho-org/sdks/git/refs/heads/tmp-release failed with 500: delete failed\n',
+      'Warning: failed to delete temporary branch "changeset-release/main-api-commit-test": GitHub API DELETE /repos/morpho-org/sdks/git/refs/heads/changeset-release/main-api-commit-test failed with 500: delete failed\n',
     );
   });
 });
@@ -685,7 +731,7 @@ describe("pushReleaseBranchWithLease", () => {
       releaseBranch: "changeset-release/main",
       remoteUrl: fixture.remote,
       repository: "morpho-org/sdks",
-      tempBranch: "tmp-release",
+      tempBranch: "changeset-release/main-api-commit-test",
       token: "token",
     });
 
@@ -714,7 +760,7 @@ describe("pushReleaseBranchWithLease", () => {
         releaseBranch: "changeset-release/main",
         remoteUrl: fixture.remote,
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).toThrow();
@@ -735,7 +781,7 @@ describe("pushReleaseBranchWithLease", () => {
       releaseBranch: "changeset-release/main",
       remoteUrl: fixture.remote,
       repository: "morpho-org/sdks",
-      tempBranch: "tmp-release",
+      tempBranch: "changeset-release/main-api-commit-test",
       token: "token",
     });
 
@@ -761,7 +807,7 @@ describe("pushReleaseBranchWithLease", () => {
         releaseBranch: "changeset-release/main",
         remoteUrl: fixture.remote,
         repository: "morpho-org/sdks",
-        tempBranch: "tmp-release",
+        tempBranch: "changeset-release/main-api-commit-test",
         token: "token",
       }),
     ).toThrow();
@@ -819,14 +865,14 @@ function createReleaseRemoteFixture(options = {}) {
   }
 
   runGit(["checkout", "main"], root);
-  runGit(["checkout", "-b", "tmp-release"], root);
+  runGit(["checkout", "-b", "changeset-release/main-api-commit-test"], root);
   writeFileSync(
     join(root, "packages/morpho-sdk/package.json"),
     `${JSON.stringify({ name: "@morpho-org/morpho-sdk", version: "1.1.0" })}\n`,
   );
   commitAll(root, "version packages");
   const tempCommit = runGit(["rev-parse", "HEAD"], root).toString().trim();
-  runGit(["push", "origin", "tmp-release"], root);
+  runGit(["push", "origin", "changeset-release/main-api-commit-test"], root);
 
   runGit(["checkout", "main"], root);
   runGit(["remote", "set-url", "origin", originalOriginUrl], root);
@@ -900,14 +946,19 @@ function createSignedCommitFetch(options = {}) {
     if (request.method === "POST" && request.url.endsWith("/git/refs")) {
       return (
         options.createRefResponse ??
-        jsonResponse({ ref: "refs/heads/tmp-release" }, { status: 201 })
+        jsonResponse(
+          { ref: "refs/heads/changeset-release/main-api-commit-test" },
+          { status: 201 },
+        )
       );
     }
 
     if (request.method === "PATCH") {
       return (
         options.patchRefResponse ??
-        jsonResponse({ ref: "refs/heads/tmp-release" })
+        jsonResponse({
+          ref: "refs/heads/changeset-release/main-api-commit-test",
+        })
       );
     }
 
