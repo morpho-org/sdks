@@ -1,7 +1,7 @@
 ---
 name: module-api-architecture
 kind: baseline
-applies: AGENTS.md §1 Architecture (layering, modularity), §4 Public API & packaging
+applies: AGENTS.md §1 Architecture (layering, modularity), §3 Type discipline (at the boundary), §4 Public API & packaging
 out-of-scope:
   - Lint mechanics (2-space indent, organize-imports) — see style-conventions.
   - Type-safety inside a function body — see code-quality.

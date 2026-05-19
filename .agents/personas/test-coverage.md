@@ -34,7 +34,7 @@ Fork-bound tests use **`*.integration.test.ts`** naming when they stay (e.g. a t
 - New public exports without a corresponding test — in colocated layout (`src/Foo.test.ts` next to `src/Foo.ts`) for packages wired for colocation, or `packages/<pkg>/test/Foo.test.ts` for the older layout.
 - New code paths inside existing exports without test cases — branches, error paths, edge cases like `0n`, `MAX_UINT256`, negative `bigint`, empty arrays, NaN-equivalents.
 - Removed or modified public exports without their tests updated (e.g. signature change, behavior change).
-- Onchain code paths (any code calling `viem` / `wagmi` actions) — confirm at least one test exercises the path. Mocked transport-level is preferred for new unit tests (the `@morpho-org/test/mock` sub-export with `createMockClient` / `mockRead` / `expectReadCall` lands with TIB-2026-04-27); fork-based is acceptable for path-purpose tests, and those should use `*.integration.test.ts` naming.
+- Onchain code paths (any code calling `viem` / `wagmi` actions) — confirm at least one test exercises the path. Per current AGENTS.md §5, use Anvil forks via `@morpho-org/test` (no mocked viem clients on RPC paths). The forthcoming TIB-2026-04-27 (tracked in PR #596) introduces an opt-in transport-level mocking convention via `@morpho-org/test/mock` (`createMockClient` / `mockRead` / `expectReadCall`); until that TIB is accepted and §5 is amended, do NOT recommend mocked transports — defer to forks. Fork-bound tests should use `*.integration.test.ts` naming so unit-only test runs filter them cleanly.
 - Snapshot or schema tests not updated when generated outputs (GraphQL types, ABIs) change.
 
 ### Wrong-place findings (the colocation enforcer)

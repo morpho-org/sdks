@@ -103,7 +103,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Each package has one reason to exist (see §1 Modularity). Framework adapters never live in core SDK packages.
 - Don't replace a small local helper with a transitive dep just to "reuse code".
 
-> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`style-conventions`](./.agents/personas/style-conventions.md).
+> Applied by persona: [`module-api-architecture`](./.agents/personas/module-api-architecture.md).
 
 ---
 
@@ -207,7 +207,7 @@ Baseline personas (always fire):
 | Persona | Anchors | Focus |
 |---|---|---|
 | [`code-quality`](./.agents/personas/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
-| [`module-api-architecture`](./.agents/personas/module-api-architecture.md) | §1, §4 | Package boundaries, public surface, NodeNext import discipline. |
+| [`module-api-architecture`](./.agents/personas/module-api-architecture.md) | §1, §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
 | [`web3-security`](./.agents/personas/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
 | [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) | §1 (testability), §2 | Swallowed errors, missing error states, dead code paths. |
 | [`style-conventions`](./.agents/personas/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
