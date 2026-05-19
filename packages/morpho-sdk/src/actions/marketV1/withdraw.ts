@@ -31,7 +31,11 @@ export interface MarketV1WithdrawParams {
     receiver: Address;
     /** Minimum withdraw share price (in ray). Slippage protection. */
     minSharePrice: bigint;
-    /** Vault reallocations to execute before withdrawing (computed by entity). */
+    /**
+     * Vault reallocations to execute before withdrawing. Compute via
+     * `MorphoMarketV1.getReallocations({ operation: "withdraw", amount })` or directly via
+     * `computeReallocations({ operation: "withdraw", amount, ... })`.
+     */
     reallocations?: readonly VaultReallocation[];
   };
   metadata?: Metadata;
@@ -69,7 +73,8 @@ export interface MarketV1WithdrawParams {
  *   the typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveWithdrawAmountError} when both `assets` and `shares` are zero, or either is negative.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
- * @throws {NonPositiveWithdrawMinSharePriceError} when `minSharePrice < 0n` (zero is allowed).
+ * @throws {NonPositiveWithdrawMinSharePriceError} when `minSharePrice < 0n` (zero is allowed despite
+ *   the class name — pattern preserved for symmetry with `marketV1Borrow`).
  * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when any reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any reallocation has no withdrawals.
  * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any withdrawal amount <= 0.
@@ -86,7 +91,7 @@ export interface MarketV1WithdrawParams {
  *     shares: 0n,
  *     onBehalf: supplier,
  *     receiver: supplier,
- *     minSharePrice: 0n, // disables slippage protection — production code should compute via `computeMinWithdrawSharePrice`
+ *     minSharePrice: 0n, // disables slippage protection — production code should compute via `computeMinWithdrawSharePrice` from market state + slippage tolerance
  *   },
  * });
  * // tx satisfies Readonly<Transaction<MarketV1WithdrawAction>>
@@ -97,10 +102,6 @@ export const marketV1Withdraw = ({
   args: { assets, shares, onBehalf, receiver, minSharePrice, reallocations },
   metadata,
 }: MarketV1WithdrawParams): Readonly<Transaction<MarketV1WithdrawAction>> => {
-  if (minSharePrice < 0n) {
-    throw new NonPositiveWithdrawMinSharePriceError(marketParams.id);
-  }
-
   if (assets < 0n || shares < 0n) {
     throw new NonPositiveWithdrawAmountError(marketParams.id);
   }
@@ -111,6 +112,10 @@ export const marketV1Withdraw = ({
 
   if (assets === 0n && shares === 0n) {
     throw new NonPositiveWithdrawAmountError(marketParams.id);
+  }
+
+  if (minSharePrice < 0n) {
+    throw new NonPositiveWithdrawMinSharePriceError(marketParams.id);
   }
 
   const actions: Action[] = [];

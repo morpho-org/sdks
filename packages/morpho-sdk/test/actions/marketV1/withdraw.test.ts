@@ -7,8 +7,13 @@ import {
   isRequirementAuthorization,
   MorphoClient,
   marketV1Withdraw,
+  type VaultReallocation,
 } from "../../../src/index.js";
-import { CbbtcUsdcMarketV1 } from "../../fixtures/marketV1.js";
+import {
+  CbbtcUsdcMarketV1,
+  WbtcUsdcSourceMarket,
+} from "../../fixtures/marketV1.js";
+import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { supplyLoan } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
@@ -221,5 +226,71 @@ describe("WithdrawMarketV1", () => {
     const requirements = await withdraw.getRequirements();
     expect(requirements.length).toBe(1);
     expect(isRequirementAuthorization(requirements[0])).toBe(true);
+  });
+
+  test("should withdraw with single-vault reallocation", async ({ client }) => {
+    const supplyAmount = parseUnits("100", 6);
+    const withdrawAmount = parseUnits("100", 6);
+    const reallocationAmount = parseUnits("2000", 6);
+
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcMarketV1,
+      supplyAmount,
+    });
+
+    const reallocations: readonly VaultReallocation[] = [
+      {
+        vault: SteakhouseUsdcVaultV1.address,
+        fee: 0n,
+        withdrawals: [
+          {
+            marketParams: WbtcUsdcSourceMarket,
+            amount: reallocationAmount,
+          },
+        ],
+      },
+    ];
+
+    const {
+      markets: {
+        CbbtcUsdcMarketV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { markets: { CbbtcUsdcMarketV1, WbtcUsdcSourceMarket } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client);
+        const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        const withdraw = market.withdraw({
+          userAddress: client.account.address,
+          assets: withdrawAmount,
+          positionData,
+          reallocations,
+        });
+
+        const requirements = await withdraw.getRequirements();
+        const authorization = requirements[0];
+        if (!isRequirementAuthorization(authorization)) {
+          throw new Error("Authorization requirement not found");
+        }
+        await client.sendTransaction(authorization);
+
+        const tx = withdraw.buildTx();
+        expect(tx.value).toBe(0n);
+        expect(tx.action.args.reallocationFee).toBe(0n);
+
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.userLoanTokenBalance).toEqual(
+      initialState.userLoanTokenBalance + withdrawAmount,
+    );
   });
 });

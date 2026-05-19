@@ -2,12 +2,17 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { CbbtcUsdcMarketV1 } from "../../../test/fixtures/marketV1.js";
+import {
+  CbbtcUsdcMarketV1,
+  WbtcUsdcSourceMarket,
+} from "../../../test/fixtures/marketV1.js";
+import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveWithdrawAmountsError,
   NonPositiveWithdrawAmountError,
   NonPositiveWithdrawMinSharePriceError,
+  type VaultReallocation,
 } from "../../types/index.js";
 import { marketV1Withdraw } from "./withdraw.js";
 
@@ -170,6 +175,39 @@ describe("marketV1Withdraw unit tests", () => {
     expect(Object.isFrozen(tx)).toBe(true);
     expect(Object.isFrozen(tx.action)).toBe(true);
     expect(Object.isFrozen(tx.action.args)).toBe(true);
+  });
+
+  test("should set tx.value to the summed reallocation fee", async ({
+    client,
+  }) => {
+    const reallocationFee = parseUnits("0.01", 18);
+    const reallocations: readonly VaultReallocation[] = [
+      {
+        vault: SteakhouseUsdcVaultV1.address,
+        fee: reallocationFee,
+        withdrawals: [
+          {
+            marketParams: WbtcUsdcSourceMarket,
+            amount: parseUnits("500", 6),
+          },
+        ],
+      },
+    ];
+
+    const tx = marketV1Withdraw({
+      market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
+      args: {
+        assets: parseUnits("100", 6),
+        shares: 0n,
+        onBehalf: client.account.address,
+        receiver: client.account.address,
+        minSharePrice: 0n,
+        reallocations,
+      },
+    });
+
+    expect(tx.value).toBe(reallocationFee);
+    expect(tx.action.args.reallocationFee).toBe(reallocationFee);
   });
 
   test("should append metadata to transaction data when provided", async ({

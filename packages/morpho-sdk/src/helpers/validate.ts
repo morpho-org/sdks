@@ -374,11 +374,12 @@ export const validateRepayParams = (params: {
  * - `fee` must be non-negative.
  * - `withdrawals` must be non-empty.
  * - Every withdrawal `amount` must be strictly positive.
- * - No withdrawal may target `targetMarketId` (the borrow market).
+ * - No withdrawal may target `targetMarketId` (the operation's target market — the market being
+ *   borrowed from for `borrow`, or being withdrawn from for `withdraw`).
  * - Withdrawal market IDs must be strictly ascending (required by `PublicAllocator.reallocateTo`).
  *
  * @param reallocations - The reallocations to validate.
- * @param targetMarketId - The ID of the market being borrowed from. No withdrawal may reference this market.
+ * @param targetMarketId - The ID of the operation's target market. No withdrawal may reference this market.
  */
 export const validateReallocations = (
   reallocations: readonly VaultReallocation[],
@@ -440,6 +441,7 @@ export const validateSlippageTolerance = (slippageTolerance: bigint): void => {
  * @param params.positionData - The current accrual position.
  * @param params.withdrawAssets - The amount of assets to withdraw.
  * @param params.marketId - The market identifier (for error messages).
+ * @throws {WithdrawExceedsSupplyError} when `withdrawAssets > positionData.supplyAssets`.
  */
 export const validateWithdrawAmount = (params: {
   positionData: AccrualPosition;
@@ -463,6 +465,7 @@ export const validateWithdrawAmount = (params: {
  * @param params.positionData - The current accrual position.
  * @param params.withdrawShares - The amount of shares to withdraw.
  * @param params.marketId - The market identifier (for error messages).
+ * @throws {WithdrawSharesExceedSupplyError} when `withdrawShares > positionData.supplyShares`.
  */
 export const validateWithdrawShares = (params: {
   positionData: AccrualPosition;

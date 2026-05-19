@@ -33,6 +33,8 @@ import {
  * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the operation's
  *   absolute shortfall on the target market — preventing fee-bearing reallocations from being
  *   attached to a call that would still revert onchain.
+ * @throws {MissingPublicAllocatorConfigError} When a vault selected for reallocation has no
+ *   PublicAllocator configuration in the simulation state.
  */
 export const computeReallocations = ({
   reallocationData: data,

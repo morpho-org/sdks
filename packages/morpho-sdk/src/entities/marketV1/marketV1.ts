@@ -83,6 +83,7 @@ import {
   type VaultReallocation,
   WithdrawExceedsCollateralError,
   ZeroCollateralAmountError,
+  ZeroSupplyAmountError,
 } from "../../types/index.js";
 
 export interface MarketV1Actions {
@@ -166,8 +167,9 @@ export interface MarketV1Actions {
    * moving liquidity from other markets via the PublicAllocator before withdrawing — used to
    * unblock withdraws that exceed on-market liquidity.
    *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if not yet
-   * authorized, since the bundler calls `withdraw(...,onBehalf=user,...)`.
+   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if GA1 is not
+   * yet authorized on Morpho (returns `[]` when already authorized), since the bundler calls
+   * `withdraw(...,onBehalf=user,...)`.
    *
    * **Stale `positionData` may cause unexpected supply share calculations.**
    *
@@ -381,24 +383,40 @@ export interface MarketV1Actions {
   }) => Promise<SimulationState>;
 
   /**
-   * Computes vault reallocations for a borrow on this market.
+   * Computes vault reallocations for a borrow or withdraw on this market.
    *
-   * Uses the shared liquidity algorithm to determine which vaults should
-   * reallocate liquidity to this market via the PublicAllocator, based on
-   * post-borrow utilization targets.
+   * Uses the shared-liquidity algorithm to determine which vaults should reallocate liquidity to
+   * this market via the PublicAllocator, based on the post-operation utilization target.
+   *
+   * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow",
+   * amount }`) or `{ operation: "withdraw", amount }` for a loan-asset withdraw.
    *
    * @param params.reallocationData - The current on-chain state (from {@link getReallocationData}).
-   * @param params.borrowAmount - The intended borrow amount.
+   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+   *        Defaults to `"borrow"` when `borrowAmount` is provided.
+   * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
+   * @param params.borrowAmount - **Deprecated.** Equivalent to `{ operation: "borrow", amount }`.
    * @param params.options - Optional reallocation computation options
    *        (utilization targets, reallocatable vaults filter, etc.).
-   * @returns Array of vault reallocations ready to pass to `borrow()` or
-   *          `supplyCollateralBorrow()`. Empty array if no reallocation is needed.
+   * @returns Array of vault reallocations ready to pass to `borrow()`, `supplyCollateralBorrow()`,
+   *          or `withdraw()`. Empty array if no reallocation is needed.
+   * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the operation's
+   *   absolute shortfall — preventing fee-bearing reallocations from being attached to a call
+   *   that would still revert on-chain.
    */
-  getReallocations: (params: {
-    reallocationData: SimulationState;
-    borrowAmount: bigint;
-    options?: ReallocationComputeOptions;
-  }) => readonly VaultReallocation[];
+  getReallocations: (
+    params: {
+      reallocationData: SimulationState;
+      options?: ReallocationComputeOptions;
+    } & (
+      | {
+          operation: "borrow" | "withdraw";
+          amount: bigint;
+          borrowAmount?: never;
+        }
+      | { operation?: "borrow"; amount?: never; borrowAmount: bigint }
+    ),
+  ) => readonly VaultReallocation[];
 }
 
 export class MorphoMarketV1 implements MarketV1Actions {
@@ -460,7 +478,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
 
     const totalAssets = amount + (nativeAmount ?? 0n);
     if (totalAssets === 0n) {
-      throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
+      throw new ZeroSupplyAmountError(this.marketParams.id);
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -1277,20 +1295,35 @@ export class MorphoMarketV1 implements MarketV1Actions {
     });
   }
 
-  getReallocations({
-    reallocationData,
-    borrowAmount,
-    options,
-  }: {
-    reallocationData: SimulationState;
-    borrowAmount: bigint;
-    options?: ReallocationComputeOptions;
-  }): readonly VaultReallocation[] {
+  getReallocations(
+    params: {
+      reallocationData: SimulationState;
+      options?: ReallocationComputeOptions;
+    } & (
+      | {
+          operation: "borrow" | "withdraw";
+          amount: bigint;
+          borrowAmount?: never;
+        }
+      | { operation?: "borrow"; amount?: never; borrowAmount: bigint }
+    ),
+  ): readonly VaultReallocation[] {
+    const { reallocationData, options } = params;
+    // Resolve legacy `borrowAmount` alias to the canonical { operation, amount } pair.
+    const operation: "borrow" | "withdraw" =
+      "operation" in params && params.operation !== undefined
+        ? params.operation
+        : "borrow";
+    const amount: bigint =
+      "amount" in params && params.amount !== undefined
+        ? params.amount
+        : params.borrowAmount!;
+
     return computeReallocations({
       reallocationData,
       marketId: this.marketParams.id,
-      operation: "borrow",
-      amount: borrowAmount,
+      operation,
+      amount,
       options: { enabled: true, ...options },
     });
   }

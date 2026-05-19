@@ -229,11 +229,11 @@ export class NonPositiveReallocationAmountError extends Error {
   }
 }
 
-/** Thrown when a reallocation withdrawal references the borrow target market (which would be a no-op or self-deal). */
+/** Thrown when a reallocation withdrawal references the operation's target market (which would be a no-op or self-deal). */
 export class ReallocationWithdrawalOnTargetMarketError extends Error {
   constructor(vault: string, marketId: string) {
     super(
-      `Reallocation withdrawal cannot include the borrow target market ${marketId} for vault ${vault}.`,
+      `Reallocation withdrawal cannot include the target market ${marketId} for vault ${vault}.`,
     );
   }
 }
