@@ -42,11 +42,12 @@ describe("getLocaleSymbols", () => {
   });
 });
 
-// `describe.sequential` is required because the four tests below call
-// `vi.stubGlobal("window"|"navigator"|"document", …)` to drive the
-// branching. These stubs mutate Node's process-global namespace, and the
-// repo-wide `sequence: { concurrent: true }` would otherwise let two
-// concurrent tests overwrite each other's globals (and one's afterEach
+// `describe.sequential` is required because the tests below drive
+// branching with `vi.stubGlobal("window"|"navigator"|"document", …)`,
+// and the first test additionally asserts on the un-stubbed Node global.
+// These stubs mutate Node's process-global namespace, and the repo-wide
+// `sequence: { concurrent: true }` would otherwise let two concurrent
+// tests overwrite each other's globals (and one's afterEach
 // `vi.unstubAllGlobals()` could revoke another's stubs mid-flight).
 describe.sequential("getEffectiveLocale", () => {
   afterEach(() => {
