@@ -116,7 +116,7 @@ export function writeGitHubReleaseBody(options) {
   writeFileSync(options.bodyFile, buildGitHubReleaseBody(options));
 }
 
-export function main(args = process.argv.slice(2)) {
+export function main(args = process.argv.slice(2), options = {}) {
   const [tag, bodyFile] = args;
   if (tag == null || bodyFile == null) {
     throw new Error(
@@ -124,7 +124,7 @@ export function main(args = process.argv.slice(2)) {
     );
   }
 
-  writeGitHubReleaseBody({ tag, bodyFile });
+  writeGitHubReleaseBody({ ...options, tag, bodyFile });
 }
 
 function getPackageTag(options) {

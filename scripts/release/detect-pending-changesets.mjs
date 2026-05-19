@@ -43,23 +43,23 @@ function sanitizeLogLine(value) {
 export function reportPendingChangesets(options = {}) {
   const pendingChangesets = listPendingChangesets(options);
   const outputFile = options.outputFile ?? process.env.GITHUB_OUTPUT;
+  const writeOutput =
+    options.writeOutput ?? ((message) => process.stdout.write(message));
 
   if (outputFile != null && outputFile !== "") {
     appendFileSync(outputFile, getGitHubOutput(pendingChangesets));
   }
 
   if (pendingChangesets.length > 0) {
-    process.stdout.write("Pending changesets:\n");
-    process.stdout.write(
-      `${pendingChangesets.map(sanitizeLogLine).join("\n")}\n`,
-    );
+    writeOutput("Pending changesets:\n");
+    writeOutput(`${pendingChangesets.map(sanitizeLogLine).join("\n")}\n`);
   }
 
   return pendingChangesets;
 }
 
-export function main() {
-  reportPendingChangesets();
+export function main(options = {}) {
+  return reportPendingChangesets(options);
 }
 
 if (

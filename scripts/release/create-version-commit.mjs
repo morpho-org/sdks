@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_COMMIT_MESSAGE = "chore: version packages";
+const RELEASE_BRANCH_RE = /^changeset-release\/(?:main|next)$/;
 const USER_AGENT = "morpho-sdks-release-version-commit";
 
 /**
@@ -46,16 +47,17 @@ export function getGitHubOutput(result) {
 /**
  * Collects local version changes and converts them into GitHub GraphQL file changes.
  *
- * @param {{ cwd?: string }} options Options for reading the git worktree.
+ * @param {{ cwd?: string, runGitImpl?: typeof runGit }} options Options for reading the git worktree.
  * @returns {{ additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }>, disallowedPaths: string[], paths: string[] }} The planned file changes.
  */
 export function collectVersionChanges(options = {}) {
   const cwd = options.cwd ?? process.cwd();
+  const runGitImpl = options.runGitImpl ?? runGit;
   const trackedPaths = readNullSeparatedGitOutput(
-    runGit(["diff", "--name-only", "-z", "HEAD", "--"], { cwd }),
+    runGitImpl(["diff", "--name-only", "-z", "HEAD", "--"], { cwd }),
   );
   const untrackedPaths = readNullSeparatedGitOutput(
-    runGit(["ls-files", "--others", "--exclude-standard", "-z"], { cwd }),
+    runGitImpl(["ls-files", "--others", "--exclude-standard", "-z"], { cwd }),
   );
   const paths = [...new Set([...trackedPaths, ...untrackedPaths])].sort();
   const disallowedPaths = paths.filter((path) => !isAllowedVersionPath(path));
@@ -104,7 +106,7 @@ export function collectVersionChanges(options = {}) {
 /**
  * Creates a GitHub-signed release commit through the GitHub App token.
  *
- * @param {{ apiBaseUrl?: string, baseSha: string, commitMessage?: string, cwd?: string, fetchImpl?: typeof fetch, fileChanges: { additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }> }, gitRemoteUrl?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, releaseBranch: string, repository: string, tempBranch?: string, token: string }} options Commit options.
+ * @param {{ apiBaseUrl?: string, baseSha: string, commitMessage?: string, cwd?: string, fetchImpl?: typeof fetch, fileChanges: { additions: Array<{ path: string, contents: string }>, deletions: Array<{ path: string }> }, gitRemoteUrl?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, releaseBranch: string, repository: string, tempBranch?: string, token: string, writeWarning?: (message: string) => void }} options Commit options.
  * @returns {Promise<{ commitOid: string, tempBranch: string }>} The created commit metadata.
  */
 export async function createSignedVersionCommit(options) {
@@ -119,6 +121,8 @@ export async function createSignedVersionCommit(options) {
   const fetchImpl = options.fetchImpl ?? fetch;
   const pushReleaseBranch =
     options.pushReleaseBranch ?? pushReleaseBranchWithLease;
+  const writeWarning =
+    options.writeWarning ?? ((message) => process.stderr.write(message));
   const tempBranch =
     options.tempBranch ??
     `${options.releaseBranch}-api-commit-${randomUUID().slice(0, 8)}`;
@@ -185,7 +189,7 @@ export async function createSignedVersionCommit(options) {
       repo,
       token: options.token,
     }).catch((error) => {
-      process.stderr.write(
+      writeWarning(
         `Warning: failed to delete temporary branch "${tempBranch}": ${getErrorMessage(error)}\n`,
       );
     });
@@ -245,9 +249,15 @@ export function pushReleaseBranchWithLease(options) {
       return;
     }
 
-    runGit(["push", "origin", `${options.commitOid}:${remoteReleaseRef}`], {
-      cwd: options.cwd,
-    });
+    runGit(
+      [
+        "push",
+        `--force-with-lease=${remoteReleaseRef}:`,
+        "origin",
+        `${options.commitOid}:${remoteReleaseRef}`,
+      ],
+      { cwd: options.cwd },
+    );
   } finally {
     runGit(["remote", "set-url", "origin", originalOriginUrl], {
       cwd: options.cwd,
@@ -258,22 +268,20 @@ export function pushReleaseBranchWithLease(options) {
 /**
  * Runs the release commit workflow step.
  *
- * @param {{ apiBaseUrl?: string, cwd?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, outputFile?: string }} options Runtime options.
+ * @param {{ apiBaseUrl?: string, cwd?: string, env?: NodeJS.ProcessEnv, fetchImpl?: typeof fetch, outputFile?: string, pushReleaseBranch?: (options: { commitOid: string, cwd: string, releaseBranch: string, remoteUrl?: string, repository: string, tempBranch: string, token: string }) => void, writeError?: (message: string) => void, writeWarning?: (message: string) => void }} options Runtime options.
  * @returns {Promise<null | { commitOid: string, tempBranch: string }>} The commit result when changes exist.
  */
 export async function main(options = {}) {
   const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
   const outputFile = options.outputFile ?? env.GITHUB_OUTPUT;
+  const writeError =
+    options.writeError ?? ((message) => process.stderr.write(message));
   const versionChanges = collectVersionChanges({ cwd });
 
   if (versionChanges.disallowedPaths.length > 0) {
-    process.stderr.write(
-      "Versioning produced files outside the release allowlist:\n",
-    );
-    process.stderr.write(
-      `${formatIndentedList(versionChanges.disallowedPaths)}\n`,
-    );
+    writeError("Versioning produced files outside the release allowlist:\n");
+    writeError(`${formatIndentedList(versionChanges.disallowedPaths)}\n`);
     throw new Error("Versioning produced files outside the release allowlist.");
   }
 
@@ -285,7 +293,7 @@ export async function main(options = {}) {
 
   const token = readRequiredEnv(env, "GH_TOKEN");
   const repository = readRequiredEnv(env, "GITHUB_REPOSITORY");
-  const releaseBranch = readRequiredEnv(env, "RELEASE_BRANCH");
+  const releaseBranch = readReleaseBranch(env);
   const baseSha = runGit(["rev-parse", "HEAD"], { cwd })
     .toString("utf8")
     .trim();
@@ -298,6 +306,7 @@ export async function main(options = {}) {
   const result = await createSignedVersionCommit({
     apiBaseUrl: options.apiBaseUrl,
     baseSha,
+    cwd,
     fetchImpl: options.fetchImpl,
     fileChanges: {
       additions: versionChanges.additions,
@@ -305,8 +314,10 @@ export async function main(options = {}) {
     },
     releaseBranch,
     repository,
+    pushReleaseBranch: options.pushReleaseBranch,
     tempBranch,
     token,
+    writeWarning: options.writeWarning,
   });
 
   appendOutput(
@@ -472,11 +483,31 @@ function readRequiredEnv(env, name) {
   return value;
 }
 
+function readReleaseBranch(env) {
+  const releaseBranch = readRequiredEnv(env, "RELEASE_BRANCH");
+  if (!RELEASE_BRANCH_RE.test(releaseBranch)) {
+    throw new Error(
+      `Invalid RELEASE_BRANCH "${releaseBranch}". Expected "changeset-release/main" or "changeset-release/next".`,
+    );
+  }
+
+  return releaseBranch;
+}
+
 function readNullSeparatedGitOutput(output) {
   return output
     .toString("utf8")
     .split("\0")
-    .filter((path) => path !== "");
+    .filter((path) => path !== "")
+    .map(validateGitPath);
+}
+
+function validateGitPath(path) {
+  if (hasControlCharacter(path) || path.split("/").includes("..")) {
+    throw new Error(`Invalid git path "${sanitizeLogLine(path)}".`);
+  }
+
+  return path;
 }
 
 function resolveWorktreePath(cwd, path) {
@@ -524,6 +555,17 @@ function hasExitStatus(error, status) {
     "status" in error &&
     error.status === status
   );
+}
+
+function hasControlCharacter(value) {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0);
+    if (codePoint != null && (codePoint <= 0x1f || codePoint === 0x7f)) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function runGit(args, options) {

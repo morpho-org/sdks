@@ -83,6 +83,13 @@ export function computePendingTag(options) {
 }
 
 function resolveManifestPath(options) {
+  if (
+    isAbsolute(options.manifestPath) ||
+    options.manifestPath.split(/[\\/]/).includes("..")
+  ) {
+    throw new Error(`Invalid manifest path "${options.manifestPath}".`);
+  }
+
   const basePath = realpathSync(options.cwd ?? process.cwd());
   const absolutePath = resolve(basePath, options.manifestPath);
   const relativePath = relative(basePath, absolutePath);
@@ -112,7 +119,7 @@ function assertPathInsideBase(options) {
  * Runs the pending package tag computation CLI.
  *
  * @param {string[]} args CLI arguments.
- * @param {{ baseRef?: string, cwd?: string }} options Runtime options.
+ * @param {{ baseRef?: string, cwd?: string, writeOutput?: (message: string) => void }} options Runtime options.
  * @returns {undefined | string} The computed package tag.
  */
 export function main(args = process.argv.slice(2), options = {}) {
@@ -130,7 +137,9 @@ export function main(args = process.argv.slice(2), options = {}) {
   });
 
   if (tag != null) {
-    process.stdout.write(tag);
+    const writeOutput =
+      options.writeOutput ?? ((message) => process.stdout.write(message));
+    writeOutput(tag);
   }
 
   return tag;

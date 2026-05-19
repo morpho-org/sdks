@@ -72,6 +72,38 @@ describe("readPackageManifest", () => {
     ).toThrow('Invalid manifest path "package.json".');
   });
 
+  test("behavior: rejects absolute manifest paths inside the worktree", () => {
+    const root = createTempDir();
+    mkdirSync(join(root, "packages/alpha"), { recursive: true });
+    writeManifest(join(root, manifestPath), {
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+
+    expect(() =>
+      readPackageManifest({
+        cwd: root,
+        manifestPath: join(root, manifestPath),
+      }),
+    ).toThrow(`Invalid manifest path "${join(root, manifestPath)}".`);
+  });
+
+  test("behavior: rejects lexical traversal manifest paths", () => {
+    const root = createTempDir();
+    mkdirSync(join(root, "packages/beta"), { recursive: true });
+    writeManifest(join(root, "packages/beta/package.json"), {
+      name: "@morpho-org/beta",
+      version: "1.0.0",
+    });
+
+    expect(() =>
+      readPackageManifest({
+        cwd: root,
+        manifestPath: "packages/alpha/../beta/package.json",
+      }),
+    ).toThrow('Invalid manifest path "packages/alpha/../beta/package.json".');
+  });
+
   test("behavior: rejects symlinked manifests", () => {
     const root = createTempDir();
     const externalRoot = createTempDir();
@@ -160,6 +192,28 @@ describe("computePendingTag", () => {
       "@morpho-org/alpha@1.0.0",
     );
   });
+
+  test("behavior: accepts injected manifests and previous manifest readers", () => {
+    const readPreviousManifest = vi.fn(() => ({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    }));
+
+    expect(
+      computePendingTag({
+        baseRef: "origin/main",
+        cwd: "/repo",
+        manifest: { name: "@morpho-org/alpha", version: "1.1.0" },
+        manifestPath,
+        readPreviousManifest,
+      }),
+    ).toBe("@morpho-org/alpha@1.1.0");
+    expect(readPreviousManifest).toHaveBeenCalledWith({
+      baseRef: "origin/main",
+      cwd: "/repo",
+      manifestPath,
+    });
+  });
 });
 
 describe("main", () => {
@@ -173,18 +227,35 @@ describe("main", () => {
       version: "1.1.0",
     });
     commitAll(root, "version package");
-    const stdout = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation(() => true);
+    const writeOutput = vi.fn();
 
-    expect(main([manifestPath], { cwd: root })).toBe("@morpho-org/alpha@1.1.0");
-    expect(stdout).toHaveBeenCalledWith("@morpho-org/alpha@1.1.0");
+    expect(main([manifestPath], { cwd: root, writeOutput })).toBe(
+      "@morpho-org/alpha@1.1.0",
+    );
+    expect(writeOutput).toHaveBeenCalledWith("@morpho-org/alpha@1.1.0");
   });
 
   test("error: missing manifest path", () => {
     expect(() => main([])).toThrow(
       "Usage: node scripts/release/compute-pending-tag.mjs <manifest-path>",
     );
+  });
+
+  test("behavior: skips stdout when version is unchanged", () => {
+    const root = createGitRepo({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    writeManifest(join(root, manifestPath), {
+      description: "metadata update",
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    commitAll(root, "metadata update");
+    const writeOutput = vi.fn();
+
+    expect(main([manifestPath], { cwd: root, writeOutput })).toBeUndefined();
+    expect(writeOutput).not.toHaveBeenCalled();
   });
 });
 
