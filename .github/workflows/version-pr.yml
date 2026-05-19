@@ -36,6 +36,31 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Record privileged-step baseline
+        id: privileged-baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Capture this BEFORE `pnpm install` runs dependency lifecycle
+          # scripts. `create-version-commit.mjs` runs with the write-scoped
+          # token and imports the other release helper modules, so hash every
+          # module reachable from it — pinning the entrypoint alone leaves an
+          # imported `helpers.mjs` free to be tampered with. Recording the
+          # baseline pre-install means tampering by either `pnpm install` or
+          # `pnpm run version` is caught by the later verification step;
+          # recording it post-install would bake install-time tampering into
+          # the baseline itself.
+          helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
+
+          echo "helper_sha=${helper_sha}" >> "${GITHUB_OUTPUT}"
+
       - run: pnpm install --frozen-lockfile
 
       - name: Detect pending changesets
@@ -55,28 +80,6 @@ jobs:
         run: |
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
-
-      - name: Record privileged-step baseline
-        if: steps.pending-changesets.outputs.has_changesets == 'true'
-        id: privileged-baseline
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # `create-version-commit.mjs` runs with the write-scoped token and
-          # imports the other release helper modules, so hash every module
-          # reachable from it — pinning the entrypoint alone leaves an
-          # imported `helpers.mjs` free to be tampered with by `pnpm run
-          # version`.
-          helper_sha="$(
-            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
-              sort -z |
-              xargs -0 sha256sum |
-              sha256sum |
-              cut -d ' ' -f 1
-          )"
-
-          echo "helper_sha=${helper_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Generate Changelog GitHub App Token
         if: steps.pending-changesets.outputs.has_changesets == 'true'
@@ -113,7 +116,7 @@ jobs:
               cut -d ' ' -f 1
           )"
           if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
-            echo "::error::Release helper scripts under scripts/release changed during versioning."
+            echo "::error::Release helper scripts under scripts/release changed after the trusted baseline (during install or versioning)."
             exit 1
           fi
 
