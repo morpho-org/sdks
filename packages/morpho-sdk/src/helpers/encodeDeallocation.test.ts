@@ -79,6 +79,9 @@ describe("encodeForceDeallocateCall", () => {
       expect.fail("expected to throw");
     } catch (e) {
       expect(e).toBeInstanceOf(NonPositiveAssetAmountError);
+      // The thrown message must name the offending adapter so callers
+      // pattern-matching on the error can attribute the failure.
+      expect((e as NonPositiveAssetAmountError).message).toContain(ADAPTER);
     }
   });
 });

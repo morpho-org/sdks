@@ -46,6 +46,19 @@ describe("createMockClient", () => {
     ).rejects.toThrow(/unhandled RPC eth_blockNumber/);
   });
 
+  test("eth_call without `to`/`data` falls through to the unhandled-RPC throw", async () => {
+    // Exercises the guard branch in `createMockClient`'s eth_call handler:
+    // when the params shape is malformed (missing `to` or `data`), the
+    // dispatch lookup is skipped and the default unhandled-RPC error fires.
+    const { client } = createMockClient(mainnet);
+    await expect(
+      client.request({
+        method: "eth_call",
+        params: [{}],
+      } as never),
+    ).rejects.toThrow(/unhandled RPC eth_call/);
+  });
+
   test("the request fn is observable (call history)", async () => {
     const { client, request } = createMockClient(mainnet);
     await client.request({ method: "eth_chainId" });
@@ -402,6 +415,73 @@ describe("expectReadCall", () => {
         functionName: "symbol",
       }),
     ).toHaveLength(1);
+  });
+
+  test("filters out unrelated calls to the same address before decoding", async () => {
+    // Record a `decimals()` call against TOKEN, then ask `expectReadCall`
+    // about an unrelated function (`balanceOf`) on the same address but
+    // with a DIFFERENT ABI that doesn't include `decimals`. Without the
+    // pre-filter, the iteration would try to decode `decimals`'s 4-byte
+    // selector against this unrelated ABI and throw — the pre-filter must
+    // skip it instead.
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: TOKEN,
+      abi: erc20Abi,
+      functionName: "decimals",
+      result: 6,
+    });
+    await readContract(handle.client, {
+      address: TOKEN,
+      abi: erc20Abi,
+      functionName: "decimals",
+    });
+
+    const unrelatedAbi = parseAbi([
+      "function totalSupply() view returns (uint256)",
+    ]);
+    // No `totalSupply` call was recorded — should return empty without
+    // aborting on a decode error against the unrelated ABI.
+    expect(
+      expectReadCall(handle, {
+        address: TOKEN,
+        abi: unrelatedAbi,
+        functionName: "totalSupply",
+      }),
+    ).toEqual([]);
+  });
+
+  test("returns empty array when the caller passes a wrong-arity ABI for the same name", async () => {
+    // The selector pre-filter prevents `decodeFunctionData` from ever
+    // running against a mismatched ABI: `balanceOf(address)` and
+    // `balanceOf(uint256)` have different selectors, so a call recorded
+    // against the address-arity overload is filtered out before decode
+    // when expectReadCall is asked about the uint256-arity overload.
+    // This pins the no-throw, empty-array behaviour.
+    const handle = createMockClient(mainnet);
+    mockRead(handle, {
+      address: TOKEN,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      result: 1n,
+    });
+    await readContract(handle.client, {
+      address: TOKEN,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [HOLDER],
+    });
+
+    const wrongArityAbi = parseAbi([
+      "function balanceOf(uint256) view returns (uint256)",
+    ]);
+    expect(
+      expectReadCall(handle, {
+        address: TOKEN,
+        abi: wrongArityAbi,
+        functionName: "balanceOf",
+      }),
+    ).toEqual([]);
   });
 });
 

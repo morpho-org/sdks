@@ -64,6 +64,34 @@ describe.sequential("addTransactionMetadata", () => {
     expect(result.data).toBe("0xdeadbeefcafe");
   });
 
+  test("strips an uppercase 0X prefix from origin (case-insensitive)", () => {
+    const tx = { to: TO, value: 0n, data: "0xdeadbeef" as Hex };
+    // "0Xcafe" must produce the same calldata as "0xcafe" / "cafe".
+    expect(addTransactionMetadata(tx, { origin: "0Xcafe" }).data).toBe(
+      "0xdeadbeefcafe",
+    );
+  });
+
+  test("warns and skips odd-length raw origin (would corrupt trailing byte)", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const tx = { to: TO, value: 0n, data: "0xdeadbeef" as Hex };
+    // "abc" is 3 hex chars — non-byte-aligned. viem's concatHex would
+    // pad the stray nibble at broadcast, corrupting the trailing analytics
+    // byte; the helper rejects it instead.
+    const result = addTransactionMetadata(tx, { origin: "abc" });
+    expect(result.data).toBe("0xdeadbeef");
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test("warns and skips odd-length origin with a 0x prefix", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const tx = { to: TO, value: 0n, data: "0xdeadbeef" as Hex };
+    // After stripping "0x", the remaining "abc" is 3 hex chars — odd.
+    const result = addTransactionMetadata(tx, { origin: "0xabc" });
+    expect(result.data).toBe("0xdeadbeef");
+    expect(warn).toHaveBeenCalled();
+  });
+
   test("warns and skips invalid origin (non-hex characters)", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const tx = { to: TO, value: 0n, data: "0xdeadbeef" as Hex };

@@ -179,10 +179,12 @@ interface MockReadOptions<
  * @param options.result - The value `eth_call` should return. Encoded
  *   via viem's `encodeFunctionResult`; the caller is responsible for
  *   passing a shape matching the function's declared return type.
- * @throws `Error` if `functionName` is not present in `abi` (function
+ * @throws {Error} when `functionName` is not present in `abi` (function
  *   typo / wrong abi). The thrown message names the missing function.
- * @throws `Error` from `encodeFunctionResult` if `options.result` does
- *   not match the function's declared return shape.
+ * @throws {Error} when `options.result` does not match the declared
+ *   return shape of any overload of `functionName` (caller passed the
+ *   wrong result type). The message names the function and the number
+ *   of overloads tried.
  *
  * @example
  * ```ts
@@ -263,9 +265,13 @@ export function mockRead<
  * when a test cares less about the response and more about *what* the SDK
  * called and with which arguments.
  *
- * Decoding errors (e.g. wrong abi passed) are not swallowed — they bubble
- * out of the helper so the test fails with the underlying decode message
- * rather than an empty-array assertion failure.
+ * Calls whose 4-byte selector does not match an overload of
+ * `match.functionName` in `match.abi` are filtered out before decoding,
+ * so unrelated calls to the same address (different functions, or
+ * different-arity overloads of the same name) are silently skipped
+ * rather than aborting on a decode error. As a consequence, passing a
+ * mismatched ABI yields an empty array instead of throwing — be sure
+ * to assert on length when you expect a specific number of calls.
  *
  * @param handle - The {@link MockClientHandle} returned by
  *   {@link createMockClient}.
@@ -276,25 +282,50 @@ export function mockRead<
  *   returned.
  * @returns An array of decoded call data objects (`{ functionName, args }`)
  *   in the order the mock observed them. Empty array if no calls matched.
- * @throws `Error` if a candidate call's data fails to decode against the
- *   provided ABI (signals the caller passed a mismatched abi).
+ *   The decoded `args` are typed as a union over every function in
+ *   `match.abi` rather than narrowed to `match.functionName`; callers
+ *   that need narrow argument types should cast at the call site or
+ *   filter the ABI to a single-entry array before passing it in.
+ * @throws {Error} when a candidate call's data fails to decode against
+ *   the provided ABI (signals the caller passed a mismatched abi).
  *
  * @example
  * ```ts
- * await readContract(handle.client, {
- *   address,
+ * import { parseAbi } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { readContract } from "viem/actions";
+ * import {
+ *   createMockClient,
+ *   expectReadCall,
+ *   mockRead,
+ * } from "@morpho-org/test/mock";
+ *
+ * const USDC = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+ * const HOLDER = "0x000000000000000000000000000000000000dEaD";
+ * const erc20 = parseAbi([
+ *   "function balanceOf(address) view returns (uint256)",
+ * ]);
+ *
+ * const handle = createMockClient(mainnet);
+ * mockRead(handle, {
+ *   address: USDC,
  *   abi: erc20,
  *   functionName: "balanceOf",
- *   args: ["0x000...dEaD"],
+ *   result: 1_000_000n,
+ * });
+ * await readContract(handle.client, {
+ *   address: USDC,
+ *   abi: erc20,
+ *   functionName: "balanceOf",
+ *   args: [HOLDER],
  * });
  *
  * const calls = expectReadCall(handle, {
- *   address,
+ *   address: USDC,
  *   abi: erc20,
  *   functionName: "balanceOf",
  * });
- * expect(calls).toHaveLength(1);
- * expect(calls[0]!.args).toEqual(["0x000...dEaD"]);
+ * // calls.length === 1; calls[0].args === [HOLDER]
  * ```
  */
 export function expectReadCall<

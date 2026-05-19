@@ -103,19 +103,27 @@ describe.sequential("Flashbots.sendRawBundle", () => {
     expect(blockNumber).toBe("0xabc");
   });
 
-  // Note: two further behaviours were attempted but proved unreliable
-  // under nock + Node fetch:
-  //
-  //   - a 5xx-reply test for the `if (!response.ok) throw` branch — nock's
-  //     reply body is delivered as text/plain by default and the source's
-  //     `await response.json()` in the error block parses inconsistently
-  //     across Node fetch implementations.
-  //   - an auto-increment-id test asserting `id` strictly increases between
-  //     two calls — nock's interceptor consumption interacts unpredictably
-  //     with Vitest's concurrent mode for back-to-back `fetch` calls in the
-  //     same test.
-  //
-  // Both branches are exercised end-to-end by the existing fork tests.
+  test("throws when the relay returns a non-OK status (5xx error branch)", async () => {
+    // Explicit `application/json` content-type so the source's
+    // `await response.json()` parses cleanly across Node fetch
+    // implementations. Reviewer suggested this approach in code review.
+    nock("https://relay.flashbots.net")
+      .post("/")
+      .reply(
+        500,
+        { error: "relay overloaded" },
+        { "content-type": "application/json" },
+      );
+
+    await expect(
+      Flashbots.sendRawBundle([SIGNED_TX_A], 18_000_000n, account),
+    ).rejects.toThrow(/relay overloaded/);
+  });
+
+  // Note: an auto-increment-id test was attempted but proved unreliable
+  // under nock + Vitest's concurrent mode — nock's interceptor consumption
+  // interacts unpredictably with back-to-back `fetch` calls in the same
+  // test. The `id` increment is exercised end-to-end by the fork tests.
 });
 
 // Flashbots.signBundle is intentionally not unit-tested here: it depends on
