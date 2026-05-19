@@ -1,7 +1,7 @@
 ---
 name: web3-security
 kind: baseline
-applies: AGENTS.md §1 Architecture (Action layer), §2 Forbidden patterns (security)
+applies: AGENTS.md §1 Architecture (Action layer), §2 Forbidden patterns (signing in builders), §5 Testing (security invariants — chainId validation, authorization, accounting)
 out-of-scope:
   - General type-safety inside function bodies — see code-quality.
   - Hardcoded secrets / shell injection / `eval` — see code-quality (it owns the §2 security primitives).
@@ -15,7 +15,7 @@ severity-guidance: |
 
 # Web3 Security
 
-The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §1 (the Action layer is pure encode-only, no state reads) and §2 (typed errors). The Action-layer rule and the chainId-validation invariant from §2 are the load-bearing parts; everything below is the application surface.
+The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §1 (the Action layer is pure encode-only, no state reads), §2 (typed errors), and §5 (security invariants — `chainId` validation, authorization, accounting, LLTV buffer, inflation-attack guard, deposit routing). The Action-layer rule and the chainId-validation invariant from §5 are the load-bearing parts; everything below is the application surface.
 
 ## What to flag
 
@@ -23,7 +23,7 @@ The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS
 
 - **Address / function-signature mismatch.** A `readContract` / `writeContract` / `simulateContract` call whose `abi` and `address` came from different registries (e.g. `MORPHO_ADDRESS` on chain A with an ABI loaded for chain B). The SDK pins ABIs + addresses in-package per §7; flag any call that constructs them dynamically without chainId gating.
 - **Argument order / type drift.** A `functionName` call whose `args` tuple doesn't match the ABI signature in argument count, ordering, or width (e.g. `uint128` where the ABI declares `uint256`, leading to silent truncation).
-- **Missing chainId validation before signing or sending.** Per §2 — every code path that produces a `Transaction`, a signed permit, or a typed-data signature must verify `client.chain.id` matches the expected chain before encoding. Flag any signing/sending path that trusts the caller's client without re-checking.
+- **Missing chainId validation before signing or sending.** Per §5 — `chainId` validation is a security invariant. Every code path that produces a `Transaction`, a signed permit, or a typed-data signature must verify `client.chain.id` matches the expected chain before encoding. Flag any signing/sending path that trusts the caller's client without re-checking.
 
 ### Transaction parameter integrity
 

@@ -51,6 +51,8 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 
+> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (testability).
+
 ---
 
 ## 2. What does not land in a PR
@@ -67,6 +69,8 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 8. Framework imports (`react`, `wagmi`, `redux`, `ethers`) in core packages.
 9. New runtime dependencies without a package-level reason and a written justification in the PR description.
 10. PRs that ship behavior-affecting package source changes without their tests, JSDoc, and semver-relevant changeset.
+
+> Applied by personas: [`code-quality`](./.agents/personas/code-quality.md) (forbidden patterns 1–4, 7–10), [`web3-security`](./.agents/personas/web3-security.md) (3 — signing in transaction builders), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (2 — typed errors).
 
 ---
 
@@ -126,7 +130,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **No mocked viem clients** on RPC paths. Use Anvil forks at pinned blocks. Pure-function tests need neither Anvil nor a viem client.
 - **Shared test helpers** live in `morpho-test`, `test`, `test-wagmi` — never in published runtime paths of feature packages.
 
-> Applied by persona: [`test-coverage`](./.agents/personas/test-coverage.md).
+> Applied by personas: [`test-coverage`](./.agents/personas/test-coverage.md) (test presence + colocation), [`web3-security`](./.agents/personas/web3-security.md) (security invariants — chainId validation, authorization, accounting).
 
 ---
 
@@ -202,9 +206,9 @@ Baseline personas (always fire):
 
 | Persona | Anchors | Focus |
 |---|---|---|
-| [`code-quality`](./.agents/personas/code-quality.md) | §1, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
+| [`code-quality`](./.agents/personas/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
 | [`module-api-architecture`](./.agents/personas/module-api-architecture.md) | §1, §4 | Package boundaries, public surface, NodeNext import discipline. |
-| [`web3-security`](./.agents/personas/web3-security.md) | §1 (Action layer), §2 | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
+| [`web3-security`](./.agents/personas/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
 | [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) | §1 (testability), §2 | Swallowed errors, missing error states, dead code paths. |
 | [`style-conventions`](./.agents/personas/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
 | [`documentation`](./.agents/personas/documentation.md) | §6 | JSDoc on exports, Markdown doc accuracy, pointer integrity, AGENTS.md ↔ persona backlink consistency. |
@@ -214,7 +218,7 @@ Conditional personas (fire only when their trigger flag is true):
 
 | Persona | Trigger | Anchors |
 |---|---|---|
-| [`ci-release-security`](./.agents/personas/ci-release-security.md) | `<HAS_CI_RELEASE>` — diff touches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, or any file mentioning `npm publish` / `pnpm publish` / `changeset publish` / `gh release create` | §10 (the rules below) |
+| [`ci-release-security`](./.agents/personas/ci-release-security.md) | `<HAS_CI_RELEASE>` — diff touches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, any `package.json` whose `scripts.*publish*` / `scripts.*release*` field is modified, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, or any file mentioning `npm publish` / `pnpm publish` / `changeset publish` / `gh release create` (canonical detector in [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) Step 4) | §10 (the rules below) |
 
 Adding a persona = drop a file under `.agents/personas/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/lib/pr-review-base.md` Step 4.
 

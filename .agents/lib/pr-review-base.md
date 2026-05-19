@@ -131,7 +131,7 @@ Baseline (always fire):
 - `web3-security.md` — contract interactions, transaction params, permit flows, race conditions.
 - `silent-failure-hunter.md` — swallowed errors, missing error states, dead code paths.
 - `style-conventions.md` — Biome compliance, import discipline, changeset relevance.
-- `documentation.md` — JSDoc on public exports per `docs/jsdoc-style.md`.
+- `documentation.md` — JSDoc on public exports per `docs/jsdoc-style.md`, plus Markdown doc accuracy, pointer/link integrity, and AGENTS.md ↔ persona backlink consistency.
 - `test-coverage.md` — missing tests for new code paths and onchain interactions.
 
 Conditional:
