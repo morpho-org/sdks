@@ -20,23 +20,17 @@ This module follows Wallet Development Kit lending protocol conventions and acce
 
 ## Installation
 
-This package is not published to npm yet. For local development, install dependencies from the repository root with pnpm:
+```bash
+pnpm add @morpho-org/wdk-protocol-lending-morpho-evm viem
+```
+
+`viem` is a peer dependency.
+
+For local development from a checkout of [`morpho-org/sdks`](https://github.com/morpho-org/sdks):
 
 ```bash
 pnpm install
-```
-
-Once npm publishing is configured, consumers should install the package with:
-
-```bash
-pnpm add @morpho-org/wdk-protocol-lending-morpho-evm
-```
-
-Useful local commands:
-
-```bash
-pnpm test
-pnpm run build
+pnpm --filter @morpho-org/wdk-protocol-lending-morpho-evm test
 ```
 
 ## Quick Start

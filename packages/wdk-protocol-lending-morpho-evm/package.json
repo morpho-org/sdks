@@ -41,7 +41,6 @@
     "index.js",
     "bare.js",
     "src/",
-    "scripts/",
     "types/",
     "LICENSE",
     "README.md"
