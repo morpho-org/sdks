@@ -87,12 +87,14 @@ const capVaultWithdrawals = (
  * targets, then falls back to aggressive reallocations (100% withdrawal
  * utilization) if liquidity is still insufficient.
  *
+ * @remarks Per-market `maxWithdrawalUtilization` overrides apply only to phase 1; phase 2 forces 100% utilization on every source market.
  * @param params.reallocationData - The local state containing market, vault, and position data.
  * @param params.marketId - The target market to reallocate liquidity into.
  * @param params.borrowAmount - The intended borrow amount (used to compute post-borrow utilization).
  * @param params.options - Optional reallocation computation options.
  * @returns Array of vault reallocations, sorted with withdrawals in ascending market id order.
- * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the borrow shortfall on the target market — preventing fee-bearing reallocations from being attached to a borrow that would still revert onchain.
+ * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the borrow shortfall on the target market — preventing fee-bearing reallocations from being attached to a borrow that would still revert onchain.
+ * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
  */
 export const computeReallocations = ({
   reallocationData: data,
