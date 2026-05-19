@@ -7,6 +7,7 @@ import { pathToFileURL } from "node:url";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_COMMIT_MESSAGE = "chore: version packages";
+const GIT_SAFE_CONFIG = ["-c", "core.hooksPath=/dev/null"];
 const RELEASE_BRANCH_RE = /^changeset-release\/(?:main|next)$/;
 const TEMP_BRANCH_RE = /^changeset-release\/(?:main|next)-api-commit-[^/]+$/;
 const USER_AGENT = "morpho-sdks-release-version-commit";
@@ -245,6 +246,7 @@ export function pushReleaseBranchWithLease(options) {
       runGit(
         [
           "push",
+          "--no-verify",
           `--force-with-lease=${remoteReleaseRef}:${expectedSha}`,
           "origin",
           `${options.commitOid}:${remoteReleaseRef}`,
@@ -257,6 +259,7 @@ export function pushReleaseBranchWithLease(options) {
     runGit(
       [
         "push",
+        "--no-verify",
         `--force-with-lease=${remoteReleaseRef}:`,
         "origin",
         `${options.commitOid}:${remoteReleaseRef}`,
@@ -586,7 +589,7 @@ function hasControlCharacter(value) {
 }
 
 function runGit(args, options) {
-  return execFileSync("git", args, {
+  return execFileSync("git", [...GIT_SAFE_CONFIG, ...args], {
     cwd: options.cwd,
     stdio: options.stdio,
   });
