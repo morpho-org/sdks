@@ -101,9 +101,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          : > "${GITHUB_ENV}"
-          : > "${GITHUB_PATH}"
-
           actual_helper_sha="$(sha256sum scripts/release/create-version-commit.mjs | cut -d ' ' -f 1)"
           if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
             echo "::error::scripts/release/create-version-commit.mjs changed during versioning."
