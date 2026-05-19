@@ -98,20 +98,20 @@ describe("matchReleaseTag", () => {
     ];
 
     expect(
-      matchReleaseTag({ packages, tag: "@morpho-org/blue-sdk@1.2.3" }),
+      matchReleaseTag({ packages, tag: "@morpho-org/blue-sdk-v1.2.3" }),
     ).toMatchObject({
       name: "@morpho-org/blue-sdk",
       version: "1.2.3",
     });
   });
 
-  test("behavior: supports tags without the @ version separator", () => {
+  test("behavior: supports legacy tags with the @ version separator", () => {
     const packages = [
       releasePackage({ name: "@morpho-org/blue-sdk", version: "1.2.3" }),
     ];
 
     expect(
-      matchReleaseTag({ packages, tag: "@morpho-org/blue-sdk-v1.2.3" }),
+      matchReleaseTag({ packages, tag: "@morpho-org/blue-sdk@1.2.3" }),
     ).toMatchObject({
       name: "@morpho-org/blue-sdk",
       version: "1.2.3",
@@ -142,9 +142,9 @@ describe("matchReleaseTag", () => {
     ];
 
     expect(() =>
-      matchReleaseTag({ packages, tag: "@morpho-org/blue-sdk@1.2.3" }),
+      matchReleaseTag({ packages, tag: "@morpho-org/blue-sdk-v1.2.3" }),
     ).toThrow(
-      'Tag "@morpho-org/blue-sdk@1.2.3" is ambiguous; matches "@morpho-org/blue-sdk", "@morpho-org/blue-sdk".',
+      'Tag "@morpho-org/blue-sdk-v1.2.3" is ambiguous; matches "@morpho-org/blue-sdk", "@morpho-org/blue-sdk".',
     );
   });
 
@@ -254,7 +254,7 @@ describe("buildGitHubReleaseBody", () => {
     expect(
       buildGitHubReleaseBody({
         packagesDir,
-        tag: "@morpho-org/blue-sdk@1.2.3",
+        tag: "@morpho-org/blue-sdk-v1.2.3",
       }),
     ).toBe("## 1.2.3\n\n### Patch Changes\n\n- current\n");
   });
@@ -278,13 +278,13 @@ describe("buildGitHubReleaseBody", () => {
     expect(
       buildGitHubReleaseBody({
         packagesDir,
-        tag: "@morpho-org/blue-sdk@1.2.3",
+        tag: "@morpho-org/blue-sdk-v1.2.3",
       }),
     ).toBe("## 1.2.3\n\n### Patch Changes\n\n- Shared changeset entry\n");
     expect(
       buildGitHubReleaseBody({
         packagesDir,
-        tag: "@morpho-org/blue-sdk-viem@4.5.6",
+        tag: "@morpho-org/blue-sdk-viem-v4.5.6",
       }),
     ).toBe("## 4.5.6\n\n### Patch Changes\n\n- Shared changeset entry\n");
   });
@@ -300,7 +300,7 @@ describe("buildGitHubReleaseBody", () => {
     expect(() =>
       buildGitHubReleaseBody({
         packagesDir,
-        tag: "@morpho-org/blue-sdk@1.2.3",
+        tag: "@morpho-org/blue-sdk-v1.2.3",
       }),
     ).toThrow('Cannot find a changelog for "@morpho-org/blue-sdk".');
   });
@@ -322,7 +322,7 @@ describe("buildGitHubReleaseBody", () => {
           }),
         ],
         packagesDir,
-        tag: "@morpho-org/blue-sdk@1.2.3",
+        tag: "@morpho-org/blue-sdk-v1.2.3",
       }),
     ).toThrow('Cannot find a changelog for "@morpho-org/blue-sdk".');
   });
@@ -339,7 +339,7 @@ describe("buildGitHubReleaseBody", () => {
     expect(() =>
       buildGitHubReleaseBody({
         packagesDir,
-        tag: "@morpho-org/blue-sdk@1.2.3",
+        tag: "@morpho-org/blue-sdk-v1.2.3",
       }),
     ).toThrow(
       `Cannot find version "1.2.3" in ${join(
@@ -367,7 +367,7 @@ describe("writeGitHubReleaseBody", () => {
     writeGitHubReleaseBody({
       bodyFile,
       packagesDir,
-      tag: "@morpho-org/blue-sdk@1.2.3",
+      tag: "@morpho-org/blue-sdk-v1.2.3",
     });
 
     expect(readFileSync(bodyFile, "utf8")).toBe("## 1.2.3\n\n- current\n");
@@ -386,7 +386,7 @@ describe("main", () => {
       manifest: { name: "@morpho-org/blue-sdk", version: "1.2.3" },
       packagesDir,
     });
-    main(["@morpho-org/blue-sdk@1.2.3", bodyFile], { packagesDir });
+    main(["@morpho-org/blue-sdk-v1.2.3", bodyFile], { packagesDir });
 
     expect(readFileSync(bodyFile, "utf8")).toBe("## 1.2.3\n\n- current\n");
   });

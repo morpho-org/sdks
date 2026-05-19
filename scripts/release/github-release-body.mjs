@@ -7,7 +7,7 @@ import { pathToFileURL } from "node:url";
 import { getErrorMessage, isPathInside } from "./helpers.mjs";
 
 const DEFAULT_PACKAGES_DIR = "packages";
-const PACKAGE_TAG_SEPARATORS = ["@", "-v"];
+const PACKAGE_TAG_SEPARATORS = ["-v", "@"];
 const VERSION_HEADING_RE =
   /^##\s+\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?(?:\s|$).*/gm;
 

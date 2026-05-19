@@ -221,7 +221,7 @@ describe("computePendingTag", () => {
     commitAll(root, "version package");
 
     expect(computePendingTag({ cwd: root, manifestPath })).toBe(
-      "@morpho-org/alpha@1.1.0",
+      "@morpho-org/alpha-v1.1.0",
     );
   });
 
@@ -247,7 +247,7 @@ describe("computePendingTag", () => {
     });
 
     expect(computePendingTag({ cwd: root, manifestPath })).toBe(
-      "@morpho-org/alpha@1.0.0",
+      "@morpho-org/alpha-v1.0.0",
     );
   });
 
@@ -265,7 +265,7 @@ describe("computePendingTag", () => {
         manifestPath,
         readPreviousManifest,
       }),
-    ).toBe("@morpho-org/alpha@1.1.0");
+    ).toBe("@morpho-org/alpha-v1.1.0");
     expect(readPreviousManifest).toHaveBeenCalledWith({
       baseRef: "origin/main",
       cwd: "/repo",
@@ -288,9 +288,9 @@ describe("main", () => {
     const writeOutput = vi.fn();
 
     expect(main([manifestPath], { cwd: root, writeOutput })).toBe(
-      "@morpho-org/alpha@1.1.0",
+      "@morpho-org/alpha-v1.1.0",
     );
-    expect(writeOutput).toHaveBeenCalledWith("@morpho-org/alpha@1.1.0");
+    expect(writeOutput).toHaveBeenCalledWith("@morpho-org/alpha-v1.1.0");
   });
 
   test("error: missing manifest path", () => {

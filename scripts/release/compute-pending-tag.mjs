@@ -96,7 +96,7 @@ export function computePendingTag(options) {
     return undefined;
   }
 
-  return `${manifest.name}@${manifest.version}`;
+  return `${manifest.name}-v${manifest.version}`;
 }
 
 function resolveManifestPath(options) {

@@ -124,7 +124,9 @@ jobs:
           pending_tags="${RUNNER_TEMP}/pending-package-tags.txt"
           trap 'rm -f "$local_tags" "$remote_tags"' EXIT
 
-          pnpm release --tag "$publish_tag"
+          # Changesets hardcodes package git tags as `name@version`; disable
+          # those tags and create the repository's `name-vversion` tags below.
+          pnpm release --tag "$publish_tag" --no-git-tag
 
           reset_origin_url() {
             git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
@@ -133,7 +135,8 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           trap 'rm -f "$local_tags" "$remote_tags"; reset_origin_url' EXIT
 
-          # Recover reruns after npm publish succeeded but tag push failed.
+          # Create package git tags after npm publish succeeds. This also
+          # recovers reruns after publish succeeded but tag push failed.
           if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
             while IFS= read -r -d '' manifest; do
               tag="$(
