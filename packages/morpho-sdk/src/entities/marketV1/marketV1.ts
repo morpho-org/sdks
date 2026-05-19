@@ -395,7 +395,8 @@ export interface MarketV1Actions {
    * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
    *        Defaults to `"borrow"` when `borrowAmount` is provided.
    * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
-   * @param params.borrowAmount - **Deprecated.** Equivalent to `{ operation: "borrow", amount }`.
+   * @param params.borrowAmount - {@deprecated} Equivalent to `{ operation: "borrow", amount }`. Use the
+   *   `operation` + `amount` form on new code.
    * @param params.options - Optional reallocation computation options
    *        (utilization targets, reallocatable vaults filter, etc.).
    * @returns Array of vault reallocations ready to pass to `borrow()`, `supplyCollateralBorrow()`,
