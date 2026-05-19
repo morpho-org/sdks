@@ -78,7 +78,15 @@ For each unique package directory among the changed files (e.g. a file at `packa
 
 Use the Glob tool: `**/AGENTS.md` and `packages/*/*.md`. Filter to paths that prefix at least one changed file's directory. Files outside `packages/` use only items 1–4 of the root baseline (items 5–7 conditional as triggered).
 
-After discovery, **print** the list of files read so the user can spot omissions:
+### Detect conditional persona triggers
+
+Compute flags from the changed-files list. These flags drive which `kind: conditional` personas launch in Step 5:
+
+- `<HAS_CI_RELEASE>` — true if any changed file matches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, root or package `package.json` (when a `scripts.*publish*` / `scripts.*release*` field is touched), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, OR if any changed file contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`.
+
+Add new flags here when introducing future conditional personas. Each `kind: conditional` persona file declares its `trigger:` placeholder in frontmatter; Step 5 launches it only when that flag is true.
+
+After discovery, **print** the list of files read AND the flag values so the user can spot omissions:
 
 ```
 Context files read (N):
@@ -87,133 +95,50 @@ Context files read (N):
   packages/morpho-sdk/AGENTS.md
   packages/morpho-sdk/src/actions/AGENTS.md
   ...
+
+Conditional flags:
+  HAS_CI_RELEASE: <true|false>
 ```
 
 ## Step 5: Launch parallel review agents
 
-Launch ALL 7 review agents **in parallel** using the Agent tool (subagent_type: `"general-purpose"`). Shared per-agent contract:
+Persona specs live in `.agents/personas/*.md`. Each file has frontmatter declaring `kind: baseline` (always fires) or `kind: conditional` (fires only when its `trigger:` flag is true), plus the prompt body.
 
-- Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the repo path / branches.
+Loop:
+
+1. Read every file in `.agents/personas/*.md`.
+2. For each persona, decide whether to launch:
+   - `kind: baseline` → always launch.
+   - `kind: conditional` → launch only when the flag named in `trigger:` is true (see Step 4 for flag computation).
+3. Launch ALL selected personas **in parallel** using the Agent tool (subagent_type: `"general-purpose"`).
+4. Track `<TOTAL_AGENTS_LAUNCHED>` = count of personas actually launched (baseline + any fired conditionals).
+
+Shared per-agent contract (applied uniformly to every launched persona):
+
+- Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the conditional flag values, the persona file body, the repo path / branches.
 - Per-package `AGENTS.md` rules refine the root for the specific package; the root wins on contradictions.
 - Agents must analyze the **full diff**, not just the latest commit.
 - Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "what is wrong + how to fix"}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
 - **Stay in scope (avoid scope creep).** Focus on the diff: flag issues introduced by these changes, and issues in adjacent code only when the diff makes that adjacent code materially worse (e.g. a renamed function whose remaining callers now misbehave, a new code path that exposes an existing bug). Do NOT flag pre-existing issues in unchanged lines of changed files, propose unrelated refactors, suggest new features or abstractions, or recommend cleanups outside the PR's intent. When in doubt, omit — the reviewer is reviewing *this change*, not the file's history.
 - Only **actionable** findings — no praise, no summaries.
 
-### Agent 1: Code Quality
+### Current persona inventory
 
-Focus: TypeScript strict mode, type safety, early returns, `as` assertions, duplication, naming, code smells, magic numbers, overly complex functions.
+Baseline (always fire):
 
-Prompt must include:
+- `code-quality.md` — type safety, code smells, naming, cross-file impact on SDK consumers, security primitives.
+- `module-api-architecture.md` — package boundaries, public surface, NodeNext import discipline.
+- `web3-security.md` — contract interactions, transaction params, permit flows, race conditions.
+- `silent-failure-hunter.md` — swallowed errors, missing error states, dead code paths.
+- `style-conventions.md` — Biome compliance, import discipline, changeset relevance.
+- `documentation.md` — JSDoc on public exports per `docs/jsdoc-style.md`.
+- `test-coverage.md` — missing tests for new code paths and onchain interactions.
 
-- Type safety issues (`any`, unsafe `as` assertions, missing generics)
-- Error handling and edge cases
-- Code smells (duplicated logic, overly complex functions, magic numbers)
-- Early returns preferred over nested conditionals
-- Naming conventions per the root `AGENTS.md` (and any per-package `AGENTS.md` for the file under review)
-- Reference `AGENTS.md` (root, canonical), `MISSION.md`, the package's `AGENTS.md`, and `CONTRIBUTING.md`
+Conditional:
 
-**Cross-file impact (critical for an SDK):**
-- Changed exports from `packages/<pkg>/src/index.ts` — could break consumer code
-- Function signature changes on public APIs (parameter add/remove/reorder/type-narrow)
-- Renamed or removed exports
-- API contract changes (return type, thrown error type, async-vs-sync)
-- New deep imports into other packages (should go through `src/index.ts`)
+- `ci-release-security.md` — fires when `<HAS_CI_RELEASE>` is true. Workflow injection, action pinning, permissions scopes, secret exposure, publish-flow integrity, lockfile drift.
 
-**Security:**
-- Hardcoded secrets, tokens, private keys, RPC URLs with credentials
-- Injection risks in any string-templated input (SQL-like queries, shell commands)
-- Authentication bypass / authorization checks missing on entry points
-- `eval`, `Function(...)` constructors, dynamic `import(<userInput>)` — flag any
-
-### Agent 2: Module & API Architecture
-
-Focus: package boundaries, public surface, type/import discipline, NodeNext compatibility.
-
-Prompt must include:
-
-- Public exports come from `packages/<pkg>/src/index.ts` only — no deep imports into other packages
-- Relative imports include `.js` suffix (NodeNext) — e.g. `export * from "./market/index.js"`
-- Prefer type-only imports where possible (`import type { Address } from "viem"`)
-- Reuse SDK types for protocol values: `Address`, `MarketId`, `ChainId`, `BigIntish`
-- `bigint` for onchain quantities and WAD-scaled rates (e.g. `92_0000000000000000n`)
-- `as const` and `satisfies` for protocol lists and ABI literals (e.g. `BLUE_OPERATIONS as const`)
-- Domain failures are typed `Error` subclasses with readonly inputs
-- Edits to generated **inputs** (e.g. `graphql/*.gql`), not generated files (e.g. `src/api/sdk.ts`)
-- No edits to build output under `lib/`
-- Reference the root `AGENTS.md`, the package's `AGENTS.md` (and any nested `AGENTS.md`), and the package's own `package.json` `exports` field
-
-### Agent 3: Web3 Security
-
-Focus: Contract interactions, transaction parameters, wallet handling, permit flows, race conditions. **This is CRITICAL review territory.**
-
-Prompt must include:
-
-- Contract interactions: verify correct contract addresses, function signatures, and arguments
-- Transaction parameters: check gas estimates, value transfers, and calldata encoding
-- Reactivity concerns: can state changes cause unintended transaction parameters?
-- Wallet connection: proper account handling and chain verification
-- Hook usage: correct usage of wagmi hooks (useContractRead, useContractWrite, etc.)
-- Error handling: transaction failures, reverts, and user rejections
-- Race conditions in async operations
-- Missing transaction confirmations or proper waiting for receipts
-- Permit/deadline handling (avoid stale block timestamps)
-
-### Agent 4: Silent Failure Hunter
-
-Focus: Swallowed errors, missing error boundaries, empty catch blocks, unhandled promise rejections, missing loading/error states, dead code paths.
-
-Prompt must include:
-
-- Empty or overly broad catch blocks that swallow errors
-- Missing error boundaries around async components
-- Unhandled promise rejections (missing `.catch()` or try/catch)
-- Missing loading states for async operations
-- Missing error states for failed data fetches
-- Silently ignored return values from critical operations
-- Dead code paths that can never execute
-
-### Agent 5: Style & Conventions Compliance
-
-Focus: Biome compliance, import discipline, monorepo conventions.
-
-Prompt must include:
-
-- Biome clean: 2-space indentation, organized imports, no unused imports/variables (`pnpm lint`)
-- Type-only imports where possible (`import type { ... }`)
-- Relative imports use `.js` suffix in source files (NodeNext)
-- No edits to generated files (e.g. `src/api/sdk.ts`) — change generated **inputs** instead
-- No edits to build output under `lib/`
-- Reuse of SDK types (`Address`, `MarketId`, `ChainId`, `BigIntish`) over local re-declarations
-- Reference the root `AGENTS.md`, the package's `AGENTS.md`, and `biome.json`
-- Changeset relevance: verify `.changeset/*.md` files are present when the PR changes published package source in a semver-relevant way. Allow patch changesets for JSDoc-only changes to published package source. Flag unnecessary changesets for repo metadata, non-API documentation-only, fixture-only, generated-output-only, or tests-only diffs; flag missing changesets for behavior-affecting published package source changes.
-
-### Agent 6: Documentation Analyzer
-
-Focus: JSDoc/TSDoc on public APIs and types in `packages/<pkg>/src/index.ts` and the files it re-exports.
-
-**Canonical JSDoc rules: `docs/jsdoc-style.md`** (operationalizes AGENTS.md §6 and MISSION.md goal #3 — AI-legibility). Include the contents of `docs/jsdoc-style.md` (or a faithful summary) so reviewers flag deviations from the canonical shape.
-
-Prompt must include:
-
-- The `docs/jsdoc-style.md` checklist (what needs JSDoc, what does not, the required block order, `@param` / `@returns` / `@throws` / `@example` rules, error-message phrasing).
-- New or modified public exports re-exported from `packages/<pkg>/src/index.ts` must have JSDoc that conforms to `docs/jsdoc-style.md`.
-- Doc comments accurate vs. the implementation (no stale references to renamed args, removed return values, changed throw behavior).
-- Public types use semantic names — flag generic `T`, `U`, `Foo` where domain names exist.
-- README / package-level doc files updated when the public API changes shape.
-- `@example` blocks compile and follow the runnable-recipe shape from the style guide.
-
-### Agent 7: Test Coverage Analyzer
-
-Focus: missing or weak tests in `packages/<pkg>/test/` for changes in `packages/<pkg>/src/`.
-
-Prompt must include:
-
-- New public exports without a corresponding test file under `packages/<pkg>/test/`
-- New code paths inside existing exports without test cases (branches, error paths, edge cases like zero/MAX_UINT256/negative bigints)
-- Removed or modified public exports without tests updated
-- Onchain code paths (any code calling `viem`/`wagmi` actions) — confirm there's at least one test that exercises the path against a fork or mock
-- Snapshot or schema tests updated when generated outputs change
+Adding a new persona = drop a new file under `.agents/personas/` with appropriate frontmatter. If conditional, also extend Step 4's flag detection. No edit to caller files needed.
 
 ## Step 6: Aggregate and deduplicate findings
 
@@ -266,5 +191,6 @@ The caller (Step 7 of `/pr-review-ci` / `/pr-review-gh` / `/pr-review-local`) co
 - `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description}`.
 - `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` or malformed output.
 - `<COUNTS>` — `{critical, high, medium, low}` totals.
+- `<TOTAL_AGENTS_LAUNCHED>` — count of personas that actually fired (baseline always-fire count + any conditional personas whose trigger flag was true). Used by the caller's report to phrase "<FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed" correctly when conditional personas did not fire.
 
 The caller formats and routes these per its mode (CI verdict / GitHub COMMENT / terminal output).
