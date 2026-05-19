@@ -1,7 +1,6 @@
 import {
   _try,
   AccrualPosition,
-  type BigIntish,
   Market,
   type MarketId,
   MathLib,
@@ -310,31 +309,59 @@ export class ReallocationData implements InputReallocationData {
    * source-market withdrawal across reallocatable vaults, applies that
    * withdrawal to a cloned state, and repeats until no valid withdrawal remains.
    *
+   * Pass `options.timestamp` to evaluate market interest and pending public
+   * allocator caps at the same block as the fetched reallocation data.
+   * The returned `data` may over-estimate `vault.publicAllocatorConfig.accruedFee`
+   * because the simulation accrues the public allocator fee once per computed
+   * withdrawal, while the on-chain `reallocateTo` call charges once per vault
+   * reallocation group.
+   *
    * @param marketId - Target market to supply with shared liquidity.
-   * @param timestampOrOptions - Optional accrual timestamp or allocator options.
-   * @param maybeOptions - Allocator options when the timestamp is passed separately.
+   * @param options - Optional allocator discovery options.
    * @returns Computed source-market withdrawals and the post-reallocation state.
    * @throws {@link UnknownReallocationMarketError} when the target market is absent.
+   * @example
+   * ```ts
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   * import { markets, vaults } from "@morpho-org/morpho-test";
+   * import {
+   *   morphoViemExtension,
+   *   type PublicReallocation,
+   *   type ReallocationData,
+   * } from "@morpho-org/morpho-sdk";
+   *
+   * const client = createPublicClient({
+   *   chain: mainnet,
+   *   transport: http(),
+   * }).extend(morphoViemExtension());
+   *
+   * const marketParams = markets[mainnet.id].usdc_wbtc;
+   * const market = client.morpho.marketV1(marketParams, mainnet.id);
+   * const block = await client.getBlock();
+   * const reallocationData = await market.getReallocationData({
+   *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
+   *   block: { number: block.number, timestamp: block.timestamp },
+   * });
+   *
+   * const result: {
+   *   withdrawals: readonly PublicReallocation[];
+   *   data: ReallocationData;
+   * } = reallocationData.getMarketPublicReallocations(marketParams.id, {
+   *   timestamp: block.timestamp,
+   * });
+   * ```
    */
-  // biome-ignore lint/complexity/useMaxParams: preserves the timestamp/options overload used by callers.
   public getMarketPublicReallocations(
     marketId: MarketId,
-    timestampOrOptions?: BigIntish | PublicAllocatorOptions,
-    maybeOptions: PublicAllocatorOptions = {},
+    options: PublicAllocatorOptions = {},
   ): {
     readonly withdrawals: readonly PublicReallocation[];
     data: ReallocationData;
   } {
-    const options =
-      typeof timestampOrOptions === "object"
-        ? timestampOrOptions
-        : maybeOptions;
-    const timestampInput =
-      typeof timestampOrOptions === "object"
-        ? options.timestamp
-        : (timestampOrOptions ?? options.timestamp);
     const {
       enabled = true,
+      timestamp,
       reallocatableVaults,
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
@@ -343,7 +370,7 @@ export class ReallocationData implements InputReallocationData {
     if (!enabled) return { withdrawals: [], data: this };
 
     const accrualTimestamp = BigInt(
-      timestampInput ?? this.getMarket(marketId).lastUpdate,
+      timestamp ?? this.getMarket(marketId).lastUpdate,
     );
 
     const configuredVaults = Object.keys(this.vaultMarketConfigs) as Address[];

@@ -138,7 +138,7 @@ export const computeReallocations = ({
 
   // Phase 1: "friendly" reallocations respecting withdrawal utilization targets.
   const { withdrawals: friendlyWithdrawals, data: friendlyReallocationData } =
-    data.getMarketPublicReallocations(market.id, options?.timestamp, options);
+    data.getMarketPublicReallocations(market.id, options);
 
   const withdrawals = [...friendlyWithdrawals];
 
@@ -153,15 +153,11 @@ export const computeReallocations = ({
     // Phase 2: "aggressive" — fully withdraw from every market (100% utilization).
     requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
     withdrawals.push(
-      ...friendlyReallocationData.getMarketPublicReallocations(
-        market.id,
-        options?.timestamp,
-        {
-          ...options,
-          defaultMaxWithdrawalUtilization: MathLib.WAD,
-          maxWithdrawalUtilization: {},
-        },
-      ).withdrawals,
+      ...friendlyReallocationData.getMarketPublicReallocations(market.id, {
+        ...options,
+        defaultMaxWithdrawalUtilization: MathLib.WAD,
+        maxWithdrawalUtilization: {},
+      }).withdrawals,
     );
   }
 

@@ -765,10 +765,11 @@ describe("ReallocationData SimulationState parity", () => {
     });
   });
 
-  test("matches public allocator parity through the timestamp overload", () => {
+  test("matches public allocator parity through the timestamp option", () => {
     const reallocationResult = new ReallocationData(
       makeBaseInput(),
-    ).getMarketPublicReallocations(targetParams.id, TIMESTAMP, {
+    ).getMarketPublicReallocations(targetParams.id, {
+      timestamp: TIMESTAMP,
       defaultMaxWithdrawalUtilization: MathLib.WAD,
     });
     const legacyResult = makeLegacyState(
@@ -790,53 +791,6 @@ describe("ReallocationData SimulationState parity", () => {
         vaults: [VAULT],
       }),
     );
-  });
-
-  test("prefers positional timestamp over options timestamp in the timestamp overload", () => {
-    const makeTimestampSensitiveInput = () => {
-      const input = makeBaseInput();
-      input.vaultMarketConfigs[VAULT]![targetParams.id] = makeVaultMarketConfig(
-        {
-          marketId: targetParams.id,
-          cap: 10_000n * MathLib.WAD,
-          pendingCap: { value: 10n * MathLib.WAD, validAt: TIMESTAMP },
-          maxIn: 10_000n * MathLib.WAD,
-          maxOut: 0n,
-        },
-      );
-
-      return input;
-    };
-
-    const positionalOnly = new ReallocationData(
-      makeTimestampSensitiveInput(),
-    ).getMarketPublicReallocations(targetParams.id, TIMESTAMP, {
-      defaultMaxWithdrawalUtilization: MathLib.WAD,
-    });
-    const conflictingOptionsTimestamp = new ReallocationData(
-      makeTimestampSensitiveInput(),
-    ).getMarketPublicReallocations(targetParams.id, TIMESTAMP, {
-      timestamp: TIMESTAMP + 1n,
-      defaultMaxWithdrawalUtilization: MathLib.WAD,
-    });
-    const optionsOnly = new ReallocationData(
-      makeTimestampSensitiveInput(),
-    ).getMarketPublicReallocations(targetParams.id, {
-      timestamp: TIMESTAMP + 1n,
-      defaultMaxWithdrawalUtilization: MathLib.WAD,
-    });
-
-    expect(positionalOnly.withdrawals).toEqual([
-      {
-        vault: VAULT,
-        id: sourceParams.id,
-        assets: 10n * MathLib.WAD,
-      },
-    ]);
-    expect(conflictingOptionsTimestamp.withdrawals).toEqual(
-      positionalOnly.withdrawals,
-    );
-    expect(optionsOnly.withdrawals).not.toEqual(positionalOnly.withdrawals);
   });
 });
 
@@ -1055,7 +1009,7 @@ describe("ReallocationData unit coverage", () => {
       data.getMarketPublicReallocations(targetParams.id, { enabled: false }),
     ).toEqual({ withdrawals: [], data });
     expect(
-      data.getMarketPublicReallocations(targetParams.id, undefined, {
+      data.getMarketPublicReallocations(targetParams.id, {
         timestamp: TIMESTAMP,
         reallocatableVaults: [],
       }).withdrawals,
