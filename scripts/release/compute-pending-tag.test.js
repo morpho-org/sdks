@@ -149,6 +149,38 @@ describe("readPreviousPackageManifest", () => {
     );
   });
 
+  test("behavior: previous commit missing the manifest", () => {
+    const root = createTempDir();
+    runGit(["-c", "init.defaultBranch=main", "init"], root);
+    writeFileSync(join(root, "README.md"), "# repo\n");
+    commitAll(root, "initial without package");
+    mkdirSync(join(root, "packages/alpha"), { recursive: true });
+    writeManifest(join(root, manifestPath), {
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    commitAll(root, "add package");
+
+    // `git show HEAD^:<path>` reports "exists on disk, but not in 'HEAD^'"
+    // because the worktree has the manifest the previous commit lacked.
+    expect(readPreviousPackageManifest({ cwd: root, manifestPath })).toBe(
+      undefined,
+    );
+  });
+
+  test("behavior: baseRef without the manifest path", () => {
+    const root = createTempDir();
+    runGit(["-c", "init.defaultBranch=main", "init"], root);
+    writeFileSync(join(root, "README.md"), "# repo\n");
+    commitAll(root, "initial without package");
+
+    // `git show HEAD:<path>` reports "does not exist in 'HEAD'" because the
+    // path is absent from both the worktree and the resolved revision.
+    expect(
+      readPreviousPackageManifest({ baseRef: "HEAD", cwd: root, manifestPath }),
+    ).toBe(undefined);
+  });
+
   test("error: rethrows a malformed previous manifest", () => {
     const root = createTempDir();
     mkdirSync(join(root, "packages/alpha"), { recursive: true });

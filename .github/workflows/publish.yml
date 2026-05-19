@@ -40,6 +40,29 @@ jobs:
       # (missing promise-retry). Pin a known-good npm 11 release instead.
       - run: npm install -g npm@11.11.0
 
+      - name: Record privileged-step baseline
+        id: privileged-baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Capture this BEFORE `pnpm install` runs dependency lifecycle
+          # scripts. The publish step configures a token-authenticated `origin`
+          # remote and then runs `compute-pending-tag.mjs`, which imports the
+          # other release helper modules, so hash every module reachable from
+          # it. Recording the baseline pre-install means install-time tampering
+          # is caught by the later verification step; recording it post-install
+          # would bake that tampering into the baseline itself.
+          helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
+
+          echo "helper_sha=${helper_sha}" >> "${GITHUB_OUTPUT}"
+
       - run: pnpm install --frozen-lockfile
 
       - name: Configure git identity
@@ -61,6 +84,26 @@ jobs:
         run: |
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
+
+      - name: Verify release helper scripts
+        if: steps.pending-changesets.outputs.has_changesets == 'false'
+        shell: bash
+        env:
+          EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
+        run: |
+          set -euo pipefail
+
+          actual_helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
+          if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
+            echo "::error::Release helper scripts under scripts/release changed after the trusted baseline (during install)."
+            exit 1
+          fi
 
       - name: Publish packages
         id: publish-packages
