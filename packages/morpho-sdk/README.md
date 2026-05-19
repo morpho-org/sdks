@@ -48,7 +48,7 @@ Every action that touches a user's tokens or positions returns two things:
 Typical requirements:
 
 - **ERC-20 approval** — the user must approve the bundler (or Morpho directly) to pull tokens. Returned as a standard `approve` transaction the consumer sends first.
-- **Permit / Permit2 signature** — off-chain approvals that go into `buildTx` as a `signature` argument, avoiding the extra approval tx. Enabled via `MorphoClient({ supportSignature: true })`.
+- **Permit / Permit2 signature** — off-chain approvals that go into `buildTx` as a `signature` argument, avoiding the extra approval tx. Enabled via `morphoViemExtension({ supportSignature: true })`.
 - **Morpho authorization** — `borrow`, `supplyCollateralBorrow`, and `repayWithdrawCollateral` require the user to authorize `GeneralAdapter1` on the Morpho contract once (`setAuthorization`). The SDK returns this as an extra transaction if it's missing.
 
 Usage pattern:
@@ -68,7 +68,7 @@ const tx = buildTx(permitSignature);
 
 ### Integration invariant — builder = signer
 
-**`userAddress` MUST equal the connected account on the viem client used to build the tx, and that same client MUST sign it.** Enforced by `validateUserAddress` (throws `MissingClientPropertyError` / `AddressMismatchError`); critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls).
+**`userAddress` MUST equal the account that ends up signing/executing the tx.** Critical for `repayWithdrawCollateral`, whose bundle mixes explicit `onBehalf` (repay) with implicit `msg.sender` (transfer-from + withdraw) — see [BUNDLER3.md](./BUNDLER3.md#other-pitfalls). Transaction builders do not validate this at build time, so callers MUST keep `userAddress` aligned with the signing account themselves. The signature requirements (`encodeErc20Permit` / `encodeErc20Permit2`) take a `WalletClient` and enforce the invariant at `sign()` time via `validateUserAddress`, rejecting any `sign(client, userAddress)` where `client.account.address !== userAddress` with `MissingClientPropertyError` / `AddressMismatchError`.
 
 | Entity       | Action                   | Route                     | Why                                                                                                 |
 | ------------ | ------------------------ | ------------------------- | --------------------------------------------------------------------------------------------------- |
@@ -88,14 +88,15 @@ const tx = buildTx(permitSignature);
 ### VaultV2
 
 ```typescript
-import { MorphoClient } from "@morpho-org/morpho-sdk";
+import { morphoViemExtension } from "@morpho-org/morpho-sdk";
 import { createPublicClient, http } from "viem";
 import { mainnet } from "viem/chains";
 
-const viemClient = createPublicClient({ chain: mainnet, transport: http() });
-const morpho = new MorphoClient(viemClient);
+const client = createPublicClient({ chain: mainnet, transport: http() }).extend(
+  morphoViemExtension(),
+);
 
-const vault = morpho.vaultV2("0xVault...", 1);
+const vault = client.morpho.vaultV2("0xVault...", 1);
 ```
 
 #### Deposit
@@ -180,7 +181,7 @@ const tx = buildTx();
 ### VaultV1
 
 ```typescript
-const vault = morpho.vaultV1("0xVault...", 1);
+const vault = client.morpho.vaultV1("0xVault...", 1);
 ```
 
 #### Deposit
@@ -222,8 +223,8 @@ const tx = buildTx();
 Atomically migrate a full position from a VaultV1 (MetaMorpho) vault into a VaultV2 vault. The bundler redeems the V1 shares and deposits the resulting assets into V2 in a single transaction. Both vaults must share the same underlying asset.
 
 ```typescript
-const sourceVault = morpho.vaultV1("0xV1Vault...", 1);
-const targetVault = morpho.vaultV2("0xV2Vault...", 1);
+const sourceVault = client.morpho.vaultV1("0xV1Vault...", 1);
+const targetVault = client.morpho.vaultV2("0xV2Vault...", 1);
 
 const { buildTx, getRequirements } = sourceVault.migrateToV2({
   userAddress: "0xUser...",
@@ -239,7 +240,7 @@ const tx = buildTx(requirementSignature);
 ### MarketV1
 
 ```typescript
-const market = morpho.marketV1(
+const market = client.morpho.marketV1(
   {
     loanToken: "0xLoan...",
     collateralToken: "0xCollateral...",
@@ -406,7 +407,7 @@ const { buildTx, getRequirements } = market.supplyCollateralBorrow({
 
 ```mermaid
 graph LR
-    MC[MorphoClient]
+    MC["client.morpho<br/>(morphoViemExtension)"]
 
     MC -->|.vaultV1| MV1
     MC -->|.vaultV2| MV2

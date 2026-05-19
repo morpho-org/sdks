@@ -1,18 +1,18 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
 import type { Action } from "@morpho-org/bundler-sdk-viem";
 import { type Address, isAddressEqual } from "viem";
 import {
   DepositAmountMismatchError,
   DepositAssetMismatchError,
   type Permit2Action,
+  Permit2ExpirationMissingError,
   type PermitAction,
   type PermitArgs,
 } from "../../types/index.js";
 
 interface GetRequirementsActionParams {
-  chainId: number;
   asset: Address;
   amount: bigint;
+  recipient: Address;
   requirementSignature: {
     args: PermitArgs;
     action: PermitAction | Permit2Action;
@@ -20,12 +20,52 @@ interface GetRequirementsActionParams {
 }
 
 /**
- * Get the actions required to transfer the asset based on the requirement signature.
+ * Encodes the bundler actions that consume a pre-signed permit / permit2 requirement and pull
+ * the asset to `recipient`.
+ *
+ * Permit2 path emits `approve2` + `transferFrom2`; classic permit path emits `permit` +
+ * `erc20TransferFrom`. The signed `asset` and `amount` must match the pulled `asset` and
+ * `amount` exactly, otherwise the function throws so the caller does not silently spend a
+ * wider-than-expected approval.
+ *
+ * @param params.asset - The ERC-20 to pull.
+ * @param params.amount - The amount to pull, in the asset's smallest unit.
+ * @param params.recipient - The address that receives the transfer.
+ * @param params.requirementSignature - The signed permit / permit2 to apply before the transfer.
+ * @returns A pair of bundler `Action`s: a permit / approve2 followed by the transfer.
+ * @throws {DepositAssetMismatchError} when the signed asset differs from `asset`.
+ * @throws {DepositAmountMismatchError} when the signed amount differs from `amount`.
+ * @throws {Permit2ExpirationMissingError} when `action.type === "permit2"` but `args.expiration` is missing.
+ * @example
+ * ```ts
+ * import { createWalletClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { getRequirementsAction } from "@morpho-org/morpho-sdk";
+ *
+ * const walletClient = createWalletClient({
+ *   chain: mainnet,
+ *   transport: http(),
+ *   account: borrower,
+ * });
+ *
+ * // `requirement` comes from `getRequirements*` helpers; signing produces a `RequirementSignature`.
+ * const requirementSignature = await requirement.sign(walletClient, borrower);
+ *
+ * const actions = getRequirementsAction({
+ *   asset: loanToken,
+ *   amount: 1_000_000n,
+ *   recipient: generalAdapter1,
+ *   requirementSignature,
+ * });
+ * // actions satisfies Action[]
+ * // - permit2 path: [{ type: "approve2", ... }, { type: "transferFrom2", ... }]
+ * // - classic permit path: [{ type: "permit", ... }, { type: "erc20TransferFrom", ... }]
+ * ```
  */
 export const getRequirementsAction = ({
-  chainId,
   asset,
   amount,
+  recipient,
   requirementSignature,
 }: GetRequirementsActionParams): Action[] => {
   if (!isAddressEqual(requirementSignature.args.asset, asset)) {
@@ -39,13 +79,9 @@ export const getRequirementsAction = ({
     );
   }
 
-  const {
-    bundler3: { generalAdapter1 },
-  } = getChainAddresses(chainId);
-
   if (requirementSignature.action.type === "permit2") {
     if (!("expiration" in requirementSignature.args)) {
-      throw new Error("Expiration is not defined");
+      throw new Permit2ExpirationMissingError();
     }
     return [
       {
@@ -67,7 +103,7 @@ export const getRequirementsAction = ({
       },
       {
         type: "transferFrom2",
-        args: [asset, amount, generalAdapter1, false /* skipRevert */],
+        args: [asset, amount, recipient, false /* skipRevert */],
       },
     ];
   }
@@ -86,7 +122,7 @@ export const getRequirementsAction = ({
     },
     {
       type: "erc20TransferFrom",
-      args: [asset, amount, generalAdapter1, false /* skipRevert */],
+      args: [asset, amount, recipient, false /* skipRevert */],
     },
   ];
 };

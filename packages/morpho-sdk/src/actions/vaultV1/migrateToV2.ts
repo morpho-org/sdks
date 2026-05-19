@@ -44,30 +44,58 @@ export interface VaultV1MigrateToV2Params {
 /**
  * Prepares an atomic full-migration transaction from VaultV1 to VaultV2.
  *
- * Routed through bundler3: transfers V1 shares to GeneralAdapter1 (via
- * `erc20TransferFrom` or permit/permit2), redeems them via `erc4626Redeem`
- * (GA1 redeems its own shares — no allowance check), then deposits the
- * resulting assets into V2 via `erc4626Deposit`. All operations execute
- * atomically in a single transaction.
+ * Routed through bundler3: transfers V1 shares to `GeneralAdapter1` (via `erc20TransferFrom` or
+ * permit/permit2), redeems them via `erc4626Redeem` (GA1 redeems its own shares — no allowance
+ * check), then deposits the resulting assets into V2 via `erc4626Deposit`. All operations
+ * execute atomically in a single transaction.
  *
- * **Prerequisite:** The user must either approve GeneralAdapter1 to spend
- * their V1 vault shares (classic approve) or provide a pre-signed
- * permit/permit2 via `requirementSignature`. Use `getRequirements()` on the
- * entity to resolve the appropriate approval.
+ * Prerequisite: the user must either approve `GeneralAdapter1` to spend their V1 vault shares
+ * (classic approve) or provide a pre-signed permit/permit2 via `requirementSignature`. Use
+ * `getRequirements()` on the entity to resolve the appropriate approval.
  *
- * @param params - The migration parameters.
- * @param params.vault.chainId - The chain ID (used to resolve bundler addresses).
- * @param params.vault.address - The VaultV1 (MetaMorpho) address.
+ * @param params.vault.chainId - The chain the source vault lives on (used to resolve bundler
+ *   addresses).
+ * @param params.vault.address - The source VaultV1 (MetaMorpho) address.
  * @param params.vault.asset - The underlying asset of the source V1 vault.
- * @param params.args.targetVault - The VaultV2 address to deposit into.
- * @param params.args.targetAsset - The underlying asset of the target V2 vault. Must equal `vault.asset`.
+ * @param params.args.targetVault - The target VaultV2 address.
+ * @param params.args.targetAsset - The underlying asset of the target V2 vault. Must equal
+ *   `vault.asset`.
  * @param params.args.shares - Number of V1 shares to migrate.
- * @param params.args.minSharePriceVaultV1 - Minimum V1 share price in RAY (slippage protection for redeem).
- * @param params.args.maxSharePriceVaultV2 - Maximum V2 share price in RAY (inflation protection for deposit).
- * @param params.args.recipient - Receives the V2 vault shares.
- * @param params.args.requirementSignature - Pre-signed permit/permit2 for V1 share transfer.
- * @param params.metadata - Optional analytics metadata.
- * @returns Deep-frozen transaction.
+ * @param params.args.minSharePriceVaultV1 - Minimum V1 share price in RAY (slippage protection
+ *   for the redeem leg).
+ * @param params.args.maxSharePriceVaultV2 - Maximum V2 share price in RAY (inflation protection
+ *   for the deposit leg).
+ * @param params.args.recipient - Address that receives the V2 vault shares.
+ * @param params.args.requirementSignature - Optional pre-signed permit/permit2 for the V1 share
+ *   transfer. When absent, the bundle falls back to a plain `erc20TransferFrom`.
+ * @param params.metadata - Optional analytics metadata attached to the bundle.
+ * @returns A deep-frozen `Transaction<VaultV1MigrateToV2Action>` with `to`, `value`, `data`, and
+ *   the typed `action` discriminator the simulation layer consumes.
+ * @throws {VaultAssetMismatchError} when `targetAsset` differs from `vault.asset`.
+ * @throws {NonPositiveSharesAmountError} when `shares <= 0n`.
+ * @throws {NegativeMinSharePriceError} when `minSharePriceVaultV1 < 0n`.
+ * @throws {NonPositiveMaxSharePriceError} when `maxSharePriceVaultV2 <= 0n`.
+ * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed asset differs from `vault.address` (the V1 share token).
+ * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
+ *   is provided and the signed amount differs from `args.shares`.
+ * @example
+ * ```ts
+ * import { vaultV1MigrateToV2 } from "@morpho-org/morpho-sdk";
+ *
+ * const tx = vaultV1MigrateToV2({
+ *   vault: { chainId: 1, address: sourceVault, asset: USDC },
+ *   args: {
+ *     targetVault,
+ *     targetAsset: USDC,
+ *     shares: 1_000_000n,
+ *     minSharePriceVaultV1: 0n, // disables redeem-leg slippage protection — production code should compute from source vault state + slippage tolerance
+ *     maxSharePriceVaultV2: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
+ *     recipient,
+ *   },
+ * });
+ * // tx satisfies Readonly<Transaction<VaultV1MigrateToV2Action>>
+ * ```
  */
 export const vaultV1MigrateToV2 = ({
   vault: { chainId, address: sourceVault, asset: sourceAsset },
@@ -114,9 +142,9 @@ export const vaultV1MigrateToV2 = ({
   if (requirementSignature) {
     actions.push(
       ...getRequirementsAction({
-        chainId,
         asset: sourceVault,
         amount: shares,
+        recipient: generalAdapter1,
         requirementSignature,
       }),
     );

@@ -3,7 +3,7 @@ import { vi } from "vitest";
 
 import { AddressScreeningError } from "../errors.js";
 import { parseTransfers } from "../simulate/parsing/transfers.js";
-import { makeTransferLog } from "../test-helpers/index.js";
+import { makeCall, makeTransferLog } from "../test-helpers/index.js";
 import { sanctionedAddresses } from "./sanctioned-addresses.js";
 import { screenAddresses } from "./screen-addresses.js";
 
@@ -43,7 +43,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
       }),
     ).rejects.toThrow(AddressScreeningError);
   });
@@ -72,7 +72,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
       }),
     ).resolves.not.toThrow();
   });
@@ -93,7 +93,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
         // chainalysisApiKey intentionally omitted
       }),
     ).resolves.not.toThrow();
@@ -129,7 +129,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
         chainalysisApiKey: "test-key",
       }),
     ).rejects.toThrow(AddressScreeningError);
@@ -168,7 +168,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
         chainalysisApiKey: "test-key",
       }),
     ).rejects.toThrow(AddressScreeningError);
@@ -194,7 +194,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
       }),
     ).resolves.not.toThrow();
   });
@@ -224,7 +224,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
         chainalysisApiKey: "test-key",
       }),
     ).rejects.toThrow(AddressScreeningError);
@@ -255,7 +255,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
         chainalysisApiKey: "test-key",
       }),
     ).resolves.not.toThrow();
@@ -278,7 +278,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
         chainalysisApiKey: "test-key",
       }),
     ).resolves.not.toThrow();
@@ -308,7 +308,7 @@ describe.sequential("screenAddresses", () => {
     await expect(
       screenAddresses({
         simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
-        transfers: parseTransfers(logs),
+        transfers: parseTransfers([makeCall(logs)]),
         chainalysisApiKey: "test-key",
       }),
     ).resolves.not.toThrow();

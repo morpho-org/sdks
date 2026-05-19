@@ -1,9 +1,9 @@
 /**
- * Base error for all simulation package errors.
- * Transport-agnostic — no HTTP status codes.
- * Consumers use try/catch + instanceof to handle specific error types.
+ * Base class for every error this package throws. Transport-agnostic — no HTTP status codes.
+ * Consumers pattern-match with `instanceof` on the concrete subclass.
  */
 export abstract class SimulationPackageError extends Error {
+  /** Stable string discriminator for log aggregation and external mapping. */
   abstract readonly code: string;
 
   constructor(message: string, options?: ErrorOptions) {

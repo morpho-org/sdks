@@ -43,7 +43,6 @@ import {
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
-  validateUserAddress,
 } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
@@ -368,7 +367,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     nativeAmount,
   }: { userAddress: Address } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (amount < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);
@@ -429,7 +427,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     reallocations?: readonly VaultReallocation[];
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (amount <= 0n) {
       throw new NonPositiveBorrowAmountError(this.marketParams.id);
@@ -495,10 +492,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     } & RepayAmountArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(
-      this.client.viemClient.account?.address,
-      params.userAddress,
-    );
 
     const {
       userAddress,
@@ -537,6 +530,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     let assets: bigint;
     let shares: bigint;
     let transferAmount: bigint;
+    let marketForRepay: Market;
 
     if (isSharesMode) {
       validateRepayShares({
@@ -546,16 +540,13 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
       assets = 0n;
       shares = params.shares;
-      // Add slippage buffer to cover interest accrued between tx construction and execution.
-      // Without this, the on-chain repay amount may exceed the pre-transferred ERC20 amount.
-      const baseTransferAmount = positionData.market.toBorrowAssets(
-        shares,
-        "Up",
-      );
-      transferAmount = MathLib.wMulUp(
-        baseTransferAmount,
-        MathLib.WAD + slippageTolerance,
-      );
+      // 2h forward accrual upper-bounds the on-chain repay price; bundle
+      // skims residual back to the receiver.
+      const accrualTimestamp =
+        MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+        Time.s.from.h(2n);
+      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
+      transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
     } else {
       validateRepayAmount({
         positionData,
@@ -565,12 +556,13 @@ export class MorphoMarketV1 implements MarketV1Actions {
       assets = params.assets;
       shares = 0n;
       transferAmount = params.assets;
+      marketForRepay = positionData.market;
     }
 
     const maxSharePrice = computeMaxRepaySharePrice({
       repayAssets: assets,
       repayShares: shares,
-      market: positionData.market,
+      market: marketForRepay,
       slippageTolerance,
     });
 
@@ -615,7 +607,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     positionData: AccrualPosition;
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (amount <= 0n) {
       throw new NonPositiveWithdrawCollateralAmountError(this.marketParams.id);
@@ -672,10 +663,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     } & RepayAmountArgs,
   ) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(
-      this.client.viemClient.account?.address,
-      params.userAddress,
-    );
 
     const {
       userAddress,
@@ -719,6 +706,13 @@ export class MorphoMarketV1 implements MarketV1Actions {
     let assets: bigint;
     let shares: bigint;
     let transferAmount: bigint;
+    let marketForRepay: Market;
+
+    // 2h forward accrual upper-bounds the on-chain repay price (shares
+    // mode) and the post-repay health check; bundle skims residual back.
+    const accrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      Time.s.from.h(2n);
 
     if (isSharesMode) {
       validateRepayShares({
@@ -728,14 +722,8 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
       assets = 0n;
       shares = params.shares;
-      const baseTransferAmount = positionData.market.toBorrowAssets(
-        shares,
-        "Up",
-      );
-      transferAmount = MathLib.wMulUp(
-        baseTransferAmount,
-        MathLib.WAD + slippageTolerance,
-      );
+      marketForRepay = positionData.market.accrueInterest(accrualTimestamp);
+      transferAmount = marketForRepay.toBorrowAssets(shares, "Up");
     } else {
       validateRepayAmount({
         positionData,
@@ -745,6 +733,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
       assets = params.assets;
       shares = 0n;
       transferAmount = params.assets;
+      marketForRepay = positionData.market;
     }
 
     if (withdrawAmount > positionData.collateral) {
@@ -755,10 +744,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
     }
 
-    // +10 min accrual buffer: residual debt grows between build and execute.
-    const accrualTimestamp =
-      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
-      Time.s.from.min(10n);
     const { position: positionAfterRepay } = positionData.repay(
       assets,
       shares,
@@ -774,7 +759,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     const maxSharePrice = computeMaxRepaySharePrice({
       repayAssets: assets,
       repayShares: shares,
-      market: positionData.market,
+      market: marketForRepay,
       slippageTolerance,
     });
 
@@ -836,7 +821,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
     reallocations?: readonly VaultReallocation[];
   } & DepositAmountArgs) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
-    validateUserAddress(this.client.viemClient.account?.address, userAddress);
 
     if (amount < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.collateralToken);

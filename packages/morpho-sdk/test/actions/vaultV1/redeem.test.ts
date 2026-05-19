@@ -106,11 +106,11 @@ describe("Redeem VaultV1", () => {
           mainnet.id,
         );
 
-        const accrualVault = await vaultV1.getData();
+        const vaultData = await vaultV1.getData();
         const deposit = vaultV1.deposit({
           userAddress: client.account.address,
           amount: depositAmount,
-          accrualVault,
+          vaultData,
         });
         const requirements = await deposit.getRequirements();
         const approveTx = requirements[0];

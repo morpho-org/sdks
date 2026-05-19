@@ -1,17 +1,17 @@
 import type { Address } from "@morpho-org/blue-sdk";
 import { fetchToken, getPermitTypedData } from "@morpho-org/blue-sdk-viem";
 import { deepFreeze, Time } from "@morpho-org/morpho-ts";
-import { type Client, verifyTypedData } from "viem";
+import { type Client, verifyTypedData, type WalletClient } from "viem";
 import { signTypedData } from "viem/actions";
+import { validateUserAddress } from "../../../helpers/validate.js";
 import {
-  AddressMismatchError,
   ChainIdMismatchError,
   InvalidSignatureError,
-  MissingClientPropertyError,
   type PermitAction,
   type Requirement,
 } from "../../../types/index.js";
 
+/** Parameters for {@link encodeErc20Permit}. */
 interface EncodeErc20PermitParams {
   token: Address;
   spender: Address;
@@ -21,6 +21,44 @@ interface EncodeErc20PermitParams {
   supportDeployless?: boolean;
 }
 
+/**
+ * Builds an EIP-2612 permit `Requirement` that, once signed, lets `spender` pull `amount` of
+ * `token`.
+ *
+ * Reads token metadata via `fetchToken`. The returned `Requirement.sign()` produces the EIP-712
+ * signature, verifies it against the connected account, and returns a `RequirementSignature`
+ * the bundler action helpers can consume. Deadline defaults to two hours from `Time.timestamp()`.
+ *
+ * @param viemClient - Connected viem `Client` whose `chain.id` matches `params.chainId`.
+ * @param params - Permit encoding parameters.
+ * @param params.token - ERC-20 token address (must support EIP-2612).
+ * @param params.spender - Address that will be granted the permit allowance.
+ * @param params.amount - Permit allowance amount.
+ * @param params.chainId - Target chain id.
+ * @param params.nonce - The user's current EIP-2612 nonce on `token`.
+ * @param params.supportDeployless - Whether `fetchToken` should use deployless multicall.
+ * @returns A `Requirement` whose `sign(client, userAddress)` produces the deep-frozen signature.
+ * @throws {ChainIdMismatchError} when `viemClient.chain?.id !== params.chainId`.
+ * @throws {MissingClientPropertyError} from `sign()` when the client has no `account.address`.
+ * @throws {AddressMismatchError} from `sign()` when the client account differs from `userAddress`.
+ * @throws {InvalidSignatureError} from `sign()` when EIP-712 verification fails.
+ * @example
+ * ```ts
+ * import { createWalletClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { encodeErc20Permit } from "@morpho-org/morpho-sdk";
+ *
+ * const client = createWalletClient({ chain: mainnet, transport: http() });
+ * const requirement = await encodeErc20Permit(client, {
+ *   token: USDC, // L1 mainnet USDC. Bridged USDC.e on L2s often does not implement EIP-2612 — query token metadata before signing on other chains. DAI uses a non-standard permit signature.
+ *   spender: generalAdapter1,
+ *   amount: 1_000_000n,
+ *   chainId: 1,
+ *   nonce: 0n,
+ * });
+ * // requirement satisfies Requirement
+ * ```
+ */
 export const encodeErc20Permit = async (
   viemClient: Client,
   params: EncodeErc20PermitParams,
@@ -49,13 +87,9 @@ export const encodeErc20Permit = async (
 
   return {
     action,
-    async sign(client: Client, userAddress: Address) {
-      if (!client.account?.address) {
-        throw new MissingClientPropertyError("client.account.address");
-      }
-      if (client.account.address !== userAddress) {
-        throw new AddressMismatchError(client.account.address, userAddress);
-      }
+    async sign(client: WalletClient, userAddress: Address) {
+      const account = client.account;
+      validateUserAddress(account?.address, userAddress);
       const typedData = getPermitTypedData(
         {
           erc20: tokenData,
@@ -70,7 +104,7 @@ export const encodeErc20Permit = async (
 
       const signature = await signTypedData(client, {
         ...typedData,
-        account: client.account,
+        account,
       });
 
       const isValid = await verifyTypedData({

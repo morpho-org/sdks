@@ -4,16 +4,15 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import { createPublicClient, http, parseUnits } from "viem";
+import { Time } from "@morpho-org/morpho-ts";
+import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
-  AddressMismatchError,
   computeMaxRepaySharePrice,
   isRequirementApproval,
   isRequirementAuthorization,
   MissingAccrualPositionError,
-  MissingClientPropertyError,
   MorphoClient,
   marketV1RepayWithdrawCollateral,
   NonPositiveRepayAmountError,
@@ -29,6 +28,10 @@ import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("RepayWithdrawCollateralMarketV1", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("should create repayWithdrawCollateral bundle (by assets)", async ({
     client,
   }) => {
@@ -249,6 +252,85 @@ describe("RepayWithdrawCollateralMarketV1", () => {
     );
   });
 
+  // Regression: same accrual bug as repay({ shares }) — transferAmount used
+  // to be sized from the stale market snapshot, so a one-shot deleverage on
+  // a dormant market reverted before collateral could be released.
+  test("should full repay by shares and withdraw all collateral on a dormant market", async ({
+    client,
+  }) => {
+    const collateralAmount = parseUnits("10", 18);
+    const borrowAmount = parseUnits("1000", 18);
+
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: WethUsdsMarketV1,
+      collateralAmount,
+    });
+    await borrow({
+      client,
+      chainId: mainnet.id,
+      market: WethUsdsMarketV1,
+      borrowAmount,
+    });
+
+    const fastForwardedTimestamp =
+      (await client.timestamp()) + Time.s.from.d(30n);
+    await client.setNextBlockTimestamp({ timestamp: fastForwardedTimestamp });
+    // Align wall-clock with chain time so the SDK's `Time.timestamp()` projection
+    // matches the block the repay tx will execute on.
+    vi.useFakeTimers({
+      now: Number(fastForwardedTimestamp) * 1000,
+      toFake: ["Date"],
+    });
+
+    await client.deal({
+      erc20: WethUsdsMarketV1.loanToken,
+      amount: parseUnits("100000", 18),
+    });
+
+    const {
+      markets: {
+        WethUsdsMarketV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { markets: { WethUsdsMarketV1 } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client, {
+          supportSignature: false,
+        });
+        const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        const action = market.repayWithdrawCollateral({
+          userAddress: client.account.address,
+          shares: positionData.borrowShares,
+          withdrawAmount: positionData.collateral,
+          positionData,
+        });
+
+        const requirements = await action.getRequirements();
+        for (const req of requirements) {
+          if (isRequirementApproval(req) || isRequirementAuthorization(req)) {
+            await client.sendTransaction(req);
+          }
+        }
+
+        const tx = action.buildTx();
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.position.borrowShares).toBe(0n);
+    expect(finalState.position.collateral).toBe(0n);
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + collateralAmount,
+    );
+  });
+
   test("should throw when withdraw makes position unhealthy (even after repay)", async ({
     client,
   }) => {
@@ -418,46 +500,6 @@ describe("RepayWithdrawCollateralMarketV1", () => {
         positionData: undefined as unknown as AccrualPosition,
       }),
     ).toThrow(MissingAccrualPositionError);
-  });
-
-  test("should throw MissingClientPropertyError when client has no account", () => {
-    // Public client (no account) — building any market action that takes a
-    // userAddress must fail loudly rather than silently produce a tx that
-    // could be signed by an unrelated account.
-    const publicClient = createPublicClient({
-      chain: mainnet,
-      transport: http(),
-    });
-    const morphoClient = new MorphoClient(publicClient);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-
-    expect(() =>
-      market.repayWithdrawCollateral({
-        userAddress: "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
-        assets: parseUnits("100", 18),
-        withdrawAmount: parseUnits("1", 18),
-        positionData: undefined as unknown as AccrualPosition,
-      }),
-    ).toThrow(MissingClientPropertyError);
-  });
-
-  test("should throw AddressMismatchError when userAddress differs from client account", async ({
-    client,
-  }) => {
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-
-    // Anvil's second default account — guaranteed distinct from client.account.
-    const otherAddress = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-
-    expect(() =>
-      market.repayWithdrawCollateral({
-        userAddress: otherAddress,
-        assets: parseUnits("100", 18),
-        withdrawAmount: parseUnits("1", 18),
-        positionData: undefined as unknown as AccrualPosition,
-      }),
-    ).toThrow(AddressMismatchError);
   });
 
   test("should return deep-frozen transaction", async ({ client }) => {

@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-sdk-wagmi",
   "description": "Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities.",
-  "version": "4.0.1",
+  "version": "4.0.2",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -29,7 +29,7 @@
     "@morpho-org/blue-sdk-viem": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@tanstack/react-query": "^5.0.0",
-    "react": "^18.0.0",
+    "react": "^18.0.0 || ^19.2.6",
     "viem": "^2.0.0",
     "wagmi": ">=2.12.10 <4.0.0"
   },
@@ -40,18 +40,18 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
-    "@tanstack/query-core": "^5.62.16",
-    "@tanstack/react-query": "^5.62.11",
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/react": "^16.1.0",
-    "@types/react": "^19.0.7",
-    "@types/react-dom": "^19.0.2",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "typescript": "^5.9.3",
-    "viem": "^2.41.2",
-    "vitest": "^4.1.4",
-    "wagmi": "^3.1.0"
+    "@tanstack/query-core": "^5.100.10",
+    "@tanstack/react-query": "^5.100.10",
+    "@testing-library/dom": "^10.4.1",
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "typescript": "^6.0.3",
+    "viem": "^2.49.3",
+    "vitest": "^4.1.6",
+    "wagmi": "^3.6.15"
   },
   "publishConfig": {
     "exports": {

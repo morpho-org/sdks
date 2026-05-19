@@ -5,29 +5,38 @@ on:
     secrets:
       MAINNET_RPC_URL:
         required: true
+      BASE_RPC_URL:
+        required: true
+      ARBITRUM_RPC_URL:
+        required: true
+
+permissions:
+  contents: read
 
 jobs:
   vitest:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
 
-      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6
 
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version-file: .nvmrc
           cache: pnpm
 
       - name: Restore Foundry cache
-        uses: actions/cache/restore@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.foundry/cache/rpc
           key: foundry-${{ github.job }}-${{ github.sha }}
           restore-keys: foundry-${{ github.job }}-
 
-      - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
+      - uses: foundry-rs/foundry-toolchain@c7450ba673e133f5ee30098b3b54f444d3a2ca2d # v1
         with:
           cache: false # Disable built-in cache to always save it.
 
@@ -42,7 +51,7 @@ jobs:
 
       - name: Save Foundry cache
         if: always()
-        uses: actions/cache/save@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
         with:
           path: ~/.foundry/cache/rpc
           key: foundry-${{ github.job }}-${{ github.sha }}

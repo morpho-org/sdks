@@ -8,7 +8,7 @@ vi.mock("@morpho-org/blue-sdk", async (importOriginal) => {
 });
 
 import { BlacklistViolationError } from "../../errors.js";
-import { makeTransferLog } from "../../test-helpers/index.js";
+import { makeCall, makeTransferLog } from "../../test-helpers/index.js";
 import { parseTransfers } from "../parsing/transfers.js";
 import { assertNoBundlerRetention } from "./bundler-retention.js";
 
@@ -22,7 +22,14 @@ const BUNDLER = getAddress(getChainAddresses(1).bundler3.bundler3) as Address;
 describe("assertNoBundlerRetention", () => {
   it("does not throw for transfers to non-blacklisted addresses", () => {
     const transfers = parseTransfers([
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: VAULT,
+          amount: 1000000n,
+        }),
+      ]),
     ]);
     expect(() =>
       assertNoBundlerRetention({ chainId: 1, transfers }),
@@ -31,7 +38,9 @@ describe("assertNoBundlerRetention", () => {
 
   it("does not throw for dust amounts to blacklisted addresses", () => {
     const transfers = parseTransfers([
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 50n }),
+      makeCall([
+        makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 50n }),
+      ]),
     ]);
     expect(() =>
       assertNoBundlerRetention({ chainId: 1, transfers }),
@@ -46,7 +55,14 @@ describe("assertNoBundlerRetention", () => {
 
   it("does not throw for unsupported chain (no blacklist)", () => {
     const transfers = parseTransfers([
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: VAULT,
+          amount: 1000000n,
+        }),
+      ]),
     ]);
     expect(() =>
       assertNoBundlerRetention({ chainId: 999999, transfers }),
@@ -59,7 +75,14 @@ describe("assertNoBundlerRetention", () => {
     });
 
     const transfers = parseTransfers([
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: VAULT,
+          amount: 1000000n,
+        }),
+      ]),
     ]);
 
     expect(() => assertNoBundlerRetention({ chainId: 1, transfers })).toThrow(
@@ -69,18 +92,20 @@ describe("assertNoBundlerRetention", () => {
 
   it("does not throw when bundler passes tokens through (net zero)", () => {
     const transfers = parseTransfers([
-      makeTransferLog({
-        token: USDC,
-        from: USER,
-        to: BUNDLER,
-        amount: 1000000n,
-      }),
-      makeTransferLog({
-        token: USDC,
-        from: BUNDLER,
-        to: VAULT,
-        amount: 1000000n,
-      }),
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: BUNDLER,
+          amount: 1000000n,
+        }),
+        makeTransferLog({
+          token: USDC,
+          from: BUNDLER,
+          to: VAULT,
+          amount: 1000000n,
+        }),
+      ]),
     ]);
     expect(() =>
       assertNoBundlerRetention({ chainId: 1, transfers }),
@@ -89,12 +114,14 @@ describe("assertNoBundlerRetention", () => {
 
   it("throws when bundler retains tokens above dust threshold", () => {
     const transfers = parseTransfers([
-      makeTransferLog({
-        token: USDC,
-        from: USER,
-        to: BUNDLER,
-        amount: 1000000n,
-      }),
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: BUNDLER,
+          amount: 1000000n,
+        }),
+      ]),
     ]);
     expect(() => assertNoBundlerRetention({ chainId: 1, transfers })).toThrow(
       BlacklistViolationError,
@@ -103,18 +130,20 @@ describe("assertNoBundlerRetention", () => {
 
   it("throws when bundler retains partial amount above dust", () => {
     const transfers = parseTransfers([
-      makeTransferLog({
-        token: USDC,
-        from: USER,
-        to: BUNDLER,
-        amount: 1000000n,
-      }),
-      makeTransferLog({
-        token: USDC,
-        from: BUNDLER,
-        to: VAULT,
-        amount: 500000n,
-      }),
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: BUNDLER,
+          amount: 1000000n,
+        }),
+        makeTransferLog({
+          token: USDC,
+          from: BUNDLER,
+          to: VAULT,
+          amount: 500000n,
+        }),
+      ]),
     ]);
     // Net retention: 500000 > DUST_THRESHOLD (100)
     expect(() => assertNoBundlerRetention({ chainId: 1, transfers })).toThrow(
@@ -124,8 +153,15 @@ describe("assertNoBundlerRetention", () => {
 
   it("does not throw when bundler retention is below dust threshold", () => {
     const transfers = parseTransfers([
-      makeTransferLog({ token: USDC, from: USER, to: BUNDLER, amount: 150n }),
-      makeTransferLog({ token: USDC, from: BUNDLER, to: VAULT, amount: 100n }),
+      makeCall([
+        makeTransferLog({ token: USDC, from: USER, to: BUNDLER, amount: 150n }),
+        makeTransferLog({
+          token: USDC,
+          from: BUNDLER,
+          to: VAULT,
+          amount: 100n,
+        }),
+      ]),
     ]);
     // Net retention: 50 <= DUST_THRESHOLD (100)
     expect(() =>
@@ -137,13 +173,15 @@ describe("assertNoBundlerRetention", () => {
     // Bundler sends more than it receives in this bundle — implies a
     // pre-existing balance is being drawn down. Red flag.
     const transfers = parseTransfers([
-      makeTransferLog({
-        token: USDC,
-        from: BUNDLER,
-        to: VAULT,
-        amount: 1000000n,
-      }),
-      // No corresponding inbound — bundler had pre-existing balance.
+      makeCall([
+        makeTransferLog({
+          token: USDC,
+          from: BUNDLER,
+          to: VAULT,
+          amount: 1000000n,
+        }),
+        // No corresponding inbound — bundler had pre-existing balance.
+      ]),
     ]);
     expect(() => assertNoBundlerRetention({ chainId: 1, transfers })).toThrow(
       BlacklistViolationError,
@@ -152,26 +190,28 @@ describe("assertNoBundlerRetention", () => {
 
   it("flags retention per (bundler,token) pair — tokenA retained, tokenB clean", () => {
     const transfers = parseTransfers([
-      // USDC retained: 1M in, 0 out
-      makeTransferLog({
-        token: USDC,
-        from: USER,
-        to: BUNDLER,
-        amount: 1000000n,
-      }),
-      // DAI clean: 1M in, 1M out (net zero)
-      makeTransferLog({
-        token: DAI,
-        from: USER,
-        to: BUNDLER,
-        amount: 1000000n,
-      }),
-      makeTransferLog({
-        token: DAI,
-        from: BUNDLER,
-        to: VAULT,
-        amount: 1000000n,
-      }),
+      makeCall([
+        // USDC retained: 1M in, 0 out
+        makeTransferLog({
+          token: USDC,
+          from: USER,
+          to: BUNDLER,
+          amount: 1000000n,
+        }),
+        // DAI clean: 1M in, 1M out (net zero)
+        makeTransferLog({
+          token: DAI,
+          from: USER,
+          to: BUNDLER,
+          amount: 1000000n,
+        }),
+        makeTransferLog({
+          token: DAI,
+          from: BUNDLER,
+          to: VAULT,
+          amount: 1000000n,
+        }),
+      ]),
     ]);
 
     try {
@@ -189,7 +229,9 @@ describe("assertNoBundlerRetention", () => {
 
   it("BlacklistViolationError.assetChanges includes {address, token, netRetained}", () => {
     const transfers = parseTransfers([
-      makeTransferLog({ token: USDC, from: USER, to: BUNDLER, amount: 777n }),
+      makeCall([
+        makeTransferLog({ token: USDC, from: USER, to: BUNDLER, amount: 777n }),
+      ]),
     ]);
 
     try {

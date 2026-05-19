@@ -9,6 +9,7 @@ import {
   type VaultV2WithdrawAction,
 } from "../../types/index.js";
 
+/** Parameters for {@link vaultV2Withdraw}. */
 export interface VaultV2WithdrawParams {
   vault: {
     address: Address;
@@ -22,22 +23,29 @@ export interface VaultV2WithdrawParams {
 }
 
 /**
- * Prepares a withdraw transaction for the VaultV2 contract.
+ * Prepares a withdraw transaction for a VaultV2 contract.
  *
- * This function constructs the transaction data required to withdraw a specified amount of assets from the vault.
+ * Direct vault call — not routed through the bundler. Withdraw has no inflation-attack surface,
+ * so skipping the bundler avoids an unnecessary approval and keeps the UX clean.
  *
- * IMPORTANT FOR DEVELOPERS:
- * This flow is not routed through the bundler because the risks are negligible since these operations cannot be affected by attacks. This avoids unnecessary approvals and keeps the UX clean.
+ * @param params.vault.address - The VaultV2 address.
+ * @param params.args.amount - Amount of underlying assets to withdraw.
+ * @param params.args.recipient - Address that receives the withdrawn assets.
+ * @param params.args.onBehalf - Address whose shares are burned.
+ * @param params.metadata - Optional analytics metadata attached to the transaction.
+ * @returns A deep-frozen `Transaction<VaultV2WithdrawAction>` with `to`, `value`, `data`, and the
+ *   typed `action` discriminator the simulation layer consumes.
+ * @throws {NonPositiveAssetAmountError} when `amount <= 0n`.
+ * @example
+ * ```ts
+ * import { vaultV2Withdraw } from "@morpho-org/morpho-sdk";
  *
- * @param {Object} params - The vault related parameters.
- * @param {Object} params.vault - The vault related parameters.
- * @param {Address} params.vault.address - The vault address.
- * @param {Object} params.args - The withdraw related parameters.
- * @param {bigint} params.args.amount - The amount of assets to withdraw.
- * @param {Address} params.args.recipient - The recipient address.
- * @param {Address} params.args.onBehalf - The address on behalf of which the withdraw is made.
- * @param {Metadata} [params.metadata] - Optional the metadata.
- * @returns {Readonly<Transaction<VaultV2WithdrawAction>>} The prepared withdraw transaction.
+ * const tx = vaultV2Withdraw({
+ *   vault: { address: vaultAddress },
+ *   args: { amount: 500_000n, recipient, onBehalf },
+ * });
+ * // tx satisfies Readonly<Transaction<VaultV2WithdrawAction>>
+ * ```
  */
 export const vaultV2Withdraw = ({
   vault: { address: vaultAddress },

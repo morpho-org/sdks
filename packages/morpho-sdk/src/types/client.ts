@@ -7,6 +7,10 @@ import type {
 } from "../entities/index.js";
 import type { Metadata } from "./index.js";
 
+/**
+ * Structural contract every concrete `MorphoClient` implementation satisfies. Carries the viem
+ * client, the resolved options bag, and the three entity-factory methods the SDK exposes.
+ */
 export interface MorphoClientType {
   readonly viemClient: Client;
   readonly options: {

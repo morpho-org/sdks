@@ -40,11 +40,23 @@ const USER: Address = "0x1111111111111111111111111111111111111111";
 const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const SPENDER: Address = "0x3333333333333333333333333333333333333333";
 
+// `makeSuccessResult` is a single-tx convenience. For multi-tx, build
+// `calls` inline (see "attributes Transfer.txIdx" below).
 function makeSuccessResult(
   logs: RawLog[] = [],
   tenderlyUrl?: string,
 ): RawSimulationResult {
-  return { logs, tenderlyUrl };
+  return {
+    calls: [
+      {
+        logs,
+        status: true,
+        returnData: "0x",
+        gasUsed: 0n,
+      },
+    ],
+    tenderlyUrl,
+  };
 }
 
 function makeConfig(
@@ -118,6 +130,76 @@ describe.sequential("simulate — success", () => {
     expect(callArgs.shareable).toBe(true);
   });
 
+  it("attributes Transfer.txIdx to the emitting tx in a multi-tx bundle", async () => {
+    const APPROVE_AMOUNT = 1_000_000n;
+    const TRANSFER_AMOUNT = 500_000n;
+
+    // Two calls: tx 0 emits a Transfer of APPROVE_AMOUNT, tx 1 emits a
+    // Transfer of TRANSFER_AMOUNT. The emitting index must round-trip.
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [
+        {
+          logs: [
+            makeTransferLog({
+              token: USDC,
+              from: USER,
+              to: SPENDER,
+              amount: APPROVE_AMOUNT,
+            }),
+          ],
+          status: true,
+          returnData: "0x",
+          gasUsed: 0n,
+        },
+        {
+          logs: [
+            makeTransferLog({
+              token: USDC,
+              from: USER,
+              to: VAULT,
+              amount: TRANSFER_AMOUNT,
+            }),
+          ],
+          status: true,
+          returnData: "0x",
+          gasUsed: 0n,
+        },
+      ],
+    });
+
+    const result = await simulate(
+      makeConfig(),
+      makeParams({
+        transactions: [
+          { from: USER, to: USDC, data: "0x095ea7b3" as Hex },
+          { from: USER, to: VAULT, data: "0xa9059cbb" as Hex },
+        ],
+      }),
+    );
+
+    expect(result.calls).toHaveLength(2);
+
+    // Pin calls↔txs 1:1 ordering directly so a regression in either contract
+    // (ordering vs. txIdx attribution) surfaces independently.
+    expect(result.calls[0]!.logs).toHaveLength(1);
+    expect(result.calls[0]!.logs[0]!.topics[0]).toBe(
+      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+    );
+    expect(result.calls[1]!.logs).toHaveLength(1);
+    expect(result.calls[1]!.logs[0]!.topics[0]).toBe(
+      "0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef",
+    );
+
+    const approveTransfer = result.transfers.find(
+      (t) => t.amount === APPROVE_AMOUNT,
+    );
+    const mainTransfer = result.transfers.find(
+      (t) => t.amount === TRANSFER_AMOUNT,
+    );
+    expect(approveTransfer?.txIdx).toBe(0);
+    expect(mainTransfer?.txIdx).toBe(1);
+  });
+
   it("throws BlacklistViolationError end-to-end when backend logs show bundler retention", async () => {
     // Pin the pipeline wiring: simulate() must invoke assertNoBundlerRetention
     // on the parsed transfers and surface BlacklistViolationError. Without
@@ -143,10 +225,19 @@ describe.sequential("simulate — success", () => {
 
 describe.sequential("simulate — authorizations", () => {
   it("resolves signature authorizations into prepended approve() calls", async () => {
-    const logs = [
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
-    ];
-    mockTenderlyRest.mockResolvedValueOnce(makeSuccessResult(logs));
+    const transferLog = makeTransferLog({
+      token: USDC,
+      from: USER,
+      to: VAULT,
+      amount: 1000000n,
+    });
+    // 2 txs: approve (no logs) + main (transfer log)
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+        { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
+      ],
+    });
 
     const auths: SimulationAuthorization[] = [
       { type: "signature", token: USDC, spender: SPENDER },
@@ -174,10 +265,20 @@ describe.sequential("simulate — authorizations", () => {
   });
 
   it("passes approval-type authorization txs through as-is (USDT-style reset)", async () => {
-    const logs = [
-      makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 1000000n }),
-    ];
-    mockTenderlyRest.mockResolvedValueOnce(makeSuccessResult(logs));
+    const transferLog = makeTransferLog({
+      token: USDC,
+      from: USER,
+      to: VAULT,
+      amount: 1000000n,
+    });
+    // 3 txs: reset-approve (no logs) + approve (no logs) + main (transfer log)
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+        { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
+      ],
+    });
 
     const resetApproveTx = {
       from: USER,
@@ -229,6 +330,21 @@ describe.sequential("simulate — error handling", () => {
     await expect(simulate(makeConfig(), makeParams())).rejects.toThrow(
       ExternalServiceError,
     );
+  });
+
+  it("error: ExternalServiceError when backend returns fewer calls than transactions", async () => {
+    // Simulate a partial/malformed backend response: 1 call for 2 txs
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [{ logs: [], status: true, returnData: "0x", gasUsed: 0n }],
+    });
+
+    const auths: SimulationAuthorization[] = [
+      { type: "signature", token: USDC, spender: SPENDER },
+    ];
+
+    await expect(
+      simulate(makeConfig(), makeParams({ authorizations: auths })),
+    ).rejects.toThrow(ExternalServiceError);
   });
 
   it("throws SimulationRevertedError even when signature authorizations are present", async () => {
@@ -382,13 +498,19 @@ describe.sequential("simulate — validation", () => {
   });
 
   it("accepts mixed-case from addresses that checksum to the same address", async () => {
-    mockTenderlyRest.mockResolvedValueOnce(makeSuccessResult([]));
-
     // Real mixed-case address — checksum form vs lowercase differ byte-for-byte,
     // so the case-normalization path is actually exercised.
     const checksum: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
     const lower = checksum.toLowerCase() as Address;
     expect(checksum).not.toBe(lower); // sanity
+
+    // 2 txs — mock must return 2 calls to satisfy the length check
+    mockTenderlyRest.mockResolvedValueOnce({
+      calls: [
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+        { logs: [], status: true, returnData: "0x", gasUsed: 0n },
+      ],
+    });
 
     await expect(
       simulate(

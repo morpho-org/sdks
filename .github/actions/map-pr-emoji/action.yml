@@ -1,0 +1,57 @@
+name: Map PR Title to Emoji
+description: Maps a PR title to a scope/type-based Slack emoji
+
+inputs:
+  pr-title:
+    description: The PR title (following the title convention)
+    required: true
+
+outputs:
+  emoji:
+    description: The Slack emoji code (e.g., :bank:, :sparkles:)
+    value: ${{ steps.map.outputs.emoji }}
+
+runs:
+  using: composite
+  steps:
+    - name: Map title to emoji
+      id: map
+      shell: bash
+      env:
+        PR_TITLE: ${{ inputs.pr-title }}
+      run: |
+        SCOPE_RE='^([a-zA-Z]+)\(([^)]+)\)'
+        TYPE_RE='^([a-zA-Z]+):'
+        if [[ "$PR_TITLE" =~ $SCOPE_RE ]]; then
+          TYPE="${BASH_REMATCH[1]}"
+          SCOPE="${BASH_REMATCH[2]}"
+        elif [[ "$PR_TITLE" =~ $TYPE_RE ]]; then
+          TYPE="${BASH_REMATCH[1]}"
+          SCOPE=""
+        else
+          TYPE=""
+          SCOPE=""
+        fi
+
+        # Scope-specific emoji (takes priority)
+        case "$SCOPE" in
+          curator|curator-v2|cv1|cv2) echo "emoji=:bank:" >> $GITHUB_OUTPUT; exit 0 ;;
+          markets|markets-v2) echo "emoji=:bar_chart:" >> $GITHUB_OUTPUT; exit 0 ;;
+          liquidation) echo "emoji=:droplet:" >> $GITHUB_OUTPUT; exit 0 ;;
+          delegate) echo "emoji=:handshake:" >> $GITHUB_OUTPUT; exit 0 ;;
+          web3) echo "emoji=:link:" >> $GITHUB_OUTPUT; exit 0 ;;
+          ui) echo "emoji=:art:" >> $GITHUB_OUTPUT; exit 0 ;;
+        esac
+
+        # Type-based emoji fallback
+        case "$TYPE" in
+          feat) echo "emoji=:sparkles:" >> $GITHUB_OUTPUT ;;
+          fix) echo "emoji=:bug:" >> $GITHUB_OUTPUT ;;
+          refactor) echo "emoji=:recycle:" >> $GITHUB_OUTPUT ;;
+          chore) echo "emoji=:broom:" >> $GITHUB_OUTPUT ;;
+          docs) echo "emoji=:memo:" >> $GITHUB_OUTPUT ;;
+          test) echo "emoji=:test_tube:" >> $GITHUB_OUTPUT ;;
+          ci) echo "emoji=:gear:" >> $GITHUB_OUTPUT ;;
+          perf) echo "emoji=:zap:" >> $GITHUB_OUTPUT ;;
+          *) echo "emoji=:rocket:" >> $GITHUB_OUTPUT ;;
+        esac
