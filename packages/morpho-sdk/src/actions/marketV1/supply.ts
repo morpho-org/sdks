@@ -11,7 +11,7 @@ import {
   type MarketV1SupplyAction,
   type Metadata,
   NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
+  NonPositiveSupplyAmountError,
   NonPositiveSupplyMaxSharePriceError,
   type RequirementSignature,
   type Transaction,
@@ -59,7 +59,7 @@ export interface MarketV1SupplyParams {
  * @param params.metadata - Optional analytics metadata attached to the bundle.
  * @returns A deep-frozen `Transaction<MarketV1SupplyAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
+ * @throws {NonPositiveSupplyAmountError} when `amount < 0n`.
  * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
  * @throws {ZeroSupplyAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @throws {NonPositiveSupplyMaxSharePriceError} when `maxSharePrice <= 0n`.
@@ -97,7 +97,7 @@ export const marketV1Supply = ({
   metadata,
 }: MarketV1SupplyParams): Readonly<Transaction<MarketV1SupplyAction>> => {
   if (amount < 0n) {
-    throw new NonPositiveAssetAmountError(marketParams.loanToken);
+    throw new NonPositiveSupplyAmountError(marketParams.id);
   }
 
   if (nativeAmount !== undefined && nativeAmount < 0n) {

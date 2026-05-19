@@ -73,6 +73,7 @@ import {
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
   NonPositiveRepayAmountError,
+  NonPositiveSupplyAmountError,
   NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
   type ReallocationComputeOptions,
@@ -470,7 +471,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
-      throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
+      throw new NonPositiveSupplyAmountError(this.marketParams.id);
     }
 
     if (nativeAmount !== undefined && nativeAmount < 0n) {
@@ -539,20 +540,16 @@ export class MorphoMarketV1 implements MarketV1Actions {
       reallocations,
     } = params;
 
-    if ("assets" in params && "shares" in params) {
+    // Value-based mode detection guards against JS callers passing `{ assets: undefined }`
+    // or `{ shares: undefined }` — TS prevents this but the runtime check seals the gap.
+    const assets = "assets" in params ? params.assets : 0n;
+    const shares = "shares" in params ? params.shares : 0n;
+
+    if (assets > 0n && shares > 0n) {
       throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
     }
-
-    const isSharesMode = "shares" in params;
-
-    if (isSharesMode) {
-      if (params.shares <= 0n) {
-        throw new NonPositiveWithdrawAmountError(this.marketParams.id);
-      }
-    } else {
-      if (params.assets <= 0n) {
-        throw new NonPositiveWithdrawAmountError(this.marketParams.id);
-      }
+    if (assets <= 0n && shares <= 0n) {
+      throw new NonPositiveWithdrawAmountError(this.marketParams.id);
     }
 
     validateSlippageTolerance(slippageTolerance);
@@ -567,25 +564,18 @@ export class MorphoMarketV1 implements MarketV1Actions {
       expectedUser: userAddress,
     });
 
-    let assets: bigint;
-    let shares: bigint;
-
-    if (isSharesMode) {
+    if (shares > 0n) {
       validateWithdrawShares({
         positionData,
-        withdrawShares: params.shares,
+        withdrawShares: shares,
         marketId: this.marketParams.id,
       });
-      assets = 0n;
-      shares = params.shares;
     } else {
       validateWithdrawAmount({
         positionData,
-        withdrawAssets: params.assets,
+        withdrawAssets: assets,
         marketId: this.marketParams.id,
       });
-      assets = params.assets;
-      shares = 0n;
     }
 
     const minSharePrice = computeMinWithdrawSharePrice({

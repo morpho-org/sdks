@@ -372,8 +372,8 @@ export class MissingPublicAllocatorConfigError extends Error {
 
 /**
  * Thrown when shared liquidity selected by `computeReallocations` cannot cover
- * the absolute borrow shortfall on the target market — the resulting
- * `morphoBorrow` would still revert onchain.
+ * the operation's absolute shortfall on the target market — the resulting
+ * `morphoBorrow` or `morphoWithdraw` would still revert onchain.
  *
  * Pattern-match on the class and inspect `params` to surface the gap to users.
  */
@@ -386,7 +386,7 @@ export class InsufficientSharedLiquidityError extends Error {
     },
   ) {
     super(
-      `Shared liquidity is insufficient to cover the borrow on market ${params.marketId}: shortfall "${params.shortfall}", available "${params.available}". Reduce the borrow amount or wait for additional vault liquidity.`,
+      `Shared liquidity is insufficient on market ${params.marketId}: shortfall "${params.shortfall}", available "${params.available}". Reduce the operation amount or wait for additional vault liquidity.`,
     );
   }
 }

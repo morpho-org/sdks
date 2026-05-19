@@ -75,11 +75,10 @@ export interface MarketV1WithdrawParams {
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
  * @throws {NonPositiveWithdrawMinSharePriceError} when `minSharePrice < 0n` (zero is allowed despite
  *   the class name — pattern preserved for symmetry with `marketV1Borrow`).
- * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when any reallocation fee is negative.
- * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any reallocation has no withdrawals.
- * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any withdrawal amount <= 0.
- * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when a reallocation withdrawal references the target market.
- * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when withdrawals are not strictly sorted by market id.
+ * @throws Reallocation errors from `buildReallocationActions` when `reallocations` is malformed
+ *   (see its JSDoc: `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`,
+ *   `NonPositiveReallocationAmountError`, `ReallocationWithdrawalOnTargetMarketError`,
+ *   `UnsortedReallocationWithdrawalsError`).
  * @example
  * ```ts
  * import { marketV1Withdraw } from "@morpho-org/morpho-sdk";

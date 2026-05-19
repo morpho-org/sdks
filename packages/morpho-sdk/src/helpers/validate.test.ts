@@ -495,7 +495,7 @@ describe("validateReallocations", () => {
     ).toThrow(NonPositiveReallocationAmountError);
   });
 
-  test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets borrow market", () => {
+  test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets the target market", () => {
     expect(() =>
       validateReallocations(
         [
