@@ -36,22 +36,6 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
-      - name: Record trusted PATH baseline
-        id: path-baseline
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # Capture PATH before `pnpm install` runs dependency lifecycle
-          # scripts, which could append an attacker-controlled directory to
-          # $GITHUB_PATH (persisted across steps). Privileged release steps
-          # pin PATH to this pre-install value.
-          {
-            echo "safe_path<<PATH_EOF"
-            echo "${PATH}"
-            echo "PATH_EOF"
-          } >> "${GITHUB_OUTPUT}"
-
       - run: pnpm install --frozen-lockfile
 
       - name: Detect pending changesets
@@ -113,13 +97,11 @@ jobs:
           # `pnpm run version` can read it from process.env.
           GITHUB_TOKEN: ${{ steps.changelog-token.outputs.token }}
 
-      - name: Harden workspace before release write token
+      - name: Verify release helper scripts
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         shell: bash
         env:
           EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
-          EXPECTED_RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
-          PATH: ${{ steps.path-baseline.outputs.safe_path }}
         run: |
           set -euo pipefail
 
@@ -135,17 +117,10 @@ jobs:
             exit 1
           fi
 
-          {
-            echo "RELEASE_BRANCH=${EXPECTED_RELEASE_BRANCH}"
-            echo "TARGET_BRANCH=${{ github.ref_name }}"
-          } >> "${GITHUB_ENV}"
-
       - name: Generate Release GitHub App Token
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
-        env:
-          PATH: ${{ steps.path-baseline.outputs.safe_path }}
         with:
           app-id: ${{ secrets.VERSION_APP_ID }}
           private-key: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
@@ -157,31 +132,26 @@ jobs:
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PATH: ${{ steps.path-baseline.outputs.safe_path }}
-          RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
         run: node scripts/release/create-version-commit.mjs
 
       - name: Open or update release PR
         if: steps.version-commit.outputs.has_version_changes == 'true'
         shell: bash
         env:
-          BASE_BRANCH: ${{ github.ref_name }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PATH: ${{ steps.path-baseline.outputs.safe_path }}
-          RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
         run: |
           set -euo pipefail
 
-          title="chore: version packages (${BASE_BRANCH})"
+          title="chore: version packages (${TARGET_BRANCH})"
           body="$(cat <<BODY
-          This PR applies the pending changesets for ${BASE_BRANCH}.
+          This PR applies the pending changesets for ${TARGET_BRANCH}.
 
           Merging it clears the consumed changesets and lets the publish workflow publish the already-versioned packages.
           BODY
           )"
 
           pr_number="$(gh pr list \
-            --base "${BASE_BRANCH}" \
+            --base "${TARGET_BRANCH}" \
             --head "${RELEASE_BRANCH}" \
             --state open \
             --json number \
@@ -191,7 +161,7 @@ jobs:
             gh pr edit "${pr_number}" --title "${title}" --body "${body}"
           else
             gh pr create \
-              --base "${BASE_BRANCH}" \
+              --base "${TARGET_BRANCH}" \
               --head "${RELEASE_BRANCH}" \
               --title "${title}" \
               --body "${body}"
