@@ -144,7 +144,7 @@ describe('MorphoProtocolEvm', () => {
         amount: 100_000n,
         nativeAmount: undefined,
         userAddress: ADDRESS,
-        accrualVault: vaultData,
+        vaultData,
         slippageTolerance: undefined
       })
       expect(account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX)
@@ -223,7 +223,7 @@ describe('MorphoProtocolEvm', () => {
         amount: 0n,
         nativeAmount: 100_000n,
         userAddress: ADDRESS,
-        accrualVault: expect.objectContaining({ asset: COLLATERAL }),
+        vaultData: expect.objectContaining({ asset: COLLATERAL }),
         slippageTolerance: undefined
       })
     })

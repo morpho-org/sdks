@@ -337,7 +337,8 @@ export default class MorphoProtocolEvm extends LendingProtocol {
       amount: depositAmounts.amount,
       nativeAmount: depositAmounts.nativeAmount,
       userAddress,
-      accrualVault,
+      // morpho-sdk v2 renamed `accrualVault` to `vaultData` on the VaultV2 deposit path.
+      vaultData: accrualVault,
       slippageTolerance: slippageTolerance ?? this._options.slippageTolerance
     })
   }
