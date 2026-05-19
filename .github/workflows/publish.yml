@@ -69,18 +69,9 @@ jobs:
         run: |
           set -euo pipefail
 
-          unexpected_hook=""
-          if [ -d .git/hooks ]; then
-            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
-          fi
-          if [ -n "${unexpected_hook}" ]; then
-            echo "::error::Unexpected git hook before git identity configuration."
-            find .git/hooks -type f ! -name '*.sample' -print
-            exit 1
-          fi
-
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config core.hooksPath /dev/null
 
       - name: Detect pending changesets
         id: pending-changesets
@@ -125,16 +116,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          unexpected_hook=""
-          if [ -d .git/hooks ]; then
-            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
-          fi
-          if [ -n "${unexpected_hook}" ]; then
-            echo "::error::Unexpected git hook before package publish."
-            find .git/hooks -type f ! -name '*.sample' -print
-            exit 1
-          fi
 
           publish_tag="latest"
           if [ "${TARGET_BRANCH}" = "next" ]; then
@@ -242,16 +223,6 @@ jobs:
         run: |
           set -euo pipefail
 
-          unexpected_hook=""
-          if [ -d .git/hooks ]; then
-            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
-          fi
-          if [ -n "${unexpected_hook}" ]; then
-            echo "::error::Unexpected git hook before package tag push."
-            find .git/hooks -type f ! -name '*.sample' -print
-            exit 1
-          fi
-
           mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           refs=()
 
@@ -265,7 +236,7 @@ jobs:
 
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           trap reset_origin_url EXIT
-          git push --atomic origin "${refs[@]}"
+          git -c core.hooksPath=/dev/null push --no-verify --atomic origin "${refs[@]}"
 
       - name: Upload package tag list
         if: steps.publish-packages.outputs.has_tags == 'true'
@@ -309,16 +280,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-
-          unexpected_hook=""
-          if [ -d .git/hooks ]; then
-            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
-          fi
-          if [ -n "${unexpected_hook}" ]; then
-            echo "::error::Unexpected git hook before GitHub release update."
-            find .git/hooks -type f ! -name '*.sample' -print
-            exit 1
-          fi
 
           mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           releases_dir="${RUNNER_TEMP}/github-releases"
