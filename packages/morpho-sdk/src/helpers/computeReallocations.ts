@@ -216,8 +216,13 @@ export const computeReallocations = ({
         return config.fee;
       })(),
       withdrawals: vaultWithdrawals
-        // Reallocation withdrawals must be sorted by market id in ascending order.
-        .sort(({ id: idA }, { id: idB }) => idA.localeCompare(idB))
+        // Reallocation withdrawals must be sorted by market id in ascending
+        // order. Use a byte-wise comparison, not `localeCompare`: the
+        // PublicAllocator contract orders by the market id's raw bytes, and
+        // `localeCompare` is locale-dependent and not guaranteed to match.
+        .sort(({ id: idA }, { id: idB }) =>
+          idA > idB ? 1 : idA < idB ? -1 : 0,
+        )
         .map(({ id, assets }) => ({
           marketParams: data.getMarket(id).params,
           amount: assets,

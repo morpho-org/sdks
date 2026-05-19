@@ -36,6 +36,7 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@morpho-org/simulation-sdk": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "dotenv": "^17.4.2",
     "typescript": "^6.0.3",

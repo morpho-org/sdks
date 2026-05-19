@@ -15,6 +15,7 @@ import {
   VaultMarketConfig,
   VaultMarketPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
+import { SimulationState as SimulationStateImport } from "@morpho-org/simulation-sdk";
 import type { Address } from "viem";
 import { maxUint256, zeroAddress } from "viem";
 import { describe, expect, test } from "vitest";
@@ -63,11 +64,10 @@ type LegacySimulationStateConstructor = new (input: {
   readonly vaultMarketConfigs: MutableReallocationInput["vaultMarketConfigs"];
 }) => LegacySimulationState;
 
-const simulationStateModulePath =
-  "../../../simulation-sdk/src/SimulationState.ts";
-const { SimulationState } = (await import(simulationStateModulePath)) as {
-  readonly SimulationState: LegacySimulationStateConstructor;
-};
+// `@morpho-org/simulation-sdk` is a dev-only dependency kept solely for this
+// parity suite; the published `morpho-sdk` package no longer depends on it.
+const SimulationState =
+  SimulationStateImport as unknown as LegacySimulationStateConstructor;
 
 const targetParams = new MarketParams({
   loanToken: LOAN_TOKEN,

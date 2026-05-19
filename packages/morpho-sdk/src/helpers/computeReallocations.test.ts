@@ -255,6 +255,56 @@ describe("computeReallocations", () => {
       const [first, second] = result[0]!.withdrawals;
       expect(first!.marketParams.id < second!.marketParams.id).toBe(true);
     });
+
+    test("behavior: sorts 3+ source markets strictly ascending by market id", () => {
+      // Locks the byte-wise market-id comparator: PublicAllocator.reallocateTo
+      // rejects a vault's withdrawals when they are not strictly ascending by
+      // market id, so a locale-dependent sort can revert a valid plan.
+      const borrowAmount = 500n * MathLib.WAD;
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        // Provided in scrambled order — output must be sorted by market id.
+        friendlyWithdrawals: [
+          { id: sourceC.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+          { id: sourceB.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 0n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        borrowAmount,
+        options: {
+          enabled: true,
+          // Low supply target → requiredAssets covers all three withdrawals
+          // so none is dropped by capping.
+          defaultSupplyTargetUtilization: MathLib.WAD / 2n,
+        },
+      });
+
+      expect(result).toHaveLength(1);
+
+      const ids = result[0]!.withdrawals.map(
+        ({ marketParams }) => marketParams.id,
+      );
+      expect(ids).toHaveLength(3);
+
+      // Order-sensitive: output equals the byte-wise ascending order, and
+      // every adjacent pair is strictly increasing.
+      const sorted = [...ids].sort((a, b) => (a > b ? 1 : a < b ? -1 : 0));
+      expect(ids).toEqual(sorted);
+      for (let i = 1; i < ids.length; i++) {
+        expect(ids[i - 1]! < ids[i]!).toBe(true);
+      }
+    });
   });
 
   // ---------------------------------------------------------------------------
