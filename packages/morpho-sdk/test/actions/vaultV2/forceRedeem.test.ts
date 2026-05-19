@@ -1,4 +1,5 @@
-import { MarketParams } from "@morpho-org/blue-sdk";
+import { type AccrualVaultV2, MarketParams } from "@morpho-org/blue-sdk";
+import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
@@ -6,6 +7,19 @@ import { MorphoClient, vaultV2ForceRedeem } from "../../../src/index.js";
 import { ReEcosystemUsdcVaultV2 } from "../../fixtures/vaultV2.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
+
+// Accrue VaultV2 to the current block timestamp so `toShares` matches the
+// post-accrue math the contract will run at redeem block (≈ same block here).
+const accruedToShares = async (params: {
+  client: AnvilTestClient;
+  vaultData: AccrualVaultV2;
+  assets: bigint;
+}) => {
+  const { client, vaultData, assets } = params;
+  const block = await client.getBlock();
+  const { vault } = vaultData.accrueInterest(block.timestamp);
+  return vault.toShares(assets);
+};
 
 describe("ForceRedeem VaultV2", () => {
   // MarketV1 adapter addresses
@@ -34,7 +48,11 @@ describe("ForceRedeem VaultV2", () => {
     const vaultV2 = morpho.vaultV2(ReEcosystemUsdcVaultV2.address, mainnet.id);
 
     const vaultV2Data = await vaultV2.getData();
-    const redeemShares = vaultV2Data.toShares(assetsDeallocate);
+    const redeemShares = await accruedToShares({
+      client,
+      vaultData: vaultV2Data,
+      assets: assetsDeallocate,
+    });
 
     await client.deal({
       erc20: ReEcosystemUsdcVaultV2.address,
@@ -96,7 +114,11 @@ describe("ForceRedeem VaultV2", () => {
     const vaultV2 = morpho.vaultV2(ReEcosystemUsdcVaultV2.address, mainnet.id);
 
     const vaultV2Data = await vaultV2.getData();
-    const redeemShares = vaultV2Data.toShares(assets);
+    const redeemShares = await accruedToShares({
+      client,
+      vaultData: vaultV2Data,
+      assets,
+    });
 
     await client.deal({
       erc20: ReEcosystemUsdcVaultV2.address,
@@ -136,7 +158,7 @@ describe("ForceRedeem VaultV2", () => {
       initialState.morphoAssetBalance - assets,
     );
     expect(finalStateVaultV1.userAssetBalance).toEqual(
-      initialStateVaultV1.userAssetBalance + assets - 1n, // -1 rounding
+      initialStateVaultV1.userAssetBalance + assets,
     );
     expect(finalState.userSharesBalance).toEqual(0n);
   });
@@ -152,7 +174,11 @@ describe("ForceRedeem VaultV2", () => {
     const vaultV2 = morpho.vaultV2(ReEcosystemUsdcVaultV2.address, mainnet.id);
 
     const vaultV2Data = await vaultV2.getData();
-    const redeemShares = vaultV2Data.toShares(totalDeallocated);
+    const redeemShares = await accruedToShares({
+      client,
+      vaultData: vaultV2Data,
+      assets: totalDeallocated,
+    });
 
     await client.deal({
       erc20: ReEcosystemUsdcVaultV2.address,

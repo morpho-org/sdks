@@ -126,7 +126,7 @@ See inline comments for details.
 If `<FAILED_AGENTS>` is non-zero, prepend to the body BEFORE the verdict:
 
 ```
-> WARNING: <FAILED_AGENTS> of 7 agents failed (<names>) — review may be incomplete.
+> WARNING: <FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed (<names>) — review may be incomplete.
 ```
 
 ### Submit

@@ -132,7 +132,6 @@ export async function fetchVaultV2(
     isVaultV2,
     asset,
     totalSupply,
-    totalAssets,
     _totalAssets,
     performanceFee,
     managementFee,
@@ -165,12 +164,6 @@ export async function fetchVaultV2(
       address,
       abi: vaultV2Abi,
       functionName: "totalSupply",
-    }),
-    readContract(client, {
-      ...parameters,
-      address,
-      abi: vaultV2Abi,
-      functionName: "totalAssets",
     }),
     readContract(client, {
       ...parameters,
@@ -338,7 +331,6 @@ export async function fetchVaultV2(
   return new VaultV2({
     ...token,
     asset,
-    totalAssets,
     _totalAssets,
     totalSupply,
     virtualShares,

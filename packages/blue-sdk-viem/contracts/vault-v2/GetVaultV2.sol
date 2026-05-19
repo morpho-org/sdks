@@ -28,7 +28,6 @@ struct VaultV2Allocation {
 struct VaultV2Response {
     Token token;
     address asset;
-    uint256 totalAssets;
     uint128 _totalAssets;
     uint256 totalSupply;
     uint256 virtualShares;
@@ -59,7 +58,6 @@ contract GetVaultV2 {
         res.token =
             Token({asset: vault.asset(), symbol: vault.symbol(), name: vault.name(), decimals: vault.decimals()});
         res.asset = vault.asset();
-        res.totalAssets = vault.totalAssets();
         res._totalAssets = vault._totalAssets();
         res.totalSupply = vault.totalSupply();
         res.virtualShares = vault.virtualShares();
