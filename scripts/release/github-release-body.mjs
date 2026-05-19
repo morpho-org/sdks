@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 
 import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
+import { getErrorMessage, isPathInside } from "./helpers.mjs";
 
 const DEFAULT_PACKAGES_DIR = "packages";
 const PACKAGE_TAG_SEPARATORS = ["@", "-v"];
@@ -140,14 +142,6 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function isPathInside(basePath, candidatePath) {
-  const relativePath = relative(basePath, candidatePath);
-  return (
-    relativePath === "" ||
-    (!relativePath.startsWith("..") && !isAbsolute(relativePath))
-  );
-}
-
 if (
   process.argv[1] != null &&
   import.meta.url === pathToFileURL(process.argv[1]).href
@@ -155,8 +149,7 @@ if (
   try {
     main();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
+    process.stderr.write(`${getErrorMessage(error)}\n`);
     process.exitCode = 1;
   }
 }

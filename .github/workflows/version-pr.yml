@@ -36,6 +36,22 @@ jobs:
           node-version-file: .nvmrc
           cache: pnpm
 
+      - name: Record trusted PATH baseline
+        id: path-baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Capture PATH before `pnpm install` runs dependency lifecycle
+          # scripts, which could append an attacker-controlled directory to
+          # $GITHUB_PATH (persisted across steps). Privileged release steps
+          # pin PATH to this pre-install value.
+          {
+            echo "safe_path<<PATH_EOF"
+            echo "${PATH}"
+            echo "PATH_EOF"
+          } >> "${GITHUB_OUTPUT}"
+
       - run: pnpm install --frozen-lockfile
 
       - name: Detect pending changesets
@@ -63,14 +79,20 @@ jobs:
         run: |
           set -euo pipefail
 
-          helper_sha="$(sha256sum scripts/release/create-version-commit.mjs | cut -d ' ' -f 1)"
+          # `create-version-commit.mjs` runs with the write-scoped token and
+          # imports the other release helper modules, so hash every module
+          # reachable from it — pinning the entrypoint alone leaves an
+          # imported `helpers.mjs` free to be tampered with by `pnpm run
+          # version`.
+          helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
 
-          {
-            echo "helper_sha=${helper_sha}"
-            echo "safe_path<<PATH_EOF"
-            echo "${PATH}"
-            echo "PATH_EOF"
-          } >> "${GITHUB_OUTPUT}"
+          echo "helper_sha=${helper_sha}" >> "${GITHUB_OUTPUT}"
 
       - name: Generate Changelog GitHub App Token
         if: steps.pending-changesets.outputs.has_changesets == 'true'
@@ -97,25 +119,20 @@ jobs:
         env:
           EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
           EXPECTED_RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
-          PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
+          PATH: ${{ steps.path-baseline.outputs.safe_path }}
         run: |
           set -euo pipefail
 
-          actual_helper_sha="$(sha256sum scripts/release/create-version-commit.mjs | cut -d ' ' -f 1)"
+          actual_helper_sha="$(
+            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
+              sort -z |
+              xargs -0 sha256sum |
+              sha256sum |
+              cut -d ' ' -f 1
+          )"
           if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
-            echo "::error::scripts/release/create-version-commit.mjs changed during versioning."
+            echo "::error::Release helper scripts under scripts/release changed during versioning."
             exit 1
-          fi
-
-          if [ -d .git/hooks ]; then
-            mapfile -t unexpected_hooks < <(find .git/hooks -mindepth 1 ! -name '*.sample' -print | sort)
-            if [ "${#unexpected_hooks[@]}" -gt 0 ]; then
-              echo "::error::Unexpected git hooks were created during versioning."
-              for hook in "${unexpected_hooks[@]}"; do
-                printf 'Unexpected hook: %q\n' "${hook}"
-              done
-              exit 1
-            fi
           fi
 
           {
@@ -128,7 +145,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
         env:
-          PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
+          PATH: ${{ steps.path-baseline.outputs.safe_path }}
         with:
           app-id: ${{ secrets.VERSION_APP_ID }}
           private-key: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
@@ -140,7 +157,7 @@ jobs:
         if: steps.pending-changesets.outputs.has_changesets == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
+          PATH: ${{ steps.path-baseline.outputs.safe_path }}
           RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
         run: node scripts/release/create-version-commit.mjs
 
@@ -150,7 +167,7 @@ jobs:
         env:
           BASE_BRANCH: ${{ github.ref_name }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
+          PATH: ${{ steps.path-baseline.outputs.safe_path }}
           RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
         run: |
           set -euo pipefail

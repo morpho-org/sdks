@@ -148,6 +148,32 @@ describe("readPreviousPackageManifest", () => {
       undefined,
     );
   });
+
+  test("error: rethrows a malformed previous manifest", () => {
+    const root = createTempDir();
+    mkdirSync(join(root, "packages/alpha"), { recursive: true });
+    writeFileSync(join(root, manifestPath), "{ not json");
+    runGit(["-c", "init.defaultBranch=main", "init"], root);
+    commitAll(root, "malformed manifest");
+    writeManifest(join(root, manifestPath), {
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    commitAll(root, "fix manifest");
+
+    expect(() =>
+      readPreviousPackageManifest({ cwd: root, manifestPath }),
+    ).toThrow(SyntaxError);
+  });
+
+  test("error: rethrows unexpected git failures", () => {
+    const root = createTempDir();
+    mkdirSync(join(root, "packages/alpha"), { recursive: true });
+
+    expect(() =>
+      readPreviousPackageManifest({ cwd: root, manifestPath }),
+    ).toThrow(/not a git repository/);
+  });
 });
 
 describe("computePendingTag", () => {

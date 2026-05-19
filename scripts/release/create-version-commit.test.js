@@ -542,6 +542,38 @@ describe("createSignedVersionCommit", () => {
     ]);
   });
 
+  test("error: missing commit oid in GraphQL response", async () => {
+    const requests = [];
+    const pushReleaseBranch = vi.fn();
+    const fetchImpl = createSignedCommitFetch({
+      graphqlBody: { data: { createCommitOnBranch: null } },
+      requests,
+    });
+
+    await expect(
+      createSignedVersionCommit({
+        apiBaseUrl: "https://api.github.test",
+        baseSha: "base-sha",
+        fetchImpl,
+        fileChanges: { additions: [], deletions: [] },
+        pushReleaseBranch,
+        releaseBranch: "changeset-release/main",
+        repository: "morpho-org/sdks",
+        tempBranch: "changeset-release/main-api-commit-test",
+        token: "token",
+      }),
+    ).rejects.toThrow(
+      'GitHub GraphQL createCommitOnBranch returned no commit oid: {"createCommitOnBranch":null}',
+    );
+    expect(pushReleaseBranch).not.toHaveBeenCalled();
+    expect(requests.map((request) => request.method)).toEqual([
+      "GET",
+      "POST",
+      "POST",
+      "DELETE",
+    ]);
+  });
+
   test("error: create ref lookup failure", async () => {
     const requests = [];
     const fetchImpl = createSignedCommitFetch({

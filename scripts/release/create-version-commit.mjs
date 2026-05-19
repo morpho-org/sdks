@@ -2,8 +2,10 @@
 
 import { execFileSync } from "node:child_process";
 import { appendFileSync, lstatSync, readFileSync, realpathSync } from "node:fs";
-import { isAbsolute, relative, resolve } from "node:path";
+import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+
+import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_COMMIT_MESSAGE = "chore: version packages";
@@ -173,7 +175,14 @@ export async function createSignedVersionCommit(options) {
         },
       },
     });
-    const commitOid = data.createCommitOnBranch.commit.oid;
+    const commitOid = data?.createCommitOnBranch?.commit?.oid;
+    if (typeof commitOid !== "string" || commitOid === "") {
+      throw new Error(
+        `GitHub GraphQL createCommitOnBranch returned no commit oid: ${summarizeResponseBody(
+          data,
+        )}`,
+      );
+    }
 
     pushReleaseBranch({
       commitOid,
@@ -233,34 +242,26 @@ export function pushReleaseBranchWithLease(options) {
       { cwd: options.cwd },
     );
 
+    // Lease against the current release-branch tip when it exists, or against
+    // an empty value (the branch must not exist yet) so a racing creation is
+    // rejected rather than silently overwritten.
+    let expectedSha = "";
     if (hasRemoteBranch({ branch: options.releaseBranch, cwd: options.cwd })) {
       runGit(["fetch", "origin", `+${remoteReleaseRef}:${localReleaseRef}`], {
         cwd: options.cwd,
       });
-      const expectedSha = runGit(["rev-parse", localReleaseRef], {
+      expectedSha = runGit(["rev-parse", localReleaseRef], {
         cwd: options.cwd,
       })
         .toString("utf8")
         .trim();
-
-      runGit(
-        [
-          "push",
-          "--no-verify",
-          `--force-with-lease=${remoteReleaseRef}:${expectedSha}`,
-          "origin",
-          `${options.commitOid}:${remoteReleaseRef}`,
-        ],
-        { cwd: options.cwd },
-      );
-      return;
     }
 
     runGit(
       [
         "push",
         "--no-verify",
-        `--force-with-lease=${remoteReleaseRef}:`,
+        `--force-with-lease=${remoteReleaseRef}:${expectedSha}`,
         "origin",
         `${options.commitOid}:${remoteReleaseRef}`,
       ],
@@ -539,9 +540,7 @@ function resolveWorktreePath(cwd, path) {
 }
 
 function assertPathInsideBase(options) {
-  const relativePath = relative(options.basePath, options.absolutePath);
-
-  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+  if (!isPathInside(options.basePath, options.absolutePath)) {
     throw new Error(`Invalid path "${options.path}".`);
   }
 }
@@ -599,19 +598,6 @@ function formatIndentedList(paths) {
   return paths.map((path) => `  ${sanitizeLogLine(path)}`).join("\n");
 }
 
-function sanitizeLogLine(value) {
-  let sanitized = "";
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    sanitized +=
-      codePoint != null && (codePoint <= 0x1f || codePoint === 0x7f)
-        ? "?"
-        : character;
-  }
-
-  return sanitized;
-}
-
 if (
   process.argv[1] != null &&
   import.meta.url === pathToFileURL(process.argv[1]).href
@@ -622,10 +608,6 @@ if (
     );
     process.exitCode = 1;
   });
-}
-
-function getErrorMessage(error) {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function sanitizeAnnotation(message) {

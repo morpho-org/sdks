@@ -4,6 +4,8 @@ import { appendFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { sanitizeLogLine } from "./helpers.mjs";
+
 const DEFAULT_CHANGESET_DIR = ".changeset";
 
 export function listPendingChangesets(options = {}) {
@@ -25,19 +27,6 @@ export function listPendingChangesets(options = {}) {
 export function getGitHubOutput(pendingChangesets) {
   const hasChangesets = pendingChangesets.length > 0 ? "true" : "false";
   return `has_changesets=${hasChangesets}\n`;
-}
-
-function sanitizeLogLine(value) {
-  let sanitized = "";
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    sanitized +=
-      codePoint != null && (codePoint <= 0x1f || codePoint === 0x7f)
-        ? "?"
-        : character;
-  }
-
-  return sanitized;
 }
 
 export function reportPendingChangesets(options = {}) {

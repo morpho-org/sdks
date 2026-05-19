@@ -5,8 +5,16 @@ import { lstatSync, readFileSync, realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { getErrorMessage, isPathInside } from "./helpers.mjs";
+
 const DEFAULT_BASE_REF = "HEAD^";
 const PACKAGE_MANIFEST_PATH_RE = /^packages\/[^/]+\/package\.json$/;
+// `git show <rev>:<path>` reports an absent base ref or an absent path with
+// one of these `fatal:` messages and exit code 128. Any other failure (git
+// missing, repository corruption, ...) must propagate rather than be treated
+// as "the package did not exist yet".
+const MISSING_REVISION_OR_PATH_RE =
+  /invalid object name|unknown revision|does not exist in|exists on disk, but not in/i;
 
 /**
  * Reads a package manifest from disk.
@@ -40,18 +48,27 @@ export function readPackageManifest(options) {
 export function readPreviousPackageManifest(options) {
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
   const manifestPath = resolveManifestPath(options);
+  let manifestSource;
 
   try {
-    return JSON.parse(
-      execFileSync("git", ["show", `${baseRef}:${manifestPath.relativePath}`], {
+    manifestSource = execFileSync(
+      "git",
+      ["show", `${baseRef}:${manifestPath.relativePath}`],
+      {
         cwd: options.cwd,
         encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
-      }),
+        stdio: ["ignore", "pipe", "pipe"],
+      },
     );
-  } catch {
-    return undefined;
+  } catch (error) {
+    if (isMissingRevisionOrPathError(error)) {
+      return undefined;
+    }
+
+    throw error;
   }
+
+  return JSON.parse(manifestSource);
 }
 
 /**
@@ -108,11 +125,24 @@ function resolveManifestPath(options) {
 }
 
 function assertPathInsideBase(options) {
-  const relativePath = relative(options.basePath, options.absolutePath);
-
-  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+  if (!isPathInside(options.basePath, options.absolutePath)) {
     throw new Error(`Invalid manifest path "${options.manifestPath}".`);
   }
+}
+
+function isMissingRevisionOrPathError(error) {
+  if (
+    typeof error !== "object" ||
+    error == null ||
+    !("status" in error) ||
+    error.status !== 128
+  ) {
+    return false;
+  }
+
+  const stderr = "stderr" in error ? error.stderr : undefined;
+
+  return typeof stderr === "string" && MISSING_REVISION_OR_PATH_RE.test(stderr);
 }
 
 /**
@@ -152,8 +182,7 @@ if (
   try {
     main();
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    process.stderr.write(`${message}\n`);
+    process.stderr.write(`${getErrorMessage(error)}\n`);
     process.exitCode = 1;
   }
 }
