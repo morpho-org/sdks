@@ -1,0 +1,184 @@
+import { execFileSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
+import {
+  computePendingTag,
+  main,
+  readPackageManifest,
+  readPreviousPackageManifest,
+} from "./compute-pending-tag.mjs";
+
+const tempDirs = [];
+const manifestPath = "packages/alpha/package.json";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+
+  for (const tempDir of tempDirs.splice(0)) {
+    rmSync(tempDir, { force: true, recursive: true });
+  }
+});
+
+describe("readPackageManifest", () => {
+  test("default", () => {
+    const root = createTempDir();
+    const absoluteManifestPath = join(root, manifestPath);
+    mkdirSync(join(root, "packages/alpha"), { recursive: true });
+    writeManifest(absoluteManifestPath, {
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+
+    expect(readPackageManifest({ manifestPath: absoluteManifestPath })).toEqual(
+      {
+        name: "@morpho-org/alpha",
+        version: "1.0.0",
+      },
+    );
+  });
+});
+
+describe("readPreviousPackageManifest", () => {
+  test("default", () => {
+    const root = createGitRepo({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    writeManifest(join(root, manifestPath), {
+      name: "@morpho-org/alpha",
+      version: "1.1.0",
+    });
+    commitAll(root, "version package");
+
+    expect(readPreviousPackageManifest({ cwd: root, manifestPath })).toEqual({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+  });
+
+  test("behavior: missing previous manifest", () => {
+    const root = createGitRepo({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+
+    expect(readPreviousPackageManifest({ cwd: root, manifestPath })).toBe(
+      undefined,
+    );
+  });
+});
+
+describe("computePendingTag", () => {
+  test("default", () => {
+    const root = createGitRepo({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    writeManifest(join(root, manifestPath), {
+      name: "@morpho-org/alpha",
+      version: "1.1.0",
+    });
+    commitAll(root, "version package");
+
+    expect(computePendingTag({ cwd: root, manifestPath })).toBe(
+      "@morpho-org/alpha@1.1.0",
+    );
+  });
+
+  test("behavior: skips unchanged versions", () => {
+    const root = createGitRepo({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    writeManifest(join(root, manifestPath), {
+      description: "Metadata-only manifest update",
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    commitAll(root, "update manifest metadata");
+
+    expect(computePendingTag({ cwd: root, manifestPath })).toBeUndefined();
+  });
+
+  test("behavior: treats a missing previous manifest as a new package", () => {
+    const root = createGitRepo({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+
+    expect(computePendingTag({ cwd: root, manifestPath })).toBe(
+      "@morpho-org/alpha@1.0.0",
+    );
+  });
+});
+
+describe("main", () => {
+  test("default", () => {
+    const root = createGitRepo({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    writeManifest(join(root, manifestPath), {
+      name: "@morpho-org/alpha",
+      version: "1.1.0",
+    });
+    commitAll(root, "version package");
+    const stdout = vi
+      .spyOn(process.stdout, "write")
+      .mockImplementation(() => true);
+
+    expect(main([manifestPath], { cwd: root })).toBe("@morpho-org/alpha@1.1.0");
+    expect(stdout).toHaveBeenCalledWith("@morpho-org/alpha@1.1.0");
+  });
+
+  test("error: missing manifest path", () => {
+    expect(() => main([])).toThrow(
+      "Usage: node scripts/release/compute-pending-tag.mjs <manifest-path>",
+    );
+  });
+});
+
+function createTempDir() {
+  const tempDir = mkdtempSync(join(tmpdir(), "pending-tag-"));
+  tempDirs.push(tempDir);
+  return tempDir;
+}
+
+function createGitRepo(manifest) {
+  const root = createTempDir();
+  mkdirSync(join(root, "packages/alpha"), { recursive: true });
+  writeManifest(join(root, manifestPath), manifest);
+  runGit(["-c", "init.defaultBranch=main", "init"], root);
+  commitAll(root, "initial");
+
+  return root;
+}
+
+function writeManifest(path, manifest) {
+  writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+function commitAll(root, message) {
+  runGit(["add", "."], root);
+  runGit(
+    [
+      "-c",
+      "commit.gpgsign=false",
+      "-c",
+      "user.name=Test",
+      "-c",
+      "user.email=test@example.com",
+      "commit",
+      "-m",
+      message,
+    ],
+    root,
+  );
+}
+
+function runGit(args, cwd) {
+  return execFileSync("git", args, { cwd });
+}

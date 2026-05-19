@@ -94,27 +94,7 @@ jobs:
           if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
             while IFS= read -r -d '' manifest; do
               tag="$(
-                node -e '
-                  const { execFileSync } = require("node:child_process");
-                  const { readFileSync } = require("node:fs");
-                  const manifest = JSON.parse(readFileSync(process.argv[1], "utf8"));
-                  let previousManifest;
-                  try {
-                    previousManifest = JSON.parse(
-                      execFileSync("git", ["show", `HEAD^:${process.argv[1]}`], {
-                        encoding: "utf8",
-                      }),
-                    );
-                  } catch {
-                    previousManifest = undefined;
-                  }
-
-                  if (previousManifest?.version === manifest.version) {
-                    process.exit(0);
-                  }
-
-                  process.stdout.write(`${manifest.name}@${manifest.version}`);
-                ' "$manifest"
+                node scripts/release/compute-pending-tag.mjs "$manifest"
               )"
 
               if [ -z "$tag" ]; then
