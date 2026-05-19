@@ -1,6 +1,11 @@
 ---
 name: test-coverage
 kind: baseline
+applies: AGENTS.md §5 Testing
+out-of-scope:
+  - Correctness of the test assertions themselves — see code-quality.
+  - Missing tests for CI workflows — see ci-release-security.
+  - Mock-vs-fork choice for Web3 paths — see web3-security (also covered indirectly here).
 focus: Missing or weak tests in `packages/<pkg>/test/` for changes in `packages/<pkg>/src/`.
 ---
 

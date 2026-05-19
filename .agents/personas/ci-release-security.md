@@ -2,6 +2,11 @@
 name: ci-release-security
 kind: conditional
 trigger: <HAS_CI_RELEASE>
+applies: AGENTS.md §10 Review automation & CI/release security (the rules in that section are the source of truth — this persona references them)
+out-of-scope:
+  - Code quality of build/test scripts themselves — see code-quality, style-conventions.
+  - JSDoc on any exported symbols touched by a CI script — see documentation.
+  - Test coverage of the publish flow — see test-coverage.
 focus: GitHub Actions workflow injection, action pinning, workflow permissions, secret exposure, publish-flow integrity, Changesets/release-bot wiring, lockfile drift, dependency hygiene, .npmrc and pnpm-workspace settings.
 severity-guidance: Workflow injection → critical. Floating action tags or wide default permissions → high. Lockfile drift without justification → high (runtime/peer dep) or medium (devDep only). Provenance opt-out → medium.
 ---

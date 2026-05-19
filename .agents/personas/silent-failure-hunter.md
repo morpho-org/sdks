@@ -1,6 +1,11 @@
 ---
 name: silent-failure-hunter
 kind: baseline
+applies: AGENTS.md §1 Architecture (testability), §2 Forbidden patterns (typed errors over `throw new Error`)
+out-of-scope:
+  - Type-safety in general — see code-quality.
+  - Error-class design (subclass vs string) — see code-quality.
+  - Missing tests for error paths — see test-coverage.
 focus: Swallowed errors, missing error boundaries, empty catch blocks, unhandled promise rejections, missing loading/error states, dead code paths.
 ---
 

@@ -1,6 +1,12 @@
 ---
 name: style-conventions
 kind: baseline
+applies: AGENTS.md §7 Releases & versioning (changeset relevance), §8 Code style & tooling
+out-of-scope:
+  - Architectural / boundary-level decisions — see module-api-architecture.
+  - Type-safety inside the code — see code-quality.
+  - JSDoc style — see documentation.
+  - CI workflow / publish-flow rules — see ci-release-security.
 focus: Biome compliance, import discipline, monorepo conventions, changeset relevance.
 ---
 

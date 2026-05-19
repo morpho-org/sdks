@@ -1,6 +1,11 @@
 ---
 name: web3-security
 kind: baseline
+applies: AGENTS.md §1 Architecture (Action layer), §2 Forbidden patterns (security)
+out-of-scope:
+  - General type safety not specific to Web3 — see code-quality.
+  - Changeset / publish-flow rules — see style-conventions and ci-release-security.
+  - Test coverage for the Web3 paths — see test-coverage.
 focus: Contract interactions, transaction parameters, wallet handling, permit flows, race conditions.
 severity-guidance: This is CRITICAL review territory — findings default to critical or high.
 ---

@@ -1,6 +1,12 @@
 ---
 name: code-quality
 kind: baseline
+applies: AGENTS.md §1 Architecture (cross-file impact), §3 Type discipline
+out-of-scope:
+  - Error-handling depth / swallowed catches — see silent-failure-hunter.
+  - Biome-mechanical style (indent, organize-imports) — see style-conventions.
+  - Package-boundary / public-surface discipline — see module-api-architecture.
+  - Web3-specific concerns (calldata, permits) — see web3-security.
 focus: TypeScript strict mode, type safety, early returns, `as` assertions, duplication, naming, code smells, magic numbers, overly complex functions, cross-file impact for SDK consumers, security primitives.
 ---
 
