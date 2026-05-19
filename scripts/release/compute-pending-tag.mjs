@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const DEFAULT_BASE_REF = "HEAD^";
+const PACKAGE_MANIFEST_PATH_RE = /^packages\/[^/]+\/package\.json$/;
 
 /**
  * Reads a package manifest from disk.
@@ -14,7 +15,20 @@ const DEFAULT_BASE_REF = "HEAD^";
  * @returns {{ name?: string, version?: string }} The parsed package manifest.
  */
 export function readPackageManifest(options) {
-  return JSON.parse(readFileSync(resolveManifestPath(options), "utf8"));
+  const manifestPath = resolveManifestPath(options);
+  const stats = lstatSync(manifestPath.absolutePath);
+
+  if (!stats.isFile()) {
+    throw new Error(`Invalid manifest path "${options.manifestPath}".`);
+  }
+
+  assertPathInsideBase({
+    absolutePath: realpathSync(manifestPath.absolutePath),
+    basePath: manifestPath.basePath,
+    manifestPath: options.manifestPath,
+  });
+
+  return JSON.parse(readFileSync(manifestPath.absolutePath, "utf8"));
 }
 
 /**
@@ -25,10 +39,11 @@ export function readPackageManifest(options) {
  */
 export function readPreviousPackageManifest(options) {
   const baseRef = options.baseRef ?? DEFAULT_BASE_REF;
+  const manifestPath = resolveManifestPath(options);
 
   try {
     return JSON.parse(
-      execFileSync("git", ["show", `${baseRef}:${options.manifestPath}`], {
+      execFileSync("git", ["show", `${baseRef}:${manifestPath.relativePath}`], {
         cwd: options.cwd,
         encoding: "utf8",
         stdio: ["ignore", "pipe", "ignore"],
@@ -68,9 +83,29 @@ export function computePendingTag(options) {
 }
 
 function resolveManifestPath(options) {
-  if (options.cwd == null) return options.manifestPath;
+  const basePath = realpathSync(options.cwd ?? process.cwd());
+  const absolutePath = resolve(basePath, options.manifestPath);
+  const relativePath = relative(basePath, absolutePath);
 
-  return resolve(options.cwd, options.manifestPath);
+  assertPathInsideBase({
+    absolutePath,
+    basePath,
+    manifestPath: options.manifestPath,
+  });
+
+  if (!PACKAGE_MANIFEST_PATH_RE.test(relativePath)) {
+    throw new Error(`Invalid manifest path "${options.manifestPath}".`);
+  }
+
+  return { absolutePath, basePath, relativePath };
+}
+
+function assertPathInsideBase(options) {
+  const relativePath = relative(options.basePath, options.absolutePath);
+
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error(`Invalid manifest path "${options.manifestPath}".`);
+  }
 }
 
 /**

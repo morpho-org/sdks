@@ -1,5 +1,11 @@
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test, vi } from "vitest";
@@ -25,18 +31,59 @@ afterEach(() => {
 describe("readPackageManifest", () => {
   test("default", () => {
     const root = createTempDir();
-    const absoluteManifestPath = join(root, manifestPath);
     mkdirSync(join(root, "packages/alpha"), { recursive: true });
-    writeManifest(absoluteManifestPath, {
+    writeManifest(join(root, manifestPath), {
       name: "@morpho-org/alpha",
       version: "1.0.0",
     });
 
-    expect(readPackageManifest({ manifestPath: absoluteManifestPath })).toEqual(
-      {
-        name: "@morpho-org/alpha",
-        version: "1.0.0",
-      },
+    expect(readPackageManifest({ cwd: root, manifestPath })).toEqual({
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+  });
+
+  test("behavior: rejects paths outside the worktree", () => {
+    const root = createTempDir();
+    const externalRoot = createTempDir();
+    mkdirSync(join(externalRoot, "packages/alpha"), { recursive: true });
+    writeManifest(join(externalRoot, manifestPath), {
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+
+    expect(() =>
+      readPackageManifest({
+        cwd: root,
+        manifestPath: join(externalRoot, manifestPath),
+      }),
+    ).toThrow(`Invalid manifest path "${join(externalRoot, manifestPath)}".`);
+  });
+
+  test("behavior: rejects non-package manifest paths", () => {
+    const root = createTempDir();
+    writeManifest(join(root, "package.json"), {
+      name: "@morpho-org/root",
+      version: "1.0.0",
+    });
+
+    expect(() =>
+      readPackageManifest({ cwd: root, manifestPath: "package.json" }),
+    ).toThrow('Invalid manifest path "package.json".');
+  });
+
+  test("behavior: rejects symlinked manifests", () => {
+    const root = createTempDir();
+    const externalRoot = createTempDir();
+    mkdirSync(join(root, "packages/alpha"), { recursive: true });
+    writeManifest(join(externalRoot, "package.json"), {
+      name: "@morpho-org/alpha",
+      version: "1.0.0",
+    });
+    symlinkSync(join(externalRoot, "package.json"), join(root, manifestPath));
+
+    expect(() => readPackageManifest({ cwd: root, manifestPath })).toThrow(
+      `Invalid manifest path "${manifestPath}".`,
     );
   });
 });
