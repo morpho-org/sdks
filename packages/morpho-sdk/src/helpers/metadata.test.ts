@@ -4,7 +4,14 @@ import { addTransactionMetadata } from "./metadata.js";
 
 const TO: Address = "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa";
 
-describe("addTransactionMetadata", () => {
+// `describe.sequential` is required because three tests below install
+// `vi.spyOn(console, "warn", …)` and rely on the per-test local `warn`
+// reference. Under the repo-wide `sequence: { concurrent: true }`,
+// `console.warn` is a single Node global — the last-installed spy wins,
+// and `vi.restoreAllMocks()` in one test's afterEach can restore warn
+// while another concurrent test is mid-assertion. Serializing the file
+// eliminates the race.
+describe.sequential("addTransactionMetadata", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });

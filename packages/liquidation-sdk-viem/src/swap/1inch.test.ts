@@ -30,7 +30,12 @@ describe("OneInch URL builders", () => {
   });
 });
 
-describe("OneInch.fetchSwap via nock", () => {
+// `describe.sequential` is required because (a) nock interceptors are
+// process-global and `nock.cleanAll()` in afterEach would wipe other
+// concurrent tests' interceptors, and (b) `vi.stubEnv` / `vi.unstubAllEnvs`
+// mutate `process.env` globally — a concurrent test's afterEach could
+// revoke the stub before the missing-API-key test's fetch reads it.
+describe.sequential("OneInch.fetchSwap via nock", () => {
   afterEach(() => {
     nock.cleanAll();
     vi.unstubAllEnvs();

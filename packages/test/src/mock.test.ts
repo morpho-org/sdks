@@ -1,6 +1,6 @@
 import {
   type Address,
-  decodeFunctionData,
+  decodeFunctionResult,
   encodeFunctionData,
   type Hex,
   parseAbi,
@@ -363,7 +363,7 @@ describe("expectReadCall", () => {
 });
 
 describe("encodeFunctionData round-trip with the mock", () => {
-  test("client.request for a manually-crafted eth_call works end-to-end", async () => {
+  test("client.request for a manually-crafted eth_call returns the encoded result", async () => {
     const handle = createMockClient(mainnet);
     mockRead(handle, {
       address: TOKEN,
@@ -380,17 +380,15 @@ describe("encodeFunctionData round-trip with the mock", () => {
       method: "eth_call",
       params: [{ to: TOKEN, data }, "latest"],
     })) as `0x${string}`;
-    const decoded = decodeFunctionData({
+    // Decode the actual returned bytes (the ABI-encoded *result*) against
+    // the function's output type and assert the registered value comes
+    // back. This is the real round-trip — encoding call data, dispatching
+    // via the mock, decoding the result.
+    const decoded = decodeFunctionResult({
       abi: erc20Abi,
-      // The returned hex is the encoded *result*, not call data — but we
-      // round-trip via the same abi to assert encoding is consistent.
-      data: encodeFunctionData({
-        abi: erc20Abi,
-        functionName: "balanceOf",
-        args: [HOLDER],
-      }),
+      functionName: "balanceOf",
+      data: result,
     });
-    expect(decoded.functionName).toBe("balanceOf");
-    expect(result.startsWith("0x")).toBe(true);
+    expect(decoded).toBe(42n);
   });
 });

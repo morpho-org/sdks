@@ -22,7 +22,12 @@ describe("Flashbots constants", () => {
   });
 });
 
-describe("Flashbots.sendRawBundle", () => {
+// `describe.sequential` is required because nock interceptors live on a
+// process-global registry and `afterEach(nock.cleanAll)` wipes ALL pending
+// interceptors. Under the repo-wide `sequence: { concurrent: true }`,
+// concurrent tests in this describe would race and `cleanAll` could remove
+// another in-flight test's interceptor.
+describe.sequential("Flashbots.sendRawBundle", () => {
   afterEach(() => {
     nock.cleanAll();
   });

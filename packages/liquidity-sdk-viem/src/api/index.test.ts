@@ -15,7 +15,10 @@ describe("apiSdk", () => {
   });
 });
 
-describe("apiSdk.getMarkets via nock", () => {
+// `describe.sequential` is required: nock interceptors are process-global
+// and `afterEach(nock.cleanAll)` would wipe other concurrent tests'
+// interceptors under the repo-wide `sequence: { concurrent: true }`.
+describe.sequential("apiSdk.getMarkets via nock", () => {
   afterEach(() => {
     nock.cleanAll();
   });
@@ -70,7 +73,8 @@ describe("apiSdk.getMarkets via nock", () => {
   });
 });
 
-describe("getSdk + GraphQLClient end-to-end", () => {
+// Same nock global-registry concern as above — must be sequential.
+describe.sequential("getSdk + GraphQLClient end-to-end", () => {
   afterEach(() => {
     nock.cleanAll();
   });

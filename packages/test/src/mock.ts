@@ -54,9 +54,10 @@ export interface MockClientHandle<chain extends Chain = Chain> {
    *
    * Only mutate this directly for advanced cases (clearing between phases
    * of a test). Do **not** hoist a single handle into `beforeAll` and
-   * share it across `test.concurrent`-flagged tests; if entries are
-   * written following a different key format they will silently fail to
-   * match incoming `eth_call`s.
+   * share it across `test.concurrent`-flagged tests: concurrent writes
+   * to the same `(address, selector)` key would race (last-write-wins),
+   * and one test's `dispatch.clear()` could remove another test's
+   * registered mock mid-flight. Create a fresh handle per test instead.
    */
   dispatch: Map<string, Hex>;
 }
@@ -82,9 +83,12 @@ export interface MockClientHandle<chain extends Chain = Chain> {
  * @returns A {@link MockClientHandle} bundling the constructed `client`,
  *   the underlying `request` mock (for `vi.fn` assertions), the resolved
  *   `chain`, and the internal `dispatch` registry.
- * @throws `Error` from the underlying mock when the caller invokes an RPC
- *   method that has not been pre-programmed — missing mocks fail loudly
- *   with the offending method and params in the message.
+ *
+ * @remarks The factory itself never throws synchronously. The returned
+ *   `client.transport` (and the underlying `request` mock) throws an
+ *   `Error` with "unhandled RPC" in the message at call time when the
+ *   caller invokes an RPC method that has not been pre-programmed —
+ *   missing mocks fail loudly with the offending method and params.
  *
  * @example
  * ```ts
