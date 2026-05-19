@@ -10,37 +10,56 @@ import {
 } from "../types/index.js";
 
 /**
- * Computes vault reallocations for a borrow operation on a target market.
+ * Computes vault reallocations for a `borrow` or `withdraw` on a target market.
  *
- * Replicates the shared liquidity algorithm from `populateSubBundle` in
+ * Replicates the shared-liquidity algorithm from `populateSubBundle` in
  * `@morpho-org/bundler-sdk-viem`. First attempts "friendly" reallocations
  * respecting withdrawal utilization targets, then falls back to aggressive
  * reallocations (100% withdrawal utilization) if liquidity is still insufficient.
  *
+ * Algebra branches on `operation`:
+ * - `"borrow"`: `S' = S`, `B' = B + amount` (additional borrow demand).
+ * - `"withdraw"`: `S' = S − amount`, `B' = B` (supply-side shrinkage).
+ *
+ * In both cases reallocated assets are added on the supply side; `requiredAssets`
+ * and `absoluteShortfall` are derived from the operation-specific post-state.
+ *
  * @param params.reallocationData - The simulation state containing market, vault, and position data.
  * @param params.marketId - The target market to reallocate liquidity into.
- * @param params.borrowAmount - The intended borrow amount (used to compute post-borrow utilization).
+ * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+ * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
  * @param params.options - Optional reallocation computation options.
  * @returns Array of vault reallocations, sorted with withdrawals in ascending market id order.
- * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the borrow shortfall on the target market — preventing fee-bearing reallocations from being attached to a borrow that would still revert onchain.
+ * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the operation's
+ *   absolute shortfall on the target market — preventing fee-bearing reallocations from being
+ *   attached to a call that would still revert onchain.
  */
 export const computeReallocations = ({
   reallocationData: data,
   marketId,
-  borrowAmount,
+  operation,
+  amount,
   options,
 }: {
   readonly reallocationData: SimulationState;
   readonly marketId: MarketId;
-  readonly borrowAmount: bigint;
+  readonly operation: "borrow" | "withdraw";
+  readonly amount: bigint;
   readonly options?: ReallocationComputeOptions;
 }): readonly VaultReallocation[] => {
   if (options?.enabled === false) return [];
 
   const market = data.getMarket(marketId).accrueInterest(data.block.timestamp);
 
-  const newTotalBorrowAssets = market.totalBorrowAssets + borrowAmount;
-  const newTotalSupplyAssets = market.totalSupplyAssets;
+  // Post-state utilization is operation-dependent.
+  const newTotalBorrowAssets =
+    operation === "borrow"
+      ? market.totalBorrowAssets + amount
+      : market.totalBorrowAssets;
+  const newTotalSupplyAssets =
+    operation === "withdraw"
+      ? market.totalSupplyAssets - amount
+      : market.totalSupplyAssets;
 
   const supplyTargetUtilization =
     options?.supplyTargetUtilization?.[market.params.id] ??
@@ -72,10 +91,17 @@ export const computeReallocations = ({
     market.id,
   );
 
-  if (
-    friendlyReallocationMarket.totalBorrowAssets + borrowAmount >
-    friendlyReallocationMarket.totalSupplyAssets
-  ) {
+  // Operation-specific post-friendly check: would the on-chain call still revert?
+  const friendlyBorrow =
+    operation === "borrow"
+      ? friendlyReallocationMarket.totalBorrowAssets + amount
+      : friendlyReallocationMarket.totalBorrowAssets;
+  const friendlySupply =
+    operation === "withdraw"
+      ? friendlyReallocationMarket.totalSupplyAssets - amount
+      : friendlyReallocationMarket.totalSupplyAssets;
+
+  if (friendlyBorrow > friendlySupply) {
     // Phase 2: "aggressive" — fully withdraw from every market (100% utilization).
     requiredAssets = newTotalBorrowAssets - newTotalSupplyAssets;
     withdrawals.push(
@@ -89,7 +115,7 @@ export const computeReallocations = ({
 
   if (requiredAssets <= 0n) return [];
 
-  // Liquidity strictly required for `morphoBorrow` to succeed onchain.
+  // Liquidity strictly required for the on-chain call to succeed.
   const absoluteShortfall =
     newTotalBorrowAssets > newTotalSupplyAssets
       ? newTotalBorrowAssets - newTotalSupplyAssets
@@ -123,7 +149,7 @@ export const computeReallocations = ({
     if (requiredAssets === 0n) break;
   }
 
-  // Refuse fee-bearing partial plans for an unreachable borrow.
+  // Refuse fee-bearing partial plans for an unreachable operation.
   if (totalReallocated < absoluteShortfall) {
     throw new InsufficientSharedLiquidityError({
       marketId,

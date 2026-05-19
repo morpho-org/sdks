@@ -8,7 +8,8 @@ Centralized type definitions and error classes. Barrel-exported via `index.ts`. 
 - `Transaction<TAction>` — immutable `{ to, value, data, action }`. Returned from every action; deep-frozen.
 - `Requirement` / `RequirementSignature` — permit/permit2 signing flow.
 - `Metadata` — optional `{ origin, timestamp? }` for calldata tracing.
-- `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Reused for vault deposits and market collateral supply.
+- `DepositAmountArgs` — union enforcing at least one of `amount` / `nativeAmount`. Reused for vault deposits, market collateral supply, and market loan-asset supply.
+- `AssetsOrSharesArgs` — discriminated union `{ assets } | { shares }`. Used by repay (borrow-side) and withdraw (supply-side). `RepayAmountArgs` is kept as a deprecated alias.
 - `MarketParams` — Morpho Blue market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`).
 - `MorphoAuthorizationAction` — used for `morpho.setAuthorization()` pre-requisite transactions.
 
@@ -23,7 +24,7 @@ Both map directly to `PublicAllocator.reallocateTo()` arguments.
 
 One class per error case. Never throw a generic `Error` from SDK source.
 
-- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `ZeroCollateralAmountError`, `NativeAmountOnNonWNativeCollateralError`.
+- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `ZeroCollateralAmountError`, `NativeAmountOnNonWNativeCollateralError`, `NativeAmountOnNonWNativeLoanError`, `ZeroSupplyAmountError`, `NonPositiveSupplyAmountError`, `NonPositiveSupplyMaxSharePriceError`, `NonPositiveWithdrawAmountError`, `NonPositiveWithdrawMinSharePriceError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
 - **Reallocation-specific:** `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`, `NonPositiveReallocationAmountError`, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`.
 
 ## Adding a new operation

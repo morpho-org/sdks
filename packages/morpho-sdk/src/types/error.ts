@@ -398,6 +398,87 @@ export class NonPositiveMinBorrowSharePriceError extends Error {
   }
 }
 
+/** Thrown when a market loan-asset supply amount is zero or negative. */
+export class NonPositiveSupplyAmountError extends Error {
+  constructor(market: string) {
+    super(`Supply amount must be positive for market: ${market}`);
+  }
+}
+
+/** Thrown when a market loan-asset supply's `maxSharePrice` slippage bound is zero or negative. */
+export class NonPositiveSupplyMaxSharePriceError extends Error {
+  constructor(market: string) {
+    super(`Max share price must be positive for market: ${market}`);
+  }
+}
+
+/** Thrown when both `amount` and `nativeAmount` resolve to zero on a market loan-asset supply. */
+export class ZeroSupplyAmountError extends Error {
+  constructor(market: string) {
+    super(
+      `Total supply amount must be positive for market: ${market}. Both amount and nativeAmount are zero.`,
+    );
+  }
+}
+
+/** Thrown when a loan-asset supply uses `nativeAmount` but the loan token is not the chain's wNative. */
+export class NativeAmountOnNonWNativeLoanError extends Error {
+  constructor(loanToken: Address, wNative: Address) {
+    super(
+      `Cannot use nativeAmount: loan token ${loanToken} is not the wrapped native token ${wNative}`,
+    );
+  }
+}
+
+/** Thrown when a market loan-asset withdraw has both `assets` and `shares` zero, or either negative. */
+export class NonPositiveWithdrawAmountError extends Error {
+  constructor(market: string) {
+    super(`Withdraw amount must be positive for market: ${market}`);
+  }
+}
+
+/** Thrown when a market loan-asset withdraw's `minSharePrice` slippage bound is negative. */
+export class NonPositiveWithdrawMinSharePriceError extends Error {
+  constructor(market: string) {
+    super(`Min share price must be non-negative for market: ${market}`);
+  }
+}
+
+/** Thrown when a loan-asset withdraw specifies both `assets` and `shares` as non-zero (modes are mutually exclusive). */
+export class MutuallyExclusiveWithdrawAmountsError extends Error {
+  constructor(market: string) {
+    super(
+      `Exactly one of assets or shares must be non-zero for market: ${market}. Both were provided.`,
+    );
+  }
+}
+
+/** Thrown when a loan-asset withdraw in assets mode exceeds the user's supplied assets in the market. */
+export class WithdrawExceedsSupplyError extends Error {
+  constructor(params: {
+    withdrawAmount: bigint;
+    available: bigint;
+    market: string;
+  }) {
+    super(
+      `Withdraw amount ${params.withdrawAmount} exceeds available supply ${params.available} for market: ${params.market}. Reduce withdraw amount.`,
+    );
+  }
+}
+
+/** Thrown when a loan-asset withdraw in shares mode exceeds the user's owned supply shares in the market. */
+export class WithdrawSharesExceedSupplyError extends Error {
+  constructor(params: {
+    withdrawShares: bigint;
+    supplyShares: bigint;
+    market: string;
+  }) {
+    super(
+      `Withdraw shares ${params.withdrawShares} exceed owned supply shares ${params.supplyShares} for market: ${params.market}. Reduce withdraw shares.`,
+    );
+  }
+}
+
 /** Thrown when a vault migration's source vault asset differs from the target vault asset. */
 export class VaultAssetMismatchError extends Error {
   constructor(sourceAsset: Address, targetAsset: Address) {

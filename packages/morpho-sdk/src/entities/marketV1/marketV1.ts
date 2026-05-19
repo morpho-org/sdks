@@ -27,41 +27,53 @@ import {
   marketV1Borrow,
   marketV1Repay,
   marketV1RepayWithdrawCollateral,
+  marketV1Supply,
   marketV1SupplyCollateral,
   marketV1SupplyCollateralBorrow,
+  marketV1Withdraw,
   marketV1WithdrawCollateral,
 } from "../../actions/index.js";
 import {
   computeMaxRepaySharePrice,
+  computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
+  computeMinWithdrawSharePrice,
   computeReallocations,
   validateAccrualPosition,
   validateChainId,
   validateNativeCollateral,
+  validateNativeLoan,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
+  validateWithdrawAmount,
+  validateWithdrawShares,
 } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
+  type AssetsOrSharesArgs,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
   type MarketV1BorrowAction,
   type MarketV1RepayAction,
   type MarketV1RepayWithdrawCollateralAction,
+  type MarketV1SupplyAction,
   type MarketV1SupplyCollateralAction,
   type MarketV1SupplyCollateralBorrowAction,
+  type MarketV1WithdrawAction,
   type MarketV1WithdrawCollateralAction,
   MissingAccrualPositionError,
   type MorphoAuthorizationAction,
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
+  MutuallyExclusiveWithdrawAmountsError,
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
   NonPositiveRepayAmountError,
+  NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
   type ReallocationComputeOptions,
   type RepayAmountArgs,
@@ -111,6 +123,70 @@ export interface MarketV1Actions {
     getRequirements: (params?: {
       useSimplePermit?: boolean;
     }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+  };
+
+  /**
+   * Prepares a loan-asset supply transaction.
+   *
+   * Routed through bundler via GeneralAdapter1. Computes `maxSharePrice` from market supply
+   * state and `slippageTolerance` to protect against share-price inflation.
+   * `getRequirements` returns ERC20 approval or permit for `GeneralAdapter1` on the loan token.
+   * When `nativeAmount` is provided, native token is wrapped; the loan token must be wNative.
+   *
+   * No Morpho authorization required (supplier is crediting, not withdrawing).
+   *
+   * @param params - Supply parameters.
+   * @returns Object with `buildTx` and `getRequirements`.
+   */
+  supply: (
+    params: {
+      userAddress: Address;
+      marketData: Market;
+      slippageTolerance?: bigint;
+    } & DepositAmountArgs,
+  ) => {
+    buildTx: (
+      requirementSignature?: RequirementSignature,
+    ) => Readonly<Transaction<MarketV1SupplyAction>>;
+    getRequirements: (params?: {
+      useSimplePermit?: boolean;
+    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+  };
+
+  /**
+   * Prepares a loan-asset withdraw transaction.
+   *
+   * Routed through bundler3 via `morphoWithdraw`. Supports two modes via {@link AssetsOrSharesArgs}:
+   * - **By assets** (`{ assets }`): withdraws an exact asset amount.
+   * - **By shares** (`{ shares }`): burns an exact share count (full close, immune to interest accrual).
+   *
+   * Computes `minSharePrice` from market supply state and `slippageTolerance`.
+   *
+   * When `reallocations` is provided, `reallocateTo` actions are prepended to the bundle,
+   * moving liquidity from other markets via the PublicAllocator before withdrawing — used to
+   * unblock withdraws that exceed on-market liquidity.
+   *
+   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if not yet
+   * authorized, since the bundler calls `withdraw(...,onBehalf=user,...)`.
+   *
+   * **Stale `positionData` may cause unexpected supply share calculations.**
+   *
+   * @param params - Withdraw parameters including pre-fetched `positionData`.
+   * @returns Object with `buildTx` and `getRequirements`.
+   */
+  withdraw: (
+    params: {
+      userAddress: Address;
+      receiver?: Address;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+      reallocations?: readonly VaultReallocation[];
+    } & AssetsOrSharesArgs,
+  ) => {
+    buildTx: () => Readonly<Transaction<MarketV1WithdrawAction>>;
+    getRequirements: () => Promise<
+      Readonly<Transaction<MorphoAuthorizationAction>>[]
+    >;
   };
 
   /**
@@ -359,6 +435,171 @@ export class MorphoMarketV1 implements MarketV1Actions {
         chainId: this.chainId,
       },
     );
+  }
+
+  supply({
+    amount = 0n,
+    userAddress,
+    nativeAmount,
+    marketData,
+    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+  }: {
+    userAddress: Address;
+    marketData: Market;
+    slippageTolerance?: bigint;
+  } & DepositAmountArgs) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    if (amount < 0n) {
+      throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
+    }
+
+    if (nativeAmount !== undefined && nativeAmount < 0n) {
+      throw new NegativeNativeAmountError(nativeAmount);
+    }
+
+    const totalAssets = amount + (nativeAmount ?? 0n);
+    if (totalAssets === 0n) {
+      throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+
+    if (nativeAmount !== undefined && nativeAmount > 0n) {
+      validateNativeLoan(this.chainId, this.marketParams.loanToken);
+    }
+
+    const maxSharePrice = computeMaxSupplySharePrice({
+      supplyAssets: totalAssets,
+      market: marketData,
+      slippageTolerance,
+    });
+
+    return {
+      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+        getRequirements(this.client.viemClient, {
+          address: this.marketParams.loanToken,
+          chainId: this.chainId,
+          supportSignature: this.client.options.supportSignature,
+          supportDeployless: this.client.options.supportDeployless,
+          useSimplePermit: params?.useSimplePermit,
+          args: { amount, from: userAddress },
+        }),
+
+      buildTx: (requirementSignature?: RequirementSignature) =>
+        marketV1Supply({
+          market: { chainId: this.chainId, marketParams: this.marketParams },
+          args: {
+            amount,
+            nativeAmount,
+            onBehalf: userAddress,
+            maxSharePrice,
+            requirementSignature,
+          },
+          metadata: this.client.options.metadata,
+        }),
+    };
+  }
+
+  withdraw(
+    params: {
+      userAddress: Address;
+      receiver?: Address;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+      reallocations?: readonly VaultReallocation[];
+    } & AssetsOrSharesArgs,
+  ) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    const {
+      userAddress,
+      receiver = userAddress,
+      positionData,
+      slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+      reallocations,
+    } = params;
+
+    if ("assets" in params && "shares" in params) {
+      throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
+    }
+
+    const isSharesMode = "shares" in params;
+
+    if (isSharesMode) {
+      if (params.shares <= 0n) {
+        throw new NonPositiveWithdrawAmountError(this.marketParams.id);
+      }
+    } else {
+      if (params.assets <= 0n) {
+        throw new NonPositiveWithdrawAmountError(this.marketParams.id);
+      }
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+
+    if (!positionData) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: userAddress,
+    });
+
+    let assets: bigint;
+    let shares: bigint;
+
+    if (isSharesMode) {
+      validateWithdrawShares({
+        positionData,
+        withdrawShares: params.shares,
+        marketId: this.marketParams.id,
+      });
+      assets = 0n;
+      shares = params.shares;
+    } else {
+      validateWithdrawAmount({
+        positionData,
+        withdrawAssets: params.assets,
+        marketId: this.marketParams.id,
+      });
+      assets = params.assets;
+      shares = 0n;
+    }
+
+    const minSharePrice = computeMinWithdrawSharePrice({
+      withdrawAssets: assets,
+      withdrawShares: shares,
+      market: positionData.market,
+      slippageTolerance,
+    });
+
+    return {
+      getRequirements: async () => {
+        const authTx = await getMorphoAuthorizationRequirement({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          userAddress,
+        });
+        return authTx ? [authTx] : [];
+      },
+
+      buildTx: () =>
+        marketV1Withdraw({
+          market: { chainId: this.chainId, marketParams: this.marketParams },
+          args: {
+            assets,
+            shares,
+            onBehalf: userAddress,
+            receiver,
+            minSharePrice,
+            reallocations,
+          },
+          metadata: this.client.options.metadata,
+        }),
+    };
   }
 
   supplyCollateral({
@@ -1048,7 +1289,8 @@ export class MorphoMarketV1 implements MarketV1Actions {
     return computeReallocations({
       reallocationData,
       marketId: this.marketParams.id,
-      borrowAmount,
+      operation: "borrow",
+      amount: borrowAmount,
       options: { enabled: true, ...options },
     });
   }

@@ -98,3 +98,109 @@ export function computeMaxRepaySharePrice(params: {
 
   return MathLib.min(maxSharePrice, MAX_ABSOLUTE_SHARE_PRICE);
 }
+
+/**
+ * Computes the maximum supply share price (in RAY, 1e27) for slippage protection.
+ *
+ * Mirrors the on-chain check in GeneralAdapter1's `morphoSupply`:
+ * ```solidity
+ * require(suppliedAssets.rDivUp(suppliedShares) <= maxSharePriceE27)
+ * ```
+ *
+ * Caps at {@link MAX_ABSOLUTE_SHARE_PRICE} to prevent absurd values on extreme markets.
+ *
+ * @param params - Computation parameters.
+ * @param params.supplyAssets - The amount of loan assets to supply.
+ * @param params.market - The market to compute the maximum supply share price for.
+ * @param params.slippageTolerance - Slippage tolerance in WAD (e.g. `0.003e18` = 0.3%).
+ * @returns `maxSharePriceE27` in RAY scale (1e27).
+ * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance >= WAD`.
+ * @throws {ShareDivideByZeroError} when expected shares round down to zero.
+ */
+export function computeMaxSupplySharePrice(params: {
+  supplyAssets: bigint;
+  market: Market;
+  slippageTolerance: bigint;
+}): bigint {
+  const { supplyAssets, market, slippageTolerance } = params;
+
+  if (slippageTolerance >= MathLib.WAD) {
+    throw new ExcessiveSlippageToleranceError(slippageTolerance);
+  }
+
+  const expectedShares = market.toSupplyShares(supplyAssets, "Down");
+
+  if (expectedShares === 0n) {
+    throw new ShareDivideByZeroError(market.params.id);
+  }
+
+  const maxSharePrice = MathLib.mulDivUp(
+    supplyAssets,
+    MathLib.wToRay(MathLib.WAD + slippageTolerance),
+    expectedShares,
+  );
+
+  return MathLib.min(maxSharePrice, MAX_ABSOLUTE_SHARE_PRICE);
+}
+
+/**
+ * Computes the minimum withdraw share price (in RAY, 1e27) for slippage protection.
+ *
+ * Mirrors the on-chain check in GeneralAdapter1's `morphoWithdraw`:
+ * ```solidity
+ * require(withdrawnAssets.rDivDown(withdrawnShares) >= minSharePriceE27)
+ * ```
+ *
+ * Supports both assets and shares modes:
+ * - By assets: derives expected shares via `toSupplyShares("Up")` (upper bound, protects the
+ *   withdrawer against over-burning shares).
+ * - By shares: derives expected assets via `toSupplyAssets("Down")` (lower bound, the on-chain
+ *   amount paid out).
+ *
+ * Direction is opposite of supply's `maxSharePrice`:
+ * - Supply uses `(WAD + slippage)` → upper bound (anti-inflation).
+ * - Withdraw uses `(WAD − slippage)` → lower bound (protects withdrawer from receiving too few
+ *   assets per share burned).
+ *
+ * @param params - Computation parameters.
+ * @param params.withdrawAssets - The amount of assets to withdraw (`0n` when withdrawing by shares).
+ * @param params.withdrawShares - The amount of shares to withdraw (`0n` when withdrawing by assets).
+ * @param params.market - The market to compute the minimum withdraw share price for.
+ * @param params.slippageTolerance - Slippage tolerance in WAD (e.g. `0.003e18` = 0.3%).
+ * @returns `minSharePriceE27` in RAY scale (1e27).
+ * @throws {ExcessiveSlippageToleranceError} when `slippageTolerance >= WAD`.
+ * @throws {ShareDivideByZeroError} when expected shares round down to zero.
+ */
+export function computeMinWithdrawSharePrice(params: {
+  withdrawAssets: bigint;
+  withdrawShares: bigint;
+  market: Market;
+  slippageTolerance: bigint;
+}): bigint {
+  const { withdrawAssets, withdrawShares, market, slippageTolerance } = params;
+
+  if (slippageTolerance >= MathLib.WAD) {
+    throw new ExcessiveSlippageToleranceError(slippageTolerance);
+  }
+
+  let assets: bigint;
+  let shares: bigint;
+
+  if (withdrawShares > 0n) {
+    assets = market.toSupplyAssets(withdrawShares, "Down");
+    shares = withdrawShares;
+  } else {
+    assets = withdrawAssets;
+    shares = market.toSupplyShares(withdrawAssets, "Up");
+  }
+
+  if (shares === 0n) {
+    throw new ShareDivideByZeroError(market.params.id);
+  }
+
+  return MathLib.mulDivDown(
+    assets,
+    MathLib.wToRay(MathLib.WAD - slippageTolerance),
+    shares,
+  );
+}

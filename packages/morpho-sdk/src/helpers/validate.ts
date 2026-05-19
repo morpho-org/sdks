@@ -20,6 +20,7 @@ import {
   MissingMarketPriceError,
   MutuallyExclusiveRepayAmountsError,
   NativeAmountOnNonWNativeCollateralError,
+  NativeAmountOnNonWNativeLoanError,
   NegativeReallocationFeeError,
   NegativeSlippageToleranceError,
   NonPositiveReallocationAmountError,
@@ -33,7 +34,9 @@ import {
   UnsortedReallocationWithdrawalsError,
   type VaultReallocation,
   WithdrawExceedsCollateralError,
+  WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
+  WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
 import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 
@@ -182,6 +185,27 @@ export const validateNativeCollateral = (
   }
   if (!isAddressEqual(collateralToken, wNative)) {
     throw new NativeAmountOnNonWNativeCollateralError(collateralToken, wNative);
+  }
+};
+
+/**
+ * Validates that the given loan token is the chain's wrapped native token.
+ * Throws {@link ChainWNativeMissingError} if wNative is not configured for the chain.
+ * Throws {@link NativeAmountOnNonWNativeLoanError} if loan token is not wNative.
+ *
+ * @param chainId - The chain to look up wNative on.
+ * @param loanToken - The market's loan token address.
+ */
+export const validateNativeLoan = (
+  chainId: number,
+  loanToken: Address,
+): void => {
+  const { wNative } = getChainAddresses(chainId);
+  if (!isDefined(wNative)) {
+    throw new ChainWNativeMissingError(chainId);
+  }
+  if (!isAddressEqual(loanToken, wNative)) {
+    throw new NativeAmountOnNonWNativeLoanError(loanToken, wNative);
   }
 };
 
@@ -406,5 +430,51 @@ export const validateSlippageTolerance = (slippageTolerance: bigint): void => {
   }
   if (slippageTolerance > MAX_SLIPPAGE_TOLERANCE) {
     throw new ExcessiveSlippageToleranceError(slippageTolerance);
+  }
+};
+
+/**
+ * Validates that the withdraw assets do not exceed the user's supplied assets in the market.
+ *
+ * @param params - Validation parameters.
+ * @param params.positionData - The current accrual position.
+ * @param params.withdrawAssets - The amount of assets to withdraw.
+ * @param params.marketId - The market identifier (for error messages).
+ */
+export const validateWithdrawAmount = (params: {
+  positionData: AccrualPosition;
+  withdrawAssets: bigint;
+  marketId: MarketId;
+}): void => {
+  const { positionData, withdrawAssets, marketId } = params;
+  if (withdrawAssets > positionData.supplyAssets) {
+    throw new WithdrawExceedsSupplyError({
+      withdrawAmount: withdrawAssets,
+      available: positionData.supplyAssets,
+      market: marketId,
+    });
+  }
+};
+
+/**
+ * Validates that the withdraw shares do not exceed the user's owned supply shares in the market.
+ *
+ * @param params - Validation parameters.
+ * @param params.positionData - The current accrual position.
+ * @param params.withdrawShares - The amount of shares to withdraw.
+ * @param params.marketId - The market identifier (for error messages).
+ */
+export const validateWithdrawShares = (params: {
+  positionData: AccrualPosition;
+  withdrawShares: bigint;
+  marketId: MarketId;
+}): void => {
+  const { positionData, withdrawShares, marketId } = params;
+  if (withdrawShares > positionData.supplyShares) {
+    throw new WithdrawSharesExceedSupplyError({
+      withdrawShares,
+      supplyShares: positionData.supplyShares,
+      market: marketId,
+    });
   }
 };

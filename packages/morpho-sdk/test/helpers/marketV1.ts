@@ -35,6 +35,37 @@ export async function supplyCollateral(params: {
 }
 
 /**
+ * Deposits loan-asset assets into a Morpho Blue market directly (bypasses the bundler).
+ * Used by withdraw fork tests to pre-fund a supplier position before exercising the SDK.
+ */
+export async function supplyLoan(params: {
+  client: AnvilTestClient;
+  chainId: number;
+  market: MarketParams;
+  supplyAmount: bigint;
+}) {
+  const { client, chainId, market, supplyAmount } = params;
+  const { morpho } = getChainAddresses(chainId);
+  await client.deal({
+    erc20: market.loanToken,
+    amount: supplyAmount,
+  });
+  await client.approve({
+    address: market.loanToken,
+    args: [morpho, MathLib.MAX_UINT_256],
+  });
+  await client.sendTransaction({
+    to: morpho,
+    data: encodeFunctionData({
+      abi: blueAbi,
+      functionName: "supply",
+      args: [market, supplyAmount, 0n, client.account.address, "0x"],
+    }),
+    value: 0n,
+  });
+}
+
+/**
  * Sets up a borrow position by supplying collateral and borrowing.
  * The user must already have collateral supplied to the market.
  */

@@ -23,6 +23,7 @@ import {
   MissingClientPropertyError,
   MissingMarketPriceError,
   NativeAmountOnNonWNativeCollateralError,
+  NativeAmountOnNonWNativeLoanError,
   NegativeReallocationFeeError,
   NegativeSlippageToleranceError,
   NonPositiveReallocationAmountError,
@@ -31,13 +32,16 @@ import {
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
   type VaultReallocation,
+  WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
+  WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 import {
   validateAccrualPosition,
   validateChainId,
   validateNativeCollateral,
+  validateNativeLoan,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateReallocations,
@@ -45,6 +49,8 @@ import {
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,
+  validateWithdrawAmount,
+  validateWithdrawShares,
 } from "./validate.js";
 
 const USER_A: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -554,5 +560,112 @@ describe("validateSlippageTolerance", () => {
     expect(() =>
       validateSlippageTolerance(MAX_SLIPPAGE_TOLERANCE + 1n),
     ).toThrow(ExcessiveSlippageToleranceError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateNativeLoan
+// ---------------------------------------------------------------------------
+
+describe("validateNativeLoan", () => {
+  const wNative = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address;
+  const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address;
+
+  test("should pass when loan token is wNative", () => {
+    expect(() => validateNativeLoan(mainnet.id, wNative)).not.toThrow();
+  });
+
+  test("should throw NativeAmountOnNonWNativeLoanError when loan token is not wNative", () => {
+    expect(() => validateNativeLoan(mainnet.id, usdc)).toThrow(
+      NativeAmountOnNonWNativeLoanError,
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateWithdrawAmount / validateWithdrawShares
+// ---------------------------------------------------------------------------
+
+describe("validateWithdrawAmount", () => {
+  test("should pass when withdraw assets are within supplied assets", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 24n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawAmount({
+        positionData: pos,
+        withdrawAssets: 10n ** 18n,
+        marketId: marketParams.id,
+      }),
+    ).not.toThrow();
+  });
+
+  test("should throw WithdrawExceedsSupplyError when withdraw assets exceed supplied assets", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 18n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawAmount({
+        positionData: pos,
+        withdrawAssets: 10n ** 30n,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawExceedsSupplyError);
+  });
+});
+
+describe("validateWithdrawShares", () => {
+  test("should pass when withdraw shares are within owned supply shares", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 24n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawShares({
+        positionData: pos,
+        withdrawShares: 10n ** 18n,
+        marketId: marketParams.id,
+      }),
+    ).not.toThrow();
+  });
+
+  test("should throw WithdrawSharesExceedSupplyError when withdraw shares exceed owned supply shares", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 18n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawShares({
+        positionData: pos,
+        withdrawShares: 10n ** 30n,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawSharesExceedSupplyError);
   });
 });
