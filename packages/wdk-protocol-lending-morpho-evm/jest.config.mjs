@@ -28,4 +28,10 @@ const moduleNameMapper = Object.fromEntries(
 export default {
   testEnvironment: "node",
   moduleNameMapper,
+  // Polyfill `BigInt.prototype.toJSON` before any test loads. Fork tests on
+  // viem clients routinely throw errors carrying bigint fields (amounts, chain
+  // ids), and jest's worker IPC JSON.stringify's those payloads to forward to
+  // the parent — without the polyfill it throws "Do not know how to serialize
+  // a BigInt" and masks the underlying error.
+  setupFiles: ["<rootDir>/jest.setup.mjs"],
 };
