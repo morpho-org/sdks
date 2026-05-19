@@ -158,7 +158,7 @@ describe("ForceRedeem VaultV2", () => {
       initialState.morphoAssetBalance - assets,
     );
     expect(finalStateVaultV1.userAssetBalance).toEqual(
-      initialStateVaultV1.userAssetBalance + assets - 1n, // -1 rounding
+      initialStateVaultV1.userAssetBalance + assets,
     );
     expect(finalState.userSharesBalance).toEqual(0n);
   });
