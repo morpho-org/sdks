@@ -9,6 +9,16 @@ import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
 
 const DEFAULT_API_BASE_URL = "https://api.github.com";
 const DEFAULT_COMMIT_MESSAGE = "chore: version packages";
+const PACKAGE_MANIFEST_PATH_RE = /^packages\/[^/]+\/package\.json$/;
+const PACKAGE_CHANGELOG_PATH_RE = /^packages\/[^/]+\/CHANGELOG\.md$/;
+const CHANGESET_PATH_RE = /^\.changeset\/[^/]+\.md$/;
+const ALLOWED_PACKAGE_JSON_TOP_LEVEL_FIELDS = new Set(["version"]);
+const ALLOWED_PACKAGE_JSON_DEPENDENCY_BLOCKS = new Set([
+  "dependencies",
+  "devDependencies",
+  "optionalDependencies",
+  "peerDependencies",
+]);
 const RELEASE_BRANCH_RE = /^changeset-release\/(?:main|next)$/;
 const TEMP_BRANCH_RE = /^changeset-release\/(?:main|next)-api-commit-[^/]+$/;
 const USER_AGENT = "morpho-sdks-release-version-commit";
@@ -21,9 +31,9 @@ const USER_AGENT = "morpho-sdks-release-version-commit";
  */
 export function isAllowedVersionPath(path) {
   return (
-    /^packages\/[^/]+\/package\.json$/.test(path) ||
-    /^packages\/[^/]+\/CHANGELOG\.md$/.test(path) ||
-    /^\.changeset\/[^/]+\.md$/.test(path) ||
+    PACKAGE_MANIFEST_PATH_RE.test(path) ||
+    PACKAGE_CHANGELOG_PATH_RE.test(path) ||
+    CHANGESET_PATH_RE.test(path) ||
     path === ".changeset/pre.json"
   );
 }
@@ -79,6 +89,10 @@ export function collectVersionChanges(options = {}) {
       stats = lstatSync(absolutePath);
     } catch (error) {
       if (isNotFoundError(error)) {
+        if (PACKAGE_MANIFEST_PATH_RE.test(path)) {
+          throw new Error(`Versioning deleted package manifest "${path}".`);
+        }
+
         deletions.push({ path });
         continue;
       }
@@ -96,8 +110,17 @@ export function collectVersionChanges(options = {}) {
       path,
     });
 
+    const contents = readFileSync(absolutePath);
+    if (PACKAGE_MANIFEST_PATH_RE.test(path)) {
+      assertSafePackageJsonChange({
+        afterSource: contents.toString("utf8"),
+        beforeSource: readBaseVersionFile({ cwd, path, runGitImpl }),
+        path,
+      });
+    }
+
     additions.push({
-      contents: readFileSync(absolutePath).toString("base64"),
+      contents: contents.toString("base64"),
       path,
     });
   }
@@ -527,6 +550,87 @@ function validateGitPath(path) {
   }
 
   return path;
+}
+
+function readBaseVersionFile(options) {
+  try {
+    return options
+      .runGitImpl(["show", `HEAD:${options.path}`], {
+        cwd: options.cwd,
+        stdio: ["ignore", "pipe", "pipe"],
+      })
+      .toString("utf8");
+  } catch (error) {
+    if (hasExitStatus(error, 128)) {
+      throw new Error(`Versioning added package manifest "${options.path}".`);
+    }
+
+    throw error;
+  }
+}
+
+function assertSafePackageJsonChange(options) {
+  const before = parsePackageJson(options.beforeSource, options.path);
+  const after = parsePackageJson(options.afterSource, options.path);
+  const fields = new Set([...Object.keys(before), ...Object.keys(after)]);
+
+  for (const field of fields) {
+    if (JSON.stringify(before[field]) === JSON.stringify(after[field])) {
+      continue;
+    }
+
+    if (ALLOWED_PACKAGE_JSON_TOP_LEVEL_FIELDS.has(field)) {
+      continue;
+    }
+
+    if (ALLOWED_PACKAGE_JSON_DEPENDENCY_BLOCKS.has(field)) {
+      const beforeNames = getDependencyNames({
+        field,
+        manifest: before,
+        path: options.path,
+      });
+      const afterNames = getDependencyNames({
+        field,
+        manifest: after,
+        path: options.path,
+      });
+
+      if (beforeNames.join(",") !== afterNames.join(",")) {
+        throw new Error(
+          `Disallowed dep-name change in ${field} of ${options.path}.`,
+        );
+      }
+
+      continue;
+    }
+
+    throw new Error(
+      `Disallowed package.json field change "${field}" in ${options.path}.`,
+    );
+  }
+}
+
+function parsePackageJson(source, path) {
+  try {
+    return JSON.parse(source);
+  } catch (error) {
+    throw new Error(`Invalid package manifest JSON in "${path}".`, {
+      cause: error,
+    });
+  }
+}
+
+function getDependencyNames(options) {
+  const value = options.manifest[options.field];
+  if (value == null) return [];
+
+  if (typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(
+      `Invalid dependency block "${options.field}" in ${options.path}.`,
+    );
+  }
+
+  return Object.keys(value).sort();
 }
 
 function resolveWorktreePath(cwd, path) {

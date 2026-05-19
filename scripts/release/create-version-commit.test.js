@@ -114,6 +114,115 @@ describe("collectVersionChanges", () => {
     });
   });
 
+  test("behavior: allows dependency range changes without dependency name changes", () => {
+    const root = createGitRepo({
+      dependencies: {
+        "@morpho-org/blue-sdk": "workspace:^",
+      },
+      devDependencies: {
+        "@morpho-org/test": "workspace:^",
+      },
+      name: "@morpho-org/morpho-sdk",
+      peerDependencies: {
+        viem: "^2.0.0",
+      },
+      version: "1.0.0",
+    });
+    const manifest = {
+      dependencies: {
+        "@morpho-org/blue-sdk": "5.23.4",
+      },
+      devDependencies: {
+        "@morpho-org/test": "2.7.4",
+      },
+      name: "@morpho-org/morpho-sdk",
+      peerDependencies: {
+        viem: "^2.50.0",
+      },
+      version: "1.1.0",
+    };
+    writeFileSync(
+      join(root, "packages/morpho-sdk/package.json"),
+      `${JSON.stringify(manifest)}\n`,
+    );
+
+    expect(collectVersionChanges({ cwd: root })).toMatchObject({
+      additions: [
+        {
+          contents: Buffer.from(`${JSON.stringify(manifest)}\n`).toString(
+            "base64",
+          ),
+          path: "packages/morpho-sdk/package.json",
+        },
+      ],
+      deletions: [],
+      disallowedPaths: [],
+      paths: ["packages/morpho-sdk/package.json"],
+    });
+  });
+
+  test("error: rejects package manifest field changes", () => {
+    const root = createGitRepo();
+    writeFileSync(
+      join(root, "packages/morpho-sdk/package.json"),
+      `${JSON.stringify({
+        name: "@morpho-org/morpho-sdk",
+        scripts: { prepublishOnly: "node payload.js" },
+        version: "1.1.0",
+      })}\n`,
+    );
+
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      'Disallowed package.json field change "scripts" in packages/morpho-sdk/package.json.',
+    );
+  });
+
+  test("error: rejects dependency name changes", () => {
+    const root = createGitRepo({
+      dependencies: {
+        "@morpho-org/blue-sdk": "workspace:^",
+      },
+      name: "@morpho-org/morpho-sdk",
+      version: "1.0.0",
+    });
+    writeFileSync(
+      join(root, "packages/morpho-sdk/package.json"),
+      `${JSON.stringify({
+        dependencies: {
+          "@morpho-org/blue-sdk-typosquat": "5.23.4",
+        },
+        name: "@morpho-org/morpho-sdk",
+        version: "1.1.0",
+      })}\n`,
+    );
+
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      "Disallowed dep-name change in dependencies of packages/morpho-sdk/package.json.",
+    );
+  });
+
+  test("error: rejects added package manifests", () => {
+    const root = createGitRepo();
+    mkdirSync(join(root, "packages/blue-sdk"), { recursive: true });
+    writeFileSync(
+      join(root, "packages/blue-sdk/package.json"),
+      `${JSON.stringify({ name: "@morpho-org/blue-sdk", version: "1.0.0" })}\n`,
+    );
+
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      'Versioning added package manifest "packages/blue-sdk/package.json".',
+    );
+  });
+
+  test("error: rejects deleted package manifests", () => {
+    const root = createGitRepo();
+    rmSync(join(root, "packages/morpho-sdk/package.json"));
+
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      'Versioning deleted package manifest "packages/morpho-sdk/package.json".',
+    );
+  });
+
   test("behavior: rejects symlinked version files", () => {
     const root = createGitRepo();
     const externalRoot = mkdtempSync(join(tmpdir(), "version-external-"));
@@ -137,6 +246,7 @@ describe("collectVersionChanges", () => {
       join(root, "packages/blue-sdk/package.json"),
       `${JSON.stringify({ name: "@morpho-org/blue-sdk", version: "1.0.0" })}\n`,
     );
+    commitAll(root, "add blue package");
     rmSync(join(root, "packages/morpho-sdk/package.json"));
     symlinkSync(
       join(root, "packages/blue-sdk/package.json"),
@@ -794,14 +904,16 @@ describe("pushReleaseBranchWithLease", () => {
   });
 });
 
-function createGitRepo() {
+function createGitRepo(
+  manifest = { name: "@morpho-org/morpho-sdk", version: "1.0.0" },
+) {
   const root = mkdtempSync(join(tmpdir(), "version-commit-"));
   tempDirs.push(root);
   mkdirSync(join(root, "packages/morpho-sdk"), { recursive: true });
   mkdirSync(join(root, ".changeset"), { recursive: true });
   writeFileSync(
     join(root, "packages/morpho-sdk/package.json"),
-    `${JSON.stringify({ name: "@morpho-org/morpho-sdk", version: "1.0.0" })}\n`,
+    `${JSON.stringify(manifest)}\n`,
   );
   writeFileSync(join(root, ".changeset/alpha.md"), "---\n");
   runGit(["-c", "init.defaultBranch=main", "init"], root);
