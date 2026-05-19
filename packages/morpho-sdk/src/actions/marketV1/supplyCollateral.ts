@@ -63,6 +63,8 @@ export interface MarketV1SupplyCollateralParams {
  *   is provided and the signed asset differs from `marketParams.collateralToken`.
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ *   signature is missing its expiration.
  * @example
  * ```ts
  * import { marketV1SupplyCollateral } from "@morpho-org/morpho-sdk";

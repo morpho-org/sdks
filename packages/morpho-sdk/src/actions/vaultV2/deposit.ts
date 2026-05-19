@@ -72,6 +72,8 @@ export interface VaultV2DepositParams {
  *   signature is ignored on the native-only path (`amount === 0n` with `nativeAmount > 0n`).
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `amount > 0n` and
  *   `requirementSignature` is provided and the signed amount differs from `args.amount`.
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when `amount > 0n` and a
+ *   Permit2 requirement signature is missing its expiration.
  * @throws {ZeroDepositAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @example
  * ```ts

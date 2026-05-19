@@ -96,6 +96,8 @@ export interface MarketV1RepayWithdrawCollateralParams {
  *   is provided and the signed asset differs from `marketParams.loanToken`.
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.transferAmount`.
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ *   signature is missing its expiration.
  * @example
  * ```ts
  * import { marketV1RepayWithdrawCollateral } from "@morpho-org/morpho-sdk";

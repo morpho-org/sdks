@@ -6,7 +6,7 @@ This document describes how **Bundler3** and **GeneralAdapter1** are used in the
 
 Bundler3 is a _multicall_ contract specific to the Morpho ecosystem. It takes as input a **list of typed actions** (ERC20 transfers, permit, permit2, native wrapping, ERC-4626 deposits, Morpho Blue calls, reallocations…) and executes them **atomically in a single transaction**.
 
-Instead of exposing the user directly to target contracts (ERC-4626 vault, Morpho Blue, PublicAllocator, WETH…), the SDK encodes a bundle via its local [`BundlerAction.encodeBundle(chainId, actions)`](src/actions/bundler.ts). The `to` of the resulting transaction is **always** the Bundler3 address for the target chain.
+Instead of exposing the user directly to target contracts (ERC-4626 vault, Morpho Blue, PublicAllocator, WETH…), the SDK encodes a bundle via its local [`BundlerAction.encodeBundle(chainId, actions)`](src/bundler/actions.ts). The `to` of the resulting transaction is **always** the Bundler3 address for the target chain.
 
 ### GeneralAdapter1: the trusted adapter
 
