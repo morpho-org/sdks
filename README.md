@@ -33,6 +33,10 @@ The packages below are lower-level building blocks. Use them only if `@morpho-or
 - [**`@morpho-org/blue-sdk-wagmi`**](./packages/blue-sdk-wagmi/) `⚠️ deprecated`: Wagmi-based package that exports Wagmi (React) hooks to fetch Morpho-related entities
 - [**`@morpho-org/simulation-sdk-wagmi`**](./packages/simulation-sdk-wagmi/) `⚠️ deprecated`: Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states
 
+#### WDK (Tether Wallet Development Kit)
+
+- [**`@morpho-org/wdk-protocol-lending-morpho-evm`**](./packages/wdk-protocol-lending-morpho-evm/) `(Apache-2.0)`: WDK lending module that bridges WDK EVM accounts (`@tetherto/wdk-wallet-evm`, `@tetherto/wdk-wallet-evm-erc-4337`) to `@morpho-org/morpho-sdk`, exposing vault and market flows (`supply`, `withdraw`, `borrow`, `repay`, collateral) with matching `quote*` / `get*Requirements`. Ships a Bare runtime entry alongside Node.
+
 #### Development
 
 - [**`@morpho-org/morpho-ts`**](./packages/morpho-ts/): TypeScript package to handle all things time & format-related
@@ -97,4 +101,6 @@ Here's a tutorial on how to link a specific package to debug at runtime:
 
 ## License
 
-[MIT](/LICENSE) License
+MIT — see [LICENSE](/LICENSE).
+
+Exception: `packages/wdk-protocol-lending-morpho-evm` ships under Apache-2.0 (see its [LICENSE](./packages/wdk-protocol-lending-morpho-evm/LICENSE)).
