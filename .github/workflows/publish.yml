@@ -67,6 +67,18 @@ jobs:
 
       - name: Configure git identity
         run: |
+          set -euo pipefail
+
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hook before git identity configuration."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -113,6 +125,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hook before package publish."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
+          fi
 
           publish_tag="latest"
           if [ "${TARGET_BRANCH}" = "next" ]; then
@@ -220,6 +242,16 @@ jobs:
         run: |
           set -euo pipefail
 
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hook before package tag push."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
+          fi
+
           mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           refs=()
 
@@ -277,6 +309,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hook before GitHub release update."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
+          fi
 
           mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           releases_dir="${RUNNER_TEMP}/github-releases"

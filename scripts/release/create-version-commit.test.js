@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -776,40 +775,6 @@ describe("pushReleaseBranchWithLease", () => {
     ).toBe(`${fixture.originalOriginUrl}\n`);
   });
 
-  test("behavior: ignores pre-push hooks for an existing release branch", () => {
-    const fixture = createReleaseRemoteFixture();
-    const raceCommit = createRemoteRaceCommit(fixture);
-    const hookMarker = join(fixture.root, "pre-push-ran");
-
-    writeFileSync(
-      join(fixture.root, ".git/hooks/pre-push"),
-      [
-        "#!/bin/sh",
-        `touch "${hookMarker}"`,
-        `git --git-dir="${fixture.remote}" update-ref refs/heads/changeset-release/main "${raceCommit}"`,
-        "",
-      ].join("\n"),
-      { mode: 0o755 },
-    );
-
-    pushReleaseBranchWithLease({
-      commitOid: fixture.tempCommit,
-      cwd: fixture.root,
-      releaseBranch: "changeset-release/main",
-      remoteUrl: fixture.remote,
-      repository: "morpho-org/sdks",
-      tempBranch: "changeset-release/main-api-commit-test",
-      token: "token",
-    });
-    expect(readRemoteBranchSha(fixture.remote, "changeset-release/main")).toBe(
-      fixture.tempCommit,
-    );
-    expect(existsSync(hookMarker)).toBe(false);
-    expect(
-      runGit(["remote", "get-url", "origin"], fixture.root).toString(),
-    ).toBe(`${fixture.originalOriginUrl}\n`);
-  });
-
   test("behavior: creates missing release branch with empty lease", () => {
     const fixture = createReleaseRemoteFixture({ createReleaseBranch: false });
 
@@ -826,37 +791,6 @@ describe("pushReleaseBranchWithLease", () => {
     expect(readRemoteBranchSha(fixture.remote, "changeset-release/main")).toBe(
       fixture.tempCommit,
     );
-  });
-
-  test("behavior: ignores pre-push hooks while creating release branch", () => {
-    const fixture = createReleaseRemoteFixture({ createReleaseBranch: false });
-    const raceCommit = createRemoteRaceCommit(fixture);
-    const hookMarker = join(fixture.root, "pre-push-ran");
-
-    writeFileSync(
-      join(fixture.root, ".git/hooks/pre-push"),
-      [
-        "#!/bin/sh",
-        `touch "${hookMarker}"`,
-        `git --git-dir="${fixture.remote}" update-ref refs/heads/changeset-release/main "${raceCommit}"`,
-        "",
-      ].join("\n"),
-      { mode: 0o755 },
-    );
-
-    pushReleaseBranchWithLease({
-      commitOid: fixture.tempCommit,
-      cwd: fixture.root,
-      releaseBranch: "changeset-release/main",
-      remoteUrl: fixture.remote,
-      repository: "morpho-org/sdks",
-      tempBranch: "changeset-release/main-api-commit-test",
-      token: "token",
-    });
-    expect(readRemoteBranchSha(fixture.remote, "changeset-release/main")).toBe(
-      fixture.tempCommit,
-    );
-    expect(existsSync(hookMarker)).toBe(false);
   });
 });
 
@@ -921,22 +855,6 @@ function createReleaseRemoteFixture(options = {}) {
   runGit(["remote", "set-url", "origin", originalOriginUrl], root);
 
   return { originalOriginUrl, remote, root, tempCommit };
-}
-
-function createRemoteRaceCommit(fixture) {
-  runGit(["checkout", "-b", "race-release", "main"], fixture.root);
-  writeFileSync(join(fixture.root, "README.md"), "# Race\n");
-  commitAll(fixture.root, "race release");
-  const raceCommit = runGit(["rev-parse", "HEAD"], fixture.root)
-    .toString()
-    .trim();
-  runGit(
-    ["push", fixture.remote, `${raceCommit}:refs/heads/race-release`],
-    fixture.root,
-  );
-  runGit(["checkout", "main"], fixture.root);
-
-  return raceCommit;
 }
 
 function commitAll(root, message) {

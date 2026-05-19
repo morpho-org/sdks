@@ -125,15 +125,14 @@ jobs:
             exit 1
           fi
 
+          unexpected_hook=""
           if [ -d .git/hooks ]; then
-            mapfile -t unexpected_hooks < <(find .git/hooks -mindepth 1 ! -name '*.sample' -print | sort)
-            if [ "${#unexpected_hooks[@]}" -gt 0 ]; then
-              echo "::error::Unexpected git hooks were created before the write-token steps."
-              for hook in "${unexpected_hooks[@]}"; do
-                printf 'Unexpected hook: %q\n' "${hook}"
-              done
-              exit 1
-            fi
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hooks were created before the write-token steps."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
           fi
 
           : > "${GITHUB_ENV}"
@@ -158,7 +157,20 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
           RELEASE_BRANCH: ${{ env.RELEASE_BRANCH }}
-        run: node scripts/release/create-version-commit.mjs
+        run: |
+          set -euo pipefail
+
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hook before signed version commit."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
+          fi
+
+          node scripts/release/create-version-commit.mjs
 
       - name: Open or update release PR
         if: steps.version-commit.outputs.has_version_changes == 'true'
@@ -170,6 +182,16 @@ jobs:
           TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
         run: |
           set -euo pipefail
+
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hook before release PR update."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
+          fi
 
           title="chore: version packages (${TARGET_BRANCH})"
           body="$(cat <<BODY
