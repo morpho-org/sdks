@@ -5,10 +5,14 @@ import { describe, expect } from "vitest";
 import {
   computeMaxSupplySharePrice,
   isRequirementApproval,
+  MarketIdMismatchError,
   MorphoClient,
   marketV1Supply,
 } from "../../../src/index.js";
-import { CbbtcUsdcMarketV1 } from "../../fixtures/marketV1.js";
+import {
+  CbbtcUsdcMarketV1,
+  WbtcUsdcSourceMarket,
+} from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
@@ -138,5 +142,22 @@ describe("SupplyMarketV1", () => {
 
     // Sanity bound only — exact value depends on virtual-share scaling.
     expect(tx.action.args.maxSharePrice).toBeGreaterThan(0n);
+  });
+
+  test("error: MarketIdMismatchError when marketData is for a different market", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const otherMarket = morphoClient.marketV1(WbtcUsdcSourceMarket, mainnet.id);
+    const wrongMarketData = await otherMarket.getMarketData();
+
+    expect(() =>
+      market.supply({
+        userAddress: client.account.address,
+        amount: parseUnits("100", 6),
+        marketData: wrongMarketData,
+      }),
+    ).toThrow(MarketIdMismatchError);
   });
 });

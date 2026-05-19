@@ -54,7 +54,6 @@ describe("WithdrawMarketV1", () => {
       args: {
         assets: withdrawAmount,
         shares: 0n,
-        onBehalf: client.account.address,
         receiver: client.account.address,
         minSharePrice,
       },
@@ -198,7 +197,6 @@ describe("WithdrawMarketV1", () => {
 
     const tx = withdraw.buildTx();
     expect(tx.action.args.receiver).toBe(receiver);
-    expect(tx.action.args.onBehalf).toBe(client.account.address);
   });
 
   test("should require Morpho authorization for GeneralAdapter1", async ({

@@ -134,7 +134,6 @@ export interface MarketV1WithdrawAction
       market: Hex;
       assets: bigint;
       shares: bigint;
-      onBehalf: Address;
       receiver: Address;
       minSharePrice: bigint;
       reallocationFee: bigint;

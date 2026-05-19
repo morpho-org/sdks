@@ -25,8 +25,6 @@ export interface MarketV1WithdrawParams {
     assets: bigint;
     /** Withdraw shares amount (`0n` when withdrawing by assets). */
     shares: bigint;
-    /** Address whose supply position is debited. The bundler uses the transaction initiator. */
-    onBehalf: Address;
     /** Address that receives the withdrawn assets. */
     receiver: Address;
     /** Minimum withdraw share price (in ray). Slippage protection. */
@@ -55,14 +53,15 @@ export interface MarketV1WithdrawParams {
  * Reallocation fees accumulate in `tx.value`. The on-chain `morphoWithdraw` sends the assets
  * computed on-chain directly to `receiver`; no skim is required.
  *
- * Requires the user to have authorized `GeneralAdapter1` on Morpho (the bundler calls
- * `withdraw(..., onBehalf=user, ...)`).
+ * The withdraw is performed on behalf of the transaction initiator (signer) — there is no
+ * separate `onBehalf` field; mirror `marketV1Borrow`. The entity layer keeps `receiver` aligned
+ * with the user when none is provided. Requires the user to have authorized `GeneralAdapter1`
+ * on Morpho.
  *
  * @param params.market.chainId - The chain the market lives on.
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
  * @param params.args.assets - Withdraw amount in loan-token assets. Set to `0n` in shares mode.
  * @param params.args.shares - Withdraw amount in supply shares. Set to `0n` in assets mode.
- * @param params.args.onBehalf - Address whose Morpho supply position is debited.
  * @param params.args.receiver - Address that receives the withdrawn assets.
  * @param params.args.minSharePrice - Minimum acceptable withdraw share price (in ray). Slippage
  *   protection.
@@ -88,7 +87,6 @@ export interface MarketV1WithdrawParams {
  *   args: {
  *     assets: 1_000_000_000n,
  *     shares: 0n,
- *     onBehalf: supplier,
  *     receiver: supplier,
  *     minSharePrice: 0n, // disables slippage protection — production code should compute via `computeMinWithdrawSharePrice` from market state + slippage tolerance
  *   },
@@ -98,7 +96,7 @@ export interface MarketV1WithdrawParams {
  */
 export const marketV1Withdraw = ({
   market: { chainId, marketParams },
-  args: { assets, shares, onBehalf, receiver, minSharePrice, reallocations },
+  args: { assets, shares, receiver, minSharePrice, reallocations },
   metadata,
 }: MarketV1WithdrawParams): Readonly<Transaction<MarketV1WithdrawAction>> => {
   if (assets < 0n || shares < 0n) {
@@ -148,7 +146,6 @@ export const marketV1Withdraw = ({
         market: marketParams.id,
         assets,
         shares,
-        onBehalf,
         receiver,
         minSharePrice,
         reallocationFee,

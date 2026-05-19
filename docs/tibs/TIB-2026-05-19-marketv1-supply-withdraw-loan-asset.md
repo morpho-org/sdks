@@ -110,7 +110,6 @@ interface MarketV1WithdrawAction extends BaseAction<"marketV1Withdraw", {
   market: Hex;
   assets: bigint;
   shares: bigint;
-  onBehalf: Address;
   receiver: Address;
   minSharePrice: bigint;
   reallocationFee: bigint;
@@ -191,6 +190,7 @@ Bundle the native-unwrap path with `withdraw` to ship a complete native story.
 - **`marketV1WithdrawNative`** — auto-unwrap on withdraw when `loanToken === wNative`. Requires routing through `generalAdapter1` as the bundler receiver and adding `unwrapNative` at the bundle tail. Track when an integrator asks.
 - **Supply on behalf of a different address.** Already supported via `onBehalf`; verify in fork tests that the entity passes the user's address by default.
 - **Withdraw to a different receiver.** Supported by the action; the entity passes `receiver = userAddress` by default. A future ergonomic shortcut on the entity (`withdraw({ receiver })`) is possible if needed.
+- **Withdraw is signer-bound (no `onBehalf`).** The bundled `morphoWithdraw` call on GeneralAdapter1 uses the transaction initiator as the position holder — mirror `marketV1Borrow`. A separate `onBehalf` argument is rejected upstream by the action signature to avoid the simulation/UI lie noted in the third review pass.
 
 ## References
 

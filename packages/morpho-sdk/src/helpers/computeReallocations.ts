@@ -24,10 +24,17 @@ import {
  * In both cases reallocated assets are added on the supply side; `requiredAssets`
  * and `absoluteShortfall` are derived from the operation-specific post-state.
  *
+ * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to
+ * `{ operation: "borrow", amount }`) — preserved so direct helper callers that
+ * predate the operation discriminator keep working.
+ *
  * @param params.reallocationData - The simulation state containing market, vault, and position data.
  * @param params.marketId - The target market to reallocate liquidity into.
  * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+ *        Defaults to `"borrow"` when `borrowAmount` is provided.
  * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
+ * @param params.borrowAmount - {@deprecated} Equivalent to `{ operation: "borrow", amount }`. Use the
+ *   `operation` + `amount` form on new code.
  * @param params.options - Optional reallocation computation options.
  * @returns Array of vault reallocations, sorted with withdrawals in ascending market id order.
  * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the operation's
@@ -36,19 +43,35 @@ import {
  * @throws {MissingPublicAllocatorConfigError} When a vault selected for reallocation has no
  *   PublicAllocator configuration in the simulation state.
  */
-export const computeReallocations = ({
-  reallocationData: data,
-  marketId,
-  operation,
-  amount,
-  options,
-}: {
-  readonly reallocationData: SimulationState;
-  readonly marketId: MarketId;
-  readonly operation: "borrow" | "withdraw";
-  readonly amount: bigint;
-  readonly options?: ReallocationComputeOptions;
-}): readonly VaultReallocation[] => {
+export const computeReallocations = (
+  params: {
+    readonly reallocationData: SimulationState;
+    readonly marketId: MarketId;
+    readonly options?: ReallocationComputeOptions;
+  } & (
+    | {
+        readonly operation: "borrow" | "withdraw";
+        readonly amount: bigint;
+        readonly borrowAmount?: never;
+      }
+    | {
+        readonly operation?: "borrow";
+        readonly amount?: never;
+        readonly borrowAmount: bigint;
+      }
+  ),
+): readonly VaultReallocation[] => {
+  const { reallocationData: data, marketId, options } = params;
+  // Resolve legacy `borrowAmount` alias to the canonical { operation, amount } pair.
+  const operation: "borrow" | "withdraw" =
+    "operation" in params && params.operation !== undefined
+      ? params.operation
+      : "borrow";
+  const amount: bigint =
+    "amount" in params && params.amount !== undefined
+      ? params.amount
+      : params.borrowAmount!;
+
   if (options?.enabled === false) return [];
 
   const market = data.getMarket(marketId).accrueInterest(data.block.timestamp);

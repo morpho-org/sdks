@@ -31,7 +31,6 @@ describe("marketV1Withdraw unit tests", () => {
       args: {
         assets,
         shares: 0n,
-        onBehalf: client.account.address,
         receiver: client.account.address,
         minSharePrice: 0n,
       },
@@ -42,7 +41,6 @@ describe("marketV1Withdraw unit tests", () => {
     expect(tx.action.args.market).toBe(CbbtcUsdcMarketV1.id);
     expect(tx.action.args.assets).toBe(assets);
     expect(tx.action.args.shares).toBe(0n);
-    expect(tx.action.args.onBehalf).toBe(client.account.address);
     expect(tx.action.args.receiver).toBe(client.account.address);
     expect(tx.action.args.minSharePrice).toBe(0n);
     expect(tx.action.args.reallocationFee).toBe(0n);
@@ -60,7 +58,6 @@ describe("marketV1Withdraw unit tests", () => {
       args: {
         assets: 0n,
         shares,
-        onBehalf: client.account.address,
         receiver: client.account.address,
         minSharePrice: 0n,
       },
@@ -72,9 +69,7 @@ describe("marketV1Withdraw unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
-  test("should support a receiver different from onBehalf", async ({
-    client,
-  }) => {
+  test("should support a receiver different from the signer", async () => {
     const receiver = "0x000000000000000000000000000000000000dEaD" as const;
 
     const tx = marketV1Withdraw({
@@ -82,13 +77,11 @@ describe("marketV1Withdraw unit tests", () => {
       args: {
         assets: parseUnits("100", 6),
         shares: 0n,
-        onBehalf: client.account.address,
         receiver,
         minSharePrice: 0n,
       },
     });
 
-    expect(tx.action.args.onBehalf).toBe(client.account.address);
     expect(tx.action.args.receiver).toBe(receiver);
   });
 
@@ -101,7 +94,6 @@ describe("marketV1Withdraw unit tests", () => {
         args: {
           assets: 0n,
           shares: 0n,
-          onBehalf: client.account.address,
           receiver: client.account.address,
           minSharePrice: 0n,
         },
@@ -118,7 +110,6 @@ describe("marketV1Withdraw unit tests", () => {
         args: {
           assets: -1n,
           shares: 0n,
-          onBehalf: client.account.address,
           receiver: client.account.address,
           minSharePrice: 0n,
         },
@@ -135,7 +126,6 @@ describe("marketV1Withdraw unit tests", () => {
         args: {
           assets: parseUnits("100", 6),
           shares: parseUnits("100", 24),
-          onBehalf: client.account.address,
           receiver: client.account.address,
           minSharePrice: 0n,
         },
@@ -152,7 +142,6 @@ describe("marketV1Withdraw unit tests", () => {
         args: {
           assets: parseUnits("100", 6),
           shares: 0n,
-          onBehalf: client.account.address,
           receiver: client.account.address,
           minSharePrice: -1n,
         },
@@ -166,7 +155,6 @@ describe("marketV1Withdraw unit tests", () => {
       args: {
         assets: parseUnits("100", 6),
         shares: 0n,
-        onBehalf: client.account.address,
         receiver: client.account.address,
         minSharePrice: 0n,
       },
@@ -199,7 +187,6 @@ describe("marketV1Withdraw unit tests", () => {
       args: {
         assets: parseUnits("100", 6),
         shares: 0n,
-        onBehalf: client.account.address,
         receiver: client.account.address,
         minSharePrice: 0n,
         reallocations,
@@ -218,7 +205,6 @@ describe("marketV1Withdraw unit tests", () => {
       args: {
         assets: parseUnits("100", 6),
         shares: 0n,
-        onBehalf: client.account.address,
         receiver: client.account.address,
         minSharePrice: 0n,
       },

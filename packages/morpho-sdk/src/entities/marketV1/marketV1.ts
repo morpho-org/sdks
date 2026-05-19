@@ -56,6 +56,7 @@ import {
   type AssetsOrSharesArgs,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
+  MarketIdMismatchError,
   type MarketV1BorrowAction,
   type MarketV1RepayAction,
   type MarketV1RepayWithdrawCollateralAction,
@@ -483,6 +484,10 @@ export class MorphoMarketV1 implements MarketV1Actions {
       throw new ZeroSupplyAmountError(this.marketParams.id);
     }
 
+    if (marketData.id !== this.marketParams.id) {
+      throw new MarketIdMismatchError(marketData.id, this.marketParams.id);
+    }
+
     validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
@@ -601,7 +606,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
           args: {
             assets,
             shares,
-            onBehalf: userAddress,
             receiver,
             minSharePrice,
             reallocations,
@@ -1299,23 +1303,23 @@ export class MorphoMarketV1 implements MarketV1Actions {
       | { operation?: "borrow"; amount?: never; borrowAmount: bigint }
     ),
   ): readonly VaultReallocation[] {
-    const { reallocationData, options } = params;
-    // Resolve legacy `borrowAmount` alias to the canonical { operation, amount } pair.
-    const operation: "borrow" | "withdraw" =
-      "operation" in params && params.operation !== undefined
-        ? params.operation
-        : "borrow";
-    const amount: bigint =
-      "amount" in params && params.amount !== undefined
-        ? params.amount
-        : params.borrowAmount!;
-
+    // The helper itself accepts the legacy `borrowAmount` alias — forward as-is.
+    const marketId = this.marketParams.id;
+    const options = { enabled: true, ...params.options };
+    if ("borrowAmount" in params && params.borrowAmount !== undefined) {
+      return computeReallocations({
+        reallocationData: params.reallocationData,
+        marketId,
+        borrowAmount: params.borrowAmount,
+        options,
+      });
+    }
     return computeReallocations({
-      reallocationData,
-      marketId: this.marketParams.id,
-      operation,
-      amount,
-      options: { enabled: true, ...options },
+      reallocationData: params.reallocationData,
+      marketId,
+      operation: params.operation as "borrow" | "withdraw",
+      amount: params.amount as bigint,
+      options,
     });
   }
 }
