@@ -8,6 +8,8 @@ Every PR is measured against the rules below. A change that violates an architec
 
 > **Enforcement note.** Some rules below are enforced by tooling today (Biome formatter, fork harness in `@morpho-org/test`, Changesets generation). Most are **review-time conventions** that humans and reviewing agents apply: JSDoc on every export, layered-import bans, the §2 forbidden-patterns list (Biome's `noExplicitAny` is warn-level, `noParameterAssign` is disabled, and there's no rule banning `as unknown as` / `@ts-ignore` / async-in-actions / framework imports / mocked viem clients on RPC paths), changeset-gates-CI, full coverage thresholds. Where a rule isn't backed by an automated check, treat it as binding regardless — wiring CI gates is tracked separately.
 
+> **Review personas.** The review-time conventions above are implemented by the `/pr-review-{ci,gh,local}` slash commands, which fan out to specialized review personas at [`.agents/personas/`](./.agents/personas/). Baseline personas fire on every review: `code-quality`, `module-api-architecture`, `web3-security`, `silent-failure-hunter`, `style-conventions`, `documentation`, `test-coverage`. Conditional personas fire when their trigger flag is true: `ci-release-security` (when the diff touches `.github/workflows/**`, `.changeset/**`, `pnpm-lock.yaml`, `.npmrc`, or publish-flow scripts). Adding a new convention to this file usually means adding a matching bullet to the relevant persona — keep the two in sync.
+
 ---
 
 ## 1. Architecture
