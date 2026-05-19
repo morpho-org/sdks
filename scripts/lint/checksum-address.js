@@ -21,7 +21,7 @@ const lint = (path) => {
 
     if (
       (!file.endsWith(".ts") && !file.endsWith(".js")) ||
-      ignored.some((pattern) => file.includes(pattern))
+      ignored.some((pattern) => filePath.includes(pattern))
     )
       continue;
 

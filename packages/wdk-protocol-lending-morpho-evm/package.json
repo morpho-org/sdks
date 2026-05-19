@@ -73,11 +73,6 @@
     "typescript": "^6.0.3",
     "viem": "^2.49.3"
   },
-  "overrides": {
-    "@gelatonetwork/relay-sdk": {
-      "axios": "^1.15.0"
-    }
-  },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
