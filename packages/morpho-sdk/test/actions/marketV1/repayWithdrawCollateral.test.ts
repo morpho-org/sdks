@@ -4,9 +4,10 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   computeMaxRepaySharePrice,
   isRequirementApproval,
@@ -27,6 +28,10 @@ import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("RepayWithdrawCollateralMarketV1", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("should create repayWithdrawCollateral bundle (by assets)", async ({
     client,
   }) => {
@@ -242,6 +247,85 @@ describe("RepayWithdrawCollateralMarketV1", () => {
     );
 
     // User should have received collateral back
+    expect(finalState.userCollateralTokenBalance).toEqual(
+      initialState.userCollateralTokenBalance + collateralAmount,
+    );
+  });
+
+  // Regression: same accrual bug as repay({ shares }) — transferAmount used
+  // to be sized from the stale market snapshot, so a one-shot deleverage on
+  // a dormant market reverted before collateral could be released.
+  test("should full repay by shares and withdraw all collateral on a dormant market", async ({
+    client,
+  }) => {
+    const collateralAmount = parseUnits("10", 18);
+    const borrowAmount = parseUnits("1000", 18);
+
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: WethUsdsMarketV1,
+      collateralAmount,
+    });
+    await borrow({
+      client,
+      chainId: mainnet.id,
+      market: WethUsdsMarketV1,
+      borrowAmount,
+    });
+
+    const fastForwardedTimestamp =
+      (await client.timestamp()) + Time.s.from.d(30n);
+    await client.setNextBlockTimestamp({ timestamp: fastForwardedTimestamp });
+    // Align wall-clock with chain time so the SDK's `Time.timestamp()` projection
+    // matches the block the repay tx will execute on.
+    vi.useFakeTimers({
+      now: Number(fastForwardedTimestamp) * 1000,
+      toFake: ["Date"],
+    });
+
+    await client.deal({
+      erc20: WethUsdsMarketV1.loanToken,
+      amount: parseUnits("100000", 18),
+    });
+
+    const {
+      markets: {
+        WethUsdsMarketV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { markets: { WethUsdsMarketV1 } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client, {
+          supportSignature: false,
+        });
+        const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        const action = market.repayWithdrawCollateral({
+          userAddress: client.account.address,
+          shares: positionData.borrowShares,
+          withdrawAmount: positionData.collateral,
+          positionData,
+        });
+
+        const requirements = await action.getRequirements();
+        for (const req of requirements) {
+          if (isRequirementApproval(req) || isRequirementAuthorization(req)) {
+            await client.sendTransaction(req);
+          }
+        }
+
+        const tx = action.buildTx();
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.position.borrowShares).toBe(0n);
+    expect(finalState.position.collateral).toBe(0n);
     expect(finalState.userCollateralTokenBalance).toEqual(
       initialState.userCollateralTokenBalance + collateralAmount,
     );

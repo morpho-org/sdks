@@ -156,6 +156,9 @@ TIB conventions:
 - Addenda may be appended to record operational updates that affect
   how the TIB is applied without changing the decision itself.
 - TIB identifiers use CalVer (YYYY-MM-DD) based on the date the TIB was first drafted.
-- See TIB-2026-04-08 (docs/tibs/TIB-2026-04-08-tib-structure.md) for the canonical structure
-  and section semantics this template is built on.
+  Earlier TIBs in this repo use sequential IDs (TIB-0002, TIB-0003); new TIBs use CalVer.
+- A TIB is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
+  TIB decides on is codified in the relevant section of `AGENTS.md`; the TIB stays as
+  the dated record of how the decision was reached. TIBs feed `AGENTS.md` — they do
+  not override it.
 -->
