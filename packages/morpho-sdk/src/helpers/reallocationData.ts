@@ -506,7 +506,7 @@ export class ReallocationData implements InputReallocationData {
    *
    * @internal
    */
-  private applyPublicReallocation({
+  protected applyPublicReallocation({
     vault,
     supplyMarketId,
     withdrawal,

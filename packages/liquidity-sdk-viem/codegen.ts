@@ -2,6 +2,7 @@ import type { CodegenConfig } from "@graphql-codegen/cli";
 
 import { BLUE_API_GRAPHQL_URL } from "@morpho-org/morpho-ts";
 
+// Concatenated to prevent codegen from interpreting `${string}` as a substitution.
 const hexStringScalar = "`0x$" + "{string}`";
 
 const config: CodegenConfig = {

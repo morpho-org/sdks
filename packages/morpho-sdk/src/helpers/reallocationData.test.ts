@@ -280,20 +280,22 @@ const makeInput = ({
   },
 });
 
-type ReallocationDataInternals = {
-  applyPublicReallocation(params: {
+class TestReallocationData extends ReallocationData {
+  public applyPublicReallocationForTest(params: {
     readonly vault: Address;
     readonly supplyMarketId: MarketId;
     readonly withdrawal: PublicReallocation;
     readonly timestamp: bigint;
-  }): ReallocationData;
-};
+  }) {
+    return this.applyPublicReallocation(params);
+  }
+}
 
 const applyPublicReallocation = (
   data: ReallocationData,
   withdrawal: PublicReallocation,
 ) =>
-  (data as unknown as ReallocationDataInternals).applyPublicReallocation({
+  new TestReallocationData(data).applyPublicReallocationForTest({
     vault: withdrawal.vault,
     supplyMarketId: targetParams.id,
     withdrawal,

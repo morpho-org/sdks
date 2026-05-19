@@ -59,7 +59,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 A scannable list of patterns reviewers reject. Most are review-only today (per the Enforcement note); treat them as binding regardless. Reviewers cite this section by number.
 
-1. `any`, `as unknown as`, `@ts-ignore`, `@ts-expect-error` (without an issue link and a deletion plan).
+1. `any`, `@ts-ignore`, `@ts-expect-error` (without an issue link and a deletion plan), and `as unknown as` outside test files. Test files may use `as unknown as` for narrow fixtures or test-only adapters when a real object would obscure the behavior under test.
 2. `throw new Error(...)` from SDK source. Every failure mode is a named, exported class.
 3. `async` in actions; clocks, randomness, network reads, or signing in transaction builders.
 4. Mutation of input arguments.
