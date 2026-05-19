@@ -1,6 +1,11 @@
 import {
   ChainId,
+  Eip5267Domain,
   Holding,
+  type IMarket,
+  type IPosition,
+  type IVault,
+  type IVaultMarketConfig,
   Market,
   type MarketId,
   MarketParams,
@@ -280,13 +285,15 @@ const makeInput = ({
   },
 });
 
+type ApplyPublicReallocationParams = {
+  readonly vault: Address;
+  readonly supplyMarketId: MarketId;
+  readonly withdrawal: PublicReallocation;
+  readonly timestamp: bigint;
+};
+
 class TestReallocationData extends ReallocationData {
-  public applyPublicReallocationForTest(params: {
-    readonly vault: Address;
-    readonly supplyMarketId: MarketId;
-    readonly withdrawal: PublicReallocation;
-    readonly timestamp: bigint;
-  }) {
+  public applyPublicReallocationForTest(params: ApplyPublicReallocationParams) {
     return this.applyPublicReallocation(params);
   }
 }
@@ -834,6 +841,131 @@ describe("ReallocationData SimulationState parity", () => {
 });
 
 describe("ReallocationData unit coverage", () => {
+  test("preserves documented entity fields when cloning inputs", () => {
+    const eip5267Domain = new Eip5267Domain({
+      fields: "0x1f",
+      name: "Clone Vault",
+      version: "1",
+      chainId: BigInt(ChainId.EthMainnet),
+      verifyingContract: VAULT,
+      salt: `0x${"44".repeat(32)}` as `0x${string}`,
+      extensions: [1n, 2n],
+    });
+    const marketInput = {
+      params: targetParams,
+      totalSupplyAssets: 123n,
+      totalBorrowAssets: 45n,
+      totalSupplyShares: 678n,
+      totalBorrowShares: 90n,
+      lastUpdate: TIMESTAMP - 10n,
+      fee: 11n,
+      price: 12n,
+      rateAtTarget: 13n,
+    } satisfies IMarket;
+    const positionInput = {
+      user: VAULT,
+      marketId: targetParams.id,
+      supplyShares: 14n,
+      borrowShares: 15n,
+      collateral: 16n,
+    } satisfies IPosition;
+    const vaultInput = {
+      address: VAULT,
+      name: "Clone Vault",
+      symbol: "cvTEST",
+      decimalsOffset: 2n,
+      asset: LOAN_TOKEN,
+      price: 17n,
+      eip5267Domain,
+      curator: OTHER_VAULT,
+      owner: zeroAddress,
+      guardian: VAULT,
+      fee: 18n,
+      feeRecipient: OTHER_VAULT,
+      skimRecipient: zeroAddress,
+      pendingTimelock: { value: 19n, validAt: 20n },
+      pendingGuardian: { value: OTHER_VAULT, validAt: 21n },
+      pendingOwner: VAULT,
+      timelock: 22n,
+      supplyQueue: [targetParams.id, sourceParams.id],
+      withdrawQueue: [sourceParams.id, targetParams.id],
+      totalSupply: 23n,
+      totalAssets: 24n,
+      lastTotalAssets: 25n,
+      lostAssets: 26n,
+      publicAllocatorConfig: {
+        admin: zeroAddress,
+        fee: 27n,
+        accruedFee: 28n,
+      },
+    } satisfies IVault;
+    const vaultMarketConfigInput = {
+      vault: VAULT,
+      marketId: targetParams.id,
+      cap: 29n,
+      pendingCap: { value: 30n, validAt: 31n },
+      removableAt: 32n,
+      enabled: true,
+      publicAllocatorConfig: new VaultMarketPublicAllocatorConfig({
+        vault: VAULT,
+        marketId: targetParams.id,
+        maxIn: 33n,
+        maxOut: 34n,
+      }),
+    } satisfies IVaultMarketConfig;
+    const market = new Market(marketInput);
+    const position = new Position(positionInput);
+    const vault = new Vault(vaultInput);
+    const vaultMarketConfig = new VaultMarketConfig(vaultMarketConfigInput);
+    const data = new ReallocationData({
+      chainId: ChainId.EthMainnet,
+      markets: { [targetParams.id]: market },
+      vaults: { [VAULT]: vault },
+      positions: { [VAULT]: { [targetParams.id]: position } },
+      vaultMarketConfigs: { [VAULT]: { [targetParams.id]: vaultMarketConfig } },
+    });
+
+    const clonedMarket = data.getMarket(targetParams.id);
+    const clonedPosition = data.getPosition(VAULT, targetParams.id);
+    const clonedVault = data.getVault(VAULT);
+    const clonedVaultMarketConfig = data.getVaultMarketConfig(
+      VAULT,
+      targetParams.id,
+    );
+
+    expect(clonedMarket).toEqual(market);
+    expect(clonedPosition).toEqual(position);
+    expect(clonedVault).toEqual(vault);
+    expect(clonedVaultMarketConfig).toEqual(vaultMarketConfig);
+
+    expect(clonedMarket).not.toBe(market);
+    expect(clonedPosition).not.toBe(position);
+    expect(clonedVault).not.toBe(vault);
+    expect(clonedVault.supplyQueue).not.toBe(vault.supplyQueue);
+    expect(clonedVault.withdrawQueue).not.toBe(vault.withdrawQueue);
+    expect(clonedVault.pendingTimelock).not.toBe(vault.pendingTimelock);
+    expect(clonedVault.pendingGuardian).not.toBe(vault.pendingGuardian);
+    expect(clonedVault.publicAllocatorConfig).not.toBe(
+      vault.publicAllocatorConfig,
+    );
+    expect(clonedVaultMarketConfig).not.toBe(vaultMarketConfig);
+    expect(clonedVaultMarketConfig.pendingCap).not.toBe(
+      vaultMarketConfig.pendingCap,
+    );
+    expect(clonedVaultMarketConfig.publicAllocatorConfig).not.toBe(
+      vaultMarketConfig.publicAllocatorConfig,
+    );
+  });
+
+  test("returns empty reallocations when disabled without reading missing target market", () => {
+    const data = new ReallocationData({ chainId: ChainId.EthMainnet });
+    const missingMarket = `0x${"55".repeat(32)}` as MarketId;
+
+    expect(
+      data.getMarketPublicReallocations(missingMarket, { enabled: false }),
+    ).toEqual({ withdrawals: [], data });
+  });
+
   test("clones inputs and exposes getters without sharing mutable entity instances", () => {
     const emptyData = new ReallocationData({ chainId: ChainId.EthMainnet });
     expect(emptyData.markets).toEqual({});

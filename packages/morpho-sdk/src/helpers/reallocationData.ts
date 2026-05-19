@@ -56,14 +56,14 @@ export interface InputReallocationData {
  *
  * @internal
  */
-const cloneMarket = (market: Market) => new Market(market);
+const cloneMarket = (market: Market) => new Market({ ...market });
 
 /**
  * Clones a market position before simulated supply or withdrawal changes are applied.
  *
  * @internal
  */
-const clonePosition = (position: Position) => new Position(position);
+const clonePosition = (position: Position) => new Position({ ...position });
 
 /**
  * Clones vault state, including queue arrays and public allocator accounting.
@@ -72,29 +72,11 @@ const clonePosition = (position: Position) => new Position(position);
  */
 const cloneVault = (vault: Vault) =>
   new Vault({
-    address: vault.address,
-    name: vault.name,
-    symbol: vault.symbol,
-    decimalsOffset: vault.decimalsOffset,
-    asset: vault.asset,
-    price: vault.price,
-    eip5267Domain: vault.eip5267Domain,
-    curator: vault.curator,
-    owner: vault.owner,
-    guardian: vault.guardian,
-    fee: vault.fee,
-    feeRecipient: vault.feeRecipient,
-    skimRecipient: vault.skimRecipient,
+    ...vault,
     pendingTimelock: { ...vault.pendingTimelock },
     pendingGuardian: { ...vault.pendingGuardian },
-    pendingOwner: vault.pendingOwner,
-    timelock: vault.timelock,
     supplyQueue: [...vault.supplyQueue],
     withdrawQueue: [...vault.withdrawQueue],
-    totalSupply: vault.totalSupply,
-    totalAssets: vault.totalAssets,
-    lastTotalAssets: vault.lastTotalAssets,
-    lostAssets: vault.lostAssets,
     publicAllocatorConfig:
       vault.publicAllocatorConfig == null
         ? undefined
@@ -108,16 +90,14 @@ const cloneVault = (vault: Vault) =>
  */
 const cloneVaultMarketConfig = (config: VaultMarketConfig) =>
   new VaultMarketConfig({
-    vault: config.vault,
-    marketId: config.marketId,
-    cap: config.cap,
+    ...config,
     pendingCap: { ...config.pendingCap },
-    removableAt: config.removableAt,
-    enabled: config.enabled,
     publicAllocatorConfig:
       config.publicAllocatorConfig == null
         ? undefined
-        : new VaultMarketPublicAllocatorConfig(config.publicAllocatorConfig),
+        : new VaultMarketPublicAllocatorConfig({
+            ...config.publicAllocatorConfig,
+          }),
   });
 
 /**
@@ -217,6 +197,29 @@ export class ReallocationData implements InputReallocationData {
    */
   public clone() {
     return new ReallocationData(this);
+  }
+
+  private forkAliasedState() {
+    const data = new ReallocationData({ chainId: this.chainId });
+
+    Object.assign(data.markets, this.markets);
+    Object.assign(data.vaults, this.vaults);
+
+    for (const [user, positions] of Object.entries(this.positions) as [
+      Address,
+      Record<MarketId, Position | undefined>,
+    ][]) {
+      data.positions[user] = positions;
+    }
+
+    for (const [vault, configs] of Object.entries(this.vaultMarketConfigs) as [
+      Address,
+      Record<MarketId, VaultMarketConfig | undefined>,
+    ][]) {
+      data.vaultMarketConfigs[vault] = configs;
+    }
+
+    return data;
   }
 
   /**
@@ -336,11 +339,12 @@ export class ReallocationData implements InputReallocationData {
       defaultMaxWithdrawalUtilization = DEFAULT_WITHDRAWAL_TARGET_UTILIZATION,
       maxWithdrawalUtilization = {},
     } = options;
+
+    if (!enabled) return { withdrawals: [], data: this };
+
     const accrualTimestamp = BigInt(
       timestampInput ?? this.getMarket(marketId).lastUpdate,
     );
-
-    if (!enabled) return { withdrawals: [], data: this };
 
     const configuredVaults = Object.keys(this.vaultMarketConfigs) as Address[];
     const vaultKeyByLower = new Map<string, Address>(
@@ -517,7 +521,12 @@ export class ReallocationData implements InputReallocationData {
     readonly withdrawal: { readonly id: MarketId; readonly assets: bigint };
     readonly timestamp: bigint;
   }) {
-    const data = this.clone();
+    const data = this.forkAliasedState();
+    data.vaults[vault] = cloneVault(this.getVault(vault));
+    data.positions[vault] = { ...(this.positions[vault] ?? {}) };
+    data.vaultMarketConfigs[vault] = {
+      ...(this.vaultMarketConfigs[vault] ?? {}),
+    };
 
     const vaultPublicAllocatorConfig =
       data.getVault(vault).publicAllocatorConfig;
@@ -525,7 +534,10 @@ export class ReallocationData implements InputReallocationData {
       throw new MissingPublicAllocatorConfigError(vault);
     vaultPublicAllocatorConfig.accruedFee += vaultPublicAllocatorConfig.fee;
 
-    const sourceConfig = data.getVaultMarketConfig(vault, withdrawal.id);
+    const sourceConfig = cloneVaultMarketConfig(
+      this.getVaultMarketConfig(vault, withdrawal.id),
+    );
+    data.vaultMarketConfigs[vault]![withdrawal.id] = sourceConfig;
     if (!sourceConfig.enabled)
       throw new DisabledReallocationMarketError(vault, withdrawal.id);
 
@@ -533,7 +545,13 @@ export class ReallocationData implements InputReallocationData {
     if (sourcePublicAllocatorConfig == null)
       throw new UnknownReallocationVaultMarketConfigError(vault, withdrawal.id);
 
-    const supplyConfig = data.getVaultMarketConfig(vault, supplyMarketId);
+    const supplyConfig =
+      supplyMarketId === withdrawal.id
+        ? sourceConfig
+        : cloneVaultMarketConfig(
+            this.getVaultMarketConfig(vault, supplyMarketId),
+          );
+    data.vaultMarketConfigs[vault]![supplyMarketId] = supplyConfig;
     if (!supplyConfig.enabled)
       throw new DisabledReallocationMarketError(vault, supplyMarketId);
 
