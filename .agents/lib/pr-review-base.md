@@ -223,7 +223,7 @@ Merge all agent results into a single list:
    - committed: `git diff --name-only $MERGE_BASE..<HEAD_REF>`
    - plus uncommitted: `git diff --name-only HEAD` (only when `<DIFF_SOURCE>=local`)
 
-   For every agent finding, compare `finding.file` against `<CHANGED_FILES>` after path normalization:
+   For every agent finding, first guard `finding.file`: if it is missing, not a string, or empty, treat the finding as malformed and route it to sub-step 2's partial-failure handling instead of dropping it here. Otherwise, compare `finding.file` against `<CHANGED_FILES>` after path normalization:
    - Strip any leading `./`.
    - Strip diff prefixes `a/` and `b/` if present.
    - If the agent returned an absolute path, strip the repo-root prefix (`git rev-parse --show-toplevel`) before compare.
