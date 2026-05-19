@@ -189,6 +189,13 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 PR review is automated by the `/pr-review-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/personas/`](./.agents/personas/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules one of them (`ci-release-security`) anchors on.
 
+### Orchestration
+
+| File | Role |
+|---|---|
+| [`.agents/commands/pr-review-{ci,gh,local}.md`](./.agents/commands/) | Three caller-side skills — one per use case (CI verdict / local PR / pre-PR terminal). Each parses args, resolves branches, then delegates Steps 3–6 to the shared base. |
+| [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) | Shared review base — reads `<PROJECT_CONTEXT>`, computes conditional flags, loops over personas, aggregates and deduplicates findings. Does not encode any rule itself; it only orchestrates. |
+
 ### Persona inventory
 
 Baseline personas (always fire):
