@@ -51,7 +51,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 
-> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (testability).
+> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity).
 
 ---
 
@@ -70,7 +70,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 9. New runtime dependencies without a package-level reason and a written justification in the PR description.
 10. PRs that ship behavior-affecting package source changes without their tests, JSDoc, and semver-relevant changeset.
 
-> Applied by personas: [`code-quality`](./.agents/personas/code-quality.md) (forbidden patterns 1–4, 7–10), [`web3-security`](./.agents/personas/web3-security.md) (3 — signing in transaction builders), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (2 — typed errors).
+> Applied by personas: [`code-quality`](./.agents/personas/code-quality.md) (forbidden patterns 1–4, 7–10), [`module-api-architecture`](./.agents/personas/module-api-architecture.md) (5 — deep cross-package imports), [`test-coverage`](./.agents/personas/test-coverage.md) (6 — mocked viem clients on RPC paths), [`web3-security`](./.agents/personas/web3-security.md) (3 — signing in transaction builders), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (complement to rule 2 — handling discipline once a typed error is thrown; code-quality owns the rule's existence).
 
 ---
 
@@ -207,18 +207,18 @@ Baseline personas (always fire):
 | Persona | Anchors | Focus |
 |---|---|---|
 | [`code-quality`](./.agents/personas/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
-| [`module-api-architecture`](./.agents/personas/module-api-architecture.md) | §1, §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
+| [`module-api-architecture`](./.agents/personas/module-api-architecture.md) | §1, §2 (rule 5), §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
 | [`web3-security`](./.agents/personas/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
-| [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) | §1 (testability), §2 | Swallowed errors, missing error states, dead code paths. |
+| [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) | §2 (handling depth for rule 2 — see persona body) | Swallowed errors, missing error states, dead code paths. |
 | [`style-conventions`](./.agents/personas/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
 | [`documentation`](./.agents/personas/documentation.md) | §6 | JSDoc on exports, Markdown doc accuracy, pointer integrity, AGENTS.md ↔ persona backlink consistency. |
-| [`test-coverage`](./.agents/personas/test-coverage.md) | §5 | Missing tests for new code paths and onchain interactions. |
+| [`test-coverage`](./.agents/personas/test-coverage.md) | §5, §2 (rule 6) | Missing tests for new code paths and onchain interactions. |
 
 Conditional personas (fire only when their trigger flag is true):
 
 | Persona | Trigger | Anchors |
 |---|---|---|
-| [`ci-release-security`](./.agents/personas/ci-release-security.md) | `<HAS_CI_RELEASE>` — diff touches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, any `package.json` whose `scripts.*publish*` / `scripts.*release*` field is modified, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, or any file mentioning `npm publish` / `pnpm publish` / `changeset publish` / `gh release create` (canonical detector in [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) Step 4) | §10 (the rules below) |
+| [`ci-release-security`](./.agents/personas/ci-release-security.md) | `<HAS_CI_RELEASE>` (computed in [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) Step 4 — that file is the single source of truth for the changed-file patterns that flip this flag) | §10 (the rules below) |
 
 Adding a persona = drop a file under `.agents/personas/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/lib/pr-review-base.md` Step 4.
 
@@ -229,7 +229,7 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 - **Workflow injection** (CRITICAL). Never interpolate attacker-controllable GitHub context (`${{ github.event.* }}`, `${{ github.head_ref }}`, comment bodies, branch names) directly into `run:` blocks, `shell:` invocations, or third-party-action arguments. Bind to an `env:` first, then reference `$VAR` in the shell so GitHub's redaction can still apply and shell expansion can't reinterpret the value.
 - **`pull_request_target` + PR-head checkout is forbidden** unless the workflow demonstrably never runs the checked-out code (no install, no test, no script). The combination grants attacker code write-scoped repo credentials.
 - **ACL-gated comment triggers.** `issue_comment` / `pull_request_review_comment` workflows must gate on `github.event.comment.author_association` (`OWNER`, `MEMBER`, or `COLLABORATOR`) before acting on comment text.
-- **Action pinning.** Third-party `uses:` lines pin to a full commit SHA with the human-readable tag in a trailing comment: `uses: foo/bar@<40-char-sha>  # v1.2.3`. First-party `actions/*` and `github/*` may use tagged versions when Dependabot covers them via `.github/dependabot.yml`.
+- **Action pinning.** Third-party `uses:` lines pin to a full commit SHA with the human-readable tag in a trailing comment: `uses: foo/bar@<40-char-sha>  # v1.2.3`. First-party `actions/*` and `github/*` may use tagged versions when Dependabot covers them via `.github/dependabot.yml`. Newly added actions from publishers the org has not used before must surface the publisher name in the review comment so a maintainer can confirm review.
 - **`permissions:` block required** on every workflow. Default `contents: read`. Job-level scopes where they differ. `id-token: write` only on OIDC / provenance-publishing jobs. `secrets: inherit` passed to reusable workflows is forbidden — list secrets explicitly.
 - **Secret exposure.** Secrets must be `env:`-bound and referenced as `$VAR` inside scripts; never interpolated into the `run:` string directly. Secrets passed to third-party actions require those actions to be SHA-pinned.
 - **Publish-flow integrity.** `npm publish` / `pnpm publish` must use `--provenance` (or the Changesets provenance-aware path). Auth via org-scoped `NODE_AUTH_TOKEN`, never a personal access token. Tag-scope changes (e.g. `next` → `latest`) require human sign-off via `environment:` with required reviewers. Removing `--provenance` is a downgrade — flag at minimum **medium**, **high** for runtime/peer-surface packages.
@@ -238,5 +238,6 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 - **Lockfile drift.** A `pnpm-lock.yaml` change without a corresponding `package.json` change is a finding unless the PR description explains why (transitive bump, security patch).
 - **Dependency hygiene.** New deps in `dependencies` or `peerDependencies` of a published package default to **high** for review. Flag unpinned semver ranges (`^`/`~`) on runtime deps, names that resemble typosquats of known packages, and deps whose registry metadata declares `postinstall` / `preinstall` / `install` scripts.
 - **`.npmrc` hardening.** `always-auth=true` or `_authToken=` committed to the repo is **critical** — credential leak. Non-`registry.npmjs.org` `registry=` or `@scope:registry=` lines require explicit human review (could redirect to a malicious registry).
+- **Workspace install behavior.** Flips of `auto-install-peers` or `strict-peer-dependencies` in `.npmrc` or `pnpm-workspace.yaml` are **medium** — surface the impact on consumer install behavior in the review comment.
 
 > Applied by persona: [`ci-release-security`](./.agents/personas/ci-release-security.md).
