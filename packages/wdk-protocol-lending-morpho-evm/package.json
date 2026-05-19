@@ -45,7 +45,9 @@
     "LICENSE",
     "README.md"
   ],
-  "sideEffects": false,
+  "sideEffects": [
+    "./bare.js"
+  ],
   "scripts": {
     "check:vault-v2": "node scripts/check-vault-v2-only.js",
     "pretest": "pnpm run check:vault-v2",

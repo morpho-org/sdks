@@ -156,6 +156,10 @@ function normalizeAmount (amount, field = 'amount') {
     throw new Error(`'${field}' must be a number or bigint.`)
   }
 
+  if (typeof amount === 'number' && !Number.isSafeInteger(amount)) {
+    throw new Error(`'${field}' must be a safe integer; pass a bigint for values above Number.MAX_SAFE_INTEGER.`)
+  }
+
   if (amount <= 0) {
     throw new Error(`'${field}' should be greater than zero.`)
   }
@@ -168,6 +172,10 @@ function normalizeOptionalNonNegativeAmount (amount, field) {
 
   if (typeof amount !== 'bigint' && typeof amount !== 'number') {
     throw new Error(`'${field}' must be a number or bigint.`)
+  }
+
+  if (typeof amount === 'number' && !Number.isSafeInteger(amount)) {
+    throw new Error(`'${field}' must be a safe integer; pass a bigint for values above Number.MAX_SAFE_INTEGER.`)
   }
 
   if (amount < 0) {
