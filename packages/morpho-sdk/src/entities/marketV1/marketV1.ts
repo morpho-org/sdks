@@ -296,6 +296,7 @@ export interface MarketV1Actions {
    * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
    * @param params.block - The block to fetch data at (number and timestamp).
    * @returns A ReallocationData instance populated with all required data.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
    */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
@@ -920,7 +921,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
    * @param params.vaultAddresses - Vaults to inspect for source-market liquidity.
    * @param params.block - Block number and timestamp used for consistent RPC reads.
    * @returns Reallocation data ready for {@link getReallocations}.
-   * @throws When the client chain does not match this market.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
    */
   async getReallocationData({
     vaultAddresses,
