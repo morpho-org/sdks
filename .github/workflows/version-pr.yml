@@ -12,15 +12,16 @@ permissions:
   contents: read
 
 jobs:
-  version-pr:
+  version-artifact:
     if: github.ref_name == 'main' || github.ref_name == 'next'
-    name: Version PR
+    name: Version packages
     runs-on: ubuntu-latest
+    outputs:
+      has_changesets: ${{ steps.pending-changesets.outputs.has_changesets }}
     env:
       CI: true
       HUSKY: 0
       TARGET_BRANCH: ${{ github.ref_name }}
-      RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -35,35 +36,6 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
-
-      - name: Record privileged-step baseline
-        id: privileged-baseline
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          # Capture this BEFORE `pnpm install` runs dependency lifecycle
-          # scripts. `create-version-commit.mjs` runs with the write-scoped
-          # token and imports the other release helper modules, so hash every
-          # module reachable from it — pinning the entrypoint alone leaves an
-          # imported `helpers.mjs` free to be tampered with. The PATH snapshot
-          # is also forced on later write-token steps so `git`, `gh`, and
-          # `node` cannot be resolved through paths appended during install or
-          # versioning.
-          helper_sha="$(
-            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
-              sort -z |
-              xargs -0 sha256sum |
-              sha256sum |
-              cut -d ' ' -f 1
-          )"
-
-          {
-            echo "helper_sha=${helper_sha}"
-            echo "safe_path<<PATH_EOF"
-            echo "${PATH}"
-            echo "PATH_EOF"
-          } >> "${GITHUB_OUTPUT}"
 
       - run: pnpm install --frozen-lockfile
 
@@ -104,26 +76,58 @@ jobs:
           # `pnpm run version` can read it from process.env.
           GITHUB_TOKEN: ${{ steps.changelog-token.outputs.token }}
 
-      - name: Verify release helper scripts
+      - name: Write version artifact
         if: steps.pending-changesets.outputs.has_changesets == 'true'
-        shell: bash
-        env:
-          EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
-          PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
         run: |
           set -euo pipefail
+          node scripts/release/write-version-artifact.mjs "${RUNNER_TEMP}/version-artifact/version-changes.json"
 
-          actual_helper_sha="$(
-            find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
-              sort -z |
-              xargs -0 sha256sum |
-              sha256sum |
-              cut -d ' ' -f 1
-          )"
-          if [ "${actual_helper_sha}" != "${EXPECTED_HELPER_SHA}" ]; then
-            echo "::error::Release helper scripts under scripts/release changed after the trusted baseline (during install or versioning)."
-            exit 1
-          fi
+      - name: Upload version artifact
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: version-pr-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/version-artifact/version-changes.json
+          if-no-files-found: error
+          retention-days: 1
+
+  version-pr:
+    name: Version PR
+    needs: version-artifact
+    if: needs.version-artifact.outputs.has_changesets == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
+      RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download version artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: version-pr-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/version-artifact
+
+      - name: Apply version artifact
+        run: |
+          set -euo pipefail
+          node scripts/release/apply-version-artifact.mjs "${RUNNER_TEMP}/version-artifact/version-changes.json"
+
+      - name: Verify write-token preconditions
+        shell: bash
+        run: |
+          set -euo pipefail
 
           unexpected_hook=""
           if [ -d .git/hooks ]; then
@@ -135,15 +139,9 @@ jobs:
             exit 1
           fi
 
-          : > "${GITHUB_ENV}"
-          : > "${GITHUB_PATH}"
-
       - name: Generate Release GitHub App Token
-        if: steps.pending-changesets.outputs.has_changesets == 'true'
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
-        env:
-          PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
         with:
           app-id: ${{ secrets.VERSION_APP_ID }}
           private-key: ${{ secrets.VERSION_APP_PRIVATE_KEY }}
@@ -152,10 +150,8 @@ jobs:
 
       - name: Create signed version commit
         id: version-commit
-        if: steps.pending-changesets.outputs.has_changesets == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
           RELEASE_BRANCH: ${{ env.RELEASE_BRANCH }}
         run: |
           set -euo pipefail
@@ -177,7 +173,6 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          PATH: ${{ steps.privileged-baseline.outputs.safe_path }}
           RELEASE_BRANCH: ${{ env.RELEASE_BRANCH }}
           TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
         run: |

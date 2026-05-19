@@ -64,13 +64,13 @@ Fires when `<HAS_CI_RELEASE>` is true — i.e. any changed file matches:
 
 ### Release-commit signing & write-token hardening (HIGH → CRITICAL)
 
-Per AGENTS.md §10 — release commits and annotated tags MUST have a valid signed identity, and write-scoped tokens MUST be minted only after the workflow has hardened itself against state inherited from earlier steps. Flag any diff that:
+Per AGENTS.md §10 — release commits and annotated tags MUST have a valid signed identity, and write-scoped tokens MUST be minted only after the workflow has hardened itself against state inherited from earlier steps. The boundary can be either same-job checksum/PATH hardening or a split-job fresh-checkout + validated data-artifact handoff. Flag any diff that:
 
 - Replaces a `createCommitOnBranch` GraphQL invocation with a local `git commit` + `git push` (loss of GitHub-signed identity). **Critical**.
-- Mints a write-scoped GitHub App token (or any `permissions: contents: write` step) **without first** verifying the checksum and `$PATH` of the trusted helper(s) that step will execute. **High**.
-- Skips truncation of `$GITHUB_ENV` / `$GITHUB_PATH` immediately before the write-scoped step. (Inheriting state from earlier untrusted steps is a privilege-escalation path.) **High**.
-- Allows `.git/hooks/` to contain any file other than `*.sample` at the start of a release job (a checked-in or earlier-step-written hook executes with the privileged identity). **Critical**.
-- Removes the forced trusted `$PATH` or the explicit `RELEASE_BRANCH` guard from the write-token step. **High**.
+- Mints a write-scoped GitHub App token (or any `permissions: contents: write` step) **without first** using either same-job checksum/PATH hardening for the trusted helper(s), or a split-job boundary where the privileged job fresh-checks out `github.sha` and validates a data-only artifact before token minting. **High**.
+- In a same-job hardening flow, skips truncation of `$GITHUB_ENV` / `$GITHUB_PATH` immediately before the write-scoped step. (Inheriting state from earlier untrusted steps is a privilege-escalation path.) **High**.
+- Allows `.git/hooks/` to contain any file other than `*.sample` before a release write-token step (a checked-in or earlier-step-written hook executes with the privileged identity). **Critical**.
+- In a same-job hardening flow, removes the forced trusted `$PATH` or the explicit `RELEASE_BRANCH` guard from the write-token step. **High**.
 - Adds a `git commit` / `git tag` invocation in a release workflow that doesn't first set `github-actions[bot]` (or another known signed identity) as the repo-local git identity — `Committer identity unknown` failures and unsigned tags are both downstream consequences. **Medium** when only tags are affected; **high** when commits are affected.
 
 ### Changesets / release-bot wiring
