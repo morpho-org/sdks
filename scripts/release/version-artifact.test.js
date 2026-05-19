@@ -8,7 +8,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
 import { applyVersionArtifact } from "./apply-version-artifact.mjs";
@@ -96,7 +96,10 @@ describe("applyVersionArtifact", () => {
       schemaVersion: 1,
     });
 
-    applyVersionArtifact({ artifactPath, cwd: root });
+    applyVersionArtifact({
+      artifactDirectory: dirname(artifactPath),
+      cwd: root,
+    });
 
     expect(
       readFileSync(join(root, "packages/morpho-sdk/package.json"), "utf8"),
@@ -120,9 +123,12 @@ describe("applyVersionArtifact", () => {
       schemaVersion: 1,
     });
 
-    expect(() => applyVersionArtifact({ artifactPath, cwd: root })).toThrow(
-      'Invalid version artifact path "README.md".',
-    );
+    expect(() =>
+      applyVersionArtifact({
+        artifactDirectory: dirname(artifactPath),
+        cwd: root,
+      }),
+    ).toThrow('Invalid version artifact path "README.md".');
   });
 
   test("error: rejects duplicate artifact paths", () => {
@@ -138,9 +144,12 @@ describe("applyVersionArtifact", () => {
       schemaVersion: 1,
     });
 
-    expect(() => applyVersionArtifact({ artifactPath, cwd: root })).toThrow(
-      'Duplicate version artifact path ".changeset/pre.json".',
-    );
+    expect(() =>
+      applyVersionArtifact({
+        artifactDirectory: dirname(artifactPath),
+        cwd: root,
+      }),
+    ).toThrow('Duplicate version artifact path ".changeset/pre.json".');
   });
 
   test("error: rejects non-canonical base64 contents", () => {
@@ -151,7 +160,12 @@ describe("applyVersionArtifact", () => {
       schemaVersion: 1,
     });
 
-    expect(() => applyVersionArtifact({ artifactPath, cwd: root })).toThrow(
+    expect(() =>
+      applyVersionArtifact({
+        artifactDirectory: dirname(artifactPath),
+        cwd: root,
+      }),
+    ).toThrow(
       'Version artifact addition ".changeset/pre.json" is not canonical base64.',
     );
   });
@@ -175,9 +189,40 @@ describe("applyVersionArtifact", () => {
       schemaVersion: 1,
     });
 
-    expect(() => applyVersionArtifact({ artifactPath, cwd: root })).toThrow(
+    expect(() =>
+      applyVersionArtifact({
+        artifactDirectory: dirname(artifactPath),
+        cwd: root,
+      }),
+    ).toThrow(
       'Disallowed package.json field change "scripts" in packages/morpho-sdk/package.json.',
     );
+  });
+
+  test("error: rejects unsafe artifact read paths", () => {
+    const root = createGitRepo();
+    const artifactPath = writeArtifact({
+      additions: [],
+      deletions: [],
+      schemaVersion: 1,
+    });
+    const artifactDirectory = dirname(artifactPath);
+
+    expect(() =>
+      applyVersionArtifact({
+        artifactDirectory,
+        artifactName: "../version-changes.json",
+        cwd: root,
+      }),
+    ).toThrow("Invalid version artifact path.");
+
+    expect(() =>
+      applyVersionArtifact({
+        artifactDirectory,
+        artifactName: artifactPath,
+        cwd: root,
+      }),
+    ).toThrow("Invalid version artifact path.");
   });
 });
 

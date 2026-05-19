@@ -8,7 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -18,14 +18,11 @@ import {
 import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
 
 const VERSION_ARTIFACT_SCHEMA_VERSION = 1;
+const VERSION_ARTIFACT_FILE = "version-changes.json";
 
 export function applyVersionArtifact(options = {}) {
-  const artifactPath = options.artifactPath;
-  if (artifactPath == null || artifactPath === "") {
-    throw new Error("Version artifact path is required.");
-  }
-
   const cwd = options.cwd ?? process.cwd();
+  const artifactPath = resolveVersionArtifactPath(options);
   const artifact = readVersionArtifact(artifactPath);
   const additions = readArtifactEntries(artifact.additions, "additions");
   const deletions = readArtifactEntries(artifact.deletions, "deletions");
@@ -71,11 +68,48 @@ export function applyVersionArtifact(options = {}) {
 }
 
 export function main(args = process.argv.slice(2), options = {}) {
-  const artifactPath = args[0];
   return applyVersionArtifact({
-    artifactPath,
+    artifactDirectory:
+      options.artifactDirectory ?? process.env.VERSION_ARTIFACT_DIR,
+    artifactName: args[0] ?? VERSION_ARTIFACT_FILE,
     cwd: options.cwd ?? process.cwd(),
   });
+}
+
+function resolveVersionArtifactPath(options) {
+  const artifactDirectory = options.artifactDirectory;
+  const artifactName = options.artifactName ?? VERSION_ARTIFACT_FILE;
+  if (typeof artifactDirectory !== "string" || artifactDirectory === "") {
+    throw new Error("Version artifact directory is required.");
+  }
+
+  if (
+    typeof artifactName !== "string" ||
+    artifactName !== VERSION_ARTIFACT_FILE ||
+    isAbsolute(artifactName) ||
+    artifactName.includes("/") ||
+    artifactName.includes("\\") ||
+    artifactName.split("/").includes("..")
+  ) {
+    throw new Error("Invalid version artifact path.");
+  }
+
+  const basePath = realpathSync(artifactDirectory);
+  const artifactPath = resolve(basePath, artifactName);
+  if (!isPathInside(basePath, artifactPath)) {
+    throw new Error("Invalid version artifact path.");
+  }
+
+  if (!lstatSync(artifactPath).isFile()) {
+    throw new Error("Invalid version artifact path.");
+  }
+
+  const realArtifactPath = realpathSync(artifactPath);
+  if (!isPathInside(basePath, realArtifactPath)) {
+    throw new Error("Invalid version artifact path.");
+  }
+
+  return realArtifactPath;
 }
 
 function readVersionArtifact(artifactPath) {
