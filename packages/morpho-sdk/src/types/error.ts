@@ -102,6 +102,15 @@ export class DepositAssetMismatchError extends Error {
   }
 }
 
+/** Thrown when a `permit2` requirement signature is missing the `expiration` field. */
+export class Permit2ExpirationMissingError extends Error {
+  constructor() {
+    super(
+      'Requirement signature with action.type === "permit2" must include args.expiration. Re-sign using the permit2 flow.',
+    );
+  }
+}
+
 /** Thrown when a vault deposit uses `nativeAmount` but the vault asset is not the chain's wNative. */
 export class NativeAmountOnNonWNativeVaultError extends Error {
   constructor(vaultAsset: Address, wNative: Address) {

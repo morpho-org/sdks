@@ -4,9 +4,10 @@ import {
   DEFAULT_SLIPPAGE_TOLERANCE,
   MathLib,
 } from "@morpho-org/blue-sdk";
+import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   computeMaxRepaySharePrice,
   isRequirementApproval,
@@ -25,6 +26,10 @@ import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("RepayMarketV1", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   test("should create repay bundle (by assets)", async ({ client }) => {
     const collateralAmount = parseUnits("10", 18);
     const borrowAmount = parseUnits("1000", 18);
@@ -263,6 +268,86 @@ describe("RepayMarketV1", () => {
     expect(finalState.position.collateral).toEqual(
       initialState.position.collateral,
     );
+  });
+
+  // Regression: repay-by-shares used to size transferAmount from the stale
+  // (un-accrued) market snapshot. On a market whose lastUpdate lags the
+  // current block, on-chain morphoRepay required more assets than the
+  // bundler had pre-pulled, reverting the supposedly-immune full repay.
+  test("should full repay by shares on a dormant market", async ({
+    client,
+  }) => {
+    const collateralAmount = parseUnits("10", 18);
+    const borrowAmount = parseUnits("1000", 18);
+
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: WethUsdsMarketV1,
+      collateralAmount,
+    });
+    await borrow({
+      client,
+      chainId: mainnet.id,
+      market: WethUsdsMarketV1,
+      borrowAmount,
+    });
+
+    // Advance chain time so lastUpdate is meaningfully behind block.timestamp.
+    // 30 days of accrual is far larger than DEFAULT_SLIPPAGE_TOLERANCE on any
+    // realistic market, so the stale-sized transfer cannot cover the on-chain
+    // repay amount without the accrual fix.
+    const fastForwardedTimestamp =
+      (await client.timestamp()) + Time.s.from.d(30n);
+    await client.setNextBlockTimestamp({ timestamp: fastForwardedTimestamp });
+    // Align wall-clock with chain time so the SDK's `Time.timestamp()` projection
+    // matches the block the repay tx will execute on.
+    vi.useFakeTimers({
+      now: Number(fastForwardedTimestamp) * 1000,
+      toFake: ["Date"],
+    });
+
+    // Pre-fund a generous loan-token balance; the bundle skim returns any
+    // unused buffer to the user, so over-funding here is safe.
+    await client.deal({
+      erc20: WethUsdsMarketV1.loanToken,
+      amount: parseUnits("100000", 18),
+    });
+
+    const {
+      markets: {
+        WethUsdsMarketV1: { finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { markets: { WethUsdsMarketV1 } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client);
+        const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        const repay = market.repay({
+          userAddress: client.account.address,
+          shares: positionData.borrowShares,
+          positionData,
+        });
+
+        const requirements = await repay.getRequirements();
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approval requirement not found");
+        }
+        await client.sendTransaction(approval);
+
+        const tx = repay.buildTx();
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.position.borrowShares).toBe(0n);
+    expect(finalState.position.collateral).toEqual(collateralAmount);
   });
 
   test("should throw when repay amount exceeds debt", async ({ client }) => {

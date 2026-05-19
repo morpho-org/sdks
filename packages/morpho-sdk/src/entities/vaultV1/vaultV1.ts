@@ -6,6 +6,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
 import {
   getRequirements,
@@ -345,8 +346,14 @@ export class MorphoVaultV1 implements VaultV1Actions {
       shares,
     );
 
-    // Compute maxSharePriceVaultV2 for V2 deposit (slippage upward)
-    const v2RefShares = targetVault.toShares(v1RefAssets);
+    // Compute maxSharePriceVaultV2 for V2 deposit (slippage upward).
+    // Accrue VaultV2 interest forward to bound the on-chain share price at execution.
+    const targetAccrualTimestamp =
+      MathLib.max(Time.timestamp(), targetVault.lastUpdate) + Time.s.from.h(2n);
+    const { vault: accruedTargetVault } = targetVault.accrueInterest(
+      targetAccrualTimestamp,
+    );
+    const v2RefShares = accruedTargetVault.toShares(v1RefAssets);
     if (v2RefShares <= 0n) {
       throw new NonPositiveSharesAmountError(targetVault.address);
     }
