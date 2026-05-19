@@ -97,6 +97,7 @@ Launch ALL 7 review agents **in parallel** using the Agent tool (subagent_type: 
 - Per-package `AGENTS.md` rules refine the root for the specific package; the root wins on contradictions.
 - Agents must analyze the **full diff**, not just the latest commit.
 - Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "what is wrong + how to fix"}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
+- **Stay in scope (avoid scope creep).** Focus on the diff: flag issues introduced by these changes, and issues in adjacent code only when the diff makes that adjacent code materially worse (e.g. a renamed function whose remaining callers now misbehave, a new code path that exposes an existing bug). Do NOT flag pre-existing issues in unchanged lines of changed files, propose unrelated refactors, suggest new features or abstractions, or recommend cleanups outside the PR's intent. When in doubt, omit — the reviewer is reviewing *this change*, not the file's history.
 - Only **actionable** findings — no praise, no summaries.
 
 ### Agent 1: Code Quality
@@ -218,7 +219,25 @@ Prompt must include:
 
 Merge all agent results into a single list:
 
-1. **Count agent failures.** An agent counts as failed if any of these hold:
+1. **Scope filter (drop out-of-scope findings).** Build `<CHANGED_FILES>` = the deduplicated file list from Step 3:
+   - committed: `git diff --name-only $MERGE_BASE..<HEAD_REF>`
+   - plus uncommitted: `git diff --name-only HEAD` (only when `<DIFF_SOURCE>=local`)
+
+   For every agent finding, first guard `finding.file`: if it is missing, not a string, or empty, treat the finding as malformed and route it to sub-step 2's partial-failure handling instead of dropping it here. Otherwise, compare `finding.file` against `<CHANGED_FILES>` after path normalization:
+   - Strip any leading `./`.
+   - Strip diff prefixes `a/` and `b/` if present.
+   - If the agent returned an absolute path, strip the repo-root prefix (`git rev-parse --show-toplevel`) before compare.
+   - Case-sensitive compare (matches git's default).
+
+   If `finding.file` is not in `<CHANGED_FILES>`, **drop the finding** and increment `<DROPPED_OUT_OF_SCOPE>`.
+
+   Do NOT filter by line number within a changed file. The Step 5 contract permits flagging adjacent code in a changed file when the diff materially worsens it, so line-level filtering would discard legitimate findings.
+
+   After the loop, print one log line: `Scope filter: dropped <DROPPED_OUT_OF_SCOPE> finding(s) targeting files outside the diff.` Then proceed to the remaining sub-steps on the surviving findings.
+
+   Note: dropped findings do NOT count toward `<FAILED_AGENTS>` — they are valid output that was simply out of scope, not malformed.
+
+2. **Count agent failures.** An agent counts as failed if any of these hold:
    - Returned `{"agent_error": "..."}` (the explicit sentinel from Step 5).
    - Returned text that is not parseable as JSON.
    - Returned a JSON value that is not an array (e.g. an object that is not the error sentinel).
@@ -226,12 +245,12 @@ Merge all agent results into a single list:
 
    Track `<FAILED_AGENTS>` as a count plus the names. This count flows into the caller's Step 7 reporting so a "no findings" verdict is never reported when some agents crashed.
 
-2. **Deduplicate** with this rule (do NOT collapse genuinely distinct findings):
+3. **Deduplicate** with this rule (do NOT collapse genuinely distinct findings):
    - Findings on the SAME file at the EXACT same line are duplicates ONLY when their descriptions overlap meaningfully (≥50% token overlap, or one is a clear paraphrase of the other). Keep the one with the higher severity; if descriptions don't overlap, keep BOTH (e.g. one agent flags missing JSDoc on line 42, another flags swallowed catch on line 42 — both stay).
    - Findings within ±3 lines but on the same file are merged ONLY when severities AND descriptions overlap.
    - When merging, keep the higher-severity finding's text.
 
-3. Sort by: file path (alphabetical, ASC), then line number (ASC), then severity (DESC).
+4. Sort by: file path (alphabetical, ASC), then line number (ASC), then severity (DESC).
 
 Severity labels (used everywhere downstream):
 
