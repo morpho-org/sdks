@@ -244,55 +244,20 @@ export const check = async <
                     seizedAssets,
                   ));
 
-                switch (true) {
-                  // In case of Usual tokens, there aren't much liquidity outside of curve, so we use it instead of 1inch/paraswap
-                  // Process USD0/USD0++ collateral liquidation with specific process (using curve)
-                  case market.params.collateralToken ===
-                    mainnetAddresses["usd0usd0++"] &&
-                    chainId === ChainId.EthMainnet:
-                    dstAmount = await encoder.curveSwapUsd0Usd0PPForUsdc(
-                      srcAmount,
-                      position.market.toBorrowAssets(
-                        position.market.getLiquidationRepaidShares(
-                          seizedAssets,
-                        )!,
-                      ),
-                      executorAddress,
-                    );
-                    break;
-                  // Process USD0++ colalteral liquidation with specific process (using curve)
-                  case market.params.collateralToken ===
-                    mainnetAddresses["usd0++"] &&
-                    chainId === ChainId.EthMainnet: {
-                    dstAmount = await encoder.swapUSD0PPToUSDC(
-                      srcAmount,
-                      position.market.toBorrowAssets(
-                        position.market.getLiquidationRepaidShares(
-                          seizedAssets,
-                        )!,
-                      ),
-                      executorAddress,
-                    );
-                    break;
-                  }
-                  // Default case, use 1inch/paraswap for other collaterals
-                  default: {
-                    const result = await encoder.handleTokenSwap(
-                      chainId,
-                      srcToken,
-                      srcAmount,
-                      market.params,
-                      slippage / 10n ** 14n,
-                      repaidAssets,
-                      client.account.address,
-                    );
+                const result = await encoder.handleTokenSwap(
+                  chainId,
+                  srcToken,
+                  srcAmount,
+                  market.params,
+                  slippage / 10n ** 14n,
+                  repaidAssets,
+                  client.account.address,
+                );
 
-                    if (result) {
-                      dstAmount = result.dstAmount;
-                    } else {
-                      return;
-                    }
-                  }
+                if (result) {
+                  dstAmount = result.dstAmount;
+                } else {
+                  return;
                 }
 
                 // Handle ERC20Wrapper collateral tokens.
