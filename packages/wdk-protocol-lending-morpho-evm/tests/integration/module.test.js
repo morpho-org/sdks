@@ -4,6 +4,7 @@ import { createServer } from 'node:net'
 import { setTimeout as delay } from 'node:timers/promises'
 
 import { createPublicClient, createWalletClient, erc20Abi, http, parseUnits } from 'viem'
+import { mainnet } from 'viem/chains'
 import { WalletAccountEvm } from '@tetherto/wdk-wallet-evm'
 import MorphoProtocolEvm from '../../index.js'
 
@@ -77,6 +78,7 @@ maybeDescribe('MorphoProtocolEvm fork e2e', () => {
 
     await waitForRpc(rpcUrl)
     publicClient = createPublicClient({
+      chain: mainnet,
       transport: http(rpcUrl)
     })
   }, 60_000)
@@ -93,6 +95,7 @@ maybeDescribe('MorphoProtocolEvm fork e2e', () => {
     const accountAddress = await account.getAddress()
     const whale = createWalletClient({
       account: USDT_WHALE,
+      chain: mainnet,
       transport: http(rpcUrl)
     })
 
