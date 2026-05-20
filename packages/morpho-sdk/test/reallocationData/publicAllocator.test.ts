@@ -14,7 +14,7 @@ import { describe, expect, test } from "vitest";
 import {
   type InputReallocationData,
   ReallocationData,
-} from "../../src/helpers/reallocationData.js";
+} from "../../src/entities/reallocationData.js";
 
 const timestamp = 12345n;
 

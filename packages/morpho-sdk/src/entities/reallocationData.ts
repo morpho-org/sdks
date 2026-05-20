@@ -12,6 +12,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import { bigIntComparator } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
+import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "../helpers/constant.js";
 import type {
   PublicAllocatorOptions,
   PublicReallocation,
@@ -24,7 +25,6 @@ import {
   UnknownReallocationVaultError,
   UnknownReallocationVaultMarketConfigError,
 } from "../types/index.js";
-import { DEFAULT_WITHDRAWAL_TARGET_UTILIZATION } from "./constant.js";
 
 /**
  * Input state required to construct {@link ReallocationData}.
@@ -107,6 +107,11 @@ const cloneVaultMarketConfig = (config: VaultMarketConfig) =>
  * and chain data needed by the shared-liquidity algorithm. Constructor inputs
  * are cloned, and simulation steps return cloned `ReallocationData` instances
  * so fetched caller inputs are not mutated.
+ *
+ * Public records are exposed for inspection and snapshotting only. Treat
+ * `markets`, `vaults`, `positions`, and `vaultMarketConfigs` as a read
+ * contract keyed by market id or address; use the getters for typed absence
+ * errors and use simulation methods to produce updated state.
  */
 export class ReallocationData implements InputReallocationData {
   /** Chain id associated with the fetched reallocation data. */

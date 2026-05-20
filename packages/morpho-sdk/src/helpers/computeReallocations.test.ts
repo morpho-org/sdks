@@ -12,12 +12,12 @@ import {
   WethUsdsMarketV1,
   WstethUsdcSourceMarket,
 } from "../../test/fixtures/marketV1.js";
+import type { ReallocationData } from "../entities/reallocationData.js";
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
 } from "../types/index.js";
 import { computeReallocations } from "./computeReallocations.js";
-import type { ReallocationData } from "./reallocationData.js";
 
 // --- Constants ---
 

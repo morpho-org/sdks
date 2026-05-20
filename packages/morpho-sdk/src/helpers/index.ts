@@ -10,10 +10,6 @@ export {
 } from "./constant.js";
 export { addTransactionMetadata } from "./metadata.js";
 export {
-  type InputReallocationData,
-  ReallocationData,
-} from "./reallocationData.js";
-export {
   computeMaxRepaySharePrice,
   computeMinBorrowSharePrice,
 } from "./slippage.js";

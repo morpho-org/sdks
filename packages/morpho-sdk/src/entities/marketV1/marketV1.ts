@@ -32,7 +32,6 @@ import {
   computeMaxRepaySharePrice,
   computeMinBorrowSharePrice,
   computeReallocations,
-  ReallocationData,
   validateAccrualPosition,
   validateChainId,
   validateNativeCollateral,
@@ -70,6 +69,7 @@ import {
   WithdrawExceedsCollateralError,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
+import { ReallocationData } from "../reallocationData.js";
 
 export interface MarketV1Actions {
   /**
@@ -320,6 +320,9 @@ export interface MarketV1Actions {
    *        Pass the fetched block timestamp to compute reallocations at the same block.
    * @returns Array of vault reallocations ready to pass to `borrow()` or
    *          `supplyCollateralBorrow()`. Empty array if no reallocation is needed.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the borrow shortfall on the target market.
+   * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
+   * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
    */
   getReallocations: (params: {
     reallocationData: ReallocationData;
@@ -1042,6 +1045,9 @@ export class MorphoMarketV1 implements MarketV1Actions {
    * @param params.borrowAmount - Borrow amount to test against post-borrow utilization.
    * @param params.options - Optional allocator and utilization options.
    * @returns Vault reallocations ready to pass to `borrow` or `supplyCollateralBorrow`.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the borrow shortfall on the target market.
+   * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
+   * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
    */
   getReallocations({
     reallocationData,

@@ -1,5 +1,6 @@
 import { type MarketId, MarketUtils, MathLib } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
+import type { ReallocationData } from "../entities/reallocationData.js";
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
@@ -8,7 +9,6 @@ import {
   type VaultReallocation,
 } from "../types/index.js";
 import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
-import type { ReallocationData } from "./reallocationData.js";
 
 type VaultWithdrawalGroup = {
   readonly vault: Address;
@@ -87,7 +87,7 @@ const capVaultWithdrawals = (
  * targets, then falls back to aggressive reallocations (100% withdrawal
  * utilization) if liquidity is still insufficient.
  *
- * @remarks Per-market `maxWithdrawalUtilization` overrides apply only to phase 1; phase 2 forces 100% utilization on every source market.
+ * @remarks Pass `options.timestamp` from the same block used to fetch `reallocationData`; when omitted, market accrual falls back to the target market's `lastUpdate`, which can diverge from the source rows' fetch block. Per-market `maxWithdrawalUtilization` overrides apply only to phase 1; phase 2 forces 100% utilization on every source market.
  * @param params.reallocationData - The local state containing market, vault, and position data.
  * @param params.marketId - The target market to reallocate liquidity into.
  * @param params.borrowAmount - The intended borrow amount (used to compute post-borrow utilization).
@@ -95,6 +95,45 @@ const capVaultWithdrawals = (
  * @returns Array of vault reallocations, sorted with withdrawals in ascending market id order.
  * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the borrow shortfall on the target market — preventing fee-bearing reallocations from being attached to a borrow that would still revert onchain.
  * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
+ * @example
+ * ```ts
+ * import { createPublicClient, http, parseUnits } from "viem";
+ * import { mainnet } from "viem/chains";
+ * import { markets, vaults } from "@morpho-org/morpho-test";
+ * import {
+ *   computeReallocations,
+ *   morphoViemExtension,
+ * } from "@morpho-org/morpho-sdk";
+ *
+ * const client = createPublicClient({
+ *   chain: mainnet,
+ *   transport: http(),
+ * }).extend(morphoViemExtension());
+ *
+ * const userAddress = "0x000000000000000000000000000000000000dEaD";
+ * const marketParams = markets[mainnet.id].usdc_wbtc;
+ * const market = client.morpho.marketV1(marketParams, mainnet.id);
+ * const block = await client.getBlock();
+ * const reallocationData = await market.getReallocationData({
+ *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],
+ *   block: { number: block.number, timestamp: block.timestamp },
+ * });
+ * const borrowAmount = parseUnits("1000", 6);
+ * const reallocations = computeReallocations({
+ *   reallocationData,
+ *   marketId: marketParams.id,
+ *   borrowAmount,
+ *   options: { timestamp: block.timestamp },
+ * });
+ * const positionData = await market.getPositionData(userAddress);
+ * const borrow = market.borrow({
+ *   userAddress,
+ *   amount: borrowAmount,
+ *   positionData,
+ *   reallocations,
+ * });
+ * // borrow.buildTx() includes any required PublicAllocator reallocations.
+ * ```
  */
 export const computeReallocations = ({
   reallocationData: data,
