@@ -33,7 +33,7 @@
     "lodash.mergewith": "^4.6.2"
   },
   "peerDependencies": {
-    "@morpho-org/morpho-ts": "workspace:^"
+    "@morpho-org/morpho-ts": "^2.5.1"
   },
   "devDependencies": {
     "@morpho-org/morpho-ts": "workspace:^",

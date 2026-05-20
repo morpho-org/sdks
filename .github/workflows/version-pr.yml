@@ -12,15 +12,16 @@ permissions:
   contents: read
 
 jobs:
-  version-pr:
+  version-artifact:
     if: github.ref_name == 'main' || github.ref_name == 'next'
-    name: Version PR
+    name: Version packages
     runs-on: ubuntu-latest
+    outputs:
+      has_changesets: ${{ steps.pending-changesets.outputs.has_changesets }}
     env:
       CI: true
       HUSKY: 0
       TARGET_BRANCH: ${{ github.ref_name }}
-      RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -75,8 +76,70 @@ jobs:
           # `pnpm run version` can read it from process.env.
           GITHUB_TOKEN: ${{ steps.changelog-token.outputs.token }}
 
-      - name: Generate Release GitHub App Token
+      - name: Write version artifact
         if: steps.pending-changesets.outputs.has_changesets == 'true'
+        run: |
+          set -euo pipefail
+          node scripts/release/write-version-artifact.mjs "${RUNNER_TEMP}/version-artifact/version-changes.json"
+
+      - name: Upload version artifact
+        if: steps.pending-changesets.outputs.has_changesets == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: version-pr-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/version-artifact/version-changes.json
+          if-no-files-found: error
+          retention-days: 1
+
+  version-pr:
+    name: Version PR
+    needs: version-artifact
+    if: needs.version-artifact.outputs.has_changesets == 'true'
+    runs-on: ubuntu-latest
+    env:
+      CI: true
+      HUSKY: 0
+      TARGET_BRANCH: ${{ github.ref_name }}
+      RELEASE_BRANCH: changeset-release/${{ github.ref_name }}
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Download version artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: version-pr-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/version-artifact
+
+      - name: Apply version artifact
+        run: |
+          set -euo pipefail
+          node scripts/release/apply-version-artifact.mjs < "${RUNNER_TEMP}/version-artifact/version-changes.json"
+
+      - name: Verify write-token preconditions
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hooks were created before the write-token steps."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
+          fi
+
+      - name: Generate Release GitHub App Token
         id: app-token
         uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3
         with:
@@ -85,117 +148,56 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
-      - name: Push release branch
+      - name: Create signed version commit
         id: version-commit
-        if: steps.pending-changesets.outputs.has_changesets == 'true'
-        shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_BRANCH: ${{ env.RELEASE_BRANCH }}
         run: |
           set -euo pipefail
 
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          reset_origin_url() {
-            git remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
-          }
-
-          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
-          trap reset_origin_url EXIT
-
-          is_allowed_version_path() {
-            [[ "$1" =~ ^packages/[^/]+/package\.json$ ]] ||
-            [[ "$1" =~ ^packages/[^/]+/CHANGELOG\.md$ ]] ||
-            [[ "$1" =~ ^\.changeset/[^/]+\.md$ ]] ||
-            [[ "$1" == ".changeset/pre.json" ]]
-          }
-
-          allowed_changed=()
-          while IFS= read -r -d '' path; do
-            if is_allowed_version_path "$path"; then
-              allowed_changed+=("$path")
-            fi
-          done < <(git diff --name-only -z)
-
-          while IFS= read -r -d '' path; do
-            if is_allowed_version_path "$path"; then
-              allowed_changed+=("$path")
-            fi
-          done < <(git ls-files --others --exclude-standard -z)
-
-          if [ "${#allowed_changed[@]}" -gt 0 ]; then
-            git add -- "${allowed_changed[@]}"
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
           fi
-
-          staged_violations=()
-          while IFS= read -r -d '' path; do
-            if ! is_allowed_version_path "$path"; then
-              staged_violations+=("$path")
-            fi
-          done < <(git diff --cached --name-only -z)
-
-          if [ "${#staged_violations[@]}" -gt 0 ]; then
-            echo "::error::Versioning staged files outside the release allowlist:"
-            printf '  %s\n' "${staged_violations[@]}"
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hook before signed version commit."
+            find .git/hooks -type f ! -name '*.sample' -print
             exit 1
           fi
 
-          unstaged=()
-          while IFS= read -r -d '' path; do
-            unstaged+=("$path")
-          done < <(git diff --name-only -z)
-
-          untracked=()
-          while IFS= read -r -d '' path; do
-            untracked+=("$path")
-          done < <(git ls-files --others --exclude-standard -z)
-
-          if [ "${#unstaged[@]}" -gt 0 ] || [ "${#untracked[@]}" -gt 0 ]; then
-            echo "::error::Versioning produced files outside the release allowlist:"
-            printf '  %s\n' "${unstaged[@]}" "${untracked[@]}"
-            exit 1
-          fi
-
-          if git diff --cached --quiet; then
-            echo "No version changes to commit."
-            echo "has_version_changes=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-
-          git commit -m "chore: version packages"
-
-          remote_release_ref="refs/heads/${RELEASE_BRANCH}"
-          local_release_ref="refs/remotes/origin/${RELEASE_BRANCH}"
-          if git ls-remote --exit-code --heads origin "${RELEASE_BRANCH}" >/dev/null 2>&1; then
-            git fetch origin "+${remote_release_ref}:${local_release_ref}"
-            expected_sha="$(git rev-parse "${local_release_ref}")"
-            git push --force-with-lease="${remote_release_ref}:${expected_sha}" origin "HEAD:${remote_release_ref}"
-          else
-            git push origin "HEAD:${remote_release_ref}"
-          fi
-
-          echo "has_version_changes=true" >> "$GITHUB_OUTPUT"
+          node scripts/release/create-version-commit.mjs
 
       - name: Open or update release PR
         if: steps.version-commit.outputs.has_version_changes == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
-          BASE_BRANCH: ${{ github.ref_name }}
+          RELEASE_BRANCH: ${{ env.RELEASE_BRANCH }}
+          TARGET_BRANCH: ${{ env.TARGET_BRANCH }}
         run: |
           set -euo pipefail
 
-          title="chore: version packages (${BASE_BRANCH})"
+          unexpected_hook=""
+          if [ -d .git/hooks ]; then
+            unexpected_hook="$(find .git/hooks -type f ! -name '*.sample' -print -quit)"
+          fi
+          if [ -n "${unexpected_hook}" ]; then
+            echo "::error::Unexpected git hook before release PR update."
+            find .git/hooks -type f ! -name '*.sample' -print
+            exit 1
+          fi
+
+          title="chore: version packages (${TARGET_BRANCH})"
           body="$(cat <<BODY
-          This PR applies the pending changesets for ${BASE_BRANCH}.
+          This PR applies the pending changesets for ${TARGET_BRANCH}.
 
           Merging it clears the consumed changesets and lets the publish workflow publish the already-versioned packages.
           BODY
           )"
 
           pr_number="$(gh pr list \
-            --base "${BASE_BRANCH}" \
+            --base "${TARGET_BRANCH}" \
             --head "${RELEASE_BRANCH}" \
             --state open \
             --json number \
@@ -205,7 +207,7 @@ jobs:
             gh pr edit "${pr_number}" --title "${title}" --body "${body}"
           else
             gh pr create \
-              --base "${BASE_BRANCH}" \
+              --base "${TARGET_BRANCH}" \
               --head "${RELEASE_BRANCH}" \
               --title "${title}" \
               --body "${body}"

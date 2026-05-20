@@ -4,6 +4,8 @@ import { appendFileSync, existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
+import { sanitizeLogLine } from "./helpers.mjs";
+
 const DEFAULT_CHANGESET_DIR = ".changeset";
 
 export function listPendingChangesets(options = {}) {
@@ -27,39 +29,26 @@ export function getGitHubOutput(pendingChangesets) {
   return `has_changesets=${hasChangesets}\n`;
 }
 
-function sanitizeLogLine(value) {
-  let sanitized = "";
-  for (const character of value) {
-    const codePoint = character.codePointAt(0);
-    sanitized +=
-      codePoint != null && (codePoint <= 0x1f || codePoint === 0x7f)
-        ? "?"
-        : character;
-  }
-
-  return sanitized;
-}
-
 export function reportPendingChangesets(options = {}) {
   const pendingChangesets = listPendingChangesets(options);
   const outputFile = options.outputFile ?? process.env.GITHUB_OUTPUT;
+  const writeOutput =
+    options.writeOutput ?? ((message) => process.stdout.write(message));
 
   if (outputFile != null && outputFile !== "") {
     appendFileSync(outputFile, getGitHubOutput(pendingChangesets));
   }
 
   if (pendingChangesets.length > 0) {
-    process.stdout.write("Pending changesets:\n");
-    process.stdout.write(
-      `${pendingChangesets.map(sanitizeLogLine).join("\n")}\n`,
-    );
+    writeOutput("Pending changesets:\n");
+    writeOutput(`${pendingChangesets.map(sanitizeLogLine).join("\n")}\n`);
   }
 
   return pendingChangesets;
 }
 
-export function main() {
-  reportPendingChangesets();
+export function main(options = {}) {
+  return reportPendingChangesets(options);
 }
 
 if (
