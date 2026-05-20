@@ -1,5 +1,12 @@
 # @morpho-org/liquidation-sdk-viem
 
+## 3.0.0
+
+### Patch Changes
+
+- Updated dependencies [[`c9796ab`](https://github.com/morpho-org/sdks/commit/c9796ab033c7fe3ac7241542f3b1a85d17e9b987)]:
+  - @morpho-org/blue-sdk@6.0.0
+
 ## 2.22.1
 
 ### Patch Changes
