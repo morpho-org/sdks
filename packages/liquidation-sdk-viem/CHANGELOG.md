@@ -1,5 +1,29 @@
 # @morpho-org/liquidation-sdk-viem
 
+## 4.0.0
+
+### Major Changes
+
+- [#675](https://github.com/morpho-org/sdks/pull/675) [`a7a1547`](https://github.com/morpho-org/sdks/commit/a7a15476316f71d3675ce2d85e0720a5999ca9c2) Thanks [@Jean-Grimal](https://github.com/Jean-Grimal)! - Remove USD0 / USD0++ liquidation support. These collateral assets are no longer
+  used on Morpho. Dropped:
+
+  - `Usual` namespace and `src/tokens/usual.ts`.
+  - `usd0`, `usd0++`, `usd0usd0++` entries on the `ChainAddresses` augmentation
+    and the matching custom-address registrations on Ethereum mainnet.
+  - `curvePools` constant (only consumed by the removed swap helpers).
+  - `LiquidationEncoder.curveSwapUsd0Usd0PPForUsdc`,
+    `LiquidationEncoder.swapUSD0PPToUSDC`, and the now-unused curve helpers
+    `getCurveWithdrawalAmount`, `getCurveSwapOutputAmountFromInput`,
+    `getCurveSwapInputAmountFromOutput`, `removeLiquidityFromCurvePool`, and
+    `curveSwap`.
+
+  `getCurveSwapIndex0Token` and the Spectra-driven `spectraCurveSwap` are kept
+  since they remain in use by the Spectra integration.
+
+### Patch Changes
+
+- [#683](https://github.com/morpho-org/sdks/pull/683) [`905726e`](https://github.com/morpho-org/sdks/commit/905726ef7b257e5074f029310e11c5236093a34f) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Migrate Morpho API market identifier selections from the deprecated `uniqueKey` field to `marketId` aliases while preserving existing SDK output shapes.
+
 ## 3.0.0
 
 ### Patch Changes
