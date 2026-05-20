@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, jest, test } from '@jest/globals'
+import { beforeEach, describe, expect, vi, test } from 'vitest'
 
 import * as viem from 'viem'
 
@@ -26,8 +26,8 @@ const WITHDRAW_COLLATERAL_TX = { to: '0x0000000000000000000000000000000000000006
 const vaultData = {
   address: VAULT,
   asset: TOKEN,
-  toAssets: jest.fn((shares) => shares),
-  toShares: jest.fn((assets) => assets)
+  toAssets: vi.fn((shares) => shares),
+  toShares: vi.fn((assets) => assets)
 }
 
 const positionData = {
@@ -38,68 +38,70 @@ const positionData = {
 }
 
 const supplyAction = {
-  getRequirements: jest.fn().mockResolvedValue([{ action: { type: 'erc20Approval' } }]),
-  buildTx: jest.fn().mockReturnValue(SUPPLY_TX)
+  getRequirements: vi.fn().mockResolvedValue([{ action: { type: 'erc20Approval' } }]),
+  buildTx: vi.fn().mockReturnValue(SUPPLY_TX)
 }
 const withdrawAction = {
-  buildTx: jest.fn().mockReturnValue(WITHDRAW_TX)
+  buildTx: vi.fn().mockReturnValue(WITHDRAW_TX)
 }
 const borrowAction = {
-  getRequirements: jest.fn().mockResolvedValue([{ action: { type: 'morphoAuthorization' } }]),
-  buildTx: jest.fn().mockReturnValue(BORROW_TX)
+  getRequirements: vi.fn().mockResolvedValue([{ action: { type: 'morphoAuthorization' } }]),
+  buildTx: vi.fn().mockReturnValue(BORROW_TX)
 }
 const repayAction = {
-  getRequirements: jest.fn().mockResolvedValue([{ action: { type: 'erc20Approval' } }]),
-  buildTx: jest.fn().mockReturnValue(REPAY_TX)
+  getRequirements: vi.fn().mockResolvedValue([{ action: { type: 'erc20Approval' } }]),
+  buildTx: vi.fn().mockReturnValue(REPAY_TX)
 }
 const supplyCollateralAction = {
-  getRequirements: jest.fn().mockResolvedValue([{ action: { type: 'erc20Approval' } }]),
-  buildTx: jest.fn().mockReturnValue(SUPPLY_COLLATERAL_TX)
+  getRequirements: vi.fn().mockResolvedValue([{ action: { type: 'erc20Approval' } }]),
+  buildTx: vi.fn().mockReturnValue(SUPPLY_COLLATERAL_TX)
 }
 const withdrawCollateralAction = {
-  buildTx: jest.fn().mockReturnValue(WITHDRAW_COLLATERAL_TX)
+  buildTx: vi.fn().mockReturnValue(WITHDRAW_COLLATERAL_TX)
 }
 
 const vaultV2Entity = {
-  getData: jest.fn().mockResolvedValue(vaultData),
-  deposit: jest.fn().mockReturnValue(supplyAction),
-  withdraw: jest.fn().mockReturnValue(withdrawAction)
+  getData: vi.fn().mockResolvedValue(vaultData),
+  deposit: vi.fn().mockReturnValue(supplyAction),
+  withdraw: vi.fn().mockReturnValue(withdrawAction)
 }
 
 const marketEntity = {
-  getPositionData: jest.fn().mockResolvedValue(positionData),
-  supplyCollateral: jest.fn().mockReturnValue(supplyCollateralAction),
-  borrow: jest.fn().mockReturnValue(borrowAction),
-  repay: jest.fn().mockReturnValue(repayAction),
-  withdrawCollateral: jest.fn().mockReturnValue(withdrawCollateralAction)
+  getPositionData: vi.fn().mockResolvedValue(positionData),
+  supplyCollateral: vi.fn().mockReturnValue(supplyCollateralAction),
+  borrow: vi.fn().mockReturnValue(borrowAction),
+  repay: vi.fn().mockReturnValue(repayAction),
+  withdrawCollateral: vi.fn().mockReturnValue(withdrawCollateralAction)
 }
 
-const vaultV2Mock = jest.fn().mockReturnValue(vaultV2Entity)
-const marketV1Mock = jest.fn().mockReturnValue(marketEntity)
-const morphoClientMock = jest.fn().mockImplementation(() => ({
-  vaultV2: vaultV2Mock,
-  marketV1: marketV1Mock
-}))
-const fetchMarketMock = jest.fn()
-const mockGetChainId = jest.fn().mockResolvedValue(1)
-const readContractMock = jest.fn().mockResolvedValue(123n)
-const extendMock = jest.fn().mockReturnValue({
+const vaultV2Mock = vi.fn().mockReturnValue(vaultV2Entity)
+const marketV1Mock = vi.fn().mockReturnValue(marketEntity)
+const morphoClientMock = vi.fn(function () {
+  return {
+    vaultV2: vaultV2Mock,
+    marketV1: marketV1Mock
+  }
+})
+const fetchMarketMock = vi.fn()
+const mockGetChainId = vi.fn().mockResolvedValue(1)
+const readContractMock = vi.fn().mockResolvedValue(123n)
+const extendMock = vi.fn().mockReturnValue({
   account: { address: ADDRESS },
   chain: { id: 1 },
   getChainId: mockGetChainId,
   readContract: readContractMock
 })
-const createClientMock = jest.fn().mockReturnValue({ extend: extendMock })
+const createClientMock = vi.fn().mockReturnValue({ extend: extendMock })
 
-jest.unstable_mockModule('@morpho-org/morpho-sdk', () => ({
+vi.doMock('@morpho-org/morpho-sdk', () => ({
   MorphoClient: morphoClientMock
 }))
 
-jest.unstable_mockModule('@morpho-org/blue-sdk-viem', () => ({
+vi.doMock('@morpho-org/blue-sdk-viem', () => ({
   fetchMarket: fetchMarketMock
 }))
 
-jest.unstable_mockModule('viem', () => ({
+vi.doMock('viem', () => ({
   ...viem,
   createClient: createClientMock
 }))
@@ -109,12 +111,12 @@ const { WalletAccountEvm, WalletAccountReadOnlyEvm } = await import('@tetherto/w
 const { WalletAccountEvmErc4337 } = await import('@tetherto/wdk-wallet-evm-erc-4337')
 const { default: MorphoProtocolEvm } = await import('../index.js')
 
-describe('MorphoProtocolEvm', () => {
+describe.sequential('MorphoProtocolEvm', () => {
   let account
   let protocol
 
   beforeEach(() => {
-    jest.clearAllMocks()
+    vi.clearAllMocks()
     fetchMarketMock.mockResolvedValue({
       params: new MarketParams(MARKET_PARAMS)
     })
@@ -124,7 +126,7 @@ describe('MorphoProtocolEvm', () => {
     account = new WalletAccountEvm(SEED, "0'/0/0", {
       provider: 'https://dummy-rpc-url.com'
     })
-    account.getAddress = jest.fn().mockResolvedValue(ADDRESS)
+    account.getAddress = vi.fn().mockResolvedValue(ADDRESS)
     protocol = new MorphoProtocolEvm(account, {
       chainId: 1,
       earnVaultAddress: VAULT,
@@ -134,8 +136,8 @@ describe('MorphoProtocolEvm', () => {
 
   describe('supply', () => {
     test('should build a vault deposit with morpho-sdk and send it', async () => {
-      account.getTokenBalance = jest.fn().mockResolvedValue(100_000n)
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n)
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
 
       const result = await protocol.supply({ token: TOKEN, amount: 100_000n })
 
@@ -166,8 +168,8 @@ describe('MorphoProtocolEvm', () => {
         borrowMarketParams: MARKET_PARAMS
       })
 
-      account.getTokenBalance = jest.fn().mockResolvedValue(100_000n)
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n)
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
 
       await protocol.supply({ token: TOKEN, amount: 100_000n })
 
@@ -196,8 +198,8 @@ describe('MorphoProtocolEvm', () => {
       options.earnVaultAddress = '0x0000000000000000000000000000000000000001'
       options.borrowMarketParams.loanToken = COLLATERAL
 
-      account.getTokenBalance = jest.fn().mockResolvedValue(100_000n)
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n)
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
 
       await protocol.supply({ token: TOKEN, amount: 100_000n })
 
@@ -213,8 +215,8 @@ describe('MorphoProtocolEvm', () => {
         asset: COLLATERAL
       })
 
-      account.getTokenBalance = jest.fn()
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
+      account.getTokenBalance = vi.fn()
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
 
       await protocol.supply({ token: COLLATERAL, nativeAmount: 100_000n })
 
@@ -240,8 +242,8 @@ describe('MorphoProtocolEvm', () => {
         borrowMarketParams: MARKET_PARAMS
       })
 
-      account.getTokenBalance = jest.fn().mockResolvedValue(100_000n)
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n)
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-supply-hash', fee: 12_345n })
 
       await protocol.supply({ token: TOKEN, amount: 100_000n })
 
@@ -290,7 +292,7 @@ describe('MorphoProtocolEvm', () => {
 
   describe('quoteSupply', () => {
     test('should quote a vault deposit transaction', async () => {
-      account.quoteSendTransaction = jest.fn().mockResolvedValue({ fee: 12_345n })
+      account.quoteSendTransaction = vi.fn().mockResolvedValue({ fee: 12_345n })
 
       const result = await protocol.quoteSupply({ token: TOKEN, amount: 100_000n })
 
@@ -301,7 +303,7 @@ describe('MorphoProtocolEvm', () => {
 
   describe('withdraw', () => {
     test('should build a vault withdraw with morpho-sdk and send it', async () => {
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-withdraw-hash', fee: 12_345n })
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-withdraw-hash', fee: 12_345n })
 
       const result = await protocol.withdraw({ token: TOKEN, amount: 100_000n })
 
@@ -324,7 +326,7 @@ describe('MorphoProtocolEvm', () => {
 
   describe('borrow', () => {
     test('should build a market borrow with morpho-sdk and send it', async () => {
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-borrow-hash', fee: 12_345n })
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-borrow-hash', fee: 12_345n })
 
       const result = await protocol.borrow({ token: TOKEN, amount: 100_000n })
 
@@ -351,7 +353,7 @@ describe('MorphoProtocolEvm', () => {
         borrowMarketId: MARKET_ID
       })
 
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-borrow-hash', fee: 12_345n })
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-borrow-hash', fee: 12_345n })
 
       await protocol.borrow({ token: TOKEN, amount: 100_000n })
 
@@ -397,7 +399,7 @@ describe('MorphoProtocolEvm', () => {
 
   describe('repay', () => {
     test('should build a max repay by shares with morpho-sdk', async () => {
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-repay-hash', fee: 12_345n })
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-repay-hash', fee: 12_345n })
 
       const result = await protocol.repay({ token: TOKEN, amount: 'max' })
 
@@ -412,8 +414,8 @@ describe('MorphoProtocolEvm', () => {
     })
 
     test('should build an asset repay with morpho-sdk after balance check', async () => {
-      account.getTokenBalance = jest.fn().mockResolvedValue(100_000n)
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-repay-hash', fee: 12_345n })
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n)
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-repay-hash', fee: 12_345n })
 
       await protocol.repay({ token: TOKEN, amount: 100_000n })
 
@@ -437,8 +439,8 @@ describe('MorphoProtocolEvm', () => {
 
   describe('collateral', () => {
     test('should build a supply collateral transaction with morpho-sdk', async () => {
-      account.getTokenBalance = jest.fn().mockResolvedValue(100_000n)
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-collateral-hash', fee: 12_345n })
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n)
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-collateral-hash', fee: 12_345n })
 
       const result = await protocol.supplyCollateral({ token: COLLATERAL, amount: 100_000n })
 
@@ -452,8 +454,8 @@ describe('MorphoProtocolEvm', () => {
     })
 
     test('should build a native-only supply collateral transaction', async () => {
-      account.getTokenBalance = jest.fn()
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-collateral-hash', fee: 12_345n })
+      account.getTokenBalance = vi.fn()
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-collateral-hash', fee: 12_345n })
 
       await protocol.supplyCollateral({ token: COLLATERAL, nativeAmount: 100_000n })
 
@@ -466,7 +468,7 @@ describe('MorphoProtocolEvm', () => {
     })
 
     test('should build a withdraw collateral transaction with morpho-sdk', async () => {
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-withdraw-collateral-hash', fee: 12_345n })
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-withdraw-collateral-hash', fee: 12_345n })
 
       const result = await protocol.withdrawCollateral({ token: COLLATERAL, amount: 100_000n })
 
@@ -494,9 +496,9 @@ describe('MorphoProtocolEvm', () => {
         chainId: 1,
         provider: 'https://dummy-rpc-url.com'
       })
-      account.getAddress = jest.fn().mockResolvedValue(ADDRESS)
-      account.getTokenBalance = jest.fn().mockResolvedValue(100_000n)
-      account.sendTransaction = jest.fn().mockResolvedValue({ hash: 'dummy-user-operation-hash', fee: 12_345n })
+      account.getAddress = vi.fn().mockResolvedValue(ADDRESS)
+      account.getTokenBalance = vi.fn().mockResolvedValue(100_000n)
+      account.sendTransaction = vi.fn().mockResolvedValue({ hash: 'dummy-user-operation-hash', fee: 12_345n })
 
       const protocol = new MorphoProtocolEvm(account, {
         chainId: 1,

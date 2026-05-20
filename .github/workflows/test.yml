@@ -49,21 +49,6 @@ jobs:
           ARBITRUM_RPC_URL: ${{ secrets.ARBITRUM_RPC_URL }}
           IS_LOGGING_DISABLED: true
 
-      # The wdk-protocol-lending-morpho-evm package still runs on jest (Phase 1
-      # of TIB-2026-05-18). Its tests are not picked up by the root vitest
-      # project, so they run in a dedicated step here. The unit suite is pure
-      # node; the e2e fork suite skips itself when MAINNET_RPC_URL is unset.
-      # Workspace `@morpho-org/*` deps are resolved to their built `lib/esm`
-      # output via the package's jest moduleNameMapper, so we build them first.
-      - name: Build dependencies for wdk-protocol-lending-morpho-evm
-        run: pnpm --filter "@morpho-org/wdk-protocol-lending-morpho-evm^..." build
-
-      - name: Run wdk-protocol-lending-morpho-evm tests
-        run: pnpm --filter @morpho-org/wdk-protocol-lending-morpho-evm test
-        env:
-          MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
-          IS_LOGGING_DISABLED: true
-
       - name: Save Foundry cache
         if: always()
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5

@@ -51,10 +51,10 @@
   "scripts": {
     "check:vault-v2": "node scripts/check-vault-v2-only.js",
     "pretest": "pnpm run check:vault-v2",
-    "test": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand",
-    "test:fork": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand tests/integration/module.test.js",
-    "test:unit": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand tests/morpho-protocol-evm.test.js",
-    "test:coverage": "cross-env NODE_OPTIONS=--experimental-vm-modules jest --runInBand --coverage"
+    "test": "vitest run",
+    "test:fork": "vitest run tests/integration/module.test.js",
+    "test:unit": "vitest run tests/morpho-protocol-evm.test.js",
+    "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
@@ -69,8 +69,6 @@
     "viem": "^2.0.0"
   },
   "devDependencies": {
-    "cross-env": "^7.0.3",
-    "jest": "^29.7.0",
     "typescript": "^6.0.3",
     "viem": "^2.50.4"
   },
