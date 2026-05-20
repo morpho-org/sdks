@@ -8,14 +8,14 @@ export const GetMarketsDocument = gql`
     query getMarkets($chainId: Int!, $marketIds: [String!]) {
   markets(where: {chainId_in: [$chainId], uniqueKey_in: $marketIds}) {
     items {
-      uniqueKey
+      uniqueKey: marketId
       targetBorrowUtilization
       publicAllocatorSharedLiquidity {
         vault {
           address
         }
         allocationMarket {
-          uniqueKey
+          uniqueKey: marketId
         }
         assets
       }
@@ -24,7 +24,7 @@ export const GetMarketsDocument = gql`
         state {
           allocation {
             market {
-              uniqueKey
+              uniqueKey: marketId
               loanAsset {
                 address
               }
