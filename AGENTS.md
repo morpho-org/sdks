@@ -51,7 +51,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 
-> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`protocol-engineer`](./.agents/personas/protocol-engineer.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (testability).
+> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (testability).
 
 ---
 
@@ -130,7 +130,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **No mocked viem clients** on RPC paths. Use Anvil forks at pinned blocks. Pure-function tests need neither Anvil nor a viem client.
 - **Shared test helpers** live in `morpho-test`, `test`, `test-wagmi` — never in published runtime paths of feature packages.
 
-> Applied by personas: [`test-coverage`](./.agents/personas/test-coverage.md) (test presence + colocation), [`protocol-engineer`](./.agents/personas/protocol-engineer.md) (protocol invariant semantics), [`web3-security`](./.agents/personas/web3-security.md) (security invariants — chainId validation, authorization, accounting).
+> Applied by personas: [`test-coverage`](./.agents/personas/test-coverage.md) (test presence + colocation), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol invariant semantics), [`web3-security`](./.agents/personas/web3-security.md) (security invariants — chainId validation, authorization, accounting).
 
 ---
 
@@ -163,7 +163,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.
 
-> Applied by personas: [`style-conventions`](./.agents/personas/style-conventions.md) (changeset relevance), [`protocol-engineer`](./.agents/personas/protocol-engineer.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/personas/ci-release-security.md) (publish-flow integrity, conditional).
+> Applied by personas: [`style-conventions`](./.agents/personas/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/personas/ci-release-security.md) (publish-flow integrity, conditional).
 
 ---
 
@@ -208,7 +208,7 @@ Baseline personas (always fire):
 |---|---|---|
 | [`code-quality`](./.agents/personas/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
 | [`module-api-architecture`](./.agents/personas/module-api-architecture.md) | §1, §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
-| [`protocol-engineer`](./.agents/personas/protocol-engineer.md) | §1, §5, §7 | Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants. |
+| [`morpho-protocol`](./.agents/personas/morpho-protocol.md) | §1, §5, §7 | Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants. |
 | [`web3-security`](./.agents/personas/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
 | [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) | §1 (testability), §2 | Swallowed errors, missing error states, dead code paths. |
 | [`style-conventions`](./.agents/personas/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
