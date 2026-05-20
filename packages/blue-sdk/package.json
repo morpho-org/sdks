@@ -39,7 +39,7 @@
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "typescript": "^6.0.3",
-    "viem": "^2.49.3",
+    "viem": "^2.50.4",
     "vitest": "^4.1.6"
   },
   "publishConfig": {
