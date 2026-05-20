@@ -1,0 +1,82 @@
+{
+  "name": "@morpho-org/wdk-protocol-lending-morpho-evm",
+  "version": "0.0.1",
+  "description": "A WDK lending module that lets EVM wallet accounts interact with Morpho vaults and markets through @morpho-org/morpho-sdk.",
+  "keywords": [
+    "wdk",
+    "protocol",
+    "lending",
+    "vaults",
+    "morpho",
+    "morpho-sdk",
+    "morpho blue",
+    "ethereum",
+    "erc-4337"
+  ],
+  "author": "Morpho Association <contact@morpho.org>",
+  "contributors": [
+    "Morpho Labs"
+  ],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "Apache-2.0",
+  "type": "module",
+  "main": "index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "bare": "./bare.js",
+      "default": "./index.js"
+    },
+    "./package": {
+      "default": "./package.json"
+    }
+  },
+  "files": [
+    "index.js",
+    "bare.js",
+    "src/",
+    "types/",
+    "LICENSE",
+    "README.md"
+  ],
+  "sideEffects": [
+    "./bare.js"
+  ],
+  "scripts": {
+    "check:vault-v2": "node scripts/check-vault-v2-only.js",
+    "pretest": "pnpm run check:vault-v2",
+    "test": "vitest run",
+    "test:fork": "vitest run tests/integration/module.test.js",
+    "test:unit": "vitest run tests/morpho-protocol-evm.test.js",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-sdk": "workspace:^",
+    "@tetherto/wdk-wallet": "1.0.0-beta.8",
+    "@tetherto/wdk-wallet-evm": "1.0.0-beta.12",
+    "@tetherto/wdk-wallet-evm-erc-4337": "1.0.0-beta.6",
+    "bare-node-runtime": "1.3.1"
+  },
+  "peerDependencies": {
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3",
+    "viem": "^2.50.4"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "engines": {
+    "node": ">=22.13"
+  }
+}

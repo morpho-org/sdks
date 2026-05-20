@@ -1,6 +1,10 @@
 packages:
   - packages/*
 
+overrides:
+  axios: 1.15.2
+  ws: 8.20.1
+
 onlyBuiltDependencies:
   - '@biomejs/biome'
   - bufferutil
