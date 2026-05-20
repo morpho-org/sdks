@@ -199,6 +199,43 @@ describe("applyVersionArtifact", () => {
     );
   });
 
+  test("error: rejects package dependency value changes before write token", () => {
+    const root = createGitRepo({
+      dependencies: {
+        viem: "^2.0.0",
+      },
+      name: "@morpho-org/morpho-sdk",
+      version: "1.0.0",
+    });
+    const artifactSource = serializeArtifact({
+      additions: [
+        {
+          contents: Buffer.from(
+            `${JSON.stringify({
+              dependencies: {
+                viem: "^2.50.0",
+              },
+              name: "@morpho-org/morpho-sdk",
+              version: "1.1.0",
+            })}\n`,
+          ).toString("base64"),
+          path: "packages/morpho-sdk/package.json",
+        },
+      ],
+      deletions: [],
+      schemaVersion: 1,
+    });
+
+    expect(() =>
+      applyVersionArtifact({
+        artifactSource,
+        cwd: root,
+      }),
+    ).toThrow(
+      "Disallowed dependency value change in dependencies of packages/morpho-sdk/package.json.",
+    );
+  });
+
   test("error: rejects missing artifact source", () => {
     const root = createGitRepo();
 
@@ -224,13 +261,15 @@ describe("applyVersionArtifact", () => {
   });
 });
 
-function createGitRepo() {
+function createGitRepo(
+  manifest = { name: "@morpho-org/morpho-sdk", version: "1.0.0" },
+) {
   const root = mkTempDir("version-artifact-");
   mkdirSync(join(root, "packages/morpho-sdk"), { recursive: true });
   mkdirSync(join(root, ".changeset"), { recursive: true });
   writeFileSync(
     join(root, "packages/morpho-sdk/package.json"),
-    `${JSON.stringify({ name: "@morpho-org/morpho-sdk", version: "1.0.0" })}\n`,
+    `${JSON.stringify(manifest)}\n`,
   );
   writeFileSync(join(root, ".changeset/alpha.md"), "---\n");
   runGit(["-c", "init.defaultBranch=main", "init"], root);

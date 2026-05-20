@@ -584,24 +584,9 @@ function assertSafePackageJsonChange(options) {
     }
 
     if (ALLOWED_PACKAGE_JSON_DEPENDENCY_BLOCKS.has(field)) {
-      const beforeNames = getDependencyNames({
-        field,
-        manifest: before,
-        path: options.path,
-      });
-      const afterNames = getDependencyNames({
-        field,
-        manifest: after,
-        path: options.path,
-      });
-
-      if (beforeNames.join(",") !== afterNames.join(",")) {
-        throw new Error(
-          `Disallowed dep-name change in ${field} of ${options.path}.`,
-        );
-      }
-
-      continue;
+      throw new Error(
+        `Disallowed dependency value change in ${field} of ${options.path}.`,
+      );
     }
 
     throw new Error(
@@ -618,19 +603,6 @@ function parsePackageJson(source, path) {
       cause: error,
     });
   }
-}
-
-function getDependencyNames(options) {
-  const value = options.manifest[options.field];
-  if (value == null) return [];
-
-  if (typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(
-      `Invalid dependency block "${options.field}" in ${options.path}.`,
-    );
-  }
-
-  return Object.keys(value).sort();
 }
 
 function resolveWorktreePath(cwd, path) {

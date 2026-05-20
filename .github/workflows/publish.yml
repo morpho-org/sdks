@@ -61,7 +61,10 @@ jobs:
               cut -d ' ' -f 1
           )"
 
-          echo "helper_sha=${helper_sha}" >> "${GITHUB_OUTPUT}"
+          {
+            echo "helper_sha=${helper_sha}"
+            echo "trusted_path=${PATH}"
+          } >> "${GITHUB_OUTPUT}"
 
       - run: pnpm install --frozen-lockfile
 
@@ -93,8 +96,11 @@ jobs:
         shell: bash
         env:
           EXPECTED_HELPER_SHA: ${{ steps.privileged-baseline.outputs.helper_sha }}
+          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
+          PATH="${TRUSTED_PATH}"
+          export PATH
 
           actual_helper_sha="$(
             find scripts/release -maxdepth 1 -type f -name '*.mjs' -print0 |
@@ -114,8 +120,13 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
+          PATH="${TRUSTED_PATH}"
+          export PATH
+          : > "$GITHUB_ENV"
+          : > "$GITHUB_PATH"
 
           publish_tag="latest"
           if [ "${TARGET_BRANCH}" = "next" ]; then
@@ -130,11 +141,11 @@ jobs:
 
           # Changesets hardcodes package git tags as `name@version`; disable
           # those tags and create the repository's `name-vversion` tags below.
-          # Run publish with an explicit environment allowlist. This drops
-          # values persisted by previous steps through $GITHUB_ENV, including
-          # Node loader variables such as NODE_OPTIONS, while preserving the
-          # OIDC request variables npm needs for trusted publishing.
-          : > "$GITHUB_ENV"
+          # Run publish with an explicit environment allowlist and the trusted
+          # pre-install PATH. This drops values persisted by previous steps
+          # through $GITHUB_ENV or $GITHUB_PATH, including Node loader variables
+          # such as NODE_OPTIONS, while preserving the OIDC request variables
+          # npm needs for trusted publishing.
           env -i \
             ACTIONS_ID_TOKEN_REQUEST_TOKEN="${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" \
             ACTIONS_ID_TOKEN_REQUEST_URL="${ACTIONS_ID_TOKEN_REQUEST_URL:-}" \
@@ -163,7 +174,7 @@ jobs:
             LANG="${LANG:-C.UTF-8}" \
             NPM_CONFIG_PROVENANCE=true \
             NPM_CONFIG_REGISTRY=https://registry.npmjs.org \
-            PATH="${PATH}" \
+            PATH="${TRUSTED_PATH}" \
             PWD="${PWD}" \
             RUNNER_TEMP="${RUNNER_TEMP}" \
             SHELL="${SHELL:-/bin/bash}" \
@@ -220,8 +231,13 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          TRUSTED_PATH: ${{ steps.privileged-baseline.outputs.trusted_path }}
         run: |
           set -euo pipefail
+          PATH="${TRUSTED_PATH}"
+          export PATH
+          : > "$GITHUB_ENV"
+          : > "$GITHUB_PATH"
 
           mapfile -t tags < "${RUNNER_TEMP}/pending-package-tags.txt"
           refs=()

@@ -114,7 +114,7 @@ describe("collectVersionChanges", () => {
     });
   });
 
-  test("behavior: allows dependency range changes without dependency name changes", () => {
+  test("error: rejects dependency value changes", () => {
     const root = createGitRepo({
       dependencies: {
         "@morpho-org/blue-sdk": "workspace:^",
@@ -146,19 +146,9 @@ describe("collectVersionChanges", () => {
       `${JSON.stringify(manifest)}\n`,
     );
 
-    expect(collectVersionChanges({ cwd: root })).toMatchObject({
-      additions: [
-        {
-          contents: Buffer.from(`${JSON.stringify(manifest)}\n`).toString(
-            "base64",
-          ),
-          path: "packages/morpho-sdk/package.json",
-        },
-      ],
-      deletions: [],
-      disallowedPaths: [],
-      paths: ["packages/morpho-sdk/package.json"],
-    });
+    expect(() => collectVersionChanges({ cwd: root })).toThrow(
+      "Disallowed dependency value change in dependencies of packages/morpho-sdk/package.json.",
+    );
   });
 
   test("error: rejects package manifest field changes", () => {
@@ -197,7 +187,7 @@ describe("collectVersionChanges", () => {
     );
 
     expect(() => collectVersionChanges({ cwd: root })).toThrow(
-      "Disallowed dep-name change in dependencies of packages/morpho-sdk/package.json.",
+      "Disallowed dependency value change in dependencies of packages/morpho-sdk/package.json.",
     );
   });
 
