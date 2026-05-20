@@ -210,6 +210,38 @@ export class LiquidityLoader<chain extends Chain = Chain> {
     );
   }
 
+  /**
+   * Fetches the shared-liquidity plan for a target market from the Morpho API and onchain state.
+   *
+   * @param marketId - Target market id to plan withdrawals for.
+   * @returns The start state, simulated end state, computed withdrawals, and target borrow utilization.
+   *
+   * @remarks The returned `endState` is produced by `ReallocationData.getMarketPublicReallocations`.
+   * Its `vault.publicAllocatorConfig.accruedFee` may over-estimate onchain accrued fees because the
+   * simulation accrues the public allocator fee once per computed withdrawal, while the onchain
+   * `reallocateTo` call charges once per vault reallocation group.
+   *
+   * @example
+   * ```ts
+   * import type { MarketId } from "@morpho-org/blue-sdk";
+   * import { LiquidityLoader } from "@morpho-org/liquidity-sdk-viem";
+   * import { createPublicClient, http } from "viem";
+   * import { mainnet } from "viem/chains";
+   *
+   * const client = createPublicClient({
+   *   chain: mainnet,
+   *   transport: http("https://rpc.example"),
+   * });
+   * const loader = new LiquidityLoader(client);
+   *
+   * const marketId =
+   *   "0x7bbbb127f5d2886295f50f3cdf86231d9ff45f248639ee1fd3f2bd5d8b129dcf" as MarketId;
+   * const { withdrawals, endState } = await loader.fetch(marketId);
+   *
+   * // withdrawals: readonly PublicReallocation[]
+   * // endState: ReallocationData
+   * ```
+   */
   public fetch(marketId: MarketId) {
     return this.dataLoader.load(marketId);
   }

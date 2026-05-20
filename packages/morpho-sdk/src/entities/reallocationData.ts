@@ -316,6 +316,12 @@ export class ReallocationData implements InputReallocationData {
    *
    * Pass `options.timestamp` to evaluate market interest and pending public
    * allocator caps at the same block as the fetched reallocation data.
+   * This method does not add the legacy one-hour delay margin that
+   * `SimulationState.getMarketPublicReallocations` applied before measuring
+   * target-market vault headroom. If a transaction may land later than the
+   * fetched block, pass a future `timestamp` or reserve your own headroom so
+   * interest accrued before inclusion does not make `reallocateTo` exceed the
+   * target market cap.
    * The returned `data` may over-estimate `vault.publicAllocatorConfig.accruedFee`
    * because the simulation accrues the public allocator fee once per computed
    * withdrawal, while the on-chain `reallocateTo` call charges once per vault

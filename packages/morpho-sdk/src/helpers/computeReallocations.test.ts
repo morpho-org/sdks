@@ -55,6 +55,12 @@ const sourceA = makeMarket(sourceParamsA);
 const sourceB = makeMarket(sourceParamsB);
 const sourceC = makeMarket(sourceParamsC);
 
+const marketWithId = (market: Market, id: MarketId) => {
+  const clonedMarket = new Market(market);
+  Object.defineProperty(clonedMarket.params, "id", { value: id });
+  return clonedMarket;
+};
+
 // --- Mock builder ---
 
 interface MockStateParams {
@@ -73,6 +79,7 @@ interface MockStateParams {
   }>;
   /** Map vault address → reallocation fee. Omitted vaults have no publicAllocatorConfig. */
   readonly vaultFees?: Record<string, bigint>;
+  readonly extraMarkets?: readonly Market[];
 }
 
 /**
@@ -87,12 +94,14 @@ function makeMockState({
   friendlyTargetMarket,
   aggressiveWithdrawals = [],
   vaultFees = {},
+  extraMarkets = [],
 }: MockStateParams = {}): ReallocationData {
   const markets = new Map<string, Market>();
   markets.set(tm.id, tm);
   markets.set(sourceA.id, sourceA);
   markets.set(sourceB.id, sourceB);
   markets.set(sourceC.id, sourceC);
+  for (const market of extraMarkets) markets.set(market.id, market);
 
   const friendlyData = {
     getMarket: (id: MarketId) =>
@@ -304,6 +313,41 @@ describe("computeReallocations", () => {
       for (let i = 1; i < ids.length; i++) {
         expect(ids[i - 1]! < ids[i]!).toBe(true);
       }
+    });
+
+    test("behavior: sorts mixed-case source market ids by normalized hex bytes", () => {
+      const borrowAmount = 500n * MathLib.WAD;
+      const mixedSourceA = `0x${"a".repeat(64)}` as MarketId;
+      const mixedSourceB = `0x${"B".repeat(64)}` as MarketId;
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        friendlyWithdrawals: [
+          { id: mixedSourceB, vault: VAULT_A, assets: 50n * MathLib.WAD },
+          { id: mixedSourceA, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 0n },
+        extraMarkets: [
+          marketWithId(sourceA, mixedSourceA),
+          marketWithId(sourceB, mixedSourceB),
+        ],
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        borrowAmount,
+        options: { enabled: true },
+      });
+
+      expect(
+        result[0]!.withdrawals.map(({ marketParams }) => marketParams.id),
+      ).toEqual([mixedSourceA, mixedSourceB]);
     });
   });
 

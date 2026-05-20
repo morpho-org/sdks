@@ -80,6 +80,15 @@ const capVaultWithdrawals = (
   return cappedWithdrawals;
 };
 
+const compareMarketIds = (idA: MarketId, idB: MarketId) => {
+  const normalizedIdA = idA.toLowerCase();
+  const normalizedIdB = idB.toLowerCase();
+
+  if (normalizedIdA > normalizedIdB) return 1;
+  if (normalizedIdA < normalizedIdB) return -1;
+  return 0;
+};
+
 /**
  * Computes vault reallocations for a borrow operation on a target market.
  *
@@ -256,12 +265,8 @@ export const computeReallocations = ({
       })(),
       withdrawals: vaultWithdrawals
         // Reallocation withdrawals must be sorted by market id in ascending
-        // order. Use a byte-wise comparison, not `localeCompare`: the
-        // PublicAllocator contract orders by the market id's raw bytes, and
-        // `localeCompare` is locale-dependent and not guaranteed to match.
-        .sort(({ id: idA }, { id: idB }) =>
-          idA > idB ? 1 : idA < idB ? -1 : 0,
-        )
+        // order. Normalize first because `MarketId` can be mixed-case hex.
+        .sort(({ id: idA }, { id: idB }) => compareMarketIds(idA, idB))
         .map(({ id, assets }) => ({
           marketParams: data.getMarket(id).params,
           amount: assets,

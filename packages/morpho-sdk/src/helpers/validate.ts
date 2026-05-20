@@ -37,6 +37,15 @@ import {
 } from "../types/index.js";
 import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 
+const compareMarketIds = (idA: MarketId, idB: MarketId) => {
+  const normalizedIdA = idA.toLowerCase();
+  const normalizedIdB = idB.toLowerCase();
+
+  if (normalizedIdA > normalizedIdB) return 1;
+  if (normalizedIdA < normalizedIdB) return -1;
+  return 0;
+};
+
 /**
  * Asserts that the client has a connected account AND that it matches
  * the provided user address.
@@ -381,7 +390,10 @@ export const validateReallocations = (
           w.marketParams.id,
         );
       }
-      if (prevId !== undefined && w.marketParams.id <= prevId) {
+      if (
+        prevId !== undefined &&
+        compareMarketIds(w.marketParams.id, prevId) <= 0
+      ) {
         throw new UnsortedReallocationWithdrawalsError(
           r.vault,
           w.marketParams.id,
