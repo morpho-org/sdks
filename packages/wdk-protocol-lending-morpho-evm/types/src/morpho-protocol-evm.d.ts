@@ -6,7 +6,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
      * @param {WalletAccountReadOnlyEvm | WalletAccountReadOnlyEvmErc4337} account - The wallet account to use to interact with the protocol.
      * @param {MorphoProtocolOptions} [options] - The Morpho target configuration.
      */
-    constructor(account: WalletAccountReadOnlyEvm | WalletAccountReadOnlyEvmErc4337, options?: MorphoProtocolOptions | undefined);
+    constructor(account: WalletAccountReadOnlyEvm | WalletAccountReadOnlyEvmErc4337, options?: MorphoProtocolOptions);
     /**
      * Creates a new interface to the Morpho protocol for EVM blockchains.
      *
@@ -14,7 +14,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
      * @param {WalletAccountEvm | WalletAccountEvmErc4337} account - The wallet account to use to interact with the protocol.
      * @param {MorphoProtocolOptions} [options] - The Morpho target configuration.
      */
-    constructor(account: WalletAccountEvm | WalletAccountEvmErc4337, options?: MorphoProtocolOptions | undefined);
+    constructor(account: WalletAccountEvm | WalletAccountEvmErc4337, options?: MorphoProtocolOptions);
     /** @private */
     private _options;
     /** @private */
@@ -295,7 +295,7 @@ export type RequirementOptions = {
     /**
      * - Prefer the Morpho SDK simple permit flow when generating approval requirements.
      */
-    useSimplePermit?: boolean | undefined;
+    useSimplePermit?: boolean;
 };
 export type MorphoErc20SupplyOptions = {
     /**
@@ -309,19 +309,19 @@ export type MorphoErc20SupplyOptions = {
     /**
      * - Optional native token amount to wrap and supply, in base units.
      */
-    nativeAmount?: number | bigint | undefined;
+    nativeAmount?: number | bigint;
     /**
      * - The address on behalf of which the supply operation should be performed. Must match the wallet account address when set.
      */
-    onBehalfOf?: string | undefined;
+    onBehalfOf?: string;
     /**
      * - Signature returned by a Morpho SDK approval requirement.
      */
-    requirementSignature?: import("@morpho-org/morpho-sdk").RequirementSignature | undefined;
+    requirementSignature?: RequirementSignature;
     /**
      * - Optional Morpho SDK slippage tolerance in WAD precision.
      */
-    slippageTolerance?: bigint | undefined;
+    slippageTolerance?: bigint;
 };
 export type MorphoNativeSupplyOptions = {
     /**
@@ -331,7 +331,7 @@ export type MorphoNativeSupplyOptions = {
     /**
      * - Optional ERC-20 amount to supply, in base units.
      */
-    amount?: number | bigint | undefined;
+    amount?: number | bigint;
     /**
      * - The native token amount to wrap and supply, in base units.
      */
@@ -339,15 +339,15 @@ export type MorphoNativeSupplyOptions = {
     /**
      * - The address on behalf of which the supply operation should be performed. Must match the wallet account address when set.
      */
-    onBehalfOf?: string | undefined;
+    onBehalfOf?: string;
     /**
      * - Signature returned by a Morpho SDK approval requirement.
      */
-    requirementSignature?: import("@morpho-org/morpho-sdk").RequirementSignature | undefined;
+    requirementSignature?: RequirementSignature;
     /**
      * - Optional Morpho SDK slippage tolerance in WAD precision.
      */
-    slippageTolerance?: bigint | undefined;
+    slippageTolerance?: bigint;
 };
 export type MorphoSupplyOptions = MorphoErc20SupplyOptions | MorphoNativeSupplyOptions;
 export type MorphoBorrowOptions = {
@@ -362,15 +362,15 @@ export type MorphoBorrowOptions = {
     /**
      * - The address on behalf of which the borrow operation should be performed. Must match the wallet account address when set.
      */
-    onBehalfOf?: string | undefined;
+    onBehalfOf?: string;
     /**
      * - Optional Morpho Vault V2 reallocations to include in the borrow action.
      */
-    reallocations?: readonly import("@morpho-org/morpho-sdk").VaultReallocation[] | undefined;
+    reallocations?: readonly VaultReallocation[];
     /**
      * - Optional Morpho SDK slippage tolerance in WAD precision.
      */
-    slippageTolerance?: bigint | undefined;
+    slippageTolerance?: bigint;
 };
 export type MorphoRepayOptions = {
     /**
@@ -384,25 +384,25 @@ export type MorphoRepayOptions = {
     /**
      * - The address on behalf of which the repay operation should be performed. Must match the wallet account address when set.
      */
-    onBehalfOf?: string | undefined;
+    onBehalfOf?: string;
     /**
      * - Signature returned by a Morpho SDK approval requirement.
      */
-    requirementSignature?: import("@morpho-org/morpho-sdk").RequirementSignature | undefined;
+    requirementSignature?: RequirementSignature;
     /**
      * - Optional Morpho SDK slippage tolerance in WAD precision.
      */
-    slippageTolerance?: bigint | undefined;
+    slippageTolerance?: bigint;
 };
 export type Presets = {
     /**
      * - Key of a curated Morpho Vault V2 preset in `MORPHO_VAULT_PRESETS`.
      */
-    earn?: string | undefined;
+    earn?: string;
     /**
      * - Key of a curated Morpho Blue market preset in `MORPHO_MARKET_PRESETS`.
      */
-    borrow?: string | undefined;
+    borrow?: string;
 };
 export type VaultPosition = {
     /**
@@ -478,35 +478,35 @@ export type MorphoProtocolOptions = {
     /**
      * - Explicit Morpho vault address. Takes priority over `presets.earn`.
      */
-    earnVaultAddress?: string | undefined;
+    earnVaultAddress?: string;
     /**
      * - Explicit market id. If `borrowMarketParams` is not provided, params are fetched on-chain.
      */
-    borrowMarketId?: string | undefined;
+    borrowMarketId?: string;
     /**
      * - Explicit Morpho Blue market params. Takes priority over `borrowMarketId` and `presets.borrow`.
      */
-    borrowMarketParams?: import("@morpho-org/blue-sdk").InputMarketParams | undefined;
+    borrowMarketParams?: InputMarketParams;
     /**
      * - Curated target names for Ethereum USDT earn/borrow.
      */
-    presets?: Presets | undefined;
+    presets?: Presets;
     /**
      * - Required when explicit Morpho targets are used; guards against wallet chain switches.
      */
-    chainId?: number | bigint | undefined;
+    chainId?: number | bigint;
     /**
      * - Optional Morpho SDK slippage tolerance in WAD precision.
      */
-    slippageTolerance?: bigint | undefined;
+    slippageTolerance?: bigint;
     /**
      * - Enable Morpho SDK permit/permit2 requirements (default: false).
      */
-    supportSignature?: boolean | undefined;
+    supportSignature?: boolean;
     /**
      * - Enable Morpho SDK deployless reads (default: false).
      */
-    supportDeployless?: boolean | undefined;
+    supportDeployless?: boolean;
 };
 import { LendingProtocol } from '@tetherto/wdk-wallet/protocols';
 import { WalletAccountReadOnlyEvmErc4337 } from '@tetherto/wdk-wallet-evm-erc-4337';

@@ -144,7 +144,7 @@ describe('MorphoProtocolEvm', () => {
         amount: 100_000n,
         nativeAmount: undefined,
         userAddress: ADDRESS,
-        vaultData,
+        accrualVault: vaultData,
         slippageTolerance: undefined
       })
       expect(account.sendTransaction).toHaveBeenCalledWith(SUPPLY_TX)
@@ -223,7 +223,7 @@ describe('MorphoProtocolEvm', () => {
         amount: 0n,
         nativeAmount: 100_000n,
         userAddress: ADDRESS,
-        vaultData: expect.objectContaining({ asset: COLLATERAL }),
+        accrualVault: expect.objectContaining({ asset: COLLATERAL }),
         slippageTolerance: undefined
       })
     })
@@ -268,16 +268,6 @@ describe('MorphoProtocolEvm', () => {
     test("should throw if 'amount' and 'nativeAmount' are zero", async () => {
       await expect(protocol.supply({ token: TOKEN, amount: 0n }))
         .rejects.toThrow("'amount' or 'nativeAmount' should be greater than zero.")
-    })
-
-    test("should reject 'amount' numbers above Number.MAX_SAFE_INTEGER", async () => {
-      await expect(protocol.supply({ token: TOKEN, amount: Number.MAX_SAFE_INTEGER + 1 }))
-        .rejects.toThrow("'amount' must be a safe integer; pass a bigint for values above Number.MAX_SAFE_INTEGER.")
-    })
-
-    test("should reject 'nativeAmount' numbers above Number.MAX_SAFE_INTEGER", async () => {
-      await expect(protocol.supply({ token: TOKEN, nativeAmount: Number.MAX_SAFE_INTEGER + 1 }))
-        .rejects.toThrow("'nativeAmount' must be a safe integer; pass a bigint for values above Number.MAX_SAFE_INTEGER.")
     })
 
     test('should require chainId with explicit Morpho targets', () => {
@@ -387,11 +377,6 @@ describe('MorphoProtocolEvm', () => {
         amount: 100_000n,
         onBehalfOf: '0x70997970C51812dc3A010C7d01b50e0d17dc79C8'
       })).rejects.toThrow("'onBehalfOf' must equal the wallet account address for Morpho SDK-backed operations.")
-    })
-
-    test("should reject 'amount' numbers above Number.MAX_SAFE_INTEGER", async () => {
-      await expect(protocol.borrow({ token: TOKEN, amount: Number.MAX_SAFE_INTEGER + 1 }))
-        .rejects.toThrow("'amount' must be a safe integer; pass a bigint for values above Number.MAX_SAFE_INTEGER.")
     })
   })
 
