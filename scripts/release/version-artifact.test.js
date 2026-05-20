@@ -8,10 +8,10 @@ import {
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
-import { applyVersionArtifact } from "./apply-version-artifact.mjs";
+import { applyVersionArtifact, main } from "./apply-version-artifact.mjs";
 import { writeVersionArtifact } from "./write-version-artifact.mjs";
 
 const tempDirs = [];
@@ -79,7 +79,7 @@ describe("applyVersionArtifact", () => {
   test("default", () => {
     const root = createGitRepo();
     const manifest = { name: "@morpho-org/morpho-sdk", version: "1.1.0" };
-    const artifactPath = writeArtifact({
+    const artifactSource = serializeArtifact({
       additions: [
         {
           contents: Buffer.from(`${JSON.stringify(manifest)}\n`).toString(
@@ -97,7 +97,7 @@ describe("applyVersionArtifact", () => {
     });
 
     applyVersionArtifact({
-      artifactDirectory: dirname(artifactPath),
+      artifactSource,
       cwd: root,
     });
 
@@ -112,7 +112,7 @@ describe("applyVersionArtifact", () => {
 
   test("error: rejects disallowed artifact paths", () => {
     const root = createGitRepo();
-    const artifactPath = writeArtifact({
+    const artifactSource = serializeArtifact({
       additions: [
         {
           contents: Buffer.from("# Changed\n").toString("base64"),
@@ -125,7 +125,7 @@ describe("applyVersionArtifact", () => {
 
     expect(() =>
       applyVersionArtifact({
-        artifactDirectory: dirname(artifactPath),
+        artifactSource,
         cwd: root,
       }),
     ).toThrow('Invalid version artifact path "README.md".');
@@ -133,7 +133,7 @@ describe("applyVersionArtifact", () => {
 
   test("error: rejects duplicate artifact paths", () => {
     const root = createGitRepo();
-    const artifactPath = writeArtifact({
+    const artifactSource = serializeArtifact({
       additions: [
         {
           contents: Buffer.from("{}\n").toString("base64"),
@@ -146,7 +146,7 @@ describe("applyVersionArtifact", () => {
 
     expect(() =>
       applyVersionArtifact({
-        artifactDirectory: dirname(artifactPath),
+        artifactSource,
         cwd: root,
       }),
     ).toThrow('Duplicate version artifact path ".changeset/pre.json".');
@@ -154,7 +154,7 @@ describe("applyVersionArtifact", () => {
 
   test("error: rejects non-canonical base64 contents", () => {
     const root = createGitRepo();
-    const artifactPath = writeArtifact({
+    const artifactSource = serializeArtifact({
       additions: [{ contents: "abc", path: ".changeset/pre.json" }],
       deletions: [],
       schemaVersion: 1,
@@ -162,7 +162,7 @@ describe("applyVersionArtifact", () => {
 
     expect(() =>
       applyVersionArtifact({
-        artifactDirectory: dirname(artifactPath),
+        artifactSource,
         cwd: root,
       }),
     ).toThrow(
@@ -172,7 +172,7 @@ describe("applyVersionArtifact", () => {
 
   test("error: rejects unsafe package manifest contents before write token", () => {
     const root = createGitRepo();
-    const artifactPath = writeArtifact({
+    const artifactSource = serializeArtifact({
       additions: [
         {
           contents: Buffer.from(
@@ -191,7 +191,7 @@ describe("applyVersionArtifact", () => {
 
     expect(() =>
       applyVersionArtifact({
-        artifactDirectory: dirname(artifactPath),
+        artifactSource,
         cwd: root,
       }),
     ).toThrow(
@@ -199,30 +199,28 @@ describe("applyVersionArtifact", () => {
     );
   });
 
-  test("error: rejects unsafe artifact read paths", () => {
+  test("error: rejects missing artifact source", () => {
     const root = createGitRepo();
-    const artifactPath = writeArtifact({
+
+    expect(() => applyVersionArtifact({ cwd: root })).toThrow(
+      "Version artifact source is required.",
+    );
+  });
+
+  test("error: rejects artifact path arguments", () => {
+    const root = createGitRepo();
+    const artifactSource = serializeArtifact({
       additions: [],
       deletions: [],
       schemaVersion: 1,
     });
-    const artifactDirectory = dirname(artifactPath);
 
     expect(() =>
-      applyVersionArtifact({
-        artifactDirectory,
-        artifactName: "../version-changes.json",
+      main(["version-changes.json"], {
+        artifactSource,
         cwd: root,
       }),
-    ).toThrow("Invalid version artifact path.");
-
-    expect(() =>
-      applyVersionArtifact({
-        artifactDirectory,
-        artifactName: artifactPath,
-        cwd: root,
-      }),
-    ).toThrow("Invalid version artifact path.");
+    ).toThrow("Version artifact path arguments are not supported.");
   });
 });
 
@@ -244,14 +242,8 @@ function createGitRepo() {
   return root;
 }
 
-function writeArtifact(artifact) {
-  const artifactPath = join(
-    mkTempDir("version-artifact-input-"),
-    "version-changes.json",
-  );
-  writeFileSync(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`);
-
-  return artifactPath;
+function serializeArtifact(artifact) {
+  return `${JSON.stringify(artifact, null, 2)}\n`;
 }
 
 function mkTempDir(prefix) {

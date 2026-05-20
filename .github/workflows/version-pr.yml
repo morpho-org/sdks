@@ -120,11 +120,9 @@ jobs:
           path: ${{ runner.temp }}/version-artifact
 
       - name: Apply version artifact
-        env:
-          VERSION_ARTIFACT_DIR: ${{ runner.temp }}/version-artifact
         run: |
           set -euo pipefail
-          node scripts/release/apply-version-artifact.mjs
+          node scripts/release/apply-version-artifact.mjs < "${RUNNER_TEMP}/version-artifact/version-changes.json"
 
       - name: Verify write-token preconditions
         shell: bash

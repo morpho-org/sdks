@@ -8,7 +8,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
 import {
@@ -18,12 +18,10 @@ import {
 import { getErrorMessage, isPathInside, sanitizeLogLine } from "./helpers.mjs";
 
 const VERSION_ARTIFACT_SCHEMA_VERSION = 1;
-const VERSION_ARTIFACT_FILE = "version-changes.json";
 
 export function applyVersionArtifact(options = {}) {
   const cwd = options.cwd ?? process.cwd();
-  const artifactPath = resolveVersionArtifactPath(options);
-  const artifact = readVersionArtifact(artifactPath);
+  const artifact = readVersionArtifact(options.artifactSource);
   const additions = readArtifactEntries(artifact.additions, "additions");
   const deletions = readArtifactEntries(artifact.deletions, "deletions");
   const seenPaths = new Set();
@@ -68,52 +66,22 @@ export function applyVersionArtifact(options = {}) {
 }
 
 export function main(args = process.argv.slice(2), options = {}) {
+  if (args.length > 0) {
+    throw new Error("Version artifact path arguments are not supported.");
+  }
+
   return applyVersionArtifact({
-    artifactDirectory:
-      options.artifactDirectory ?? process.env.VERSION_ARTIFACT_DIR,
-    artifactName: args[0] ?? VERSION_ARTIFACT_FILE,
+    artifactSource: options.artifactSource ?? readFileSync(0, "utf8"),
     cwd: options.cwd ?? process.cwd(),
   });
 }
 
-function resolveVersionArtifactPath(options) {
-  const artifactDirectory = options.artifactDirectory;
-  const artifactName = options.artifactName ?? VERSION_ARTIFACT_FILE;
-  if (typeof artifactDirectory !== "string" || artifactDirectory === "") {
-    throw new Error("Version artifact directory is required.");
+function readVersionArtifact(artifactSource) {
+  if (typeof artifactSource !== "string" || artifactSource === "") {
+    throw new Error("Version artifact source is required.");
   }
 
-  if (
-    typeof artifactName !== "string" ||
-    artifactName !== VERSION_ARTIFACT_FILE ||
-    isAbsolute(artifactName) ||
-    artifactName.includes("/") ||
-    artifactName.includes("\\") ||
-    artifactName.split("/").includes("..")
-  ) {
-    throw new Error("Invalid version artifact path.");
-  }
-
-  const basePath = realpathSync(artifactDirectory);
-  const artifactPath = resolve(basePath, artifactName);
-  if (!isPathInside(basePath, artifactPath)) {
-    throw new Error("Invalid version artifact path.");
-  }
-
-  if (!lstatSync(artifactPath).isFile()) {
-    throw new Error("Invalid version artifact path.");
-  }
-
-  const realArtifactPath = realpathSync(artifactPath);
-  if (!isPathInside(basePath, realArtifactPath)) {
-    throw new Error("Invalid version artifact path.");
-  }
-
-  return realArtifactPath;
-}
-
-function readVersionArtifact(artifactPath) {
-  const artifact = JSON.parse(readFileSync(artifactPath, "utf8"));
+  const artifact = JSON.parse(artifactSource);
 
   if (
     artifact == null ||
