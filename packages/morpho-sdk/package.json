@@ -18,19 +18,54 @@
   "exports": {
     ".": "./src/index.ts",
     "./abis": "./src/abis.ts",
-    "./bundler": "./src/bundler/index.ts"
+    "./addresses": "./src/addresses.ts",
+    "./augment": "./src/augment.ts",
+    "./augment/*": "./src/augment/*.ts",
+    "./bundler": "./src/bundler/index.ts",
+    "./constants": "./src/constants.ts",
+    "./entities": "./src/entities/index.ts",
+    "./errors": "./src/errors.ts",
+    "./fetch": "./src/fetch.ts",
+    "./utils": "./src/utils.ts"
   },
   "typesVersions": {
     "*": {
       "abis": [
         "src/abis.ts"
       ],
+      "addresses": [
+        "src/addresses.ts"
+      ],
+      "augment": [
+        "src/augment.ts"
+      ],
+      "augment/*": [
+        "src/augment/*.ts"
+      ],
       "bundler": [
         "src/bundler/index.ts"
+      ],
+      "constants": [
+        "src/constants.ts"
+      ],
+      "entities": [
+        "src/entities/index.ts"
+      ],
+      "errors": [
+        "src/errors.ts"
+      ],
+      "fetch": [
+        "src/fetch.ts"
+      ],
+      "utils": [
+        "src/utils.ts"
       ]
     }
   },
-  "sideEffects": false,
+  "sideEffects": [
+    "./lib/*/augment.js",
+    "./lib/*/augment/*.js"
+  ],
   "files": [
     "lib"
   ],
@@ -72,10 +107,50 @@
         "import": "./lib/esm/abis.js",
         "require": "./lib/cjs/abis.js"
       },
+      "./addresses": {
+        "types": "./lib/esm/addresses.d.ts",
+        "import": "./lib/esm/addresses.js",
+        "require": "./lib/cjs/addresses.js"
+      },
+      "./augment": {
+        "types": "./lib/esm/augment.d.ts",
+        "import": "./lib/esm/augment.js",
+        "require": "./lib/cjs/augment.js"
+      },
+      "./augment/*": {
+        "types": "./lib/esm/augment/*.d.ts",
+        "import": "./lib/esm/augment/*.js",
+        "require": "./lib/cjs/augment/*.js"
+      },
       "./bundler": {
         "types": "./lib/esm/bundler/index.d.ts",
         "import": "./lib/esm/bundler/index.js",
         "require": "./lib/cjs/bundler/index.js"
+      },
+      "./constants": {
+        "types": "./lib/esm/constants.d.ts",
+        "import": "./lib/esm/constants.js",
+        "require": "./lib/cjs/constants.js"
+      },
+      "./entities": {
+        "types": "./lib/esm/entities/index.d.ts",
+        "import": "./lib/esm/entities/index.js",
+        "require": "./lib/cjs/entities/index.js"
+      },
+      "./errors": {
+        "types": "./lib/esm/errors.d.ts",
+        "import": "./lib/esm/errors.js",
+        "require": "./lib/cjs/errors.js"
+      },
+      "./fetch": {
+        "types": "./lib/esm/fetch.d.ts",
+        "import": "./lib/esm/fetch.js",
+        "require": "./lib/cjs/fetch.js"
+      },
+      "./utils": {
+        "types": "./lib/esm/utils.d.ts",
+        "import": "./lib/esm/utils.js",
+        "require": "./lib/cjs/utils.js"
       }
     }
   }

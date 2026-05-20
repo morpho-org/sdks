@@ -338,8 +338,8 @@ export class ReallocationData implements InputReallocationData {
    * import {
    *   morphoViemExtension,
    *   type PublicReallocation,
-   *   type ReallocationData,
    * } from "@morpho-org/morpho-sdk";
+   * import type { ReallocationData } from "@morpho-org/morpho-sdk/entities";
    *
    * const client = createPublicClient({
    *   chain: mainnet,
