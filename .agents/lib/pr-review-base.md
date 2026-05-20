@@ -78,13 +78,28 @@ For each unique package directory among the changed files (e.g. a file at `packa
 
 Use the Glob tool: `**/AGENTS.md` and `packages/*/*.md`. Filter to paths that prefix at least one changed file's directory. Files outside `packages/` use only items 1–4 of the root baseline (items 5–7 conditional as triggered).
 
+### Protocol source-of-truth context (when relevant)
+
+If the diff touches protocol-facing SDK surface — action/entity/helper code, viem/wagmi contract calls, typed-data helpers, ABI/address/constant registries, or files mentioning `encodeFunctionData`, `readContract`, `writeContract`, `simulateContract`, `MarketParams`, `VaultV2`, `MetaMorpho`, `bundler3`, `GeneralAdapter1`, `PublicAllocator`, `Permit2`, `LLTV`, `WAD`, `maxSharePrice`, `minSharePrice`, `abi`, or `functionName` — add targeted protocol context for `morpho-protocol` and `web3-security`.
+
+Do **not** dump huge ABI files wholesale. Instead, search/read narrow excerpts around the relevant symbol(s) from:
+
+1. `packages/blue-sdk-viem/src/abis.ts` — Morpho Blue, MetaMorpho, VaultV2, factories, PublicAllocator, adapter ABIs, permit ABIs.
+2. `packages/bundler-sdk-viem/src/abis.ts` — bundler3 and adapter ABIs.
+3. `packages/liquidation-sdk-viem/src/abis.ts` — liquidation-specific ABIs when liquidation code is touched.
+4. `packages/blue-sdk/src/constants.ts` and `packages/morpho-sdk/src/helpers/constant.ts` — protocol scales, limits, and fixed constants.
+5. `packages/morpho-sdk/AGENTS.md` plus nested `AGENTS.md` such as `packages/morpho-sdk/src/actions/AGENTS.md` — routing, glossary, native wrapping, and reallocation rules.
+
+If no matching ABI/address/constant excerpt is found for a changed protocol call, record that absence in `<PROJECT_CONTEXT>` instead of letting agents infer from memory.
+
 ### Detect conditional persona triggers
 
-Compute flags from the changed-files list. These flags drive which `kind: conditional` personas launch in Step 5:
+Compute flags from the changed-files list. These flags are passed to every persona; flags for `kind: conditional` personas also drive whether they launch in Step 5:
 
 - `<HAS_CI_RELEASE>` — true if any changed file matches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, root or package `package.json` (when a `scripts.*publish*` / `scripts.*release*` field is touched), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, OR if any changed file contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`.
+- `<HAS_PROTOCOL_SURFACE>` — true if any changed file or changed hunk touches protocol-facing SDK code or terms listed in the protocol source-of-truth section above. This flag does not gate `morpho-protocol` (baseline); it tells all agents whether protocol context should have been collected.
 
-Add new flags here when introducing future conditional personas. Each `kind: conditional` persona file declares its `trigger:` placeholder in frontmatter; Step 5 launches it only when that flag is true.
+Add new flags here when introducing future conditional personas. Each `kind: conditional` persona file declares its `trigger:` placeholder in frontmatter; Step 5 launches it only when the flag is true.
 
 After discovery, **print** the list of files read AND the flag values so the user can spot omissions:
 
@@ -96,8 +111,9 @@ Context files read (N):
   packages/morpho-sdk/src/actions/AGENTS.md
   ...
 
-Conditional flags:
+Flags:
   HAS_CI_RELEASE: <true|false>
+  HAS_PROTOCOL_SURFACE: <true|false>
 ```
 
 ## Step 5: Launch parallel review agents
@@ -116,10 +132,12 @@ Loop:
 Shared per-agent contract (applied uniformly to every launched persona):
 
 - Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the conditional flag values, the persona file body, the repo path / branches.
+- When `<HAS_PROTOCOL_SURFACE>` is true, `<PROJECT_CONTEXT>` must include the targeted ABI/address/constant/routing excerpts from Step 4's protocol source-of-truth section, or an explicit note that no relevant source excerpt was found.
 - Per-package `AGENTS.md` rules refine the root for the specific package; the root wins on contradictions.
 - Agents must analyze the **full diff**, not just the latest commit.
 - Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "what is wrong + how to fix"}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
 - **Stay in scope (avoid scope creep).** Focus on the diff: flag issues introduced by these changes, and issues in adjacent code only when the diff makes that adjacent code materially worse (e.g. a renamed function whose remaining callers now misbehave, a new code path that exposes an existing bug). Do NOT flag pre-existing issues in unchanged lines of changed files, propose unrelated refactors, suggest new features or abstractions, or recommend cleanups outside the PR's intent. When in doubt, omit — the reviewer is reviewing *this change*, not the file's history.
+- **Don't nitpick.** Polish, wording, naming preferences, stylistic alternatives, and "you could also" suggestions are not findings — omit them regardless of severity label. A Low-severity finding belongs in the output only when a reasonable reviewer would clearly act on it in this PR.
 - Only **actionable** findings — no praise, no summaries.
 
 ### Current persona inventory
@@ -128,6 +146,7 @@ Baseline (always fire):
 
 - `code-quality.md` — type safety, code smells, naming, cross-file impact on SDK consumers, security primitives.
 - `module-api-architecture.md` — package boundaries, public surface, NodeNext import discipline.
+- `morpho-protocol.md` — Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants.
 - `web3-security.md` — contract interactions, transaction params, permit flows, race conditions.
 - `silent-failure-hunter.md` — swallowed errors, missing error states, dead code paths.
 - `style-conventions.md` — Biome compliance, import discipline, changeset relevance.
