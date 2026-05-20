@@ -264,8 +264,8 @@ importers:
   packages/liquidation-sdk-viem:
     dependencies:
       '@velora-dex/sdk':
-        specifier: 9.5.2
-        version: 9.5.2(axios@1.15.2)(ethers@6.14.4)(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))
+        specifier: 9.5.3
+        version: 9.5.3(axios@1.15.2)(ethers@6.14.4)(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))
       executooor-viem:
         specifier: ^1.3.3
         version: 1.3.3(evm-maths@7.0.1)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))
@@ -1531,8 +1531,8 @@ packages:
   '@oxc-project/types@0.130.0':
     resolution: {integrity: sha512-ibD2usx9JRu7f5pu2tMKMI4cpA4NgXJQoYRP4pQ7Pxmn1l6k/53qWtQWZayhYy3X4QZkt90Ot+mJEaeXouio6Q==}
 
-  '@paraswap/core@2.4.1':
-    resolution: {integrity: sha512-mb0GCuLqQcrGZBzILC8N4WetnIqWEG6DxA2KZuk4X5HJZ9zeW9FQTCXMzZhGAJSx2ZiBMdHbV6RevmXI7IlJbQ==}
+  '@paraswap/core@2.4.3':
+    resolution: {integrity: sha512-2AxAsSzGfaaUWdsbr5qAAwP0eiEfIFd9LDzGMK+aMXYAbS7LgC33LqGnhMDXKJsAQuPgdXhCMpMcasuFrYXz0w==}
 
   '@peculiar/asn1-schema@2.7.0':
     resolution: {integrity: sha512-W8ZfWzLmQnrcky+eh3tni4IozMdqBDiHWU0N+vve/UGjMaUs8c0L7A2oEdkBXS8rTpWDpK/aoI3DG/L/hxmxPg==}
@@ -1805,9 +1805,9 @@ packages:
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
 
-  '@velora-dex/sdk@9.5.2':
-    resolution: {integrity: sha512-wuQRcyfE3/gl6AQL1o2oP+KHm/pAND72M2oMB76IPCgfCgxjftcHJwnBIKsCAJqIfZ94jjQEI085f0LATWBRpA==}
-    engines: {node: '>=18'}
+  '@velora-dex/sdk@9.5.3':
+    resolution: {integrity: sha512-yTPbxdQxN8D2R6BY8sydHNDEIS8UaF5b6f++fNvDD3rpSYdYT0E+qaIcQ4qLpFctS7ZBMgUH2O/J1Ta6yTgh7Q==}
+    engines: {node: '>=22'}
     peerDependencies:
       axios: 1.15.2
       ethers: ^5.5.0 || ^6.0.0
@@ -5237,7 +5237,7 @@ snapshots:
 
   '@oxc-project/types@0.130.0': {}
 
-  '@paraswap/core@2.4.1': {}
+  '@paraswap/core@2.4.3': {}
 
   '@peculiar/asn1-schema@2.7.0':
     dependencies:
@@ -5570,9 +5570,9 @@ snapshots:
     dependencies:
       '@types/node': 25.8.0
 
-  '@velora-dex/sdk@9.5.2(axios@1.15.2)(ethers@6.14.4)(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))':
+  '@velora-dex/sdk@9.5.3(axios@1.15.2)(ethers@6.14.4)(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))':
     dependencies:
-      '@paraswap/core': 2.4.1
+      '@paraswap/core': 2.4.3
       ts-essentials: 10.2.0(typescript@6.0.3)
     optionalDependencies:
       axios: 1.15.2

@@ -27,7 +27,7 @@
     "codegen": "graphql-codegen --config codegen.ts"
   },
   "dependencies": {
-    "@velora-dex/sdk": "9.5.2",
+    "@velora-dex/sdk": "9.5.3",
     "executooor-viem": "^1.3.3"
   },
   "peerDependencies": {
