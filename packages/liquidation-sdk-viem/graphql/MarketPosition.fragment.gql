@@ -3,7 +3,7 @@ fragment MarketPosition on MarketPosition {
     address
   }
   market {
-    uniqueKey
+    uniqueKey: marketId
     collateralAsset {
       address
       decimals

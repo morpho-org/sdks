@@ -9,7 +9,7 @@ export const MarketPositionFragmentDoc = gql`
     address
   }
   market {
-    uniqueKey
+    uniqueKey: marketId
     collateralAsset {
       address
       decimals
@@ -53,7 +53,7 @@ export const GetLiquidatablePositionsDocument = gql`
         address
       }
       market {
-        uniqueKey
+        uniqueKey: marketId
       }
       state {
         borrowShares
@@ -80,7 +80,7 @@ export const GetMarketsAssetsDocument = gql`
       skip
     }
     items {
-      uniqueKey
+      uniqueKey: marketId
       collateralAsset {
         address
         decimals
@@ -101,7 +101,7 @@ export const GetWhitelistedMarketIdsDocument = gql`
     query getWhitelistedMarketIds($chainId: Int!) {
   markets(where: {chainId_in: [$chainId], listed: true}) {
     items {
-      uniqueKey
+      uniqueKey: marketId
     }
   }
 }

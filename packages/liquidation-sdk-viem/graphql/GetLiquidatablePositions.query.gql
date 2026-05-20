@@ -29,7 +29,7 @@ query getLiquidatablePositions(
         address
       }
       market {
-        uniqueKey
+        uniqueKey: marketId
       }
       state {
         borrowShares
