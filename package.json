@@ -45,7 +45,7 @@
     "dotenv-cli": "^11.0.0",
     "happy-dom": "^20.9.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.4.3",
+    "lint-staged": "^17.0.5",
     "solc": "0.8.35",
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3",
