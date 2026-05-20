@@ -1209,10 +1209,4 @@ describe("BundlerAction", () => {
       ),
     ).toThrow(BundlerErrors.UnexpectedAction);
   });
-
-  test("error: UnexpectedSignature", () => {
-    expect(new BundlerErrors.UnexpectedSignature(recipient).message).toContain(
-      recipient,
-    );
-  });
 });

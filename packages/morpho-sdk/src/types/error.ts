@@ -49,27 +49,6 @@ export namespace BundlerErrors {
       super(`unexpected action "${type}" on chain "${chainId}"`);
     }
   }
-
-  /**
-   * Thrown when a signature would authorize an unsafe consumer.
-   *
-   * @example
-   * ```ts
-   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
-   *
-   * if (error instanceof BundlerErrors.UnexpectedSignature) {
-   *   // Ask the user to sign a payload for the expected spender.
-   * }
-   * ```
-   */
-  export class UnexpectedSignature extends Error {
-    /**
-     * @param spender - Address unexpectedly authorized by the signature.
-     */
-    constructor(spender: Address) {
-      super(`unexpected signature consumer "${spender}"`);
-    }
-  }
 }
 
 /** Thrown when an asset amount is required to be positive but is zero or negative. */
