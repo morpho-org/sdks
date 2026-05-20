@@ -40,7 +40,7 @@
     "@changesets/cli": "^2.31.0",
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
-    "@types/node": "^25.8.0",
+    "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.6",
     "@vitest/ui": "^4.1.6",
     "dotenv-cli": "^11.0.0",
