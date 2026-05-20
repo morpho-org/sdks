@@ -25,10 +25,10 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
+    "@morpho-org/blue-sdk": "^6.0.0",
+    "@morpho-org/blue-sdk-viem": "^5.0.0",
+    "@morpho-org/morpho-ts": "^2.5.1",
+    "@morpho-org/simulation-sdk": "^4.0.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {

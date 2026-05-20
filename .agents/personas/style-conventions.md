@@ -27,13 +27,14 @@ Per AGENTS.md §8 — mechanical style (Biome enforces what it can; this persona
 Per AGENTS.md §7 — changeset relevance (the policy lives in §7; this persona checks the diff matches):
 
 - Behavior-affecting changes to published package source **without** a `.changeset/*.md` entry.
+- Changesets that bump a package without auditing downstream internal `peerDependencies`. Internal peer ranges are explicit semver ranges, not `workspace:` ranges, so Changesets will not auto-bump peer dependents; flag missing peer range updates and missing explicit changeset entries for affected dependent packages.
 - JSDoc-only changes to published package source may ship a patch changeset when maintainers want them in release notes — flag the absence only as **low** unless the export's contract changed.
 - Unnecessary changesets on repo metadata, non-API doc-only diffs, fixtures, generated outputs, or tests-only diffs.
 - Changeset whose declared bump (patch/minor/major) doesn't match the diff's contract impact.
 
 ## Severity guidance
 
-- **High** — missing changeset on a behavior-affecting source change in a published package (CI release will undercount, integrators get a surprise).
+- **High** — missing changeset on a behavior-affecting source change in a published package, or a package bump whose downstream internal peer ranges were not updated when required (CI release will undercount, integrators get a surprise).
 - **Medium** — Biome violation surviving `pnpm lint`, missing `.js` suffix, runtime import where type-only would do.
 - **Low** — local re-declaration of an SDK type, JSDoc-only diff without a patch changeset, unnecessary changeset.
 

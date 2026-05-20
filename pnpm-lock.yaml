@@ -389,10 +389,6 @@ importers:
         version: 4.1.6(@types/node@25.8.0)(@vitest/coverage-v8@4.1.6)(@vitest/ui@4.1.6)(happy-dom@20.9.0)(vite@8.0.13(@types/node@25.8.0)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/migration-sdk-viem:
-    dependencies:
-      '@morpho-org/bundler-sdk-viem':
-        specifier: workspace:^
-        version: link:../bundler-sdk-viem
     devDependencies:
       '@morpho-org/blue-sdk':
         specifier: workspace:^
@@ -400,6 +396,9 @@ importers:
       '@morpho-org/blue-sdk-viem':
         specifier: workspace:^
         version: link:../blue-sdk-viem
+      '@morpho-org/bundler-sdk-viem':
+        specifier: workspace:^
+        version: link:../bundler-sdk-viem
       '@morpho-org/morpho-test':
         specifier: workspace:^
         version: link:../morpho-test

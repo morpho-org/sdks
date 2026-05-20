@@ -21,6 +21,7 @@ Per AGENTS.md §1 and §4 — package boundaries and the public surface:
 - A new export from `src/index.ts` (or removal/rename of an existing one) — flag for cross-file impact on consumers; check that downstream code in the monorepo and the JSDoc still match.
 - A layering reversal — entity reading state when it should be lazy, action encoding calldata that should belong to a helper, helper depending on an entity, etc. (See the §1 Layering table.)
 - A new framework import (`react`, `wagmi`, `redux`, `ethers`) in a core SDK package. Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`); core packages stay framework-free.
+- Internal workspace dependencies that do not use `workspace:` ranges, except `peerDependencies`: internal peers intentionally use explicit published semver ranges so Changesets does not auto-bump peer dependents. When a package is bumped, check all packages that declare it as a peer dependency; flag missing peer range updates or missing explicit dependent changesets.
 
 Per AGENTS.md §3 — type discipline at the boundary:
 

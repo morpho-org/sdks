@@ -25,9 +25,9 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
+    "@morpho-org/blue-sdk": "^6.0.0",
+    "@morpho-org/blue-sdk-viem": "^5.0.0",
+    "@morpho-org/morpho-ts": "^2.5.1",
     "@tanstack/react-query": "^5.0.0",
     "react": "^18.0.0 || ^19.2.6",
     "viem": "^2.0.0",
