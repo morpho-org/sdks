@@ -320,6 +320,7 @@ export interface MarketV1Actions {
    *        Pass the fetched block timestamp to compute reallocations at the same block.
    * @returns Array of vault reallocations ready to pass to `borrow()` or
    *          `supplyCollateralBorrow()`. Empty array if no reallocation is needed.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the borrow shortfall on the target market.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
@@ -1045,6 +1046,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
    * @param params.borrowAmount - Borrow amount to test against post-borrow utilization.
    * @param params.options - Optional allocator and utilization options.
    * @returns Vault reallocations ready to pass to `borrow` or `supplyCollateralBorrow`.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
    * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the borrow shortfall on the target market.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
@@ -1058,6 +1060,8 @@ export class MorphoMarketV1 implements MarketV1Actions {
     borrowAmount: bigint;
     options?: ReallocationComputeOptions;
   }): readonly VaultReallocation[] {
+    validateChainId(reallocationData.chainId, this.chainId);
+
     return computeReallocations({
       reallocationData,
       marketId: this.marketParams.id,
