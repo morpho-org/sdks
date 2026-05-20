@@ -391,7 +391,7 @@ jobs:
           node-version-file: .nvmrc
 
       - name: Download package tag list
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: pending-package-tags
           path: ${{ runner.temp }}
