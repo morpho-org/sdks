@@ -137,6 +137,7 @@ Shared per-agent contract (applied uniformly to every launched persona):
 - Agents must analyze the **full diff**, not just the latest commit.
 - Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "what is wrong + how to fix"}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
 - **Stay in scope (avoid scope creep).** Focus on the diff: flag issues introduced by these changes, and issues in adjacent code only when the diff makes that adjacent code materially worse (e.g. a renamed function whose remaining callers now misbehave, a new code path that exposes an existing bug). Do NOT flag pre-existing issues in unchanged lines of changed files, propose unrelated refactors, suggest new features or abstractions, or recommend cleanups outside the PR's intent. When in doubt, omit — the reviewer is reviewing *this change*, not the file's history.
+- **Default to omitting Low-severity findings.** Only include a Low finding when it would mislead a future reader or compound with another finding on the same code. Polish, wording, and stylistic preferences are not findings.
 - Only **actionable** findings — no praise, no summaries.
 
 ### Current persona inventory
