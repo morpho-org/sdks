@@ -1,5 +1,11 @@
 # @morpho-org/liquidity-sdk-viem
 
+## 2.0.1
+
+### Patch Changes
+
+- [#683](https://github.com/morpho-org/sdks/pull/683) [`905726e`](https://github.com/morpho-org/sdks/commit/905726ef7b257e5074f029310e11c5236093a34f) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Migrate Morpho API market identifier selections from the deprecated `uniqueKey` field to `marketId` aliases while preserving existing SDK output shapes.
+
 ## 2.0.0
 
 ### Patch Changes
