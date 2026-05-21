@@ -1,4 +1,4 @@
-# TIB-2026-05-21: Pull `0xbulma/claude-skills` learnings into the `.agents/` PR review engine
+# TIB-2026-05-21: PR review engine — deterministic scope filter, WHAT/FIX schema, audit trail
 
 | Field      | Value                                       |
 | ---------- | ------------------------------------------- |
@@ -18,7 +18,7 @@ The repo's PR review automation lives under `.agents/`:
 - 9 personas at `.agents/personas/*.md` (8 baseline + 1 conditional `ci-release-security`).
 - Inventory and rules are codified in [`AGENTS.md`](../../AGENTS.md) §10; every persona's `applies:` frontmatter cites the `AGENTS.md` section(s) it enforces.
 
-In parallel, an external Claude Code plugin — [`0xbulma/claude-skills`](https://github.com/0xbulma/claude-skills) — has evolved the same architecture into a more rigorous engine. Same shape (caller → engine → parallel personas → dedup), but with structural improvements that address review-noise problems we also have:
+A separate Claude Code review-engine plugin — developed independently against the same caller → engine → parallel-personas → dedup architecture we use — has matured into a more rigorous engine. Same shape, but with structural improvements that address review-noise problems we also have:
 
 1. **Findings on lines the diff didn't touch.** Our scope filter only drops findings whose file is not in the diff. Agents flagging pre-existing untyped errors / missing JSDoc on unchanged lines of a *touched* file get through. The external engine builds a `CHANGED_LINES` map from `git diff --unified=0` and drops findings outside a ±15-line tolerance window.
 2. **Free-form descriptions reviewers can't act on.** Our finding schema is `{severity, file, line, description}` with no constraint on description shape. Agents drift between "this is a bug" and "consider X for readability". The external engine enforces `WHAT: <problem>. FIX: <code change>.` in every description.
@@ -125,11 +125,11 @@ Each phase is one focused PR. None of them ship behaviour-affecting source for p
 
 ## Considered Alternatives
 
-### Alternative 1: Adopt the external repo's plugin layout wholesale
+### Alternative 1: Adopt a Claude Code plugin layout wholesale
 
 Move `.agents/` to a Claude Code plugin structure (`plugins/local/skills/pr-review-engine/SKILL.md`, etc.).
 
-**Why rejected:** The in-repo `.agents/` model is intentionally co-located with the rules it enforces (sits next to `AGENTS.md`). Plugin-marketplace structure adds an indirection layer without value here — no shared distribution across repos, no SessionStart installer needed. The cost-benefit favours keeping the existing layout and absorbing only the structural learnings (frontmatter conventions, scripts, references).
+**Why rejected:** The in-repo `.agents/` model is intentionally co-located with the rules it enforces (sits next to `AGENTS.md`). A plugin-marketplace structure adds an indirection layer without value here — no shared distribution across repos, no SessionStart installer needed. The cost-benefit favours keeping the existing layout and absorbing only the structural learnings (frontmatter conventions, scripts, references).
 
 ### Alternative 2: Keep `ci-release-security` as one persona
 
@@ -137,17 +137,17 @@ Leave the combined persona in place; tighten its `applies:` anchorage and skip t
 
 **Why rejected:** `AGENTS.md` §10's rules are organised into three independently-triggered concerns (CI security, release integrity, dependency hygiene). Firing all three when only `pnpm-lock.yaml` changed wastes a parallel agent and dilutes the persona's focus. The split mirrors the existing §10 sub-section structure exactly — no rule duplication, three sharper personas. The `applies:` frontmatter on each split persona still cites the §10 sub-rules it owns, so anchorage is preserved (in fact strengthened — each persona points at a narrower rule set).
 
-### Alternative 3: Adopt generic baseline personas from the external repo
+### Alternative 3: Adopt generic baseline personas in place of the Morpho-specific ones
 
-Replace `morpho-protocol`, `web3-security`, `code-quality`, `module-api-architecture`, etc. with the external repo's generic six (`correctness`, `error-handling`, `docs`, `tests`, `simplification`, `performance`).
+Replace `morpho-protocol`, `web3-security`, `code-quality`, `module-api-architecture`, etc. with a generic six (`correctness`, `error-handling`, `docs`, `tests`, `simplification`, `performance`) of the kind a fresh review-engine plugin tends to ship with.
 
-**Why rejected:** Explicit user instruction to keep specificity and anchorage. The Morpho-specific personas are the differentiator — they encode protocol semantics (ABI/address drift, operation routing, accounting/LLTV/share-price invariants) that no generic persona can replicate. The external repo's six are good starting points for a fresh plugin, not a substitute for what this repo has earned.
+**Why rejected:** Explicit instruction to keep specificity and anchorage. The Morpho-specific personas are the differentiator — they encode protocol semantics (ABI/address drift, operation routing, accounting/LLTV/share-price invariants) that no generic persona can replicate. Generic personas are good starting points for a fresh plugin, not a substitute for what this repo has earned.
 
 ### Alternative 4: Skip the bundled scripts; keep prose-only spec
 
 Keep the engine as a single Markdown document with the diff math and schema validation described in English.
 
-**Why rejected:** Prose is exactly where the external repo drifted before adopting the scripts. Anthropic's own skill guide (cited in their `SKILL.md`) puts it crisply: "Code is deterministic; language interpretation isn't." Scope-filter accuracy is non-negotiable — a flaky filter erodes trust in every review. The 100-ish lines of bundled shell+Python carry their weight.
+**Why rejected:** Prose is exactly the layer where deterministic logic drifts. Anthropic's skill guide puts it crisply: "Code is deterministic; language interpretation isn't." Scope-filter accuracy is non-negotiable — a flaky filter erodes trust in every review. The 100-ish lines of bundled TypeScript carry their weight.
 
 ## Assumptions & Constraints
 
@@ -155,7 +155,7 @@ Keep the engine as a single Markdown document with the diff math and schema vali
 - Node ≥22 + Bash are available locally and in CI (already true — repo standard per [`AGENTS.md`](../../AGENTS.md) §8). No Python dependency.
 - The repo has (or will have at Phase 2) `tsx` as a root `devDependency`. `tsx` is the standard runner for TypeScript scripts in pnpm/Node monorepos; it does not affect any published package's runtime or peer-dep surface (it's strictly a dev tool).
 - `gh` CLI is authenticated for `pr-review-gh` / `pr-review-ci` (already true).
-- The external repo (`0xbulma/claude-skills`) is a reference design only — we are not taking a runtime dependency on it. The TIB freezes the relevant ideas at this date; future drift in the external repo does not bind us.
+- The external review-engine plugin is a reference design only — we are not taking a runtime dependency on it. The TIB freezes the relevant ideas at this date; future drift in that external work does not bind us.
 - The Morpho-specific persona inventory is stable. If a future TIB adds a new baseline persona, it adds a row to `AGENTS.md` §10 and a file under `.agents/personas/` — but that is out of scope for this TIB.
 
 ## Dependencies
@@ -172,9 +172,9 @@ One forward-looking consideration: the bundled `validate-findings.ts` parses age
 
 ## Future Considerations
 
-- **Orchestrator persona / iteration loop**: the external repo's `tib-ship` skill uses `<EXCLUDE_AGENTS>` to suppress `runtime-validation` during inner iterations. If we ever introduce an analogous orchestrator (e.g. for automated TIB execution), the `<EXCLUDE_AGENTS>` hook is already in place.
+- **Orchestrator persona / iteration loop**: a future automated TIB-execution orchestrator (analogous to a `tib-ship` skill) could suppress one expensive persona during inner iterations using `<EXCLUDE_AGENTS>` and run it once after convergence. The hook is already in place.
 - **CI-mode invocation of the engine**: nothing in the engine is CI-specific; the only difference is the caller's Step 7 output rendering. If we want to run the engine inside a GitHub Action (instead of the existing `/pr-review-ci` flow), the `disable-model-invocation` engine flag does not block it — only direct slash invocation is blocked.
-- **Generic persona migration**: if a future TIB introduces React/Next surface in this repo (e.g. a docs site), the external repo's `react-next`, `styling`, `accessibility`, `ai-sdk` personas are ready to adopt — same architecture, same frontmatter shape.
+- **Generic persona migration**: if a future TIB introduces React/Next surface in this repo (e.g. a docs site), persona patterns for `react-next`, `styling`, `accessibility`, `ai-sdk` can be added as new conditional personas — same architecture, same frontmatter shape.
 
 ## Open Questions
 
@@ -184,10 +184,10 @@ One forward-looking consideration: the bundled `validate-findings.ts` parses age
 ## References
 
 - [`AGENTS.md`](../../AGENTS.md) §10 — Review automation & CI/release security (source of truth this TIB updates the inventory tables of).
-- [`0xbulma/claude-skills`](https://github.com/0xbulma/claude-skills) — external Claude Code plugin whose engine, scripts, and conditional-persona-split design this TIB absorbs.
-- [`0xbulma/claude-skills`: `plugins/local/skills/pr-review-engine/SKILL.md`](https://github.com/0xbulma/claude-skills/blob/main/plugins/local/skills/pr-review-engine/SKILL.md) — reference engine spec.
-- [`.agents/lib/pr-review-base.md`](../../.agents/lib/pr-review-base.md) — current engine, to be augmented per this TIB.
-- [`.agents/personas/`](../../.agents/personas/) — current persona inventory, to be split per Phase 4.
+- [`.agents/lib/pr-review-base.md`](../../.agents/lib/pr-review-base.md) — current engine, augmented by this TIB.
+- [`.agents/personas/`](../../.agents/personas/) — current persona inventory, split per Phase 4.
+- [`.agents/lib/scripts/`](../../.agents/lib/scripts/) — bundled deterministic scripts added by Phase 2.
+- [`.agents/references/`](../../.agents/references/) — shared rubric content added by Phase 2.
 
 ## Addenda
 
