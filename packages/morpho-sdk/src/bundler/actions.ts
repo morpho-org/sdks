@@ -283,6 +283,13 @@ export namespace BundlerAction {
   /**
    * Encodes a native-token transfer for Bundler3 execution.
    *
+   * @remarks
+   * Transfers to Bundler3 are treated as bundle pre-funding and emit no inner
+   * call. Transfers whose `owner` is GeneralAdapter1 are encoded as
+   * `GeneralAdapter1.nativeTransfer(recipient, amount)` and always use
+   * `skipRevert: false`; the caller-supplied `skipRevert` argument applies
+   * only to direct native transfers from other owners.
+   *
    * @param chainId - Chain where the action will execute.
    * @param owner - Current native-token owner in the bundle.
    * @param recipient - Native-token recipient.
