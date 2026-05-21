@@ -61,6 +61,47 @@ const encodeCallbackCalls = (callbackCalls: BundlerCall[]) => {
   } as const;
 };
 
+interface BundleValueState {
+  readonly value: bigint;
+  readonly availableBundlerValue: bigint;
+}
+
+interface EncodeBundleActionParams {
+  readonly chainId: number;
+  readonly action: Action;
+  readonly valueState: BundleValueState;
+}
+
+interface EncodeBundleActionResult {
+  readonly calls: BundlerCall[];
+  readonly valueState: BundleValueState;
+}
+
+const addBundlerPrefund = (
+  state: BundleValueState,
+  amount: bigint,
+): BundleValueState => ({
+  value: state.value + amount,
+  availableBundlerValue: state.availableBundlerValue + amount,
+});
+
+const consumeCallValue = (
+  state: BundleValueState,
+  call: BundlerCall,
+): BundleValueState => {
+  if (call.value > state.availableBundlerValue) {
+    return {
+      value: state.value + call.value - state.availableBundlerValue,
+      availableBundlerValue: 0n,
+    };
+  }
+
+  return {
+    value: state.value,
+    availableBundlerValue: state.availableBundlerValue - call.value,
+  };
+};
+
 /**
  * Encodes the Bundler3 action subset used by `morpho-sdk` transaction builders.
  *
@@ -112,44 +153,24 @@ export namespace BundlerAction {
    */
   export function encodeBundle(chainId: number, actions: Action[]) {
     const {
-      bundler3: { bundler3, generalAdapter1 },
+      bundler3: { bundler3 },
     } = getChainAddresses(chainId);
 
-    let value = 0n;
-    let availableBundlerValue = 0n;
+    let valueState: BundleValueState = {
+      value: 0n,
+      availableBundlerValue: 0n,
+    };
     const encodedActions: BundlerCall[] = [];
 
     for (const action of actions) {
-      if (action.type === "nativeTransfer") {
-        const [owner, recipient, amount] = action.args;
-
-        // A transfer into Bundler3 emits no inner call; it pre-funds later
-        // value-carrying calls in the same multicall.
-        if (
-          !isAddressEqual(owner, bundler3) &&
-          !isAddressEqual(owner, generalAdapter1) &&
-          isAddressEqual(recipient, bundler3)
-        ) {
-          value += amount;
-          availableBundlerValue += amount;
-        }
-      }
-
-      for (const call of BundlerAction.encode(chainId, action)) {
-        if (call.value > availableBundlerValue) {
-          value += call.value - availableBundlerValue;
-          availableBundlerValue = 0n;
-        } else {
-          availableBundlerValue -= call.value;
-        }
-
-        encodedActions.push(call);
-      }
+      const encodedAction = encodeBundleAction({ chainId, action, valueState });
+      encodedActions.push(...encodedAction.calls);
+      valueState = encodedAction.valueState;
     }
 
     return {
       to: bundler3,
-      value,
+      value: valueState.value,
       data: encodeFunctionData({
         abi: bundler3Abi,
         functionName: "multicall",
@@ -278,6 +299,62 @@ export namespace BundlerAction {
         return BundlerAction.wrapNative(chainId, ...args);
       }
     }
+  }
+
+  function encodeBundleAction({
+    chainId,
+    action,
+    valueState,
+  }: EncodeBundleActionParams): EncodeBundleActionResult {
+    const {
+      bundler3: { bundler3, generalAdapter1 },
+    } = getChainAddresses(chainId);
+    let nextValueState = valueState;
+
+    if (action.type === "nativeTransfer") {
+      const [owner, recipient, amount] = action.args;
+
+      // A transfer into Bundler3 emits no inner call; it pre-funds later
+      // value-carrying calls in the same multicall or callback reentry.
+      if (
+        !isAddressEqual(owner, bundler3) &&
+        !isAddressEqual(owner, generalAdapter1) &&
+        isAddressEqual(recipient, bundler3)
+      ) {
+        nextValueState = addBundlerPrefund(nextValueState, amount);
+      }
+    }
+
+    const calls = BundlerAction.encode(chainId, action);
+    for (const call of calls) {
+      nextValueState = consumeCallValue(nextValueState, call);
+    }
+
+    if (action.type === "morphoSupplyCollateral") {
+      const [, , , onMorphoSupplyCollateral] = action.args;
+      for (const callbackAction of onMorphoSupplyCollateral) {
+        const encodedCallback = encodeBundleAction({
+          chainId,
+          action: callbackAction,
+          valueState: nextValueState,
+        });
+        nextValueState = encodedCallback.valueState;
+      }
+    }
+
+    if (action.type === "morphoRepay") {
+      const [, , , , , onMorphoRepay] = action.args;
+      for (const callbackAction of onMorphoRepay) {
+        const encodedCallback = encodeBundleAction({
+          chainId,
+          action: callbackAction,
+          valueState: nextValueState,
+        });
+        nextValueState = encodedCallback.valueState;
+      }
+    }
+
+    return { calls, valueState: nextValueState };
   }
 
   /**

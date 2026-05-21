@@ -367,7 +367,16 @@ describe("BundlerAction", () => {
     let value = 0n;
     let availableBundlerValue = 0n;
 
-    for (const action of actions) {
+    const consumeCall = (call: BundlerCall) => {
+      if (call.value > availableBundlerValue) {
+        value += call.value - availableBundlerValue;
+        availableBundlerValue = 0n;
+      } else {
+        availableBundlerValue -= call.value;
+      }
+    };
+
+    const accountAction = (action: Action) => {
       if (action.type === "nativeTransfer") {
         const [transferOwner, transferRecipient, amount] = action.args;
 
@@ -382,13 +391,24 @@ describe("BundlerAction", () => {
       }
 
       for (const call of BundlerAction.encode(chainId, action)) {
-        if (call.value > availableBundlerValue) {
-          value += call.value - availableBundlerValue;
-          availableBundlerValue = 0n;
-        } else {
-          availableBundlerValue -= call.value;
-        }
+        consumeCall(call);
       }
+
+      if (action.type === "morphoSupplyCollateral") {
+        const [, , , callbackActions] = action.args;
+        for (const callbackAction of callbackActions)
+          accountAction(callbackAction);
+      }
+
+      if (action.type === "morphoRepay") {
+        const [, , , , , callbackActions] = action.args;
+        for (const callbackAction of callbackActions)
+          accountAction(callbackAction);
+      }
+    };
+
+    for (const action of actions) {
+      accountAction(action);
     }
 
     return value;
@@ -703,6 +723,45 @@ describe("BundlerAction", () => {
     const calls = decoded.args[0] ?? [];
     expect(calls).toHaveLength(1);
     expect(calls[0]?.value).toBe(5n);
+  });
+
+  test("encodeBundle includes callback action values in transaction value", () => {
+    const tx = BundlerAction.encodeBundle(chainId, [
+      {
+        type: "morphoSupplyCollateral",
+        args: [
+          market,
+          1n,
+          owner,
+          [
+            {
+              type: "reallocateTo",
+              args: [
+                vault,
+                5n,
+                [{ marketParams: market, amount: 2n }],
+                market,
+                false,
+              ],
+            },
+          ],
+          false,
+        ],
+      },
+    ]);
+
+    expect(tx.value).toBe(5n);
+
+    const decoded = decodeFunctionData({
+      abi: bundler3Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.functionName).toBe("multicall");
+    const calls = decoded.args[0] ?? [];
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.value).toBe(0n);
+    expect(calls[0]?.callbackHash).not.toBe(zeroHash);
   });
 
   test("encodeBundle uses native transfers to Bundler3 before adding call value", () => {
