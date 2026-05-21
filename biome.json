@@ -3,7 +3,7 @@
   "files": {
     "includes": [
       "**",
-      "!**/lib",
+      "!packages/**/lib",
       "!**/.vscode",
       "!**/cache",
       "!**/coverage",

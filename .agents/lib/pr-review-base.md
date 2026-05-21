@@ -32,7 +32,7 @@ The base contract: callers must pass these resolved values into Steps 3–6 and 
 
 **Use the local repo on disk, NOT the GitHub API.**
 
-Compute the merge-base and the diff:
+Compute the merge-base, the diff, and the `<CHANGED_LINES>` map:
 
 ```bash
 MERGE_BASE=$(git merge-base origin/<BASE_BRANCH> <HEAD_REF>)
@@ -40,6 +40,15 @@ MERGE_BASE=$(git merge-base origin/<BASE_BRANCH> <HEAD_REF>)
 
 git diff $MERGE_BASE..<HEAD_REF>
 git diff --name-only $MERGE_BASE..<HEAD_REF>
+
+# Build the per-file CHANGED_LINES map. Used by Step 5 (envelope
+# injection) and Step 6 (scope filter, line-level). Deterministic
+# parsing — do NOT reimplement in prose. Edge cases (deletion-only
+# hunks, pure renames, file deletions) are documented in
+# .agents/references/changed-lines.md.
+git diff --unified=0 $MERGE_BASE..<HEAD_REF> \
+  | node .agents/lib/scripts/build-changed-lines.ts \
+  > /tmp/pr-review-changed-lines.json
 ```
 
 If `<DIFF_SOURCE>=local` AND uncommitted changes exist, also include them:
@@ -47,7 +56,16 @@ If `<DIFF_SOURCE>=local` AND uncommitted changes exist, also include them:
 ```bash
 git diff HEAD                  # combined staged + unstaged
 git diff --name-only HEAD
+
+# Merge the uncommitted hunks into CHANGED_LINES — uncommitted shadows
+# committed for files appearing in both (the agent reads the working
+# tree, not git's index).
+git diff --unified=0 HEAD \
+  | node .agents/lib/scripts/build-changed-lines.ts \
+  > /tmp/pr-review-changed-lines-uncommitted.json
 ```
+
+Merge the two JSON maps in your shell of choice (typically `jq -s 'add'`); the uncommitted side wins on collisions.
 
 Combine the two file lists, deduplicate, announce the count of uncommitted files included so the user knows the review covers their full work-in-progress:
 
@@ -139,7 +157,7 @@ Loop:
 
 Shared per-agent contract (applied uniformly to every launched persona):
 
-- Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the conditional flag values, the persona file body, the repo path / branches.
+- Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the conditional flag values, `<CHANGED_LINES>` (the JSON map produced in Step 3), the persona file body, the repo path / branches. `<CHANGED_LINES>` is the **authoritative** record of which lines the diff added — agents that emit a `line:` field outside that set (beyond the ±15 adjacent-code tolerance, see [`.agents/references/calibration.md`](../references/calibration.md)) will see their findings dropped in Step 6.
 - When `<HAS_PROTOCOL_SURFACE>` is true, `<PROJECT_CONTEXT>` must include the targeted ABI/address/constant/routing excerpts from Step 4's protocol source-of-truth section, or an explicit note that no relevant source excerpt was found.
 - Per-package `AGENTS.md` rules refine the root for the specific package; the root wins on contradictions.
 - Agents must analyze the **full diff**, not just the latest commit.
@@ -171,23 +189,32 @@ Adding a new persona = drop a new file under `.agents/personas/` with appropriat
 
 Merge all agent results into a single list:
 
-1. **Scope filter (drop out-of-scope findings).** Build `<CHANGED_FILES>` = the deduplicated file list from Step 3:
-   - committed: `git diff --name-only $MERGE_BASE..<HEAD_REF>`
-   - plus uncommitted: `git diff --name-only HEAD` (only when `<DIFF_SOURCE>=local`)
+1. **Scope filter + schema validation (deterministic).** Collect every agent's findings into a single JSON array file (e.g. `/tmp/pr-review-findings.json`), then run the bundled validator:
 
-   For every agent finding, first guard `finding.file`: if it is missing, not a string, or empty, treat the finding as malformed and route it to sub-step 2's partial-failure handling instead of dropping it here. Otherwise, compare `finding.file` against `<CHANGED_FILES>` after path normalization:
-   - Strip any leading `./`.
-   - Strip diff prefixes `a/` and `b/` if present.
-   - If the agent returned an absolute path, strip the repo-root prefix (`git rev-parse --show-toplevel`) before compare.
-   - Case-sensitive compare (matches git's default).
+   ```bash
+   node .agents/lib/scripts/validate-findings.ts \
+     /tmp/pr-review-findings.json \
+     /tmp/pr-review-changed-lines.json \
+     "$(git rev-parse --show-toplevel)" \
+     > /tmp/pr-review-filtered.json
+   ```
 
-   If `finding.file` is not in `<CHANGED_FILES>`, **drop the finding** and increment `<DROPPED_OUT_OF_SCOPE>`.
+   The validator applies four checks in this order (see [`.agents/references/scope-filter.md`](../references/scope-filter.md) for the rationale):
 
-   Do NOT filter by line number within a changed file. The Step 5 contract permits flagging adjacent code in a changed file when the diff materially worsens it, so line-level filtering would discard legitimate findings.
+   1. **Schema check** — `severity` ∈ `critical|high|medium|low`, `file` is a non-empty string, `line` is a positive integer, `description` is non-empty AND contains both a `WHAT:` substring and a `FIX:` substring. Schema failures route to `failed[]` and feed `<FAILED_AGENTS>` (see sub-step 2).
+   2. **File-out-of-scope** — `file` not present in `<CHANGED_LINES>` (after path normalization: strip `./`, strip `a/` and `b/` diff prefixes; see [`.agents/references/scope-filter.md`](../references/scope-filter.md) for the full rule). Drops to `dropped[]` with `drop_reason: file_out_of_scope`.
+   3. **Line-pre-existing** — `file` in scope, but `line` is outside the ±15 tolerance window around any changed line. Drops to `dropped[]` with `drop_reason: line_pre_existing` and `distance_to_nearest_changed_line`. Pure renames (empty `CHANGED_LINES` for a file) short-circuit this filter — see [`.agents/references/changed-lines.md`](../references/changed-lines.md).
+   4. **Markdown documentation-example** — `.md` file, `line` inside a CommonMark fenced code block (` ``` ` / `~~~`). Drops to `dropped[]` with `drop_reason: doc_example_fp`. Detection rule lives in [`.agents/references/scope-filter.md`](../references/scope-filter.md).
 
-   After the loop, print one log line: `Scope filter: dropped <DROPPED_OUT_OF_SCOPE> finding(s) targeting files outside the diff.` Then proceed to the remaining sub-steps on the surviving findings.
+   The validator emits `{ kept, dropped, failed, counts }` on stdout. The kept array is what feeds sub-step 3's deduplication; `dropped` flows to the caller's audit-trail rendering (Phase 3 adds `<DROPPED_FINDINGS>` to the output contract).
 
-   Note: dropped findings do NOT count toward `<FAILED_AGENTS>` — they are valid output that was simply out of scope, not malformed.
+   After the validator returns, print one summary line per non-zero counter:
+
+   ```
+   Scope filter: dropped N file-level + N line-level + N doc-example finding(s).
+   ```
+
+   Note: schema failures (`failed[]`) count toward `<FAILED_AGENTS>` (sub-step 2); scope drops do NOT.
 
 2. **Count agent failures.** An agent counts as failed if any of these hold:
    - Returned `{"agent_error": "..."}` (the explicit sentinel from Step 5).
