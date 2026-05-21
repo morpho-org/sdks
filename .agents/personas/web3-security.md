@@ -1,6 +1,7 @@
 ---
 name: web3-security
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §1 Architecture (Action layer), §2 Forbidden patterns (signing in builders), §5 Testing (security invariants — chainId validation, authorization, accounting)
 out-of-scope:
   - General type-safety inside function bodies — see code-quality.

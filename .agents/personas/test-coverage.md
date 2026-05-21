@@ -1,6 +1,7 @@
 ---
 name: test-coverage
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §5 Testing
 out-of-scope:
   - Correctness of the test assertions themselves — see code-quality.

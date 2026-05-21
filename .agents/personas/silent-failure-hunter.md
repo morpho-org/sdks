@@ -1,6 +1,7 @@
 ---
 name: silent-failure-hunter
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §1 Architecture (testability), §2 Forbidden patterns (typed errors over `throw new Error`)
 out-of-scope:
   - General type-safety inside function bodies — see code-quality.

@@ -1,6 +1,7 @@
 ---
 name: documentation
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §6 Documentation
 out-of-scope:
   - Code correctness — see code-quality.

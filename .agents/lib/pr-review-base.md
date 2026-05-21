@@ -1,3 +1,11 @@
+---
+name: pr-review-base
+kind: engine
+version: 0.1.0
+disable-model-invocation: true
+description: Shared Steps 3–6 of the in-repo PR review automation. Consumed by .agents/commands/pr-review-{ci,gh,local}.md — do NOT invoke directly. Walks .agents/personas/*.md and fans out per-persona sub-agents over the diff.
+---
+
 # pr-review base — shared Steps 3–6
 
 This file is the shared review base for the three `/pr-review-*` slash commands. It is invoked indirectly via:

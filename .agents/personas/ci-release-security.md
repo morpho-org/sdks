@@ -1,6 +1,7 @@
 ---
 name: ci-release-security
 kind: conditional
+version: 1.0.0
 trigger: <HAS_CI_RELEASE>
 applies: AGENTS.md §10 Review automation & CI/release security (the rules in that section are the source of truth — this persona references them)
 out-of-scope:

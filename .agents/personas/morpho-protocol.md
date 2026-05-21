@@ -1,6 +1,7 @@
 ---
 name: morpho-protocol
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §1 Architecture (protocol layering and single source of truth), §5 Testing (protocol/security invariants), §7 Releases & versioning (pinned ABIs and addresses)
 out-of-scope:
   - Wallet safety, signing UX, permit replay, and chain mismatch around user signatures — see web3-security.

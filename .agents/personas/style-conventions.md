@@ -1,6 +1,7 @@
 ---
 name: style-conventions
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §7 Releases & versioning (changeset relevance), §8 Code style & tooling
 out-of-scope:
   - Architectural / boundary-level decisions — see module-api-architecture.

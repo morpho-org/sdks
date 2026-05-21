@@ -1,6 +1,7 @@
 ---
 name: code-quality
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §2 Forbidden patterns, §3 Type discipline
 out-of-scope:
   - Error-handling depth / swallowed catches / missing error states — see silent-failure-hunter.

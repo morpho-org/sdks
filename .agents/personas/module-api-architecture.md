@@ -1,6 +1,7 @@
 ---
 name: module-api-architecture
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §1 Architecture (layering, modularity), §3 Type discipline (at the boundary), §4 Public API & packaging
 out-of-scope:
   - Lint mechanics (2-space indent, organize-imports) — see style-conventions.
