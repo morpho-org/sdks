@@ -164,7 +164,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.
 
-> Applied by personas: [`style-conventions`](./.agents/personas/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (pinned ABI/address release contract), [`ci-release-security`](./.agents/personas/ci-release-security.md) (publish-flow integrity, conditional).
+> Applied by personas: [`style-conventions`](./.agents/personas/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (pinned ABI/address release contract), [`release-integrity`](./.agents/personas/release-integrity.md) (publish-flow integrity, conditional).
 
 ---
 
@@ -192,7 +192,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 ## 10. Review automation & CI/release security
 
-PR review is automated by the `/pr-review-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/personas/`](./.agents/personas/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules one of them (`ci-release-security`) anchors on.
+PR review is automated by the `/pr-review-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/personas/`](./.agents/personas/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules three of them (`ci-security`, `release-integrity`, `dependencies`) anchor on. The engine ships bundled TypeScript scripts (`build-changed-lines.ts`, `validate-findings.ts`) and a `references/` directory for shared rubric content — see [`.agents/lib/scripts/`](./.agents/lib/scripts/) and [`.agents/references/`](./.agents/references/).
 
 ### Orchestration
 
@@ -220,13 +220,15 @@ Conditional personas (fire only when their trigger flag is true):
 
 | Persona | Trigger | Anchors |
 |---|---|---|
-| [`ci-release-security`](./.agents/personas/ci-release-security.md) | `<HAS_CI_RELEASE>` — diff touches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, any `package.json` whose `scripts.*publish*` / `scripts.*release*` field is modified, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, or any file mentioning `npm publish` / `pnpm publish` / `changeset publish` / `gh release create` (canonical detector in [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) Step 4) | §10 (the rules below) |
+| [`ci-security`](./.agents/personas/ci-security.md) | `<HAS_WORKFLOWS>` — diff touches `.github/workflows/**` or `.github/actions/**` (canonical detector in [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) Step 4) | §10 (workflow injection, action pinning, permissions, secrets) |
+| [`release-integrity`](./.agents/personas/release-integrity.md) | `<HAS_RELEASE>` — diff touches `.changeset/**`, any `package.json` whose `scripts.*publish*` / `scripts.*release*` field is modified, or any file containing `changeset publish` / `npm publish` / `pnpm publish` / `gh release create` | §10 (publish-flow integrity, release-commit signing, Changesets / release-bot wiring) |
+| [`dependencies`](./.agents/personas/dependencies.md) | `<HAS_DEPS>` — diff touches `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc` (any level), `package-lock.json`, or `yarn.lock` | §10 (lockfile drift, dependency hygiene, `.npmrc` hardening) |
 
 Adding a persona = drop a file under `.agents/personas/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/lib/pr-review-base.md` Step 4.
 
-### CI / release security rules (anchors `ci-release-security`)
+### CI / release security rules (anchors `ci-security` / `release-integrity` / `dependencies`)
 
-These are the rules `ci-release-security` enforces. They live here as source of truth; the persona references this section by anchor. When a rule changes here, update the persona body to match.
+These are the rules the three conditional personas enforce — each owns a disjoint subset (`ci-security`: workflow-level hardening; `release-integrity`: publish flow + Changesets; `dependencies`: lockfile + `.npmrc` + dep hygiene). The rules live here as source of truth; each persona references the relevant sub-set by anchor. When a rule changes here, update the matching persona body to match.
 
 - **Workflow injection** (CRITICAL). Never interpolate attacker-controllable GitHub context (`${{ github.event.* }}`, `${{ github.head_ref }}`, comment bodies, branch names) directly into `run:` blocks, `shell:` invocations, or third-party-action arguments. Bind to an `env:` first, then reference `$VAR` in the shell so GitHub's redaction can still apply and shell expansion can't reinterpret the value.
 - **`pull_request_target` + PR-head checkout is forbidden** unless the workflow demonstrably never runs the checked-out code (no install, no test, no script). The combination grants attacker code write-scoped repo credentials.
@@ -241,4 +243,4 @@ These are the rules `ci-release-security` enforces. They live here as source of 
 - **Dependency hygiene.** New deps in `dependencies` or `peerDependencies` of a published package default to **high** for review. Flag unpinned semver ranges (`^`/`~`) on runtime deps, names that resemble typosquats of known packages, and deps whose registry metadata declares `postinstall` / `preinstall` / `install` scripts.
 - **`.npmrc` hardening.** `always-auth=true` or `_authToken=` committed to the repo is **critical** — credential leak. Non-`registry.npmjs.org` `registry=` or `@scope:registry=` lines require explicit human review (could redirect to a malicious registry).
 
-> Applied by persona: [`ci-release-security`](./.agents/personas/ci-release-security.md).
+> Applied by personas: [`ci-security`](./.agents/personas/ci-security.md) (workflow injection, `pull_request_target` + PR-head checkout, ACL-gated comment triggers, action pinning, `permissions:`, secret exposure), [`release-integrity`](./.agents/personas/release-integrity.md) (publish-flow integrity, release-commit signing & write-token hardening, Changesets / release-bot wiring), [`dependencies`](./.agents/personas/dependencies.md) (lockfile drift, dependency hygiene, `.npmrc` hardening).

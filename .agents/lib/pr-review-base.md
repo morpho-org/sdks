@@ -27,6 +27,7 @@ The base contract: callers must pass these resolved values into Steps 3–6 and 
 | `<BASE_BRANCH>` | `gh pr view` → `baseRefName` (PR modes) OR `--local` arg / auto-detected |
 | `<HEAD_SHA>` | `gh pr view` → `headRefOid` (PR modes) OR `git rev-parse HEAD` (Local-only) |
 | `<DIFF_SOURCE>` | `pr` (use `origin/<BASE_BRANCH>...origin/<HEAD_BRANCH>`) OR `local` (use `origin/<BASE_BRANCH>...HEAD` and include uncommitted) |
+| `<EXCLUDE_AGENTS>` | Optional list of persona names to skip in Step 5. Defaults to `[]`. Forward-compat hook for future orchestrators (e.g. an iteration loop that suppresses a costly persona during inner iterations and runs it once after convergence). |
 
 ## Step 3: Get the diff locally
 
@@ -122,7 +123,9 @@ If no matching ABI/address/constant excerpt is found for a changed protocol call
 
 Compute flags from the changed-files list. These flags are passed to every persona; flags for `kind: conditional` personas also drive whether they launch in Step 5:
 
-- `<HAS_CI_RELEASE>` — true if any changed file matches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, root or package `package.json` (when a `scripts.*publish*` / `scripts.*release*` field is touched), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, OR if any changed file contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`.
+- `<HAS_WORKFLOWS>` — true if any changed file matches `.github/workflows/**` or `.github/actions/**` (composite or local actions). Fires `ci-security`.
+- `<HAS_RELEASE>` — true if any changed file matches `.changeset/**`, OR a root / package `package.json` whose `scripts.*publish*` / `scripts.*release*` field is touched, OR any file containing `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`. Fires `release-integrity`.
+- `<HAS_DEPS>` — true if any changed file matches `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc` (any level), `package-lock.json`, or `yarn.lock`. Fires `dependencies`.
 - `<HAS_PROTOCOL_SURFACE>` — true if any changed file or changed hunk touches protocol-facing SDK code or terms listed in the protocol source-of-truth section above. This flag does not gate `morpho-protocol` (baseline); it tells all agents whether protocol context should have been collected.
 
 Add new flags here when introducing future conditional personas. Each `kind: conditional` persona file declares its `trigger:` placeholder in frontmatter; Step 5 launches it only when the flag is true.
@@ -138,8 +141,10 @@ Context files read (N):
   ...
 
 Flags:
-  HAS_CI_RELEASE: <true|false>
-  HAS_PROTOCOL_SURFACE: <true|false>
+  HAS_WORKFLOWS:       <true|false>
+  HAS_RELEASE:         <true|false>
+  HAS_DEPS:            <true|false>
+  HAS_PROTOCOL_SURFACE:<true|false>
 ```
 
 ## Step 5: Launch parallel review agents
@@ -152,8 +157,9 @@ Loop:
 2. For each persona, decide whether to launch:
    - `kind: baseline` → always launch.
    - `kind: conditional` → launch only when the flag named in `trigger:` is true (see Step 4 for flag computation).
-3. Launch ALL selected personas **in parallel** using the Agent tool (subagent_type: `"general-purpose"`).
-4. Track `<TOTAL_AGENTS_LAUNCHED>` = count of personas actually launched (baseline + any fired conditionals).
+3. **Apply the caller's exclusion list.** If the caller passed `<EXCLUDE_AGENTS>` (a list of persona names, defaults to `[]`), drop those personas from the launch set. Used by orchestrators that want to suppress a specific agent during inner iterations and run it once explicitly at the end.
+4. Launch ALL remaining selected personas **in parallel** using the Agent tool (subagent_type: `"general-purpose"`).
+5. Track `<TOTAL_AGENTS_LAUNCHED>` = count of personas actually launched (baseline + any fired conditionals − excluded).
 
 Shared per-agent contract (applied uniformly to every launched persona):
 
@@ -183,7 +189,9 @@ Baseline (always fire):
 
 Conditional:
 
-- `ci-release-security.md` — fires when `<HAS_CI_RELEASE>` is true. Workflow injection, action pinning, permissions scopes, secret exposure, publish-flow integrity, lockfile drift.
+- `ci-security.md` — fires when `<HAS_WORKFLOWS>` is true. Workflow injection, `pull_request_target` + PR-head checkout, ACL-gated comment triggers, action pinning, `permissions:` scopes, secret exposure.
+- `release-integrity.md` — fires when `<HAS_RELEASE>` is true. Publish-flow integrity (`--provenance`, org tokens, tag scope), release-commit signing & write-token hardening, Changesets / release-bot wiring.
+- `dependencies.md` — fires when `<HAS_DEPS>` is true. Lockfile drift, new-dep hygiene (`postinstall`, typosquats, unpinned ranges), `.npmrc` and `pnpm-workspace.yaml` hardening.
 
 Adding a new persona = drop a new file under `.agents/personas/` with appropriate frontmatter. If conditional, also extend Step 4's flag detection. No edit to caller files needed.
 

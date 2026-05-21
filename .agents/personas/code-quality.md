@@ -9,7 +9,7 @@ out-of-scope:
   - Package-boundary / public-surface discipline — see module-api-architecture.
   - JSDoc shape on exported symbols — see documentation.
   - Web3-specific concerns (calldata, permits, chain-id validation) — see web3-security.
-  - CI / publish-flow / lockfile concerns — see ci-release-security.
+  - Workflow injection, action pinning, permissions, secrets — see ci-security. Publish-flow, release-commit signing, Changesets wiring — see release-integrity. Lockfile drift, dependency hygiene, `.npmrc` — see dependencies.
 focus: TypeScript type safety inside function bodies, code smells, early returns, naming, magic numbers, complexity, security primitives at the code level (secrets, injection, eval).
 ---
 

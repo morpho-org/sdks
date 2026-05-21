@@ -7,7 +7,7 @@ out-of-scope:
   - General type-safety inside function bodies — see code-quality.
   - Morpho protocol accounting, operation routing, and ABI/source-of-truth drift — see morpho-protocol.
   - Hardcoded secrets / shell injection / `eval` — see code-quality (it owns the §2 security primitives).
-  - Changeset / publish-flow rules — see style-conventions and ci-release-security.
+  - Changeset / publish-flow rules — see style-conventions and release-integrity.
   - Test coverage for the Web3 paths — see test-coverage.
   - Generic error-handling depth — see silent-failure-hunter (this persona owns Web3-specific reverts and failed-tx handling).
 focus: Contract interactions, transaction parameters, wallet handling, permit flows, chain-id validation, reentrancy patterns, race conditions across async onchain operations.
@@ -75,6 +75,6 @@ The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS
 - Do NOT flag generic type-safety, magic numbers, or naming drift in non-Web3 code — that's `code-quality`'s job.
 - Do NOT flag Morpho protocol accounting, operation routing, or ABI/source-of-truth drift except where it directly creates a wallet/signature/transaction-security issue — that's `morpho-protocol`'s job.
 - Do NOT flag generic error swallowing (`catch (_) {}`) — `silent-failure-hunter`. This persona owns **Web3-specific** failure handling (failed-tx surfacing, revert decoding, user-rejection paths).
-- Do NOT flag changeset relevance or publish-flow concerns — `style-conventions` and `ci-release-security`.
+- Do NOT flag changeset relevance or publish-flow concerns — `style-conventions` and `release-integrity`.
 - Do NOT propose new test coverage on Web3 paths — `test-coverage`. This persona reviews whether the *source* is correct; coverage is the other persona.
 - Reference the root [`AGENTS.md`](../../AGENTS.md), [`MISSION.md`](../../MISSION.md), the package's `AGENTS.md`, and any pinned ABI / address registry files as `<PROJECT_CONTEXT>`.
