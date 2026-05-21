@@ -89,6 +89,8 @@ export namespace BundlerAction {
    * @param actions - Ordered Bundler3 actions to encode.
    * @returns Transaction target, calldata, and native value required by the
    * bundle.
+   * @throws {BundlerErrors.MissingSignature} when a signature action is unsigned.
+   * @throws {BundlerErrors.UnexpectedAction} when an action is unavailable on the chain.
    *
    * @example
    * ```ts
