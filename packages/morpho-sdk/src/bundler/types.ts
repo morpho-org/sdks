@@ -65,12 +65,15 @@ export interface Permit2PermitSingle {
  * Argument tuples for Bundler3 actions supported by `morpho-sdk`.
  */
 export interface ActionArgs {
+  /** Native-token transfer from `owner` to `recipient` for `amount`; `skipRevert` controls Bundler3 revert handling. */
   readonly nativeTransfer: [
     owner: Address,
     recipient: Address,
     amount: bigint,
     skipRevert?: boolean,
   ];
+
+  /** ERC20 transfer from `adapter` to `recipient` for `amount` of `asset`; `skipRevert` controls Bundler3 revert handling. */
   readonly erc20Transfer: [
     asset: Address,
     recipient: Address,
@@ -78,12 +81,16 @@ export interface ActionArgs {
     adapter: Address,
     skipRevert?: boolean,
   ];
+
+  /** GeneralAdapter1 ERC20 `transferFrom` of `asset` and `amount` to `recipient`; `skipRevert` controls Bundler3 revert handling. */
   readonly erc20TransferFrom: [
     asset: Address,
     amount: bigint,
     recipient: Address,
     skipRevert?: boolean,
   ];
+
+  /** ERC-2612 permit from `owner` for `asset`, `amount`, `deadline`, and `signature`; `skipRevert` controls Bundler3 revert handling. */
   readonly permit: [
     owner: Address,
     asset: Address,
@@ -92,18 +99,24 @@ export interface ActionArgs {
     signature: Hex | null,
     skipRevert?: boolean,
   ];
+
+  /** Permit2 approval from `owner` for `permitSingle` and `signature`; `skipRevert` controls Bundler3 revert handling. */
   readonly approve2: [
     owner: Address,
     permitSingle: Permit2PermitSingle,
     signature: Hex | null,
     skipRevert?: boolean,
   ];
+
+  /** GeneralAdapter1 Permit2 transfer of `asset` and `amount` to `recipient`; `skipRevert` controls Bundler3 revert handling. */
   readonly transferFrom2: [
     asset: Address,
     amount: bigint,
     recipient: Address,
     skipRevert?: boolean,
   ];
+
+  /** ERC4626 deposit into `erc4626` for `assets`, `maxSharePrice`, and `receiver`; `skipRevert` controls Bundler3 revert handling. */
   readonly erc4626Deposit: [
     erc4626: Address,
     assets: bigint,
@@ -111,6 +124,8 @@ export interface ActionArgs {
     receiver: Address,
     skipRevert?: boolean,
   ];
+
+  /** ERC4626 redeem from `erc4626` for `shares`, `minSharePrice`, `receiver`, and `owner`; `skipRevert` controls Bundler3 revert handling. */
   readonly erc4626Redeem: [
     erc4626: Address,
     shares: bigint,
@@ -119,6 +134,8 @@ export interface ActionArgs {
     owner: Address,
     skipRevert?: boolean,
   ];
+
+  /** Morpho Blue supply-collateral call for `market`, `assets`, `onBehalf`, and callback actions; `skipRevert` controls Bundler3 revert handling. */
   readonly morphoSupplyCollateral: [
     market: InputMarketParams,
     assets: bigint,
@@ -126,6 +143,8 @@ export interface ActionArgs {
     onMorphoSupplyCollateral: Action[],
     skipRevert?: boolean,
   ];
+
+  /** Morpho Blue borrow call for `market`, `assets` or `shares`, `slippageAmount`, and `receiver`; `skipRevert` controls Bundler3 revert handling. */
   readonly morphoBorrow: [
     market: InputMarketParams,
     assets: bigint,
@@ -134,6 +153,8 @@ export interface ActionArgs {
     receiver: Address,
     skipRevert?: boolean,
   ];
+
+  /** Morpho Blue repay call for `market`, `assets` or `shares`, `slippageAmount`, `onBehalf`, and callback actions; `skipRevert` controls Bundler3 revert handling. */
   readonly morphoRepay: [
     market: InputMarketParams,
     assets: bigint,
@@ -143,12 +164,16 @@ export interface ActionArgs {
     onMorphoRepay: Action[],
     skipRevert?: boolean,
   ];
+
+  /** Morpho Blue withdraw-collateral call for `market`, `assets`, and `receiver`; `skipRevert` controls Bundler3 revert handling. */
   readonly morphoWithdrawCollateral: [
     market: InputMarketParams,
     assets: bigint,
     receiver: Address,
     skipRevert?: boolean,
   ];
+
+  /** PublicAllocator reallocation to `supplyMarket` from `vault` withdrawals while paying `fee`; `skipRevert` controls Bundler3 revert handling. */
   readonly reallocateTo: [
     vault: Address,
     fee: bigint,
@@ -156,6 +181,8 @@ export interface ActionArgs {
     supplyMarket: InputMarketParams,
     skipRevert?: boolean,
   ];
+
+  /** GeneralAdapter1 native wrap of `amount` to `recipient`; `skipRevert` controls Bundler3 revert handling. */
   readonly wrapNative: [
     amount: bigint,
     recipient: Address,

@@ -16,6 +16,7 @@ import {
   decodeFunctionData,
   encodeAbiParameters,
   type Hex,
+  isAddressEqual,
   keccak256,
   parseSignature,
   zeroHash,
@@ -315,6 +316,36 @@ describe("BundlerAction", () => {
         }) satisfies Action,
     ),
   );
+  const bundleActionArbitrary: fc.Arbitrary<Action> = fc.oneof(
+    actionArbitrary,
+    fc.tuple(addressArbitrary, amountArbitrary, skipRevertArbitrary).map(
+      ([prefundOwner, amount, skipRevert]) =>
+        ({
+          type: "nativeTransfer",
+          args: [prefundOwner, bundler3, amount, skipRevert],
+        }) satisfies Action,
+    ),
+    fc.tuple(amountArbitrary, skipRevertArbitrary).map(
+      ([amount, skipRevert]) =>
+        ({
+          type: "nativeTransfer",
+          args: [bundler3, generalAdapter1, amount, skipRevert],
+        }) satisfies Action,
+    ),
+    fc.tuple(amountArbitrary, skipRevertArbitrary).map(
+      ([fee, skipRevert]) =>
+        ({
+          type: "reallocateTo",
+          args: [
+            vault,
+            fee,
+            [{ marketParams: market, amount: 1n }],
+            market,
+            skipRevert,
+          ],
+        }) satisfies Action,
+    ),
+  );
 
   const onlyCall = (calls: readonly BundlerCall[]) => {
     expect(calls).toHaveLength(1);
@@ -331,6 +362,37 @@ describe("BundlerAction", () => {
     skipRevert: true,
     callbackHash: zeroHash,
   } satisfies BundlerCall;
+
+  const expectedBundleValue = (actions: readonly Action[]) => {
+    let value = 0n;
+    let availableBundlerValue = 0n;
+
+    for (const action of actions) {
+      if (action.type === "nativeTransfer") {
+        const [transferOwner, transferRecipient, amount] = action.args;
+
+        if (
+          !isAddressEqual(transferOwner, bundler3) &&
+          !isAddressEqual(transferOwner, generalAdapter1) &&
+          isAddressEqual(transferRecipient, bundler3)
+        ) {
+          value += amount;
+          availableBundlerValue += amount;
+        }
+      }
+
+      for (const call of BundlerAction.encode(chainId, action)) {
+        if (call.value > availableBundlerValue) {
+          value += call.value - availableBundlerValue;
+          availableBundlerValue = 0n;
+        } else {
+          availableBundlerValue -= call.value;
+        }
+      }
+    }
+
+    return value;
+  };
 
   const parityActions = [
     {
@@ -538,6 +600,20 @@ describe("BundlerAction", () => {
     );
   });
 
+  test("encodeBundle derives value from native pre-funding and call values", () => {
+    fc.assert(
+      fc.property(
+        fc.array(bundleActionArbitrary, { maxLength: 20 }),
+        (actions) => {
+          expect(BundlerAction.encodeBundle(chainId, actions).value).toBe(
+            expectedBundleValue(actions),
+          );
+        },
+      ),
+      { numRuns: 100, seed: 670 },
+    );
+  });
+
   test("encodeBundle", () => {
     const actions: Action[] = [
       {
@@ -653,6 +729,67 @@ describe("BundlerAction", () => {
     const calls = decoded.args[0] ?? [];
     expect(calls).toHaveLength(1);
     expect(calls[0]?.value).toBe(5n);
+  });
+
+  test.each([
+    {
+      description: "preserves excess prefunded value",
+      actions: [
+        {
+          type: "nativeTransfer",
+          args: [owner, bundler3, 10n, false],
+        },
+        {
+          type: "nativeTransfer",
+          args: [bundler3, generalAdapter1, 5n, false],
+        },
+      ],
+      value: 10n,
+    },
+    {
+      description: "adds only the deficit across multiple value calls",
+      actions: [
+        {
+          type: "nativeTransfer",
+          args: [owner, bundler3, 5n, false],
+        },
+        {
+          type: "nativeTransfer",
+          args: [bundler3, generalAdapter1, 4n, false],
+        },
+        {
+          type: "nativeTransfer",
+          args: [bundler3, generalAdapter1, 4n, false],
+        },
+      ],
+      value: 8n,
+    },
+    {
+      description:
+        "drains multiple pre-fundings before adding excess call value",
+      actions: [
+        {
+          type: "nativeTransfer",
+          args: [owner, bundler3, 5n, false],
+        },
+        {
+          type: "nativeTransfer",
+          args: [recipient, bundler3, 5n, false],
+        },
+        {
+          type: "nativeTransfer",
+          args: [bundler3, generalAdapter1, 12n, false],
+        },
+      ],
+      value: 12n,
+    },
+  ] satisfies {
+    description: string;
+    actions: Action[];
+    value: bigint;
+  }[])("encodeBundle $description", ({ actions, value }) => {
+    expect(BundlerAction.encodeBundle(chainId, actions).value).toBe(value);
+    expect(value).toBe(expectedBundleValue(actions));
   });
 
   test("encodeBundle matches registry addresses case-insensitively", () => {

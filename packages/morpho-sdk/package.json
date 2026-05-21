@@ -15,6 +15,21 @@
   "license": "MIT",
   "type": "module",
   "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./abis": "./src/abis.ts",
+    "./bundler": "./src/bundler/index.ts"
+  },
+  "typesVersions": {
+    "*": {
+      "abis": [
+        "src/abis.ts"
+      ],
+      "bundler": [
+        "src/bundler/index.ts"
+      ]
+    }
+  },
   "sideEffects": false,
   "files": [
     "lib"
