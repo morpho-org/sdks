@@ -25,17 +25,6 @@ import type {
   Permit2PermitSingle,
 } from "./types.js";
 
-export type {
-  Action,
-  ActionArgs,
-  Actions,
-  ActionType,
-  Authorization,
-  InputReallocation,
-  Permit2PermitSingle,
-  Permit2PermitSingleDetails,
-} from "./types.js";
-
 /**
  * Encoded low-level call consumed by Bundler3's `multicall`.
  */
@@ -84,6 +73,19 @@ export namespace BundlerAction {
   /**
    * Encodes a list of Bundler3 actions into a single Bundler3 multicall
    * transaction request.
+   *
+   * @remarks
+   * This is a low-level encoding helper, not a safe bundle constructor. It
+   * does not validate that native-token pre-funding is fully consumed or that
+   * pre-funding actions are ordered before the value-carrying calls they fund.
+   *
+   * When custom actions include `nativeTransfer(externalOwner, bundler3,
+   * amount)`, no inner Bundler3 call is emitted for that transfer. Consumers
+   * must ensure those pre-funding actions precede their downstream consumers
+   * and leave no residual pre-funded native token; otherwise `tx.value` can be
+   * over-counted or native token can remain stranded on Bundler3. The
+   * high-level `morpho-sdk` action builders construct actions in that order,
+   * but this invariant is not checked at runtime by `encodeBundle`.
    *
    * @param chainId - Chain where the bundle will execute.
    * @param actions - Ordered Bundler3 actions to encode.
