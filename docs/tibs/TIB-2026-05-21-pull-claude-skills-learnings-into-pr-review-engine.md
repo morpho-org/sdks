@@ -189,6 +189,32 @@ One forward-looking consideration: the bundled `validate-findings.ts` parses age
 - [`.agents/lib/pr-review-base.md`](../../.agents/lib/pr-review-base.md) — current engine, to be augmented per this TIB.
 - [`.agents/personas/`](../../.agents/personas/) — current persona inventory, to be split per Phase 4.
 
+## Addenda
+
+### 2026-05-21 — Drop `tsx` dependency in favour of native Node TS
+
+**Author:** @0xbulma
+
+The TIB body proposes `tsx` as a root `devDependency` used to execute `.agents/lib/scripts/*.ts`. During Phase 2 execution, native Node 24 (the repo's runtime per `engines.node >= 22.13`) was confirmed to strip TypeScript types out of the box (`node --experimental-strip-types`-equivalent behaviour stable in Node ≥22.6). The bundled scripts are written within the strip-only subset (no parameter properties, no `enum`, no namespaces) and run under plain `node .agents/lib/scripts/<script>.ts` — no transpiler needed.
+
+**Operational changes** (decision unchanged — still TypeScript scripts, still Node stdlib only):
+
+- `pnpm tsx <script>.ts` → `node <script>.ts` everywhere in the engine prose, references docs, and Phase-5 invariant test.
+- No `tsx` devDependency. The Dependencies section's "one devDependency added" claim no longer applies.
+- The Phase-2 commit also did NOT need to add a `pnpm.onlyBuiltDependencies` entry for `esbuild` (which would have been needed had `tsx` shipped).
+
+Why it matters: the engine has zero new build-time dependencies. The toolchain is exactly what was there before plus two TS files and one Bash-free invariant test.
+
+### 2026-05-21 — Phase-2 unit tests replaced by Phase-5 integration test
+
+**Author:** @0xbulma
+
+The TIB body's Phase 2 implicitly expected colocated `*.test.ts` unit tests for the two scripts (per AGENTS.md §5 colocation rule). During execution, the user directed scope reduction: skip Phase-2 unit tests; rely on Phase 5's invariant test plus end-to-end smoke runs during development.
+
+**Rationale:** the scripts have a thin CLI surface, no business logic that benefits from unit isolation. The Phase-5 invariant test verifies they parse and execute under native Node; manual end-to-end smoke runs confirm the JSON output shape. Adding vitest project-glob wiring for a two-script directory was deemed not worth the config surface.
+
+This is an operational scope-reduction, not a rule waiver — if either script grows non-trivial logic that benefits from unit tests, the colocation rule from AGENTS.md §5 still applies and a follow-up TIP should add them.
+
 <!--
 TIB conventions:
 - Once accepted, do not substantively edit this TIB. If the decision needs to change,
