@@ -129,6 +129,21 @@ If `<FAILED_AGENTS>` is non-zero, prepend to the body BEFORE the verdict:
 > WARNING: <FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed (<names>) — review may be incomplete.
 ```
 
+### Dropped-findings audit trail
+
+The engine's scope filter (Step 6.1 of `lib/pr-review-base.md`) emits `<DROPPED_FINDINGS>` — findings tagged with `drop_reason` ∈ `{file_out_of_scope, line_pre_existing, doc_example_fp}`. In CI mode, **do not** render this in the formal GitHub review body: the verdict needs to stay tight, and the dropped list is mostly noise for reviewers consuming an approve/reject decision.
+
+Instead, write the full JSON to:
+
+```bash
+DROPPED_FILE="/tmp/pr-review-ci-<PR_NUMBER>-dropped.json"
+echo "$DROPPED_FINDINGS_JSON" > "$DROPPED_FILE"
+```
+
+Then attach it as a workflow artifact via the CI runner's standard artifact-upload step (out of band of this skill). Maintainers triaging filter false-positives can download the artifact and inspect; reviewers reading the PR comment thread are not bothered with the audit trail.
+
+If `<DROPPED_FINDINGS>` is empty, skip the file write and the artifact upload entirely.
+
 ### Submit
 
 ```bash

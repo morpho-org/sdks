@@ -161,7 +161,9 @@ Shared per-agent contract (applied uniformly to every launched persona):
 - When `<HAS_PROTOCOL_SURFACE>` is true, `<PROJECT_CONTEXT>` must include the targeted ABI/address/constant/routing excerpts from Step 4's protocol source-of-truth section, or an explicit note that no relevant source excerpt was found.
 - Per-package `AGENTS.md` rules refine the root for the specific package; the root wins on contradictions.
 - Agents must analyze the **full diff**, not just the latest commit.
-- Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "what is wrong + how to fix"}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
+- Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "WHAT: ... FIX: ..."}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
+- **`description` schema (load-bearing).** Every finding's `description` MUST contain both a `WHAT:` clause naming the specific problem AND a `FIX:` clause stating the specific change. Recommended format: `WHAT: <one sentence>. FIX: <one sentence>.` Free-form prose otherwise. Findings whose `description` lacks either clause are routed to `failed[]` in Step 6 sub-step 2 and counted toward `<FAILED_AGENTS>` — they are NOT silently dropped, but they DO flag the agent as partially malformed in the caller's report. The schema is validated by [`validate-findings.ts`](./scripts/validate-findings.ts); see kept + dropped calibration examples in [`.agents/references/calibration.md`](../references/calibration.md).
+- **`line` schema.** `line` must be a positive integer pointing inside `<CHANGED_LINES>` for the cited `file`, or within ±15 lines of one. Findings outside the window are dropped in Step 6 sub-step 1 with `drop_reason: line_pre_existing` and `distance_to_nearest_changed_line`. The tolerance window is a fixed engine constant (see [`.agents/references/calibration.md`](../references/calibration.md)).
 - **Stay in scope (avoid scope creep).** Focus on the diff: flag issues introduced by these changes, and issues in adjacent code only when the diff makes that adjacent code materially worse (e.g. a renamed function whose remaining callers now misbehave, a new code path that exposes an existing bug). Do NOT flag pre-existing issues in unchanged lines of changed files, propose unrelated refactors, suggest new features or abstractions, or recommend cleanups outside the PR's intent. When in doubt, omit — the reviewer is reviewing *this change*, not the file's history.
 - **Don't nitpick.** Polish, wording, naming preferences, stylistic alternatives, and "you could also" suggestions are not findings — omit them regardless of severity label. A Low-severity finding belongs in the output only when a reasonable reviewer would clearly act on it in this PR.
 - Only **actionable** findings — no praise, no summaries.
@@ -220,7 +222,7 @@ Merge all agent results into a single list:
    - Returned `{"agent_error": "..."}` (the explicit sentinel from Step 5).
    - Returned text that is not parseable as JSON.
    - Returned a JSON value that is not an array (e.g. an object that is not the error sentinel).
-   - Returned an array containing one or more objects missing required fields (`severity` not in `critical`/`high`/`medium`/`low`, missing or non-string `file`, missing or non-numeric `line`, missing or empty `description`) — count the agent as **partially failed**: keep the valid findings from that agent, but include the agent in `<FAILED_AGENTS>` so the report flags it.
+   - Returned an array containing one or more findings that landed in `failed[]` from sub-step 1's validator — i.e. wrong `severity`, missing/non-string `file`, non-positive-integer `line`, empty `description`, OR missing `WHAT:` / `FIX:` clause. Count the agent as **partially failed**: keep the valid findings from that agent, but include the agent in `<FAILED_AGENTS>` so the report flags it.
 
    Track `<FAILED_AGENTS>` as a count plus the names. This count flows into the caller's Step 7 reporting so a "no findings" verdict is never reported when some agents crashed.
 
@@ -242,9 +244,11 @@ Severity labels (used everywhere downstream):
 
 The caller (Step 7 of `/pr-review-ci` / `/pr-review-gh` / `/pr-review-local`) consumes:
 
-- `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description}`.
-- `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` or malformed output.
-- `<COUNTS>` — `{critical, high, medium, low}` totals.
+- `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description}` (the validator's `kept[]`, post-dedup).
+- `<DROPPED_FINDINGS>` — findings the scope filter dropped, each tagged with `drop_reason` (`file_out_of_scope` / `line_pre_existing` / `doc_example_fp`) and, for line-level drops, `distance_to_nearest_changed_line`. The caller surfaces this as a collapsible audit section so filter false-positives are never silently nuked. See `pr-review-gh.md` Step 7 for the GitHub-comment rendering and `pr-review-local.md` Step 7 for the terminal rendering. `pr-review-ci.md` writes this to `/tmp/` only — the formal GitHub review body stays tight (verdict + actionable findings).
+- `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` OR whose findings landed in the validator's `failed[]` bucket (malformed shape OR missing `WHAT:`/`FIX:` clauses). The audit trail surfaces *which* finding malformed *which* agent so the user can see why.
+- `<COUNTS>` — `{critical, high, medium, low}` totals on the kept findings.
+- `<DROPPED_COUNTS>` — `{file_out_of_scope, line_pre_existing, doc_example_fp}` totals on the dropped findings. Caller skills use this to size the audit-trail block (omitted entirely when all three are zero).
 - `<TOTAL_AGENTS_LAUNCHED>` — count of personas that actually fired (baseline always-fire count + any conditional personas whose trigger flag was true). Used by the caller's report to phrase "<FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed" correctly when conditional personas did not fire.
 
 The caller formats and routes these per its mode (CI verdict / GitHub COMMENT / terminal output).
