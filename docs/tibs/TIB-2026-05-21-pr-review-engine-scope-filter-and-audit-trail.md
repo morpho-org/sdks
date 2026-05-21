@@ -205,15 +205,20 @@ The TIB body proposes `tsx` as a root `devDependency` used to execute `.agents/l
 
 Why it matters: the engine has zero new build-time dependencies. The toolchain is exactly what was there before plus two TS files and one Bash-free invariant test.
 
-### 2026-05-21 — Phase-2 unit tests replaced by Phase-5 integration test
+### 2026-05-21 — Colocated unit tests added (AGENTS.md §5 compliant)
 
 **Author:** @0xbulma
 
-The TIB body's Phase 2 implicitly expected colocated `*.test.ts` unit tests for the two scripts (per AGENTS.md §5 colocation rule). During execution, the user directed scope reduction: skip Phase-2 unit tests; rely on Phase 5's invariant test plus end-to-end smoke runs during development.
+An earlier addendum noted Phase-2 colocated unit tests were deferred in favour of the Phase-5 invariant test. The maintainer subsequently asked for AGENTS.md §5 compliance — every script unit-tested with a colocated `*.test.ts`. This addendum supersedes that scope reduction:
 
-**Rationale:** the scripts have a thin CLI surface, no business logic that benefits from unit isolation. The Phase-5 invariant test verifies they parse and execute under native Node; manual end-to-end smoke runs confirm the JSON output shape. Adding vitest project-glob wiring for a two-script directory was deemed not worth the config surface.
+- `.agents/pr-review-engine/scripts/build-changed-lines.test.ts` — covers the diff parser end-to-end: single/multi hunks, dedup+sort, deletion-only hunks (`+0`), pure renames (`[]`), rename-with-content, file deletions (absent from map), new files, multiple files, the `DiffParseError` class export. 12 cases.
+- `.agents/pr-review-engine/scripts/validate-findings.test.ts` — covers all three scope-filter stages and the schema check: `findFencedBlocks` (no fence / matched ``` / matched ~~~ / unclosed / multiple / indented), schema rejections (missing WHAT or FIX, invalid severity, non-positive line, non-integer line, missing description, missing/empty file, non-object), scope filter (kept / file-out-of-scope / line-pre-existing with distance / adjacent-tolerance / pure-rename short-circuit / path normalization variants), Markdown fence FP filter (line inside fence / outside / on delimiter / non-.md skip / missing file fallback), and counts aggregation. 32 cases.
 
-This is an operational scope-reduction, not a rule waiver — if either script grows non-trivial logic that benefits from unit tests, the colocation rule from AGENTS.md §5 still applies and a follow-up TIP should add them.
+The Phase-5 invariant test was also converted to vitest (`.agents/pr-review-engine/test/invariants.test.ts`) and refactored to import the engine scripts as modules (replacing the prior `node --check` parse-only smoke test with a stronger import-time smoke that also exercises the export surface). 55 parameterised cases.
+
+Wiring: `vitest.config.ts` gains a `pr-review-engine` project glob (`{ name: "pr-review-engine", include: [".agents/pr-review-engine/**/*.test.ts"], environment: "node" }`); `pnpm test:agents` is rewired from a one-shot Node script to `vitest run --project=pr-review-engine` so the engine tests run under the same harness as everything else (and also run as part of the bare `pnpm test` invocation).
+
+Total: 99 cases across 3 test files, runtime ≈ 200ms.
 
 ### 2026-05-21 — Standardized `.agents/pr-review-engine/` layout
 

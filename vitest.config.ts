@@ -43,6 +43,14 @@ export default defineConfig({
       {
         extends: true,
         test: {
+          name: "pr-review-engine",
+          include: [".agents/pr-review-engine/**/*.test.ts"],
+          environment: "node",
+        },
+      },
+      {
+        extends: true,
+        test: {
           name: "morpho-ts",
           include: [
             "packages/morpho-ts/test/**/*.test.ts",
