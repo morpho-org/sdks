@@ -16,6 +16,7 @@ import { getBlock } from "viem/actions";
 import { apiSdk } from "./api/index.js";
 
 const REALLOCATION_SIMULATION_DELAY = 3_600n;
+
 export interface LiquidityParameters {
   /**
    * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
