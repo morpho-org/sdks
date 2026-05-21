@@ -1,17 +1,17 @@
 #!/usr/bin/env node
-// Invariant test for the .agents/ PR review engine.
+// Invariant test for the .agents/pr-review-engine/ PR review engine.
 //
 // Asserts structural integrity that the rest of the engine relies on:
 //
-//   1. Every persona has parseable frontmatter with the required fields.
-//   2. Every conditional persona's `trigger:` references a flag computed
-//      in pr-review-base.md Step 4.
-//   3. The engine itself (.agents/lib/pr-review-base.md) has the
+//   1. Every agent file has parseable frontmatter with the required fields.
+//   2. Every conditional agent's `trigger:` references a flag computed
+//      in SKILL.md Step 4.
+//   3. The engine itself (.agents/pr-review-engine/SKILL.md) has the
 //      `disable-model-invocation: true` flag.
 //   4. Both bundled scripts (build-changed-lines.ts, validate-findings.ts)
 //      exist and parse-execute under native Node.
-//   5. AGENTS.md §10 persona-inventory tables name every persona file under
-//      .agents/personas/ and no others.
+//   5. AGENTS.md §10 persona-inventory tables name every agent file under
+//      .agents/pr-review-engine/agents/ and no others.
 //
 // Run: pnpm test:agents
 // Exit code: 0 on green, 1 on any violation. Violations print to stderr.
@@ -21,10 +21,10 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const PERSONAS_DIR = join(REPO_ROOT, ".agents/personas");
-const SCRIPTS_DIR = join(REPO_ROOT, ".agents/lib/scripts");
-const BASE_PATH = join(REPO_ROOT, ".agents/lib/pr-review-base.md");
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const AGENTS_DIR = join(REPO_ROOT, ".agents/pr-review-engine/agents");
+const SCRIPTS_DIR = join(REPO_ROOT, ".agents/pr-review-engine/scripts");
+const SKILL_PATH = join(REPO_ROOT, ".agents/pr-review-engine/SKILL.md");
 const AGENTS_MD_PATH = join(REPO_ROOT, "AGENTS.md");
 
 const REQUIRED_PERSONA_FIELDS = ["name", "kind", "version", "applies"] as const;
@@ -62,11 +62,11 @@ function ok(check: string): void {
 }
 
 // 1. Every persona has frontmatter with required fields.
-const personaFiles = readdirSync(PERSONAS_DIR).filter((f) => f.endsWith(".md"));
+const personaFiles = readdirSync(AGENTS_DIR).filter((f) => f.endsWith(".md"));
 const conditionalTriggers = new Map<string, string>();
 
 for (const file of personaFiles) {
-  const fmContent = readFileSync(join(PERSONAS_DIR, file), "utf8");
+  const fmContent = readFileSync(join(AGENTS_DIR, file), "utf8");
   const fm = parseFrontmatter(fmContent);
   if (!fm) {
     fail("persona-frontmatter", `${file}: no parseable frontmatter`);
@@ -99,8 +99,8 @@ for (const file of personaFiles) {
 if (failures.length === 0)
   ok(`persona frontmatter (${personaFiles.length} files)`);
 
-// 2. Every conditional `trigger:` flag is computed in pr-review-base.md Step 4.
-const baseContent = readFileSync(BASE_PATH, "utf8");
+// 2. Every conditional `trigger:` flag is computed in SKILL.md Step 4.
+const baseContent = readFileSync(SKILL_PATH, "utf8");
 const triggerBlock = baseContent.match(
   /### Detect conditional persona triggers([\s\S]*?)(?=^###|^##)/m,
 );
@@ -110,7 +110,7 @@ for (const [persona, trigger] of conditionalTriggers) {
   if (!triggerSection.includes(flagName)) {
     fail(
       "persona-trigger-wiring",
-      `${persona}: trigger flag "${flagName}" is not defined in pr-review-base.md Step 4`,
+      `${persona}: trigger flag "${flagName}" is not defined in SKILL.md Step 4`,
     );
   }
 }
@@ -121,27 +121,27 @@ if (conditionalTriggers.size > 0 && failures.length === 0) {
 // 3. Engine has disable-model-invocation: true.
 const baseFm = parseFrontmatter(baseContent);
 if (!baseFm) {
-  fail("engine-frontmatter", "pr-review-base.md: no parseable frontmatter");
+  fail("engine-frontmatter", "SKILL.md: no parseable frontmatter");
 } else {
   if (baseFm["disable-model-invocation"] !== "true") {
     fail(
       "engine-frontmatter",
-      `pr-review-base.md: disable-model-invocation must be "true", got "${baseFm["disable-model-invocation"] ?? "<missing>"}"`,
+      `SKILL.md: disable-model-invocation must be "true", got "${baseFm["disable-model-invocation"] ?? "<missing>"}"`,
     );
   }
   if (baseFm.kind !== "engine") {
     fail(
       "engine-frontmatter",
-      `pr-review-base.md: kind must be "engine", got "${baseFm.kind ?? "<missing>"}"`,
+      `SKILL.md: kind must be "engine", got "${baseFm.kind ?? "<missing>"}"`,
     );
   }
   if (!baseFm.version || !/^\d+\.\d+\.\d+$/.test(baseFm.version)) {
     fail(
       "engine-frontmatter",
-      `pr-review-base.md: version="${baseFm.version ?? "<missing>"}" not semver`,
+      `SKILL.md: version="${baseFm.version ?? "<missing>"}" not semver`,
     );
   }
-  if (failures.length === 0) ok("engine frontmatter (pr-review-base.md)");
+  if (failures.length === 0) ok("engine frontmatter (SKILL.md)");
 }
 
 // 4. Both bundled scripts exist and parse-execute under native Node.
@@ -169,7 +169,7 @@ if (failures.length === 0)
 const agentsMd = readFileSync(AGENTS_MD_PATH, "utf8");
 const personaSlugsInTables = new Set<string>();
 const PERSONA_LINK_RE =
-  /\[`([a-z0-9-]+)`\]\(\.\/\.agents\/personas\/([a-z0-9-]+)\.md\)/g;
+  /\[`([a-z0-9-]+)`\]\(\.\/\.agents\/pr-review-engine\/agents\/([a-z0-9-]+)\.md\)/g;
 for (const match of agentsMd.matchAll(PERSONA_LINK_RE)) {
   // match[1] is the displayed name; match[2] is the filename slug
   personaSlugsInTables.add(match[2]!);

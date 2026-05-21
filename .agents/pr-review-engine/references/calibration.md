@@ -1,6 +1,6 @@
 # Calibration — ±15 tolerance window + kept/dropped examples
 
-Consumed by [`.agents/lib/pr-review-base.md`](../lib/pr-review-base.md) Step 5 (sub-agent prompt envelope, slot 8). Persona authors must copy the kept/dropped examples below **verbatim** when invoking the engine — paraphrased examples train agents off the schema.
+Consumed by [`.agents/pr-review-engine/SKILL.md`](../SKILL.md) Step 5 (sub-agent prompt envelope, slot 8). Persona authors must copy the kept/dropped examples below **verbatim** when invoking the engine — paraphrased examples train agents off the schema.
 
 ## Why ±15 lines
 
@@ -12,7 +12,7 @@ The line-level scope filter (sub-step 3 in [`scope-filter.md`](./scope-filter.md
 - **50 (loose)** lets pre-existing findings drift in. Agents writing about untyped functions / missing JSDoc / TODO-style cleanups in unchanged regions of changed files start escaping the filter, and the audit-trail ratio (`DROPPED_FINDINGS / FINDINGS`) drops below the engine's target.
 - **15** is the empirical midpoint: it covers most legitimate "I see what they did and the function 12 lines down now misbehaves" findings, while reliably catching the "this file has untyped errors throughout" sweep. Agents that genuinely want to flag something 30 lines away are explicitly off-rule per the per-agent contract — the contract says "issues introduced by the diff, plus adjacent code only when the diff materially worsens it."
 
-The threshold ships in the constant `TOLERANCE` at the top of [`validate-findings.ts`](../lib/scripts/validate-findings.ts). Changing it is an engine-level decision and requires a TIB.
+The threshold ships in the constant `TOLERANCE` at the top of [`validate-findings.ts`](../scripts/validate-findings.ts). Changing it is an engine-level decision and requires a TIB.
 
 ## Kept finding (good shape — agent example)
 

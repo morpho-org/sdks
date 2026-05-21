@@ -215,6 +215,33 @@ The TIB body's Phase 2 implicitly expected colocated `*.test.ts` unit tests for 
 
 This is an operational scope-reduction, not a rule waiver — if either script grows non-trivial logic that benefits from unit tests, the colocation rule from AGENTS.md §5 still applies and a follow-up TIP should add them.
 
+### 2026-05-21 — Standardized `.agents/pr-review-engine/` layout
+
+**Author:** @0xbulma
+
+The TIB body lands the engine, agents, scripts, references, and test as siblings of `.agents/commands/`, scattered across `.agents/lib/`, `.agents/personas/`, `.agents/references/`, `.agents/test/`. After all five phases shipped, the layout was reorganised post-hoc into a single grouped engine directory matching the Anthropic Skills convention (without going full plugin):
+
+```
+.agents/
+├── commands/                       # caller-side skills (unchanged)
+└── pr-review-engine/
+    ├── SKILL.md                    # was .agents/lib/pr-review-base.md
+    ├── agents/                     # was .agents/personas/
+    ├── references/                 # was .agents/references/
+    ├── scripts/                    # was .agents/lib/scripts/
+    └── test/                       # was .agents/test/
+```
+
+Operational changes (decision unchanged — same engine, same agents, same scripts, same scope-filter contract):
+
+- Engine entrypoint renamed: `pr-review-base.md` → `SKILL.md`. Frontmatter `name:` bumped to `pr-review-engine`, `version:` to `0.2.0`.
+- Agent specs renamed at the directory level: `personas/` → `agents/`. The prose vocabulary "persona" is kept in docs (matches `AGENTS.md`'s "Applied by personas: …" backlinks); only the directory and the invariant-test variable names change.
+- Test renamed to `invariants.test.ts`, reflecting that it's the engine's invariant guard (not a generic unit test).
+- All cross-references in `AGENTS.md`, command files, references, scripts, the test, and `package.json` updated to the new paths. `pnpm test:agents` now invokes `node .agents/pr-review-engine/test/invariants.test.ts`.
+- `biome.json` no longer needs a `.agents/lib/scripts/` carve-out — the engine scripts are under `.agents/pr-review-engine/scripts/` and the existing `!packages/**/lib` exclude no longer collides with them.
+
+The Phase-1 through Phase-5 commits in this branch still reference the old paths (those are the paths that existed at the time of each commit); the reorganisation commit (`refactor(agents): standardize layout`) updates everything in one pass. New PRs should target the new paths.
+
 <!--
 TIB conventions:
 - Once accepted, do not substantively edit this TIB. If the decision needs to change,

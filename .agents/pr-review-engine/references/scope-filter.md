@@ -1,6 +1,6 @@
 # Scope filter — path normalization + Markdown fence rule
 
-Engine ref: [`.agents/lib/scripts/validate-findings.ts`](../lib/scripts/validate-findings.ts). Consumed by [`.agents/lib/pr-review-base.md`](../lib/pr-review-base.md) Step 6 (sub-steps 1 and 4).
+Engine ref: [`.agents/pr-review-engine/scripts/validate-findings.ts`](../scripts/validate-findings.ts). Consumed by [`.agents/pr-review-engine/SKILL.md`](../SKILL.md) Step 6 (sub-steps 1 and 4).
 
 This file documents the two non-obvious parts of the scope filter: how agent-reported paths are normalized before lookup in `CHANGED_LINES`, and how the Markdown documentation-example filter detects fenced code blocks.
 

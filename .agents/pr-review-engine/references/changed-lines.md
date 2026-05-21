@@ -1,6 +1,6 @@
 # `CHANGED_LINES` build — edge cases
 
-Engine ref: [`.agents/lib/scripts/build-changed-lines.ts`](../lib/scripts/build-changed-lines.ts). Consumed by [`.agents/lib/pr-review-base.md`](../lib/pr-review-base.md) Step 3 and the line-level filter in Step 6.
+Engine ref: [`.agents/pr-review-engine/scripts/build-changed-lines.ts`](../scripts/build-changed-lines.ts). Consumed by [`.agents/pr-review-engine/SKILL.md`](../SKILL.md) Step 3 and the line-level filter in Step 6.
 
 `CHANGED_LINES` is a JSON map `{ "<path>": [<line>, ...] }` where each line is a number that the diff added on the `+` side at unified=0. The presence/absence semantics are load-bearing — every line below is a finding-filtering decision.
 

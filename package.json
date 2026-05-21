@@ -28,7 +28,7 @@
     "jsdoc:coverage:check": "node --no-warnings=ExperimentalWarning scripts/jsdoc-coverage.js --self-check",
     "docs:build": "typedoc",
     "test": "dotenv -- vitest",
-    "test:agents": "node .agents/test/pr-review-engine.test.ts",
+    "test:agents": "node .agents/pr-review-engine/test/invariants.test.ts",
     "test:coverage": "$npm_execpath test --coverage",
     "coverage:report": "genhtml --hierarchical --sort --prefix \"$(pwd)\" -o coverage/lcov coverage/lcov.info",
     "changeset": "changeset",

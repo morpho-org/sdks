@@ -8,7 +8,7 @@ Every PR is measured against the rules below. A change that violates an architec
 
 > **Enforcement note.** Some rules below are enforced by tooling today (Biome formatter, fork harness in `@morpho-org/test`, Changesets generation). Most are **review-time conventions** that humans and reviewing agents apply: JSDoc on every export, layered-import bans, the §2 forbidden-patterns list (Biome's `noExplicitAny` is warn-level, `noParameterAssign` is disabled, and there's no rule banning `as unknown as` / `@ts-ignore` / async-in-actions / framework imports / mocked viem clients on RPC paths), changeset-gates-CI, full coverage thresholds. Where a rule isn't backed by an automated check, treat it as binding regardless — wiring CI gates is tracked separately.
 
-> **Review personas.** The review-time conventions above are applied at PR review by specialized personas under [`.agents/personas/`](./.agents/personas/), invoked by the `/pr-review-{ci,gh,local}` slash commands. See [§10](#10-review-automation--cirelease-security) for the full inventory and the CI/release rules they anchor. When a rule below changes, the matching persona's bullet must change with it — the backlinks on each section name the personas to update.
+> **Review personas.** The review-time conventions above are applied at PR review by specialized personas under [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/), invoked by the `/pr-review-{ci,gh,local}` slash commands. See [§10](#10-review-automation--cirelease-security) for the full inventory and the CI/release rules they anchor. When a rule below changes, the matching persona's bullet must change with it — the backlinks on each section name the personas to update.
 
 ---
 
@@ -51,7 +51,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 - Small primitives that combine. No kitchen-sink helpers; no boolean-prop explosions.
 - Prefer early returns over deep nesting — guard clauses first, happy path last.
 
-> Applied by personas: [`module-api-architecture`](./.agents/personas/module-api-architecture.md), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/personas/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (testability).
+> Applied by personas: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (protocol routing + ABI/address source of truth), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (Action-layer purity), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (testability).
 
 ---
 
@@ -70,7 +70,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 9. New runtime dependencies without a package-level reason and a written justification in the PR description.
 10. PRs that ship behavior-affecting package source changes without their tests, JSDoc, and semver-relevant changeset.
 
-> Applied by personas: [`code-quality`](./.agents/personas/code-quality.md) (forbidden patterns 1–4, 7–10), [`web3-security`](./.agents/personas/web3-security.md) (3 — signing in transaction builders), [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) (2 — typed errors).
+> Applied by personas: [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md) (forbidden patterns 1–4, 7–10), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (3 — signing in transaction builders), [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) (2 — typed errors).
 
 ---
 
@@ -89,7 +89,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Internal symbols carry `@internal` JSDoc and do not participate in the stability contract.
 - **Absorb fragile types.** Types at risk of upstream churn are re-declared locally rather than re-exported, so the SDK's version story stays decoupled from its dependencies.
 
-> Applied by personas: [`code-quality`](./.agents/personas/code-quality.md), [`module-api-architecture`](./.agents/personas/module-api-architecture.md).
+> Applied by personas: [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md), [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md).
 
 ---
 
@@ -103,7 +103,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Each package has one reason to exist (see §1 Modularity). Framework adapters never live in core SDK packages.
 - Don't replace a small local helper with a transitive dep just to "reuse code".
 
-> Applied by persona: [`module-api-architecture`](./.agents/personas/module-api-architecture.md).
+> Applied by persona: [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md).
 
 ---
 
@@ -130,7 +130,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Mocked viem clients are limited to unit tests via the transport boundary.** Integration / fork tests of contract round-trips use Anvil forks at pinned blocks. Pure-function tests need neither Anvil nor a viem client. Unit tests that need a viem `Client` shape for code that internally calls `viem/actions` (`readContract`, `getChainId`, …) may use `createMockClient` from `@morpho-org/test/mock`, which installs a `vi.fn`-backed `custom()` transport — the same surface `viem/actions` resolves through, so the mock is behaviour-faithful (per TIB-2026-04-27). Do **not** stub `client.readContract` directly with `vi.spyOn`; the actions resolve through `client.transport` and the spy will silently no-op.
 - **Shared test helpers** live in `morpho-test`, `test`, `test-wagmi` — never in published runtime paths of feature packages.
 
-> Applied by personas: [`test-coverage`](./.agents/personas/test-coverage.md) (test presence + colocation), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (protocol invariant semantics), [`web3-security`](./.agents/personas/web3-security.md) (security invariants — chainId validation, authorization, accounting).
+> Applied by personas: [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) (test presence + colocation), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (protocol invariant semantics), [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) (security invariants — chainId validation, authorization, accounting).
 
 ---
 
@@ -148,7 +148,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **TypeDoc-generated reference** published per release.
 - **Feedback loop:** if the same question is asked twice, the answer goes into the relevant `AGENTS.md` or JSDoc on the export it concerns.
 
-> Applied by persona: [`documentation`](./.agents/personas/documentation.md) (also covers Markdown doc accuracy and pointer integrity across the repo, not just JSDoc).
+> Applied by persona: [`documentation`](./.agents/pr-review-engine/agents/documentation.md) (also covers Markdown doc accuracy and pointer integrity across the repo, not just JSDoc).
 
 ---
 
@@ -164,7 +164,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - **Cantina audit on every major release**, with the public report linked from the CHANGELOG entry. Critical CVEs trigger out-of-band patches.
 - **Pre-release dogfood on every minor:** at least one internal app and one external partner before the `latest` tag flips.
 
-> Applied by personas: [`style-conventions`](./.agents/personas/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/personas/morpho-protocol.md) (pinned ABI/address release contract), [`release-integrity`](./.agents/personas/release-integrity.md) (publish-flow integrity, conditional).
+> Applied by personas: [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) (changeset relevance), [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) (pinned ABI/address release contract), [`release-integrity`](./.agents/pr-review-engine/agents/release-integrity.md) (publish-flow integrity, conditional).
 
 ---
 
@@ -177,7 +177,7 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 - Generated code: change generated inputs (`graphql/*.gql`), never edit generated outputs (`src/api/sdk.ts`). Never edit `lib/`.
 - One concern per PR. Tests, JSDoc, and any required semver-relevant changeset land with the change — not as a follow-up.
 
-> Applied by persona: [`style-conventions`](./.agents/personas/style-conventions.md).
+> Applied by persona: [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md).
 
 ---
 
@@ -192,14 +192,14 @@ A scannable list of patterns reviewers reject. Most are review-only today (per t
 
 ## 10. Review automation & CI/release security
 
-PR review is automated by the `/pr-review-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/personas/`](./.agents/personas/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules three of them (`ci-security`, `release-integrity`, `dependencies`) anchor on. The engine ships bundled TypeScript scripts (`build-changed-lines.ts`, `validate-findings.ts`) and a `references/` directory for shared rubric content — see [`.agents/lib/scripts/`](./.agents/lib/scripts/) and [`.agents/references/`](./.agents/references/).
+PR review is automated by the `/pr-review-{ci,gh,local}` slash commands, which fan out to the personas at [`.agents/pr-review-engine/agents/`](./.agents/pr-review-engine/agents/). This section is the canonical inventory of those personas and the source of truth for the CI/release rules three of them (`ci-security`, `release-integrity`, `dependencies`) anchor on. The engine ships bundled TypeScript scripts (`build-changed-lines.ts`, `validate-findings.ts`) and a `references/` directory for shared rubric content — see [`.agents/pr-review-engine/scripts/`](./.agents/pr-review-engine/scripts/) and [`.agents/pr-review-engine/references/`](./.agents/pr-review-engine/references/).
 
 ### Orchestration
 
 | File | Role |
 |---|---|
 | [`.agents/commands/pr-review-{ci,gh,local}.md`](./.agents/commands/) | Three caller-side skills — one per use case (CI verdict / local PR / pre-PR terminal). Each parses args, resolves branches, then delegates Steps 3–6 to the shared base. |
-| [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) | Shared review base — reads `<PROJECT_CONTEXT>`, computes conditional flags, loops over personas, aggregates and deduplicates findings. Does not encode any rule itself; it only orchestrates. |
+| [`.agents/pr-review-engine/SKILL.md`](./.agents/pr-review-engine/SKILL.md) | Shared review base — reads `<PROJECT_CONTEXT>`, computes conditional flags, loops over personas, aggregates and deduplicates findings. Does not encode any rule itself; it only orchestrates. |
 
 ### Persona inventory
 
@@ -207,24 +207,24 @@ Baseline personas (always fire):
 
 | Persona | Anchors | Focus |
 |---|---|---|
-| [`code-quality`](./.agents/personas/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
-| [`module-api-architecture`](./.agents/personas/module-api-architecture.md) | §1, §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
-| [`morpho-protocol`](./.agents/personas/morpho-protocol.md) | §1, §5, §7 | Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants. |
-| [`web3-security`](./.agents/personas/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
-| [`silent-failure-hunter`](./.agents/personas/silent-failure-hunter.md) | §1 (testability), §2 | Swallowed errors, missing error states, dead code paths. |
-| [`style-conventions`](./.agents/personas/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
-| [`documentation`](./.agents/personas/documentation.md) | §6 | JSDoc on exports, Markdown doc accuracy, pointer integrity, AGENTS.md ↔ persona backlink consistency. |
-| [`test-coverage`](./.agents/personas/test-coverage.md) | §5 | Missing tests for new code paths and onchain interactions. |
+| [`code-quality`](./.agents/pr-review-engine/agents/code-quality.md) | §2, §3 | Type safety, code smells, naming, cross-file impact on SDK consumers, security primitives. |
+| [`module-api-architecture`](./.agents/pr-review-engine/agents/module-api-architecture.md) | §1, §3, §4 | Package boundaries, public surface, NodeNext import discipline, boundary-level type discipline. |
+| [`morpho-protocol`](./.agents/pr-review-engine/agents/morpho-protocol.md) | §1, §5, §7 | Morpho protocol semantics, ABI/address source-of-truth drift, operation routing, accounting/share-price/LLTV invariants. |
+| [`web3-security`](./.agents/pr-review-engine/agents/web3-security.md) | §1 (Action layer), §2, §5 (security invariants) | Contract interactions, transaction params, permit flows, race conditions. Severity defaults to critical/high. |
+| [`silent-failure-hunter`](./.agents/pr-review-engine/agents/silent-failure-hunter.md) | §1 (testability), §2 | Swallowed errors, missing error states, dead code paths. |
+| [`style-conventions`](./.agents/pr-review-engine/agents/style-conventions.md) | §7, §8 | Biome compliance, import discipline, changeset relevance. |
+| [`documentation`](./.agents/pr-review-engine/agents/documentation.md) | §6 | JSDoc on exports, Markdown doc accuracy, pointer integrity, AGENTS.md ↔ persona backlink consistency. |
+| [`test-coverage`](./.agents/pr-review-engine/agents/test-coverage.md) | §5 | Missing tests for new code paths and onchain interactions. |
 
 Conditional personas (fire only when their trigger flag is true):
 
 | Persona | Trigger | Anchors |
 |---|---|---|
-| [`ci-security`](./.agents/personas/ci-security.md) | `<HAS_WORKFLOWS>` — diff touches `.github/workflows/**` or `.github/actions/**` (canonical detector in [`.agents/lib/pr-review-base.md`](./.agents/lib/pr-review-base.md) Step 4) | §10 (workflow injection, action pinning, permissions, secrets) |
-| [`release-integrity`](./.agents/personas/release-integrity.md) | `<HAS_RELEASE>` — diff touches `.changeset/**`, any `package.json` whose `scripts.*publish*` / `scripts.*release*` field is modified, or any file containing `changeset publish` / `npm publish` / `pnpm publish` / `gh release create` | §10 (publish-flow integrity, release-commit signing, Changesets / release-bot wiring) |
-| [`dependencies`](./.agents/personas/dependencies.md) | `<HAS_DEPS>` — diff touches `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc` (any level), `package-lock.json`, or `yarn.lock` | §10 (lockfile drift, dependency hygiene, `.npmrc` hardening) |
+| [`ci-security`](./.agents/pr-review-engine/agents/ci-security.md) | `<HAS_WORKFLOWS>` — diff touches `.github/workflows/**` or `.github/actions/**` (canonical detector in [`.agents/pr-review-engine/SKILL.md`](./.agents/pr-review-engine/SKILL.md) Step 4) | §10 (workflow injection, action pinning, permissions, secrets) |
+| [`release-integrity`](./.agents/pr-review-engine/agents/release-integrity.md) | `<HAS_RELEASE>` — diff touches `.changeset/**`, any `package.json` whose `scripts.*publish*` / `scripts.*release*` field is modified, or any file containing `changeset publish` / `npm publish` / `pnpm publish` / `gh release create` | §10 (publish-flow integrity, release-commit signing, Changesets / release-bot wiring) |
+| [`dependencies`](./.agents/pr-review-engine/agents/dependencies.md) | `<HAS_DEPS>` — diff touches `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc` (any level), `package-lock.json`, or `yarn.lock` | §10 (lockfile drift, dependency hygiene, `.npmrc` hardening) |
 
-Adding a persona = drop a file under `.agents/personas/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/lib/pr-review-base.md` Step 4.
+Adding a persona = drop a file under `.agents/pr-review-engine/agents/` with `applies:` frontmatter, add a row to the relevant table above, and (for a conditional persona) extend the flag detection in `.agents/pr-review-engine/SKILL.md` Step 4.
 
 ### CI / release security rules (anchors `ci-security` / `release-integrity` / `dependencies`)
 
@@ -243,4 +243,4 @@ These are the rules the three conditional personas enforce — each owns a disjo
 - **Dependency hygiene.** New deps in `dependencies` or `peerDependencies` of a published package default to **high** for review. Flag unpinned semver ranges (`^`/`~`) on runtime deps, names that resemble typosquats of known packages, and deps whose registry metadata declares `postinstall` / `preinstall` / `install` scripts.
 - **`.npmrc` hardening.** `always-auth=true` or `_authToken=` committed to the repo is **critical** — credential leak. Non-`registry.npmjs.org` `registry=` or `@scope:registry=` lines require explicit human review (could redirect to a malicious registry).
 
-> Applied by personas: [`ci-security`](./.agents/personas/ci-security.md) (workflow injection, `pull_request_target` + PR-head checkout, ACL-gated comment triggers, action pinning, `permissions:`, secret exposure), [`release-integrity`](./.agents/personas/release-integrity.md) (publish-flow integrity, release-commit signing & write-token hardening, Changesets / release-bot wiring), [`dependencies`](./.agents/personas/dependencies.md) (lockfile drift, dependency hygiene, `.npmrc` hardening).
+> Applied by personas: [`ci-security`](./.agents/pr-review-engine/agents/ci-security.md) (workflow injection, `pull_request_target` + PR-head checkout, ACL-gated comment triggers, action pinning, `permissions:`, secret exposure), [`release-integrity`](./.agents/pr-review-engine/agents/release-integrity.md) (publish-flow integrity, release-commit signing & write-token hardening, Changesets / release-bot wiring), [`dependencies`](./.agents/pr-review-engine/agents/dependencies.md) (lockfile drift, dependency hygiene, `.npmrc` hardening).

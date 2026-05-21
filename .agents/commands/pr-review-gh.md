@@ -38,7 +38,7 @@ Same as `/pr-review-ci` Step 2: `gh pr view <PR_NUMBER>`, capture and validate `
 
 ## Steps 3–6: Shared review base
 
-**Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with these inputs:
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with these inputs:
 
 - `<DIFF_SOURCE>` = `pr`
 - `<HEAD_REF>` = `origin/<HEAD_BRANCH>`
@@ -177,7 +177,7 @@ CYCLE START:
 4. NEW COMMIT DETECTED:
    Say "New commit detected on PR #<PR_NUMBER>: ${CYCLE_HEAD_SHA}. Running full review..."
 
-5. **Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with:
+5. **Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with:
    - <DIFF_SOURCE> = pr
    - <HEAD_REF> = origin/<HEAD_BRANCH>
    - <BASE_BRANCH> = <BASE_BRANCH>

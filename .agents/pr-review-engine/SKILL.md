@@ -1,9 +1,9 @@
 ---
-name: pr-review-base
+name: pr-review-engine
 kind: engine
-version: 0.1.0
+version: 0.2.0
 disable-model-invocation: true
-description: Shared Steps 3–6 of the in-repo PR review automation. Consumed by .agents/commands/pr-review-{ci,gh,local}.md — do NOT invoke directly. Walks .agents/personas/*.md and fans out per-persona sub-agents over the diff.
+description: Shared Steps 3–6 of the in-repo PR review automation. Consumed by .agents/commands/pr-review-{ci,gh,local}.md — do NOT invoke directly. Walks .agents/pr-review-engine/agents/*.md and fans out per-persona sub-agents over the diff.
 ---
 
 # pr-review base — shared Steps 3–6
@@ -46,9 +46,9 @@ git diff --name-only $MERGE_BASE..<HEAD_REF>
 # injection) and Step 6 (scope filter, line-level). Deterministic
 # parsing — do NOT reimplement in prose. Edge cases (deletion-only
 # hunks, pure renames, file deletions) are documented in
-# .agents/references/changed-lines.md.
+# .agents/pr-review-engine/references/changed-lines.md.
 git diff --unified=0 $MERGE_BASE..<HEAD_REF> \
-  | node .agents/lib/scripts/build-changed-lines.ts \
+  | node .agents/pr-review-engine/scripts/build-changed-lines.ts \
   > /tmp/pr-review-changed-lines.json
 ```
 
@@ -62,7 +62,7 @@ git diff --name-only HEAD
 # committed for files appearing in both (the agent reads the working
 # tree, not git's index).
 git diff --unified=0 HEAD \
-  | node .agents/lib/scripts/build-changed-lines.ts \
+  | node .agents/pr-review-engine/scripts/build-changed-lines.ts \
   > /tmp/pr-review-changed-lines-uncommitted.json
 ```
 
@@ -149,11 +149,11 @@ Flags:
 
 ## Step 5: Launch parallel review agents
 
-Persona specs live in `.agents/personas/*.md`. Each file has frontmatter declaring `kind: baseline` (always fires) or `kind: conditional` (fires only when its `trigger:` flag is true), plus the prompt body.
+Persona specs live in `.agents/pr-review-engine/agents/*.md`. Each file has frontmatter declaring `kind: baseline` (always fires) or `kind: conditional` (fires only when its `trigger:` flag is true), plus the prompt body.
 
 Loop:
 
-1. Read every file in `.agents/personas/*.md`.
+1. Read every file in `.agents/pr-review-engine/agents/*.md`.
 2. For each persona, decide whether to launch:
    - `kind: baseline` → always launch.
    - `kind: conditional` → launch only when the flag named in `trigger:` is true (see Step 4 for flag computation).
@@ -163,13 +163,13 @@ Loop:
 
 Shared per-agent contract (applied uniformly to every launched persona):
 
-- Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the conditional flag values, `<CHANGED_LINES>` (the JSON map produced in Step 3), the persona file body, the repo path / branches. `<CHANGED_LINES>` is the **authoritative** record of which lines the diff added — agents that emit a `line:` field outside that set (beyond the ±15 adjacent-code tolerance, see [`.agents/references/calibration.md`](../references/calibration.md)) will see their findings dropped in Step 6.
+- Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the conditional flag values, `<CHANGED_LINES>` (the JSON map produced in Step 3), the persona file body, the repo path / branches. `<CHANGED_LINES>` is the **authoritative** record of which lines the diff added — agents that emit a `line:` field outside that set (beyond the ±15 adjacent-code tolerance, see [`.agents/pr-review-engine/references/calibration.md`](./references/calibration.md)) will see their findings dropped in Step 6.
 - When `<HAS_PROTOCOL_SURFACE>` is true, `<PROJECT_CONTEXT>` must include the targeted ABI/address/constant/routing excerpts from Step 4's protocol source-of-truth section, or an explicit note that no relevant source excerpt was found.
 - Per-package `AGENTS.md` rules refine the root for the specific package; the root wins on contradictions.
 - Agents must analyze the **full diff**, not just the latest commit.
 - Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "WHAT: ... FIX: ..."}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
-- **`description` schema (load-bearing).** Every finding's `description` MUST contain both a `WHAT:` clause naming the specific problem AND a `FIX:` clause stating the specific change. Recommended format: `WHAT: <one sentence>. FIX: <one sentence>.` Free-form prose otherwise. Findings whose `description` lacks either clause are routed to `failed[]` in Step 6 sub-step 2 and counted toward `<FAILED_AGENTS>` — they are NOT silently dropped, but they DO flag the agent as partially malformed in the caller's report. The schema is validated by [`validate-findings.ts`](./scripts/validate-findings.ts); see kept + dropped calibration examples in [`.agents/references/calibration.md`](../references/calibration.md).
-- **`line` schema.** `line` must be a positive integer pointing inside `<CHANGED_LINES>` for the cited `file`, or within ±15 lines of one. Findings outside the window are dropped in Step 6 sub-step 1 with `drop_reason: line_pre_existing` and `distance_to_nearest_changed_line`. The tolerance window is a fixed engine constant (see [`.agents/references/calibration.md`](../references/calibration.md)).
+- **`description` schema (load-bearing).** Every finding's `description` MUST contain both a `WHAT:` clause naming the specific problem AND a `FIX:` clause stating the specific change. Recommended format: `WHAT: <one sentence>. FIX: <one sentence>.` Free-form prose otherwise. Findings whose `description` lacks either clause are routed to `failed[]` in Step 6 sub-step 2 and counted toward `<FAILED_AGENTS>` — they are NOT silently dropped, but they DO flag the agent as partially malformed in the caller's report. The schema is validated by [`validate-findings.ts`](./scripts/validate-findings.ts); see kept + dropped calibration examples in [`.agents/pr-review-engine/references/calibration.md`](./references/calibration.md).
+- **`line` schema.** `line` must be a positive integer pointing inside `<CHANGED_LINES>` for the cited `file`, or within ±15 lines of one. Findings outside the window are dropped in Step 6 sub-step 1 with `drop_reason: line_pre_existing` and `distance_to_nearest_changed_line`. The tolerance window is a fixed engine constant (see [`.agents/pr-review-engine/references/calibration.md`](./references/calibration.md)).
 - **Stay in scope (avoid scope creep).** Focus on the diff: flag issues introduced by these changes, and issues in adjacent code only when the diff makes that adjacent code materially worse (e.g. a renamed function whose remaining callers now misbehave, a new code path that exposes an existing bug). Do NOT flag pre-existing issues in unchanged lines of changed files, propose unrelated refactors, suggest new features or abstractions, or recommend cleanups outside the PR's intent. When in doubt, omit — the reviewer is reviewing *this change*, not the file's history.
 - **Don't nitpick.** Polish, wording, naming preferences, stylistic alternatives, and "you could also" suggestions are not findings — omit them regardless of severity label. A Low-severity finding belongs in the output only when a reasonable reviewer would clearly act on it in this PR.
 - Only **actionable** findings — no praise, no summaries.
@@ -193,7 +193,7 @@ Conditional:
 - `release-integrity.md` — fires when `<HAS_RELEASE>` is true. Publish-flow integrity (`--provenance`, org tokens, tag scope), release-commit signing & write-token hardening, Changesets / release-bot wiring.
 - `dependencies.md` — fires when `<HAS_DEPS>` is true. Lockfile drift, new-dep hygiene (`postinstall`, typosquats, unpinned ranges), `.npmrc` and `pnpm-workspace.yaml` hardening.
 
-Adding a new persona = drop a new file under `.agents/personas/` with appropriate frontmatter. If conditional, also extend Step 4's flag detection. No edit to caller files needed.
+Adding a new persona = drop a new file under `.agents/pr-review-engine/agents/` with appropriate frontmatter. If conditional, also extend Step 4's flag detection. No edit to caller files needed.
 
 ## Step 6: Aggregate and deduplicate findings
 
@@ -202,19 +202,19 @@ Merge all agent results into a single list:
 1. **Scope filter + schema validation (deterministic).** Collect every agent's findings into a single JSON array file (e.g. `/tmp/pr-review-findings.json`), then run the bundled validator:
 
    ```bash
-   node .agents/lib/scripts/validate-findings.ts \
+   node .agents/pr-review-engine/scripts/validate-findings.ts \
      /tmp/pr-review-findings.json \
      /tmp/pr-review-changed-lines.json \
      "$(git rev-parse --show-toplevel)" \
      > /tmp/pr-review-filtered.json
    ```
 
-   The validator applies four checks in this order (see [`.agents/references/scope-filter.md`](../references/scope-filter.md) for the rationale):
+   The validator applies four checks in this order (see [`.agents/pr-review-engine/references/scope-filter.md`](./references/scope-filter.md) for the rationale):
 
    1. **Schema check** — `severity` ∈ `critical|high|medium|low`, `file` is a non-empty string, `line` is a positive integer, `description` is non-empty AND contains both a `WHAT:` substring and a `FIX:` substring. Schema failures route to `failed[]` and feed `<FAILED_AGENTS>` (see sub-step 2).
-   2. **File-out-of-scope** — `file` not present in `<CHANGED_LINES>` (after path normalization: strip `./`, strip `a/` and `b/` diff prefixes; see [`.agents/references/scope-filter.md`](../references/scope-filter.md) for the full rule). Drops to `dropped[]` with `drop_reason: file_out_of_scope`.
-   3. **Line-pre-existing** — `file` in scope, but `line` is outside the ±15 tolerance window around any changed line. Drops to `dropped[]` with `drop_reason: line_pre_existing` and `distance_to_nearest_changed_line`. Pure renames (empty `CHANGED_LINES` for a file) short-circuit this filter — see [`.agents/references/changed-lines.md`](../references/changed-lines.md).
-   4. **Markdown documentation-example** — `.md` file, `line` inside a CommonMark fenced code block (` ``` ` / `~~~`). Drops to `dropped[]` with `drop_reason: doc_example_fp`. Detection rule lives in [`.agents/references/scope-filter.md`](../references/scope-filter.md).
+   2. **File-out-of-scope** — `file` not present in `<CHANGED_LINES>` (after path normalization: strip `./`, strip `a/` and `b/` diff prefixes; see [`.agents/pr-review-engine/references/scope-filter.md`](./references/scope-filter.md) for the full rule). Drops to `dropped[]` with `drop_reason: file_out_of_scope`.
+   3. **Line-pre-existing** — `file` in scope, but `line` is outside the ±15 tolerance window around any changed line. Drops to `dropped[]` with `drop_reason: line_pre_existing` and `distance_to_nearest_changed_line`. Pure renames (empty `CHANGED_LINES` for a file) short-circuit this filter — see [`.agents/pr-review-engine/references/changed-lines.md`](./references/changed-lines.md).
+   4. **Markdown documentation-example** — `.md` file, `line` inside a CommonMark fenced code block (` ``` ` / `~~~`). Drops to `dropped[]` with `drop_reason: doc_example_fp`. Detection rule lives in [`.agents/pr-review-engine/references/scope-filter.md`](./references/scope-filter.md).
 
    The validator emits `{ kept, dropped, failed, counts }` on stdout. The kept array is what feeds sub-step 3's deduplication; `dropped` flows to the caller's audit-trail rendering (Phase 3 adds `<DROPPED_FINDINGS>` to the output contract).
 

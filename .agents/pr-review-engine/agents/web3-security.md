@@ -17,7 +17,7 @@ severity-guidance: |
 
 # Web3 Security
 
-The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §1 (the Action layer is pure encode-only, no state reads), §2 (typed errors), and §5 (security invariants — `chainId` validation, authorization, accounting, LLTV buffer, inflation-attack guard, deposit routing). The Action-layer rule and the chainId-validation invariant from §5 are the load-bearing parts; everything below is the application surface.
+The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §1 (the Action layer is pure encode-only, no state reads), §2 (typed errors), and §5 (security invariants — `chainId` validation, authorization, accounting, LLTV buffer, inflation-attack guard, deposit routing). The Action-layer rule and the chainId-validation invariant from §5 are the load-bearing parts; everything below is the application surface.
 
 ## What to flag
 
@@ -77,4 +77,4 @@ The boundary between the SDK and the chain. Authoritative rules live in [`AGENTS
 - Do NOT flag generic error swallowing (`catch (_) {}`) — `silent-failure-hunter`. This persona owns **Web3-specific** failure handling (failed-tx surfacing, revert decoding, user-rejection paths).
 - Do NOT flag changeset relevance or publish-flow concerns — `style-conventions` and `release-integrity`.
 - Do NOT propose new test coverage on Web3 paths — `test-coverage`. This persona reviews whether the *source* is correct; coverage is the other persona.
-- Reference the root [`AGENTS.md`](../../AGENTS.md), [`MISSION.md`](../../MISSION.md), the package's `AGENTS.md`, and any pinned ABI / address registry files as `<PROJECT_CONTEXT>`.
+- Reference the root [`AGENTS.md`](../../../AGENTS.md), [`MISSION.md`](../../../MISSION.md), the package's `AGENTS.md`, and any pinned ABI / address registry files as `<PROJECT_CONTEXT>`.

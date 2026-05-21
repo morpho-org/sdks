@@ -17,7 +17,7 @@ severity-guidance: `_authToken=` or `always-auth=true` committed in `.npmrc` →
 
 Focus: the supply-chain edge. Every new dep is code we ship without writing; every lockfile bump is a transitive surface change we have to trust. This persona reviews the *dependency surface* — package adds / removes, lockfile drift, postinstall risk, `.npmrc` and `pnpm-workspace.yaml` hardening. Workflow-level concerns live in `ci-security`; publish-flow concerns live in `release-integrity`.
 
-Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §10 — read those first; the bullets below are the application points.
+Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §10 — read those first; the bullets below are the application points.
 
 ## Trigger
 

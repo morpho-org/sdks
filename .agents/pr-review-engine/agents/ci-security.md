@@ -17,7 +17,7 @@ severity-guidance: Workflow injection → critical. `pull_request_target` + PR-h
 
 Focus: the GitHub Actions trust boundary. CI runs with privileged tokens; one bad workflow merge can run attacker code on a maintainer's box. This persona reviews the *workflow surface* — injection paths, runner permissions, action pinning. Publish-flow integrity, release-commit signing, and lockfile drift are explicitly **out of scope** here — they live in `release-integrity` and `dependencies` respectively.
 
-Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §10 — read those first; the bullets below are the application points.
+Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §10 — read those first; the bullets below are the application points.
 
 ## Trigger
 

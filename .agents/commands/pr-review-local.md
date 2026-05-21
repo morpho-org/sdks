@@ -89,7 +89,7 @@ fi
 
 ## Steps 3–6: Shared review base
 
-**Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with:
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with:
 
 - `<DIFF_SOURCE>` = `local` (include uncommitted diff)
 - `<HEAD_REF>` = `HEAD`

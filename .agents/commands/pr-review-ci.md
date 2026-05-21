@@ -46,7 +46,7 @@ Extract `<BASE_BRANCH>`, `<HEAD_BRANCH>`, `<HEAD_SHA>`, `state`. Validate that a
 
 ## Steps 3–6: Shared review base
 
-**Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with these inputs:
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with these inputs:
 
 - `<DIFF_SOURCE>` = `pr` (use `origin/<BASE_BRANCH>...origin/<HEAD_BRANCH>`)
 - `<HEAD_REF>` = `origin/<HEAD_BRANCH>`

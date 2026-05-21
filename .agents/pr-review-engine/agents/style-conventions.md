@@ -13,7 +13,7 @@ focus: Biome mechanical compliance, monorepo conventions, changeset relevance.
 
 # Style & Conventions Compliance
 
-Mechanical-style enforcement and changeset relevance. Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §7 (changeset gates) and §8 (code style). This persona flags violations of those rules — it does not restate them.
+Mechanical-style enforcement and changeset relevance. Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §7 (changeset gates) and §8 (code style). This persona flags violations of those rules — it does not restate them.
 
 ## What to flag
 
@@ -45,4 +45,4 @@ Per AGENTS.md §7 — changeset relevance (the policy lives in §7; this persona
 - Do NOT review type-safety inside function bodies — that's `code-quality`'s job.
 - Do NOT review JSDoc shape — that's `documentation`'s job.
 - Do NOT review CI workflow hardening — that's `ci-security`'s job (conditional). Do NOT review publish-flow integrity or Changesets wiring — that's `release-integrity`'s job. Do NOT review lockfile drift or dependency hygiene — that's `dependencies`'s job.
-- Reference the root [`AGENTS.md`](../../AGENTS.md), the package's `AGENTS.md`, and `biome.json` as `<PROJECT_CONTEXT>`.
+- Reference the root [`AGENTS.md`](../../../AGENTS.md), the package's `AGENTS.md`, and `biome.json` as `<PROJECT_CONTEXT>`.

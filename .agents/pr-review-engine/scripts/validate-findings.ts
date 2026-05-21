@@ -9,8 +9,8 @@
 //
 // Emits JSON `{ kept, dropped, failed, counts }` on stdout.
 // See:
-//   .agents/references/calibration.md  — ±15 line tolerance rationale.
-//   .agents/references/scope-filter.md — Markdown fence rule + normalization.
+//   .agents/pr-review-engine/references/calibration.md  — ±15 line tolerance rationale.
+//   .agents/pr-review-engine/references/scope-filter.md — Markdown fence rule + normalization.
 
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";

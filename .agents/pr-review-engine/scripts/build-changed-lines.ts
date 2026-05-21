@@ -8,7 +8,7 @@
 //   - Reads a unified=0 diff from stdin and parses it.
 //   - Emits JSON `{ "<path>": [<line>, ...] }` on stdout.
 //
-// Edge cases (see .agents/references/changed-lines.md):
+// Edge cases (see .agents/pr-review-engine/references/changed-lines.md):
 //   - Deletion-only hunks (`+0`): produce no entries for that file's hunk.
 //   - Pure renames: file appears in the map with an empty `[]` array
 //     (line-level filter must short-circuit on empty sets in

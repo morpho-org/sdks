@@ -17,7 +17,7 @@ severity-guidance: Loss of GitHub-signed identity on release commits → critica
 
 Focus: the path code takes from `main` to the npm registry. Publishes run under privileged identities; release commits and tags carry org reputation; a botched Changesets config can ship the wrong packages. This persona reviews the *release surface* — provenance, signing, write-token hardening, Changesets wiring. Workflow-level hardening (injection, action pinning, `permissions:`) lives in `ci-security`; dependency hygiene lives in `dependencies`.
 
-Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §10 — read those first; the bullets below are the application points.
+Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §10 — read those first; the bullets below are the application points.
 
 ## Trigger
 
