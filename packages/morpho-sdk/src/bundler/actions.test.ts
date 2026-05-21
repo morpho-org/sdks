@@ -436,10 +436,14 @@ describe("BundlerAction", () => {
   };
 
   describe("bundler-sdk-viem parity", () => {
-    test("matches encodeBundle for adapted bundle dispatch and value accounting", () => {
-      expect(BundlerAction.encodeBundle(chainId, parityActions)).toStrictEqual(
-        LegacyBundlerAction.encodeBundle(chainId, parityActions),
-      );
+    test("matches encodeBundle dispatch while recomputing value locally", () => {
+      const tx = BundlerAction.encodeBundle(chainId, parityActions);
+      const legacyTx = LegacyBundlerAction.encodeBundle(chainId, parityActions);
+
+      expect(tx.to).toBe(legacyTx.to);
+      expect(tx.data).toBe(legacyTx.data);
+      expect(tx.value).toBe(130n);
+      expect(legacyTx.value).toBe(123n);
     });
 
     test.each(
@@ -603,7 +607,7 @@ describe("BundlerAction", () => {
     `);
   });
 
-  test("encodeBundle excludes reallocateTo fees from transaction value", () => {
+  test("encodeBundle includes reallocateTo fees in transaction value", () => {
     const withdrawals = [{ marketParams: market, amount: 2n }];
     const tx = BundlerAction.encodeBundle(chainId, [
       {
@@ -612,7 +616,7 @@ describe("BundlerAction", () => {
       },
     ]);
 
-    expect(tx.value).toBe(0n);
+    expect(tx.value).toBe(5n);
 
     const decoded = decodeFunctionData({
       abi: bundler3Abi,
@@ -620,13 +624,46 @@ describe("BundlerAction", () => {
     });
 
     expect(decoded.functionName).toBe("multicall");
-    expect(decoded.args[0]).toHaveLength(1);
-    expect(decoded.args[0][0]?.value).toBe(5n);
+    const calls = decoded.args[0] ?? [];
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.value).toBe(5n);
+  });
+
+  test("encodeBundle uses native transfers to Bundler3 before adding call value", () => {
+    const withdrawals = [{ marketParams: market, amount: 2n }];
+    const tx = BundlerAction.encodeBundle(chainId, [
+      {
+        type: "nativeTransfer",
+        args: [owner, bundler3, 5n, false],
+      },
+      {
+        type: "reallocateTo",
+        args: [vault, 5n, withdrawals, market, false],
+      },
+    ]);
+
+    expect(tx.value).toBe(5n);
+
+    const decoded = decodeFunctionData({
+      abi: bundler3Abi,
+      data: tx.data,
+    });
+
+    expect(decoded.functionName).toBe("multicall");
+    const calls = decoded.args[0] ?? [];
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.value).toBe(5n);
   });
 
   test("encodeBundle matches registry addresses case-insensitively", () => {
     const lowerBundler3 = bundler3.toLowerCase() as Address;
     const lowerGeneralAdapter1 = generalAdapter1.toLowerCase() as Address;
+    const preloadTx = BundlerAction.encodeBundle(chainId, [
+      {
+        type: "nativeTransfer",
+        args: [owner, lowerBundler3, 5n, false],
+      },
+    ]);
     const tx = BundlerAction.encodeBundle(chainId, [
       {
         type: "nativeTransfer",
@@ -638,7 +675,8 @@ describe("BundlerAction", () => {
       },
     ]);
 
-    expect(tx.value).toBe(12n);
+    expect(preloadTx.value).toBe(5n);
+    expect(tx.value).toBe(7n);
 
     const decoded = decodeFunctionData({
       abi: bundler3Abi,
@@ -646,9 +684,10 @@ describe("BundlerAction", () => {
     });
 
     expect(decoded.functionName).toBe("multicall");
-    expect(decoded.args[0]).toHaveLength(1);
-    expect(decoded.args[0][0]?.to.toLowerCase()).toBe(lowerGeneralAdapter1);
-    expect(decoded.args[0][0]?.value).toBe(7n);
+    const calls = decoded.args[0] ?? [];
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.to.toLowerCase()).toBe(lowerGeneralAdapter1);
+    expect(calls[0]?.value).toBe(7n);
   });
 
   test.each(

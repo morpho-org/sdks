@@ -166,10 +166,7 @@ export const marketV1Repay = ({
     });
   }
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: 0n,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);

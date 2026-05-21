@@ -178,10 +178,6 @@ export const vaultV1Deposit = ({
 
   let tx = BundlerAction.encodeBundle(chainId, actions);
 
-  if (nativeAmount) {
-    tx = { ...tx, value: nativeAmount };
-  }
-
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);
   }

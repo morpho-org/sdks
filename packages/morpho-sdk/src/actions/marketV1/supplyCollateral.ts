@@ -141,10 +141,7 @@ export const marketV1SupplyCollateral = ({
     args: [marketParams, totalCollateral, onBehalf, [], false],
   });
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: nativeAmount ?? 0n,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);

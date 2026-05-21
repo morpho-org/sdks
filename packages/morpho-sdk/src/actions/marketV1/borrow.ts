@@ -106,10 +106,7 @@ export const marketV1Borrow = ({
     args: [marketParams, amount, 0n, minSharePrice, receiver, false],
   });
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: reallocationFee,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);

@@ -207,10 +207,7 @@ export const marketV1SupplyCollateralBorrow = ({
     args: [marketParams, borrowAmount, 0n, minSharePrice, receiver, false],
   });
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: (nativeAmount ?? 0n) + reallocationFee,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);

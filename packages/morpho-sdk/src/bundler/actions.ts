@@ -87,8 +87,8 @@ export namespace BundlerAction {
    *
    * @param chainId - Chain where the bundle will execute.
    * @param actions - Ordered Bundler3 actions to encode.
-   * @returns Transaction target, calldata, and native value inferred from
-   * native-transfer actions.
+   * @returns Transaction target, calldata, and native value required by the
+   * bundle.
    *
    * @example
    * ```ts
@@ -112,25 +112,36 @@ export namespace BundlerAction {
     } = getChainAddresses(chainId);
 
     let value = 0n;
+    let availableBundlerValue = 0n;
+    const encodedActions: BundlerCall[] = [];
 
-    for (const { type, args } of actions) {
-      if (type !== "nativeTransfer") continue;
+    for (const action of actions) {
+      if (action.type === "nativeTransfer") {
+        const [owner, recipient, amount] = action.args;
 
-      const [owner, recipient, amount] = args;
+        // A transfer into Bundler3 emits no inner call; it pre-funds later
+        // value-carrying calls in the same multicall.
+        if (
+          !isAddressEqual(owner, bundler3) &&
+          !isAddressEqual(owner, generalAdapter1) &&
+          isAddressEqual(recipient, bundler3)
+        ) {
+          value += amount;
+          availableBundlerValue += amount;
+        }
+      }
 
-      if (
-        !isAddressEqual(owner, bundler3) &&
-        !isAddressEqual(owner, generalAdapter1) &&
-        (isAddressEqual(recipient, bundler3) ||
-          isAddressEqual(recipient, generalAdapter1))
-      ) {
-        value += amount;
+      for (const call of BundlerAction.encode(chainId, action)) {
+        if (call.value > availableBundlerValue) {
+          value += call.value - availableBundlerValue;
+          availableBundlerValue = 0n;
+        } else {
+          availableBundlerValue -= call.value;
+        }
+
+        encodedActions.push(call);
       }
     }
-
-    const encodedActions = actions.flatMap(
-      BundlerAction.encode.bind(null, chainId),
-    );
 
     return {
       to: bundler3,

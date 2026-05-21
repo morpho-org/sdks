@@ -194,10 +194,7 @@ export const marketV1RepayWithdrawCollateral = ({
     args: [marketParams, withdrawAmount, receiver, false],
   });
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: 0n,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);

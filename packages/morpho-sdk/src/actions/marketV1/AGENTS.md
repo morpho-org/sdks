@@ -28,7 +28,7 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 | `supplyCollateralBorrow` | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → morphoBorrow` |
 | `supplyCollateralBorrow` (with reallocations) | `[nativeWrap?] → [erc20Transfer?] → morphoSupplyCollateral → [reallocateTo × N] → morphoBorrow` |
 
-`tx.value = (nativeAmount ?? 0n) + reallocationFeeTotal`.
+`BundlerAction.encodeBundle` derives `tx.value` from native wrapping calls and reallocation fees.
 
 ## Mode and ordering rules
 
