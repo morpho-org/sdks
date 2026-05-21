@@ -1,7 +1,7 @@
 import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
-import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, maxUint256 } from "viem";
+import { type Action, BundlerAction } from "../../bundler/index.js";
 import {
   addTransactionMetadata,
   validateRepayParams,
@@ -96,6 +96,8 @@ export interface MarketV1RepayWithdrawCollateralParams {
  *   is provided and the signed asset differs from `marketParams.loanToken`.
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.transferAmount`.
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ *   signature is missing its expiration.
  * @example
  * ```ts
  * import { marketV1RepayWithdrawCollateral } from "@morpho-org/morpho-sdk";
@@ -192,10 +194,7 @@ export const marketV1RepayWithdrawCollateral = ({
     args: [marketParams, withdrawAmount, receiver, false],
   });
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: 0n,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);

@@ -1,5 +1,5 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import type { Action } from "@morpho-org/bundler-sdk-viem";
+import type { Action } from "../../bundler/index.js";
 import { validateReallocations } from "../../helpers/index.js";
 import type { VaultReallocation } from "../../types/index.js";
 
@@ -14,8 +14,7 @@ import type { VaultReallocation } from "../../types/index.js";
  *
  * @param reallocations - The vault reallocations to encode.
  * @param targetMarketParams - The target market params the freed liquidity is destined for.
- * @returns The encoded `reallocateTo` actions and the summed reallocation fee (in native, used
- *   as `tx.value` in the parent bundle).
+ * @returns The encoded `reallocateTo` actions and the summed reallocation fee in native tokens.
  * @throws {NegativeReallocationFeeError} when any reallocation fee is negative.
  * @throws {EmptyReallocationWithdrawalsError} when any reallocation has no withdrawals.
  * @throws {NonPositiveReallocationAmountError} when any withdrawal amount is non-positive.

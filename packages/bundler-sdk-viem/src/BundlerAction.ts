@@ -15,6 +15,7 @@ import {
   encodeAbiParameters,
   encodeFunctionData,
   type Hex,
+  isAddressEqual,
   keccak256,
   maxUint256,
   parseSignature,
@@ -71,9 +72,10 @@ export namespace BundlerAction {
       const [owner, recipient, amount] = args;
 
       if (
-        owner !== bundler3 &&
-        owner !== generalAdapter1 &&
-        (recipient === bundler3 || recipient === generalAdapter1)
+        !isAddressEqual(owner, bundler3) &&
+        !isAddressEqual(owner, generalAdapter1) &&
+        (isAddressEqual(recipient, bundler3) ||
+          isAddressEqual(recipient, generalAdapter1))
       )
         value += amount;
     }
@@ -436,9 +438,9 @@ export namespace BundlerAction {
       bundler3: { bundler3, generalAdapter1 },
     } = getChainAddresses(chainId);
 
-    if (recipient === bundler3) return [];
+    if (isAddressEqual(recipient, bundler3)) return [];
 
-    if (owner === generalAdapter1)
+    if (isAddressEqual(owner, generalAdapter1))
       return [
         {
           to: generalAdapter1,
@@ -1081,7 +1083,7 @@ export namespace BundlerAction {
     } = getChainAddresses(chainId);
     const { r, s, yParity } = parseSignature(signature);
 
-    if (authorization.authorized === bundler3)
+    if (isAddressEqual(authorization.authorized, bundler3))
       throw new BundlerErrors.UnexpectedSignature(authorization.authorized);
 
     return [

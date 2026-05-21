@@ -18,11 +18,11 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 ## Native wrapping (canonical statement)
 
-Only valid for assets/collateral configured as wNative. When `nativeAmount > 0`: prepend `nativeTransfer` + `wrapNative` to the bundle and set `tx.value = nativeAmount`. Reject native amounts on non-wNative assets with the dedicated error.
+Only valid for assets/collateral configured as wNative. When `nativeAmount > 0`: prepend `nativeTransfer` + `wrapNative` to the bundle; `BundlerAction.encodeBundle` derives `tx.value` from the encoded value-carrying calls. Reject native amounts on non-wNative assets with the dedicated error.
 
 ## Shared liquidity / reallocations (canonical statement)
 
-`marketV1Borrow` and `marketV1SupplyCollateralBorrow` accept optional `reallocations: VaultReallocation[]`. Each reallocation becomes a `PublicAllocator.reallocateTo(vault, fee, withdrawals, targetMarket)` bundler action **before** `morphoBorrow`. Fees accumulate in `tx.value`. Validation: `helpers/validateReallocations`. Other layer docs link here rather than restating these rules.
+`marketV1Borrow` and `marketV1SupplyCollateralBorrow` accept optional `reallocations: VaultReallocation[]`. Each reallocation becomes a `PublicAllocator.reallocateTo(vault, fee, withdrawals, targetMarket)` bundler action **before** `morphoBorrow`. `BundlerAction.encodeBundle` includes those fees in `tx.value`. Validation: `helpers/validateReallocations`. Other layer docs link here rather than restating these rules.
 
 ## Discriminated unions
 

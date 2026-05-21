@@ -6,7 +6,7 @@ This document describes how **Bundler3** and **GeneralAdapter1** are used in the
 
 Bundler3 is a _multicall_ contract specific to the Morpho ecosystem. It takes as input a **list of typed actions** (ERC20 transfers, permit, permit2, native wrapping, ERC-4626 deposits, Morpho Blue calls, reallocations…) and executes them **atomically in a single transaction**.
 
-Instead of exposing the user directly to target contracts (ERC-4626 vault, Morpho Blue, PublicAllocator, WETH…), the SDK encodes a bundle via [`BundlerAction.encodeBundle(chainId, actions)`](src/actions/vaultV1/deposit.ts#L146) from `@morpho-org/bundler-sdk-viem`. The `to` of the resulting transaction is **always** the Bundler3 address for the target chain.
+Instead of exposing the user directly to target contracts (ERC-4626 vault, Morpho Blue, PublicAllocator, WETH…), the SDK encodes a bundle via its local [`BundlerAction.encodeBundle(chainId, actions)`](src/bundler/actions.ts). The `to` of the resulting transaction is **always** the Bundler3 address for the target chain.
 
 ### GeneralAdapter1: the trusted adapter
 
@@ -66,7 +66,7 @@ For every ERC-4626 deposit (VaultV1 / VaultV2), GeneralAdapter1 calls `erc4626De
 
 ### 4. Shared liquidity without an ad-hoc contract
 
-`VaultReallocation`s are encoded as plain `reallocateTo` bundler actions (PublicAllocator). They are **prepended to the bundle** (borrow) or **inserted between supply-collateral and borrow** (`supplyCollateralBorrow`), and native fees are aggregated into `tx.value`. No extra off-chain machinery: everything flows through the same bundler-action composition.
+`VaultReallocation`s are encoded as plain `reallocateTo` bundler actions (PublicAllocator). They are **prepended to the bundle** (borrow) or **inserted between supply-collateral and borrow** (`supplyCollateralBorrow`), and `BundlerAction.encodeBundle` aggregates native fees into `tx.value`. No extra off-chain machinery: everything flows through the same bundler-action composition.
 
 ### 5. A single approval surface
 
@@ -101,7 +101,7 @@ This is the main design caveat. For the following operations the SDK emits a **d
 - **Morpho authorization for GA1 required for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`.** A user who has never granted it will receive the `setAuthorization` requirement through [`getMorphoAuthorizationRequirement`](src/actions/requirements/getMorphoAuthorizationRequirement.ts) — to execute beforehand or sign via permit.
 - **Critical order in `repayWithdrawCollateral`**: `morphoRepay` **must** precede `morphoWithdrawCollateral` in the bundle, otherwise the position is deemed unhealthy at withdraw time and the tx reverts.
 - **Builder must equal signer.** Bundler actions reference accounts in two different ways: some take an explicit `onBehalf` and act on `userAddress` (e.g. `morphoRepay`), others act implicitly on the **initiator** — the `msg.sender` of `bundler3.multicall`, i.e. the EOA signing the tx, not the adapter — (e.g. `erc20TransferFrom`, `morphoWithdrawCollateral`, the latter exposing no `onBehalf` parameter on GA1). `repayWithdrawCollateral` is the canonical example: the repay leg targets `userAddress` while the transfer-from and the withdraw target the initiator. If the address that built the tx (and filled `userAddress`) is not the address that signs/executes it, the bundle would repay one account's debt while pulling tokens from and withdrawing collateral against the signer. Transaction builders do not validate this at build time — callers MUST keep `userAddress` aligned with the signing account. The signature requirements (`encodeErc20Permit` / `encodeErc20Permit2`) take a `WalletClient` and enforce this at `sign()` time via `validateUserAddress` (throws `MissingClientPropertyError` / `AddressMismatchError`).
-- **Tricky `tx.value`**: whenever a `nativeAmount` or a `reallocateTo` (native fee) is involved, `tx.value` is computed by the SDK. Do not overwrite it on the caller side.
+- **Tricky `tx.value`**: whenever a `nativeAmount` or a `reallocateTo` (native fee) is involved, `BundlerAction.encodeBundle` computes `tx.value`. Do not overwrite it on the caller side.
 - **Chain-specific Bundler3 address**: always resolve through `getChainAddresses(chainId)` and validate that the viem client's `chainId` matches the params.
 
 ## Code references
