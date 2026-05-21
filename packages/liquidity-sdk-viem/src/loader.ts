@@ -15,6 +15,8 @@ import type { Chain, Client, Transport } from "viem";
 import { getBlock } from "viem/actions";
 import { apiSdk } from "./api/index.js";
 
+const REALLOCATION_SIMULATION_DELAY = 3_600n;
+
 export interface LiquidityParameters {
   /**
    * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
@@ -188,7 +190,7 @@ export class LiquidityLoader<chain extends Chain = Chain> {
             const { data: endState, withdrawals } =
               startState.getMarketPublicReallocations(uniqueKey, {
                 ...parameters,
-                timestamp: block.timestamp,
+                timestamp: block.timestamp + REALLOCATION_SIMULATION_DELAY,
                 maxWithdrawalUtilization,
                 enabled: true,
               });

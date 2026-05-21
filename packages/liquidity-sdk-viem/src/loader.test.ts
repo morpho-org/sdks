@@ -596,15 +596,23 @@ describe.sequential("LiquidityLoader.fetch", () => {
     nock.cleanAll();
   });
 
-  test("passes the fetched block timestamp into reallocation computation", async () => {
+  test("passes the fetched block timestamp plus one hour into reallocation computation", async () => {
+    const pendingCapValidAt = 3_700n;
+
     mockApiMarkets();
-    const firstHandle = setupLoaderMockClient({ blockTimestamp: 100n });
+    const firstHandle = setupLoaderMockClient({
+      blockTimestamp: 100n,
+      targetPendingCapValidAt: pendingCapValidAt,
+    });
     const first = await new LiquidityLoader(firstHandle.client).fetch(
       targetMarketId,
     );
 
     mockApiMarkets();
-    const secondHandle = setupLoaderMockClient({ blockTimestamp: 125n });
+    const secondHandle = setupLoaderMockClient({
+      blockTimestamp: 101n,
+      targetPendingCapValidAt: pendingCapValidAt,
+    });
     const second = await new LiquidityLoader(secondHandle.client).fetch(
       targetMarketId,
     );
