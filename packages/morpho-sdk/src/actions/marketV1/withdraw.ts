@@ -7,8 +7,8 @@ import {
   type MarketV1WithdrawAction,
   type Metadata,
   MutuallyExclusiveWithdrawAmountsError,
+  NegativeWithdrawMinSharePriceError,
   NonPositiveWithdrawAmountError,
-  NonPositiveWithdrawMinSharePriceError,
   type Transaction,
   type VaultReallocation,
 } from "../../types/index.js";
@@ -72,7 +72,7 @@ export interface MarketV1WithdrawParams {
  *   the typed `action` discriminator the simulation layer consumes.
  * @throws {NonPositiveWithdrawAmountError} when both `assets` and `shares` are zero, or either is negative.
  * @throws {MutuallyExclusiveWithdrawAmountsError} when both `assets` and `shares` are non-zero.
- * @throws {NonPositiveWithdrawMinSharePriceError} when `minSharePrice < 0n` (zero is allowed despite
+ * @throws {NegativeWithdrawMinSharePriceError} when `minSharePrice < 0n` (zero is allowed despite
  *   the class name — pattern preserved for symmetry with `marketV1Borrow`).
  * @throws Reallocation errors from `buildReallocationActions` when `reallocations` is malformed
  *   (see its JSDoc: `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`,
@@ -112,7 +112,7 @@ export const marketV1Withdraw = ({
   }
 
   if (minSharePrice < 0n) {
-    throw new NonPositiveWithdrawMinSharePriceError(marketParams.id);
+    throw new NegativeWithdrawMinSharePriceError(marketParams.id);
   }
 
   const actions: Action[] = [];

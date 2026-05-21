@@ -5,8 +5,11 @@ import { describe, expect } from "vitest";
 import {
   computeMinWithdrawSharePrice,
   isRequirementAuthorization,
+  MissingAccrualPositionError,
   MorphoClient,
+  MutuallyExclusiveWithdrawAmountsError,
   marketV1Withdraw,
+  NonPositiveWithdrawAmountError,
   type VaultReallocation,
 } from "../../../src/index.js";
 import {
@@ -293,5 +296,51 @@ describe("WithdrawMarketV1", () => {
     expect(finalState.userLoanTokenBalance).toEqual(
       initialState.userLoanTokenBalance + withdrawAmount,
     );
+  });
+
+  test("error: MutuallyExclusiveWithdrawAmountsError when both assets and shares are non-zero", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: parseUnits("1", 6),
+        shares: 1n,
+        positionData: undefined as never,
+      } as never),
+    ).toThrow(MutuallyExclusiveWithdrawAmountsError);
+  });
+
+  test("error: NonPositiveWithdrawAmountError when shares is negative", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        shares: -1n,
+        positionData: undefined as never,
+      } as never),
+    ).toThrow(NonPositiveWithdrawAmountError);
+  });
+
+  test("error: MissingAccrualPositionError when positionData is missing", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: parseUnits("1", 6),
+        positionData: undefined as never,
+      }),
+    ).toThrow(MissingAccrualPositionError);
   });
 });

@@ -12,7 +12,7 @@ import {
   isRequirementSignature,
   NativeAmountOnNonWNativeLoanError,
   NegativeNativeAmountError,
-  NonPositiveSupplyAmountError,
+  NegativeSupplyAmountError,
   NonPositiveSupplyMaxSharePriceError,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
@@ -168,7 +168,7 @@ describe("marketV1Supply unit tests", () => {
     expect(localSpy).not.toHaveBeenCalled();
   });
 
-  test("should throw NonPositiveSupplyAmountError when amount is negative", async ({
+  test("should throw NegativeSupplyAmountError when amount is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -180,7 +180,7 @@ describe("marketV1Supply unit tests", () => {
           maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
-    ).toThrow(NonPositiveSupplyAmountError);
+    ).toThrow(NegativeSupplyAmountError);
   });
 
   test("should throw ZeroSupplyAmountError when total amount is zero", async ({

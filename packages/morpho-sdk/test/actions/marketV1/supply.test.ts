@@ -8,6 +8,9 @@ import {
   MarketIdMismatchError,
   MorphoClient,
   marketV1Supply,
+  NegativeNativeAmountError,
+  NegativeSupplyAmountError,
+  ZeroSupplyAmountError,
 } from "../../../src/index.js";
 import {
   CbbtcUsdcMarketV1,
@@ -159,5 +162,54 @@ describe("SupplyMarketV1", () => {
         marketData: wrongMarketData,
       }),
     ).toThrow(MarketIdMismatchError);
+  });
+
+  test("error: NegativeSupplyAmountError when amount is negative", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const marketData = await market.getMarketData();
+
+    expect(() =>
+      market.supply({
+        userAddress: client.account.address,
+        amount: -1n,
+        marketData,
+      }),
+    ).toThrow(NegativeSupplyAmountError);
+  });
+
+  test("error: NegativeNativeAmountError when nativeAmount is negative", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const marketData = await market.getMarketData();
+
+    expect(() =>
+      market.supply({
+        userAddress: client.account.address,
+        amount: parseUnits("100", 6),
+        nativeAmount: -1n,
+        marketData,
+      }),
+    ).toThrow(NegativeNativeAmountError);
+  });
+
+  test("error: ZeroSupplyAmountError when both amount and nativeAmount are zero", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const marketData = await market.getMarketData();
+
+    expect(() =>
+      market.supply({
+        userAddress: client.account.address,
+        amount: 0n,
+        marketData,
+      }),
+    ).toThrow(ZeroSupplyAmountError);
   });
 });

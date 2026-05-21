@@ -10,8 +10,8 @@ import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 import { test } from "../../../test/setup.js";
 import {
   MutuallyExclusiveWithdrawAmountsError,
+  NegativeWithdrawMinSharePriceError,
   NonPositiveWithdrawAmountError,
-  NonPositiveWithdrawMinSharePriceError,
   type VaultReallocation,
 } from "../../types/index.js";
 import { marketV1Withdraw } from "./withdraw.js";
@@ -117,6 +117,22 @@ describe("marketV1Withdraw unit tests", () => {
     ).toThrow(NonPositiveWithdrawAmountError);
   });
 
+  test("should throw NonPositiveWithdrawAmountError when shares is negative", async ({
+    client,
+  }) => {
+    expect(() =>
+      marketV1Withdraw({
+        market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
+        args: {
+          assets: 0n,
+          shares: -1n,
+          receiver: client.account.address,
+          minSharePrice: 0n,
+        },
+      }),
+    ).toThrow(NonPositiveWithdrawAmountError);
+  });
+
   test("should throw MutuallyExclusiveWithdrawAmountsError when both assets and shares are non-zero", async ({
     client,
   }) => {
@@ -133,7 +149,7 @@ describe("marketV1Withdraw unit tests", () => {
     ).toThrow(MutuallyExclusiveWithdrawAmountsError);
   });
 
-  test("should throw NonPositiveWithdrawMinSharePriceError when minSharePrice is negative", async ({
+  test("should throw NegativeWithdrawMinSharePriceError when minSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -146,7 +162,7 @@ describe("marketV1Withdraw unit tests", () => {
           minSharePrice: -1n,
         },
       }),
-    ).toThrow(NonPositiveWithdrawMinSharePriceError);
+    ).toThrow(NegativeWithdrawMinSharePriceError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

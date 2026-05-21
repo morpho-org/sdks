@@ -194,7 +194,9 @@ export function computeMinWithdrawSharePrice(params: {
     shares = market.toSupplyShares(withdrawAssets, "Up");
   }
 
-  if (shares === 0n) {
+  // Dust shares can round to `assets === 0n` here, which would make
+  // `minSharePriceE27 = 0` and silently nullify the on-chain slippage cap.
+  if (shares === 0n || assets === 0n) {
     throw new ShareDivideByZeroError(market.params.id);
   }
 

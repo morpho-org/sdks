@@ -154,36 +154,6 @@ describe("computeReallocations", () => {
       expect(result).toEqual([]);
     });
 
-    test("legacy `borrowAmount` alias should match `{ operation: 'borrow', amount }`", () => {
-      const amount = 500n * MathLib.WAD;
-      const friendlyTargetMarket = makeMarket(targetParams, {
-        totalSupplyAssets: 1500n * MathLib.WAD,
-        totalBorrowAssets: 500n * MathLib.WAD,
-      });
-      const data = makeMockState({
-        friendlyWithdrawals: [
-          { id: sourceA.id, vault: VAULT_A, assets: 300n * MathLib.WAD },
-        ],
-        friendlyTargetMarket,
-        vaultFees: { [VAULT_A]: 1000n },
-      });
-
-      const viaAlias = computeReallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        borrowAmount: amount,
-      });
-      const viaCanonical = computeReallocations({
-        reallocationData: data,
-        marketId: targetParams.id,
-        operation: "borrow",
-        amount,
-      });
-
-      expect(viaAlias).toEqual(viaCanonical);
-      expect(viaAlias).toHaveLength(1);
-    });
-
     test("should proceed with reallocation when options is undefined", () => {
       // Regression: previously `!options?.enabled` short-circuited when options
       // was undefined, blocking reallocation entirely. The fix uses

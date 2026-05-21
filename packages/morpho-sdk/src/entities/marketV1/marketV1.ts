@@ -71,10 +71,10 @@ import {
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
   NegativeNativeAmountError,
+  NegativeSupplyAmountError,
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
   NonPositiveRepayAmountError,
-  NonPositiveSupplyAmountError,
   NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
   type ReallocationComputeOptions,
@@ -417,7 +417,12 @@ export interface MarketV1Actions {
           amount: bigint;
           borrowAmount?: never;
         }
-      | { operation?: "borrow"; amount?: never; borrowAmount: bigint }
+      | {
+          /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
+          borrowAmount: bigint;
+          operation?: never;
+          amount?: never;
+        }
     ),
   ) => readonly VaultReallocation[];
 }
@@ -472,7 +477,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     if (amount < 0n) {
-      throw new NonPositiveSupplyAmountError(this.marketParams.id);
+      throw new NegativeSupplyAmountError(this.marketParams.id);
     }
 
     if (nativeAmount !== undefined && nativeAmount < 0n) {
@@ -550,10 +555,14 @@ export class MorphoMarketV1 implements MarketV1Actions {
     const assets = ("assets" in params ? params.assets : undefined) ?? 0n;
     const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
 
+    // Catch mixed-sign inputs before the mutex/zero-zero checks. Mirrors action layer.
+    if (assets < 0n || shares < 0n) {
+      throw new NonPositiveWithdrawAmountError(this.marketParams.id);
+    }
     if (assets > 0n && shares > 0n) {
       throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
     }
-    if (assets <= 0n && shares <= 0n) {
+    if (assets === 0n && shares === 0n) {
       throw new NonPositiveWithdrawAmountError(this.marketParams.id);
     }
 
@@ -1300,25 +1309,32 @@ export class MorphoMarketV1 implements MarketV1Actions {
           amount: bigint;
           borrowAmount?: never;
         }
-      | { operation?: "borrow"; amount?: never; borrowAmount: bigint }
+      | {
+          /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
+          borrowAmount: bigint;
+          operation?: never;
+          amount?: never;
+        }
     ),
   ): readonly VaultReallocation[] {
-    // The helper itself accepts the legacy `borrowAmount` alias — forward as-is.
     const marketId = this.marketParams.id;
     const options = { enabled: true, ...params.options };
-    if ("borrowAmount" in params && params.borrowAmount !== undefined) {
+
+    if (params.borrowAmount !== undefined) {
       return computeReallocations({
         reallocationData: params.reallocationData,
         marketId,
-        borrowAmount: params.borrowAmount,
+        operation: "borrow",
+        amount: params.borrowAmount,
         options,
       });
     }
+
     return computeReallocations({
       reallocationData: params.reallocationData,
       marketId,
-      operation: params.operation as "borrow" | "withdraw",
-      amount: params.amount as bigint,
+      operation: params.operation,
+      amount: params.amount,
       options,
     });
   }

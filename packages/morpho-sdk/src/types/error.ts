@@ -398,10 +398,10 @@ export class NonPositiveMinBorrowSharePriceError extends Error {
   }
 }
 
-/** Thrown when a market loan-asset supply amount is zero or negative. */
-export class NonPositiveSupplyAmountError extends Error {
+/** Thrown when a market loan-asset supply amount is negative. */
+export class NegativeSupplyAmountError extends Error {
   constructor(market: string) {
-    super(`Supply amount must be positive for market: ${market}`);
+    super(`Supply amount must be non-negative for market: ${market}`);
   }
 }
 
@@ -438,7 +438,7 @@ export class NonPositiveWithdrawAmountError extends Error {
 }
 
 /** Thrown when a market loan-asset withdraw's `minSharePrice` slippage bound is negative. */
-export class NonPositiveWithdrawMinSharePriceError extends Error {
+export class NegativeWithdrawMinSharePriceError extends Error {
   constructor(market: string) {
     super(`Min share price must be non-negative for market: ${market}`);
   }
