@@ -89,7 +89,7 @@ fi
 
 ## Steps 3–6: Shared review base
 
-**Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with:
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with:
 
 - `<DIFF_SOURCE>` = `local` (include uncommitted diff)
 - `<HEAD_REF>` = `HEAD`
@@ -126,6 +126,23 @@ Format directly in the conversation:
 ```
 
 Group findings by file (already sorted by Step 6). Within each file, list highest-severity findings first.
+
+### Audit trail
+
+After the findings (and before the sentinel line), print a single audit-trail block IFF `<DROPPED_FINDINGS>` is non-empty:
+
+```
+─── Audit trail ─── <N> finding(s) dropped by the scope filter
+  File out of scope:                  <DROPPED_COUNTS.file_out_of_scope>
+  Line outside ±15 of any changed:    <DROPPED_COUNTS.line_pre_existing>
+  Markdown documentation example:     <DROPPED_COUNTS.doc_example_fp>
+
+  Full per-finding detail in /tmp/pr-review-local-dropped.json.
+  If a kept finding is missing that should NOT have been dropped, inspect
+  the JSON and re-run the review on a tighter diff scope.
+```
+
+Always write `<DROPPED_FINDINGS>` to `/tmp/pr-review-local-dropped.json`, even when the block is omitted, so the user can inspect on demand.
 
 ### Sentinel lines
 

@@ -1,6 +1,7 @@
 ---
 name: morpho-protocol
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §1 Architecture (protocol layering and single source of truth), §5 Testing (protocol/security invariants), §7 Releases & versioning (pinned ABIs and addresses)
 out-of-scope:
   - Wallet safety, signing UX, permit replay, and chain mismatch around user signatures — see web3-security.
@@ -15,7 +16,7 @@ severity-guidance: |
 
 # Morpho Protocol
 
-Review from the protocol-facing SDK contract: does this diff still model Morpho exactly? Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §1 (single source of truth per ABI/address and Action/Entity layering), §5 (security invariants as tests), §7 (pin ABIs and addresses in-package), and package/nested `AGENTS.md` files such as [`packages/morpho-sdk/AGENTS.md`](../../packages/morpho-sdk/AGENTS.md) and [`packages/morpho-sdk/src/actions/AGENTS.md`](../../packages/morpho-sdk/src/actions/AGENTS.md).
+Review from the protocol-facing SDK contract: does this diff still model Morpho exactly? Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §1 (single source of truth per ABI/address and Action/Entity layering), §5 (security invariants as tests), §7 (pin ABIs and addresses in-package), and package/nested `AGENTS.md` files such as [`packages/morpho-sdk/AGENTS.md`](../../../packages/morpho-sdk/AGENTS.md) and [`packages/morpho-sdk/src/actions/AGENTS.md`](../../../packages/morpho-sdk/src/actions/AGENTS.md).
 
 This persona complements `web3-security`: `web3-security` asks whether the wallet/signature/transaction surface is safe; `morpho-protocol` asks whether the SDK's model of Morpho protocol semantics is correct.
 

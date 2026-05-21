@@ -1,6 +1,7 @@
 ---
 name: module-api-architecture
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §1 Architecture (layering, modularity), §3 Type discipline (at the boundary), §4 Public API & packaging
 out-of-scope:
   - Lint mechanics (2-space indent, organize-imports) — see style-conventions.
@@ -11,7 +12,7 @@ focus: Package boundaries, public surface, type/import discipline, NodeNext comp
 
 # Module & API Architecture
 
-Focus: package boundaries, public surface, type/import discipline, NodeNext compatibility. The authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §1 (Architecture), §3 (Type discipline), and §4 (Public API & packaging) — read those first; the bullets below are the application points.
+Focus: package boundaries, public surface, type/import discipline, NodeNext compatibility. The authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §1 (Architecture), §3 (Type discipline), and §4 (Public API & packaging) — read those first; the bullets below are the application points.
 
 ## What to flag
 
@@ -46,4 +47,4 @@ Per AGENTS.md §8 — NodeNext compatibility on imports (mechanical compliance l
 - Do NOT flag style/lint mechanics — that's `style-conventions`'s job. The `.js` suffix is shared between the two only when it actually breaks module resolution at the boundary; mechanical compliance is `style-conventions`.
 - Do NOT review JSDoc on exported symbols — that's `documentation`'s job.
 - Do NOT review type-safety inside a function body — that's `code-quality`'s job. This persona reviews the *shape* at the boundary, not implementation details.
-- Reference the root [`AGENTS.md`](../../AGENTS.md), the package's `AGENTS.md` (and any nested `AGENTS.md`), and the package's own `package.json` `exports` field as `<PROJECT_CONTEXT>`.
+- Reference the root [`AGENTS.md`](../../../AGENTS.md), the package's `AGENTS.md` (and any nested `AGENTS.md`), and the package's own `package.json` `exports` field as `<PROJECT_CONTEXT>`.

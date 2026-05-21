@@ -1,6 +1,7 @@
 ---
 name: code-quality
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §2 Forbidden patterns, §3 Type discipline
 out-of-scope:
   - Error-handling depth / swallowed catches / missing error states — see silent-failure-hunter.
@@ -8,13 +9,13 @@ out-of-scope:
   - Package-boundary / public-surface discipline — see module-api-architecture.
   - JSDoc shape on exported symbols — see documentation.
   - Web3-specific concerns (calldata, permits, chain-id validation) — see web3-security.
-  - CI / publish-flow / lockfile concerns — see ci-release-security.
+  - Workflow injection, action pinning, permissions, secrets — see ci-security. Publish-flow, release-commit signing, Changesets wiring — see release-integrity. Lockfile drift, dependency hygiene, `.npmrc` — see dependencies.
 focus: TypeScript type safety inside function bodies, code smells, early returns, naming, magic numbers, complexity, security primitives at the code level (secrets, injection, eval).
 ---
 
 # Code Quality
 
-Code-level correctness inside the function bodies the diff touches. Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §2 (forbidden patterns) and §3 (type discipline) — read those first; this persona enforces them and adds the smell-detection layer Biome can't catch.
+Code-level correctness inside the function bodies the diff touches. Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §2 (forbidden patterns) and §3 (type discipline) — read those first; this persona enforces them and adds the smell-detection layer Biome can't catch.
 
 ## What to flag
 
@@ -63,4 +64,4 @@ Cross-file impact (SDK-critical):
 - Do NOT review Biome-mechanical style — that's `style-conventions`'s job.
 - Do NOT review package boundaries or public-surface design — that's `module-api-architecture`'s job. (You may flag the *consequence* of a breaking change on callers in the repo.)
 - Do NOT review JSDoc shape — that's `documentation`'s job.
-- Reference the root [`AGENTS.md`](../../AGENTS.md), [`MISSION.md`](../../MISSION.md), the package's `AGENTS.md`, and `CONTRIBUTING.md` as `<PROJECT_CONTEXT>`.
+- Reference the root [`AGENTS.md`](../../../AGENTS.md), [`MISSION.md`](../../../MISSION.md), the package's `AGENTS.md`, and `CONTRIBUTING.md` as `<PROJECT_CONTEXT>`.

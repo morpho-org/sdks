@@ -1,3 +1,11 @@
+---
+name: pr-review-engine
+kind: engine
+version: 0.2.0
+disable-model-invocation: true
+description: Shared Steps 3–6 of the in-repo PR review automation. Consumed by .agents/commands/pr-review-{ci,gh,local}.md — do NOT invoke directly. Walks .agents/pr-review-engine/agents/*.md and fans out per-persona sub-agents over the diff.
+---
+
 # pr-review base — shared Steps 3–6
 
 This file is the shared review base for the three `/pr-review-*` slash commands. It is invoked indirectly via:
@@ -19,12 +27,13 @@ The base contract: callers must pass these resolved values into Steps 3–6 and 
 | `<BASE_BRANCH>` | `gh pr view` → `baseRefName` (PR modes) OR `--local` arg / auto-detected |
 | `<HEAD_SHA>` | `gh pr view` → `headRefOid` (PR modes) OR `git rev-parse HEAD` (Local-only) |
 | `<DIFF_SOURCE>` | `pr` (use `origin/<BASE_BRANCH>...origin/<HEAD_BRANCH>`) OR `local` (use `origin/<BASE_BRANCH>...HEAD` and include uncommitted) |
+| `<EXCLUDE_AGENTS>` | Optional list of persona names to skip in Step 5. Defaults to `[]`. Forward-compat hook for future orchestrators (e.g. an iteration loop that suppresses a costly persona during inner iterations and runs it once after convergence). |
 
 ## Step 3: Get the diff locally
 
 **Use the local repo on disk, NOT the GitHub API.**
 
-Compute the merge-base and the diff:
+Compute the merge-base, the diff, and the `<CHANGED_LINES>` map:
 
 ```bash
 MERGE_BASE=$(git merge-base origin/<BASE_BRANCH> <HEAD_REF>)
@@ -32,6 +41,15 @@ MERGE_BASE=$(git merge-base origin/<BASE_BRANCH> <HEAD_REF>)
 
 git diff $MERGE_BASE..<HEAD_REF>
 git diff --name-only $MERGE_BASE..<HEAD_REF>
+
+# Build the per-file CHANGED_LINES map. Used by Step 5 (envelope
+# injection) and Step 6 (scope filter, line-level). Deterministic
+# parsing — do NOT reimplement in prose. Edge cases (deletion-only
+# hunks, pure renames, file deletions) are documented in
+# .agents/pr-review-engine/references/changed-lines.md.
+git diff --unified=0 $MERGE_BASE..<HEAD_REF> \
+  | node .agents/pr-review-engine/scripts/build-changed-lines.ts \
+  > /tmp/pr-review-changed-lines.json
 ```
 
 If `<DIFF_SOURCE>=local` AND uncommitted changes exist, also include them:
@@ -39,7 +57,16 @@ If `<DIFF_SOURCE>=local` AND uncommitted changes exist, also include them:
 ```bash
 git diff HEAD                  # combined staged + unstaged
 git diff --name-only HEAD
+
+# Merge the uncommitted hunks into CHANGED_LINES — uncommitted shadows
+# committed for files appearing in both (the agent reads the working
+# tree, not git's index).
+git diff --unified=0 HEAD \
+  | node .agents/pr-review-engine/scripts/build-changed-lines.ts \
+  > /tmp/pr-review-changed-lines-uncommitted.json
 ```
+
+Merge the two JSON maps in your shell of choice (typically `jq -s 'add'`); the uncommitted side wins on collisions.
 
 Combine the two file lists, deduplicate, announce the count of uncommitted files included so the user knows the review covers their full work-in-progress:
 
@@ -96,7 +123,9 @@ If no matching ABI/address/constant excerpt is found for a changed protocol call
 
 Compute flags from the changed-files list. These flags are passed to every persona; flags for `kind: conditional` personas also drive whether they launch in Step 5:
 
-- `<HAS_CI_RELEASE>` — true if any changed file matches `.github/workflows/**`, `.github/actions/**`, `.changeset/**`, root or package `package.json` (when a `scripts.*publish*` / `scripts.*release*` field is touched), `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc`, OR if any changed file contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`.
+- `<HAS_WORKFLOWS>` — true if any changed file matches `.github/workflows/**` or `.github/actions/**` (composite or local actions). Fires `ci-security`.
+- `<HAS_RELEASE>` — true if any changed file matches `.changeset/**`, OR a root / package `package.json` whose `scripts.*publish*` / `scripts.*release*` field is touched, OR any file containing `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`. Fires `release-integrity`.
+- `<HAS_DEPS>` — true if any changed file matches `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `.npmrc` (any level), `package-lock.json`, or `yarn.lock`. Fires `dependencies`.
 - `<HAS_PROTOCOL_SURFACE>` — true if any changed file or changed hunk touches protocol-facing SDK code or terms listed in the protocol source-of-truth section above. This flag does not gate `morpho-protocol` (baseline); it tells all agents whether protocol context should have been collected.
 
 Add new flags here when introducing future conditional personas. Each `kind: conditional` persona file declares its `trigger:` placeholder in frontmatter; Step 5 launches it only when the flag is true.
@@ -112,30 +141,35 @@ Context files read (N):
   ...
 
 Flags:
-  HAS_CI_RELEASE: <true|false>
-  HAS_PROTOCOL_SURFACE: <true|false>
+  HAS_WORKFLOWS:       <true|false>
+  HAS_RELEASE:         <true|false>
+  HAS_DEPS:            <true|false>
+  HAS_PROTOCOL_SURFACE:<true|false>
 ```
 
 ## Step 5: Launch parallel review agents
 
-Persona specs live in `.agents/personas/*.md`. Each file has frontmatter declaring `kind: baseline` (always fires) or `kind: conditional` (fires only when its `trigger:` flag is true), plus the prompt body.
+Persona specs live in `.agents/pr-review-engine/agents/*.md`. Each file has frontmatter declaring `kind: baseline` (always fires) or `kind: conditional` (fires only when its `trigger:` flag is true), plus the prompt body.
 
 Loop:
 
-1. Read every file in `.agents/personas/*.md`.
+1. Read every file in `.agents/pr-review-engine/agents/*.md`.
 2. For each persona, decide whether to launch:
    - `kind: baseline` → always launch.
    - `kind: conditional` → launch only when the flag named in `trigger:` is true (see Step 4 for flag computation).
-3. Launch ALL selected personas **in parallel** using the Agent tool (subagent_type: `"general-purpose"`).
-4. Track `<TOTAL_AGENTS_LAUNCHED>` = count of personas actually launched (baseline + any fired conditionals).
+3. **Apply the caller's exclusion list.** If the caller passed `<EXCLUDE_AGENTS>` (a list of persona names, defaults to `[]`), drop those personas from the launch set. Used by orchestrators that want to suppress a specific agent during inner iterations and run it once explicitly at the end.
+4. Launch ALL remaining selected personas **in parallel** using the Agent tool (subagent_type: `"general-purpose"`).
+5. Track `<TOTAL_AGENTS_LAUNCHED>` = count of personas actually launched (baseline + any fired conditionals − excluded).
 
 Shared per-agent contract (applied uniformly to every launched persona):
 
-- Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the conditional flag values, the persona file body, the repo path / branches.
+- Each agent receives: full diff, full content of changed files (read from local FS), `<PROJECT_CONTEXT>` from Step 4, the conditional flag values, `<CHANGED_LINES>` (the JSON map produced in Step 3), the persona file body, the repo path / branches. `<CHANGED_LINES>` is the **authoritative** record of which lines the diff added — agents that emit a `line:` field outside that set (beyond the ±15 adjacent-code tolerance, see [`.agents/pr-review-engine/references/calibration.md`](./references/calibration.md)) will see their findings dropped in Step 6.
 - When `<HAS_PROTOCOL_SURFACE>` is true, `<PROJECT_CONTEXT>` must include the targeted ABI/address/constant/routing excerpts from Step 4's protocol source-of-truth section, or an explicit note that no relevant source excerpt was found.
 - Per-package `AGENTS.md` rules refine the root for the specific package; the root wins on contradictions.
 - Agents must analyze the **full diff**, not just the latest commit.
-- Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "what is wrong + how to fix"}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
+- Each agent **must return** a JSON array `[{severity: "critical"|"high"|"medium"|"low", file: "path", line: number, description: "WHAT: ... FIX: ..."}]` OR an explicit error sentinel `{"agent_error": "<reason>"}` if it could not complete (the aggregator in Step 6 distinguishes "no findings" from "agent failed").
+- **`description` schema (load-bearing).** Every finding's `description` MUST contain both a `WHAT:` clause naming the specific problem AND a `FIX:` clause stating the specific change. Recommended format: `WHAT: <one sentence>. FIX: <one sentence>.` Free-form prose otherwise. Findings whose `description` lacks either clause are routed to `failed[]` in Step 6 sub-step 2 and counted toward `<FAILED_AGENTS>` — they are NOT silently dropped, but they DO flag the agent as partially malformed in the caller's report. The schema is validated by [`validate-findings.ts`](./scripts/validate-findings.ts); see kept + dropped calibration examples in [`.agents/pr-review-engine/references/calibration.md`](./references/calibration.md).
+- **`line` schema.** `line` must be a positive integer pointing inside `<CHANGED_LINES>` for the cited `file`, or within ±15 lines of one. Findings outside the window are dropped in Step 6 sub-step 1 with `drop_reason: line_pre_existing` and `distance_to_nearest_changed_line`. The tolerance window is a fixed engine constant (see [`.agents/pr-review-engine/references/calibration.md`](./references/calibration.md)).
 - **Stay in scope (avoid scope creep).** Focus on the diff: flag issues introduced by these changes, and issues in adjacent code only when the diff makes that adjacent code materially worse (e.g. a renamed function whose remaining callers now misbehave, a new code path that exposes an existing bug). Do NOT flag pre-existing issues in unchanged lines of changed files, propose unrelated refactors, suggest new features or abstractions, or recommend cleanups outside the PR's intent. When in doubt, omit — the reviewer is reviewing *this change*, not the file's history.
 - **Don't nitpick.** Polish, wording, naming preferences, stylistic alternatives, and "you could also" suggestions are not findings — omit them regardless of severity label. A Low-severity finding belongs in the output only when a reasonable reviewer would clearly act on it in this PR.
 - Only **actionable** findings — no praise, no summaries.
@@ -155,37 +189,48 @@ Baseline (always fire):
 
 Conditional:
 
-- `ci-release-security.md` — fires when `<HAS_CI_RELEASE>` is true. Workflow injection, action pinning, permissions scopes, secret exposure, publish-flow integrity, lockfile drift.
+- `ci-security.md` — fires when `<HAS_WORKFLOWS>` is true. Workflow injection, `pull_request_target` + PR-head checkout, ACL-gated comment triggers, action pinning, `permissions:` scopes, secret exposure.
+- `release-integrity.md` — fires when `<HAS_RELEASE>` is true. Publish-flow integrity (`--provenance`, org tokens, tag scope), release-commit signing & write-token hardening, Changesets / release-bot wiring.
+- `dependencies.md` — fires when `<HAS_DEPS>` is true. Lockfile drift, new-dep hygiene (`postinstall`, typosquats, unpinned ranges), `.npmrc` and `pnpm-workspace.yaml` hardening.
 
-Adding a new persona = drop a new file under `.agents/personas/` with appropriate frontmatter. If conditional, also extend Step 4's flag detection. No edit to caller files needed.
+Adding a new persona = drop a new file under `.agents/pr-review-engine/agents/` with appropriate frontmatter. If conditional, also extend Step 4's flag detection. No edit to caller files needed.
 
 ## Step 6: Aggregate and deduplicate findings
 
 Merge all agent results into a single list:
 
-1. **Scope filter (drop out-of-scope findings).** Build `<CHANGED_FILES>` = the deduplicated file list from Step 3:
-   - committed: `git diff --name-only $MERGE_BASE..<HEAD_REF>`
-   - plus uncommitted: `git diff --name-only HEAD` (only when `<DIFF_SOURCE>=local`)
+1. **Scope filter + schema validation (deterministic).** Collect every agent's findings into a single JSON array file (e.g. `/tmp/pr-review-findings.json`), then run the bundled validator:
 
-   For every agent finding, first guard `finding.file`: if it is missing, not a string, or empty, treat the finding as malformed and route it to sub-step 2's partial-failure handling instead of dropping it here. Otherwise, compare `finding.file` against `<CHANGED_FILES>` after path normalization:
-   - Strip any leading `./`.
-   - Strip diff prefixes `a/` and `b/` if present.
-   - If the agent returned an absolute path, strip the repo-root prefix (`git rev-parse --show-toplevel`) before compare.
-   - Case-sensitive compare (matches git's default).
+   ```bash
+   node .agents/pr-review-engine/scripts/validate-findings.ts \
+     /tmp/pr-review-findings.json \
+     /tmp/pr-review-changed-lines.json \
+     "$(git rev-parse --show-toplevel)" \
+     > /tmp/pr-review-filtered.json
+   ```
 
-   If `finding.file` is not in `<CHANGED_FILES>`, **drop the finding** and increment `<DROPPED_OUT_OF_SCOPE>`.
+   The validator applies four checks in this order (see [`.agents/pr-review-engine/references/scope-filter.md`](./references/scope-filter.md) for the rationale):
 
-   Do NOT filter by line number within a changed file. The Step 5 contract permits flagging adjacent code in a changed file when the diff materially worsens it, so line-level filtering would discard legitimate findings.
+   1. **Schema check** — `severity` ∈ `critical|high|medium|low`, `file` is a non-empty string, `line` is a positive integer, `description` is non-empty AND contains both a `WHAT:` substring and a `FIX:` substring. Schema failures route to `failed[]` and feed `<FAILED_AGENTS>` (see sub-step 2).
+   2. **File-out-of-scope** — `file` not present in `<CHANGED_LINES>` (after path normalization: strip `./`, strip `a/` and `b/` diff prefixes; see [`.agents/pr-review-engine/references/scope-filter.md`](./references/scope-filter.md) for the full rule). Drops to `dropped[]` with `drop_reason: file_out_of_scope`.
+   3. **Line-pre-existing** — `file` in scope, but `line` is outside the ±15 tolerance window around any changed line. Drops to `dropped[]` with `drop_reason: line_pre_existing` and `distance_to_nearest_changed_line`. Pure renames (empty `CHANGED_LINES` for a file) short-circuit this filter — see [`.agents/pr-review-engine/references/changed-lines.md`](./references/changed-lines.md).
+   4. **Markdown documentation-example** — `.md` file, `line` inside a CommonMark fenced code block (` ``` ` / `~~~`). Drops to `dropped[]` with `drop_reason: doc_example_fp`. Detection rule lives in [`.agents/pr-review-engine/references/scope-filter.md`](./references/scope-filter.md).
 
-   After the loop, print one log line: `Scope filter: dropped <DROPPED_OUT_OF_SCOPE> finding(s) targeting files outside the diff.` Then proceed to the remaining sub-steps on the surviving findings.
+   The validator emits `{ kept, dropped, failed, counts }` on stdout. The kept array is what feeds sub-step 3's deduplication; `dropped` flows to the caller's audit-trail rendering (Phase 3 adds `<DROPPED_FINDINGS>` to the output contract).
 
-   Note: dropped findings do NOT count toward `<FAILED_AGENTS>` — they are valid output that was simply out of scope, not malformed.
+   After the validator returns, print one summary line per non-zero counter:
+
+   ```
+   Scope filter: dropped N file-level + N line-level + N doc-example finding(s).
+   ```
+
+   Note: schema failures (`failed[]`) count toward `<FAILED_AGENTS>` (sub-step 2); scope drops do NOT.
 
 2. **Count agent failures.** An agent counts as failed if any of these hold:
    - Returned `{"agent_error": "..."}` (the explicit sentinel from Step 5).
    - Returned text that is not parseable as JSON.
    - Returned a JSON value that is not an array (e.g. an object that is not the error sentinel).
-   - Returned an array containing one or more objects missing required fields (`severity` not in `critical`/`high`/`medium`/`low`, missing or non-string `file`, missing or non-numeric `line`, missing or empty `description`) — count the agent as **partially failed**: keep the valid findings from that agent, but include the agent in `<FAILED_AGENTS>` so the report flags it.
+   - Returned an array containing one or more findings that landed in `failed[]` from sub-step 1's validator — i.e. wrong `severity`, missing/non-string `file`, non-positive-integer `line`, empty `description`, OR missing `WHAT:` / `FIX:` clause. Count the agent as **partially failed**: keep the valid findings from that agent, but include the agent in `<FAILED_AGENTS>` so the report flags it.
 
    Track `<FAILED_AGENTS>` as a count plus the names. This count flows into the caller's Step 7 reporting so a "no findings" verdict is never reported when some agents crashed.
 
@@ -207,9 +252,11 @@ Severity labels (used everywhere downstream):
 
 The caller (Step 7 of `/pr-review-ci` / `/pr-review-gh` / `/pr-review-local`) consumes:
 
-- `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description}`.
-- `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` or malformed output.
-- `<COUNTS>` — `{critical, high, medium, low}` totals.
+- `<FINDINGS>` — sorted, deduplicated array of `{severity, file, line, description}` (the validator's `kept[]`, post-dedup).
+- `<DROPPED_FINDINGS>` — findings the scope filter dropped, each tagged with `drop_reason` (`file_out_of_scope` / `line_pre_existing` / `doc_example_fp`) and, for line-level drops, `distance_to_nearest_changed_line`. The caller surfaces this as a collapsible audit section so filter false-positives are never silently nuked. See `pr-review-gh.md` Step 7 for the GitHub-comment rendering and `pr-review-local.md` Step 7 for the terminal rendering. `pr-review-ci.md` writes this to `/tmp/` only — the formal GitHub review body stays tight (verdict + actionable findings).
+- `<FAILED_AGENTS>` — count + names of agents that returned `agent_error` OR whose findings landed in the validator's `failed[]` bucket (malformed shape OR missing `WHAT:`/`FIX:` clauses). The audit trail surfaces *which* finding malformed *which* agent so the user can see why.
+- `<COUNTS>` — `{critical, high, medium, low}` totals on the kept findings.
+- `<DROPPED_COUNTS>` — `{file_out_of_scope, line_pre_existing, doc_example_fp}` totals on the dropped findings. Caller skills use this to size the audit-trail block (omitted entirely when all three are zero).
 - `<TOTAL_AGENTS_LAUNCHED>` — count of personas that actually fired (baseline always-fire count + any conditional personas whose trigger flag was true). Used by the caller's report to phrase "<FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed" correctly when conditional personas did not fire.
 
 The caller formats and routes these per its mode (CI verdict / GitHub COMMENT / terminal output).

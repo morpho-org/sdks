@@ -1,10 +1,11 @@
 ---
 name: test-coverage
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §5 Testing
 out-of-scope:
   - Correctness of the test assertions themselves — see code-quality.
-  - Missing tests for CI workflows — see ci-release-security.
+  - Missing tests for CI workflows or release flow — see ci-security / release-integrity.
   - Mock-vs-fork choice for Web3 paths — see web3-security.
 focus: |
   Missing or weak tests for changes in `packages/<pkg>/src/`. Enforces the colocation rule from AGENTS.md §5: new unit tests sit next to source (`src/Foo.ts` ↔ `src/Foo.test.ts`), with `*.integration.test.ts` for fork-bound tests that stay. Flags refactors that don't migrate their tests to colocation in the packages where colocation is wired.
@@ -56,7 +57,7 @@ These fire only when AGENTS.md §5's colocation rule applies — i.e. either the
 ## Out-of-scope reminders (for the sub-agent)
 
 - Do NOT review the test assertions themselves — that's `code-quality`'s job.
-- Do NOT review CI workflow / publish-flow test coverage — that's `ci-release-security`'s job.
+- Do NOT review CI workflow or publish-flow test coverage — that's `ci-security` / `release-integrity`'s job (conditional).
 - Do NOT propose new test infrastructure or fixtures — point at the existing helpers in `@morpho-org/test` (and the `/mock` sub-export once TIB-2026-04-27 lands) instead.
 - Do NOT flag missing tests for internal (non-exported) symbols when the public surface covering them is tested.
 - Per AGENTS.md §5, the colocation rule applies **going forward** — do not flag the existing `packages/<pkg>/test/` layouts in non-wired packages as findings on their own. The wrong-place rules above are scoped to NEW files in colocation-wired packages or refactor-driven migrations.

@@ -1,18 +1,19 @@
 ---
 name: style-conventions
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §7 Releases & versioning (changeset relevance), §8 Code style & tooling
 out-of-scope:
   - Architectural / boundary-level decisions — see module-api-architecture.
   - Type-safety inside the code — see code-quality.
   - JSDoc style — see documentation.
-  - CI workflow / publish-flow rules — see ci-release-security.
+  - CI workflow hardening — see ci-security. Publish-flow / Changesets wiring — see release-integrity. Lockfile drift, dependency hygiene — see dependencies.
 focus: Biome mechanical compliance, monorepo conventions, changeset relevance.
 ---
 
 # Style & Conventions Compliance
 
-Mechanical-style enforcement and changeset relevance. Authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §7 (changeset gates) and §8 (code style). This persona flags violations of those rules — it does not restate them.
+Mechanical-style enforcement and changeset relevance. Authoritative rules live in [`AGENTS.md`](../../../AGENTS.md) §7 (changeset gates) and §8 (code style). This persona flags violations of those rules — it does not restate them.
 
 ## What to flag
 
@@ -43,5 +44,5 @@ Per AGENTS.md §7 — changeset relevance (the policy lives in §7; this persona
 - Do NOT review architectural decisions (package boundaries, public-surface design) — that's `module-api-architecture`'s job.
 - Do NOT review type-safety inside function bodies — that's `code-quality`'s job.
 - Do NOT review JSDoc shape — that's `documentation`'s job.
-- Do NOT review CI workflows, publish-flow integrity, or lockfile drift — that's `ci-release-security`'s job (conditional).
-- Reference the root [`AGENTS.md`](../../AGENTS.md), the package's `AGENTS.md`, and `biome.json` as `<PROJECT_CONTEXT>`.
+- Do NOT review CI workflow hardening — that's `ci-security`'s job (conditional). Do NOT review publish-flow integrity or Changesets wiring — that's `release-integrity`'s job. Do NOT review lockfile drift or dependency hygiene — that's `dependencies`'s job.
+- Reference the root [`AGENTS.md`](../../../AGENTS.md), the package's `AGENTS.md`, and `biome.json` as `<PROJECT_CONTEXT>`.

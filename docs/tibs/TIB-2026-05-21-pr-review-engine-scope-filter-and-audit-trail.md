@@ -1,0 +1,261 @@
+# TIB-2026-05-21: PR review engine — deterministic scope filter, WHAT/FIX schema, audit trail
+
+| Field      | Value                                       |
+| ---------- | ------------------------------------------- |
+| **Status** | Accepted                                    |
+| **Date**   | 2026-05-21                                  |
+| **Author** | @0xbulma                                    |
+| **Scope**  | Repo-wide (`.agents/`, `AGENTS.md` §10)     |
+
+---
+
+## Context
+
+The repo's PR review automation lives under `.agents/`:
+
+- 3 caller commands at `.agents/commands/pr-review-{ci,gh,local}.md`.
+- 1 shared base at `.agents/lib/pr-review-base.md` (Steps 3–6: diff, context, fan-out, aggregate).
+- 9 personas at `.agents/personas/*.md` (8 baseline + 1 conditional `ci-release-security`).
+- Inventory and rules are codified in [`AGENTS.md`](../../AGENTS.md) §10; every persona's `applies:` frontmatter cites the `AGENTS.md` section(s) it enforces.
+
+A separate Claude Code review-engine plugin — developed independently against the same caller → engine → parallel-personas → dedup architecture we use — has matured into a more rigorous engine. Same shape, but with structural improvements that address review-noise problems we also have:
+
+1. **Findings on lines the diff didn't touch.** Our scope filter only drops findings whose file is not in the diff. Agents flagging pre-existing untyped errors / missing JSDoc on unchanged lines of a *touched* file get through. The external engine builds a `CHANGED_LINES` map from `git diff --unified=0` and drops findings outside a ±15-line tolerance window.
+2. **Free-form descriptions reviewers can't act on.** Our finding schema is `{severity, file, line, description}` with no constraint on description shape. Agents drift between "this is a bug" and "consider X for readability". The external engine enforces `WHAT: <problem>. FIX: <code change>.` in every description.
+3. **Silent drops.** When our scope filter drops a finding, the user has no signal that it happened. The external engine surfaces a `<DROPPED_FINDINGS>` audit trail (collapsible `<details>` in GH comments, JSON on disk for local runs).
+4. **Markdown documentation false-positives.** Agents regularly flag example code inside fenced blocks of `.md` files as if it were live code. The external engine has a CommonMark-fence-aware filter for this.
+5. **Determinism scattered across English prose.** Our engine re-derives diff math and edge-case handling (renames, deletion-only hunks) in prose at every run. The external engine ships bundled scripts — we adopt the pattern but reimplement in TypeScript (matches the repo's strict-TS / NodeNext / zero-`any` discipline from [`AGENTS.md`](../../AGENTS.md) §3 + §8; no Python toolchain, no `.mjs` carve-out).
+6. **One coarse conditional persona** (`ci-release-security`) fires whenever any of CI / release / dependency files are touched — wastes a parallel agent and dilutes focus. The external engine splits these into three narrowly-triggered personas.
+7. **No versioning** on the engine or personas. Updates to a persona's prompt body are invisible to anyone reading the git history of a single file. The external engine uses semver frontmatter on the engine + every agent.
+
+These improvements were earned on a working plugin; absorbing them here is straightforward and risk-bounded. What we must **not** lose is the specificity that makes this repo's reviewer useful: the Morpho-specific personas (`morpho-protocol`, `web3-security` with Morpho semantics, etc.), the `applies:` anchorage to `AGENTS.md` §X, and the protocol source-of-truth context block in Step 4. An off-the-shelf generic agent set cannot replicate these.
+
+## Goals / Non-Goals
+
+**Goals**
+
+- Cut review noise by adopting the external engine's deterministic scope filter (file + ±15 line tolerance) and Markdown-fence filter.
+- Make findings mechanically actionable by enforcing a `WHAT:`/`FIX:` schema and validating it.
+- Expose the audit trail (`<DROPPED_FINDINGS>`) so filter false-positives are visible, not silent.
+- Split `ci-release-security` into three narrowly-triggered conditional personas — each anchored to a discrete §10 sub-rule cluster — so reviews fire only the agents the diff actually needs.
+- Add semver versioning to the engine and personas so prompt drift is auditable.
+- Add a lightweight invariant test to prevent future PRs from breaking the `applies:` ↔ `AGENTS.md` ↔ `<HAS_*>` flag wiring.
+- Move deterministic logic (diff parsing, schema validation, fence detection) into bundled scripts; keep the engine's prose to orchestration, not algorithm.
+
+**Non-Goals**
+
+- Do **not** change the Morpho-specific baseline persona inventory. `morpho-protocol`, `web3-security`, `code-quality`, `module-api-architecture`, `silent-failure-hunter`, `style-conventions`, `documentation`, `test-coverage` stay as they are — they are the specificity this TIB is preserving.
+- Do **not** change the rules codified in `AGENTS.md` §10. This TIB updates only the §10 persona-inventory tables to reflect the split; the rules themselves are untouched.
+- Do **not** import React/Next/Tailwind/styling/accessibility/AI-SDK/runtime-validation personas. This is a TypeScript SDK monorepo with no UI surface.
+- Do **not** restructure `.agents/` as a Claude Code plugin marketplace. The current layout is intentionally close to the rules it enforces.
+- Do **not** add a `SessionStart` external-rubric installer. Orthogonal to the in-repo `.agents/` model.
+
+## Current Solution
+
+What exists today (full inventory in [`AGENTS.md`](../../AGENTS.md) §10):
+
+- **Caller commands** ([`.agents/commands/`](../../.agents/commands/)): `pr-review-ci.md`, `pr-review-gh.md`, `pr-review-local.md`. Each handles arg parsing, env validation, branch resolution, and the mode-specific report (CI verdict / GH comment / terminal).
+- **Shared engine** ([`.agents/lib/pr-review-base.md`](../../.agents/lib/pr-review-base.md)): Steps 3–6. Step 3 computes the diff and reads changed files. Step 4 reads `<PROJECT_CONTEXT>` and computes conditional flags (`<HAS_CI_RELEASE>`, `<HAS_PROTOCOL_SURFACE>`). Step 5 fans out parallel sub-agents. Step 6 aggregates, deduplicates, and returns `<FINDINGS>` + `<FAILED_AGENTS>` + `<COUNTS>` + `<TOTAL_AGENTS_LAUNCHED>`.
+- **Personas** ([`.agents/personas/`](../../.agents/personas/)): 8 baseline (`code-quality`, `module-api-architecture`, `morpho-protocol`, `web3-security`, `silent-failure-hunter`, `style-conventions`, `documentation`, `test-coverage`) + 1 conditional (`ci-release-security`, triggered by `<HAS_CI_RELEASE>`). Each has `applies:` frontmatter citing `AGENTS.md` sections, plus `out-of-scope`, `focus`, `severity-guidance`.
+
+Strengths to preserve: Morpho-specific baseline personas, `applies:` anchoring, `<HAS_PROTOCOL_SURFACE>` flag and Step 4's protocol source-of-truth context (narrow ABI/address/constant excerpts from `packages/*-viem/src/abis.ts`, `packages/blue-sdk/src/constants.ts`, `packages/morpho-sdk/AGENTS.md`).
+
+Gaps to close: see Context above (line-level filter, schema, audit trail, fence filter, determinism, persona split, versioning, invariant test).
+
+## Proposed Solution
+
+Absorb the external engine's structural learnings into `.agents/` without touching the Morpho-specific persona inventory or §X anchorage. Concretely, this TIB decides to **adopt** the following:
+
+1. **Engine frontmatter** on `lib/pr-review-base.md`: `name: pr-review-base`, `version: 0.1.0`, `kind: engine`, `disable-model-invocation: true`. No file move or rename.
+2. **Versioning frontmatter** on every persona file (`version: 1.0.0` initial). Bump per substantive change; documented in `AGENTS.md` §10.
+3. **`<CHANGED_LINES>` map** built in Step 3 from `git diff --unified=0`, serialized as JSON `{ "<path>": [<line>, ...] }`, and injected into the sub-agent envelope.
+4. **±15-line tolerance window** in Step 6 sub-step 1. Findings outside the window dropped as `pre_existing`; tagged with `distance_to_nearest_changed_line` for audit. Pure renames (empty `CHANGED_LINES` for a file) short-circuit the line filter.
+5. **`WHAT:` / `FIX:` description schema.** Every finding's `description` must contain both clauses. Step 6 sub-step 2 routes missing-clause findings into `<FAILED_AGENTS>` (kept but flagged) — never silently dropped.
+6. **`<DROPPED_FINDINGS>` audit trail** added to the engine's output contract. Each dropped finding is tagged with `drop_reason` ∈ {`file_out_of_scope`, `line_pre_existing`, `doc_example_fp`}. Callers render it:
+   - `pr-review-gh`: collapsible `<details>` block; full JSON to `/tmp/pr-review-gh-<PR>-dropped.json`.
+   - `pr-review-local`: terminal summary (counters only); JSON to `/tmp/`.
+   - `pr-review-ci`: JSON to `/tmp/` only — keep the formal GH review body tight (verdict + actionable findings).
+7. **Markdown documentation-example filter.** Findings on `.md` files whose cited line falls inside a CommonMark fenced code block are dropped with reason `doc_example_fp`. Full rule (fence handling, off-by-one, limitations) lives in `.agents/references/scope-filter.md`.
+8. **Bundled scripts** at `.agents/lib/scripts/` — TypeScript, run via `pnpm tsx` (the repo already requires Node ≥22 and strict TS; `tsx` is added as a root `devDependency` if not already present):
+   - `build-changed-lines.ts` — parses `git diff --unified=0` (spawned via `node:child_process`), emits the `<CHANGED_LINES>` JSON. Handles deletion-only and pure-rename edge cases.
+   - `validate-findings.ts` — applies the WHAT/FIX schema + ±15 window + Markdown fence filter. Emits dropped findings with `drop_reason` and `distance_to_nearest_changed_line`.
+   Both scripts: strict TS (`readonly` public fields, typed errors named per [`AGENTS.md`](../../AGENTS.md) §2.2, no `any`); rely on the Node stdlib only (no transitive `dependencies` — `tsx` is the sole devDep, and only for execution); read JSON from stdin / file args; write JSON to stdout; exit non-zero on parse failure. Invocation pattern: `pnpm tsx .agents/lib/scripts/<script>.ts`. They supersede the prose specs of those checks in `lib/pr-review-base.md`; the prose retains only orchestration.
+9. **`references/` directory** at `.agents/references/`:
+   - `calibration.md` — kept + dropped finding examples, ±15 rationale.
+   - `changed-lines.md` — deletion-only and pure-rename edge cases for the script.
+   - `scope-filter.md` — Markdown fence detection rule, path normalization.
+   Loaded on demand by Step 5's envelope; not slash-invocable (frontmatter `disable-model-invocation: true`).
+10. **Sub-agent prompt envelope** rewritten as an explicit, numbered, 8-slot contract Step 5 must "copy verbatim — do NOT paraphrase":
+    1. Persona file body, verbatim.
+    2. `<PROJECT_CONTEXT>` from Step 4 (root + per-package docs, lint contract, protocol source-of-truth excerpts when `<HAS_PROTOCOL_SURFACE>`).
+    3. Full diff (committed + uncommitted when `<DIFF_SOURCE>=local`).
+    4. Full content of changed files (read from local FS via Read tool).
+    5. Conditional flag values.
+    6. `<CHANGED_LINES>` as JSON.
+    7. Shared per-agent contract bullets (verbatim).
+    8. **Calibration examples** — one kept-finding + one dropped-finding from `references/calibration.md`, verbatim.
+11. **Split `ci-release-security` into three conditional personas**, each anchored to a discrete §10 sub-rule cluster:
+    - `ci-security.md` — `trigger: <HAS_WORKFLOWS>`. §10 workflow injection, `pull_request_target` + PR-head checkout, ACL-gated comment triggers, action pinning, `permissions:` block, secret exposure.
+    - `release-integrity.md` — `trigger: <HAS_RELEASE>`. §10 publish-flow integrity (`--provenance`, org tokens), release-commit signing & write-token hardening, Changesets / release-bot wiring.
+    - `dependencies.md` — `trigger: <HAS_DEPS>`. §10 lockfile drift, dependency hygiene (typosquats, `postinstall` scripts), `.npmrc` hardening.
+    Each persona's `applies:` frontmatter cites its specific §10 sub-rules. The single combined `ci-release-security.md` is deleted.
+12. **New conditional flags** in Step 4 (replace `<HAS_CI_RELEASE>`):
+    - `<HAS_WORKFLOWS>` — true if any changed file matches `.github/workflows/**` or `.github/actions/**`.
+    - `<HAS_RELEASE>` — true if any changed file matches `.changeset/**`, a `package.json` whose `scripts.*publish*` / `scripts.*release*` field is modified, or any file containing `changeset publish`, `npm publish`, `pnpm publish`, `gh release create`.
+    - `<HAS_DEPS>` — true if any changed file matches `pnpm-lock.yaml`, `pnpm-workspace.yaml`, or `.npmrc` (any level). Note: `package.json` dependency changes are caught by §10's lockfile-drift rule via `<HAS_RELEASE>` + `<HAS_DEPS>` together when the lock is also touched.
+13. **`<EXCLUDE_AGENTS>` input** in the caller→engine contract. Accepts a list of persona names; the engine drops them from the Step 5 launch set. Default empty. No caller uses it today; added as a forward-compat hook (e.g. for an orchestrator persona that iterates with a subset).
+14. **Lightweight invariant test** at `.agents/test/pr-review-engine.test.sh` (Bash, idempotent, no external test runner):
+    - Every persona file has parseable YAML frontmatter.
+    - Every persona has `name`, `kind`, `version`, `applies` fields.
+    - Every `kind: conditional` persona has a `trigger:` whose flag name appears in Step 4 of `lib/pr-review-base.md`.
+    - Every script in `.agents/lib/scripts/` is executable (`test -x`).
+    - `AGENTS.md` §10's persona-inventory tables match the actual files under `.agents/personas/`.
+    Wired into `pnpm test:agents` (advisory, non-blocking initially).
+15. **`AGENTS.md` §10 updates**: replace the `ci-release-security` row with three rows (one per split persona); reference the new bundled scripts and `references/` directory; document the new flags in the trigger column. The §10 rules themselves are unchanged — only the persona-inventory tables move.
+
+### Implementation Phases
+
+Each phase is one focused PR. None of them ship behaviour-affecting source for published packages, so no Changesets entries are needed — `chore(agents): …` commits.
+
+- **Phase 1 — Engine scaffolding (no behaviour change).** Add `version` frontmatter to `lib/pr-review-base.md` + every persona (initial `1.0.0`). Create empty `.agents/lib/scripts/` and `.agents/references/`. Add `disable-model-invocation: true` to `lib/pr-review-base.md`. Update `AGENTS.md` §10 references (not rules) to reflect the new layout.
+- **Phase 2 — Determinism (TypeScript scripts).** Write `build-changed-lines.ts` and `validate-findings.ts` under `.agents/lib/scripts/`. Strict TS, NodeNext, Node stdlib only — no runtime `dependencies` added; `tsx` is added as a root `devDependency` if not already present (execution-only, not bundled into any published package). Add `references/changed-lines.md` and `references/scope-filter.md`. Rewrite `lib/pr-review-base.md` Step 3 to invoke `pnpm tsx .agents/lib/scripts/build-changed-lines.ts` and Step 6 sub-step 1 to invoke `pnpm tsx .agents/lib/scripts/validate-findings.ts`. Inject `<CHANGED_LINES>` into the Step 5 envelope.
+- **Phase 3 — Schema + audit trail.** Add the `WHAT:`/`FIX:` requirement to the per-agent contract in Step 5. Add `<DROPPED_FINDINGS>` to the output contract. Add `references/calibration.md` (kept + dropped examples). Update `pr-review-gh` Step 7 to render the audit-trail `<details>` block; `pr-review-local` Step 7 to print terminal counters; `pr-review-ci` to write JSON to `/tmp/` only.
+- **Phase 4 — Persona split.** Create `ci-security.md`, `release-integrity.md`, `dependencies.md` with `applies:` anchored to their respective §10 sub-rules. Delete `ci-release-security.md`. Add `<HAS_WORKFLOWS>` / `<HAS_RELEASE>` / `<HAS_DEPS>` to Step 4; retire `<HAS_CI_RELEASE>`. Update `AGENTS.md` §10 inventory tables. Add `<EXCLUDE_AGENTS>` to the caller→engine contract.
+- **Phase 5 — Invariant test.** Write `.agents/test/pr-review-engine.test.sh`. Wire into the repo's test surface (likely via `pnpm test:agents` or similar). Initially advisory; flip to blocking once the test stabilises across two consecutive green main runs.
+
+## Considered Alternatives
+
+### Alternative 1: Adopt a Claude Code plugin layout wholesale
+
+Move `.agents/` to a Claude Code plugin structure (`plugins/local/skills/pr-review-engine/SKILL.md`, etc.).
+
+**Why rejected:** The in-repo `.agents/` model is intentionally co-located with the rules it enforces (sits next to `AGENTS.md`). A plugin-marketplace structure adds an indirection layer without value here — no shared distribution across repos, no SessionStart installer needed. The cost-benefit favours keeping the existing layout and absorbing only the structural learnings (frontmatter conventions, scripts, references).
+
+### Alternative 2: Keep `ci-release-security` as one persona
+
+Leave the combined persona in place; tighten its `applies:` anchorage and skip the split.
+
+**Why rejected:** `AGENTS.md` §10's rules are organised into three independently-triggered concerns (CI security, release integrity, dependency hygiene). Firing all three when only `pnpm-lock.yaml` changed wastes a parallel agent and dilutes the persona's focus. The split mirrors the existing §10 sub-section structure exactly — no rule duplication, three sharper personas. The `applies:` frontmatter on each split persona still cites the §10 sub-rules it owns, so anchorage is preserved (in fact strengthened — each persona points at a narrower rule set).
+
+### Alternative 3: Adopt generic baseline personas in place of the Morpho-specific ones
+
+Replace `morpho-protocol`, `web3-security`, `code-quality`, `module-api-architecture`, etc. with a generic six (`correctness`, `error-handling`, `docs`, `tests`, `simplification`, `performance`) of the kind a fresh review-engine plugin tends to ship with.
+
+**Why rejected:** Explicit instruction to keep specificity and anchorage. The Morpho-specific personas are the differentiator — they encode protocol semantics (ABI/address drift, operation routing, accounting/LLTV/share-price invariants) that no generic persona can replicate. Generic personas are good starting points for a fresh plugin, not a substitute for what this repo has earned.
+
+### Alternative 4: Skip the bundled scripts; keep prose-only spec
+
+Keep the engine as a single Markdown document with the diff math and schema validation described in English.
+
+**Why rejected:** Prose is exactly the layer where deterministic logic drifts. Anthropic's skill guide puts it crisply: "Code is deterministic; language interpretation isn't." Scope-filter accuracy is non-negotiable — a flaky filter erodes trust in every review. The 100-ish lines of bundled TypeScript carry their weight.
+
+## Assumptions & Constraints
+
+- The `.agents/` directory is review-time tooling — no published package depends on it; no Changesets entries are required for this TIB's implementation phases.
+- Node ≥22 + Bash are available locally and in CI (already true — repo standard per [`AGENTS.md`](../../AGENTS.md) §8). No Python dependency.
+- The repo has (or will have at Phase 2) `tsx` as a root `devDependency`. `tsx` is the standard runner for TypeScript scripts in pnpm/Node monorepos; it does not affect any published package's runtime or peer-dep surface (it's strictly a dev tool).
+- `gh` CLI is authenticated for `pr-review-gh` / `pr-review-ci` (already true).
+- The external review-engine plugin is a reference design only — we are not taking a runtime dependency on it. The TIB freezes the relevant ideas at this date; future drift in that external work does not bind us.
+- The Morpho-specific persona inventory is stable. If a future TIB adds a new baseline persona, it adds a row to `AGENTS.md` §10 and a file under `.agents/personas/` — but that is out of scope for this TIB.
+
+## Dependencies
+
+- No new runtime dependencies for any published package.
+- One **devDependency** added at the repo root if not already present: `tsx` (used only to execute the `.agents/lib/scripts/*.ts` files; never imported by published code). The engine scripts themselves use Node stdlib only.
+- Implementation phases depend only on the repo's existing toolchain: Node ≥22, `tsx`, Bash, `git`, and `gh`. No Python.
+
+## Security
+
+This TIB does not change the rules codified in `AGENTS.md` §10. The CI / release / dependency security rules — workflow injection prevention, action pinning, `permissions:` discipline, secret exposure, publish-flow integrity (`--provenance`), release-commit signing & write-token hardening, lockfile drift, dependency hygiene, `.npmrc` hardening — remain authoritative. The split into three personas (`ci-security` / `release-integrity` / `dependencies`) sharpens enforcement without changing the substance of any rule.
+
+One forward-looking consideration: the bundled `validate-findings.ts` parses agent output. The script must defensively handle malformed input (non-array, missing fields, non-string paths, non-integer lines) and route every failure mode into `<FAILED_AGENTS>` rather than silently dropping. This is already required behaviour today; codifying it in TypeScript (not prose) tightens the contract — the parser exposes a typed `Finding` interface with `readonly` fields, and the failure modes are exported as named error classes per [`AGENTS.md`](../../AGENTS.md) §2.2 / §3.
+
+## Future Considerations
+
+- **Orchestrator persona / iteration loop**: a future automated TIB-execution orchestrator (analogous to a `tib-ship` skill) could suppress one expensive persona during inner iterations using `<EXCLUDE_AGENTS>` and run it once after convergence. The hook is already in place.
+- **CI-mode invocation of the engine**: nothing in the engine is CI-specific; the only difference is the caller's Step 7 output rendering. If we want to run the engine inside a GitHub Action (instead of the existing `/pr-review-ci` flow), the `disable-model-invocation` engine flag does not block it — only direct slash invocation is blocked.
+- **Generic persona migration**: if a future TIB introduces React/Next surface in this repo (e.g. a docs site), persona patterns for `react-next`, `styling`, `accessibility`, `ai-sdk` can be added as new conditional personas — same architecture, same frontmatter shape.
+
+## Open Questions
+
+- Should the invariant test be wired as `pnpm test:agents` (new top-level script) or invoked from an existing test target (e.g. `pnpm test` root-level)? Defer to Phase 5 PR review.
+- Should `<HAS_RELEASE>` also trigger when only a top-level `package.json` `version` field changes (not a `scripts.*publish*` change)? Probably no — version bumps come through Changesets, which already trips the flag via `.changeset/**`. Will validate during Phase 4.
+
+## References
+
+- [`AGENTS.md`](../../AGENTS.md) §10 — Review automation & CI/release security (source of truth this TIB updates the inventory tables of).
+- [`.agents/lib/pr-review-base.md`](../../.agents/lib/pr-review-base.md) — current engine, augmented by this TIB.
+- [`.agents/personas/`](../../.agents/personas/) — current persona inventory, split per Phase 4.
+- [`.agents/lib/scripts/`](../../.agents/lib/scripts/) — bundled deterministic scripts added by Phase 2.
+- [`.agents/references/`](../../.agents/references/) — shared rubric content added by Phase 2.
+
+## Addenda
+
+### 2026-05-21 — Drop `tsx` dependency in favour of native Node TS
+
+**Author:** @0xbulma
+
+The TIB body proposes `tsx` as a root `devDependency` used to execute `.agents/lib/scripts/*.ts`. During Phase 2 execution, native Node 24 (the repo's runtime per `engines.node >= 22.13`) was confirmed to strip TypeScript types out of the box (`node --experimental-strip-types`-equivalent behaviour stable in Node ≥22.6). The bundled scripts are written within the strip-only subset (no parameter properties, no `enum`, no namespaces) and run under plain `node .agents/lib/scripts/<script>.ts` — no transpiler needed.
+
+**Operational changes** (decision unchanged — still TypeScript scripts, still Node stdlib only):
+
+- `pnpm tsx <script>.ts` → `node <script>.ts` everywhere in the engine prose, references docs, and Phase-5 invariant test.
+- No `tsx` devDependency. The Dependencies section's "one devDependency added" claim no longer applies.
+- The Phase-2 commit also did NOT need to add a `pnpm.onlyBuiltDependencies` entry for `esbuild` (which would have been needed had `tsx` shipped).
+
+Why it matters: the engine has zero new build-time dependencies. The toolchain is exactly what was there before plus two TS files and one Bash-free invariant test.
+
+### 2026-05-21 — Colocated unit tests added (AGENTS.md §5 compliant)
+
+**Author:** @0xbulma
+
+An earlier addendum noted Phase-2 colocated unit tests were deferred in favour of the Phase-5 invariant test. The maintainer subsequently asked for AGENTS.md §5 compliance — every script unit-tested with a colocated `*.test.ts`. This addendum supersedes that scope reduction:
+
+- `.agents/pr-review-engine/scripts/build-changed-lines.test.ts` — covers the diff parser end-to-end: single/multi hunks, dedup+sort, deletion-only hunks (`+0`), pure renames (`[]`), rename-with-content, file deletions (absent from map), new files, multiple files, the `DiffParseError` class export. 12 cases.
+- `.agents/pr-review-engine/scripts/validate-findings.test.ts` — covers all three scope-filter stages and the schema check: `findFencedBlocks` (no fence / matched ``` / matched ~~~ / unclosed / multiple / indented), schema rejections (missing WHAT or FIX, invalid severity, non-positive line, non-integer line, missing description, missing/empty file, non-object), scope filter (kept / file-out-of-scope / line-pre-existing with distance / adjacent-tolerance / pure-rename short-circuit / path normalization variants), Markdown fence FP filter (line inside fence / outside / on delimiter / non-.md skip / missing file fallback), and counts aggregation. 32 cases.
+
+The Phase-5 invariant test was also converted to vitest (`.agents/pr-review-engine/test/invariants.test.ts`) and refactored to import the engine scripts as modules (replacing the prior `node --check` parse-only smoke test with a stronger import-time smoke that also exercises the export surface). 55 parameterised cases.
+
+Wiring: `vitest.config.ts` gains a `pr-review-engine` project glob (`{ name: "pr-review-engine", include: [".agents/pr-review-engine/**/*.test.ts"], environment: "node" }`); `pnpm test:agents` is rewired from a one-shot Node script to `vitest run --project=pr-review-engine` so the engine tests run under the same harness as everything else (and also run as part of the bare `pnpm test` invocation).
+
+Total: 99 cases across 3 test files, runtime ≈ 200ms.
+
+### 2026-05-21 — Standardized `.agents/pr-review-engine/` layout
+
+**Author:** @0xbulma
+
+The TIB body lands the engine, agents, scripts, references, and test as siblings of `.agents/commands/`, scattered across `.agents/lib/`, `.agents/personas/`, `.agents/references/`, `.agents/test/`. After all five phases shipped, the layout was reorganised post-hoc into a single grouped engine directory matching the Anthropic Skills convention (without going full plugin):
+
+```
+.agents/
+├── commands/                       # caller-side skills (unchanged)
+└── pr-review-engine/
+    ├── SKILL.md                    # was .agents/lib/pr-review-base.md
+    ├── agents/                     # was .agents/personas/
+    ├── references/                 # was .agents/references/
+    ├── scripts/                    # was .agents/lib/scripts/
+    └── test/                       # was .agents/test/
+```
+
+Operational changes (decision unchanged — same engine, same agents, same scripts, same scope-filter contract):
+
+- Engine entrypoint renamed: `pr-review-base.md` → `SKILL.md`. Frontmatter `name:` bumped to `pr-review-engine`, `version:` to `0.2.0`.
+- Agent specs renamed at the directory level: `personas/` → `agents/`. The prose vocabulary "persona" is kept in docs (matches `AGENTS.md`'s "Applied by personas: …" backlinks); only the directory and the invariant-test variable names change.
+- Test renamed to `invariants.test.ts`, reflecting that it's the engine's invariant guard (not a generic unit test).
+- All cross-references in `AGENTS.md`, command files, references, scripts, the test, and `package.json` updated to the new paths. `pnpm test:agents` now invokes `node .agents/pr-review-engine/test/invariants.test.ts`.
+- `biome.json` no longer needs a `.agents/lib/scripts/` carve-out — the engine scripts are under `.agents/pr-review-engine/scripts/` and the existing `!packages/**/lib` exclude no longer collides with them.
+
+The Phase-1 through Phase-5 commits in this branch still reference the old paths (those are the paths that existed at the time of each commit); the reorganisation commit (`refactor(agents): standardize layout`) updates everything in one pass. New PRs should target the new paths.
+
+<!--
+TIB conventions:
+- Once accepted, do not substantively edit this TIB. If the decision needs to change,
+  create a new TIB that supersedes this one and update the Status/Superseded by fields.
+- Addenda may be appended to record operational updates that affect
+  how the TIB is applied without changing the decision itself.
+- TIB identifiers use CalVer (YYYY-MM-DD) based on the date the TIB was first drafted.
+- A TIB is a *proposal* until its Status becomes Accepted. Once accepted, the rule the
+  TIB decides on is codified in the relevant section of `AGENTS.md`; the TIB stays as
+  the dated record of how the decision was reached. TIBs feed `AGENTS.md` — they do
+  not override it.
+-->

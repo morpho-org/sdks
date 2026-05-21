@@ -1,6 +1,7 @@
 ---
 name: documentation
 kind: baseline
+version: 1.0.0
 applies: AGENTS.md §6 Documentation
 out-of-scope:
   - Code correctness — see code-quality.
@@ -42,7 +43,7 @@ Files in scope (read each one whose content is in the diff OR which references s
 - `AGENTS.md` (root and per-package). `CLAUDE.md` is a symlink to `AGENTS.md` — don't double-check.
 - `MISSION.md`, `CONTRIBUTING.md`, `SECURITY.md`.
 - `docs/**/*.md` (style guides, architecture deep-dives, TIBs, templates).
-- `.agents/lib/*.md`, `.agents/personas/*.md`, `.agents/commands/*.md`.
+- `.agents/pr-review-engine/SKILL.md`, `.agents/pr-review-engine/agents/*.md`, `.agents/pr-review-engine/references/*.md`, `.agents/commands/*.md`.
 - Any `*.md` colocated with a package (`packages/<pkg>/*.md`).
 
 For each Markdown file affected, flag:
@@ -57,8 +58,8 @@ For each Markdown file affected, flag:
 For every Markdown link, path reference, or symbol pointer in the changed files (and in files that reference anything the diff renamed/moved):
 
 - **Internal Markdown links must resolve.** `[label](./path/to/file.md)` — the path must exist. Anchors `#section-name` must match a heading in the target file (slugified — GitHub's convention).
-- **Path references in prose must resolve.** Lines like `Reference \`docs/jsdoc-style.md\`` or `Read \`.agents/personas/web3-security.md\`` are pointers; the file must exist.
-- **Frontmatter references must resolve.** Persona frontmatter (`applies:`, `trigger:`, `canonical-rules:`, `out-of-scope:` mentions) must reference real `AGENTS.md` sections, real flag names from `pr-review-base.md` Step 4, and real file paths.
+- **Path references in prose must resolve.** Lines like `Reference \`docs/jsdoc-style.md\`` or `Read \`.agents/pr-review-engine/agents/web3-security.md\`` are pointers; the file must exist.
+- **Frontmatter references must resolve.** Persona frontmatter (`applies:`, `trigger:`, `canonical-rules:`, `out-of-scope:` mentions) must reference real `AGENTS.md` sections, real flag names from `SKILL.md` Step 4, and real file paths.
 - **Renames cascade.** If the diff renames or moves a file (detect via `git diff --name-status --find-renames`), every reference to the old path in any tracked Markdown / persona / skill / command file must be updated. Grep for the old basename in the repo and surface unresolved hits.
 - **Removed exports / removed files.** If the diff removes a public export or a file, grep the repo for references and flag any that survive.
 

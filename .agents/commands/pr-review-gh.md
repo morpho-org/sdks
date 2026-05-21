@@ -38,7 +38,7 @@ Same as `/pr-review-ci` Step 2: `gh pr view <PR_NUMBER>`, capture and validate `
 
 ## Steps 3–6: Shared review base
 
-**Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with these inputs:
+**Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with these inputs:
 
 - `<DIFF_SOURCE>` = `pr`
 - `<HEAD_REF>` = `origin/<HEAD_BRANCH>`
@@ -74,8 +74,23 @@ Always use `"event": "COMMENT"` — never auto-approve or request changes in loc
 | Medium | X |
 | Low | X |
 
+<details>
+<summary>Audit trail — <N> finding(s) dropped by the engine's scope filter</summary>
+
+| Drop reason | Count |
+|---|---|
+| File out of scope | <DROPPED_COUNTS.file_out_of_scope> |
+| Line outside ±15 of any changed line | <DROPPED_COUNTS.line_pre_existing> |
+| Markdown documentation example | <DROPPED_COUNTS.doc_example_fp> |
+
+Full per-finding detail (file, line, description, distance_to_nearest_changed_line, drop_reason) written to `/tmp/pr-review-gh-<PR_NUMBER>-dropped.json` on the reviewer's machine — inspect locally if you suspect a filter false-positive. If the kept-finding list above is missing something the filter shouldn't have dropped, leave a comment on this review explaining which file/line should be re-reviewed and the human reviewer will top up the list manually.
+
+</details>
+
 _This is an automated parallel review. It will re-run when new commits are pushed (if watching)._
 ```
+
+Render the `<details>` audit-trail block ONLY when `<DROPPED_FINDINGS>` is non-empty — omit the entire block on clean diffs to avoid noise. Always write `<DROPPED_FINDINGS>` to `/tmp/pr-review-gh-<PR_NUMBER>-dropped.json` so the reviewer can inspect it; never post the full dropped-findings JSON inline.
 
 If `<FAILED_AGENTS>` is non-zero, prepend `> WARNING: <FAILED_AGENTS> of <TOTAL_AGENTS_LAUNCHED> agents failed (<names>) — review may be incomplete.` to the body.
 
@@ -162,7 +177,7 @@ CYCLE START:
 4. NEW COMMIT DETECTED:
    Say "New commit detected on PR #<PR_NUMBER>: ${CYCLE_HEAD_SHA}. Running full review..."
 
-5. **Read `.agents/lib/pr-review-base.md` and follow Steps 3–6 there**, with:
+5. **Read `.agents/pr-review-engine/SKILL.md` and follow Steps 3–6 there**, with:
    - <DIFF_SOURCE> = pr
    - <HEAD_REF> = origin/<HEAD_BRANCH>
    - <BASE_BRANCH> = <BASE_BRANCH>
