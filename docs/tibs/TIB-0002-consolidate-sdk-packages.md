@@ -335,9 +335,9 @@ From `packages/bundler-sdk-viem` extract into `morpho-sdk`:
 - `src/types/actions.ts`: the `Action` discriminated union and supporting types used to build those
   bundles, including `ActionArgs`, `ActionType`, `Actions`, `Authorization`, `InputReallocation`,
   `Permit2PermitSingleDetails`, and `Permit2PermitSingle`.
-- `src/abis.ts`: the complete ABI barrel from `bundler-sdk-viem`, not only the ABI literals used by
-  current `morpho-sdk` actions. Extract and re-export `universalRewardsDistributorAbi`,
-  `bundler3Abi`, `coreAdapterAbi`, `generalAdapter1Abi`, `ethereumGeneralAdapter1Abi`,
+- `src/abis.ts`: the bundler action and adapter ABI barrel from `bundler-sdk-viem`, not only the ABI
+  literals used by current `morpho-sdk` actions. Extract and re-export `bundler3Abi`,
+  `coreAdapterAbi`, `generalAdapter1Abi`, `ethereumGeneralAdapter1Abi`,
   `paraswapAdapterAbi`, `erc20WrapperAdapterAbi`, `aaveV2MigrationAdapterAbi`,
   `aaveV3MigrationAdapterAbi`, `aaveV3OptimizerMigrationAdapterAbi`,
   `compoundV2MigrationAdapterAbi`, and `compoundV3MigrationAdapterAbi` from

@@ -71,6 +71,8 @@
     }
   },
   "sideEffects": [
+    "./src/augment.ts",
+    "./src/augment/*.ts",
     "./lib/*/augment.js",
     "./lib/*/augment/*.js"
   ],
