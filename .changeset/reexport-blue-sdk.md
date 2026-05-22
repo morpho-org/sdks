@@ -108,6 +108,7 @@ New entity imports from `@morpho-org/morpho-sdk/entities`:
 - `Position` from `@morpho-org/morpho-sdk/entities`
 - `PreLiquidationParams` from `@morpho-org/morpho-sdk/entities`
 - `PreLiquidationPosition` from `@morpho-org/morpho-sdk/entities`
+- `ReallocationData` from `@morpho-org/morpho-sdk/entities`
 - `Token` from `@morpho-org/morpho-sdk/entities`
 - `User` from `@morpho-org/morpho-sdk/entities`
 - `Vault` from `@morpho-org/morpho-sdk/entities`
@@ -143,6 +144,7 @@ New entity type imports from `@morpho-org/morpho-sdk/entities`:
 - `IMarket` from `@morpho-org/morpho-sdk/entities`
 - `IMarketParams` from `@morpho-org/morpho-sdk/entities`
 - `InputMarketParams` from `@morpho-org/morpho-sdk/entities`
+- `InputReallocationData` from `@morpho-org/morpho-sdk/entities`
 - `IPermit2Allowance` from `@morpho-org/morpho-sdk/entities`
 - `IPosition` from `@morpho-org/morpho-sdk/entities`
 - `IPreLiquidationParams` from `@morpho-org/morpho-sdk/entities`
@@ -292,7 +294,6 @@ New utility imports from `@morpho-org/morpho-sdk/utils`:
 - `getValue` from `@morpho-org/morpho-sdk/utils`
 - `hasValue` from `@morpho-org/morpho-sdk/utils`
 - `HexFormatter` from `@morpho-org/morpho-sdk/utils`
-- `InputReallocationData` from `@morpho-org/morpho-sdk/utils`
 - `isDefined` from `@morpho-org/morpho-sdk/utils`
 - `isNotNull` from `@morpho-org/morpho-sdk/utils`
 - `isNotUndefined` from `@morpho-org/morpho-sdk/utils`
@@ -309,7 +310,6 @@ New utility imports from `@morpho-org/morpho-sdk/utils`:
 - `PartialDottedKeys` from `@morpho-org/morpho-sdk/utils`
 - `PercentFormatter` from `@morpho-org/morpho-sdk/utils`
 - `readContractRestructured` from `@morpho-org/morpho-sdk/utils`
-- `ReallocationData` from `@morpho-org/morpho-sdk/utils`
 - `REWARDS_BASE_URL` from `@morpho-org/morpho-sdk/utils`
 - `retryPromiseLinearBackoff` from `@morpho-org/morpho-sdk/utils`
 - `restructure` from `@morpho-org/morpho-sdk/utils`
@@ -354,3 +354,5 @@ New augmentation imports:
 - `VaultUser` from `@morpho-org/morpho-sdk/augment/VaultUser`
 
 Remove the formatter's String prototype mutation so the morpho-sdk utils entrypoint can re-export morpho-ts utilities without adding a top-level side effect.
+
+`ReallocationData` and `InputReallocationData` are intentionally exposed from `@morpho-org/morpho-sdk/entities`. Moving them there is not a breaking change in this re-export changeset because they are introduced by the pending `extract-public-reallocation-data` changeset and have not been published as root-level `morpho-sdk` imports.
