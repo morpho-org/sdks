@@ -399,7 +399,6 @@ const snapshotPreservedState = (
 
         return {
           totalAssets: dataVault.totalAssets,
-          accruedFee: dataVault.publicAllocatorConfig?.accruedFee,
           withdrawQueue: dataVault.withdrawQueue,
         };
       }),
@@ -1127,15 +1126,14 @@ describe("ReallocationData unit coverage", () => {
       }),
     };
 
-    expect(
-      new ReallocationData(input).getMarketPublicReallocations(
-        targetParams.id,
-        {
-          timestamp: TIMESTAMP,
-          defaultMaxWithdrawalUtilization: MathLib.WAD,
-        },
-      ).withdrawals,
-    ).toEqual([
+    const reallocationResult = new ReallocationData(
+      input,
+    ).getMarketPublicReallocations(targetParams.id, {
+      timestamp: TIMESTAMP,
+      defaultMaxWithdrawalUtilization: MathLib.WAD,
+    });
+
+    expect(reallocationResult.withdrawals).toEqual([
       {
         vault: VAULT,
         id: alternateSourceParams.id,
@@ -1152,6 +1150,13 @@ describe("ReallocationData unit coverage", () => {
         assets: 10n * MathLib.WAD,
       },
     ]);
+    expect(
+      reallocationResult.data.getVault(VAULT).publicAllocatorConfig?.accruedFee,
+    ).toBe(13n);
+    expect(
+      reallocationResult.data.getVault(OTHER_VAULT).publicAllocatorConfig
+        ?.accruedFee,
+    ).toBe(13n);
 
     expect(
       new ReallocationData({

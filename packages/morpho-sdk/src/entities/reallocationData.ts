@@ -322,10 +322,9 @@ export class ReallocationData implements InputReallocationData {
    * fetched block, pass a future `timestamp` or reserve your own headroom so
    * interest accrued before inclusion does not make `reallocateTo` exceed the
    * target market cap.
-   * The returned `data` may over-estimate `vault.publicAllocatorConfig.accruedFee`
-   * because the simulation accrues the public allocator fee once per computed
-   * withdrawal, while the on-chain `reallocateTo` call charges once per vault
-   * reallocation group.
+   * Returned `data` normalizes `vault.publicAllocatorConfig.accruedFee` to the
+   * on-chain `reallocateTo` fee semantics: one fee charge per vault with at
+   * least one computed withdrawal.
    *
    * @param marketId - Target market to supply with shared liquidity.
    * @param options - Optional allocator discovery options.
@@ -427,8 +426,30 @@ export class ReallocationData implements InputReallocationData {
         );
 
       const largestVaultWithdrawal = vaultWithdrawals[0];
-      if (largestVaultWithdrawal?.largestWithdrawal == null)
+      if (largestVaultWithdrawal?.largestWithdrawal == null) {
+        const withdrawalCountsByVault = new Map<Address, number>();
+
+        for (const { vault } of withdrawals) {
+          withdrawalCountsByVault.set(
+            vault,
+            (withdrawalCountsByVault.get(vault) ?? 0) + 1,
+          );
+        }
+
+        for (const [vault, count] of withdrawalCountsByVault) {
+          if (count <= 1) continue;
+
+          const vaultPublicAllocatorConfig =
+            data.getVault(vault).publicAllocatorConfig;
+          if (vaultPublicAllocatorConfig == null)
+            throw new MissingPublicAllocatorConfigError(vault);
+
+          vaultPublicAllocatorConfig.accruedFee -=
+            BigInt(count - 1) * vaultPublicAllocatorConfig.fee;
+        }
+
         return { withdrawals, data };
+      }
 
       const { vault, largestWithdrawal } = largestVaultWithdrawal;
       withdrawals.push({ ...largestWithdrawal, vault });

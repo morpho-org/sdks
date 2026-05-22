@@ -218,10 +218,9 @@ export class LiquidityLoader<chain extends Chain = Chain> {
    * @param marketId - Target market id to plan withdrawals for.
    * @returns The start state, simulated end state, computed withdrawals, and target borrow utilization.
    *
-   * @remarks The returned `endState` is produced by `ReallocationData.getMarketPublicReallocations`.
-   * Its `vault.publicAllocatorConfig.accruedFee` may over-estimate onchain accrued fees because the
-   * simulation accrues the public allocator fee once per computed withdrawal, while the onchain
-   * `reallocateTo` call charges once per vault reallocation group.
+   * @remarks The returned `endState` is produced by `ReallocationData.getMarketPublicReallocations`
+   * from onchain inputs fetched at one block, with reallocation headroom evaluated one hour after
+   * that block timestamp.
    *
    * @example
    * ```ts
