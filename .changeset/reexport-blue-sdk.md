@@ -5,29 +5,32 @@
 
 Re-export consolidated blue-sdk, blue-sdk-viem, and utility surfaces from morpho-sdk through canonical root and subpath entrypoints.
 
-New root imports from `@morpho-org/morpho-sdk`:
+New root action type imports from `@morpho-org/morpho-sdk`:
 
-- `AdaptiveCurveIrmLib` from `@morpho-org/morpho-sdk`
-- `getAuthorizationTypedData` from `@morpho-org/morpho-sdk`
-- `getDaiPermitTypedData` from `@morpho-org/morpho-sdk`
-- `getPermit2PermitTypedData` from `@morpho-org/morpho-sdk`
-- `getPermit2TransferFromTypedData` from `@morpho-org/morpho-sdk`
-- `getPermitTypedData` from `@morpho-org/morpho-sdk`
-- `MathLib` from `@morpho-org/morpho-sdk`
-- `SharesMath` from `@morpho-org/morpho-sdk`
+- `MarketV1Actions` from `@morpho-org/morpho-sdk`
+- `VaultV1Actions` from `@morpho-org/morpho-sdk`
+- `VaultV2Actions` from `@morpho-org/morpho-sdk`
 
-New root type imports from `@morpho-org/morpho-sdk`:
+New imports from `@morpho-org/morpho-sdk/types`:
 
-- `Address` from `@morpho-org/morpho-sdk`
-- `BigIntish` from `@morpho-org/morpho-sdk`
-- `ChainMetadata` from `@morpho-org/morpho-sdk`
-- `DeploylessFetchParameters` from `@morpho-org/morpho-sdk`
-- `Failable` from `@morpho-org/morpho-sdk`
-- `Fetchable` from `@morpho-org/morpho-sdk`
-- `FetchParameters` from `@morpho-org/morpho-sdk`
-- `Loadable` from `@morpho-org/morpho-sdk`
-- `MarketId` from `@morpho-org/morpho-sdk`
-- `RoundingDirection` from `@morpho-org/morpho-sdk`
+- `BigIntish` from `@morpho-org/morpho-sdk/types`
+- `ChainMetadata` from `@morpho-org/morpho-sdk/types`
+- `CollateralAllocation` from `@morpho-org/morpho-sdk/types`
+- `DeploylessFetchParameters` from `@morpho-org/morpho-sdk/types`
+- `Eip712Field` from `@morpho-org/morpho-sdk/types`
+- `Erc20AllowanceRecipient` from `@morpho-org/morpho-sdk/types`
+- `Failable` from `@morpho-org/morpho-sdk/types`
+- `Fetchable` from `@morpho-org/morpho-sdk/types`
+- `FetchParameters` from `@morpho-org/morpho-sdk/types`
+- `InputMarketParams` from `@morpho-org/morpho-sdk/types`
+- `IPermit2Allowance` from `@morpho-org/morpho-sdk/types`
+- `Loadable` from `@morpho-org/morpho-sdk/types`
+- `MarketId` from `@morpho-org/morpho-sdk/types`
+- `MaxBorrowOptions` from `@morpho-org/morpho-sdk/types`
+- `MaxPositionCapacities` from `@morpho-org/morpho-sdk/types`
+- `MaxWithdrawCollateralOptions` from `@morpho-org/morpho-sdk/types`
+- `Pending` from `@morpho-org/morpho-sdk/types`
+- `Permit2Allowance` from `@morpho-org/morpho-sdk/types`
 
 New error imports from `@morpho-org/morpho-sdk/errors`:
 
@@ -75,16 +78,32 @@ New address type imports from `@morpho-org/morpho-sdk/addresses`:
 
 New constants imports from `@morpho-org/morpho-sdk/constants`:
 
+- `APPROVE_ONLY_ONCE_TOKENS` from `@morpho-org/morpho-sdk/constants`
+- `BLUE_API_BASE_URL` from `@morpho-org/morpho-sdk/constants`
+- `BLUE_API_GRAPHQL_URL` from `@morpho-org/morpho-sdk/constants`
+- `CDN_BASE_URL` from `@morpho-org/morpho-sdk/constants`
 - `ChainId` from `@morpho-org/morpho-sdk/constants`
 - `ChainUtils` from `@morpho-org/morpho-sdk/constants`
+- `DEFAULT_LLTV_BUFFER` from `@morpho-org/morpho-sdk/constants`
+- `DEFAULT_SUPPLY_TARGET_UTILIZATION` from `@morpho-org/morpho-sdk/constants`
 - `DEFAULT_SLIPPAGE_TOLERANCE` from `@morpho-org/morpho-sdk/constants`
+- `DEFAULT_WITHDRAWAL_TARGET_UTILIZATION` from `@morpho-org/morpho-sdk/constants`
+- `DOCS_BASE_URL` from `@morpho-org/morpho-sdk/constants`
 - `EIP_712_FIELDS` from `@morpho-org/morpho-sdk/constants`
 - `isMarketId` from `@morpho-org/morpho-sdk/constants`
 - `LIQUIDATION_CURSOR` from `@morpho-org/morpho-sdk/constants`
+- `MAX_ABSOLUTE_SHARE_PRICE` from `@morpho-org/morpho-sdk/constants`
 - `MAX_LIQUIDATION_INCENTIVE_FACTOR` from `@morpho-org/morpho-sdk/constants`
+- `MAX_SLIPPAGE_TOLERANCE` from `@morpho-org/morpho-sdk/constants`
+- `MAX_TOKEN_APPROVALS` from `@morpho-org/morpho-sdk/constants`
+- `MORPHO_DOMAIN` from `@morpho-org/morpho-sdk/constants`
+- `OPTIMIZERS_API_BASE_URL` from `@morpho-org/morpho-sdk/constants`
+- `OPTIMIZERS_BASE_URL` from `@morpho-org/morpho-sdk/constants`
 - `ORACLE_PRICE_SCALE` from `@morpho-org/morpho-sdk/constants`
+- `REWARDS_BASE_URL` from `@morpho-org/morpho-sdk/constants`
 - `SECONDS_PER_YEAR` from `@morpho-org/morpho-sdk/constants`
 - `TransactionType` from `@morpho-org/morpho-sdk/constants`
+- `ZERO_ADDRESS` from `@morpho-org/morpho-sdk/constants`
 
 New entity imports from `@morpho-org/morpho-sdk/entities`:
 
@@ -101,7 +120,6 @@ New entity imports from `@morpho-org/morpho-sdk/entities`:
 - `Holding` from `@morpho-org/morpho-sdk/entities`
 - `Market` from `@morpho-org/morpho-sdk/entities`
 - `MarketParams` from `@morpho-org/morpho-sdk/entities`
-- `MarketUtils` from `@morpho-org/morpho-sdk/entities`
 - `MorphoMarketV1` from `@morpho-org/morpho-sdk/entities`
 - `MorphoVaultV1` from `@morpho-org/morpho-sdk/entities`
 - `MorphoVaultV2` from `@morpho-org/morpho-sdk/entities`
@@ -118,7 +136,6 @@ New entity imports from `@morpho-org/morpho-sdk/entities`:
 - `VaultMarketPublicAllocatorConfig` from `@morpho-org/morpho-sdk/entities`
 - `VaultToken` from `@morpho-org/morpho-sdk/entities`
 - `VaultUser` from `@morpho-org/morpho-sdk/entities`
-- `VaultUtils` from `@morpho-org/morpho-sdk/entities`
 - `VaultV2` from `@morpho-org/morpho-sdk/entities`
 - `VaultV2Adapter` from `@morpho-org/morpho-sdk/entities`
 - `VaultV2MorphoMarketV1Adapter` from `@morpho-org/morpho-sdk/entities`
@@ -128,9 +145,6 @@ New entity imports from `@morpho-org/morpho-sdk/entities`:
 
 New entity type imports from `@morpho-org/morpho-sdk/entities`:
 
-- `CollateralAllocation` from `@morpho-org/morpho-sdk/entities`
-- `Eip712Field` from `@morpho-org/morpho-sdk/entities`
-- `Erc20AllowanceRecipient` from `@morpho-org/morpho-sdk/entities`
 - `IAccrualPosition` from `@morpho-org/morpho-sdk/entities`
 - `IAccrualVault` from `@morpho-org/morpho-sdk/entities`
 - `IAccrualVaultV2` from `@morpho-org/morpho-sdk/entities`
@@ -143,9 +157,7 @@ New entity type imports from `@morpho-org/morpho-sdk/entities`:
 - `IHolding` from `@morpho-org/morpho-sdk/entities`
 - `IMarket` from `@morpho-org/morpho-sdk/entities`
 - `IMarketParams` from `@morpho-org/morpho-sdk/entities`
-- `InputMarketParams` from `@morpho-org/morpho-sdk/entities`
 - `InputReallocationData` from `@morpho-org/morpho-sdk/entities`
-- `IPermit2Allowance` from `@morpho-org/morpho-sdk/entities`
 - `IPosition` from `@morpho-org/morpho-sdk/entities`
 - `IPreLiquidationParams` from `@morpho-org/morpho-sdk/entities`
 - `IPreLiquidationPosition` from `@morpho-org/morpho-sdk/entities`
@@ -163,21 +175,12 @@ New entity type imports from `@morpho-org/morpho-sdk/entities`:
 - `IVaultV2MorphoMarketV1Adapter` from `@morpho-org/morpho-sdk/entities`
 - `IVaultV2MorphoMarketV1AdapterV2` from `@morpho-org/morpho-sdk/entities`
 - `IVaultV2MorphoVaultV1Adapter` from `@morpho-org/morpho-sdk/entities`
-- `MarketV1Actions` from `@morpho-org/morpho-sdk/entities`
-- `MaxBorrowOptions` from `@morpho-org/morpho-sdk/entities`
-- `MaxPositionCapacities` from `@morpho-org/morpho-sdk/entities`
-- `MaxWithdrawCollateralOptions` from `@morpho-org/morpho-sdk/entities`
-- `Pending` from `@morpho-org/morpho-sdk/entities`
 - `PeripheralBalance` from `@morpho-org/morpho-sdk/entities`
 - `PeripheralBalanceType` from `@morpho-org/morpho-sdk/entities`
-- `Permit2Allowance` from `@morpho-org/morpho-sdk/entities`
 - `VaultPublicAllocatorConfig` from `@morpho-org/morpho-sdk/entities`
-- `VaultV1Actions` from `@morpho-org/morpho-sdk/entities`
-- `VaultV2Actions` from `@morpho-org/morpho-sdk/entities`
 
 New fetch imports from `@morpho-org/morpho-sdk/fetch`:
 
-- `decodeBytes32String` from `@morpho-org/morpho-sdk/fetch`
 - `fetchAccrualPosition` from `@morpho-org/morpho-sdk/fetch`
 - `fetchAccrualVault` from `@morpho-org/morpho-sdk/fetch`
 - `fetchAccrualVaultV2` from `@morpho-org/morpho-sdk/fetch`
@@ -204,7 +207,28 @@ New fetch imports from `@morpho-org/morpho-sdk/fetch`:
 - `fetchVaultV2MorphoMarketV1Adapter` from `@morpho-org/morpho-sdk/fetch`
 - `fetchVaultV2MorphoMarketV1AdapterV2` from `@morpho-org/morpho-sdk/fetch`
 - `fetchVaultV2MorphoVaultV1Adapter` from `@morpho-org/morpho-sdk/fetch`
-- `optionalBoolean` from `@morpho-org/morpho-sdk/fetch`
+
+New format imports from `@morpho-org/morpho-sdk/format`:
+
+- `BaseFormatter` from `@morpho-org/morpho-sdk/format`
+- `CommasFormatter` from `@morpho-org/morpho-sdk/format`
+- `CommonFormatter` from `@morpho-org/morpho-sdk/format`
+- `convertNumStrFromEffectiveTo` from `@morpho-org/morpho-sdk/format`
+- `convertNumStrToLocal` from `@morpho-org/morpho-sdk/format`
+- `createFormat` from `@morpho-org/morpho-sdk/format`
+- `Format` from `@morpho-org/morpho-sdk/format`
+- `format` from `@morpho-org/morpho-sdk/format`
+- `formatEnumeration` from `@morpho-org/morpho-sdk/format`
+- `formatLongString` from `@morpho-org/morpho-sdk/format`
+- `formatUnion` from `@morpho-org/morpho-sdk/format`
+- `getEffectiveLocale` from `@morpho-org/morpho-sdk/format`
+- `getEnUSNumberToLocalParts` from `@morpho-org/morpho-sdk/format`
+- `getLocaleSymbols` from `@morpho-org/morpho-sdk/format`
+- `HexFormatter` from `@morpho-org/morpho-sdk/format`
+- `LocaleParts` from `@morpho-org/morpho-sdk/format`
+- `NumberFormatter` from `@morpho-org/morpho-sdk/format`
+- `PercentFormatter` from `@morpho-org/morpho-sdk/format`
+- `ShortFormatter` from `@morpho-org/morpho-sdk/format`
 
 New ABI imports from `@morpho-org/morpho-sdk/abis`:
 
@@ -238,7 +262,6 @@ New ABI imports from `@morpho-org/morpho-sdk/abis`:
 - `preLiquidationAbi` from `@morpho-org/morpho-sdk/abis`
 - `preLiquidationFactoryAbi` from `@morpho-org/morpho-sdk/abis`
 - `publicAllocatorAbi` from `@morpho-org/morpho-sdk/abis`
-- `universalRewardsDistributorAbi` from `@morpho-org/morpho-sdk/abis`
 - `vaultV1AdapterAbi` from `@morpho-org/morpho-sdk/abis`
 - `vaultV1AdapterFactoryAbi` from `@morpho-org/morpho-sdk/abis`
 - `vaultV2Abi` from `@morpho-org/morpho-sdk/abis`
@@ -249,74 +272,52 @@ New ABI imports from `@morpho-org/morpho-sdk/abis`:
 
 New utility imports from `@morpho-org/morpho-sdk/utils`:
 
+- `AdaptiveCurveIrmLib` from `@morpho-org/morpho-sdk/utils`
 - `addTransactionMetadata` from `@morpho-org/morpho-sdk/utils`
-- `APPROVE_ONLY_ONCE_TOKENS` from `@morpho-org/morpho-sdk/utils`
 - `ArrayElementType` from `@morpho-org/morpho-sdk/utils`
-- `BaseFormatter` from `@morpho-org/morpho-sdk/utils`
 - `bigIntComparator` from `@morpho-org/morpho-sdk/utils`
-- `BLUE_API_BASE_URL` from `@morpho-org/morpho-sdk/utils`
-- `BLUE_API_GRAPHQL_URL` from `@morpho-org/morpho-sdk/utils`
 - `CapacityLimit` from `@morpho-org/morpho-sdk/utils`
 - `CapacityLimitReason` from `@morpho-org/morpho-sdk/utils`
-- `CDN_BASE_URL` from `@morpho-org/morpho-sdk/utils`
-- `CommasFormatter` from `@morpho-org/morpho-sdk/utils`
-- `CommonFormatter` from `@morpho-org/morpho-sdk/utils`
 - `computeMaxRepaySharePrice` from `@morpho-org/morpho-sdk/utils`
 - `computeMinBorrowSharePrice` from `@morpho-org/morpho-sdk/utils`
 - `computeReallocations` from `@morpho-org/morpho-sdk/utils`
-- `convertNumStrFromEffectiveTo` from `@morpho-org/morpho-sdk/utils`
-- `convertNumStrToLocal` from `@morpho-org/morpho-sdk/utils`
-- `createFormat` from `@morpho-org/morpho-sdk/utils`
 - `createGetValue` from `@morpho-org/morpho-sdk/utils`
 - `createHasValue` from `@morpho-org/morpho-sdk/utils`
-- `DEFAULT_LLTV_BUFFER` from `@morpho-org/morpho-sdk/utils`
-- `DEFAULT_SUPPLY_TARGET_UTILIZATION` from `@morpho-org/morpho-sdk/utils`
-- `DEFAULT_WITHDRAWAL_TARGET_UTILIZATION` from `@morpho-org/morpho-sdk/utils`
+- `decodeBytes32String` from `@morpho-org/morpho-sdk/utils`
 - `deepFreeze` from `@morpho-org/morpho-sdk/utils`
 - `DeepPartial` from `@morpho-org/morpho-sdk/utils`
-- `DOCS_BASE_URL` from `@morpho-org/morpho-sdk/utils`
 - `DottedKeys` from `@morpho-org/morpho-sdk/utils`
 - `entries` from `@morpho-org/morpho-sdk/utils`
 - `FieldType` from `@morpho-org/morpho-sdk/utils`
 - `filterDefined` from `@morpho-org/morpho-sdk/utils`
-- `Format` from `@morpho-org/morpho-sdk/utils`
-- `format` from `@morpho-org/morpho-sdk/utils`
-- `formatEnumeration` from `@morpho-org/morpho-sdk/utils`
-- `formatLongString` from `@morpho-org/morpho-sdk/utils`
-- `formatUnion` from `@morpho-org/morpho-sdk/utils`
 - `fromEntries` from `@morpho-org/morpho-sdk/utils`
-- `getEffectiveLocale` from `@morpho-org/morpho-sdk/utils`
-- `getEnUSNumberToLocalParts` from `@morpho-org/morpho-sdk/utils`
+- `getAuthorizationTypedData` from `@morpho-org/morpho-sdk/utils`
+- `getDaiPermitTypedData` from `@morpho-org/morpho-sdk/utils`
 - `getLast` from `@morpho-org/morpho-sdk/utils`
 - `getLastDefined` from `@morpho-org/morpho-sdk/utils`
-- `getLocaleSymbols` from `@morpho-org/morpho-sdk/utils`
+- `getPermit2PermitTypedData` from `@morpho-org/morpho-sdk/utils`
+- `getPermit2TransferFromTypedData` from `@morpho-org/morpho-sdk/utils`
+- `getPermitTypedData` from `@morpho-org/morpho-sdk/utils`
 - `getSubdomainBaseUrl` from `@morpho-org/morpho-sdk/utils`
 - `getValue` from `@morpho-org/morpho-sdk/utils`
 - `hasValue` from `@morpho-org/morpho-sdk/utils`
-- `HexFormatter` from `@morpho-org/morpho-sdk/utils`
 - `isDefined` from `@morpho-org/morpho-sdk/utils`
 - `isNotNull` from `@morpho-org/morpho-sdk/utils`
 - `isNotUndefined` from `@morpho-org/morpho-sdk/utils`
 - `keys` from `@morpho-org/morpho-sdk/utils`
-- `LocaleParts` from `@morpho-org/morpho-sdk/utils`
-- `MAX_ABSOLUTE_SHARE_PRICE` from `@morpho-org/morpho-sdk/utils`
-- `MAX_SLIPPAGE_TOLERANCE` from `@morpho-org/morpho-sdk/utils`
-- `MAX_TOKEN_APPROVALS` from `@morpho-org/morpho-sdk/utils`
+- `MarketUtils` from `@morpho-org/morpho-sdk/utils`
 - `mergeEntries` from `@morpho-org/morpho-sdk/utils`
-- `MORPHO_DOMAIN` from `@morpho-org/morpho-sdk/utils`
-- `NumberFormatter` from `@morpho-org/morpho-sdk/utils`
-- `OPTIMIZERS_API_BASE_URL` from `@morpho-org/morpho-sdk/utils`
-- `OPTIMIZERS_BASE_URL` from `@morpho-org/morpho-sdk/utils`
+- `MathLib` from `@morpho-org/morpho-sdk/utils`
+- `optionalBoolean` from `@morpho-org/morpho-sdk/utils`
 - `PartialDottedKeys` from `@morpho-org/morpho-sdk/utils`
-- `PercentFormatter` from `@morpho-org/morpho-sdk/utils`
 - `readContractRestructured` from `@morpho-org/morpho-sdk/utils`
-- `REWARDS_BASE_URL` from `@morpho-org/morpho-sdk/utils`
 - `retryPromiseLinearBackoff` from `@morpho-org/morpho-sdk/utils`
 - `restructure` from `@morpho-org/morpho-sdk/utils`
 - `safeGetAddress` from `@morpho-org/morpho-sdk/utils`
 - `safeParseNumber` from `@morpho-org/morpho-sdk/utils`
 - `safeParseUnits` from `@morpho-org/morpho-sdk/utils`
-- `ShortFormatter` from `@morpho-org/morpho-sdk/utils`
+- `RoundingDirection` from `@morpho-org/morpho-sdk/utils`
+- `SharesMath` from `@morpho-org/morpho-sdk/utils`
 - `Time` from `@morpho-org/morpho-sdk/utils`
 - `transformValue` from `@morpho-org/morpho-sdk/utils`
 - `validateAccrualPosition` from `@morpho-org/morpho-sdk/utils`
@@ -330,10 +331,10 @@ New utility imports from `@morpho-org/morpho-sdk/utils`:
 - `validateRepayShares` from `@morpho-org/morpho-sdk/utils`
 - `validateSlippageTolerance` from `@morpho-org/morpho-sdk/utils`
 - `validateUserAddress` from `@morpho-org/morpho-sdk/utils`
+- `VaultUtils` from `@morpho-org/morpho-sdk/utils`
 - `values` from `@morpho-org/morpho-sdk/utils`
 - `WithId` from `@morpho-org/morpho-sdk/utils`
 - `WithIndex` from `@morpho-org/morpho-sdk/utils`
-- `ZERO_ADDRESS` from `@morpho-org/morpho-sdk/utils`
 
 New augmentation imports:
 

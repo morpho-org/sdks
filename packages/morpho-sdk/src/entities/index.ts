@@ -1,7 +1,4 @@
 export type {
-  CollateralAllocation,
-  Eip712Field,
-  Erc20AllowanceRecipient,
   IAccrualPosition,
   IAccrualVault,
   IAccrualVaultV2,
@@ -14,8 +11,6 @@ export type {
   IHolding,
   IMarket,
   IMarketParams,
-  InputMarketParams,
-  IPermit2Allowance,
   IPosition,
   IPreLiquidationParams,
   IPreLiquidationPosition,
@@ -33,13 +28,8 @@ export type {
   IVaultV2MorphoMarketV1Adapter,
   IVaultV2MorphoMarketV1AdapterV2,
   IVaultV2MorphoVaultV1Adapter,
-  MaxBorrowOptions,
-  MaxPositionCapacities,
-  MaxWithdrawCollateralOptions,
-  Pending,
   PeripheralBalance,
   PeripheralBalanceType,
-  Permit2Allowance,
   VaultPublicAllocatorConfig,
 } from "@morpho-org/blue-sdk";
 export {
@@ -56,7 +46,6 @@ export {
   Holding,
   Market,
   MarketParams,
-  MarketUtils,
   Position,
   PreLiquidationParams,
   PreLiquidationPosition,
@@ -69,7 +58,6 @@ export {
   VaultMarketPublicAllocatorConfig,
   VaultToken,
   VaultUser,
-  VaultUtils,
   VaultV2,
   VaultV2Adapter,
   VaultV2MorphoMarketV1Adapter,
@@ -77,10 +65,10 @@ export {
   VaultV2MorphoVaultV1Adapter,
   WrappedToken,
 } from "@morpho-org/blue-sdk";
-export * from "./marketV1/index.js";
+export { MorphoMarketV1 } from "./marketV1/index.js";
 export {
   type InputReallocationData,
   ReallocationData,
 } from "./reallocationData.js";
-export * from "./vaultV1/index.js";
-export * from "./vaultV2/index.js";
+export { MorphoVaultV1 } from "./vaultV1/index.js";
+export { MorphoVaultV2 } from "./vaultV2/index.js";

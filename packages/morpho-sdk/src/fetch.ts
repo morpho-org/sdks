@@ -1,5 +1,4 @@
 export {
-  decodeBytes32String,
   fetchAccrualPosition,
   fetchAccrualVault,
   fetchAccrualVaultV2,
@@ -26,5 +25,4 @@ export {
   fetchVaultV2MorphoMarketV1Adapter,
   fetchVaultV2MorphoMarketV1AdapterV2,
   fetchVaultV2MorphoVaultV1Adapter,
-  optionalBoolean,
 } from "@morpho-org/blue-sdk-viem";

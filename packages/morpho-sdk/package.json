@@ -26,6 +26,8 @@
     "./entities": "./src/entities/index.ts",
     "./errors": "./src/errors.ts",
     "./fetch": "./src/fetch.ts",
+    "./format": "./src/format.ts",
+    "./types": "./src/types.ts",
     "./utils": "./src/utils.ts"
   },
   "typesVersions": {
@@ -56,6 +58,12 @@
       ],
       "fetch": [
         "src/fetch.ts"
+      ],
+      "format": [
+        "src/format.ts"
+      ],
+      "types": [
+        "src/types.ts"
       ],
       "utils": [
         "src/utils.ts"
@@ -146,6 +154,16 @@
         "types": "./lib/esm/fetch.d.ts",
         "import": "./lib/esm/fetch.js",
         "require": "./lib/cjs/fetch.js"
+      },
+      "./format": {
+        "types": "./lib/esm/format.d.ts",
+        "import": "./lib/esm/format.js",
+        "require": "./lib/cjs/format.js"
+      },
+      "./types": {
+        "types": "./lib/esm/types.d.ts",
+        "import": "./lib/esm/types.js",
+        "require": "./lib/cjs/types.js"
       },
       "./utils": {
         "types": "./lib/esm/utils.d.ts",
