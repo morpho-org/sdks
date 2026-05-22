@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/simulation-sdk-wagmi",
   "description": "Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states.",
-  "version": "4.0.2",
+  "version": "5.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -25,11 +25,11 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/blue-sdk-wagmi": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
+    "@morpho-org/blue-sdk": "^6.0.0",
+    "@morpho-org/blue-sdk-viem": "^5.0.0",
+    "@morpho-org/blue-sdk-wagmi": "^5.0.0",
+    "@morpho-org/morpho-ts": "^2.5.1",
+    "@morpho-org/simulation-sdk": "^4.0.0",
     "@tanstack/react-query": "^5.0.0",
     "mutative": "^1.0.8",
     "react": "^18.0.0 || ^19.2.6",

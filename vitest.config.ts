@@ -13,6 +13,15 @@ export default defineConfig({
         "packages/test-wagmi/**",
         "packages/morpho-test/**",
         "packages/**/*.md",
+        "packages/**/src/**/*.test.ts",
+        "packages/**/src/**/__test-utils__/**",
+        "packages/**/src/**/__mocks__/**",
+        "packages/**/src/**/__fixtures__/**",
+        "packages/**/src/**/index.ts",
+        "packages/**/src/**/*.d.ts",
+        "packages/**/src/**/abis.ts",
+        "packages/**/src/api/sdk.ts",
+        "packages/**/src/api/types.ts",
         "scripts/**/*.test.{js,mjs}",
       ],
     },
@@ -35,14 +44,20 @@ export default defineConfig({
         extends: true,
         test: {
           name: "morpho-ts",
-          include: ["packages/morpho-ts/test/**/*.test.ts"],
+          include: [
+            "packages/morpho-ts/test/**/*.test.ts",
+            "packages/morpho-ts/src/**/*.test.ts",
+          ],
         },
       },
       {
         extends: true,
         test: {
           name: "blue-sdk",
-          include: ["packages/blue-sdk/test/**/*.test.ts"],
+          include: [
+            "packages/blue-sdk/test/**/*.test.ts",
+            "packages/blue-sdk/src/**/*.test.ts",
+          ],
         },
       },
       {
@@ -75,7 +90,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "blue-sdk-viem",
-          include: ["packages/blue-sdk-viem/test/**/*.test.ts"],
+          include: [
+            "packages/blue-sdk-viem/test/**/*.test.ts",
+            "packages/blue-sdk-viem/src/**/*.test.ts",
+          ],
           testTimeout: 60_000,
         },
       },
@@ -121,7 +139,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "bundler-sdk-viem",
-          include: ["packages/bundler-sdk-viem/test/**/*.test.ts"],
+          include: [
+            "packages/bundler-sdk-viem/test/**/*.test.ts",
+            "packages/bundler-sdk-viem/src/**/*.test.ts",
+          ],
           environment: "happy-dom",
           testTimeout: 60_000,
         },
@@ -130,7 +151,10 @@ export default defineConfig({
         extends: true,
         test: {
           name: "liquidation-sdk-viem",
-          include: ["packages/liquidation-sdk-viem/test/**/*.test.ts"],
+          include: [
+            "packages/liquidation-sdk-viem/test/**/*.test.ts",
+            "packages/liquidation-sdk-viem/src/**/*.test.ts",
+          ],
           testTimeout: 90_000,
         },
       },
@@ -138,14 +162,38 @@ export default defineConfig({
         extends: true,
         test: {
           name: "liquidity-sdk-viem",
-          include: ["packages/liquidity-sdk-viem/test/**/*.test.ts"],
+          include: [
+            "packages/liquidity-sdk-viem/test/**/*.test.ts",
+            "packages/liquidity-sdk-viem/src/**/*.test.ts",
+          ],
         },
       },
       {
         extends: true,
         test: {
           name: "test",
-          include: ["packages/test/test/**/*.test.ts"],
+          include: [
+            "packages/test/test/**/*.test.ts",
+            "packages/test/src/**/*.test.ts",
+          ],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "morpho-test",
+          include: ["packages/morpho-test/src/**/*.test.ts"],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "wdk-protocol-lending-morpho-evm",
+          include: [
+            "packages/wdk-protocol-lending-morpho-evm/tests/**/*.test.{ts,js}",
+            "packages/wdk-protocol-lending-morpho-evm/src/**/*.test.{ts,js}",
+          ],
+          testTimeout: 120_000,
         },
       },
     ],

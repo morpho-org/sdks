@@ -20,7 +20,7 @@ query getMarketsAssets(
       skip
     }
     items {
-      uniqueKey
+      uniqueKey: marketId
       collateralAsset {
         address
         decimals

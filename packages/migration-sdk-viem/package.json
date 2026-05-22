@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/migration-sdk-viem",
   "description": "Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to build migration bundles to migrate lending positions (on aave, compound, morpho-aaveV3-optimizer, ...) to the morpho protocol.",
-  "version": "2.3.2",
+  "version": "3.0.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "oumar-fall"
@@ -25,16 +25,17 @@
     "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json"
   },
   "peerDependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/bundler-sdk-viem": "workspace:^",
-    "@morpho-org/morpho-ts": "workspace:^",
-    "@morpho-org/simulation-sdk": "workspace:^",
+    "@morpho-org/blue-sdk": "^6.0.0",
+    "@morpho-org/blue-sdk-viem": "^5.0.0",
+    "@morpho-org/bundler-sdk-viem": "^5.0.0",
+    "@morpho-org/morpho-ts": "^2.5.1",
+    "@morpho-org/simulation-sdk": "^4.0.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {
     "@morpho-org/blue-sdk": "workspace:^",
     "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/bundler-sdk-viem": "workspace:^",
     "@morpho-org/morpho-test": "workspace:^",
     "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/simulation-sdk": "workspace:^",

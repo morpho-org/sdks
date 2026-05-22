@@ -93,7 +93,7 @@ describe("AccrualVaultV2", () => {
         blockNumber: block.number,
       });
 
-    expect(accruedVaultV2.totalAssets).toEqual(expectedTotalAssets);
+    expect(accruedVaultV2._totalAssets).toEqual(expectedTotalAssets);
     expect(accruedVaultV2.totalSupply).toEqual(
       vaultV2.totalSupply + performanceFeeShares + managementFeeShares,
     );
@@ -127,7 +127,6 @@ describe("AccrualVaultV2", () => {
         performanceFee: 0n,
         performanceFeeRecipient: zeroAddress,
         symbol: "tvUSDC",
-        totalAssets: 16474000n,
         _totalAssets: 16474000n,
         totalSupply: 16474000000000000000n,
         virtualShares: 1000000000000n,
@@ -166,7 +165,6 @@ describe("AccrualVaultV2", () => {
         performanceFee: 0n,
         performanceFeeRecipient: zeroAddress,
         symbol: "tvUSDC",
-        totalAssets: 16474000n,
         _totalAssets: 16474000n,
         totalSupply: 16474000000000000000n,
         virtualShares: 1000000000000n,
