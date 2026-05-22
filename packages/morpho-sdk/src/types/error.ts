@@ -485,6 +485,27 @@ export class WithdrawSharesExceedSupplyError extends Error {
   }
 }
 
+/**
+ * Thrown when `computeReallocations` is called with a withdraw `amount` greater
+ * than the target market's current `totalSupplyAssets` — the post-withdraw
+ * supply would be negative, making the on-chain `morphoWithdraw` revert
+ * regardless of any reallocation. Caught here so callers do not pay
+ * PublicAllocator fees on an unreachable operation.
+ */
+export class ReallocationWithdrawExceedsMarketSupplyError extends Error {
+  constructor(
+    public readonly params: {
+      readonly marketId: MarketId;
+      readonly withdrawAmount: bigint;
+      readonly totalSupplyAssets: bigint;
+    },
+  ) {
+    super(
+      `Withdraw amount "${params.withdrawAmount}" exceeds market total supply "${params.totalSupplyAssets}" on market ${params.marketId}. Reduce the withdraw amount.`,
+    );
+  }
+}
+
 /** Thrown when a vault migration's source vault asset differs from the target vault asset. */
 export class VaultAssetMismatchError extends Error {
   constructor(sourceAsset: Address, targetAsset: Address) {

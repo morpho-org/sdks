@@ -6,6 +6,7 @@ import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
   type ReallocationComputeOptions,
+  ReallocationWithdrawExceedsMarketSupplyError,
   type VaultReallocation,
 } from "../types/index.js";
 
@@ -33,6 +34,9 @@ import {
  * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the operation's
  *   absolute shortfall on the target market — preventing fee-bearing reallocations from being
  *   attached to a call that would still revert onchain.
+ * @throws {ReallocationWithdrawExceedsMarketSupplyError} If `operation === "withdraw"` and
+ *   `amount` exceeds the target market's `totalSupplyAssets` — the on-chain call would revert
+ *   regardless of reallocations.
  * @throws {MissingPublicAllocatorConfigError} When a vault selected for reallocation has no
  *   PublicAllocator configuration in the simulation state.
  */
@@ -52,6 +56,17 @@ export const computeReallocations = ({
   if (options?.enabled === false) return [];
 
   const market = data.getMarket(marketId).accrueInterest(data.block.timestamp);
+
+  // Reject unreachable withdraws before any utilization math: a negative
+  // post-supply yields a negative utilization that short-circuits the
+  // utilization gate below and silently returns `[]` — masking a sure revert.
+  if (operation === "withdraw" && amount > market.totalSupplyAssets) {
+    throw new ReallocationWithdrawExceedsMarketSupplyError({
+      marketId,
+      withdrawAmount: amount,
+      totalSupplyAssets: market.totalSupplyAssets,
+    });
+  }
 
   // Post-state utilization is operation-dependent.
   const newTotalBorrowAssets =

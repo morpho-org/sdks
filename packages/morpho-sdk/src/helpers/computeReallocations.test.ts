@@ -16,6 +16,7 @@ import {
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
+  ReallocationWithdrawExceedsMarketSupplyError,
 } from "../types/index.js";
 import { computeReallocations } from "./computeReallocations.js";
 
@@ -841,6 +842,51 @@ describe("computeReallocations", () => {
           options: { enabled: true },
         }),
       ).toThrow(InsufficientSharedLiquidityError);
+    });
+
+    test("error: ReallocationWithdrawExceedsMarketSupplyError when amount exceeds market supply", () => {
+      // Default target: S=1000, B=500. Withdraw 1001 → would yield S' negative.
+      // Without the guard, getUtilization returns a negative ratio that slips
+      // under supplyTargetUtilization and silently returns [] — masking a sure revert.
+      const data = makeMockState();
+      const withdrawAmount = parseEther("1001");
+
+      try {
+        computeReallocations({
+          reallocationData: data,
+          marketId: targetParams.id,
+          operation: "withdraw",
+          amount: withdrawAmount,
+          options: { enabled: true },
+        });
+        throw new Error("should have thrown");
+      } catch (e) {
+        expect(e).toBeInstanceOf(ReallocationWithdrawExceedsMarketSupplyError);
+        const err = e as ReallocationWithdrawExceedsMarketSupplyError;
+        expect(err.params.marketId).toBe(targetParams.id);
+        expect(err.params.withdrawAmount).toBe(withdrawAmount);
+        expect(err.params.totalSupplyAssets).toBe(parseEther("1000"));
+      }
+    });
+
+    test("should not throw when withdraw amount equals total supply (boundary)", () => {
+      // Edge: amount === totalSupplyAssets is reachable on-chain (drains supply
+      // exactly, B must be 0 for the call to succeed); we delegate the
+      // utilization / shortfall reasoning to the rest of the algorithm.
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: parseEther("1000"),
+        totalBorrowAssets: 0n,
+      });
+      const data = makeMockState({ targetMarket: tm });
+      expect(() =>
+        computeReallocations({
+          reallocationData: data,
+          marketId: targetParams.id,
+          operation: "withdraw",
+          amount: parseEther("1000"),
+          options: { enabled: true },
+        }),
+      ).not.toThrow(ReallocationWithdrawExceedsMarketSupplyError);
     });
   });
 });
