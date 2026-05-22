@@ -170,14 +170,20 @@ export class ZeroCollateralAmountError extends Error {
   }
 }
 
-/** Thrown when a collateral supply uses `nativeAmount` but the collateral token is not the chain's wNative. */
-export class NativeAmountOnNonWNativeCollateralError extends Error {
-  constructor(collateralToken: Address, wNative: Address) {
+/** Thrown when an action uses `nativeAmount` but the target asset is not the chain's wNative. */
+export class NativeAmountOnNonWNativeAssetError extends Error {
+  constructor(asset: Address, wNative: Address) {
     super(
-      `Cannot use nativeAmount: collateral token ${collateralToken} is not the wrapped native token ${wNative}`,
+      `Cannot use nativeAmount: asset ${asset} is not the wrapped native token ${wNative}`,
     );
   }
 }
+
+/** @deprecated Use {@link NativeAmountOnNonWNativeAssetError}. */
+export const NativeAmountOnNonWNativeCollateralError =
+  NativeAmountOnNonWNativeAssetError;
+export type NativeAmountOnNonWNativeCollateralError =
+  NativeAmountOnNonWNativeAssetError;
 
 /** Thrown when a borrow exceeds the LLTV-buffered safe maximum for the position. */
 export class BorrowExceedsSafeLtvError extends Error {
@@ -414,10 +420,10 @@ export class NegativeSupplyAmountError extends Error {
   }
 }
 
-/** Thrown when a market loan-asset supply's `maxSharePrice` slippage bound is zero or negative. */
-export class NonPositiveSupplyMaxSharePriceError extends Error {
+/** Thrown when a market loan-asset supply's `maxSharePrice` slippage bound is negative. */
+export class NegativeSupplyMaxSharePriceError extends Error {
   constructor(market: string) {
-    super(`Max share price must be positive for market: ${market}`);
+    super(`Max share price must be non-negative for market: ${market}`);
   }
 }
 
@@ -426,15 +432,6 @@ export class ZeroSupplyAmountError extends Error {
   constructor(market: string) {
     super(
       `Total supply amount must be positive for market: ${market}. Both amount and nativeAmount are zero.`,
-    );
-  }
-}
-
-/** Thrown when a loan-asset supply uses `nativeAmount` but the loan token is not the chain's wNative. */
-export class NativeAmountOnNonWNativeLoanError extends Error {
-  constructor(loanToken: Address, wNative: Address) {
-    super(
-      `Cannot use nativeAmount: loan token ${loanToken} is not the wrapped native token ${wNative}`,
     );
   }
 }

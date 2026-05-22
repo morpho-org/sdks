@@ -22,8 +22,7 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  NativeAmountOnNonWNativeCollateralError,
-  NativeAmountOnNonWNativeLoanError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeReallocationFeeError,
   NegativeSlippageToleranceError,
   NonPositiveReallocationAmountError,
@@ -40,8 +39,7 @@ import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 import {
   validateAccrualPosition,
   validateChainId,
-  validateNativeCollateral,
-  validateNativeLoan,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateReallocations,
@@ -259,21 +257,21 @@ describe("validateChainId", () => {
 });
 
 // ---------------------------------------------------------------------------
-// validateNativeCollateral
+// validateNativeAsset
 // ---------------------------------------------------------------------------
 
-describe("validateNativeCollateral", () => {
+describe("validateNativeAsset", () => {
   // On mainnet, wNative = WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
   const wNative = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address;
   const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address;
 
-  test("should pass when collateral is wNative", () => {
-    expect(() => validateNativeCollateral(mainnet.id, wNative)).not.toThrow();
+  test("should pass when asset is wNative", () => {
+    expect(() => validateNativeAsset(mainnet.id, wNative)).not.toThrow();
   });
 
-  test("should throw NativeAmountOnNonWNativeCollateralError when collateral is not wNative", () => {
-    expect(() => validateNativeCollateral(mainnet.id, usdc)).toThrow(
-      NativeAmountOnNonWNativeCollateralError,
+  test("should throw NativeAmountOnNonWNativeAssetError when asset is not wNative", () => {
+    expect(() => validateNativeAsset(mainnet.id, usdc)).toThrow(
+      NativeAmountOnNonWNativeAssetError,
     );
   });
 });
@@ -560,25 +558,6 @@ describe("validateSlippageTolerance", () => {
     expect(() =>
       validateSlippageTolerance(MAX_SLIPPAGE_TOLERANCE + 1n),
     ).toThrow(ExcessiveSlippageToleranceError);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// validateNativeLoan
-// ---------------------------------------------------------------------------
-
-describe("validateNativeLoan", () => {
-  const wNative = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address;
-  const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address;
-
-  test("should pass when loan token is wNative", () => {
-    expect(() => validateNativeLoan(mainnet.id, wNative)).not.toThrow();
-  });
-
-  test("should throw NativeAmountOnNonWNativeLoanError when loan token is not wNative", () => {
-    expect(() => validateNativeLoan(mainnet.id, usdc)).toThrow(
-      NativeAmountOnNonWNativeLoanError,
-    );
   });
 });
 

@@ -1,16 +1,25 @@
-import { DEFAULT_SLIPPAGE_TOLERANCE } from "@morpho-org/blue-sdk";
+import {
+  AccrualPosition as AccrualPositionClass,
+  DEFAULT_SLIPPAGE_TOLERANCE,
+} from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  AccrualPositionUserMismatchError,
   computeMinWithdrawSharePrice,
+  ExcessiveSlippageToleranceError,
   isRequirementAuthorization,
+  MarketIdMismatchError,
   MissingAccrualPositionError,
   MorphoClient,
   MutuallyExclusiveWithdrawAmountsError,
   marketV1Withdraw,
+  NegativeSlippageToleranceError,
   NonPositiveWithdrawAmountError,
   type VaultReallocation,
+  WithdrawExceedsSupplyError,
+  WithdrawSharesExceedSupplyError,
 } from "../../../src/index.js";
 import {
   CbbtcUsdcMarketV1,
@@ -298,6 +307,154 @@ describe("WithdrawMarketV1", () => {
     );
   });
 
+  test("should withdraw by shares with single-vault reallocation", async ({
+    client,
+  }) => {
+    const supplyAmount = parseUnits("200", 6);
+    const reallocationAmount = parseUnits("2000", 6);
+
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcMarketV1,
+      supplyAmount,
+    });
+
+    const reallocations: readonly VaultReallocation[] = [
+      {
+        vault: SteakhouseUsdcVaultV1.address,
+        fee: 0n,
+        withdrawals: [
+          {
+            marketParams: WbtcUsdcSourceMarket,
+            amount: reallocationAmount,
+          },
+        ],
+      },
+    ];
+
+    const {
+      markets: {
+        CbbtcUsdcMarketV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { markets: { CbbtcUsdcMarketV1, WbtcUsdcSourceMarket } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client);
+        const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        // Withdraw half the supply shares; mode-by-shares exercises the
+        // `toSupplyAssets("Down")` path in the slippage helper.
+        const withdrawShares = positionData.supplyShares / 2n;
+
+        const withdraw = market.withdraw({
+          userAddress: client.account.address,
+          shares: withdrawShares,
+          positionData,
+          reallocations,
+        });
+
+        const requirements = await withdraw.getRequirements();
+        const authorization = requirements[0];
+        if (!isRequirementAuthorization(authorization)) {
+          throw new Error("Authorization requirement not found");
+        }
+        await client.sendTransaction(authorization);
+
+        const tx = withdraw.buildTx();
+        expect(tx.value).toBe(0n);
+        expect(tx.action.args.shares).toBe(withdrawShares);
+        expect(tx.action.args.assets).toBe(0n);
+
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.position.supplyShares).toBeLessThan(
+      initialState.position.supplyShares,
+    );
+    expect(finalState.userLoanTokenBalance).toBeGreaterThan(
+      initialState.userLoanTokenBalance,
+    );
+  });
+
+  test("should withdraw to a different receiver with reallocation", async ({
+    client,
+  }) => {
+    const supplyAmount = parseUnits("200", 6);
+    const withdrawAmount = parseUnits("50", 6);
+    const reallocationAmount = parseUnits("2000", 6);
+    const receiver = "0x000000000000000000000000000000000000dEaD" as const;
+
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcMarketV1,
+      supplyAmount,
+    });
+
+    const reallocations: readonly VaultReallocation[] = [
+      {
+        vault: SteakhouseUsdcVaultV1.address,
+        fee: 0n,
+        withdrawals: [
+          {
+            marketParams: WbtcUsdcSourceMarket,
+            amount: reallocationAmount,
+          },
+        ],
+      },
+    ];
+
+    const receiverInitialBalance = await client.balanceOf({
+      erc20: CbbtcUsdcMarketV1.loanToken,
+      owner: receiver,
+    });
+
+    await testInvariants({
+      client,
+      params: { markets: { CbbtcUsdcMarketV1, WbtcUsdcSourceMarket } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client);
+        const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+        const positionData = await market.getPositionData(
+          client.account.address,
+        );
+
+        const withdraw = market.withdraw({
+          userAddress: client.account.address,
+          receiver,
+          assets: withdrawAmount,
+          positionData,
+          reallocations,
+        });
+
+        const requirements = await withdraw.getRequirements();
+        const authorization = requirements[0];
+        if (!isRequirementAuthorization(authorization)) {
+          throw new Error("Authorization requirement not found");
+        }
+        await client.sendTransaction(authorization);
+
+        const tx = withdraw.buildTx();
+        expect(tx.action.args.receiver).toBe(receiver);
+        await client.sendTransaction(tx);
+      },
+    });
+
+    const receiverFinalBalance = await client.balanceOf({
+      erc20: CbbtcUsdcMarketV1.loanToken,
+      owner: receiver,
+    });
+    expect(receiverFinalBalance).toEqual(
+      receiverInitialBalance + withdrawAmount,
+    );
+  });
+
   test("error: MutuallyExclusiveWithdrawAmountsError when both assets and shares are non-zero", async ({
     client,
   }) => {
@@ -342,5 +499,137 @@ describe("WithdrawMarketV1", () => {
         positionData: undefined as never,
       }),
     ).toThrow(MissingAccrualPositionError);
+  });
+
+  test("error: MarketIdMismatchError when positionData is for a different market", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const otherMarket = morphoClient.marketV1(WbtcUsdcSourceMarket, mainnet.id);
+    const wrongPositionData = await otherMarket.getPositionData(
+      client.account.address,
+    );
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: parseUnits("1", 6),
+        positionData: wrongPositionData,
+      }),
+    ).toThrow(MarketIdMismatchError);
+  });
+
+  test("error: AccrualPositionUserMismatchError when positionData is for a different user", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const otherUser = "0x000000000000000000000000000000000000dEaD" as const;
+    const positionData = await market.getPositionData(otherUser);
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: parseUnits("1", 6),
+        positionData,
+      }),
+    ).toThrow(AccrualPositionUserMismatchError);
+  });
+
+  test("error: WithdrawExceedsSupplyError when assets exceed supplied", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const positionData = new AccrualPositionClass(
+      {
+        user: client.account.address,
+        supplyShares: parseUnits("100", 24),
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      {
+        params: CbbtcUsdcMarketV1,
+        totalSupplyAssets: parseUnits("1000", 6),
+        totalSupplyShares: parseUnits("1000", 24),
+        totalBorrowAssets: 0n,
+        totalBorrowShares: 0n,
+        lastUpdate: 0n,
+        fee: 0n,
+      },
+    );
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: parseUnits("1000", 6),
+        positionData,
+      }),
+    ).toThrow(WithdrawExceedsSupplyError);
+  });
+
+  test("error: WithdrawSharesExceedSupplyError when shares exceed owned", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const positionData = new AccrualPositionClass(
+      {
+        user: client.account.address,
+        supplyShares: parseUnits("100", 24),
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      {
+        params: CbbtcUsdcMarketV1,
+        totalSupplyAssets: parseUnits("1000", 6),
+        totalSupplyShares: parseUnits("1000", 24),
+        totalBorrowAssets: 0n,
+        totalBorrowShares: 0n,
+        lastUpdate: 0n,
+        fee: 0n,
+      },
+    );
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        shares: parseUnits("101", 24),
+        positionData,
+      }),
+    ).toThrow(WithdrawSharesExceedSupplyError);
+  });
+
+  test("error: NegativeSlippageToleranceError when slippageTolerance is negative", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: parseUnits("1", 6),
+        positionData: undefined as never,
+        slippageTolerance: -1n,
+      }),
+    ).toThrow(NegativeSlippageToleranceError);
+  });
+
+  test("error: ExcessiveSlippageToleranceError when slippageTolerance is too high", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+
+    expect(() =>
+      market.withdraw({
+        userAddress: client.account.address,
+        assets: parseUnits("1", 6),
+        positionData: undefined as never,
+        slippageTolerance: parseUnits("1", 18),
+      }),
+    ).toThrow(ExcessiveSlippageToleranceError);
   });
 });

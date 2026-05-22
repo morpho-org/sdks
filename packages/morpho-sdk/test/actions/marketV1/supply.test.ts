@@ -1,20 +1,29 @@
-import { DEFAULT_SLIPPAGE_TOLERANCE } from "@morpho-org/blue-sdk";
-import { parseUnits } from "viem";
+import {
+  addressesRegistry,
+  DEFAULT_SLIPPAGE_TOLERANCE,
+  MathLib,
+} from "@morpho-org/blue-sdk";
+import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   computeMaxSupplySharePrice,
+  ExcessiveSlippageToleranceError,
   isRequirementApproval,
+  isRequirementSignature,
   MarketIdMismatchError,
   MorphoClient,
   marketV1Supply,
+  NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
+  NegativeSlippageToleranceError,
   NegativeSupplyAmountError,
   ZeroSupplyAmountError,
 } from "../../../src/index.js";
 import {
   CbbtcUsdcMarketV1,
   WbtcUsdcSourceMarket,
+  WstethWethMarketV1,
 } from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
@@ -147,6 +156,182 @@ describe("SupplyMarketV1", () => {
     expect(tx.action.args.maxSharePrice).toBeGreaterThan(0n);
   });
 
+  test("should supply loan token end-to-end with permit2", async ({
+    client,
+  }) => {
+    const {
+      permit2,
+      bundler3: { generalAdapter1 },
+    } = addressesRegistry[mainnet.id];
+
+    const supplyAmount = parseUnits("1000", 6); // USDC
+
+    await client.deal({
+      erc20: CbbtcUsdcMarketV1.loanToken,
+      amount: supplyAmount,
+    });
+
+    const {
+      markets: {
+        CbbtcUsdcMarketV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { markets: { CbbtcUsdcMarketV1 } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client, {
+          supportSignature: true,
+        });
+        const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+        const marketData = await market.getMarketData();
+
+        const supply = market.supply({
+          userAddress: client.account.address,
+          amount: supplyAmount,
+          marketData,
+        });
+
+        const requirements = await supply.getRequirements();
+        expect(requirements.length).toBe(2);
+
+        const approvalPermit2 = requirements[0];
+        if (!isRequirementApproval(approvalPermit2)) {
+          throw new Error("Expected approval requirement for permit2");
+        }
+        expect(approvalPermit2.action.args.spender).toBe(permit2);
+        expect(approvalPermit2.action.args.amount).toBe(MathLib.MAX_UINT_160);
+        await client.sendTransaction(approvalPermit2);
+
+        const signaturePermit2 = requirements[1];
+        if (!isRequirementSignature(signaturePermit2)) {
+          throw new Error("Expected permit2 signature requirement");
+        }
+        expect(signaturePermit2.action.type).toBe("permit2");
+        expect(signaturePermit2.action.args.spender).toBe(generalAdapter1);
+
+        const requirementSignature = await signaturePermit2.sign(
+          client,
+          client.account.address,
+        );
+        expect(isHex(requirementSignature.args.signature)).toBe(true);
+
+        const tx = supply.buildTx(requirementSignature);
+        expect(tx.value).toBe(0n);
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.userLoanTokenBalance).toEqual(
+      initialState.userLoanTokenBalance - supplyAmount,
+    );
+    expect(finalState.position.supplyShares).toBeGreaterThan(
+      initialState.position.supplyShares,
+    );
+  });
+
+  test("should supply loan token end-to-end with native ETH only (wNative loan)", async ({
+    client,
+  }) => {
+    const nativeAmount = parseUnits("1", 18);
+
+    await client.setBalance({
+      address: client.account.address,
+      value: nativeAmount + parseUnits("10", 18),
+    });
+
+    const {
+      markets: {
+        WstethWethMarketV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { markets: { WstethWethMarketV1 } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client);
+        const market = morphoClient.marketV1(WstethWethMarketV1, mainnet.id);
+        const marketData = await market.getMarketData();
+
+        const supply = market.supply({
+          userAddress: client.account.address,
+          amount: 0n,
+          nativeAmount,
+          marketData,
+        });
+
+        // No ERC20 approval needed: only native wrapping inside the bundle.
+        const requirements = await supply.getRequirements();
+        expect(requirements.length).toBe(0);
+
+        const tx = supply.buildTx();
+        expect(tx.value).toEqual(nativeAmount);
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.morphoLoanTokenBalance).toEqual(
+      initialState.morphoLoanTokenBalance + nativeAmount,
+    );
+    expect(finalState.position.supplyShares).toBeGreaterThan(
+      initialState.position.supplyShares,
+    );
+  });
+
+  test("should supply loan token end-to-end with both ERC20 WETH and native ETH", async ({
+    client,
+  }) => {
+    const amount = parseUnits("0.5", 18);
+    const nativeAmount = parseUnits("0.5", 18);
+    const totalAssets = amount + nativeAmount;
+
+    await client.deal({
+      erc20: WstethWethMarketV1.loanToken,
+      amount,
+    });
+    await client.setBalance({
+      address: client.account.address,
+      value: nativeAmount + parseUnits("10", 18),
+    });
+
+    const {
+      markets: {
+        WstethWethMarketV1: { initialState, finalState },
+      },
+    } = await testInvariants({
+      client,
+      params: { markets: { WstethWethMarketV1 } },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client);
+        const market = morphoClient.marketV1(WstethWethMarketV1, mainnet.id);
+        const marketData = await market.getMarketData();
+
+        const supply = market.supply({
+          userAddress: client.account.address,
+          amount,
+          nativeAmount,
+          marketData,
+        });
+
+        const requirements = await supply.getRequirements();
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Approval requirement not found");
+        }
+        await client.sendTransaction(approval);
+
+        const tx = supply.buildTx();
+        expect(tx.value).toEqual(nativeAmount);
+        await client.sendTransaction(tx);
+      },
+    });
+
+    expect(finalState.userLoanTokenBalance).toEqual(
+      initialState.userLoanTokenBalance - amount,
+    );
+    expect(finalState.morphoLoanTokenBalance).toEqual(
+      initialState.morphoLoanTokenBalance + totalAssets,
+    );
+  });
+
   test("error: MarketIdMismatchError when marketData is for a different market", async ({
     client,
   }) => {
@@ -211,5 +396,55 @@ describe("SupplyMarketV1", () => {
         marketData,
       }),
     ).toThrow(ZeroSupplyAmountError);
+  });
+
+  test("error: NegativeSlippageToleranceError when slippageTolerance is negative", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const marketData = await market.getMarketData();
+
+    expect(() =>
+      market.supply({
+        userAddress: client.account.address,
+        amount: parseUnits("100", 6),
+        marketData,
+        slippageTolerance: -1n,
+      }),
+    ).toThrow(NegativeSlippageToleranceError);
+  });
+
+  test("error: ExcessiveSlippageToleranceError when slippageTolerance is too high", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const marketData = await market.getMarketData();
+
+    expect(() =>
+      market.supply({
+        userAddress: client.account.address,
+        amount: parseUnits("100", 6),
+        marketData,
+        slippageTolerance: parseUnits("1", 18),
+      }),
+    ).toThrow(ExcessiveSlippageToleranceError);
+  });
+
+  test("error: NativeAmountOnNonWNativeAssetError when loan token is not wNative", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
+    const marketData = await market.getMarketData();
+
+    expect(() =>
+      market.supply({
+        userAddress: client.account.address,
+        nativeAmount: parseUnits("1", 18),
+        marketData,
+      }),
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 });

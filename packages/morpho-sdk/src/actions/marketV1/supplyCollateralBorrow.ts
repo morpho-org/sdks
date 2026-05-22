@@ -4,7 +4,7 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import {
   addTransactionMetadata,
-  validateNativeCollateral,
+  validateNativeAsset,
 } from "../../helpers/index.js";
 import {
   type DepositAmountArgs,
@@ -77,7 +77,7 @@ export interface MarketV1SupplyCollateralBorrowParams {
  * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
  * @throws {ZeroCollateralAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
- * @throws {NativeAmountOnNonWNativeCollateralError} when `nativeAmount > 0n` but the collateral
+ * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
  *   token is not the chain's wNative.
  * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.collateralToken`.
@@ -155,7 +155,7 @@ export const marketV1SupplyCollateralBorrow = ({
   const actions: Action[] = [];
 
   if (nativeAmount !== undefined && nativeAmount > 0n) {
-    validateNativeCollateral(chainId, marketParams.collateralToken);
+    validateNativeAsset(chainId, marketParams.collateralToken);
 
     actions.push(
       {

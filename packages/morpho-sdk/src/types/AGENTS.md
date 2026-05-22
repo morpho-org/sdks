@@ -24,7 +24,7 @@ Both map directly to `PublicAllocator.reallocateTo()` arguments.
 
 One class per error case. Never throw a generic `Error` from SDK source.
 
-- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `ZeroCollateralAmountError`, `NativeAmountOnNonWNativeCollateralError`, `NativeAmountOnNonWNativeLoanError`, `ZeroSupplyAmountError`, `NegativeSupplyAmountError`, `NonPositiveSupplyMaxSharePriceError`, `NonPositiveWithdrawAmountError`, `NegativeWithdrawMinSharePriceError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
+- **Market-specific:** `BorrowExceedsSafeLtvError`, `MissingMarketPriceError`, `ZeroCollateralAmountError`, `NativeAmountOnNonWNativeAssetError`, `ZeroSupplyAmountError`, `NegativeSupplyAmountError`, `NegativeSupplyMaxSharePriceError`, `NonPositiveWithdrawAmountError`, `NegativeWithdrawMinSharePriceError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`.
 - **Reallocation-specific:** `NegativeReallocationFeeError`, `EmptyReallocationWithdrawalsError`, `NonPositiveReallocationAmountError`, `ReallocationWithdrawalOnTargetMarketError`, `UnsortedReallocationWithdrawalsError`.
 
 ## Adding a new operation

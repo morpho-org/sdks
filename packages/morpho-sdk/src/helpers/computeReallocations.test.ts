@@ -5,7 +5,7 @@ import {
   MathLib,
 } from "@morpho-org/blue-sdk";
 import type { SimulationState } from "@morpho-org/simulation-sdk";
-import type { Address } from "viem";
+import { type Address, parseEther } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   CbbtcUsdcMarketV1,
@@ -725,7 +725,7 @@ describe("computeReallocations", () => {
         reallocationData: data,
         marketId: targetParams.id,
         operation: "withdraw",
-        amount: 100n * MathLib.WAD,
+        amount: parseEther("100"),
         options: { enabled: true },
       });
       expect(result).toEqual([]);
@@ -733,17 +733,17 @@ describe("computeReallocations", () => {
 
     test("should return friendly reallocations when post-withdraw utilization exceeds target", () => {
       // S=1000, B=500. Withdraw 460 → S'=540, util = 500/540 ≈ 92.6% > 90.5%.
-      const withdrawAmount = 460n * MathLib.WAD;
+      const withdrawAmount = parseEther("460");
 
       // After friendly reallocation: target gets +500 supply, easing utilization.
       const friendlyTargetMarket = makeMarket(targetParams, {
-        totalSupplyAssets: 1500n * MathLib.WAD,
-        totalBorrowAssets: 500n * MathLib.WAD,
+        totalSupplyAssets: parseEther("1500"),
+        totalBorrowAssets: parseEther("500"),
       });
 
       const data = makeMockState({
         friendlyWithdrawals: [
-          { id: sourceA.id, vault: VAULT_A, assets: 500n * MathLib.WAD },
+          { id: sourceA.id, vault: VAULT_A, assets: parseEther("500") },
         ],
         friendlyTargetMarket,
         vaultFees: { [VAULT_A]: 0n },
@@ -765,25 +765,25 @@ describe("computeReallocations", () => {
     test("should fall back to aggressive when friendly is insufficient", () => {
       // S=600, B=500. Withdraw 200 → S'=400, B=500 > S' so on-chain revert without help.
       const tm = makeMarket(targetParams, {
-        totalSupplyAssets: 600n * MathLib.WAD,
-        totalBorrowAssets: 500n * MathLib.WAD,
+        totalSupplyAssets: parseEther("600"),
+        totalBorrowAssets: parseEther("500"),
       });
-      const withdrawAmount = 200n * MathLib.WAD;
+      const withdrawAmount = parseEther("200");
 
       // Friendly: target after = +50 supply → still S=650, B=500. Withdraw 200 → S'=450 < B=500.
       const friendlyTargetMarket = makeMarket(targetParams, {
-        totalSupplyAssets: 650n * MathLib.WAD,
-        totalBorrowAssets: 500n * MathLib.WAD,
+        totalSupplyAssets: parseEther("650"),
+        totalBorrowAssets: parseEther("500"),
       });
 
       const data = makeMockState({
         targetMarket: tm,
         friendlyWithdrawals: [
-          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+          { id: sourceA.id, vault: VAULT_A, assets: parseEther("50") },
         ],
         friendlyTargetMarket,
         aggressiveWithdrawals: [
-          { id: sourceB.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
+          { id: sourceB.id, vault: VAULT_A, assets: parseEther("200") },
         ],
         vaultFees: { [VAULT_A]: 0n },
       });
@@ -803,31 +803,31 @@ describe("computeReallocations", () => {
         (sum, w) => sum + w.amount,
         0n,
       );
-      expect(totalAmount).toBeGreaterThanOrEqual(100n * MathLib.WAD);
+      expect(totalAmount).toBeGreaterThanOrEqual(parseEther("100"));
     });
 
     test("should throw InsufficientSharedLiquidityError when even aggressive falls short", () => {
       // S=600, B=500. Withdraw 200 → S'=400 < B=500. Absolute shortfall = 100.
       const tm = makeMarket(targetParams, {
-        totalSupplyAssets: 600n * MathLib.WAD,
-        totalBorrowAssets: 500n * MathLib.WAD,
+        totalSupplyAssets: parseEther("600"),
+        totalBorrowAssets: parseEther("500"),
       });
-      const withdrawAmount = 200n * MathLib.WAD;
+      const withdrawAmount = parseEther("200");
 
       const friendlyTargetMarket = makeMarket(targetParams, {
-        totalSupplyAssets: 605n * MathLib.WAD,
-        totalBorrowAssets: 500n * MathLib.WAD,
+        totalSupplyAssets: parseEther("605"),
+        totalBorrowAssets: parseEther("500"),
       });
 
       const data = makeMockState({
         targetMarket: tm,
-        // Only 5 WAD friendly + 50 WAD aggressive available = 55 WAD < 100 WAD shortfall.
+        // Only 5 + 50 = 55 available < 100 shortfall.
         friendlyWithdrawals: [
-          { id: sourceA.id, vault: VAULT_A, assets: 5n * MathLib.WAD },
+          { id: sourceA.id, vault: VAULT_A, assets: parseEther("5") },
         ],
         friendlyTargetMarket,
         aggressiveWithdrawals: [
-          { id: sourceB.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+          { id: sourceB.id, vault: VAULT_A, assets: parseEther("50") },
         ],
         vaultFees: { [VAULT_A]: 0n },
       });

@@ -39,3 +39,12 @@ export const WstethUsdcSourceMarket = new MarketParams({
   irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
   lltv: 860000000000000000n,
 });
+
+/** wstETH collateral / WETH loan — used to exercise wNative-loan supply paths. */
+export const WstethWethMarketV1 = new MarketParams({
+  loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
+  collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0",
+  oracle: "0x2a01EB9496094dA03c4E364Def50f5aD1280AD72",
+  irm: "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC",
+  lltv: 945000000000000000n,
+});

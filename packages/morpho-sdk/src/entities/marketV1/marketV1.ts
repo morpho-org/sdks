@@ -41,8 +41,7 @@ import {
   computeReallocations,
   validateAccrualPosition,
   validateChainId,
-  validateNativeCollateral,
-  validateNativeLoan,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateRepayAmount,
@@ -496,7 +495,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
-      validateNativeLoan(this.chainId, this.marketParams.loanToken);
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
     }
 
     const maxSharePrice = computeMaxSupplySharePrice({
@@ -645,7 +644,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     }
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
-      validateNativeCollateral(this.chainId, this.marketParams.collateralToken);
+      validateNativeAsset(this.chainId, this.marketParams.collateralToken);
     }
 
     return {
@@ -1115,7 +1114,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
-      validateNativeCollateral(this.chainId, this.marketParams.collateralToken);
+      validateNativeAsset(this.chainId, this.marketParams.collateralToken);
     }
 
     validatePositionHealth({

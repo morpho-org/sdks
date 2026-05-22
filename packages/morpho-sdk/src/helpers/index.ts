@@ -9,8 +9,7 @@ export {
 export {
   validateAccrualPosition,
   validateChainId,
-  validateNativeCollateral,
-  validateNativeLoan,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateReallocations,

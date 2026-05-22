@@ -4,7 +4,7 @@ import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
 import {
   addTransactionMetadata,
-  validateNativeLoan,
+  validateNativeAsset,
 } from "../../helpers/index.js";
 import {
   type DepositAmountArgs,
@@ -12,7 +12,7 @@ import {
   type Metadata,
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
-  NonPositiveSupplyMaxSharePriceError,
+  NegativeSupplyMaxSharePriceError,
   type RequirementSignature,
   type Transaction,
   ZeroSupplyAmountError,
@@ -62,9 +62,9 @@ export interface MarketV1SupplyParams {
  * @throws {NegativeSupplyAmountError} when `amount < 0n`.
  * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
  * @throws {ZeroSupplyAmountError} when both `amount` and `nativeAmount` resolve to zero.
- * @throws {NonPositiveSupplyMaxSharePriceError} when `maxSharePrice <= 0n`.
+ * @throws {NegativeSupplyMaxSharePriceError} when `maxSharePrice < 0n`.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
- * @throws {NativeAmountOnNonWNativeLoanError} when `nativeAmount > 0n` but the loan token is not
+ * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
  *   the chain's wNative.
  * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed asset differs from `marketParams.loanToken`.
@@ -104,8 +104,8 @@ export const marketV1Supply = ({
     throw new NegativeNativeAmountError(nativeAmount);
   }
 
-  if (maxSharePrice <= 0n) {
-    throw new NonPositiveSupplyMaxSharePriceError(marketParams.id);
+  if (maxSharePrice < 0n) {
+    throw new NegativeSupplyMaxSharePriceError(marketParams.id);
   }
 
   const totalAssets = amount + (nativeAmount ?? 0n);
@@ -121,7 +121,7 @@ export const marketV1Supply = ({
   const actions: Action[] = [];
 
   if (nativeAmount !== undefined && nativeAmount > 0n) {
-    validateNativeLoan(chainId, marketParams.loanToken);
+    validateNativeAsset(chainId, marketParams.loanToken);
 
     actions.push(
       {

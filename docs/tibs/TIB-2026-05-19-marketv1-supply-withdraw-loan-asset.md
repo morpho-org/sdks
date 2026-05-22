@@ -57,10 +57,10 @@ Reproduces the wNative-collateral pattern from `marketV1SupplyCollateral` agains
 
 - `nativeAmount > 0n` ⇒ prepend `nativeTransfer(bundler3 → generalAdapter1)` + `wrapNative(generalAdapter1)`; the supplied `totalAssets = amount + nativeAmount` reaches Morpho as wNative.
 - `amount > 0n` and `nativeAmount > 0n` is supported (mixed flow).
-- `nativeAmount > 0n` and `loanToken !== wNative` throws `NativeAmountOnNonWNativeLoanError`.
+- `nativeAmount > 0n` and `loanToken !== wNative` throws `NativeAmountOnNonWNativeAssetError`.
 - Chain without configured `wNative` throws `ChainWNativeMissingError`.
 
-The validation lives in `validateNativeLoan(chainId, loanToken)`, a mirror of `validateNativeCollateral`. The choice of two public helpers (rather than a single parameterized one) preserves the "one error class per domain" rule: a caller pattern-matching on `NativeAmountOnNonWNativeCollateralError` must never see an error from the loan-side path bubble up.
+The validation lives in `validateNativeAsset(chainId, asset)` — a single action-agnostic helper used by both the loan-side (supply) and collateral-side (supplyCollateral, supplyCollateralBorrow) paths. The legacy `validateNativeLoan` / `validateNativeCollateral` are removed; `NativeAmountOnNonWNativeCollateralError` is kept as a deprecated alias of `NativeAmountOnNonWNativeAssetError` so existing `instanceof` checks keep working.
 
 A withdraw with native unwrap is **out of scope** for this PR. It requires routing `morphoWithdraw` to `receiver=generalAdapter1` and then chaining `unwrapNative(generalAdapter1 → user)`. The asymmetry exists because withdraw is a single bundler call today; adding the unwrap path adds another action plus a residual-skim consideration. Tracked as a future builder (`marketV1WithdrawNative`) when demand emerges.
 
@@ -122,22 +122,23 @@ interface MarketV1WithdrawAction extends BaseAction<"marketV1Withdraw", {
 
 Nine new classes, one per failure mode (`src/types/error.ts`):
 
-- `NonPositiveSupplyAmountError`
-- `NonPositiveSupplyMaxSharePriceError`
+- `NegativeSupplyAmountError`
+- `NegativeSupplyMaxSharePriceError`
 - `ZeroSupplyAmountError`
-- `NativeAmountOnNonWNativeLoanError`
 - `NonPositiveWithdrawAmountError`
-- `NonPositiveWithdrawMinSharePriceError`
+- `NegativeWithdrawMinSharePriceError`
 - `MutuallyExclusiveWithdrawAmountsError`
 - `WithdrawExceedsSupplyError`
 - `WithdrawSharesExceedSupplyError`
+
+The native-asset validator was unified: `validateNativeCollateral` / `validateNativeLoan` are replaced by a single action-agnostic `validateNativeAsset(chainId, asset)`, throwing `NativeAmountOnNonWNativeAssetError`. `NativeAmountOnNonWNativeCollateralError` is kept as a deprecated alias of the new class (instance check still works).
 
 Messages follow the canonical `"<what> <values>. <Imperative remediation>."` shape established by `BorrowExceedsSafeLtvError`.
 
 ### Implementation phases
 
 - **Phase 1 — Types + errors.** Extend `src/types/action.ts` (action interfaces + `AssetsOrSharesArgs`) and `src/types/error.ts`. Unblocks barrel re-exports for the rest of the work.
-- **Phase 2 — Helpers.** Add `computeMaxSupplySharePrice` and `computeMinWithdrawSharePrice` in `src/helpers/slippage.ts`; `validateWithdrawAmount`, `validateWithdrawShares`, and `validateNativeLoan` in `src/helpers/validate.ts`. Unit tests colocated.
+- **Phase 2 — Helpers.** Add `computeMaxSupplySharePrice` and `computeMinWithdrawSharePrice` in `src/helpers/slippage.ts`; `validateWithdrawAmount`, `validateWithdrawShares`, and the unified `validateNativeAsset` in `src/helpers/validate.ts`. Unit tests colocated.
 - **Phase 3 — `computeReallocations` extension.** Add the `operation` discriminator; update the borrow caller to pass `"borrow"`; cover the withdraw branch with new tests.
 - **Phase 4 — Action builders.** `src/actions/marketV1/supply.ts` and `src/actions/marketV1/withdraw.ts` + colocated unit tests + barrel update.
 - **Phase 5 — Entity wiring.** Two new methods on `MorphoMarketV1` (`supply`, `withdraw`); generalize `getReallocations` to take `{ amount, operation }`.

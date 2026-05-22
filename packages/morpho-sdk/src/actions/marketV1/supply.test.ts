@@ -10,10 +10,10 @@ import { test } from "../../../test/setup.js";
 import {
   isRequirementApproval,
   isRequirementSignature,
-  NativeAmountOnNonWNativeLoanError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
-  NonPositiveSupplyMaxSharePriceError,
+  NegativeSupplyMaxSharePriceError,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
@@ -213,7 +213,7 @@ describe("marketV1Supply unit tests", () => {
     ).toThrow(NegativeNativeAmountError);
   });
 
-  test("should throw NonPositiveSupplyMaxSharePriceError when maxSharePrice is zero", async ({
+  test("should throw NegativeSupplyMaxSharePriceError when maxSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
@@ -222,13 +222,13 @@ describe("marketV1Supply unit tests", () => {
         args: {
           amount: parseUnits("1000", 6),
           onBehalf: client.account.address,
-          maxSharePrice: 0n,
+          maxSharePrice: -1n,
         },
       }),
-    ).toThrow(NonPositiveSupplyMaxSharePriceError);
+    ).toThrow(NegativeSupplyMaxSharePriceError);
   });
 
-  test("should throw NativeAmountOnNonWNativeLoanError for non-wNative loan token", async ({
+  test("should throw NativeAmountOnNonWNativeAssetError for non-wNative loan token", async ({
     client,
   }) => {
     expect(() =>
@@ -240,7 +240,7 @@ describe("marketV1Supply unit tests", () => {
           maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
-    ).toThrow(NativeAmountOnNonWNativeLoanError);
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

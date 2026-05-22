@@ -19,8 +19,7 @@ import {
   MissingClientPropertyError,
   MissingMarketPriceError,
   MutuallyExclusiveRepayAmountsError,
-  NativeAmountOnNonWNativeCollateralError,
-  NativeAmountOnNonWNativeLoanError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeReallocationFeeError,
   NegativeSlippageToleranceError,
   NonPositiveReallocationAmountError,
@@ -168,44 +167,22 @@ export const validateChainId = (
 };
 
 /**
- * Validates that the given collateral token is the chain's wrapped native token.
- * Throws {@link ChainWNativeMissingError} if wNative is not configured for the chain.
- * Throws {@link NativeAmountOnNonWNativeCollateralError} if collateral is not wNative.
+ * Validates that the given asset is the chain's wrapped native token.
+ * Used by any action that may receive `nativeAmount` — the SDK wraps native
+ * into wNative, so the target asset must be wNative for the action to succeed.
  *
  * @param chainId - The chain to look up wNative on.
- * @param collateralToken - The market's collateral token address.
+ * @param asset - The asset address to check (collateral, loan, vault asset…).
+ * @throws {ChainWNativeMissingError} if wNative is not configured for the chain.
+ * @throws {NativeAmountOnNonWNativeAssetError} if the asset is not wNative.
  */
-export const validateNativeCollateral = (
-  chainId: number,
-  collateralToken: Address,
-): void => {
+export const validateNativeAsset = (chainId: number, asset: Address): void => {
   const { wNative } = getChainAddresses(chainId);
   if (!isDefined(wNative)) {
     throw new ChainWNativeMissingError(chainId);
   }
-  if (!isAddressEqual(collateralToken, wNative)) {
-    throw new NativeAmountOnNonWNativeCollateralError(collateralToken, wNative);
-  }
-};
-
-/**
- * Validates that the given loan token is the chain's wrapped native token.
- * Throws {@link ChainWNativeMissingError} if wNative is not configured for the chain.
- * Throws {@link NativeAmountOnNonWNativeLoanError} if loan token is not wNative.
- *
- * @param chainId - The chain to look up wNative on.
- * @param loanToken - The market's loan token address.
- */
-export const validateNativeLoan = (
-  chainId: number,
-  loanToken: Address,
-): void => {
-  const { wNative } = getChainAddresses(chainId);
-  if (!isDefined(wNative)) {
-    throw new ChainWNativeMissingError(chainId);
-  }
-  if (!isAddressEqual(loanToken, wNative)) {
-    throw new NativeAmountOnNonWNativeLoanError(loanToken, wNative);
+  if (!isAddressEqual(asset, wNative)) {
+    throw new NativeAmountOnNonWNativeAssetError(asset, wNative);
   }
 };
 
