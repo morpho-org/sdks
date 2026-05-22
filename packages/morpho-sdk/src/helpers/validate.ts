@@ -37,7 +37,8 @@ import {
 } from "../types/index.js";
 import { DEFAULT_LLTV_BUFFER, MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 
-const compareMarketIds = (idA: MarketId, idB: MarketId) => {
+/** @internal */
+export const compareMarketIds = (idA: MarketId, idB: MarketId) => {
   const normalizedIdA = idA.toLowerCase();
   const normalizedIdB = idB.toLowerCase();
 

@@ -9,6 +9,7 @@ import {
   type VaultReallocation,
 } from "../types/index.js";
 import { DEFAULT_SUPPLY_TARGET_UTILIZATION } from "./constant.js";
+import { compareMarketIds } from "./validate.js";
 
 type VaultWithdrawalGroup = {
   readonly vault: Address;
@@ -78,15 +79,6 @@ const capVaultWithdrawals = (
   }
 
   return cappedWithdrawals;
-};
-
-const compareMarketIds = (idA: MarketId, idB: MarketId) => {
-  const normalizedIdA = idA.toLowerCase();
-  const normalizedIdB = idB.toLowerCase();
-
-  if (normalizedIdA > normalizedIdB) return 1;
-  if (normalizedIdA < normalizedIdB) return -1;
-  return 0;
 };
 
 /**
