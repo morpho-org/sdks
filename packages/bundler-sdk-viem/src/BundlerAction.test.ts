@@ -3,6 +3,7 @@ import { type Address, decodeFunctionData } from "viem";
 import { describe, expect, test } from "vitest";
 import { coreAdapterAbi } from "./abis.js";
 import { BundlerAction } from "./BundlerAction.js";
+import { BundlerErrors } from "./errors.js";
 import type { Action } from "./types/index.js";
 
 describe("BundlerAction address comparisons", () => {
@@ -60,5 +61,21 @@ describe("BundlerAction address comparisons", () => {
     });
     expect(decoded.functionName).toBe("nativeTransfer");
     expect(decoded.args).toEqual([recipient, 2n]);
+  });
+
+  test("morphoSetAuthorizationWithSig rejects lowercased Bundler3 authorizations", () => {
+    expect(() =>
+      BundlerAction.morphoSetAuthorizationWithSig(
+        chainId,
+        {
+          authorizer: owner,
+          authorized: lowerBundler3,
+          isAuthorized: true,
+          nonce: 0n,
+          deadline: 1n,
+        },
+        "0x",
+      ),
+    ).toThrow(BundlerErrors.UnexpectedSignature);
   });
 });

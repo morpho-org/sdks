@@ -31,6 +31,7 @@ import {
   encodeFunctionData,
   erc20Abi,
   hexToBigInt,
+  isAddressEqual,
   maxUint256,
   slice,
   verifyTypedData,
@@ -148,7 +149,7 @@ export const encodeOperation = (
       } = operation.args;
 
       // Never authorize bundler3 otherwise the signature can be used independently.
-      if (authorized === bundler3)
+      if (isAddressEqual(authorized, bundler3))
         throw new BundlerErrors.UnexpectedSignature(authorized);
 
       if (supportsSignature) {

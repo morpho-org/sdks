@@ -1081,10 +1081,11 @@ export namespace BundlerAction {
       morpho,
       bundler3: { bundler3 },
     } = getChainAddresses(chainId);
-    const { r, s, yParity } = parseSignature(signature);
 
     if (isAddressEqual(authorization.authorized, bundler3))
       throw new BundlerErrors.UnexpectedSignature(authorization.authorized);
+
+    const { r, s, yParity } = parseSignature(signature);
 
     return [
       {
