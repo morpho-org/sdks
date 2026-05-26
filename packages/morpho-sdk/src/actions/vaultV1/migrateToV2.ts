@@ -1,7 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual, maxUint256 } from "viem";
+import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type Metadata,
@@ -79,6 +79,8 @@ export interface VaultV1MigrateToV2Params {
  *   is provided and the signed asset differs from `vault.address` (the V1 share token).
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.shares`.
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ *   signature is missing its expiration.
  * @example
  * ```ts
  * import { vaultV1MigrateToV2 } from "@morpho-org/morpho-sdk";

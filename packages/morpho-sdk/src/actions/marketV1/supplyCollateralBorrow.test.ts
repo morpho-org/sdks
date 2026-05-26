@@ -4,8 +4,10 @@ import { mainnet } from "viem/chains";
 import { describe, expect, vi } from "vitest";
 import {
   UsdcEurcvMarketV1,
+  WbtcUsdcSourceMarket,
   WethUsdsMarketV1,
 } from "../../../test/fixtures/marketV1.js";
+import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 import { test } from "../../../test/setup.js";
 import {
   isRequirementApproval,
@@ -15,6 +17,7 @@ import {
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
   NonPositiveMinBorrowSharePriceError,
+  type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
@@ -79,6 +82,45 @@ describe("marketV1SupplyCollateralBorrow unit tests", () => {
     expect(tx.action.args.collateralAmount).toBe(nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
+  });
+
+  test("should create bundler tx with native wrapping and reallocations", async ({
+    client,
+  }) => {
+    const nativeAmount = parseUnits("0.5", 18);
+    const borrowAmount = parseUnits("1000", 6);
+    const reallocationFee = parseUnits("0.01", 18);
+    const reallocations: readonly VaultReallocation[] = [
+      {
+        vault: SteakhouseUsdcVaultV1.address,
+        fee: reallocationFee,
+        withdrawals: [
+          {
+            marketParams: WbtcUsdcSourceMarket,
+            amount: parseUnits("2000", 6),
+          },
+        ],
+      },
+    ];
+
+    const tx = marketV1SupplyCollateralBorrow({
+      market: {
+        chainId: mainnet.id,
+        marketParams: WethUsdsMarketV1,
+      },
+      args: {
+        nativeAmount,
+        borrowAmount,
+        onBehalf: client.account.address,
+        receiver: client.account.address,
+        minSharePrice: 0n,
+        reallocations,
+      },
+    });
+
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    expect(tx.action.args.reallocationFee).toBe(reallocationFee);
+    expect(tx.value).toBe(nativeAmount + reallocationFee);
   });
 
   test("should create bundler tx with both ERC20 + native amount", async ({

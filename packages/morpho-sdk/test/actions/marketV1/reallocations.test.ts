@@ -2,9 +2,10 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { publicAllocatorAbi } from "@morpho-org/blue-sdk-viem";
 
 import { type Address, encodeFunctionData, parseUnits } from "viem";
-import { mainnet } from "viem/chains";
+import { base, mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
+  ChainIdMismatchError,
   EmptyReallocationWithdrawalsError,
   isRequirementApproval,
   isRequirementAuthorization,
@@ -616,6 +617,20 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
 });
 
 describe("getReallocationData and getReallocations", () => {
+  test("should reject getReallocationData when the client chain differs from the market chain", async ({
+    client,
+  }) => {
+    const morphoClient = new MorphoClient(client);
+    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, base.id);
+
+    await expect(
+      market.getReallocationData({
+        vaultAddresses: [SteakhouseUsdcVaultV1.address],
+        block: { number: 0n, timestamp: 0n },
+      }),
+    ).rejects.toBeInstanceOf(ChainIdMismatchError);
+  });
+
   test("should compute reallocations and borrow using getReallocationData + getReallocations", async ({
     client,
   }) => {
@@ -655,6 +670,7 @@ describe("getReallocationData and getReallocations", () => {
         const reallocations = market.getReallocations({
           reallocationData,
           borrowAmount,
+          options: { timestamp: block.timestamp },
         });
 
         expect(reallocations.length).toBeGreaterThan(0);
@@ -733,6 +749,7 @@ describe("getReallocationData and getReallocations", () => {
         const reallocations = market.getReallocations({
           reallocationData,
           borrowAmount,
+          options: { timestamp: block.timestamp },
         });
 
         expect(reallocations.length).toBeGreaterThan(0);
@@ -792,6 +809,7 @@ describe("getReallocationData and getReallocations", () => {
     const reallocations = market.getReallocations({
       reallocationData,
       borrowAmount,
+      options: { timestamp: block.timestamp },
     });
 
     expect(reallocations).toEqual([]);

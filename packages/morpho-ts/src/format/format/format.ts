@@ -53,24 +53,21 @@ type FormatOptions =
   | FormatCommasOptions
   | FormatPercentOptions;
 
-declare global {
-  interface String {
-    insert(index: number, substr: string, fillWith?: string): string;
-  }
-}
-
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
-String.prototype.insert = function (index, substr, fillWith) {
-  // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-  if (index < 0) index = this.length + index;
+const insertString = (
+  value: string,
+  index: number,
+  substr: string,
+  fillWith?: string,
+) => {
+  let offset = index < 0 ? value.length + index : index;
 
   let filler = "";
-  if (index < 0) {
-    if (fillWith) filler = fillWith.repeat(-index).slice(index);
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    index = 0;
+  if (offset < 0) {
+    if (fillWith) filler = fillWith.repeat(-offset).slice(offset);
+    offset = 0;
   }
-  return this.slice(0, index) + substr + filler + this.slice(index);
+  return value.slice(0, offset) + substr + filler + value.slice(offset);
 };
 
 const RANGES = [
@@ -121,7 +118,8 @@ const _formatShort = (
   if (params) {
     return (
       _applyOptions(
-        stringValue.insert(
+        insertString(
+          stringValue,
           -((params.power ?? params.minDecimals) + decimals),
           ".",
           "0",
@@ -134,7 +132,7 @@ const _formatShort = (
     return _formatCommas(bi, decimals, formatOptions);
   }
   return _applyOptions(
-    decimals ? stringValue.insert(-decimals, ".", "0") : stringValue,
+    decimals ? insertString(stringValue, -decimals, ".", "0") : stringValue,
     formatOptions,
   );
 };
@@ -146,7 +144,7 @@ const _formatCommas = (
   formatOptions: Omit<FormatCommasOptions, "format">,
 ) => {
   const stringValue = decimals
-    ? bi.toString().insert(-decimals, ".", "0")
+    ? insertString(bi.toString(), -decimals, ".", "0")
     : bi.toString();
 
   const [wholePart, decimalPart] = stringValue.split(".");
@@ -170,7 +168,7 @@ const _formatNumber = (
 ) => {
   if (decimals === 0) return _applyOptions(bi.toString(), formatOptions);
   return _applyOptions(
-    bi.toString().insert(-decimals, ".", "0"),
+    insertString(bi.toString(), -decimals, ".", "0"),
     formatOptions,
   );
 };

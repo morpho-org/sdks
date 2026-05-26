@@ -4,7 +4,6 @@ import {
   MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import type { SimulationState } from "@morpho-org/simulation-sdk";
 import { type Address, parseEther } from "viem";
 import { describe, expect, test } from "vitest";
 import {
@@ -13,6 +12,7 @@ import {
   WethUsdsMarketV1,
   WstethUsdcSourceMarket,
 } from "../../test/fixtures/marketV1.js";
+import type { ReallocationData } from "../entities/reallocationData.js";
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
@@ -56,6 +56,12 @@ const sourceA = makeMarket(sourceParamsA);
 const sourceB = makeMarket(sourceParamsB);
 const sourceC = makeMarket(sourceParamsC);
 
+const marketWithId = (market: Market, id: MarketId) => {
+  const clonedMarket = new Market(market);
+  Object.defineProperty(clonedMarket.params, "id", { value: id });
+  return clonedMarket;
+};
+
 // --- Mock builder ---
 
 interface MockStateParams {
@@ -74,13 +80,14 @@ interface MockStateParams {
   }>;
   /** Map vault address → reallocation fee. Omitted vaults have no publicAllocatorConfig. */
   readonly vaultFees?: Record<string, bigint>;
+  readonly extraMarkets?: readonly Market[];
 }
 
 /**
- * Creates a minimal mock SimulationState.
+ * Creates a minimal mock ReallocationData.
  *
  * Only implements the methods computeReallocations actually calls:
- * `getMarket`, `getMarketPublicReallocations`, `getVault`, `block`.
+ * `getMarket`, `getMarketPublicReallocations`, and `getVault`.
  */
 function makeMockState({
   targetMarket: tm = defaultTarget,
@@ -88,12 +95,14 @@ function makeMockState({
   friendlyTargetMarket,
   aggressiveWithdrawals = [],
   vaultFees = {},
-}: MockStateParams = {}): SimulationState {
+  extraMarkets = [],
+}: MockStateParams = {}): ReallocationData {
   const markets = new Map<string, Market>();
   markets.set(tm.id, tm);
   markets.set(sourceA.id, sourceA);
   markets.set(sourceB.id, sourceB);
   markets.set(sourceC.id, sourceC);
+  for (const market of extraMarkets) markets.set(market.id, market);
 
   const friendlyData = {
     getMarket: (id: MarketId) =>
@@ -102,12 +111,11 @@ function makeMockState({
         : markets.get(id)!,
     getMarketPublicReallocations: () => ({
       withdrawals: [...aggressiveWithdrawals],
-      data: {} as SimulationState,
+      data: {} as ReallocationData,
     }),
   };
 
   return {
-    block: { number: 0n, timestamp: TIMESTAMP },
     getMarket: (id: MarketId) => {
       const m = markets.get(id);
       if (m == null) throw new Error(`Mock: unknown market ${id}`);
@@ -122,7 +130,7 @@ function makeMockState({
         ? { admin: vault, fee: vaultFees[vault]!, accruedFee: 0n }
         : undefined,
     }),
-  } as unknown as SimulationState;
+  } as unknown as ReallocationData;
 }
 
 // ---------------------------------------------------------------------------
@@ -133,7 +141,7 @@ describe("computeReallocations", () => {
   describe("early returns", () => {
     test("should return empty when enabled is false", () => {
       const result = computeReallocations({
-        reallocationData: {} as SimulationState,
+        reallocationData: {} as ReallocationData,
         marketId: targetParams.id,
         operation: "borrow",
         amount: MathLib.WAD,
@@ -261,6 +269,93 @@ describe("computeReallocations", () => {
 
       const [first, second] = result[0]!.withdrawals;
       expect(first!.marketParams.id < second!.marketParams.id).toBe(true);
+    });
+
+    test("behavior: sorts 3+ source markets strictly ascending by market id", () => {
+      // Locks the byte-wise market-id comparator: PublicAllocator.reallocateTo
+      // rejects a vault's withdrawals when they are not strictly ascending by
+      // market id, so a locale-dependent sort can revert a valid plan.
+      const borrowAmount = 500n * MathLib.WAD;
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        // Provided in scrambled order — output must be sorted by market id.
+        friendlyWithdrawals: [
+          { id: sourceC.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+          { id: sourceA.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+          { id: sourceB.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 0n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: borrowAmount,
+        options: {
+          enabled: true,
+          // Low supply target → requiredAssets covers all three withdrawals
+          // so none is dropped by capping.
+          defaultSupplyTargetUtilization: MathLib.WAD / 2n,
+        },
+      });
+
+      expect(result).toHaveLength(1);
+
+      const ids = result[0]!.withdrawals.map(
+        ({ marketParams }) => marketParams.id,
+      );
+      expect(ids).toHaveLength(3);
+
+      // Order-sensitive: output equals the byte-wise ascending order, and
+      // every adjacent pair is strictly increasing.
+      const sorted = [...ids].sort((a, b) => (a > b ? 1 : a < b ? -1 : 0));
+      expect(ids).toEqual(sorted);
+      for (let i = 1; i < ids.length; i++) {
+        expect(ids[i - 1]! < ids[i]!).toBe(true);
+      }
+    });
+
+    test("behavior: sorts mixed-case source market ids by normalized hex bytes", () => {
+      const borrowAmount = 500n * MathLib.WAD;
+      const mixedSourceA = `0x${"a".repeat(64)}` as MarketId;
+      const mixedSourceB = `0x${"B".repeat(64)}` as MarketId;
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        friendlyWithdrawals: [
+          { id: mixedSourceB, vault: VAULT_A, assets: 50n * MathLib.WAD },
+          { id: mixedSourceA, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 0n },
+        extraMarkets: [
+          marketWithId(sourceA, mixedSourceA),
+          marketWithId(sourceB, mixedSourceB),
+        ],
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: borrowAmount,
+        options: { enabled: true },
+      });
+
+      expect(
+        result[0]!.withdrawals.map(({ marketParams }) => marketParams.id),
+      ).toEqual([mixedSourceA, mixedSourceB]);
     });
   });
 
@@ -405,6 +500,56 @@ describe("computeReallocations", () => {
       expect(vaultBResult!.fee).toBe(2000n);
     });
 
+    test("should group by vault before capping to avoid an unnecessary second vault fee", () => {
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: 800n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const borrowAmount = 500n * MathLib.WAD;
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1060n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+
+      const data = makeMockState({
+        targetMarket: tm,
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: 150n * MathLib.WAD },
+          { id: sourceB.id, vault: VAULT_B, assets: 60n * MathLib.WAD },
+          { id: sourceC.id, vault: VAULT_A, assets: 50n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 1000n, [VAULT_B]: 2000n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: borrowAmount,
+        options: {
+          enabled: true,
+          supplyTargetUtilization: { [targetParams.id]: MathLib.WAD },
+        },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.vault).toBe(VAULT_A);
+      expect(result[0]!.fee).toBe(1000n);
+      expect(result[0]!.withdrawals).toEqual(
+        expect.arrayContaining([
+          { marketParams: sourceA.params, amount: 150n * MathLib.WAD },
+          { marketParams: sourceC.params, amount: 50n * MathLib.WAD },
+        ]),
+      );
+      expect(
+        result[0]!.withdrawals.some(
+          ({ marketParams }) => marketParams.id === sourceB.id,
+        ),
+      ).toBe(false);
+    });
+
     test("should deduplicate same-market withdrawals within a vault", () => {
       const tm = makeMarket(targetParams, {
         totalSupplyAssets: 800n * MathLib.WAD,
@@ -522,6 +667,50 @@ describe("computeReallocations", () => {
       expect(result).toHaveLength(1);
       // With MAX_UINT_160 as requiredAssets, the full withdrawal amount is used (no capping).
       expect(result[0]!.withdrawals[0]!.amount).toBe(300n * MathLib.WAD);
+    });
+
+    test("should return empty when required assets is non-positive", () => {
+      const result = computeReallocations({
+        reallocationData: makeMockState(),
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: 500n * MathLib.WAD,
+        options: {
+          enabled: true,
+          defaultSupplyTargetUtilization: -MathLib.WAD,
+        },
+      });
+
+      expect(result).toEqual([]);
+    });
+
+    test("should skip zero-sized withdrawals before grouping reallocations", () => {
+      const borrowAmount = 500n * MathLib.WAD;
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const data = makeMockState({
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: 0n },
+          { id: sourceB.id, vault: VAULT_A, assets: 10n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 0n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: borrowAmount,
+        options: { enabled: true },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.withdrawals).toEqual([
+        { marketParams: sourceB.params, amount: 10n * MathLib.WAD },
+      ]);
     });
 
     test("should respect per-market supplyTargetUtilization override", () => {

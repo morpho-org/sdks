@@ -1,7 +1,7 @@
 import { getChainAddresses, type MarketParams } from "@morpho-org/blue-sdk";
-import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
+import { type Action, BundlerAction } from "../../bundler/index.js";
 import {
   addTransactionMetadata,
   validateNativeAsset,
@@ -83,6 +83,8 @@ export interface MarketV1SupplyCollateralBorrowParams {
  *   is provided and the signed asset differs from `marketParams.collateralToken`.
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
+ *   signature is missing its expiration.
  * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
  *   `reallocations` is non-empty and any `reallocation.fee < 0n`.
  * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
@@ -205,10 +207,7 @@ export const marketV1SupplyCollateralBorrow = ({
     args: [marketParams, borrowAmount, 0n, minSharePrice, receiver, false],
   });
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: (nativeAmount ?? 0n) + reallocationFee,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);

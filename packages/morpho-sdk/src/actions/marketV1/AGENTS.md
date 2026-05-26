@@ -34,7 +34,7 @@ ERC-20 approval spender is **GeneralAdapter1** for any bundled path — never th
 | `withdraw` | `morphoWithdraw` |
 | `withdraw` (with reallocations) | `[reallocateTo × N] → morphoWithdraw` |
 
-`tx.value = (nativeAmount ?? 0n) + reallocationFeeTotal`. `morphoWithdraw` sends assets directly to `receiver`; no skim needed in either mode.
+`BundlerAction.encodeBundle` derives `tx.value` from native wrapping calls and reallocation fees.
 
 ## Mode and ordering rules
 

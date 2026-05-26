@@ -1,7 +1,6 @@
 import {
   type AccrualPosition,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  type Holding,
   type Market,
   type MarketId,
   type MarketParams,
@@ -12,14 +11,12 @@ import {
 } from "@morpho-org/blue-sdk";
 import {
   fetchAccrualPosition,
-  fetchHolding,
   fetchMarket,
   fetchPosition,
   fetchVault,
   fetchVaultMarketConfig,
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import { type MinimalBlock, SimulationState } from "@morpho-org/simulation-sdk";
 import type { Address } from "viem";
 import {
   getMorphoAuthorizationRequirement,
@@ -86,6 +83,7 @@ import {
   ZeroCollateralAmountError,
   ZeroSupplyAmountError,
 } from "../../types/index.js";
+import { ReallocationData } from "../reallocationData.js";
 
 export interface MarketV1Actions {
   /**
@@ -359,7 +357,7 @@ export interface MarketV1Actions {
   };
 
   /**
-   * Fetches all on-chain data needed to construct a {@link SimulationState}
+   * Fetches all on-chain data needed to construct a {@link ReallocationData}
    * for computing vault reallocations via the public allocator.
    *
    * The target market is refetched internally at `block.number` so the
@@ -368,7 +366,7 @@ export interface MarketV1Actions {
    * inject unnecessary `reallocateTo` actions (and their PublicAllocator
    * fees) into the resulting bundle.
    *
-   * The returned simulation state can be passed to {@link getReallocations}
+   * The returned reallocation data can be passed to {@link getReallocations}
    * to compute the `VaultReallocation[]` array for `borrow()` or
    * `supplyCollateralBorrow()`.
    *
@@ -376,12 +374,16 @@ export interface MarketV1Actions {
    *
    * @param params.vaultAddresses - Addresses of MetaMorpho vaults that allocate to this market.
    * @param params.block - The block to fetch data at (number and timestamp).
-   * @returns A SimulationState populated with all required data.
+   * @returns A ReallocationData instance populated with all required data.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
    */
   getReallocationData: (params: {
     vaultAddresses: readonly Address[];
-    block: MinimalBlock;
-  }) => Promise<SimulationState>;
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }) => Promise<ReallocationData>;
 
   /**
    * Computes vault reallocations for a borrow or withdraw on this market.
@@ -399,16 +401,18 @@ export interface MarketV1Actions {
    * @param params.borrowAmount - {@deprecated} Equivalent to `{ operation: "borrow", amount }`. Use the
    *   `operation` + `amount` form on new code.
    * @param params.options - Optional reallocation computation options
-   *        (utilization targets, reallocatable vaults filter, etc.).
+   *        (timestamp, utilization targets, reallocatable vaults filter, etc.).
+   *        Pass the fetched block timestamp to compute reallocations at the same block.
    * @returns Array of vault reallocations ready to pass to `borrow()`, `supplyCollateralBorrow()`,
    *          or `withdraw()`. Empty array if no reallocation is needed.
-   * @throws {InsufficientSharedLiquidityError} If shared liquidity cannot cover the operation's
-   *   absolute shortfall — preventing fee-bearing reallocations from being attached to a call
-   *   that would still revert on-chain.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
+   * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
+   * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
    */
   getReallocations: (
     params: {
-      reallocationData: SimulationState;
+      reallocationData: ReallocationData;
       options?: ReallocationComputeOptions;
     } & (
       | {
@@ -1173,13 +1177,25 @@ export class MorphoMarketV1 implements MarketV1Actions {
     };
   }
 
+  /**
+   * Fetches all on-chain inputs needed to compute public allocator reallocations.
+   *
+   * @param params - Reallocation data fetch parameters.
+   * @param params.vaultAddresses - Vaults to inspect for source-market liquidity.
+   * @param params.block - Block number and timestamp used for consistent RPC reads.
+   * @returns Reallocation data ready for {@link getReallocations}.
+   * @throws {ChainIdMismatchError} when the client chain does not match this market.
+   */
   async getReallocationData({
     vaultAddresses,
     block,
   }: {
     vaultAddresses: readonly Address[];
-    block: MinimalBlock;
-  }): Promise<SimulationState> {
+    block: {
+      readonly number: bigint;
+      readonly timestamp: bigint;
+    };
+  }): Promise<ReallocationData> {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
 
     const client = this.client.viemClient;
@@ -1221,9 +1237,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
       (mid) => mid !== targetMarketId,
     );
 
-    const loanToken = targetMarket.params.loanToken;
-
-    const [markets, configs, positions, holdings] = await Promise.all([
+    const [markets, configs, positions] = await Promise.all([
       Promise.all(
         sourceMarketIds.map((mid) => fetchMarket(mid, client, fetchParams)),
       ),
@@ -1243,14 +1257,9 @@ export class MorphoMarketV1 implements MarketV1Actions {
           })),
         ),
       ),
-      Promise.all(
-        vaultAddresses.map((addr) =>
-          fetchHolding(addr, loanToken, client, fetchParams),
-        ),
-      ),
     ]);
 
-    // Assemble records for SimulationState.
+    // Assemble records for ReallocationData.
     const marketsRecord: Record<MarketId, Market | undefined> = {
       [targetMarketId]: targetMarket,
     };
@@ -1279,28 +1288,37 @@ export class MorphoMarketV1 implements MarketV1Actions {
       (positionsRecord[vault] ??= {})[mid] = position;
     }
 
-    const holdingsRecord: Record<
-      Address,
-      Record<Address, Holding | undefined>
-    > = {};
-    for (const holding of holdings) {
-      (holdingsRecord[holding.user] ??= {})[holding.token] = holding;
-    }
-
-    return new SimulationState({
+    return new ReallocationData({
       chainId: this.chainId,
-      block,
       markets: marketsRecord,
       vaults: vaultsRecord,
       vaultMarketConfigs: vaultMarketConfigsRecord,
       positions: positionsRecord,
-      holdings: holdingsRecord,
     });
   }
 
+  /**
+   * Computes public allocator reallocations for a borrow or withdraw on this market.
+   *
+   * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow", amount }`)
+   * or `{ operation, amount }` for a borrow or loan-asset withdraw.
+   *
+   * @param params - Reallocation computation parameters.
+   * @param params.reallocationData - State returned by {@link getReallocationData}.
+   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+   * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
+   * @param params.borrowAmount - {@deprecated Pass `{ operation: "borrow", amount }` instead.}
+   * @param params.options - Optional allocator and utilization options.
+   * @returns Vault reallocations ready to pass to `borrow`, `supplyCollateralBorrow`, or `withdraw`.
+   * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
+   * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
+   * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
+   */
   getReallocations(
     params: {
-      reallocationData: SimulationState;
+      reallocationData: ReallocationData;
       options?: ReallocationComputeOptions;
     } & (
       | {
@@ -1316,6 +1334,8 @@ export class MorphoMarketV1 implements MarketV1Actions {
         }
     ),
   ): readonly VaultReallocation[] {
+    validateChainId(params.reallocationData.chainId, this.chainId);
+
     const marketId = this.marketParams.id;
     const options = { enabled: true, ...params.options };
 
