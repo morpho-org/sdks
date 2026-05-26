@@ -99,15 +99,14 @@ export const marketV1Withdraw = ({
   args: { assets, shares, receiver, minSharePrice, reallocations },
   metadata,
 }: MarketV1WithdrawParams): Readonly<Transaction<MarketV1WithdrawAction>> => {
-  if (assets < 0n || shares < 0n) {
-    throw new NonPositiveWithdrawAmountError(marketParams.id);
-  }
-
-  if (assets > 0n && shares > 0n) {
+  // Mutual exclusion is detected on "both values present" (either non-zero),
+  // before sign checks — otherwise `{ assets: -1n, shares: 5n }` would be
+  // misreported as a positivity error rather than the actual mode conflict.
+  if (assets !== 0n && shares !== 0n) {
     throw new MutuallyExclusiveWithdrawAmountsError(marketParams.id);
   }
 
-  if (assets === 0n && shares === 0n) {
+  if (assets < 0n || shares < 0n || (assets === 0n && shares === 0n)) {
     throw new NonPositiveWithdrawAmountError(marketParams.id);
   }
 

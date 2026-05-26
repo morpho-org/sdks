@@ -554,14 +554,14 @@ export class MorphoMarketV1 implements MarketV1Actions {
     const assets = ("assets" in params ? params.assets : undefined) ?? 0n;
     const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
 
-    // Catch mixed-sign inputs before the mutex/zero-zero checks. Mirrors action layer.
-    if (assets < 0n || shares < 0n) {
-      throw new NonPositiveWithdrawAmountError(this.marketParams.id);
-    }
-    if (assets > 0n && shares > 0n) {
+    // Mode conflict comes first: detect "both values present" (either non-zero)
+    // before positivity, so `{ assets: -1n, shares: 5n }` reports the actual
+    // mode conflict instead of being misclassified as a positivity error.
+    // Mirrors action layer.
+    if (assets !== 0n && shares !== 0n) {
       throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
     }
-    if (assets === 0n && shares === 0n) {
+    if (assets < 0n || shares < 0n || (assets === 0n && shares === 0n)) {
       throw new NonPositiveWithdrawAmountError(this.marketParams.id);
     }
 

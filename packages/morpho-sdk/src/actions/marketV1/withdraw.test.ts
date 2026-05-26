@@ -149,6 +149,24 @@ describe("marketV1Withdraw unit tests", () => {
     ).toThrow(MutuallyExclusiveWithdrawAmountsError);
   });
 
+  test("should throw MutuallyExclusiveWithdrawAmountsError on mixed-sign inputs (positive assets, negative shares)", async ({
+    client,
+  }) => {
+    // A mixed-sign pair still expresses "both modes specified" — surface that
+    // as the mode-conflict error rather than masking it as a positivity error.
+    expect(() =>
+      marketV1Withdraw({
+        market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
+        args: {
+          assets: parseUnits("100", 6),
+          shares: -1n,
+          receiver: client.account.address,
+          minSharePrice: 0n,
+        },
+      }),
+    ).toThrow(MutuallyExclusiveWithdrawAmountsError);
+  });
+
   test("should throw NegativeWithdrawMinSharePriceError when minSharePrice is negative", async ({
     client,
   }) => {
