@@ -1,3 +1,32 @@
+export { marketParamsAbi } from "@morpho-org/blue-sdk";
+export {
+  adaptiveCurveIrmAbi,
+  blueAbi,
+  blueOracleAbi,
+  erc2612Abi,
+  erc5267Abi,
+  metaMorphoAbi,
+  metaMorphoFactoryAbi,
+  morphoMarketV1AdapterAbi,
+  morphoMarketV1AdapterFactoryAbi,
+  morphoMarketV1AdapterV2Abi,
+  morphoMarketV1AdapterV2FactoryAbi,
+  morphoVaultV1AdapterAbi,
+  morphoVaultV1AdapterFactoryAbi,
+  permissionedErc20WrapperAbi,
+  permit2Abi,
+  preLiquidationAbi,
+  preLiquidationFactoryAbi,
+  publicAllocatorAbi,
+  vaultV1AdapterAbi,
+  vaultV1AdapterFactoryAbi,
+  vaultV2Abi,
+  vaultV2FactoryAbi,
+  whitelistControllerAggregatorV2Abi,
+  wrappedBackedTokenAbi,
+  wstEthAbi,
+} from "@morpho-org/blue-sdk-viem";
+
 /** ABI for the Bundler3 multicall contract. */
 export const bundler3Abi = [
   {

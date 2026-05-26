@@ -128,14 +128,19 @@ direct dependencies. Other packages keep their peer dependency model.
 
 Keep all consolidated consumer imports under the single `@morpho-org/morpho-sdk` package name.
 Do not create package-name variants such as `@morpho-org/morpho-sdk-*` for these surfaces. Minimize
-package subpaths: thin value, type, action, client, and entity domains are re-exported from the
-package root, while fetch utilities, ABI literals, the consolidated utility barrel, and
-side-effecting augmentation keep dedicated public subpaths.
+package subpaths: thin value, type, action, and client domains are re-exported from the package
+root, while entities, constants, addresses, errors, fetch utilities, ABI literals, the consolidated
+utility barrel, and side-effecting augmentation keep dedicated public subpaths.
 
 - `@morpho-org/morpho-sdk`: the primary application import surface. Re-export current
-  `morpho-sdk` client, action, entity, helper, and type APIs from the root, and add root re-exports
-  for `blue-sdk` entity barrels, addresses, constants, errors, math helpers, utility types,
-  capacity helpers, viem parsing/restructuring helpers, and `blue-sdk-viem` signature helpers.
+  `morpho-sdk` client, action, helper, and type APIs from the root, plus root re-exports for
+  math helpers and `blue-sdk-viem` signature helpers.
+- `@morpho-org/morpho-sdk/entities`: expose `blue-sdk` entity classes and the `morpho-sdk` entity
+  classes such as `MorphoMarketV1`, `MorphoVaultV1`, `MorphoVaultV2`, and `ReallocationData`.
+- `@morpho-org/morpho-sdk/constants`: expose non-address protocol constants.
+- `@morpho-org/morpho-sdk/addresses`: expose address registries, wrapper token registries, and
+  address lookup helpers.
+- `@morpho-org/morpho-sdk/errors`: expose `blue-sdk` error helpers and error classes.
 - `@morpho-org/morpho-sdk/fetch`: re-export `packages/blue-sdk-viem/src/fetch/index.ts`. This
   remains a dedicated subpath because fetchers are the network/read layer and are expected to be
   imported together.
@@ -152,7 +157,8 @@ side-effecting augmentation keep dedicated public subpaths.
 Example imports after consolidation:
 
 ```ts
-import { ChainId, Market, Token, Vault } from "@morpho-org/morpho-sdk";
+import { ChainId } from "@morpho-org/morpho-sdk/constants";
+import { Market, Token, Vault } from "@morpho-org/morpho-sdk/entities";
 import { fetchMarket, fetchToken, fetchVault } from "@morpho-org/morpho-sdk/fetch";
 import { bundler3Abi } from "@morpho-org/morpho-sdk/abis";
 import {
@@ -178,41 +184,58 @@ Implement the package export map exactly with these public subpaths:
         "require": "./lib/cjs/index.js"
       },
       "./abis": {
-        "types": "./lib/esm/abis/index.d.ts",
-        "import": "./lib/esm/abis/index.js",
-        "require": "./lib/cjs/abis/index.js"
+        "types": "./lib/esm/abis.d.ts",
+        "import": "./lib/esm/abis.js",
+        "require": "./lib/cjs/abis.js"
+      },
+      "./addresses": {
+        "types": "./lib/esm/addresses.d.ts",
+        "import": "./lib/esm/addresses.js",
+        "require": "./lib/cjs/addresses.js"
       },
       "./augment": {
-        "types": "./lib/esm/augment/index.d.ts",
-        "import": "./lib/esm/augment/index.js",
-        "require": "./lib/cjs/augment/index.js"
+        "types": "./lib/esm/augment.d.ts",
+        "import": "./lib/esm/augment.js",
+        "require": "./lib/cjs/augment.js"
+      },
+      "./constants": {
+        "types": "./lib/esm/constants.d.ts",
+        "import": "./lib/esm/constants.js",
+        "require": "./lib/cjs/constants.js"
+      },
+      "./entities": {
+        "types": "./lib/esm/entities/index.d.ts",
+        "import": "./lib/esm/entities/index.js",
+        "require": "./lib/cjs/entities/index.js"
+      },
+      "./errors": {
+        "types": "./lib/esm/errors.d.ts",
+        "import": "./lib/esm/errors.js",
+        "require": "./lib/cjs/errors.js"
       },
       "./fetch": {
-        "types": "./lib/esm/fetch/index.d.ts",
-        "import": "./lib/esm/fetch/index.js",
-        "require": "./lib/cjs/fetch/index.js"
+        "types": "./lib/esm/fetch.d.ts",
+        "import": "./lib/esm/fetch.js",
+        "require": "./lib/cjs/fetch.js"
       },
       "./utils": {
-        "types": "./lib/esm/utils/index.d.ts",
-        "import": "./lib/esm/utils/index.js",
-        "require": "./lib/cjs/utils/index.js"
+        "types": "./lib/esm/utils.d.ts",
+        "import": "./lib/esm/utils.js",
+        "require": "./lib/cjs/utils.js"
       }
     }
   }
 }
 ```
 
-Implement only `src/fetch/index.ts`, `src/abis/index.ts`, `src/utils/index.ts`, and
-`src/augment/index.ts` as package subpath barrels. All other new barrels are internal source
-organization and are re-exported from `packages/morpho-sdk/src/index.ts` or
-`packages/morpho-sdk/src/utils/index.ts`.
-Do not add public package subpaths such as `./actions`, `./client`, `./entities`, `./helpers`,
-`./types`, `./math`, `./constants`, `./addresses`, `./errors`, `./signatures`, or any `./utils/*`
-subpath.
+Implement standalone `src/fetch.ts`, `src/abis.ts`, `src/utils.ts`, `src/augment.ts`,
+`src/addresses.ts`, `src/constants.ts`, and `src/errors.ts` files as package subpath barrels.
+Do not add public package subpaths such as `./actions`, `./client`, `./helpers`, `./types`,
+`./math`, `./signatures`, or any `./utils/*` subpath.
 
-- `src/index.ts` re-exports the current `morpho-sdk` action, client, entity, helper, and type
-  barrels, plus the new internal barrels for root-level `blue-sdk` and `blue-sdk-viem` surfaces.
-- `src/entities/index.ts` is an internal root barrel that re-exports public `blue-sdk` market,
+- `src/index.ts` re-exports the current `morpho-sdk` action, client, helper, and type barrels, plus
+  the new internal barrels for root-level math and `blue-sdk-viem` signature surfaces.
+- `src/entities/index.ts` is the public entity subpath barrel that re-exports public `blue-sdk` market,
   token, holding, user, position, and vault entity entrypoints rather than a hand-maintained class
   list, so abstract/base entities such as vault adapter classes are not silently omitted.
 - `src/utils/index.ts` is the public utility barrel. It re-exports every public export from
@@ -312,9 +335,9 @@ From `packages/bundler-sdk-viem` extract into `morpho-sdk`:
 - `src/types/actions.ts`: the `Action` discriminated union and supporting types used to build those
   bundles, including `ActionArgs`, `ActionType`, `Actions`, `Authorization`, `InputReallocation`,
   `Permit2PermitSingleDetails`, and `Permit2PermitSingle`.
-- `src/abis.ts`: the complete ABI barrel from `bundler-sdk-viem`, not only the ABI literals used by
-  current `morpho-sdk` actions. Extract and re-export `universalRewardsDistributorAbi`,
-  `bundler3Abi`, `coreAdapterAbi`, `generalAdapter1Abi`, `ethereumGeneralAdapter1Abi`,
+- `src/abis.ts`: the bundler action and adapter ABI barrel from `bundler-sdk-viem`, not only the ABI
+  literals used by current `morpho-sdk` actions. Extract and re-export `bundler3Abi`,
+  `coreAdapterAbi`, `generalAdapter1Abi`, `ethereumGeneralAdapter1Abi`,
   `paraswapAdapterAbi`, `erc20WrapperAdapterAbi`, `aaveV2MigrationAdapterAbi`,
   `aaveV3MigrationAdapterAbi`, `aaveV3OptimizerMigrationAdapterAbi`,
   `compoundV2MigrationAdapterAbi`, and `compoundV3MigrationAdapterAbi` from

@@ -4,7 +4,7 @@ import type {
   MarketV1Actions,
   VaultV1Actions,
   VaultV2Actions,
-} from "../entities/index.js";
+} from "../actions/index.js";
 import type { Metadata } from "./index.js";
 
 /**

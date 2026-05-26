@@ -5,10 +5,8 @@ import {
   fetchVault,
   fetchVaultMarketConfig,
 } from "@morpho-org/blue-sdk-viem";
-import {
-  type PublicReallocation,
-  ReallocationData,
-} from "@morpho-org/morpho-sdk";
+import type { PublicReallocation } from "@morpho-org/morpho-sdk";
+import { ReallocationData } from "@morpho-org/morpho-sdk/entities";
 import { entries, fromEntries, isDefined } from "@morpho-org/morpho-ts";
 import DataLoader from "dataloader";
 import type { Chain, Client, Transport } from "viem";
@@ -16,7 +14,6 @@ import { getBlock } from "viem/actions";
 import { apiSdk } from "./api/index.js";
 
 const REALLOCATION_SIMULATION_DELAY = 3_600n;
-
 export interface LiquidityParameters {
   /**
    * The default maximum utilization allowed to reach to find shared liquidity (scaled by WAD).
