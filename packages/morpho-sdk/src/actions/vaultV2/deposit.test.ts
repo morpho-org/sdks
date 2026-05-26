@@ -211,6 +211,32 @@ describe.sequential("depositVaultV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
+  test("should create deposit bundle with native amount for wNative vault", async ({
+    client,
+  }) => {
+    const nativeAmount = parseUnits("1", 18);
+    const maxSharePrice = 1000000000000000000n;
+
+    const tx = vaultV2Deposit({
+      vault: {
+        chainId: mainnet.id,
+        address: KpkWETHVaultV2.address,
+        asset: wNative,
+      },
+      args: {
+        amount: 0n,
+        nativeAmount,
+        maxSharePrice,
+        recipient: client.account.address,
+      },
+    });
+
+    expect(tx.action.args.vault).toBe(KpkWETHVaultV2.address);
+    expect(tx.action.args.amount).toBe(0n);
+    expect(tx.action.args.nativeAmount).toBe(nativeAmount);
+    expect(tx.value).toBe(nativeAmount);
+  });
+
   test("should throw when signature amount does not match deposit amount", async ({
     client,
   }) => {

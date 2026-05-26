@@ -1,5 +1,5 @@
-import type { Action } from "@morpho-org/bundler-sdk-viem";
 import { type Address, isAddressEqual } from "viem";
+import type { Action } from "../../bundler/index.js";
 import {
   DepositAmountMismatchError,
   DepositAssetMismatchError,

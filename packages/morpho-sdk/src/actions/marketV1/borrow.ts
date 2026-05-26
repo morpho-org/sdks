@@ -1,7 +1,7 @@
 import type { MarketParams } from "@morpho-org/blue-sdk";
-import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
+import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   type MarketV1BorrowAction,
@@ -106,10 +106,7 @@ export const marketV1Borrow = ({
     args: [marketParams, amount, 0n, minSharePrice, receiver, false],
   });
 
-  let tx = {
-    ...BundlerAction.encodeBundle(chainId, actions),
-    value: reallocationFee,
-  };
+  let tx = BundlerAction.encodeBundle(chainId, actions);
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);
