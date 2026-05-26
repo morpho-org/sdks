@@ -3,6 +3,17 @@ export type {
   RequirementSignature,
   VaultReallocation,
 } from "@morpho-org/morpho-sdk";
+export type { TransactionResult } from "@tetherto/wdk-wallet";
+export type {
+  BorrowOptions,
+  BorrowResult,
+  RepayOptions,
+  RepayResult,
+  SupplyOptions,
+  SupplyResult,
+  WithdrawOptions,
+  WithdrawResult,
+} from "@tetherto/wdk-wallet/protocols";
 export {
   type Market,
   type MarketPresetKey,
@@ -14,6 +25,7 @@ export {
 export type {
   AccountData,
   ApprovalOrSignatureRequirement,
+  Eip1193Provider,
   Erc4337TransactionConfig,
   MarketPosition,
   MorphoBorrowOptions,
