@@ -157,8 +157,7 @@ This also makes the UX simpler, since users only need to approve the general ada
 
 **Security invariant:** Never bypass the general adapter for deposits.
 
-The bundle is encoded via `BundlerAction.encodeBundle(chainId, actions)` from
-`@morpho-org/bundler-sdk-viem`. The `to` address of the resulting transaction is always the
+The bundle is encoded via the local `BundlerAction.encodeBundle(chainId, actions)` helper. The `to` address of the resulting transaction is always the
 Bundler3 contract address for the target chain.
 
 ### Withdrawals and Redeems: Direct vault calls
@@ -196,9 +195,7 @@ The SDK builds on the Morpho TypeScript ecosystem. Each dependency has a specifi
 morpho-sdk
 ├── @morpho-org/blue-sdk           Core protocol constants and math
 ├── @morpho-org/blue-sdk-viem      On-chain data fetching and ABIs
-├── @morpho-org/bundler-sdk-viem   Bundle encoding for deposits
 ├── @morpho-org/morpho-ts          Shared utilities (deepFreeze, Time)
-├── @morpho-org/simulation-sdk     Token approval constants
 └── viem                           Ethereum client and ABI encoding
 ```
 
@@ -226,7 +223,7 @@ On-chain data fetching and contract ABIs:
 - **Typed data helpers**: `getPermitTypedData`, `getPermit2PermitTypedData` — used to build
   EIP-712 signing payloads for permit flows.
 
-### `@morpho-org/bundler-sdk-viem`
+### Local Bundler Encoding
 
 Deposit bundle encoding:
 
@@ -242,14 +239,6 @@ Shared utilities:
 - **`deepFreeze`** — recursively freezes objects. Applied to every returned `Transaction`.
 - **`Time`** — timestamp helpers used for permit deadlines and metadata timestamps.
 - **`isDefined`** — type-narrowing utility used in the requirements decision tree.
-
-### `@morpho-org/simulation-sdk`
-
-Token approval constants:
-
-- **`MAX_TOKEN_APPROVALS`** — per-chain/token cap for approval amounts in `encodeErc20Approval`.
-- **`APPROVE_ONLY_ONCE_TOKENS`** — tokens (like USDT) that require resetting allowance to zero
-  before setting a new value. Used in `getRequirementsApproval` to prepend a reset transaction.
 
 ## Requirements System
 

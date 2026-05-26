@@ -1,7 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
-import { type Action, BundlerAction } from "@morpho-org/bundler-sdk-viem";
 import { deepFreeze, isDefined } from "@morpho-org/morpho-ts";
 import { type Address, isAddressEqual } from "viem";
+import { type Action, BundlerAction } from "../../bundler/index.js";
 import { addTransactionMetadata } from "../../helpers/index.js";
 import {
   ChainWNativeMissingError,
@@ -72,6 +72,8 @@ export interface VaultV2DepositParams {
  *   signature is ignored on the native-only path (`amount === 0n` with `nativeAmount > 0n`).
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `amount > 0n` and
  *   `requirementSignature` is provided and the signed amount differs from `args.amount`.
+ * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when `amount > 0n` and a
+ *   Permit2 requirement signature is missing its expiration.
  * @throws {ZeroDepositAmountError} when both `amount` and `nativeAmount` resolve to zero.
  * @example
  * ```ts
@@ -175,10 +177,6 @@ export const vaultV2Deposit = ({
   });
 
   let tx = BundlerAction.encodeBundle(chainId, actions);
-
-  if (nativeAmount) {
-    tx = { ...tx, value: nativeAmount };
-  }
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);

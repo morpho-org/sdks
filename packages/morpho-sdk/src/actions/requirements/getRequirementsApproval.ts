@@ -1,5 +1,5 @@
 import type { Address } from "@morpho-org/blue-sdk";
-import { APPROVE_ONLY_ONCE_TOKENS } from "@morpho-org/simulation-sdk";
+import { APPROVE_ONLY_ONCE_TOKENS } from "../../helpers/constant.js";
 import {
   ApprovalAmountLessThanSpendAmountError,
   type ERC20ApprovalAction,

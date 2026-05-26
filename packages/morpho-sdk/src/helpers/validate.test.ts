@@ -1,6 +1,7 @@
 import {
   AccrualPosition,
   Market,
+  type MarketId,
   MarketParams,
   MathLib,
   ORACLE_PRICE_SCALE,
@@ -430,6 +431,10 @@ describe("validateRepayShares", () => {
 describe("validateReallocations", () => {
   const targetMarketId = marketParams.id;
   const sourceMarketA = new MarketParams(CbbtcUsdcMarketV1);
+  const marketParamsWithId = (id: MarketId) => ({
+    ...sourceMarketA,
+    id,
+  });
 
   const validReallocation: VaultReallocation = {
     vault: USER_A,
@@ -519,6 +524,26 @@ describe("validateReallocations", () => {
         targetMarketId,
       ),
     ).toThrow(UnsortedReallocationWithdrawalsError);
+  });
+
+  test("should accept mixed-case withdrawal ids when normalized order is ascending", () => {
+    const mixedSourceA = `0x${"a".repeat(64)}` as MarketId;
+    const mixedSourceB = `0x${"B".repeat(64)}` as MarketId;
+
+    expect(() =>
+      validateReallocations(
+        [
+          {
+            ...validReallocation,
+            withdrawals: [
+              { marketParams: marketParamsWithId(mixedSourceA), amount: 1n },
+              { marketParams: marketParamsWithId(mixedSourceB), amount: 1n },
+            ],
+          },
+        ],
+        targetMarketId,
+      ),
+    ).not.toThrow();
   });
 });
 

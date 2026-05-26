@@ -1,5 +1,55 @@
-import type { MarketId } from "@morpho-org/blue-sdk";
+import { type MarketId, UnknownDataError } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
+
+/**
+ * Typed errors thrown while encoding supported Bundler3 actions.
+ *
+ * @remarks
+ * Import these classes through `@morpho-org/morpho-sdk` when handling
+ * failures from `BundlerAction`.
+ */
+export namespace BundlerErrors {
+  /**
+   * Thrown when an action that requires an offchain signature is encoded before
+   * the signature has been attached.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.MissingSignature) {
+   *   // Attach the missing permit or Permit2 signature, then encode again.
+   * }
+   * ```
+   */
+  export class MissingSignature extends Error {
+    constructor() {
+      super("missing signature");
+    }
+  }
+
+  /**
+   * Thrown when an action is unsupported on the requested chain.
+   *
+   * @example
+   * ```ts
+   * import { BundlerErrors } from "@morpho-org/morpho-sdk";
+   *
+   * if (error instanceof BundlerErrors.UnexpectedAction) {
+   *   // Remove or replace the action for the selected chain.
+   * }
+   * ```
+   */
+  export class UnexpectedAction extends Error {
+    /**
+     * @param type - Unsupported Bundler3 action discriminator or name.
+     * @param chainId - Chain where the action was requested.
+     */
+    constructor(type: string, chainId: number) {
+      super(`unexpected action "${type}" on chain "${chainId}"`);
+    }
+  }
+}
 
 /** Thrown when an asset amount is required to be positive but is zero or negative. */
 export class NonPositiveAssetAmountError extends Error {
@@ -379,6 +429,18 @@ export class MissingPublicAllocatorConfigError extends Error {
   }
 }
 
+/** Thrown when a reallocation attempts to use a disabled vault market. */
+export class DisabledReallocationMarketError extends Error {
+  constructor(
+    public readonly vault: Address,
+    public readonly marketId: MarketId,
+  ) {
+    super(
+      `Vault ${vault} has disabled market ${marketId}. Remove it from reallocations or re-enable the market before reallocating.`,
+    );
+  }
+}
+
 /**
  * Thrown when shared liquidity selected by `computeReallocations` cannot cover
  * the absolute borrow shortfall on the target market — the resulting
@@ -397,6 +459,56 @@ export class InsufficientSharedLiquidityError extends Error {
     super(
       `Shared liquidity is insufficient to cover the borrow on market ${params.marketId}: shortfall "${params.shortfall}", available "${params.available}". Reduce the borrow amount or wait for additional vault liquidity.`,
     );
+  }
+}
+
+/** Thrown when reallocation state does not contain a requested market. */
+export class UnknownReallocationMarketError extends UnknownDataError {
+  /**
+   * @param marketId - Missing market id.
+   */
+  constructor(public readonly marketId: MarketId) {
+    super(`unknown reallocation market "${marketId}"`);
+  }
+}
+
+/** Thrown when reallocation state does not contain a requested vault. */
+export class UnknownReallocationVaultError extends UnknownDataError {
+  /**
+   * @param vault - Missing vault address.
+   */
+  constructor(public readonly vault: Address) {
+    super(`unknown reallocation vault "${vault}"`);
+  }
+}
+
+/** Thrown when reallocation state does not contain a requested vault-market config. */
+export class UnknownReallocationVaultMarketConfigError extends UnknownDataError {
+  /**
+   * @param vault - Vault address for the missing config.
+   * @param marketId - Market id for the missing config.
+   */
+  constructor(
+    public readonly vault: Address,
+    public readonly marketId: MarketId,
+  ) {
+    super(
+      `unknown reallocation config for vault "${vault}" on market "${marketId}"`,
+    );
+  }
+}
+
+/** Thrown when reallocation state does not contain a requested market position. */
+export class UnknownReallocationPositionError extends UnknownDataError {
+  /**
+   * @param user - Position owner address.
+   * @param marketId - Market id for the missing position.
+   */
+  constructor(
+    public readonly user: Address,
+    public readonly marketId: MarketId,
+  ) {
+    super(`unknown reallocation position of "${user}" on market "${marketId}"`);
   }
 }
 

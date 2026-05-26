@@ -2,12 +2,17 @@ import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { WethUsdsMarketV1 } from "../../../test/fixtures/marketV1.js";
+import {
+  WbtcUsdcSourceMarket,
+  WethUsdsMarketV1,
+} from "../../../test/fixtures/marketV1.js";
+import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
 
 import { test } from "../../../test/setup.js";
 import {
   NonPositiveBorrowAmountError,
   NonPositiveMinBorrowSharePriceError,
+  type VaultReallocation,
 } from "../../types/index.js";
 import { marketV1Borrow } from "./borrow.js";
 
@@ -38,6 +43,41 @@ describe("marketV1Borrow unit tests", () => {
     expect(tx.to).toBe(bundler3);
     expect(tx.data).toBeDefined();
     expect(tx.value).toBe(0n);
+  });
+
+  test("should include reallocation fees in transaction value", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    const reallocationFee = parseUnits("0.01", 18);
+    const reallocations: readonly VaultReallocation[] = [
+      {
+        vault: SteakhouseUsdcVaultV1.address,
+        fee: reallocationFee,
+        withdrawals: [
+          {
+            marketParams: WbtcUsdcSourceMarket,
+            amount: parseUnits("2000", 6),
+          },
+        ],
+      },
+    ];
+
+    const tx = marketV1Borrow({
+      market: {
+        chainId: mainnet.id,
+        marketParams: WethUsdsMarketV1,
+      },
+      args: {
+        amount,
+        minSharePrice: 0n,
+        receiver: client.account.address,
+        reallocations,
+      },
+    });
+
+    expect(tx.value).toBe(reallocationFee);
+    expect(tx.action.args.reallocationFee).toBe(reallocationFee);
   });
 
   test("should throw NonPositiveBorrowAmountError when amount is zero", async ({
