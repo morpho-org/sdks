@@ -25,23 +25,10 @@
   },
   "license": "Apache-2.0",
   "type": "module",
-  "main": "index.js",
-  "types": "./types/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./types/index.d.ts",
-      "bare": "./bare.js",
-      "default": "./index.js"
-    },
-    "./package": {
-      "default": "./package.json"
-    }
-  },
+  "main": "src/index.ts",
   "files": [
-    "index.js",
+    "lib",
     "bare.js",
-    "src/",
-    "types/",
     "LICENSE",
     "README.md"
   ],
@@ -50,31 +37,44 @@
   ],
   "scripts": {
     "check:vault-v2": "node scripts/check-vault-v2-only.js",
+    "prepublish": "$npm_execpath build",
+    "build": "pnpm run check:vault-v2 && tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "build:cjs": "tsc --build tsconfig.build.cjs.json --noCheck && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
+    "build:esm": "tsc --build tsconfig.build.esm.json --noCheck && echo '{\"type\":\"module\"}' > lib/esm/package.json",
     "pretest": "pnpm run check:vault-v2",
-    "test": "vitest run",
-    "test:fork": "vitest run tests/integration/module.test.js",
-    "test:unit": "vitest run tests/morpho-protocol-evm.test.js",
-    "test:coverage": "vitest run --coverage"
+    "test": "vitest --root ../.. --project wdk-protocol-lending-morpho-evm"
   },
   "dependencies": {
-    "@morpho-org/blue-sdk": "workspace:^",
-    "@morpho-org/blue-sdk-viem": "workspace:^",
-    "@morpho-org/morpho-sdk": "workspace:^",
     "@tetherto/wdk-wallet": "1.0.0-beta.8",
     "@tetherto/wdk-wallet-evm": "1.0.0-beta.12",
     "@tetherto/wdk-wallet-evm-erc-4337": "1.0.0-beta.6",
     "bare-node-runtime": "1.3.1"
   },
   "peerDependencies": {
+    "@morpho-org/blue-sdk": "^6.0.0",
+    "@morpho-org/blue-sdk-viem": "^5.0.0",
+    "@morpho-org/morpho-sdk": "^2.0.0",
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@morpho-org/blue-sdk": "workspace:^",
+    "@morpho-org/blue-sdk-viem": "workspace:^",
+    "@morpho-org/morpho-sdk": "workspace:^",
     "typescript": "^6.0.3",
-    "viem": "^2.50.4"
+    "viem": "^2.49.3",
+    "vitest": "^4.1.6"
   },
   "publishConfig": {
     "access": "public",
-    "registry": "https://registry.npmjs.org/"
+    "registry": "https://registry.npmjs.org/",
+    "exports": {
+      ".": {
+        "types": "./lib/esm/index.d.ts",
+        "bare": "./bare.js",
+        "import": "./lib/esm/index.js",
+        "require": "./lib/cjs/index.js"
+      }
+    }
   },
   "engines": {
     "node": ">=22.13"
