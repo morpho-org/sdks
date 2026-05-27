@@ -11,15 +11,3 @@ updates:
     schedule:
       interval: weekly
     target-branch: main
-
-  - package-ecosystem: npm
-    directory: /
-    schedule:
-      interval: weekly
-    target-branch: next
-
-  - package-ecosystem: github-actions
-    directory: /
-    schedule:
-      interval: weekly
-    target-branch: next

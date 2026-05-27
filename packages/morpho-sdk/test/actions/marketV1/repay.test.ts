@@ -2,7 +2,6 @@ import {
   type AccrualPosition,
   AccrualPosition as AccrualPositionClass,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
@@ -200,28 +199,6 @@ describe("RepayMarketV1", () => {
       borrowAmount,
     });
 
-    // Deal enough loan tokens to cover the buffered transfer amount (slippage buffer)
-    const morphoClientSetup = new MorphoClient(client);
-    const marketSetup = morphoClientSetup.marketV1(
-      WethUsdsMarketV1,
-      mainnet.id,
-    );
-    const setupPosition = await marketSetup.getPositionData(
-      client.account.address,
-    );
-    const baseAmount = setupPosition.market.toBorrowAssets(
-      setupPosition.borrowShares,
-      "Up",
-    );
-    const dealAmount = MathLib.wMulUp(
-      baseAmount,
-      MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
-    );
-    await client.deal({
-      erc20: WethUsdsMarketV1.loanToken,
-      amount: dealAmount,
-    });
-
     const {
       markets: {
         WethUsdsMarketV1: { initialState, finalState },
@@ -249,6 +226,12 @@ describe("RepayMarketV1", () => {
         if (!isRequirementApproval(approval)) {
           throw new Error("Approval requirement not found");
         }
+        // Shares-mode repayments use a forward-accrued transfer amount;
+        // fund the exact requirement instead of a stale fixture estimate.
+        await client.deal({
+          erc20: WethUsdsMarketV1.loanToken,
+          amount: approval.action.args.amount,
+        });
         await client.sendTransaction(approval);
 
         const tx = repay.buildTx();
