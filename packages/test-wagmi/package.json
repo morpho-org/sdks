@@ -19,6 +19,7 @@
   "type": "module",
   "main": "src/index.ts",
   "files": [
+    "DEPRECATION.md",
     "lib"
   ],
   "license": "MIT",

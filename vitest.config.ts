@@ -14,7 +14,7 @@ export default defineConfig({
         "packages/morpho-test/**",
         "packages/**/*.md",
         "packages/**/src/**/*.test.ts",
-        "packages/**/src/**/__test-utils__/**",
+        "packages/**/src/**/__test__/**",
         "packages/**/src/**/__mocks__/**",
         "packages/**/src/**/__fixtures__/**",
         "packages/**/src/**/index.ts",

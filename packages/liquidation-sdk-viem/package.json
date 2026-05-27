@@ -19,6 +19,7 @@
   },
   "main": "src/index.ts",
   "files": [
+    "DEPRECATION.md",
     "lib",
     "examples"
   ],
