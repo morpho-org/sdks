@@ -144,6 +144,17 @@ export interface ActionArgs {
     skipRevert?: boolean,
   ];
 
+  /** Morpho Blue supply call for `market`, `assets` or `shares`, `slippageAmount`, `onBehalf`, and callback actions; `skipRevert` controls Bundler3 revert handling. */
+  readonly morphoSupply: [
+    market: InputMarketParams,
+    assets: bigint,
+    shares: bigint,
+    slippageAmount: bigint,
+    onBehalf: Address,
+    onMorphoSupply: Action[],
+    skipRevert?: boolean,
+  ];
+
   /** Morpho Blue borrow call for `market`, `assets` or `shares`, `slippageAmount`, and `receiver`; `skipRevert` controls Bundler3 revert handling. */
   readonly morphoBorrow: [
     market: InputMarketParams,
@@ -162,6 +173,16 @@ export interface ActionArgs {
     slippageAmount: bigint,
     onBehalf: Address,
     onMorphoRepay: Action[],
+    skipRevert?: boolean,
+  ];
+
+  /** Morpho Blue withdraw call for `market`, `assets` or `shares`, `slippageAmount`, and `receiver`; `skipRevert` controls Bundler3 revert handling. */
+  readonly morphoWithdraw: [
+    market: InputMarketParams,
+    assets: bigint,
+    shares: bigint,
+    slippageAmount: bigint,
+    receiver: Address,
     skipRevert?: boolean,
   ];
 
