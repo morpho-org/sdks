@@ -153,8 +153,8 @@ jobs:
           # Run publish with an explicit environment allowlist and the trusted
           # pre-install PATH. This drops values persisted by previous steps
           # through $GITHUB_ENV or $GITHUB_PATH, including Node loader variables
-          # such as NODE_OPTIONS, while preserving the OIDC request variables
-          # npm needs for trusted publishing.
+          # such as NODE_OPTIONS, while preserving the GitHub OIDC/provenance
+          # metadata that pnpm/npm need for trusted publishing.
           env -i \
             ACTIONS_ID_TOKEN_REQUEST_TOKEN="${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" \
             ACTIONS_ID_TOKEN_REQUEST_URL="${ACTIONS_ID_TOKEN_REQUEST_URL:-}" \
@@ -170,6 +170,7 @@ jobs:
             GITHUB_REF_NAME="${GITHUB_REF_NAME:-}" \
             GITHUB_REPOSITORY="${GITHUB_REPOSITORY}" \
             GITHUB_REPOSITORY_ID="${GITHUB_REPOSITORY_ID:-}" \
+            GITHUB_REPOSITORY_OWNER_ID="${GITHUB_REPOSITORY_OWNER_ID:-}" \
             GITHUB_RUN_ATTEMPT="${GITHUB_RUN_ATTEMPT:-}" \
             GITHUB_RUN_ID="${GITHUB_RUN_ID:-}" \
             GITHUB_RUN_NUMBER="${GITHUB_RUN_NUMBER:-}" \
@@ -186,6 +187,7 @@ jobs:
             NPM_CONFIG_REGISTRY=https://registry.npmjs.org \
             PATH="${TRUSTED_PATH}" \
             PWD="${PWD}" \
+            RUNNER_ENVIRONMENT="${RUNNER_ENVIRONMENT:-}" \
             RUNNER_TEMP="${RUNNER_TEMP}" \
             SHELL="${SHELL:-/bin/bash}" \
             TMPDIR="${TMPDIR:-/tmp}" \
