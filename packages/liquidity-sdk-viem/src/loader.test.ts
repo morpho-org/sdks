@@ -485,7 +485,7 @@ const setupLoaderMockClient = ({
 
 const mockApiMarkets = (
   sourceTargetWithdrawUtilization = MathLib.WAD,
-  items = [
+  items: readonly Record<string, unknown>[] = [
     {
       uniqueKey: targetMarketId,
       targetBorrowUtilization: "900000000000000000",
@@ -671,5 +671,66 @@ describe.sequential("LiquidityLoader.fetch", () => {
     ).rejects.toThrow(
       "did not return a Promise of an Array of the same length",
     );
+  });
+
+  test("rejects when the API response omits the markets list", async () => {
+    const handle = setupLoaderMockClient({ blockTimestamp: 100n });
+    nock(new URL(BLUE_API_GRAPHQL_URL).origin)
+      .post("/graphql")
+      .reply(200, { data: { markets: {} } });
+
+    await expect(
+      new LiquidityLoader(handle.client).fetch(targetMarketId),
+    ).rejects.toThrow(
+      "did not return a Promise of an Array of the same length",
+    );
+  });
+
+  test("returns an empty plan when supplying vaults are missing", async () => {
+    const handle = setupLoaderMockClient({ blockTimestamp: 100n });
+    mockApiMarkets(MathLib.WAD, [
+      {
+        uniqueKey: targetMarketId,
+        targetBorrowUtilization: "900000000000000000",
+        publicAllocatorSharedLiquidity: [],
+      },
+    ]);
+
+    await expect(
+      new LiquidityLoader(handle.client).fetch(targetMarketId),
+    ).resolves.toMatchObject({ withdrawals: [] });
+  });
+
+  test("returns an empty plan when vault allocation is missing", async () => {
+    const handle = setupLoaderMockClient({ blockTimestamp: 100n });
+    mockApiMarkets(MathLib.WAD, [
+      {
+        uniqueKey: targetMarketId,
+        targetBorrowUtilization: "900000000000000000",
+        publicAllocatorSharedLiquidity: [],
+        supplyingVaults: [{ address: vault }],
+      },
+    ]);
+
+    await expect(
+      new LiquidityLoader(handle.client).fetch(targetMarketId),
+    ).resolves.toMatchObject({ withdrawals: [] });
+  });
+
+  test("rejects with the per-market simulation error when utilization overrides throw", async () => {
+    const handle = setupLoaderMockClient({ blockTimestamp: 100n });
+    const maxWithdrawalUtilization = {} as Record<MarketId, bigint>;
+    Object.defineProperty(maxWithdrawalUtilization, sourceMarketId, {
+      get() {
+        throw new TypeError("bad utilization override");
+      },
+    });
+    mockApiMarkets();
+
+    await expect(
+      new LiquidityLoader(handle.client, {
+        maxWithdrawalUtilization,
+      }).fetch(targetMarketId),
+    ).rejects.toThrow(/^An error occurred while simulating reallocations:/);
   });
 });
