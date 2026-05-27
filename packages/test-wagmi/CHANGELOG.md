@@ -1,5 +1,11 @@
 # @morpho-org/test-wagmi
 
+## 3.0.1
+
+### Patch Changes
+
+- [#722](https://github.com/morpho-org/sdks/pull/722) [`d2882d6`](https://github.com/morpho-org/sdks/commit/d2882d6535bfbd5dad09e022062b6f07f5fb2a53) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Deprecate `@morpho-org/test-wagmi` with no replacement package. See [DEPRECATION.md](./DEPRECATION.md) for the npm deprecation message, the maintained `@morpho-org/test` base, and the Wagmi-specific test helper surface that is not retained.
+
 ## 3.0.0
 
 ### Patch Changes
