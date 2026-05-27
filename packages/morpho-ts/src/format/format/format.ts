@@ -64,6 +64,7 @@ const insertString = (
 
   let filler = "";
   if (offset < 0) {
+    /* v8 ignore next -- callers only omit fillWith when offset stays non-negative. */
     if (fillWith) filler = fillWith.repeat(-offset).slice(offset);
     offset = 0;
   }
@@ -178,6 +179,7 @@ const _withUnit = (value: string, unit?: string) => {
   switch (unit) {
     case "$":
       return `$${value}`;
+    /* v8 ignore next -- empty string is handled by the falsy-unit guard above. */
     case "":
     case "%":
       return `${value}${unit}`;
@@ -385,8 +387,10 @@ export abstract class BaseFormatter {
 
         const strValue = `${whole}${newDigits.slice(0, numberExp)}.${newDigits.slice(numberExp)}`;
 
+        /* v8 ignore start -- strValue always includes the decimal separator above. */
         // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
         decimals = strValue.split(".")[1]?.length ?? 0;
+        /* v8 ignore stop */
         // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
         value = BigInt(strValue.replace(".", ""));
       } else {

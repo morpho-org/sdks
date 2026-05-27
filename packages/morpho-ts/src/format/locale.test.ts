@@ -33,12 +33,12 @@ describe("getLocaleSymbols", () => {
 
   test("falls back to en-US when locale is invalid", () => {
     // The function still echoes back the input locale string but uses en-US formatter on RangeError
-    const r = getLocaleSymbols("not-a-real-locale");
+    const r = getLocaleSymbols("not-a-real-locale!");
     // The decimal/group come from the en-US fallback
     expect(r.decimalSymbol).toBe(".");
     expect(r.groupSymbol).toBe(",");
     // Locale string is echoed back as-is
-    expect(r.locale).toBe("not-a-real-locale");
+    expect(r.locale).toBe("not-a-real-locale!");
   });
 });
 

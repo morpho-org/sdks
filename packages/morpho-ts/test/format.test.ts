@@ -82,6 +82,23 @@ describe("format", () => {
       expect(customOptions.default).toBe(undefined);
     });
 
+    test("should create every custom formatter type", () => {
+      const customFormat = createFormat(
+        { all: { digits: 2 } },
+        {
+          customCommas: { format: Format.commas, unit: "ETH" },
+          customHex: { format: Format.hex, prefix: true },
+          customPercent: { format: Format.percent, unit: "%" },
+          customShort: { format: Format.short, unit: "USD" },
+        },
+      );
+
+      expect(customFormat.customCommas.of(1234.5)).toEqual("1,234.50 ETH");
+      expect(customFormat.customHex.of(255)).toEqual("0xff");
+      expect(customFormat.customPercent.of(0.1234)).toEqual("12.34%");
+      expect(customFormat.customShort.of(12345)).toEqual("12.34k USD");
+    });
+
     test("shouldn't create conflicts between formatters", () => {
       const formatters = createFormat();
 
@@ -117,6 +134,10 @@ describe("format", () => {
     describe("should properly format number in hex format", () => {
       test("without option", () => {
         expect(format.hex.of(number)).toEqual((123456789).toString(16));
+      });
+
+      test("with prefix", () => {
+        expect(format.hex.prefix().of(number)).toEqual("0x75bcd15");
       });
 
       test("with a default value", () => {
@@ -219,6 +240,10 @@ describe("format", () => {
         expect(format.number.digits(2).of(number)).toEqual("12345.67");
       });
 
+      test("with readable small values", () => {
+        expect(format.number.digits(2).readable().of(0.001)).toEqual("< 0.01");
+      });
+
       test("with min", () => {
         expect(format.number.min(20000).of(number)).toEqual("< 20000.0000");
       });
@@ -291,6 +316,10 @@ describe("format", () => {
     describe("should properly format bigint in number format", () => {
       test("without option", () => {
         expect(format.number.of(bigint, decimals)).toEqual("12345.6789");
+      });
+
+      test("with non-standard negative decimals", () => {
+        expect(format.number.of(bigint, -2)).toEqual("12.3456789");
       });
 
       test("with digits", () => {
@@ -451,6 +480,14 @@ describe("format", () => {
     describe("should properly format bigint in short format", () => {
       test("with small integers", () => {
         expect(format.short.of(123n, 0)).toEqual("123");
+      });
+
+      test("with decimals but no short suffix", () => {
+        expect(format.short.of(123n, 2)).toEqual("1.23");
+      });
+
+      test("with larger suffixes", () => {
+        expect(format.short.of(1_234_567n, 0)).toEqual("1.234567M");
       });
 
       test("without option", () => {
@@ -619,6 +656,10 @@ describe("format", () => {
     describe("should properly format bigint in commas format", () => {
       test("without option", () => {
         expect(format.commas.of(bigint, decimals)).toEqual("12,345.6789");
+      });
+
+      test("without decimals", () => {
+        expect(format.commas.of(123456n, 0)).toEqual("123,456");
       });
 
       test("with digits", () => {
