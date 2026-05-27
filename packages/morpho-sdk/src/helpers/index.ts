@@ -11,12 +11,14 @@ export {
 export { addTransactionMetadata } from "./metadata.js";
 export {
   computeMaxRepaySharePrice,
+  computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
+  computeMinWithdrawSharePrice,
 } from "./slippage.js";
 export {
   validateAccrualPosition,
   validateChainId,
-  validateNativeCollateral,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateReallocations,
@@ -25,4 +27,6 @@ export {
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,
+  validateWithdrawAmount,
+  validateWithdrawShares,
 } from "./validate.js";

@@ -3,7 +3,7 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, vi } from "vitest";
 import {
-  UsdcEurcvMarketV1,
+  CbbtcUsdcMarketV1,
   WethUsdsMarketV1,
 } from "../../../test/fixtures/marketV1.js";
 import { test } from "../../../test/setup.js";
@@ -12,114 +12,106 @@ import {
   isRequirementSignature,
   NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
-  ZeroCollateralAmountError,
+  NegativeSupplyAmountError,
+  NegativeSupplyMaxSharePriceError,
+  ZeroSupplyAmountError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { getRequirements } from "../requirements/index.js";
-import { marketV1SupplyCollateral } from "./supplyCollateral.js";
+import { marketV1Supply } from "./supply.js";
 
-describe("marketV1SupplyCollateral unit tests", () => {
+describe("marketV1Supply unit tests", () => {
   const { wNative } = addressesRegistry[mainnet.id];
   const {
     bundler3: { bundler3 },
   } = getChainAddresses(mainnet.id);
 
-  /** Market params with wNative as collateral — enables native wrapping tests. */
-  const wNativeCollateralMarketParams = {
+  // Market params with wNative as loan asset — enables native wrapping tests.
+  const wNativeLoanMarketParams = {
     ...WethUsdsMarketV1,
-    collateralToken: wNative,
+    loanToken: wNative,
   };
 
-  test("should create direct supply collateral transaction (no native)", async ({
+  /** RAY-scaled max share price ≈ 1.01x — generous slippage bound for unit tests. */
+  const MAX_SHARE_PRICE = 1_010_000_000_000_000_000_000_000_000n;
+
+  test("should create direct supply transaction (no native)", async ({
     client,
   }) => {
-    const amount = parseUnits("1", 18);
+    const amount = parseUnits("1000", 6); // USDC
 
-    const tx = marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsMarketV1,
-      },
+    const tx = marketV1Supply({
+      market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
       args: {
         amount,
         onBehalf: client.account.address,
+        maxSharePrice: MAX_SHARE_PRICE,
       },
     });
 
     expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("marketV1SupplyCollateral");
-    expect(tx.action.args.market).toBe(WethUsdsMarketV1.id);
+    expect(tx.action.type).toBe("marketV1Supply");
+    expect(tx.action.args.market).toBe(CbbtcUsdcMarketV1.id);
     expect(tx.action.args.amount).toBe(amount);
     expect(tx.action.args.onBehalf).toBe(client.account.address);
+    expect(tx.action.args.maxSharePrice).toBe(MAX_SHARE_PRICE);
     expect(tx.action.args.nativeAmount).toBeUndefined();
     expect(tx.to).toBe(bundler3);
     expect(tx.data).toBeDefined();
     expect(tx.value).toBe(0n);
   });
 
-  test("should create bundler supply collateral with native wrapping", async ({
+  test("should create supply transaction with native wrapping", async ({
     client,
   }) => {
     const nativeAmount = parseUnits("1", 18);
 
-    const tx = marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: wNativeCollateralMarketParams,
-      },
+    const tx = marketV1Supply({
+      market: { chainId: mainnet.id, marketParams: wNativeLoanMarketParams },
       args: {
         nativeAmount,
         onBehalf: client.account.address,
+        maxSharePrice: MAX_SHARE_PRICE,
       },
     });
 
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("marketV1SupplyCollateral");
+    expect(tx.action.type).toBe("marketV1Supply");
     expect(tx.action.args.amount).toBe(nativeAmount);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
     expect(tx.to).toBe(bundler3);
   });
 
-  test("should create bundler tx with both ERC20 amount and native amount", async ({
+  test("should create tx with both ERC20 amount and native amount", async ({
     client,
   }) => {
     const amount = parseUnits("0.5", 18);
     const nativeAmount = parseUnits("0.5", 18);
-    const totalCollateral = amount + nativeAmount;
+    const totalAssets = amount + nativeAmount;
 
-    const tx = marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: wNativeCollateralMarketParams,
-      },
+    const tx = marketV1Supply({
+      market: { chainId: mainnet.id, marketParams: wNativeLoanMarketParams },
       args: {
         amount,
         nativeAmount,
         onBehalf: client.account.address,
+        maxSharePrice: MAX_SHARE_PRICE,
       },
     });
 
-    expect(tx.action.args.amount).toBe(totalCollateral);
+    expect(tx.action.args.amount).toBe(totalAssets);
     expect(tx.action.args.nativeAmount).toBe(nativeAmount);
     expect(tx.value).toBe(nativeAmount);
   });
 
-  test("should create bundler tx with permit2 signature and native wrapping", async ({
-    client,
-  }) => {
-    const amount = parseUnits("0.5", 18);
-    const nativeAmount = parseUnits("0.5", 18);
+  test("should create tx with permit2 signature", async ({ client }) => {
+    const amount = parseUnits("1000", 6);
 
     const requirements = await getRequirements(client, {
-      address: wNative,
+      address: CbbtcUsdcMarketV1.loanToken,
       chainId: mainnet.id,
       supportSignature: true,
-      args: {
-        amount,
-        from: client.account.address,
-      },
+      args: { amount, from: client.account.address },
     });
 
     const approvalPermit2 = requirements[0];
@@ -142,23 +134,18 @@ describe("marketV1SupplyCollateral unit tests", () => {
       "getRequirementsAction",
     );
 
-    const tx = marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: wNativeCollateralMarketParams,
-      },
+    const tx = marketV1Supply({
+      market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
       args: {
         amount,
-        nativeAmount,
         onBehalf: client.account.address,
+        maxSharePrice: MAX_SHARE_PRICE,
         requirementSignature,
       },
     });
 
     expect(localSpy).toHaveBeenCalled();
-    expect(tx).toBeDefined();
-    expect(tx.action.type).toBe("marketV1SupplyCollateral");
-    expect(tx.value).toBe(nativeAmount);
+    expect(tx.action.type).toBe("marketV1Supply");
   });
 
   test("should not call getRequirementsAction when no requirementSignature", async ({
@@ -169,97 +156,100 @@ describe("marketV1SupplyCollateral unit tests", () => {
       "getRequirementsAction",
     );
 
-    marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsMarketV1,
-      },
+    marketV1Supply({
+      market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
       args: {
-        amount: parseUnits("1", 18),
+        amount: parseUnits("1000", 6),
         onBehalf: client.account.address,
+        maxSharePrice: MAX_SHARE_PRICE,
       },
     });
 
     expect(localSpy).not.toHaveBeenCalled();
   });
 
-  test("should throw NonPositiveAssetAmountError when amount is negative", async ({
+  test("should throw NegativeSupplyAmountError when amount is negative", async ({
     client,
   }) => {
     expect(() =>
-      marketV1SupplyCollateral({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsMarketV1,
-        },
+      marketV1Supply({
+        market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
         args: {
           amount: -1n,
           onBehalf: client.account.address,
+          maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
-    ).toThrow(NonPositiveAssetAmountError);
+    ).toThrow(NegativeSupplyAmountError);
   });
 
-  test("should throw ZeroCollateralAmountError when total collateral is zero", async ({
+  test("should throw ZeroSupplyAmountError when total amount is zero", async ({
     client,
   }) => {
     expect(() =>
-      marketV1SupplyCollateral({
-        market: {
-          chainId: mainnet.id,
-          marketParams: WethUsdsMarketV1,
-        },
+      marketV1Supply({
+        market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
         args: {
           amount: 0n,
           onBehalf: client.account.address,
+          maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
-    ).toThrow(ZeroCollateralAmountError);
+    ).toThrow(ZeroSupplyAmountError);
   });
 
   test("should throw NegativeNativeAmountError when nativeAmount is negative", async ({
     client,
   }) => {
     expect(() =>
-      marketV1SupplyCollateral({
-        market: {
-          chainId: mainnet.id,
-          marketParams: wNativeCollateralMarketParams,
-        },
+      marketV1Supply({
+        market: { chainId: mainnet.id, marketParams: wNativeLoanMarketParams },
         args: {
           nativeAmount: -1n,
           onBehalf: client.account.address,
+          maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
     ).toThrow(NegativeNativeAmountError);
   });
 
-  test("should throw NativeAmountOnNonWNativeAssetError for non-wNative collateral", async ({
+  test("should throw NegativeSupplyMaxSharePriceError when maxSharePrice is negative", async ({
     client,
   }) => {
     expect(() =>
-      marketV1SupplyCollateral({
-        market: {
-          chainId: mainnet.id,
-          marketParams: UsdcEurcvMarketV1,
+      marketV1Supply({
+        market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
+        args: {
+          amount: parseUnits("1000", 6),
+          onBehalf: client.account.address,
+          maxSharePrice: -1n,
         },
+      }),
+    ).toThrow(NegativeSupplyMaxSharePriceError);
+  });
+
+  test("should throw NativeAmountOnNonWNativeAssetError for non-wNative loan token", async ({
+    client,
+  }) => {
+    expect(() =>
+      marketV1Supply({
+        market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
         args: {
           nativeAmount: parseUnits("1", 18),
           onBehalf: client.account.address,
+          maxSharePrice: MAX_SHARE_PRICE,
         },
       }),
     ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {
-    const tx = marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsMarketV1,
-      },
+    const tx = marketV1Supply({
+      market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
       args: {
-        amount: parseUnits("1", 18),
+        amount: parseUnits("1000", 6),
         onBehalf: client.account.address,
+        maxSharePrice: MAX_SHARE_PRICE,
       },
     });
 
@@ -271,21 +261,17 @@ describe("marketV1SupplyCollateral unit tests", () => {
   test("should append metadata to transaction data when provided", async ({
     client,
   }) => {
-    const amount = parseUnits("1", 18);
-
-    const txWith = marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: WethUsdsMarketV1,
-      },
+    const tx = marketV1Supply({
+      market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
       args: {
-        amount,
+        amount: parseUnits("1000", 6),
         onBehalf: client.account.address,
+        maxSharePrice: MAX_SHARE_PRICE,
       },
       metadata: { origin: "a1b2c3d4" },
     });
 
-    expect(txWith.action.type).toBe("marketV1SupplyCollateral");
-    expect(txWith.data.includes("a1b2c3d4")).toBe(true);
+    expect(tx.action.type).toBe("marketV1Supply");
+    expect(tx.data.includes("a1b2c3d4")).toBe(true);
   });
 });

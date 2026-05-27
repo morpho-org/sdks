@@ -8,93 +8,110 @@ import {
 } from "../../helpers/index.js";
 import {
   type DepositAmountArgs,
-  type MarketV1SupplyCollateralAction,
+  type MarketV1SupplyAction,
   type Metadata,
   NegativeNativeAmountError,
-  NonPositiveAssetAmountError,
+  NegativeSupplyAmountError,
+  NegativeSupplyMaxSharePriceError,
   type RequirementSignature,
   type Transaction,
-  ZeroCollateralAmountError,
+  ZeroSupplyAmountError,
 } from "../../types/index.js";
 import { getRequirementsAction } from "../requirements/getRequirementsAction.js";
 
-/** Parameters for {@link marketV1SupplyCollateral}. */
-export interface MarketV1SupplyCollateralParams {
+/** Parameters for {@link marketV1Supply}. */
+export interface MarketV1SupplyParams {
   market: {
     readonly chainId: number;
     readonly marketParams: MarketParams;
   };
   args: DepositAmountArgs & {
     onBehalf: Address;
+    /** Maximum supply share price (in ray). Slippage protection against inflation attacks. */
+    maxSharePrice: bigint;
     requirementSignature?: RequirementSignature;
   };
   metadata?: Metadata;
 }
 
 /**
- * Prepares a supply-collateral transaction for a Morpho Blue market.
+ * Prepares a loan-asset supply transaction for a Morpho Blue market.
  *
  * Routed through bundler3 via `GeneralAdapter1`. When `nativeAmount > 0`, native ETH is wrapped
- * via `GeneralAdapter1.wrapNative()` before the collateral supply; the collateral token must be
- * the chain's wNative for that path.
+ * via `GeneralAdapter1.wrapNative()` before the supply; the loan token must be the chain's
+ * wNative for that path. Uses `maxSharePrice` to protect against share-price inflation between
+ * transaction construction and execution.
  *
- * Zero loss: all collateral reaches Morpho. No dust left in bundler or adapter.
+ * Zero loss: all supplied assets reach Morpho. No dust left in bundler or adapter.
  *
  * @param params.market.chainId - The chain the market lives on.
  * @param params.market.marketParams - Market params (loanToken, collateralToken, oracle, irm, lltv).
- * @param params.args.amount - Amount of ERC-20 collateral to supply. At least one of `amount` or
+ * @param params.args.amount - Amount of ERC-20 loan asset to supply. At least one of `amount` or
  *   `nativeAmount` must be positive. Defaults to `0n`.
- * @param params.args.onBehalf - Address whose Morpho position is credited with the collateral.
+ * @param params.args.onBehalf - Address whose Morpho supply position is credited.
+ * @param params.args.maxSharePrice - Maximum acceptable supply share price (in ray). Slippage
+ *   protection.
+ * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
+ *   supply. Requires the loan token to be the chain's wNative.
  * @param params.args.requirementSignature - Optional pre-signed permit/permit2 approval. When
  *   absent, the bundle uses a plain `erc20TransferFrom` and assumes the user has already
  *   approved `GeneralAdapter1`.
- * @param params.args.nativeAmount - Optional amount of native token to wrap into wNative for the
- *   supply. Requires the collateral token to be the chain's wNative.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<MarketV1SupplyCollateralAction>` with `to`, `value`, `data`,
- *   and the typed `action` discriminator the simulation layer consumes.
- * @throws {NonPositiveAssetAmountError} when `amount < 0n`.
+ * @returns A deep-frozen `Transaction<MarketV1SupplyAction>` with `to`, `value`, `data`, and the
+ *   typed `action` discriminator the simulation layer consumes.
+ * @throws {NegativeSupplyAmountError} when `amount < 0n`.
  * @throws {NegativeNativeAmountError} when `nativeAmount < 0n`.
- * @throws {ZeroCollateralAmountError} when both `amount` and `nativeAmount` resolve to zero.
+ * @throws {ZeroSupplyAmountError} when both `amount` and `nativeAmount` resolve to zero.
+ * @throws {NegativeSupplyMaxSharePriceError} when `maxSharePrice < 0n`.
  * @throws {ChainWNativeMissingError} when `nativeAmount > 0n` but the chain has no configured wNative.
- * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the collateral
- *   token is not the chain's wNative.
+ * @throws {NativeAmountOnNonWNativeAssetError} when `nativeAmount > 0n` but the loan token is not
+ *   the chain's wNative.
  * @throws {DepositAssetMismatchError} from `getRequirementsAction` when `requirementSignature`
- *   is provided and the signed asset differs from `marketParams.collateralToken`.
+ *   is provided and the signed asset differs from `marketParams.loanToken`.
  * @throws {DepositAmountMismatchError} from `getRequirementsAction` when `requirementSignature`
  *   is provided and the signed amount differs from `args.amount`.
- * @throws {Permit2ExpirationMissingError} from `getRequirementsAction` when a Permit2 requirement
- *   signature is missing its expiration.
  * @example
  * ```ts
- * import { marketV1SupplyCollateral } from "@morpho-org/morpho-sdk";
+ * import { marketV1Supply } from "@morpho-org/morpho-sdk";
  *
- * const tx = marketV1SupplyCollateral({
+ * const tx = marketV1Supply({
  *   market: { chainId: 1, marketParams },
- *   args: { amount: 1_000_000_000_000_000_000n, onBehalf },
+ *   args: {
+ *     amount: 1_000_000_000n,
+ *     onBehalf: supplier,
+ *     maxSharePrice: 1_010_000_000_000_000_000_000_000_000n, // RAY-scaled, 1.01x
+ *   },
  * });
- * // tx satisfies Readonly<Transaction<MarketV1SupplyCollateralAction>>
+ * // tx satisfies Readonly<Transaction<MarketV1SupplyAction>>
  * ```
  */
-export const marketV1SupplyCollateral = ({
+export const marketV1Supply = ({
   market: { chainId, marketParams },
-  args: { amount = 0n, onBehalf, requirementSignature, nativeAmount },
+  args: {
+    amount = 0n,
+    onBehalf,
+    maxSharePrice,
+    requirementSignature,
+    nativeAmount,
+  },
   metadata,
-}: MarketV1SupplyCollateralParams): Readonly<
-  Transaction<MarketV1SupplyCollateralAction>
-> => {
+}: MarketV1SupplyParams): Readonly<Transaction<MarketV1SupplyAction>> => {
   if (amount < 0n) {
-    throw new NonPositiveAssetAmountError(marketParams.collateralToken);
+    throw new NegativeSupplyAmountError(marketParams.id);
   }
 
   if (nativeAmount !== undefined && nativeAmount < 0n) {
     throw new NegativeNativeAmountError(nativeAmount);
   }
 
-  const totalCollateral = amount + (nativeAmount ?? 0n);
+  if (maxSharePrice < 0n) {
+    throw new NegativeSupplyMaxSharePriceError(marketParams.id);
+  }
 
-  if (totalCollateral === 0n) {
-    throw new ZeroCollateralAmountError(marketParams.id);
+  const totalAssets = amount + (nativeAmount ?? 0n);
+
+  if (totalAssets === 0n) {
+    throw new ZeroSupplyAmountError(marketParams.id);
   }
 
   const {
@@ -104,7 +121,7 @@ export const marketV1SupplyCollateral = ({
   const actions: Action[] = [];
 
   if (nativeAmount !== undefined && nativeAmount > 0n) {
-    validateNativeAsset(chainId, marketParams.collateralToken);
+    validateNativeAsset(chainId, marketParams.loanToken);
 
     actions.push(
       {
@@ -122,7 +139,7 @@ export const marketV1SupplyCollateral = ({
     if (requirementSignature) {
       actions.push(
         ...getRequirementsAction({
-          asset: marketParams.collateralToken,
+          asset: marketParams.loanToken,
           amount,
           recipient: generalAdapter1,
           requirementSignature,
@@ -131,17 +148,20 @@ export const marketV1SupplyCollateral = ({
     } else {
       actions.push({
         type: "erc20TransferFrom",
-        args: [marketParams.collateralToken, amount, generalAdapter1, false],
+        args: [marketParams.loanToken, amount, generalAdapter1, false],
       });
     }
   }
 
   actions.push({
-    type: "morphoSupplyCollateral",
-    args: [marketParams, totalCollateral, onBehalf, [], false],
+    type: "morphoSupply",
+    args: [marketParams, totalAssets, 0n, maxSharePrice, onBehalf, [], false],
   });
 
-  let tx = BundlerAction.encodeBundle(chainId, actions);
+  let tx = {
+    ...BundlerAction.encodeBundle(chainId, actions),
+    value: nativeAmount ?? 0n,
+  };
 
   if (metadata) {
     tx = addTransactionMetadata(tx, metadata);
@@ -150,11 +170,12 @@ export const marketV1SupplyCollateral = ({
   return deepFreeze({
     ...tx,
     action: {
-      type: "marketV1SupplyCollateral",
+      type: "marketV1Supply",
       args: {
         market: marketParams.id,
-        amount: totalCollateral,
+        amount: totalAssets,
         onBehalf,
+        maxSharePrice,
         nativeAmount,
       },
     },

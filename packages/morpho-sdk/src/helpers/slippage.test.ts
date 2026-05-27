@@ -8,7 +8,9 @@ import {
 import { MAX_ABSOLUTE_SHARE_PRICE } from "./constant.js";
 import {
   computeMaxRepaySharePrice,
+  computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
+  computeMinWithdrawSharePrice,
 } from "./slippage.js";
 
 /** 1:1 share-to-asset ratio market for predictable results. */
@@ -181,6 +183,165 @@ describe("computeMaxRepaySharePrice", () => {
       computeMaxRepaySharePrice({
         repayAssets: 10n ** 18n,
         repayShares: 0n,
+        market: normalMarket,
+        slippageTolerance: MathLib.WAD + 1n,
+      }),
+    ).toThrow(ExcessiveSlippageToleranceError);
+  });
+});
+
+describe("computeMaxSupplySharePrice", () => {
+  test("should return a positive share price for a normal supply", () => {
+    const result = computeMaxSupplySharePrice({
+      supplyAssets: 10n ** 18n,
+      market: normalMarket,
+      slippageTolerance: slippage03,
+    });
+    expect(result).toBeGreaterThan(0n);
+  });
+
+  test("should return a higher price with higher slippage tolerance", () => {
+    const amount = 10n ** 18n;
+    const low = computeMaxSupplySharePrice({
+      supplyAssets: amount,
+      market: normalMarket,
+      slippageTolerance: slippage03,
+    });
+    const high = computeMaxSupplySharePrice({
+      supplyAssets: amount,
+      market: normalMarket,
+      slippageTolerance: (10n * MathLib.WAD) / 1000n,
+    });
+    expect(high).toBeGreaterThan(low);
+  });
+
+  test("should cap at MAX_ABSOLUTE_SHARE_PRICE for extreme share prices", () => {
+    // Market where 1 share backs 10^30 assets on the supply side.
+    const extreme = new Market({
+      params: new MarketParams(WethUsdsMarketV1),
+      totalSupplyAssets: 10n ** 30n,
+      totalBorrowAssets: 10n ** 30n,
+      totalSupplyShares: 1n,
+      totalBorrowShares: 10n ** 30n,
+      lastUpdate: 1_700_000_000n,
+      fee: 0n,
+      price: 10n ** 36n,
+    });
+    const result = computeMaxSupplySharePrice({
+      supplyAssets: 10n ** 30n,
+      market: extreme,
+      slippageTolerance: slippage03,
+    });
+    expect(result).toBe(MAX_ABSOLUTE_SHARE_PRICE);
+  });
+
+  test("should throw ShareDivideByZeroError when expected shares round to zero", () => {
+    // Market with very high share price so a tiny asset supply rounds shares to 0 (Down).
+    const extreme = new Market({
+      params: new MarketParams(WethUsdsMarketV1),
+      totalSupplyAssets: 10n ** 30n,
+      totalBorrowAssets: 10n ** 30n,
+      totalSupplyShares: 1n,
+      totalBorrowShares: 10n ** 30n,
+      lastUpdate: 1_700_000_000n,
+      fee: 0n,
+      price: 10n ** 36n,
+    });
+    expect(() =>
+      computeMaxSupplySharePrice({
+        supplyAssets: 1n,
+        market: extreme,
+        slippageTolerance: slippage03,
+      }),
+    ).toThrow(ShareDivideByZeroError);
+  });
+
+  test("should throw ExcessiveSlippageToleranceError when slippage equals WAD", () => {
+    expect(() =>
+      computeMaxSupplySharePrice({
+        supplyAssets: 10n ** 18n,
+        market: normalMarket,
+        slippageTolerance: MathLib.WAD,
+      }),
+    ).toThrow(ExcessiveSlippageToleranceError);
+  });
+
+  test("should throw ExcessiveSlippageToleranceError when slippage exceeds WAD", () => {
+    expect(() =>
+      computeMaxSupplySharePrice({
+        supplyAssets: 10n ** 18n,
+        market: normalMarket,
+        slippageTolerance: MathLib.WAD + 1n,
+      }),
+    ).toThrow(ExcessiveSlippageToleranceError);
+  });
+});
+
+describe("computeMinWithdrawSharePrice", () => {
+  test("should compute min share price via by-assets path", () => {
+    const result = computeMinWithdrawSharePrice({
+      withdrawAssets: 10n ** 18n,
+      withdrawShares: 0n,
+      market: normalMarket,
+      slippageTolerance: slippage03,
+    });
+    expect(result).toBeGreaterThan(0n);
+  });
+
+  test("should compute min share price via by-shares path", () => {
+    const result = computeMinWithdrawSharePrice({
+      withdrawAssets: 0n,
+      withdrawShares: 10n ** 18n,
+      market: normalMarket,
+      slippageTolerance: slippage03,
+    });
+    expect(result).toBeGreaterThan(0n);
+  });
+
+  test("should return a lower price with higher slippage tolerance", () => {
+    const low = computeMinWithdrawSharePrice({
+      withdrawAssets: 10n ** 18n,
+      withdrawShares: 0n,
+      market: normalMarket,
+      slippageTolerance: slippage03,
+    });
+    const high = computeMinWithdrawSharePrice({
+      withdrawAssets: 10n ** 18n,
+      withdrawShares: 0n,
+      market: normalMarket,
+      slippageTolerance: (10n * MathLib.WAD) / 1000n,
+    });
+    expect(high).toBeLessThan(low);
+  });
+
+  test("should throw ShareDivideByZeroError when computed shares is zero", () => {
+    // 1:1 market — supplying 0 assets yields 0 shares.
+    expect(() =>
+      computeMinWithdrawSharePrice({
+        withdrawAssets: 0n,
+        withdrawShares: 0n,
+        market: normalMarket,
+        slippageTolerance: slippage03,
+      }),
+    ).toThrow(ShareDivideByZeroError);
+  });
+
+  test("should throw ExcessiveSlippageToleranceError when slippage equals WAD", () => {
+    expect(() =>
+      computeMinWithdrawSharePrice({
+        withdrawAssets: 10n ** 18n,
+        withdrawShares: 0n,
+        market: normalMarket,
+        slippageTolerance: MathLib.WAD,
+      }),
+    ).toThrow(ExcessiveSlippageToleranceError);
+  });
+
+  test("should throw ExcessiveSlippageToleranceError when slippage exceeds WAD", () => {
+    expect(() =>
+      computeMinWithdrawSharePrice({
+        withdrawAssets: 10n ** 18n,
+        withdrawShares: 0n,
         market: normalMarket,
         slippageTolerance: MathLib.WAD + 1n,
       }),

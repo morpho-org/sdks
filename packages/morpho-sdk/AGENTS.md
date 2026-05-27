@@ -7,7 +7,7 @@ Transaction builders for VaultV1, VaultV2, and MarketV1. Subfolders carry the la
 ## Routing summary
 
 - **VaultV1 / VaultV2 deposits** route through bundler3 via GeneralAdapter1 (which enforces `maxSharePrice`, protecting against inflation attacks). VaultV1/V2 `withdraw` and `redeem` are direct vault calls. VaultV2 `forceWithdraw` / `forceRedeem` use `multicall` with `forceDeallocate` calls before the final withdraw/redeem.
-- **MarketV1 bundled paths** (`supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`) route through bundler3 via GeneralAdapter1. `repay` accepts assets (partial) or shares (full, with upper-bound transfer + `maxSharePrice`); `repayWithdrawCollateral` repays first, then withdraws.
+- **MarketV1 bundled paths** (`supply`, `supplyCollateral`, `borrow`, `supplyCollateralBorrow`, `repay`, `repayWithdrawCollateral`, `withdraw`) route through bundler3 via GeneralAdapter1. `repay` and `withdraw` each accept assets or shares (mutually exclusive); `repayWithdrawCollateral` repays first then withdraws. Loan-asset `supply` supports native wrapping when `loanToken === wNative`; loan-asset `withdraw` supports optional PublicAllocator reallocations to top up market liquidity (same mechanism as `borrow`).
 - **Bundle composition, native wrapping, and reallocation rules** are canonical in [`src/actions/AGENTS.md`](./src/actions/AGENTS.md).
 
 ## Tests
@@ -24,19 +24,19 @@ Protocol terms used across this package's docs and JSDoc:
 - **VaultV1 / MetaMorpho** — ERC-4626 vault layered on top of MarketV1.
 - **VaultV2** — successor vault with adapter-based liquidity routing and `forceDeallocate`.
 - **bundler3** — the bundler entry point; receives a sequence of adapter actions in one transaction.
-- **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, and `repayWithdrawCollateral`.
+- **GeneralAdapter1** — the bundler-side adapter that holds approvals/auth and executes Morpho calls on the user's behalf. Required as the spender for ERC-20 approvals on every bundled path; required as authorized operator on Morpho for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (the supplier-side path).
 - **PublicAllocator** — Morpho contract that lets vault curators move liquidity between markets within a vault (`reallocateTo(...)`).
 
 ### Bundler actions
 
 The action verbs an integrator sees in the bundle (`BundlerAction.encode...`):
 
-- **`morphoBorrow` / `morphoSupplyCollateral` / `morphoRepay`** — Morpho Blue contract calls executed by GeneralAdapter1 on the user's behalf.
-- **`setAuthorization`** — Morpho call that grants GeneralAdapter1 the right to call market functions on behalf of the user. Required pre-condition for the three bundled MarketV1 paths above.
+- **`morphoBorrow` / `morphoSupply` / `morphoSupplyCollateral` / `morphoRepay` / `morphoWithdraw`** — Morpho Blue contract calls executed by GeneralAdapter1 on the user's behalf.
+- **`setAuthorization`** — Morpho call that grants GeneralAdapter1 the right to call market functions on behalf of the user. Required pre-condition for `borrow`, `supplyCollateralBorrow`, `repayWithdrawCollateral`, and `withdraw` (loan-asset).
 - **`erc20TransferFrom`** — pulls user-approved tokens into the bundler.
 - **`nativeTransfer` + `wrapNative`** — pair that converts an attached native amount (`tx.value`) into the chain's wNative for a deposit/supply path.
 - **`forceDeallocate`** — VaultV2 multicall entry that pulls liquidity out of a specific adapter before withdraw/redeem.
-- **`reallocateTo`** — `PublicAllocator` call that shifts liquidity between markets in a curator vault before a borrow.
+- **`reallocateTo`** — `PublicAllocator` call that shifts liquidity between markets in a curator vault before a borrow or a loan-asset withdraw.
 
 ### Constants and conventions
 
