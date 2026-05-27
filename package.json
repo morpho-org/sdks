@@ -40,9 +40,9 @@
     "@changesets/cli": "^2.31.0",
     "@commitlint/cli": "^21.0.1",
     "@commitlint/config-conventional": "^21.0.1",
-    "@types/node": "^25.8.0",
-    "@vitest/coverage-v8": "^4.1.6",
-    "@vitest/ui": "^4.1.6",
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^4.1.7",
+    "@vitest/ui": "^4.1.7",
     "dotenv-cli": "^11.0.0",
     "happy-dom": "^20.9.0",
     "husky": "^9.1.7",
@@ -51,9 +51,9 @@
     "typedoc": "^0.28.19",
     "typescript": "^6.0.3",
     "undici": "^8.3.0",
-    "viem": "^2.49.3",
-    "vite": "^8.0.13",
-    "vitest": "^4.1.6"
+    "viem": "^2.50.4",
+    "vite": "^8.0.14",
+    "vitest": "^4.1.7"
   },
   "lint-staged": {
     "*.{json,gql}": "biome check --write --no-errors-on-unmatched",
