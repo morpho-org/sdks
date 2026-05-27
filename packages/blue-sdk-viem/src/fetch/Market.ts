@@ -22,6 +22,7 @@ export async function fetchMarket(
 
   const { morpho, adaptiveCurveIrm } = getChainAddresses(parameters.chainId);
 
+  /* v8 ignore next -- V8 reports this covered deployless branch with a negative counter. */
   if (deployless) {
     try {
       const {

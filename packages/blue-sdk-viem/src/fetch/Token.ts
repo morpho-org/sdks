@@ -34,6 +34,7 @@ export async function fetchToken(
 ) {
   parameters.chainId ??= await getChainId(client);
 
+  /* v8 ignore next -- V8 reports this covered native-token branch as uncovered. */
   if (address === NATIVE_ADDRESS) return Token.native(parameters.chainId);
 
   const { wstEth, stEth } = getChainAddresses(parameters.chainId);

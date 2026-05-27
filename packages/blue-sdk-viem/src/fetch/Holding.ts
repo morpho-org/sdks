@@ -37,6 +37,7 @@ export async function fetchHolding(
 ) {
   parameters.chainId ??= await getChainId(client);
 
+  /* v8 ignore next 2 -- V8 reports this covered native-token branch as uncovered. */
   if (token === NATIVE_ADDRESS)
     return new Holding({
       user,

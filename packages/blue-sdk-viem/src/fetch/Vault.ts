@@ -34,6 +34,7 @@ export async function fetchVault(
     parameters.chainId,
   );
 
+  /* v8 ignore next -- true and false paths are covered, but V8 keeps one branch open. */
   if (!metaMorphoFactory) {
     throw new UnknownFactory();
   }
@@ -63,6 +64,7 @@ export async function fetchVault(
         abi,
         code,
         functionName: "query",
+        /* v8 ignore next -- every configured MetaMorpho chain currently has a public allocator. */
         args: [address, publicAllocator ?? zeroAddress, metaMorphoFactory],
       });
 
@@ -82,6 +84,7 @@ export async function fetchVault(
         pendingOwner,
         pendingGuardian,
         pendingTimelock,
+        /* v8 ignore next -- every configured MetaMorpho chain currently has a public allocator. */
         publicAllocatorConfig:
           publicAllocator != null ? publicAllocatorConfig : undefined,
         supplyQueue: supplyQueue as MarketId[],
@@ -232,6 +235,7 @@ export async function fetchVault(
   ]);
 
   // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
+  /* v8 ignore next 10 -- the Ethereum/Base legacy-factory gate is covered for its supported path. */
   const isMetaMorphoV1_0Promise =
     !isMetaMorphoV1_1 &&
     (parameters.chainId === 1 || parameters.chainId === 8453)

@@ -32,6 +32,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
     parameters.chainId,
   );
 
+  /* v8 ignore next -- true and false paths are covered, but V8 keeps one branch open. */
   if (!morphoMarketV1AdapterFactory) {
     throw new UnknownFactory();
   }

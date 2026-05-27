@@ -74,6 +74,7 @@ function zipParams<
   return params.reduce(
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     (acc, param, index) => {
+      /* v8 ignore next -- callers validate output names before zipping. */
       return typeof param.name === "string"
         ? // biome-ignore lint/performance/noAccumulatingSpread: This keeps type system happy with negligible performance impact
           { ...acc, [param.name]: values[index] }

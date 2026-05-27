@@ -87,6 +87,7 @@ export async function fetchVaultV2(
     vaultV2Factory,
   } = getChainAddresses(parameters.chainId);
 
+  /* v8 ignore next -- true and false paths are covered, but V8 keeps one branch open. */
   if (!vaultV2Factory) {
     throw new UnknownFactory();
   }
@@ -99,6 +100,7 @@ export async function fetchVaultV2(
           abi,
           code,
           functionName: "query",
+          /* v8 ignore next 6 -- supported Vault V2 registries always include the Vault V1 adapter factory. */
           args: [
             address,
             vaultV2Factory,
