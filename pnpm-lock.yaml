@@ -6,7 +6,6 @@ settings:
 
 overrides:
   axios: 1.15.2
-  viem: 2.49.3
   ws: 8.20.1
 
 importers:
@@ -62,7 +61,7 @@ importers:
         specifier: ^8.3.0
         version: 8.3.0
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vite:
         specifier: ^8.0.13
@@ -99,7 +98,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -123,7 +122,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -177,7 +176,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -234,7 +233,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -256,7 +255,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -326,7 +325,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -387,7 +386,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -432,7 +431,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -472,7 +471,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -493,7 +492,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
 
   packages/morpho-ts:
@@ -533,7 +532,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -602,7 +601,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -633,7 +632,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -672,7 +671,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -709,7 +708,7 @@ importers:
         specifier: ^6.0.3
         version: 6.0.3
       viem:
-        specifier: 2.49.3
+        specifier: ^2.49.3
         version: 2.49.3(typescript@6.0.3)(zod@4.4.3)
       vitest:
         specifier: ^4.1.6
@@ -1817,7 +1816,7 @@ packages:
     peerDependencies:
       axios: 1.15.2
       ethers: ^5.5.0 || ^6.0.0
-      viem: 2.49.3
+      viem: ^2.21.0
       web3: ^4.14.0
     peerDependenciesMeta:
       axios:
@@ -1885,7 +1884,7 @@ packages:
       accounts: ~0.10
       porto: ~0.2.35
       typescript: '>=5.7.3'
-      viem: 2.49.3
+      viem: 2.x
     peerDependenciesMeta:
       '@base-org/account':
         optional: true
@@ -1912,7 +1911,7 @@ packages:
       '@tanstack/query-core': '>=5.0.0'
       accounts: ~0.12
       typescript: '>=5.7.3'
-      viem: 2.49.3
+      viem: 2.x
     peerDependenciesMeta:
       '@tanstack/query-core':
         optional: true
@@ -2708,7 +2707,7 @@ packages:
     resolution: {integrity: sha512-8npMgRIDerwxeyWonqsTSrw28CIU4EDUz2JSXRz5hEIF6pxNbRls6uS2wR2lf74J2fxAgtF6+Ltin5/bMlFiyw==}
     peerDependencies:
       evm-maths: ^7.0.0
-      viem: 2.49.3
+      viem: ^2.0.0
 
   expect-type@1.3.0:
     resolution: {integrity: sha512-knvyeauYhqjOYvQ66MznSMs83wmHrCycNEN6Ao+2AeYEfxUIkuiVxdEa1qlGEPK+We3n0THiDciYSsCcgW/DoA==}
@@ -3877,12 +3876,12 @@ packages:
   viem-deal@2.0.4:
     resolution: {integrity: sha512-gd1+pnLissjxYbaJ8u2UtdOOpv0o4W8RsVlSwy5w+SEasi/f5VJvrCVmE8cBrcHpvWYqoaxwj4VfJG45oLPnyQ==}
     peerDependencies:
-      viem: 2.49.3
+      viem: ^2.21.18
 
   viem-tracer@1.8.0:
     resolution: {integrity: sha512-4cyMux8N9v8gBLpmgtayhdPsNz7C46SNqaS2RrURKRFqEgDGvCGuRNn5I+PhDrnY/NZoLWWosUF3gOQ/r60lcA==}
     peerDependencies:
-      viem: 2.49.3
+      viem: ^2.21.0
 
   viem@2.49.3:
     resolution: {integrity: sha512-FlIXd2kRygDxJtvjtPp74vjmyOKMjKlXXgTNdMxr8h3kcDrQ4bYb9q1MpSWyCVa3L2NJc9gSv+u8HcHYIZQUkw==}
@@ -3982,7 +3981,7 @@ packages:
       '@tanstack/react-query': '>=5.0.0'
       react: '>=18'
       typescript: '>=5.7.3'
-      viem: 2.49.3
+      viem: 2.x
     peerDependenciesMeta:
       typescript:
         optional: true
@@ -5644,7 +5643,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@wagmi/connectors@8.0.14(@wagmi/core@3.4.12(@tanstack/query-core@5.100.10)(@types/react@19.2.14)(react@19.2.6)(typescript@6.0.3)(use-sync-external-store@1.4.0(react@19.2.6))(viem@2.49.3(typescript@6.0.3)(zod@4.4.3)))(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))':
+  '@wagmi/connectors@8.0.14(@wagmi/core@3.4.12(@tanstack/query-core@5.100.10)(@types/react@19.2.14)(react@19.2.6)(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3)))(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))':
     dependencies:
       '@wagmi/core': 3.4.12(@tanstack/query-core@5.100.10)(@types/react@19.2.14)(react@19.2.6)(typescript@6.0.3)(use-sync-external-store@1.4.0(react@19.2.6))(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))
       viem: 2.49.3(typescript@6.0.3)(zod@4.4.3)
@@ -7802,7 +7801,7 @@ snapshots:
   wagmi@3.6.15(@tanstack/query-core@5.100.10)(@tanstack/react-query@5.100.10(react@19.2.6))(@types/react@19.2.14)(react@19.2.6)(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3)):
     dependencies:
       '@tanstack/react-query': 5.100.10(react@19.2.6)
-      '@wagmi/connectors': 8.0.14(@wagmi/core@3.4.12(@tanstack/query-core@5.100.10)(@types/react@19.2.14)(react@19.2.6)(typescript@6.0.3)(use-sync-external-store@1.4.0(react@19.2.6))(viem@2.49.3(typescript@6.0.3)(zod@4.4.3)))(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))
+      '@wagmi/connectors': 8.0.14(@wagmi/core@3.4.12(@tanstack/query-core@5.100.10)(@types/react@19.2.14)(react@19.2.6)(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3)))(typescript@6.0.3)(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))
       '@wagmi/core': 3.4.12(@tanstack/query-core@5.100.10)(@types/react@19.2.14)(react@19.2.6)(typescript@6.0.3)(use-sync-external-store@1.4.0(react@19.2.6))(viem@2.49.3(typescript@6.0.3)(zod@4.4.3))
       react: 19.2.6
       use-sync-external-store: 1.4.0(react@19.2.6)
