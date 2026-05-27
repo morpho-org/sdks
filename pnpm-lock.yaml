@@ -701,8 +701,8 @@ importers:
         specifier: 1.0.0-beta.6
         version: 1.0.0-beta.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))(bare-url@2.4.3)(typescript@6.0.3)(zod@4.4.3)
       bare-node-runtime:
-        specifier: 1.3.1
-        version: 1.3.1(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+        specifier: 1.4.0
+        version: 1.4.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
     devDependencies:
       typescript:
         specifier: ^6.0.3
@@ -2259,6 +2259,9 @@ packages:
   bare-node-runtime@1.3.1:
     resolution: {integrity: sha512-VuTkBLZKAZdC1hiEX+4so9YQo2Su4FVJRUbXfqMas66dJOcQIuyc7Rz3ED9ZNVg7MXUygOeLz0N54pDGxtDWzw==}
 
+  bare-node-runtime@1.4.0:
+    resolution: {integrity: sha512-/mYhg/vJSnrBlz1CFKjgihT7PoChbYFsxjUf7mEas7997ty/dQ4plyzhn17TF/u163Of8hvil+ZWFF7amApl9A==}
+
   bare-os@3.9.1:
     resolution: {integrity: sha512-6M5XjcnsygQNPMCMPXSK379xrJFiZ/AEMNBmFEmQW8d/789VQATvriyi5r0HYTL9TkQ26rn3kgdTG3aisbrXkQ==}
     engines: {bare: '>=1.14.0'}
@@ -2300,6 +2303,14 @@ packages:
     resolution: {integrity: sha512-fNHMOdQIlYuTvMB3Oh9Apk99hLKn351+Ir8vz+khiPTcOqIyGG4uWWjdLTzxWdYGsA0eT+We3y0K74hjj2nq7A==}
     engines: {bare: '>=1.7.0'}
 
+  bare-sqlite@0.1.4:
+    resolution: {integrity: sha512-h2UdmQohSQG98lrMZ31PnhKIZRNT+1cDUZRzboHmsXKp+l4N4UBSJylMDEGL+D4fw6MJfOHWFIzUG20pITGy8Q==}
+    peerDependencies:
+      bare-buffer: '*'
+    peerDependenciesMeta:
+      bare-buffer:
+        optional: true
+
   bare-stdio@1.0.2:
     resolution: {integrity: sha512-3WJDqtvVGP4f+j68kyEC05umOYNwKJ1xG+YAXL8yZ605WgNqiRhVaFq+mVIhBt2eKNp7pa5vCQdhOt1pNh79SA==}
 
@@ -2325,8 +2336,8 @@ packages:
       bare-buffer:
         optional: true
 
-  bare-structured-clone@1.5.4:
-    resolution: {integrity: sha512-kR6S30P6dpFXKTelZ7Ki/Dfc31dOsaKNupLK+r5dM04wxHkON5G3WtaKP2JGXdsbjyUjk6JO0YM5kb6S8HTFEw==}
+  bare-structured-clone@1.5.5:
+    resolution: {integrity: sha512-b1x++7qt6x7T0Rm8NAg/EnU13+rn3Gfglv8N5PGtFcfdi4yAfLJs/mLbrVfc+C66DFrO+CxdIsl1NcnE6Ra+xQ==}
     engines: {bare: '>=1.2.0'}
 
   bare-stylize@0.0.1:
@@ -2362,6 +2373,10 @@ packages:
 
   bare-tls@3.1.4:
     resolution: {integrity: sha512-0zmlDYkHjsU3h/I3Z69QZetBZibMUlcLI+OtHhQHeso/73si7/wN58EslxmG3SRx/b5Vx2kzqexlEBMDRvFveg==}
+    engines: {bare: '>=1.7.0'}
+
+  bare-tls@3.1.5:
+    resolution: {integrity: sha512-yoOtW3MyJF1mMwavLeuqOE7+qTKZ9cl1GRPxCUOXMUvYCfGltvXyRH48R4EKrRIfgUG6vil6n4Ea1i81fwmgZA==}
     engines: {bare: '>=1.7.0'}
 
   bare-tty@5.1.0:
@@ -2501,8 +2516,8 @@ packages:
     resolution: {integrity: sha512-gk/Z852D2Wtb//0I+kRFNKKE9dIIVirjoqPoA1wJU+XePVXZfGeBpk45+A1rKO4Q43prqWBNY/MiIeRLbPWUaA==}
     engines: {node: '>=4.0.0'}
 
-  compact-encoding@2.19.2:
-    resolution: {integrity: sha512-/YjhHQE/5L4F7l5Bht69dRbP9RV6zoJPeowi8bMKQxNKe3Nh6hOY8pBGoVE9fz5GaWfEd8fWJ2aU9sB4KZuMYg==}
+  compact-encoding@3.1.0:
+    resolution: {integrity: sha512-HcXBKXucAr+rqCAzS+SmOgqXXkvbrUqLrqc4FSBGQ6Ifh8SCVTDiIcSfML92ZGK1ARePJIyug0698gnmaAwlBw==}
 
   compare-func@2.0.0:
     resolution: {integrity: sha512-zHig5N+tPWARooBnb0Zx1MFcdfpyJrfTJ3Y5L+IFvUm8rM74hHz66z0gw0x4tijh5CorKkKUCnW82R2vmpeCRA==}
@@ -5710,7 +5725,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@wagmi/connectors@8.0.14(@wagmi/core@3.4.12(@tanstack/query-core@5.100.14)(@types/react@19.2.15)(react@19.2.6)(typescript@6.0.3)(use-sync-external-store@1.4.0(react@19.2.6))(viem@2.50.4(typescript@6.0.3)(zod@4.4.3)))(typescript@6.0.3)(viem@2.50.4(typescript@6.0.3)(zod@4.4.3))':
+  '@wagmi/connectors@8.0.14(@wagmi/core@3.4.12(@tanstack/query-core@5.100.14)(@types/react@19.2.15)(react@19.2.6)(typescript@6.0.3)(viem@2.50.4(typescript@6.0.3)(zod@4.4.3)))(typescript@6.0.3)(viem@2.50.4(typescript@6.0.3)(zod@4.4.3))':
     dependencies:
       '@wagmi/core': 3.4.12(@tanstack/query-core@5.100.14)(@types/react@19.2.15)(react@19.2.6)(typescript@6.0.3)(use-sync-external-store@1.4.0(react@19.2.6))(viem@2.50.4(typescript@6.0.3)(zod@4.4.3))
       viem: 2.50.4(typescript@6.0.3)(zod@4.4.3)
@@ -5878,7 +5893,7 @@ snapshots:
     dependencies:
       bare-events: 2.8.3(bare-abort-controller@1.1.2)
       bare-stream: 2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
-      bare-structured-clone: 1.5.4
+      bare-structured-clone: 1.5.5
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -6003,7 +6018,7 @@ snapshots:
     dependencies:
       bare-http1: 4.5.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
       bare-tcp: 2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
-      bare-tls: 3.1.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-tls: 3.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
     transitivePeerDependencies:
       - bare-abort-controller
       - bare-buffer
@@ -6134,6 +6149,51 @@ snapshots:
       - bare-tcp
       - react-native-b4a
 
+  bare-node-runtime@1.4.0(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)):
+    dependencies:
+      bare-abort-controller: 1.1.2
+      bare-assert: 1.2.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-async-hooks: 0.0.0
+      bare-buffer: 3.6.0
+      bare-console: 6.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-crypto: 1.13.7(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-dgram: 1.0.1(bare-abort-controller@1.1.2)(bare-url@2.4.3)
+      bare-diagnostics-channel: 1.1.0
+      bare-dns: 2.1.4
+      bare-events: 2.8.3(bare-abort-controller@1.1.2)
+      bare-fetch: 3.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-fs: 4.7.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-http1: 4.5.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
+      bare-https: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))(bare-url@2.4.3)
+      bare-inspector: 6.0.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-tcp@2.2.13(bare-abort-controller@1.1.2)(bare-buffer@3.6.0))
+      bare-module: 6.2.0(bare-buffer@3.6.0)
+      bare-net: 2.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-os: 3.9.1
+      bare-path: 3.0.0
+      bare-performance: 2.0.0
+      bare-process: 4.4.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-punycode: 0.0.0
+      bare-querystring: 1.1.0
+      bare-readline: 1.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-repl: 6.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-sqlite: 0.1.4(bare-buffer@3.6.0)
+      bare-stream: 2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-string-decoder: 1.0.0(bare-buffer@3.6.0)
+      bare-subprocess: 6.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-timers: 3.2.1(bare-abort-controller@1.1.2)
+      bare-tls: 3.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-tty: 5.1.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-url: 2.4.3
+      bare-utils: 1.6.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+      bare-v8: 1.0.1
+      bare-vm: 1.0.1
+      bare-worker: 4.1.6(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-ws: 3.0.0(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-url@2.4.3)
+      bare-zlib: 1.3.3(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+    transitivePeerDependencies:
+      - bare-tcp
+      - react-native-b4a
+
   bare-os@3.9.1: {}
 
   bare-path@3.0.0:
@@ -6208,6 +6268,10 @@ snapshots:
     transitivePeerDependencies:
       - bare-abort-controller
 
+  bare-sqlite@0.1.4(bare-buffer@3.6.0):
+    optionalDependencies:
+      bare-buffer: 3.6.0
+
   bare-stdio@1.0.2(bare-abort-controller@1.1.2)(bare-buffer@3.6.0):
     dependencies:
       bare-fs: 4.7.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
@@ -6237,12 +6301,12 @@ snapshots:
     transitivePeerDependencies:
       - react-native-b4a
 
-  bare-structured-clone@1.5.4:
+  bare-structured-clone@1.5.5:
     dependencies:
       bare-buffer: 3.6.0
       bare-type: 1.1.0
       bare-url: 2.4.3
-      compact-encoding: 2.19.2
+      compact-encoding: 3.1.0
     transitivePeerDependencies:
       - react-native-b4a
 
@@ -6302,6 +6366,16 @@ snapshots:
       bare-abort-controller: 1.1.2
 
   bare-tls@3.1.4(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2)):
+    dependencies:
+      bare-net: 2.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
+      bare-stream: 2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
+    transitivePeerDependencies:
+      - bare-abort-controller
+      - bare-buffer
+      - bare-events
+      - react-native-b4a
+
+  bare-tls@3.1.5(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2)):
     dependencies:
       bare-net: 2.3.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)
       bare-stream: 2.13.1(bare-abort-controller@1.1.2)(bare-buffer@3.6.0)(bare-events@2.8.3(bare-abort-controller@1.1.2))
@@ -6499,7 +6573,7 @@ snapshots:
 
   common-tags@1.8.2: {}
 
-  compact-encoding@2.19.2:
+  compact-encoding@3.1.0:
     dependencies:
       b4a: 1.8.1
     transitivePeerDependencies:
@@ -7877,7 +7951,7 @@ snapshots:
   wagmi@3.6.15(@tanstack/query-core@5.100.14)(@tanstack/react-query@5.100.14(react@19.2.6))(@types/react@19.2.15)(react@19.2.6)(typescript@6.0.3)(viem@2.50.4(typescript@6.0.3)(zod@4.4.3)):
     dependencies:
       '@tanstack/react-query': 5.100.14(react@19.2.6)
-      '@wagmi/connectors': 8.0.14(@wagmi/core@3.4.12(@tanstack/query-core@5.100.14)(@types/react@19.2.15)(react@19.2.6)(typescript@6.0.3)(use-sync-external-store@1.4.0(react@19.2.6))(viem@2.50.4(typescript@6.0.3)(zod@4.4.3)))(typescript@6.0.3)(viem@2.50.4(typescript@6.0.3)(zod@4.4.3))
+      '@wagmi/connectors': 8.0.14(@wagmi/core@3.4.12(@tanstack/query-core@5.100.14)(@types/react@19.2.15)(react@19.2.6)(typescript@6.0.3)(viem@2.50.4(typescript@6.0.3)(zod@4.4.3)))(typescript@6.0.3)(viem@2.50.4(typescript@6.0.3)(zod@4.4.3))
       '@wagmi/core': 3.4.12(@tanstack/query-core@5.100.14)(@types/react@19.2.15)(react@19.2.6)(typescript@6.0.3)(use-sync-external-store@1.4.0(react@19.2.6))(viem@2.50.4(typescript@6.0.3)(zod@4.4.3))
       react: 19.2.6
       use-sync-external-store: 1.4.0(react@19.2.6)
