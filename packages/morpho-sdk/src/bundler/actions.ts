@@ -272,7 +272,7 @@ export namespace BundlerAction {
           market,
           assets,
           shares,
-          slippageAmount,
+          maxSharePrice,
           onBehalf,
           onMorphoRepay,
           skipRevert,
@@ -283,7 +283,7 @@ export namespace BundlerAction {
           market,
           assets,
           shares,
-          slippageAmount,
+          maxSharePrice,
           onBehalf,
           onMorphoRepay.flatMap(BundlerAction.encode.bind(null, chainId)),
           skipRevert,
@@ -907,7 +907,7 @@ export namespace BundlerAction {
    * @param market - Morpho Blue market parameters.
    * @param assets - Borrow asset amount.
    * @param shares - Borrow share amount.
-   * @param slippageAmount - Slippage guard amount.
+   * @param minSharePrice - Minimum amount of borrowed assets per borrow share minted, scaled by 1e27.
    * @param receiver - Recipient of borrowed assets.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
    * @returns Encoded Bundler3 calls.
@@ -945,7 +945,7 @@ export namespace BundlerAction {
     market: InputMarketParams,
     assets: bigint,
     shares: bigint,
-    slippageAmount: bigint,
+    minSharePrice: bigint,
     receiver: Address,
     skipRevert = false,
   ): BundlerCall[] {
@@ -959,7 +959,7 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoBorrow",
-          args: [market, assets, shares, slippageAmount, receiver],
+          args: [market, assets, shares, minSharePrice, receiver],
         }),
         value: 0n,
         skipRevert,
@@ -975,7 +975,7 @@ export namespace BundlerAction {
    * @param market - Morpho Blue market parameters.
    * @param assets - Repay asset amount.
    * @param shares - Repay share amount.
-   * @param slippageAmount - Slippage guard amount.
+   * @param maxSharePrice - Maximum amount of repaid assets per borrow share redeemed, scaled by 1e27.
    * @param onBehalf - Account whose borrow is repaid.
    * @param callbackCalls - Calls executed in Morpho's callback.
    * @param skipRevert - Whether Bundler3 should tolerate a revert.
@@ -1015,7 +1015,7 @@ export namespace BundlerAction {
     market: InputMarketParams,
     assets: bigint,
     shares: bigint,
-    slippageAmount: bigint,
+    maxSharePrice: bigint,
     onBehalf: Address,
     callbackCalls: BundlerCall[],
     skipRevert = false,
@@ -1032,7 +1032,7 @@ export namespace BundlerAction {
         data: encodeFunctionData({
           abi: generalAdapter1Abi,
           functionName: "morphoRepay",
-          args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
+          args: [market, assets, shares, maxSharePrice, onBehalf, reenterData],
         }),
         value: 0n,
         skipRevert,
