@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/bundler-sdk-viem",
   "description": "Viem-based extension of `@morpho-org/simulation-sdk` that exports utilities to transform simple interactions on Morpho (such as `Blue_Borrow`) and Morpho Vaults (such as `MetaMorpho_Deposit`) into the required bundles (with ERC20 approvals, transfers, etc) to submit to the bundler onchain.",
-  "version": "5.0.0",
+  "version": "5.0.1",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
@@ -40,15 +40,15 @@
     "@morpho-org/simulation-sdk-wagmi": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "@morpho-org/test-wagmi": "workspace:^",
-    "@tanstack/query-core": "^5.100.10",
-    "@tanstack/react-query": "^5.100.10",
+    "@tanstack/query-core": "^5.100.14",
+    "@tanstack/react-query": "^5.100.14",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/lodash": "^4.17.24",
     "lodash": "^4.18.1",
     "typescript": "^6.0.3",
-    "viem": "^2.49.3",
-    "vitest": "^4.1.6"
+    "viem": "^2.50.4",
+    "vitest": "^4.1.7"
   },
   "publishConfig": {
     "exports": {

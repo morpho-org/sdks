@@ -1,5 +1,14 @@
 # @morpho-org/simulation-sdk
 
+## 4.0.1
+
+### Patch Changes
+
+- [#722](https://github.com/morpho-org/sdks/pull/722) [`d2882d6`](https://github.com/morpho-org/sdks/commit/d2882d6535bfbd5dad09e022062b6f07f5fb2a53) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Deprecate `@morpho-org/simulation-sdk` for application consumers once maintained workspace consumers have migrated away from it. See [DEPRECATION.md](./DEPRECATION.md) for the npm deprecation message, supported `@morpho-org/morpho-sdk` reallocation helpers, and the broad simulation surface that is not retained.
+
+- Updated dependencies [[`42c27ae`](https://github.com/morpho-org/sdks/commit/42c27ae6cdc6c58426b1d08e6646fd91886a46c0)]:
+  - @morpho-org/morpho-ts@2.5.2
+
 ## 4.0.0
 
 ### Patch Changes

@@ -2,7 +2,6 @@ import {
   type AccrualPosition,
   AccrualPosition as AccrualPositionClass,
   DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
@@ -178,28 +177,6 @@ describe("RepayWithdrawCollateralMarketV1", () => {
       borrowAmount,
     });
 
-    // Deal enough loan tokens for the full repay (with slippage buffer for interest accrual)
-    const morphoClientSetup = new MorphoClient(client);
-    const marketSetup = morphoClientSetup.marketV1(
-      WethUsdsMarketV1,
-      mainnet.id,
-    );
-    const setupPosition = await marketSetup.getPositionData(
-      client.account.address,
-    );
-    const baseAmount = setupPosition.market.toBorrowAssets(
-      setupPosition.borrowShares,
-      "Up",
-    );
-    const dealAmount = MathLib.wMulUp(
-      baseAmount,
-      MathLib.WAD + DEFAULT_SLIPPAGE_TOLERANCE,
-    );
-    await client.deal({
-      erc20: WethUsdsMarketV1.loanToken,
-      amount: dealAmount,
-    });
-
     const {
       markets: {
         WethUsdsMarketV1: { initialState, finalState },
@@ -227,7 +204,15 @@ describe("RepayWithdrawCollateralMarketV1", () => {
 
         const requirements = await action.getRequirements();
         for (const req of requirements) {
-          if (isRequirementApproval(req) || isRequirementAuthorization(req)) {
+          if (isRequirementApproval(req)) {
+            // Shares-mode repayments use a forward-accrued transfer amount;
+            // fund the exact requirement instead of a stale fixture estimate.
+            await client.deal({
+              erc20: WethUsdsMarketV1.loanToken,
+              amount: req.action.args.amount,
+            });
+            await client.sendTransaction(req);
+          } else if (isRequirementAuthorization(req)) {
             await client.sendTransaction(req);
           }
         }
@@ -314,7 +299,15 @@ describe("RepayWithdrawCollateralMarketV1", () => {
 
         const requirements = await action.getRequirements();
         for (const req of requirements) {
-          if (isRequirementApproval(req) || isRequirementAuthorization(req)) {
+          if (isRequirementApproval(req)) {
+            // Shares-mode repayments use a forward-accrued transfer amount;
+            // fund the exact requirement instead of a stale fixture estimate.
+            await client.deal({
+              erc20: WethUsdsMarketV1.loanToken,
+              amount: req.action.args.amount,
+            });
+            await client.sendTransaction(req);
+          } else if (isRequirementAuthorization(req)) {
             await client.sendTransaction(req);
           }
         }
