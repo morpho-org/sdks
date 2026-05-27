@@ -99,6 +99,15 @@ describe("ChainUtils explorer URL helpers", () => {
         nativeCurrency: { name: "Kaia", symbol: "KAIA", decimals: 18 },
       },
     ],
+    [
+      5_042,
+      {
+        name: "Arc",
+        explorerUrl: "https://testnet.arcscan.app",
+        identifier: "arc",
+        nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+      },
+    ],
   ])("exposes era-2 metadata for chain %i", (chainId, expectedMetadata) => {
     expect(
       (ChainUtils.CHAIN_METADATA as Record<number, unknown>)[chainId],

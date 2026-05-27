@@ -239,6 +239,13 @@ describe("addresses helpers", () => {
       morphoDeployment: 208_021_118n,
       wNativeDeployment: 104_802_159n,
     },
+    {
+      chainId: 5_042,
+      morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
+      wNative: "0x0000000000000000000000000000000000000001",
+      morphoDeployment: 1_208_685n,
+      wNativeDeployment: 0n,
+    },
   ])("exposes era-2 addresses and deployments for chain $chainId", ({
     chainId,
     morpho,
