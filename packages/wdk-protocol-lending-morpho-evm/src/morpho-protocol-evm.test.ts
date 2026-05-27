@@ -143,9 +143,6 @@ const { MarketParams } = await import("@morpho-org/blue-sdk");
 const { WalletAccountEvm, WalletAccountReadOnlyEvm } = await import(
   "@tetherto/wdk-wallet-evm"
 );
-const { WalletAccountEvmErc4337 } = await import(
-  "@tetherto/wdk-wallet-evm-erc-4337"
-);
 const { default: MorphoProtocolEvm } = await import("./morpho-protocol-evm.js");
 
 describe.sequential("MorphoProtocolEvm", () => {
@@ -669,17 +666,16 @@ describe.sequential("MorphoProtocolEvm", () => {
   });
 
   describe("erc-4337", () => {
-    test("should send through an erc-4337 account with config", async () => {
+    test("should send through an erc-4337-shaped account with config", async () => {
       // biome-ignore lint/nursery/noShadow: test-local account shadowing the suite default
-      const account = new WalletAccountEvmErc4337(SEED, "0'/0/0", {
-        chainId: 1,
-        provider: "https://dummy-rpc-url.com",
-        bundlerUrl: "https://dummy-bundler-url.com",
-        entryPointAddress: "0x0000000000000000000000000000000000000007",
-        safeModulesVersion: "0.3.0",
-        isSponsored: false,
-        useNativeCoins: true,
-      });
+      const account = Object.assign(
+        new WalletAccountEvm(SEED, "0'/0/0", {
+          provider: "https://dummy-rpc-url.com",
+        }),
+        {
+          getUserOperationReceipt: vi.fn(),
+        },
+      );
       account.getAddress = vi.fn().mockResolvedValue(ADDRESS);
       account.getTokenBalance = vi.fn().mockResolvedValue(100_000n);
       account.sendTransaction = vi

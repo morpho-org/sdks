@@ -3,19 +3,6 @@
   "compilerOptions": {
     "outDir": "lib",
     "rootDir": ".",
-    "baseUrl": ".",
-    "paths": {
-      "@morpho-org/blue-sdk": ["../blue-sdk/lib/esm/index.d.ts"],
-      "@morpho-org/blue-sdk-viem": ["../blue-sdk-viem/lib/esm/index.d.ts"],
-      "@morpho-org/bundler-sdk-viem": [
-        "../bundler-sdk-viem/lib/esm/index.d.ts"
-      ],
-      "@morpho-org/morpho-sdk": ["../morpho-sdk/lib/esm/index.d.ts"],
-      "@morpho-org/morpho-ts": ["../morpho-ts/lib/esm/index.d.ts"],
-      "@morpho-org/simulation-sdk": ["../simulation-sdk/lib/esm/index.d.ts"],
-      "@tetherto/wdk-wallet/protocols": [
-        "./node_modules/@tetherto/wdk-wallet/types/src/protocols/index.d.ts"
-      ]
-    }
+    "baseUrl": "."
   }
 }

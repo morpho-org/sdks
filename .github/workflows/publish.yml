@@ -91,10 +91,6 @@ jobs:
           echo "::error::.changeset/pre.json is present on main. Run pnpm changeset pre exit and commit the result before stable releases."
           exit 1
 
-      - name: Build packages before publish
-        if: steps.pending-changesets.outputs.has_changesets == 'false'
-        run: pnpm build
-
       - name: Verify release helper scripts
         if: steps.pending-changesets.outputs.has_changesets == 'false'
         shell: bash

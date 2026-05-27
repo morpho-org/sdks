@@ -22,17 +22,10 @@ import type {
   WithdrawResult,
 } from "@tetherto/wdk-wallet/protocols";
 import { LendingProtocol } from "@tetherto/wdk-wallet/protocols";
-import type { WalletAccountReadOnlyEvm } from "@tetherto/wdk-wallet-evm";
-import { WalletAccountEvm } from "@tetherto/wdk-wallet-evm";
 import type {
-  EvmErc4337WalletNativeCoinsConfig,
-  EvmErc4337WalletPaymasterTokenConfig,
-  EvmErc4337WalletSponsorshipPolicyConfig,
-} from "@tetherto/wdk-wallet-evm-erc-4337";
-import {
-  WalletAccountEvmErc4337,
-  WalletAccountReadOnlyEvmErc4337,
-} from "@tetherto/wdk-wallet-evm-erc-4337";
+  WalletAccountEvm,
+  WalletAccountReadOnlyEvm,
+} from "@tetherto/wdk-wallet-evm";
 import {
   type Address,
   type Chain,
@@ -55,12 +48,6 @@ import {
   MORPHO_VAULT_PRESETS,
   type VaultPresetKey,
 } from "./morpho-presets.js";
-
-export type MorphoEvmAccount =
-  | WalletAccountReadOnlyEvm
-  | WalletAccountReadOnlyEvmErc4337
-  | WalletAccountEvm
-  | WalletAccountEvmErc4337;
 
 /**
  * Minimal EIP-1193 provider shape the adapter needs to construct a viem
@@ -96,11 +83,69 @@ interface WdkWalletWithConfig {
 type ViemPublicClient = Client<Transport, Chain> &
   PublicActions<Transport, Chain>;
 
+interface Erc4337PaymasterTokenConfig {
+  /** Whether the paymaster is sponsoring the account. */
+  isSponsored?: false;
+  /** Whether to use native coins instead of a paymaster to pay gas fees. */
+  useNativeCoins?: false;
+  /** The URL of the paymaster service. */
+  paymasterUrl: string;
+  /** The address of the paymaster smart contract. */
+  paymasterAddress: string;
+  /** The paymaster token configuration. */
+  paymasterToken: { readonly address: string };
+  /** The maximum fee amount for transfer operations. */
+  transferMaxFee?: number | bigint;
+}
+
+interface Erc4337SponsorshipPolicyConfig {
+  /** Whether the paymaster is sponsoring the account. */
+  isSponsored: true;
+  /** Whether to use native coins instead of a paymaster to pay gas fees. */
+  useNativeCoins?: false;
+  /** The URL of the paymaster service. */
+  paymasterUrl: string;
+  /** The sponsorship policy id. */
+  sponsorshipPolicyId?: string;
+}
+
+interface Erc4337NativeCoinsConfig {
+  /** Whether the paymaster is sponsoring the account. */
+  isSponsored?: false;
+  /** Whether to use native coins instead of a paymaster to pay gas fees. */
+  useNativeCoins: true;
+  /** The maximum fee amount for transfer operations. */
+  transferMaxFee?: number | bigint;
+}
+
 export type Erc4337TransactionConfig = Partial<
-  | EvmErc4337WalletPaymasterTokenConfig
-  | EvmErc4337WalletSponsorshipPolicyConfig
-  | EvmErc4337WalletNativeCoinsConfig
+  | Erc4337PaymasterTokenConfig
+  | Erc4337SponsorshipPolicyConfig
+  | Erc4337NativeCoinsConfig
 >;
+
+interface Erc4337ReadOnlyAccount {
+  getAddress(): Promise<string>;
+  getTokenBalance(tokenAddress: string): Promise<bigint>;
+  quoteSendTransaction(
+    tx: WdkTransaction | readonly WdkTransaction[],
+    config?: Erc4337TransactionConfig,
+  ): Promise<{ fee: bigint }>;
+  getUserOperationReceipt(hash: string): Promise<unknown>;
+}
+
+interface Erc4337WritableAccount extends Erc4337ReadOnlyAccount {
+  sendTransaction(
+    tx: WdkTransaction | readonly WdkTransaction[],
+    config?: Erc4337TransactionConfig,
+  ): Promise<SupplyResult>;
+}
+
+export type MorphoEvmAccount =
+  | WalletAccountReadOnlyEvm
+  | WalletAccountEvm
+  | Erc4337ReadOnlyAccount
+  | Erc4337WritableAccount;
 
 export type RequirementApproval = Transaction<ERC20ApprovalAction>;
 export type RequirementAuthorization = Transaction<MorphoAuthorizationAction>;
@@ -389,6 +434,34 @@ function toWdkTransaction(tx: {
     value: tx.value ?? 0n,
     data: tx.data,
   };
+}
+
+function isErc4337ReadOnlyAccount(
+  account: MorphoEvmAccount,
+): account is Erc4337ReadOnlyAccount {
+  return (
+    typeof (account as { getUserOperationReceipt?: unknown })
+      .getUserOperationReceipt === "function"
+  );
+}
+
+function isErc4337WritableAccount(
+  account: MorphoEvmAccount,
+): account is Erc4337WritableAccount {
+  return (
+    isErc4337ReadOnlyAccount(account) &&
+    typeof (account as { sendTransaction?: unknown }).sendTransaction ===
+      "function"
+  );
+}
+
+function isWritableAccount(
+  account: MorphoEvmAccount,
+): account is WalletAccountEvm | Erc4337WritableAccount {
+  return (
+    typeof (account as { sendTransaction?: unknown }).sendTransaction ===
+    "function"
+  );
 }
 
 /**
@@ -1357,12 +1430,7 @@ export default class MorphoProtocolEvm extends LendingProtocol {
   }
 
   private _assertWritable(method: string): void {
-    if (
-      !(
-        this._evmAccount instanceof WalletAccountEvm ||
-        this._evmAccount instanceof WalletAccountEvmErc4337
-      )
-    ) {
+    if (!isWritableAccount(this._evmAccount)) {
       throw new Error(
         `The '${method}' method requires the protocol to be initialized with a non read-only account.`,
       );
@@ -1420,13 +1488,10 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     tx: WdkTransaction,
     config?: Erc4337TransactionConfig,
   ): Promise<SupplyResult> {
-    if (this._evmAccount instanceof WalletAccountEvmErc4337) {
-      return (await this._evmAccount.sendTransaction(
-        tx,
-        config,
-      )) as SupplyResult;
+    if (isErc4337WritableAccount(this._evmAccount)) {
+      return await this._evmAccount.sendTransaction(tx, config);
     }
-    if (this._evmAccount instanceof WalletAccountEvm) {
+    if (isWritableAccount(this._evmAccount)) {
       return (await this._evmAccount.sendTransaction(tx)) as SupplyResult;
     }
     throw new Error(
@@ -1438,10 +1503,9 @@ export default class MorphoProtocolEvm extends LendingProtocol {
     tx: WdkTransaction,
     config?: Erc4337TransactionConfig,
   ): Promise<{ fee: bigint }> {
-    const { fee } =
-      this._evmAccount instanceof WalletAccountReadOnlyEvmErc4337
-        ? await this._evmAccount.quoteSendTransaction(tx, config)
-        : await this._evmAccount.quoteSendTransaction(tx);
+    const { fee } = isErc4337ReadOnlyAccount(this._evmAccount)
+      ? await this._evmAccount.quoteSendTransaction(tx, config)
+      : await this._evmAccount.quoteSendTransaction(tx);
 
     return { fee };
   }
