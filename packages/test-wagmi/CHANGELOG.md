@@ -1,5 +1,14 @@
 # @morpho-org/test-wagmi
 
+## 3.0.2
+
+### Patch Changes
+
+- [#742](https://github.com/morpho-org/sdks/pull/742) [`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fix npm source metadata by publishing full repository URLs and monorepo package directories.
+
+- Updated dependencies [[`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7)]:
+  - @morpho-org/test@2.8.1
+
 ## 3.0.1
 
 ### Patch Changes

@@ -1,5 +1,22 @@
 # @morpho-org/morpho-sdk
 
+## 3.1.0
+
+### Minor Changes
+
+- [#684](https://github.com/morpho-org/sdks/pull/684) [`49b24e7`](https://github.com/morpho-org/sdks/commit/49b24e7e8ffc9e1ff6ea1381b81873de7cccdd83) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Adds `morphoSupply` and `morphoWithdraw` to the local Bundler3 action subset (action types, encoder functions, and `encode` dispatch), used by `marketV1Supply` / `marketV1Withdraw`. This keeps `@morpho-org/bundler-sdk-viem` a devDependency only — the published `morpho-sdk` tarball no longer imports it at runtime.
+
+- [#684](https://github.com/morpho-org/sdks/pull/684) [`49b24e7`](https://github.com/morpho-org/sdks/commit/49b24e7e8ffc9e1ff6ea1381b81873de7cccdd83) Thanks [@Foulks-Plb](https://github.com/Foulks-Plb)! - Add `marketV1Supply` and `marketV1Withdraw` for the loan asset of a Morpho Blue market, routed through bundler3 / GeneralAdapter1. `marketV1Supply` mirrors `marketV1SupplyCollateral` with `maxSharePrice` (anti-inflation) and optional native wrapping when `loanToken === wNative`. `marketV1Withdraw` mirrors `marketV1Borrow` with `minSharePrice` (slippage) and optional PublicAllocator reallocations to top up market liquidity. Withdraw is signer-bound (no `onBehalf` arg; the bundler uses the transaction initiator, matching `marketV1Borrow`); it supports both `assets` and `shares` modes (via the new generic `AssetsOrSharesArgs` type; `RepayAmountArgs` kept as a deprecated alias). New entity methods `MorphoMarketV1.supply()` (validates `marketData.id === marketParams.id`) and `MorphoMarketV1.withdraw()` expose the same surface. `computeReallocations` takes a canonical `{ operation: "borrow" | "withdraw", amount }` shape (single source of truth for shared-liquidity planning); `MorphoMarketV1.getReallocations` keeps a `{ borrowAmount }` alias for back-compat at the entity boundary. Merges `validateNativeCollateral` and `validateNativeLoan` into a single action-agnostic `validateNativeAsset(chainId, asset)`; the corresponding error class is now `NativeAmountOnNonWNativeAssetError` (`NativeAmountOnNonWNativeCollateralError` is kept as a deprecated alias). New typed errors: `NegativeSupplyAmountError`, `NegativeSupplyMaxSharePriceError`, `ZeroSupplyAmountError`, `NonPositiveWithdrawAmountError`, `NegativeWithdrawMinSharePriceError`, `MutuallyExclusiveWithdrawAmountsError`, `WithdrawExceedsSupplyError`, `WithdrawSharesExceedSupplyError`, `ReallocationWithdrawExceedsMarketSupplyError` (raised by `computeReallocations` when a `"withdraw"` `amount` exceeds the target market's total supply — blocks fee-bearing reallocations on an on-chain-unreachable call).
+
+### Patch Changes
+
+- [#742](https://github.com/morpho-org/sdks/pull/742) [`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fix npm source metadata by publishing full repository URLs and monorepo package directories.
+
+- Updated dependencies [[`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7)]:
+  - @morpho-org/blue-sdk@6.0.1
+  - @morpho-org/blue-sdk-viem@5.0.1
+  - @morpho-org/morpho-ts@2.5.3
+
 ## 3.0.0
 
 ### Major Changes
