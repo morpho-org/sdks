@@ -22,7 +22,7 @@ import * as getRequirementsActionModule from "../requirements/getRequirementsAct
 import { getRequirements } from "../requirements/index.js";
 import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
-describe("vaultV1MigrateToV2 unit tests", () => {
+describe.sequential("vaultV1MigrateToV2 unit tests", () => {
   test("should create migrate transaction for USDC vaults", async ({
     client,
   }) => {

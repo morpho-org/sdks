@@ -24,7 +24,7 @@ import * as getRequirementsActionModule from "../requirements/getRequirementsAct
 import { getRequirements } from "../requirements/index.js";
 import { marketV1SupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
-describe("marketV1SupplyCollateralBorrow unit tests", () => {
+describe.sequential("marketV1SupplyCollateralBorrow unit tests", () => {
   const { wNative } = addressesRegistry[mainnet.id];
   const marketParams = new MarketParams(WethUsdsMarketV1);
   const marketId = marketParams.id;

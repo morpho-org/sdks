@@ -20,7 +20,7 @@ import * as getRequirementsActionModule from "../requirements/getRequirementsAct
 import { getRequirements } from "../requirements/index.js";
 import { marketV1Supply } from "./supply.js";
 
-describe("marketV1Supply unit tests", () => {
+describe.sequential("marketV1Supply unit tests", () => {
   const { wNative } = addressesRegistry[mainnet.id];
   const {
     bundler3: { bundler3 },

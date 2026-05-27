@@ -15,7 +15,7 @@ import {
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { marketV1RepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 
-describe("marketV1RepayWithdrawCollateral unit tests", () => {
+describe.sequential("marketV1RepayWithdrawCollateral unit tests", () => {
   const {
     bundler3: { bundler3 },
   } = getChainAddresses(mainnet.id);

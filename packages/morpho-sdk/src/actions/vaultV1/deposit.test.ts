@@ -21,7 +21,7 @@ import * as getRequirementsActionModule from "../requirements/getRequirementsAct
 import { getRequirements } from "../requirements/index.js";
 import { vaultV1Deposit } from "./deposit.js";
 
-describe("depositVaultV1 unit tests", () => {
+describe.sequential("depositVaultV1 unit tests", () => {
   const { dai, usdc, wNative } = addressesRegistry[mainnet.id];
 
   test("should create deposit bundle with DAI via permit2", async ({
