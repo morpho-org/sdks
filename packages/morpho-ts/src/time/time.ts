@@ -57,6 +57,7 @@ Object.defineProperties(
                   unitFrom,
                   (value: bigint | number) => {
                     switch (unitFrom) {
+                      /* v8 ignore next -- unitFrom cannot be ms in this larger-unit conversion branch. */
                       case "ms":
                         return value;
                       case "s":
@@ -123,4 +124,5 @@ export namespace Time {
   export function timestamp() {
     return BigInt(Math.ceil(Date.now() / 1_000));
   }
+  /* v8 ignore next -- TypeScript emits an untestable namespace-merge fallback branch. */
 }
