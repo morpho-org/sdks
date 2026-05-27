@@ -1,5 +1,11 @@
 # @morpho-org/test
 
+## 2.8.1
+
+### Patch Changes
+
+- [#742](https://github.com/morpho-org/sdks/pull/742) [`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fix npm source metadata by publishing full repository URLs and monorepo package directories.
+
 ## 2.8.0
 
 ### Minor Changes
