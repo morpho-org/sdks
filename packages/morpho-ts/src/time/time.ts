@@ -18,6 +18,9 @@ type P = {
 
 type Converters = { from: P; fromPeriod(period: Time.PeriodLike): number };
 
+/**
+ * Groups unit converters for milliseconds, seconds, minutes, hours, days, weeks, months, and years.
+ */
 // biome-ignore lint/complexity/noStaticOnlyClass: namespace-style API for unit converters
 export class Time {
   static ms: Converters;
@@ -104,11 +107,38 @@ Object.defineProperties(
   ),
 );
 
+/**
+ * Exposes time helper types and functions merged onto the `Time` converter class.
+ */
 export namespace Time {
+  /**
+   * Supported time unit identifier.
+   */
   export type Unit = TUnit;
+
+  /**
+   * Object form of a time period with a unit and duration.
+   */
   export type Period = TPeriod;
+
+  /**
+   * Time period accepted either as a unit shorthand or a full period object.
+   */
   export type PeriodLike = TPeriod | TUnit;
 
+  /**
+   * Normalizes a period-like value into object form.
+   *
+   * @param periodLike - Unit shorthand or full period object to normalize.
+   * @returns A period object with `unit` and `duration`.
+   * @example
+   * ```ts
+   * import { Time } from "@morpho-org/morpho-ts";
+   *
+   * const period = Time.toPeriod("d");
+   * // { unit: "d", duration: 1 }
+   * ```
+   */
   export function toPeriod(periodLike: PeriodLike): Period {
     if (typeof periodLike === "object") return periodLike;
     return {
@@ -117,10 +147,36 @@ export namespace Time {
     };
   }
 
+  /**
+   * Resolves a value after waiting for a duration in milliseconds.
+   *
+   * @param ms - Duration to wait in milliseconds.
+   * @param value - Optional value resolved by the returned promise.
+   * @returns A promise that resolves with `value` after the wait duration.
+   * @example
+   * ```ts
+   * import { Time } from "@morpho-org/morpho-ts";
+   *
+   * const value = await Time.wait(10, "ready");
+   * // "ready"
+   * ```
+   */
   export async function wait<T>(ms: number, value?: T) {
     return new Promise((resolve) => setTimeout(() => resolve(value), ms));
   }
 
+  /**
+   * Returns the current Unix timestamp rounded up to the next second.
+   *
+   * @returns The current Unix timestamp as a bigint.
+   * @example
+   * ```ts
+   * import { Time } from "@morpho-org/morpho-ts";
+   *
+   * const now = Time.timestamp();
+   * // now satisfies bigint
+   * ```
+   */
   export function timestamp() {
     return BigInt(Math.ceil(Date.now() / 1_000));
   }
