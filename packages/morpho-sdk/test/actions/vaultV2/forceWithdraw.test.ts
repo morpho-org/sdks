@@ -2,10 +2,10 @@ import { MarketParams } from "@morpho-org/blue-sdk";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { ReEcosystemUsdcVaultV2 } from "../../../test/fixtures/vaultV2.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { test } from "../../../test/setup.js";
-import { MorphoClient, vaultV2ForceWithdraw } from "../../index.js";
+import { MorphoClient, vaultV2ForceWithdraw } from "../../../src/index.js";
+import { ReEcosystemUsdcVaultV2 } from "../../fixtures/vaultV2.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { test } from "../../setup.js";
 
 describe("ForceWithdraw VaultV2", () => {
   // MarketV1 adapter addresses

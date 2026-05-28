@@ -8,16 +8,16 @@ import {
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { WethUsdsMarketV1 } from "../../../test/fixtures/marketV1.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { supplyCollateral } from "../../../test/helpers/marketV1.js";
-import { test } from "../../../test/setup.js";
 import {
   BorrowExceedsSafeLtvError,
   isRequirementAuthorization,
   MissingAccrualPositionError,
   MorphoClient,
-} from "../../index.js";
+} from "../../../src/index.js";
+import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { supplyCollateral } from "../../helpers/marketV1.js";
+import { test } from "../../setup.js";
 
 describe("BorrowMarketV1", () => {
   test("should compute minSharePrice from real market borrow state", async ({

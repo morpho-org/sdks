@@ -1,10 +1,10 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { KeyrockUsdcVaultV2 } from "../../../test/fixtures/vaultV2.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { test } from "../../../test/setup.js";
-import { MorphoClient } from "../../index.js";
+import { MorphoClient } from "../../../src/index.js";
+import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { test } from "../../setup.js";
 
 describe("Redeem VaultV2", () => {
   test("should redeem 1K USDC in vaultV2", async ({ client }) => {

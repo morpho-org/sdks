@@ -2,17 +2,17 @@ import type { AccrualPosition } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { WethUsdsMarketV1 } from "../../../test/fixtures/marketV1.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { borrow, supplyCollateral } from "../../../test/helpers/marketV1.js";
-import { test } from "../../../test/setup.js";
 import {
   MissingAccrualPositionError,
   MorphoClient,
   NonPositiveWithdrawCollateralAmountError,
   WithdrawExceedsCollateralError,
   WithdrawMakesPositionUnhealthyError,
-} from "../../index.js";
+} from "../../../src/index.js";
+import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
+import { test } from "../../setup.js";
 
 describe("WithdrawCollateralMarketV1", () => {
   test("should withdraw collateral (no debt)", async ({ client }) => {

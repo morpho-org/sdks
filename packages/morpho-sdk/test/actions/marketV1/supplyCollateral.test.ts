@@ -7,17 +7,17 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  CbbtcUsdcMarketV1,
-  UsdcEurcvMarketV1,
-  WethUsdsMarketV1,
-} from "../../../test/fixtures/marketV1.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { test } from "../../../test/setup.js";
-import {
   isRequirementApproval,
   isRequirementSignature,
   MorphoClient,
-} from "../../index.js";
+} from "../../../src/index.js";
+import {
+  CbbtcUsdcMarketV1,
+  UsdcEurcvMarketV1,
+  WethUsdsMarketV1,
+} from "../../fixtures/marketV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { test } from "../../setup.js";
 
 describe("SupplyCollateralMarketV1", () => {
   test("should supply 1 collateral with approval", async ({ client }) => {

@@ -7,17 +7,17 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  GauntletWethVaultV1,
-  SteakhouseUSDTVaultV1,
-  SteakhouseUsdcVaultV1,
-} from "../../../test/fixtures/vaultV1.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { test } from "../../../test/setup.js";
-import {
   isRequirementApproval,
   isRequirementSignature,
   MorphoClient,
-} from "../../index.js";
+} from "../../../src/index.js";
+import {
+  GauntletWethVaultV1,
+  SteakhouseUSDTVaultV1,
+  SteakhouseUsdcVaultV1,
+} from "../../fixtures/vaultV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { test } from "../../setup.js";
 
 describe("DepositVaultV1", () => {
   test("should deposit 1K USDC in vaultV1", async ({ client }) => {

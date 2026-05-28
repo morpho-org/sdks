@@ -3,13 +3,6 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  CbbtcUsdcMarketV1,
-  WbtcUsdcSourceMarket,
-  WstethWethMarketV1,
-} from "../../../test/fixtures/marketV1.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { test } from "../../../test/setup.js";
-import {
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
   isRequirementSignature,
@@ -20,7 +13,14 @@ import {
   NegativeSlippageToleranceError,
   NegativeSupplyAmountError,
   ZeroSupplyAmountError,
-} from "../../index.js";
+} from "../../../src/index.js";
+import {
+  CbbtcUsdcMarketV1,
+  WbtcUsdcSourceMarket,
+  WstethWethMarketV1,
+} from "../../fixtures/marketV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { test } from "../../setup.js";
 
 describe("SupplyMarketV1", () => {
   test("should supply loan token end-to-end", async ({ client }) => {

@@ -1,10 +1,10 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { test } from "../../../test/setup.js";
-import { isRequirementApproval, MorphoClient } from "../../index.js";
+import { isRequirementApproval, MorphoClient } from "../../../src/index.js";
+import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { test } from "../../setup.js";
 
 describe("Redeem VaultV1", () => {
   test("should redeem 1K shares in vaultV1", async ({ client }) => {

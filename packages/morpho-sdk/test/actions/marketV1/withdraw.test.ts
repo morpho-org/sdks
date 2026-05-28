@@ -3,14 +3,6 @@ import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  CbbtcUsdcMarketV1,
-  WbtcUsdcSourceMarket,
-} from "../../../test/fixtures/marketV1.js";
-import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { supplyLoan } from "../../../test/helpers/marketV1.js";
-import { test } from "../../../test/setup.js";
-import {
   AccrualPositionUserMismatchError,
   ExcessiveSlippageToleranceError,
   isRequirementAuthorization,
@@ -23,7 +15,15 @@ import {
   type VaultReallocation,
   WithdrawExceedsSupplyError,
   WithdrawSharesExceedSupplyError,
-} from "../../index.js";
+} from "../../../src/index.js";
+import {
+  CbbtcUsdcMarketV1,
+  WbtcUsdcSourceMarket,
+} from "../../fixtures/marketV1.js";
+import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { supplyLoan } from "../../helpers/marketV1.js";
+import { test } from "../../setup.js";
 
 describe("WithdrawMarketV1", () => {
   test("should withdraw loan token end-to-end (assets mode)", async ({

@@ -6,13 +6,6 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../../src/helpers/constant.js";
 import {
-  UsdcEurcvMarketV1,
-  WethUsdsMarketV1,
-} from "../../../test/fixtures/marketV1.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { supplyCollateral } from "../../../test/helpers/marketV1.js";
-import { test } from "../../../test/setup.js";
-import {
   BorrowExceedsSafeLtvError,
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
@@ -20,7 +13,14 @@ import {
   isRequirementSignature,
   MissingAccrualPositionError,
   MorphoClient,
-} from "../../index.js";
+} from "../../../src/index.js";
+import {
+  UsdcEurcvMarketV1,
+  WethUsdsMarketV1,
+} from "../../fixtures/marketV1.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { supplyCollateral } from "../../helpers/marketV1.js";
+import { test } from "../../setup.js";
 
 describe("SupplyCollateralBorrowMarketV1", () => {
   test("should supply collateral and borrow with ERC20 approval and authorization", async ({

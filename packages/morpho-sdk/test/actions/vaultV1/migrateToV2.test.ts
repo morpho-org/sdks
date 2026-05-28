@@ -1,15 +1,15 @@
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
-import { KeyrockUsdcVaultV2 } from "../../../test/fixtures/vaultV2.js";
-import { testInvariants } from "../../../test/helpers/invariants.js";
-import { test } from "../../../test/setup.js";
 import {
   isRequirementApproval,
   isRequirementSignature,
   MorphoClient,
-} from "../../index.js";
+} from "../../../src/index.js";
+import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
+import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
+import { testInvariants } from "../../helpers/invariants.js";
+import { test } from "../../setup.js";
 
 describe("MigrateToV2 VaultV1", () => {
   test("should migrate full USDC position from V1 to V2", async ({
