@@ -22,16 +22,6 @@ import type { DeploylessFetchParameters } from "../types.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
-const legacyMetaMorphoV1Factory = "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101";
-const legacyMetaMorphoV1Factories: Partial<Record<number, Address>> = {
-  1: legacyMetaMorphoV1Factory,
-  8453: legacyMetaMorphoV1Factory,
-};
-
-function throwUnknownFactory(): never {
-  throw new UnknownFactory();
-}
-
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVault(
   address: Address,
@@ -40,23 +30,16 @@ export async function fetchVault(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const chainAddresses = getChainAddresses(parameters.chainId);
-  const { publicAllocator } = chainAddresses;
-  const metaMorphoFactory =
-    chainAddresses.metaMorphoFactory ?? throwUnknownFactory();
+  const { publicAllocator, metaMorphoFactory } = getChainAddresses(
+    parameters.chainId,
+  );
+
+  if (!metaMorphoFactory) {
+    throw new UnknownFactory();
+  }
 
   if (deployless) {
     try {
-      let queryPublicAllocator: Address;
-      let hasPublicAllocator: boolean;
-      if (publicAllocator == null) {
-        queryPublicAllocator = zeroAddress;
-        hasPublicAllocator = false;
-      } else {
-        queryPublicAllocator = publicAllocator;
-        hasPublicAllocator = true;
-      }
-
       const {
         config,
         owner,
@@ -80,15 +63,8 @@ export async function fetchVault(
         abi,
         code,
         functionName: "query",
-        args: [address, queryPublicAllocator, metaMorphoFactory],
+        args: [address, publicAllocator ?? zeroAddress, metaMorphoFactory],
       });
-
-      let vaultPublicAllocatorConfig: typeof publicAllocatorConfig | undefined;
-      if (hasPublicAllocator) {
-        vaultPublicAllocatorConfig = publicAllocatorConfig;
-      } else {
-        vaultPublicAllocatorConfig = undefined;
-      }
 
       return new Vault({
         ...new VaultConfig({
@@ -106,7 +82,8 @@ export async function fetchVault(
         pendingOwner,
         pendingGuardian,
         pendingTimelock,
-        publicAllocatorConfig: vaultPublicAllocatorConfig,
+        publicAllocatorConfig:
+          publicAllocator != null ? publicAllocatorConfig : undefined,
         supplyQueue: supplyQueue as MarketId[],
         withdrawQueue: withdrawQueue as MarketId[],
         totalSupply,
@@ -254,23 +231,18 @@ export async function fetchVault(
     }).catch(() => false),
   ]);
 
-  let isMetaMorphoV1_0Promise: Promise<boolean>;
-  const legacyMetaMorphoFactory =
-    legacyMetaMorphoV1Factories[parameters.chainId];
-  if (isMetaMorphoV1_1) {
-    isMetaMorphoV1_0Promise = Promise.resolve(false);
-  } else if (legacyMetaMorphoFactory != null) {
-    // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
-    isMetaMorphoV1_0Promise = readContract(client, {
-      ...parameters,
-      address: legacyMetaMorphoFactory,
-      abi: metaMorphoFactoryAbi,
-      functionName: "isMetaMorpho",
-      args: [address],
-    }).then((isLegacyMetaMorpho) => isLegacyMetaMorpho === true);
-  } else {
-    isMetaMorphoV1_0Promise = Promise.resolve(false);
-  }
+  // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
+  const isMetaMorphoV1_0Promise =
+    !isMetaMorphoV1_1 &&
+    (parameters.chainId === 1 || parameters.chainId === 8453)
+      ? readContract(client, {
+          ...parameters,
+          address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
+          abi: metaMorphoFactoryAbi,
+          functionName: "isMetaMorpho",
+          args: [address],
+        })
+      : Promise.resolve(false);
 
   let publicAllocatorConfigPromise:
     | Promise<VaultPublicAllocatorConfig>

@@ -18,25 +18,8 @@ export async function fetchVaultMarketPublicAllocatorConfig(
   parameters.chainId ??= await getChainId(client);
 
   const { publicAllocator } = getChainAddresses(parameters.chainId);
-  return publicAllocator == null
-    ? undefined
-    : fetchVaultMarketPublicAllocatorConfigWithAllocator(
-        vault,
-        marketId,
-        client,
-        parameters,
-        publicAllocator,
-      );
-}
+  if (publicAllocator == null) return;
 
-// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
-async function fetchVaultMarketPublicAllocatorConfigWithAllocator(
-  vault: Address,
-  marketId: MarketId,
-  client: Client,
-  parameters: FetchParameters,
-  publicAllocator: Address,
-) {
   const [maxIn, maxOut] = await readContract(client, {
     ...parameters,
     address: publicAllocator,

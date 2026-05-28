@@ -20,10 +20,6 @@ import type { DeploylessFetchParameters } from "../../types.js";
 import { readContractRestructured } from "../../utils.js";
 import { fetchAccrualPosition } from "../Position.js";
 
-function throwUnknownFactory(): never {
-  throw new UnknownFactory();
-}
-
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultV2MorphoMarketV1Adapter(
   address: Address,
@@ -32,9 +28,13 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const chainAddresses = getChainAddresses(parameters.chainId);
-  const morphoMarketV1AdapterFactory =
-    chainAddresses.morphoMarketV1AdapterFactory ?? throwUnknownFactory();
+  const { morphoMarketV1AdapterFactory } = getChainAddresses(
+    parameters.chainId,
+  );
+
+  if (!morphoMarketV1AdapterFactory) {
+    throw new UnknownFactory();
+  }
 
   if (deployless) {
     try {

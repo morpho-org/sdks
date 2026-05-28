@@ -22,52 +22,6 @@ export async function fetchMarket(
 
   const { morpho, adaptiveCurveIrm } = getChainAddresses(parameters.chainId);
 
-  const fetchWithMulticall = async () => {
-    const [params, market] = await Promise.all([
-      readContractRestructured(client, {
-        ...parameters,
-        address: morpho,
-        abi: blueAbi,
-        functionName: "idToMarketParams",
-        args: [id],
-      }),
-      readContractRestructured(client, {
-        ...parameters,
-        address: morpho,
-        abi: blueAbi,
-        functionName: "market",
-        args: [id],
-      }),
-    ]);
-
-    const [price, rateAtTarget] = await Promise.all([
-      params.oracle !== zeroAddress
-        ? readContract(client, {
-            ...parameters,
-            address: params.oracle,
-            abi: blueOracleAbi,
-            functionName: "price",
-          }).catch(() => undefined)
-        : undefined,
-      params.irm === adaptiveCurveIrm
-        ? readContract(client, {
-            ...parameters,
-            address: adaptiveCurveIrm,
-            abi: adaptiveCurveIrmAbi,
-            functionName: "rateAtTarget",
-            args: [id],
-          })
-        : undefined,
-    ]);
-
-    return new Market({
-      params,
-      ...market,
-      price,
-      rateAtTarget,
-    });
-  };
-
   if (deployless) {
     try {
       const {
@@ -106,9 +60,50 @@ export async function fetchMarket(
     } catch (error) {
       if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
-      return fetchWithMulticall();
     }
-  } else {
-    return fetchWithMulticall();
   }
+
+  const [params, market] = await Promise.all([
+    readContractRestructured(client, {
+      ...parameters,
+      address: morpho,
+      abi: blueAbi,
+      functionName: "idToMarketParams",
+      args: [id],
+    }),
+    readContractRestructured(client, {
+      ...parameters,
+      address: morpho,
+      abi: blueAbi,
+      functionName: "market",
+      args: [id],
+    }),
+  ]);
+
+  const [price, rateAtTarget] = await Promise.all([
+    params.oracle !== zeroAddress
+      ? readContract(client, {
+          ...parameters,
+          address: params.oracle,
+          abi: blueOracleAbi,
+          functionName: "price",
+        }).catch(() => undefined)
+      : undefined,
+    params.irm === adaptiveCurveIrm
+      ? readContract(client, {
+          ...parameters,
+          address: adaptiveCurveIrm,
+          abi: adaptiveCurveIrmAbi,
+          functionName: "rateAtTarget",
+          args: [id],
+        })
+      : undefined,
+  ]);
+
+  return new Market({
+    params,
+    ...market,
+    price,
+    rateAtTarget,
+  });
 }

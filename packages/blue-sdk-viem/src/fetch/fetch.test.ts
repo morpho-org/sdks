@@ -41,7 +41,7 @@ import {
   mockDeploylessReads,
   mockNativeBalance,
   mockReadFailure,
-} from "../__test__/viem.js";
+} from "../__test-utils__/viem.js";
 import {
   adaptiveCurveIrmAbi,
   blueAbi,

@@ -32,7 +32,7 @@ import {
   mockDeploylessRead,
   mockDeploylessReads,
   mockReadFailure,
-} from "../../__test__/viem.js";
+} from "../../__test-utils__/viem.js";
 import {
   blueAbi,
   erc5267Abi,

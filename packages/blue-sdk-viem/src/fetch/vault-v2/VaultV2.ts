@@ -33,10 +33,6 @@ import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchToken } from "../Token.js";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
-function throwUnknownFactory(): never {
-  throw new UnknownFactory();
-}
-
 /**
  * Fetches VaultV2 state and liquidity-cap data.
  *
@@ -85,27 +81,18 @@ export async function fetchVaultV2(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const chainAddresses = getChainAddresses(parameters.chainId);
-  const { morphoVaultV1AdapterFactory, morphoMarketV1AdapterV2Factory } =
-    chainAddresses;
-  const vaultV2Factory = chainAddresses.vaultV2Factory ?? throwUnknownFactory();
+  const {
+    morphoVaultV1AdapterFactory,
+    morphoMarketV1AdapterV2Factory,
+    vaultV2Factory,
+  } = getChainAddresses(parameters.chainId);
+
+  if (!vaultV2Factory) {
+    throw new UnknownFactory();
+  }
 
   if (deployless) {
     try {
-      let vaultV1AdapterFactory: Address;
-      if (morphoVaultV1AdapterFactory == null) {
-        vaultV1AdapterFactory = zeroAddress;
-      } else {
-        vaultV1AdapterFactory = morphoVaultV1AdapterFactory;
-      }
-
-      let marketV1AdapterV2Factory: Address;
-      if (morphoMarketV1AdapterV2Factory == null) {
-        marketV1AdapterV2Factory = zeroAddress;
-      } else {
-        marketV1AdapterV2Factory = morphoMarketV1AdapterV2Factory;
-      }
-
       const { token, isLiquidityAdapterKnown, liquidityAllocations, ...vault } =
         await readContract(client, {
           ...parameters,
@@ -115,8 +102,8 @@ export async function fetchVaultV2(
           args: [
             address,
             vaultV2Factory,
-            vaultV1AdapterFactory,
-            marketV1AdapterV2Factory,
+            morphoVaultV1AdapterFactory ?? zeroAddress,
+            morphoMarketV1AdapterV2Factory ?? zeroAddress,
           ],
         });
 
