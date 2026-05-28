@@ -1,7 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$comment": "Maps GitHub handles → Slack user IDs for SDK contributors. Used by the PR Slack notification workflow to route DMs. Entries with a null Slack ID are skipped (no DM sent).",
-  "teams": {},
+  "teams": {
+    "sdk-engineers": {
+      "Foulks-Plb": "U07G2B1ANLW",
+      "Rubilmax": "U03L0SC1JUR",
+      "0xbulma": "U06BS7VN03W"
+    }
+  },
   "members": {
     "Jean-Grimal": "U05A615L5DX",
     "Foulks-Plb": "U07G2B1ANLW",
