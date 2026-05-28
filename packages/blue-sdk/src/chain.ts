@@ -358,7 +358,7 @@ export namespace ChainUtils {
       name: "Arc",
       id: ChainId.ArcMainnet,
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
-      explorerUrl: "https://testnet.arcscan.app",
+      explorerUrl: "http://explorer.arc.io/",
       identifier: "arc",
     },
   } satisfies Record<ChainId, ChainMetadata>;
