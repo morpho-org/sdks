@@ -19,6 +19,10 @@ import {
 import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchAccrualVault } from "../Vault.js";
 
+function throwUnknownFactory(): never {
+  throw new UnknownFactory();
+}
+
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultV2MorphoVaultV1Adapter(
   address: Address,
@@ -27,12 +31,9 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
-
-  /* v8 ignore next -- true and false paths are covered, but V8 keeps one branch open. */
-  if (!morphoVaultV1AdapterFactory) {
-    throw new UnknownFactory();
-  }
+  const chainAddresses = getChainAddresses(parameters.chainId);
+  const morphoVaultV1AdapterFactory =
+    chainAddresses.morphoVaultV1AdapterFactory ?? throwUnknownFactory();
 
   if (deployless) {
     try {

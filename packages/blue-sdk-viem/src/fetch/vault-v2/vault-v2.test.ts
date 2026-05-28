@@ -3,9 +3,11 @@ import {
   type AccrualVaultV2MorphoMarketV1AdapterV2,
   AccrualVaultV2MorphoVaultV1Adapter,
   addressesRegistry,
+  type ChainAddresses,
   ChainId,
   MarketParams,
   marketParamsAbi,
+  registerCustomAddresses,
   UnknownFactory,
   UnknownOfFactory,
   UnsupportedVaultV2AdapterError,
@@ -63,6 +65,7 @@ import {
 
 const CHAIN_ID = ChainId.EthMainnet;
 const ADDRESSES = addressesRegistry[CHAIN_ID];
+const VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID = 9_101_002;
 
 const VAULT: Address = "0x1111111111111111111111111111111111111111";
 const ASSET: Address = "0x2222222222222222222222222222222222222222";
@@ -71,6 +74,23 @@ const ADAPTER_2: Address = "0x4444444444444444444444444444444444444444";
 const RECIPIENT: Address = "0x5555555555555555555555555555555555555555";
 const ORACLE: Address = "0x6666666666666666666666666666666666666666";
 const COLLATERAL: Address = "0x7777777777777777777777777777777777777777";
+
+if (
+  (addressesRegistry as Record<number, unknown>)[
+    VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID
+  ] == null
+) {
+  registerCustomAddresses({
+    addresses: {
+      [VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID]: {
+        morpho: ADDRESSES.morpho,
+        bundler3: ADDRESSES.bundler3,
+        adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+        vaultV2Factory: ADDRESSES.vaultV2Factory,
+      } satisfies ChainAddresses,
+    },
+  });
+}
 
 const MARKET_PARAMS = new MarketParams({
   loanToken: ASSET,
@@ -351,7 +371,7 @@ describe("fetchVaultV2", () => {
     mockDeploylessRead(handle, vaultV2QueryAbi, "query", vaultV2Result);
 
     const vault = await fetchVaultV2(VAULT, handle.client, {
-      chainId: ChainId.LineaMainnet,
+      chainId: VAULT_V2_WITHOUT_ADAPTER_FACTORIES_CHAIN_ID,
     });
 
     expect(vault.liquidityAllocations?.[0]?.allocation).toBe(100n);

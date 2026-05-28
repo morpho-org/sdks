@@ -21,6 +21,10 @@ import {
 import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchMarket } from "../Market.js";
 
+function throwUnknownFactory(): never {
+  throw new UnknownFactory();
+}
+
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultV2MorphoMarketV1AdapterV2(
   address: Address,
@@ -29,14 +33,9 @@ export async function fetchVaultV2MorphoMarketV1AdapterV2(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { morphoMarketV1AdapterV2Factory } = getChainAddresses(
-    parameters.chainId,
-  );
-
-  /* v8 ignore next -- true and false paths are covered, but V8 keeps one branch open. */
-  if (!morphoMarketV1AdapterV2Factory) {
-    throw new UnknownFactory();
-  }
+  const chainAddresses = getChainAddresses(parameters.chainId);
+  const morphoMarketV1AdapterV2Factory =
+    chainAddresses.morphoMarketV1AdapterV2Factory ?? throwUnknownFactory();
 
   if (deployless) {
     try {

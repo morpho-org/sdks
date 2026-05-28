@@ -1,6 +1,7 @@
 import {
   AccrualVault,
   addressesRegistry,
+  type ChainAddresses,
   ChainId,
   ConstantWrappedToken,
   Eip5267Domain,
@@ -12,6 +13,7 @@ import {
   Position,
   PreLiquidationParams,
   PreLiquidationPosition,
+  registerCustomAddresses,
   Token,
   UnknownFactory,
   UnknownOfFactory,
@@ -80,6 +82,24 @@ import { fetchVaultUser } from "./VaultUser.js";
 
 const CHAIN_ID = ChainId.EthMainnet;
 const ADDRESSES = addressesRegistry[CHAIN_ID];
+const META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID = 9_101_001;
+
+if (
+  (addressesRegistry as Record<number, unknown>)[
+    META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID
+  ] == null
+) {
+  registerCustomAddresses({
+    addresses: {
+      [META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID]: {
+        morpho: ADDRESSES.morpho,
+        bundler3: ADDRESSES.bundler3,
+        adaptiveCurveIrm: ADDRESSES.adaptiveCurveIrm,
+        metaMorphoFactory: ADDRESSES.metaMorphoFactory,
+      } satisfies ChainAddresses,
+    },
+  });
+}
 
 const USER: Address = "0x1111111111111111111111111111111111111111";
 const TOKEN: Address = "0x2222222222222222222222222222222222222222";
@@ -209,6 +229,58 @@ function mockVaultMarketConfigReads(
   });
 }
 
+function mockVaultMulticallReads(
+  handle: ReturnType<typeof createMockClient>,
+  {
+    hasPublicAllocator = false,
+    isMetaMorphoV1_1 = true,
+  }: {
+    hasPublicAllocator?: boolean;
+    isMetaMorphoV1_1?: boolean;
+  } = {},
+) {
+  mockVaultConfigReads(handle);
+  for (const [functionName, result] of [
+    ["curator", RECIPIENT],
+    ["owner", USER],
+    ["guardian", COLLATERAL],
+    ["timelock", 47n],
+    ["pendingTimelock", [48n, 49n]],
+    ["pendingGuardian", [ORACLE, 50n]],
+    ["pendingOwner", TOKEN],
+    ["fee", 51n],
+    ["feeRecipient", USER],
+    ["skimRecipient", RECIPIENT],
+    ["totalSupply", 52n],
+    ["totalAssets", 53n],
+    ["lastTotalAssets", 54n],
+    ["lostAssets", 55n],
+    ["supplyQueueLength", 0n],
+    ["withdrawQueueLength", 0n],
+  ] as const) {
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName,
+      result,
+    });
+  }
+  if (ADDRESSES.publicAllocator != null) {
+    mockRead(handle, {
+      address: VAULT,
+      abi: metaMorphoAbi,
+      functionName: "isAllocator",
+      result: hasPublicAllocator,
+    });
+  }
+  mockRead(handle, {
+    address: ADDRESSES.metaMorphoFactory,
+    abi: metaMorphoFactoryIsMetaMorphoAbi,
+    functionName: "isMetaMorpho",
+    result: isMetaMorphoV1_1,
+  });
+}
+
 // biome-ignore lint/complexity/useMaxParams: Test helper keeps call sites compact.
 function mockTokenReads(
   handle: ReturnType<typeof createMockClient>,
@@ -262,9 +334,7 @@ describe("fetchToken", () => {
   test("returns the native token without RPC reads", async () => {
     const { client } = createMockClient(mainnet);
 
-    const token = await fetchToken(NATIVE_ADDRESS, client, {
-      chainId: CHAIN_ID,
-    });
+    const token = await fetchToken(NATIVE_ADDRESS, client);
 
     expect(token).toBeInstanceOf(Token);
     expect(token.address).toBe(NATIVE_ADDRESS);
@@ -714,9 +784,7 @@ describe("fetchHolding", () => {
     const handle = createMockClient(mainnet);
     mockNativeBalance(handle, 99n);
 
-    const holding = await fetchHolding(USER, NATIVE_ADDRESS, handle.client, {
-      chainId: CHAIN_ID,
-    });
+    const holding = await fetchHolding(USER, NATIVE_ADDRESS, handle.client);
 
     expect(holding).toBeInstanceOf(Holding);
     expect(holding.balance).toBe(99n);
@@ -1089,12 +1157,13 @@ describe("vault fetchers", () => {
   });
 
   test("fetchVaultMarketPublicAllocatorConfig returns undefined when the chain has no public allocator", async () => {
-    const { client } = createMockClient(mainnet);
+    const { client } = createMockClient({
+      ...mainnet,
+      id: ChainId.TempoMainnet,
+    });
 
     await expect(
-      fetchVaultMarketPublicAllocatorConfig(VAULT, ID, client, {
-        chainId: ChainId.TempoMainnet,
-      }),
+      fetchVaultMarketPublicAllocatorConfig(VAULT, ID, client),
     ).resolves.toBeUndefined();
   });
 
@@ -1248,6 +1317,46 @@ describe("vault fetchers", () => {
     expect(vault.publicAllocatorConfig?.accruedFee).toBe(46n);
   });
 
+  test("fetchVault omits deployless public allocator config when the chain has no public allocator", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessRead(handle, vaultQueryAbi, "query", {
+      config: {
+        asset: TOKEN,
+        symbol: "vMOCK",
+        name: "Vault Mock",
+        decimals: 18n,
+        decimalsOffset: 2n,
+        eip5267Domain: DOMAIN,
+      },
+      owner: USER,
+      curator: RECIPIENT,
+      guardian: COLLATERAL,
+      timelock: 37n,
+      pendingTimelock: { value: 38n, validAt: 39n },
+      pendingGuardian: { value: ORACLE, validAt: 40n },
+      pendingOwner: TOKEN,
+      fee: 41n,
+      feeRecipient: USER,
+      skimRecipient: RECIPIENT,
+      totalSupply: 42n,
+      totalAssets: 43n,
+      lastTotalAssets: 44n,
+      supplyQueue: [ID],
+      withdrawQueue: [ID],
+      publicAllocatorConfig: {
+        admin: USER,
+        fee: 45n,
+        accruedFee: 46n,
+      },
+    });
+
+    const vault = await fetchVault(VAULT, handle.client, {
+      chainId: META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID,
+    });
+
+    expect(vault.publicAllocatorConfig).toBeUndefined();
+  });
+
   test("fetchVault throws UnknownFactory when the chain has no MetaMorpho factory", async () => {
     const { client } = createMockClient(mainnet);
 
@@ -1266,6 +1375,32 @@ describe("vault fetchers", () => {
         deployless: "force",
       }),
     ).rejects.toThrow();
+  });
+
+  test("fetchVault skips the legacy factory fallback when the v1.1 factory recognizes the vault", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, ["0x"]);
+    mockVaultMulticallReads(handle);
+
+    const vault = await fetchVault(VAULT, handle.client, {
+      chainId: CHAIN_ID,
+      deployless: false,
+    });
+
+    expect(vault.totalAssets).toBe(53n);
+  });
+
+  test("fetchVault does not use the legacy factory fallback on unsupported chains", async () => {
+    const handle = createMockClient(mainnet);
+    mockDeploylessReads(handle, ["0x"]);
+    mockVaultMulticallReads(handle, { isMetaMorphoV1_1: false });
+
+    await expect(
+      fetchVault(VAULT, handle.client, {
+        chainId: META_MORPHO_WITHOUT_PUBLIC_ALLOCATOR_CHAIN_ID,
+        deployless: false,
+      }),
+    ).rejects.toThrow(UnknownOfFactory);
   });
 
   test("fetchVault uses multicall and the MetaMorpho v1.0 factory fallback", async () => {

@@ -74,11 +74,8 @@ function zipParams<
   return params.reduce(
     // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
     (acc, param, index) => {
-      /* v8 ignore next -- callers validate output names before zipping. */
-      return typeof param.name === "string"
-        ? // biome-ignore lint/performance/noAccumulatingSpread: This keeps type system happy with negligible performance impact
-          { ...acc, [param.name]: values[index] }
-        : acc;
+      // biome-ignore lint/performance/noAccumulatingSpread: This keeps type system happy with negligible performance impact
+      return { ...acc, [param.name as string]: values[index] };
     },
     {} as ZipToObject<T, V>,
   );
@@ -142,7 +139,7 @@ export function restructure<
   const x = getAbiItem(parameters);
   switch (x?.type) {
     case "function": {
-      if (x.outputs.some((output) => output.name === undefined)) {
+      if (x.outputs.some((output) => typeof output.name !== "string")) {
         throw new Error(
           `Attempted to restructure return values lacking names in ABI ${parameters.args!} ${x.outputs}`,
         );

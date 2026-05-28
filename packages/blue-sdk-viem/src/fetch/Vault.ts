@@ -22,6 +22,16 @@ import type { DeploylessFetchParameters } from "../types.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
+const legacyMetaMorphoV1Factory = "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101";
+const legacyMetaMorphoV1Factories: Partial<Record<number, Address>> = {
+  1: legacyMetaMorphoV1Factory,
+  8453: legacyMetaMorphoV1Factory,
+};
+
+function throwUnknownFactory(): never {
+  throw new UnknownFactory();
+}
+
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVault(
   address: Address,
@@ -30,17 +40,23 @@ export async function fetchVault(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const { publicAllocator, metaMorphoFactory } = getChainAddresses(
-    parameters.chainId,
-  );
-
-  /* v8 ignore next -- true and false paths are covered, but V8 keeps one branch open. */
-  if (!metaMorphoFactory) {
-    throw new UnknownFactory();
-  }
+  const chainAddresses = getChainAddresses(parameters.chainId);
+  const { publicAllocator } = chainAddresses;
+  const metaMorphoFactory =
+    chainAddresses.metaMorphoFactory ?? throwUnknownFactory();
 
   if (deployless) {
     try {
+      let queryPublicAllocator: Address;
+      let hasPublicAllocator: boolean;
+      if (publicAllocator == null) {
+        queryPublicAllocator = zeroAddress;
+        hasPublicAllocator = false;
+      } else {
+        queryPublicAllocator = publicAllocator;
+        hasPublicAllocator = true;
+      }
+
       const {
         config,
         owner,
@@ -64,9 +80,15 @@ export async function fetchVault(
         abi,
         code,
         functionName: "query",
-        /* v8 ignore next -- every configured MetaMorpho chain currently has a public allocator. */
-        args: [address, publicAllocator ?? zeroAddress, metaMorphoFactory],
+        args: [address, queryPublicAllocator, metaMorphoFactory],
       });
+
+      let vaultPublicAllocatorConfig: typeof publicAllocatorConfig | undefined;
+      if (hasPublicAllocator) {
+        vaultPublicAllocatorConfig = publicAllocatorConfig;
+      } else {
+        vaultPublicAllocatorConfig = undefined;
+      }
 
       return new Vault({
         ...new VaultConfig({
@@ -84,9 +106,7 @@ export async function fetchVault(
         pendingOwner,
         pendingGuardian,
         pendingTimelock,
-        /* v8 ignore next -- every configured MetaMorpho chain currently has a public allocator. */
-        publicAllocatorConfig:
-          publicAllocator != null ? publicAllocatorConfig : undefined,
+        publicAllocatorConfig: vaultPublicAllocatorConfig,
         supplyQueue: supplyQueue as MarketId[],
         withdrawQueue: withdrawQueue as MarketId[],
         totalSupply,
@@ -234,19 +254,23 @@ export async function fetchVault(
     }).catch(() => false),
   ]);
 
-  // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
-  /* v8 ignore next 10 -- the Ethereum/Base legacy-factory gate is covered for its supported path. */
-  const isMetaMorphoV1_0Promise =
-    !isMetaMorphoV1_1 &&
-    (parameters.chainId === 1 || parameters.chainId === 8453)
-      ? readContract(client, {
-          ...parameters,
-          address: "0xA9c3D3a366466Fa809d1Ae982Fb2c46E5fC41101",
-          abi: metaMorphoFactoryAbi,
-          functionName: "isMetaMorpho",
-          args: [address],
-        })
-      : Promise.resolve(false);
+  let isMetaMorphoV1_0Promise: Promise<boolean>;
+  const legacyMetaMorphoFactory =
+    legacyMetaMorphoV1Factories[parameters.chainId];
+  if (isMetaMorphoV1_1) {
+    isMetaMorphoV1_0Promise = Promise.resolve(false);
+  } else if (legacyMetaMorphoFactory != null) {
+    // Fallback to the MetaMorphoV1.0 factory on Ethereum (1) and Base (8453)
+    isMetaMorphoV1_0Promise = readContract(client, {
+      ...parameters,
+      address: legacyMetaMorphoFactory,
+      abi: metaMorphoFactoryAbi,
+      functionName: "isMetaMorpho",
+      args: [address],
+    }).then((isLegacyMetaMorpho) => isLegacyMetaMorpho === true);
+  } else {
+    isMetaMorphoV1_0Promise = Promise.resolve(false);
+  }
 
   let publicAllocatorConfigPromise:
     | Promise<VaultPublicAllocatorConfig>

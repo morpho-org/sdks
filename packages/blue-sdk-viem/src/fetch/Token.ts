@@ -34,10 +34,20 @@ export async function fetchToken(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  /* v8 ignore next -- V8 reports this covered native-token branch as uncovered. */
-  if (address === NATIVE_ADDRESS) return Token.native(parameters.chainId);
+  return address === NATIVE_ADDRESS
+    ? Token.native(parameters.chainId)
+    : fetchErc20Token(address, client, deployless, parameters);
+}
 
-  const { wstEth, stEth } = getChainAddresses(parameters.chainId);
+// biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+async function fetchErc20Token(
+  address: Address,
+  client: Client,
+  deployless: boolean | "force",
+  parameters: Omit<DeploylessFetchParameters, "deployless">,
+) {
+  const resolvedChainId = parameters.chainId!;
+  const { wstEth, stEth } = getChainAddresses(resolvedChainId);
 
   if (deployless) {
     try {
@@ -69,7 +79,7 @@ export async function fetchToken(
           token.stEthPerWstEth,
         );
 
-      const unwrapToken = getUnwrappedToken(address, parameters.chainId);
+      const unwrapToken = getUnwrappedToken(address, resolvedChainId);
       if (unwrapToken)
         return new ConstantWrappedToken(metadata, unwrapToken, token.decimals);
 
@@ -171,7 +181,7 @@ export async function fetchToken(
     }
   }
 
-  const unwrapToken = getUnwrappedToken(address, parameters.chainId);
+  const unwrapToken = getUnwrappedToken(address, resolvedChainId);
   if (unwrapToken)
     return new ConstantWrappedToken(token, unwrapToken, token.decimals);
 

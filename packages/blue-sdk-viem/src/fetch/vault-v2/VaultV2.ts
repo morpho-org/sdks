@@ -33,6 +33,10 @@ import type { DeploylessFetchParameters } from "../../types.js";
 import { fetchToken } from "../Token.js";
 import { fetchAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
+function throwUnknownFactory(): never {
+  throw new UnknownFactory();
+}
+
 /**
  * Fetches VaultV2 state and liquidity-cap data.
  *
@@ -81,31 +85,38 @@ export async function fetchVaultV2(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  const {
-    morphoVaultV1AdapterFactory,
-    morphoMarketV1AdapterV2Factory,
-    vaultV2Factory,
-  } = getChainAddresses(parameters.chainId);
-
-  /* v8 ignore next -- true and false paths are covered, but V8 keeps one branch open. */
-  if (!vaultV2Factory) {
-    throw new UnknownFactory();
-  }
+  const chainAddresses = getChainAddresses(parameters.chainId);
+  const { morphoVaultV1AdapterFactory, morphoMarketV1AdapterV2Factory } =
+    chainAddresses;
+  const vaultV2Factory = chainAddresses.vaultV2Factory ?? throwUnknownFactory();
 
   if (deployless) {
     try {
+      let vaultV1AdapterFactory: Address;
+      if (morphoVaultV1AdapterFactory == null) {
+        vaultV1AdapterFactory = zeroAddress;
+      } else {
+        vaultV1AdapterFactory = morphoVaultV1AdapterFactory;
+      }
+
+      let marketV1AdapterV2Factory: Address;
+      if (morphoMarketV1AdapterV2Factory == null) {
+        marketV1AdapterV2Factory = zeroAddress;
+      } else {
+        marketV1AdapterV2Factory = morphoMarketV1AdapterV2Factory;
+      }
+
       const { token, isLiquidityAdapterKnown, liquidityAllocations, ...vault } =
         await readContract(client, {
           ...parameters,
           abi,
           code,
           functionName: "query",
-          /* v8 ignore next 6 -- supported Vault V2 registries always include the Vault V1 adapter factory. */
           args: [
             address,
             vaultV2Factory,
-            morphoVaultV1AdapterFactory ?? zeroAddress,
-            morphoMarketV1AdapterV2Factory ?? zeroAddress,
+            vaultV1AdapterFactory,
+            marketV1AdapterV2Factory,
           ],
         });
 

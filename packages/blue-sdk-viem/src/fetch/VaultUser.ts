@@ -16,7 +16,37 @@ export async function fetchVaultUser(
 ) {
   parameters.chainId ??= await getChainId(client);
 
-  /* v8 ignore next -- V8 reports this covered deployless branch with a negative counter. */
+  const fetchWithMulticall = async () => {
+    const config = await fetchVaultConfig(vault, client, {
+      ...parameters,
+      deployless,
+    });
+
+    const [allowance, isAllocator] = await Promise.all([
+      readContract(client, {
+        ...parameters,
+        address: config.asset,
+        abi: erc20Abi,
+        functionName: "allowance",
+        args: [user, vault],
+      }),
+      readContract(client, {
+        ...parameters,
+        address: vault,
+        abi: metaMorphoAbi,
+        functionName: "isAllocator",
+        args: [user],
+      }),
+    ]);
+
+    return new VaultUser({
+      vault,
+      user,
+      isAllocator,
+      allowance,
+    });
+  };
+
   if (deployless) {
     try {
       const { isAllocator, allowance } = await readContract(client, {
@@ -36,35 +66,9 @@ export async function fetchVaultUser(
     } catch (error) {
       if (deployless === "force") throw error;
       // Fallback to multicall if deployless call fails.
+      return fetchWithMulticall();
     }
+  } else {
+    return fetchWithMulticall();
   }
-
-  const config = await fetchVaultConfig(vault, client, {
-    ...parameters,
-    deployless,
-  });
-
-  const [allowance, isAllocator] = await Promise.all([
-    readContract(client, {
-      ...parameters,
-      address: config.asset,
-      abi: erc20Abi,
-      functionName: "allowance",
-      args: [user, vault],
-    }),
-    readContract(client, {
-      ...parameters,
-      address: vault,
-      abi: metaMorphoAbi,
-      functionName: "isAllocator",
-      args: [user],
-    }),
-  ]);
-
-  return new VaultUser({
-    vault,
-    user,
-    isAllocator,
-    allowance,
-  });
 }

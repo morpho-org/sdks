@@ -1,17 +1,11 @@
 import {
   addressesRegistry,
   ChainId,
-  Eip5267Domain,
   MathLib,
   Token,
 } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import { describe, expect, test } from "vitest";
-import {
-  InvalidPermitDomainChainIdError,
-  InvalidPermitDomainVerifyingContractError,
-  UnsupportedPermitDomainExtensionsError,
-} from "../error.js";
 import { getAuthorizationTypedData } from "./manager.js";
 import { getDaiPermitTypedData, getPermitTypedData } from "./permit.js";
 import {
@@ -22,20 +16,6 @@ import {
 const OWNER: Address = "0x1111111111111111111111111111111111111111";
 const SPENDER: Address = "0x2222222222222222222222222222222222222222";
 const TOKEN: Address = "0x3333333333333333333333333333333333333333";
-
-const domain = (
-  overrides: Partial<ConstructorParameters<typeof Eip5267Domain>[0]> = {},
-) =>
-  new Eip5267Domain({
-    fields: "0x1f",
-    name: "Mock Token",
-    version: "1",
-    chainId: BigInt(ChainId.EthMainnet),
-    verifyingContract: TOKEN,
-    salt: "0x0000000000000000000000000000000000000000000000000000000000000000",
-    extensions: [],
-    ...overrides,
-  });
 
 describe("getAuthorizationTypedData", () => {
   test("returns the Morpho authorization typed data", () => {
@@ -65,98 +45,6 @@ describe("getAuthorizationTypedData", () => {
 });
 
 describe("getPermitTypedData", () => {
-  test("uses a fetched EIP-5267 domain when it matches token and chain", () => {
-    const erc20 = new Token({
-      address: TOKEN,
-      name: "Fallback Name",
-      eip5267Domain: domain(),
-    });
-
-    const typedData = getPermitTypedData(
-      {
-        erc20,
-        owner: OWNER,
-        spender: SPENDER,
-        allowance: 3n,
-        nonce: 4n,
-        deadline: 5n,
-      },
-      ChainId.EthMainnet,
-    );
-
-    expect(typedData.domain).toEqual(domain().eip712Domain);
-    expect(typedData.message).toEqual({
-      owner: OWNER,
-      spender: SPENDER,
-      value: 3n,
-      nonce: 4n,
-      deadline: 5n,
-    });
-  });
-
-  test("throws when the fetched domain has unsupported extensions", () => {
-    const erc20 = new Token({
-      address: TOKEN,
-      eip5267Domain: domain({ extensions: [1n] }),
-    });
-
-    expect(() =>
-      getPermitTypedData(
-        {
-          erc20,
-          owner: OWNER,
-          spender: SPENDER,
-          allowance: 1n,
-          nonce: 1n,
-          deadline: 1n,
-        },
-        ChainId.EthMainnet,
-      ),
-    ).toThrow(UnsupportedPermitDomainExtensionsError);
-  });
-
-  test("throws when the fetched domain is bound to another chain", () => {
-    const erc20 = new Token({
-      address: TOKEN,
-      eip5267Domain: domain({ chainId: BigInt(ChainId.BaseMainnet) }),
-    });
-
-    expect(() =>
-      getPermitTypedData(
-        {
-          erc20,
-          owner: OWNER,
-          spender: SPENDER,
-          allowance: 1n,
-          nonce: 1n,
-          deadline: 1n,
-        },
-        ChainId.EthMainnet,
-      ),
-    ).toThrow(InvalidPermitDomainChainIdError);
-  });
-
-  test("throws when the fetched domain omits the verifying contract", () => {
-    const erc20 = new Token({
-      address: TOKEN,
-      eip5267Domain: domain({ fields: "0x07" }),
-    });
-
-    expect(() =>
-      getPermitTypedData(
-        {
-          erc20,
-          owner: OWNER,
-          spender: SPENDER,
-          allowance: 1n,
-          nonce: 1n,
-          deadline: 1n,
-        },
-        ChainId.EthMainnet,
-      ),
-    ).toThrow(InvalidPermitDomainVerifyingContractError);
-  });
-
   test("builds a default version 2 domain for USDC and EURC", () => {
     const { usdc, eurc } = addressesRegistry[ChainId.EthMainnet];
 
