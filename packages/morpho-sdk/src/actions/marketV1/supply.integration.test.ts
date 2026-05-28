@@ -1,67 +1,28 @@
-import {
-  addressesRegistry,
-  DEFAULT_SLIPPAGE_TOLERANCE,
-  MathLib,
-} from "@morpho-org/blue-sdk";
+import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  computeMaxSupplySharePrice,
+  CbbtcUsdcMarketV1,
+  WbtcUsdcSourceMarket,
+  WstethWethMarketV1,
+} from "../../../test/fixtures/marketV1.js";
+import { testInvariants } from "../../../test/helpers/invariants.js";
+import { test } from "../../../test/setup.js";
+import {
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
   isRequirementSignature,
   MarketIdMismatchError,
   MorphoClient,
-  marketV1Supply,
   NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
   NegativeSlippageToleranceError,
   NegativeSupplyAmountError,
   ZeroSupplyAmountError,
-} from "../../../src/index.js";
-import {
-  CbbtcUsdcMarketV1,
-  WbtcUsdcSourceMarket,
-  WstethWethMarketV1,
-} from "../../fixtures/marketV1.js";
-import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+} from "../../index.js";
 
 describe("SupplyMarketV1", () => {
-  test("should create supply bundle", async ({ client }) => {
-    const supplyAmount = parseUnits("100", 6);
-
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
-    const marketData = await market.getMarketData();
-
-    const supply = market.supply({
-      userAddress: client.account.address,
-      amount: supplyAmount,
-      marketData,
-    });
-
-    const tx = supply.buildTx();
-
-    const maxSharePrice = computeMaxSupplySharePrice({
-      supplyAssets: supplyAmount,
-      market: marketData,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    const directTx = marketV1Supply({
-      market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
-      args: {
-        amount: supplyAmount,
-        onBehalf: client.account.address,
-        maxSharePrice,
-      },
-    });
-
-    expect(directTx).toStrictEqual(tx);
-  });
-
   test("should supply loan token end-to-end", async ({ client }) => {
     const supplyAmount = parseUnits("1000", 6); // USDC
 

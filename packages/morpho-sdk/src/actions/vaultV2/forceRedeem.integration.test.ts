@@ -3,10 +3,10 @@ import type { AnvilTestClient } from "@morpho-org/test";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { MorphoClient, vaultV2ForceRedeem } from "../../../src/index.js";
-import { ReEcosystemUsdcVaultV2 } from "../../fixtures/vaultV2.js";
-import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { ReEcosystemUsdcVaultV2 } from "../../../test/fixtures/vaultV2.js";
+import { testInvariants } from "../../../test/helpers/invariants.js";
+import { test } from "../../../test/setup.js";
+import { MorphoClient, vaultV2ForceRedeem } from "../../index.js";
 
 // Accrue VaultV2 to the current block timestamp so `toShares` matches the
 // post-accrue math the contract will run at redeem block (≈ same block here).

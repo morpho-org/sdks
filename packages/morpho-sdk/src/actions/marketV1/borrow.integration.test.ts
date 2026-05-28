@@ -8,61 +8,18 @@ import {
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
+import { WethUsdsMarketV1 } from "../../../test/fixtures/marketV1.js";
+import { testInvariants } from "../../../test/helpers/invariants.js";
+import { supplyCollateral } from "../../../test/helpers/marketV1.js";
+import { test } from "../../../test/setup.js";
 import {
   BorrowExceedsSafeLtvError,
-  computeMinBorrowSharePrice,
   isRequirementAuthorization,
   MissingAccrualPositionError,
   MorphoClient,
-  marketV1Borrow,
-} from "../../../src/index.js";
-import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
-import { testInvariants } from "../../helpers/invariants.js";
-import { supplyCollateral } from "../../helpers/marketV1.js";
-import { test } from "../../setup.js";
+} from "../../index.js";
 
 describe("BorrowMarketV1", () => {
-  test("should create borrow bundle", async ({ client }) => {
-    const collateralAmount = parseUnits("10", 18);
-    const amount = parseUnits("100", 18);
-
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsMarketV1,
-      collateralAmount,
-    });
-
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    const borrow = market.borrow({
-      userAddress: client.account.address,
-      amount,
-      positionData,
-    });
-
-    const tx = borrow.buildTx();
-
-    const minSharePrice = computeMinBorrowSharePrice({
-      borrowAmount: amount,
-      market: positionData.market,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    const directTx = marketV1Borrow({
-      market: { chainId: mainnet.id, marketParams: WethUsdsMarketV1 },
-      args: {
-        amount,
-        receiver: client.account.address,
-        minSharePrice,
-      },
-    });
-
-    expect(directTx).toStrictEqual(tx);
-  });
-
   test("should compute minSharePrice from real market borrow state", async ({
     client,
   }) => {

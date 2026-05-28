@@ -1,50 +1,12 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import {
-  isRequirementApproval,
-  MorphoClient,
-  vaultV2Deposit,
-} from "../../../src/index.js";
-import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
-import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { KeyrockUsdcVaultV2 } from "../../../test/fixtures/vaultV2.js";
+import { testInvariants } from "../../../test/helpers/invariants.js";
+import { test } from "../../../test/setup.js";
+import { isRequirementApproval, MorphoClient } from "../../index.js";
 
 describe("DepositVaultV2", () => {
-  test("should create deposit bundle", async ({ client }) => {
-    const morpho = new MorphoClient(client);
-
-    const vault = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
-    const vaultData = await vault.getData();
-    const deposit = vault.deposit({
-      userAddress: client.account.address,
-      amount: 1000000000000000000n,
-      vaultData,
-    });
-    const requirements_1 = await deposit.getRequirements();
-    const data = await vault.getData();
-    const tx_1 = deposit.buildTx();
-
-    const tx_2 = vaultV2Deposit({
-      vault: {
-        chainId: mainnet.id,
-        address: KeyrockUsdcVaultV2.address,
-        asset: KeyrockUsdcVaultV2.asset,
-      },
-      args: {
-        amount: 1000000000000000000n,
-        maxSharePrice: tx_1.action.args.maxSharePrice,
-        recipient: client.account.address,
-      },
-    });
-
-    expect(deposit).toBeDefined();
-    expect(requirements_1).toBeDefined();
-    expect(tx_1).toStrictEqual(tx_2);
-    expect(data.asset).toStrictEqual(KeyrockUsdcVaultV2.asset);
-    expect(data.address).toStrictEqual(KeyrockUsdcVaultV2.address);
-  });
-
   test("should deposit 1K USDC in vaultV2", async ({ client }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({

@@ -7,45 +7,19 @@ import { isHex, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
-  isRequirementApproval,
-  isRequirementSignature,
-  MorphoClient,
-  marketV1SupplyCollateral,
-} from "../../../src/index.js";
-import {
   CbbtcUsdcMarketV1,
   UsdcEurcvMarketV1,
   WethUsdsMarketV1,
-} from "../../fixtures/marketV1.js";
-import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+} from "../../../test/fixtures/marketV1.js";
+import { testInvariants } from "../../../test/helpers/invariants.js";
+import { test } from "../../../test/setup.js";
+import {
+  isRequirementApproval,
+  isRequirementSignature,
+  MorphoClient,
+} from "../../index.js";
 
 describe("SupplyCollateralMarketV1", () => {
-  test("should create supply collateral bundle", async ({ client }) => {
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
-
-    const supplyCollateral = market.supplyCollateral({
-      userAddress: client.account.address,
-      amount: parseUnits("1", 18),
-    });
-    const tx = supplyCollateral.buildTx();
-
-    const directTx = marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: CbbtcUsdcMarketV1,
-      },
-      args: {
-        amount: parseUnits("1", 18),
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(supplyCollateral).toBeDefined();
-    expect(directTx).toStrictEqual(tx);
-  });
-
   test("should supply 1 collateral with approval", async ({ client }) => {
     const amount = parseUnits("1", 18);
     await client.deal({

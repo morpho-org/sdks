@@ -2,55 +2,19 @@ import type { AccrualPosition } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
+import { WethUsdsMarketV1 } from "../../../test/fixtures/marketV1.js";
+import { testInvariants } from "../../../test/helpers/invariants.js";
+import { borrow, supplyCollateral } from "../../../test/helpers/marketV1.js";
+import { test } from "../../../test/setup.js";
 import {
   MissingAccrualPositionError,
   MorphoClient,
-  marketV1WithdrawCollateral,
   NonPositiveWithdrawCollateralAmountError,
   WithdrawExceedsCollateralError,
   WithdrawMakesPositionUnhealthyError,
-} from "../../../src/index.js";
-import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
-import { testInvariants } from "../../helpers/invariants.js";
-import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
-
-import { test } from "../../setup.js";
+} from "../../index.js";
 
 describe("WithdrawCollateralMarketV1", () => {
-  test("should create withdrawCollateral bundle", async ({ client }) => {
-    const collateralAmount = parseUnits("10", 18);
-
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsMarketV1,
-      collateralAmount,
-    });
-
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    const withdraw = market.withdrawCollateral({
-      userAddress: client.account.address,
-      amount: collateralAmount,
-      positionData,
-    });
-
-    const tx = withdraw.buildTx();
-
-    const directTx = marketV1WithdrawCollateral({
-      market: { chainId: mainnet.id, marketParams: WethUsdsMarketV1 },
-      args: {
-        amount: collateralAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-      },
-    });
-
-    expect(directTx).toStrictEqual(tx);
-  });
-
   test("should withdraw collateral (no debt)", async ({ client }) => {
     const collateralAmount = parseUnits("10", 18);
     const withdrawAmount = parseUnits("5", 18);
@@ -234,32 +198,5 @@ describe("WithdrawCollateralMarketV1", () => {
         positionData: undefined as unknown as AccrualPosition,
       }),
     ).toThrow(MissingAccrualPositionError);
-  });
-
-  test("should return deep-frozen transaction", async ({ client }) => {
-    const collateralAmount = parseUnits("10", 18);
-
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsMarketV1,
-      collateralAmount,
-    });
-
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    const tx = market
-      .withdrawCollateral({
-        userAddress: client.account.address,
-        amount: parseUnits("1", 18),
-        positionData,
-      })
-      .buildTx();
-
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
   });
 });

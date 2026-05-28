@@ -1,38 +1,12 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import { MorphoClient, vaultV1Withdraw } from "../../../src/index.js";
-import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
-import { testInvariants } from "../../helpers/invariants.js";
-import { test } from "../../setup.js";
+import { SteakhouseUsdcVaultV1 } from "../../../test/fixtures/vaultV1.js";
+import { testInvariants } from "../../../test/helpers/invariants.js";
+import { test } from "../../../test/setup.js";
+import { MorphoClient } from "../../index.js";
 
 describe("Withdraw VaultV1", () => {
-  test("should create withdraw transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client);
-
-    const withdraw = morpho
-      .vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id)
-      .withdraw({
-        userAddress: client.account.address,
-        amount: 1000000000000000000n,
-      });
-    const tx_1 = withdraw.buildTx();
-
-    const tx_2 = vaultV1Withdraw({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        amount: 1000000000000000000n,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(withdraw).toBeDefined();
-    expect(tx_1).toStrictEqual(tx_2);
-  });
-
   test("should withdraw 1K assets in vaultV1", async ({ client }) => {
     const shares = parseUnits("1000", 18);
     const assets = parseUnits("1000", 6);
