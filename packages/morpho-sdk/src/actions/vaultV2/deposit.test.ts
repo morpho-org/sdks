@@ -21,7 +21,7 @@ import * as getRequirementsActionModule from "../requirements/getRequirementsAct
 import { getRequirements } from "../requirements/index.js";
 import { vaultV2Deposit } from "./deposit.js";
 
-describe.sequential("depositVaultV2 unit tests", () => {
+describe("depositVaultV2 unit tests", () => {
   const { dai, usdc, wNative } = addressesRegistry[mainnet.id];
 
   afterEach(() => {

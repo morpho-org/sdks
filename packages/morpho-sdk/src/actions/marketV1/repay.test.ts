@@ -14,7 +14,7 @@ import {
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { marketV1Repay } from "./repay.js";
 
-describe.sequential("marketV1Repay unit tests", () => {
+describe("marketV1Repay unit tests", () => {
   const {
     bundler3: { bundler3 },
   } = getChainAddresses(mainnet.id);
