@@ -1,4 +1,5 @@
 export * from "./borrow.js";
+export * from "./refinance.js";
 export * from "./repay.js";
 export * from "./repayWithdrawCollateral.js";
 export * from "./supply.js";

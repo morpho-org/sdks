@@ -218,6 +218,21 @@ export interface MarketV1RepayWithdrawCollateralAction
     }
   > {}
 
+export interface MarketV1RefinanceAction
+  extends BaseAction<
+    "marketV1Refinance",
+    {
+      readonly sourceMarket: Hex;
+      readonly targetMarket: Hex;
+      readonly collateralAmount: bigint;
+      readonly borrowAssets: bigint;
+      readonly borrowShares: bigint;
+      readonly minBorrowSharePrice: bigint;
+      readonly maxRepaySharePrice: bigint;
+      readonly user: Address;
+    }
+  > {}
+
 /**
  * Enforces that exactly one of `assets` / `shares` is provided.
  *
@@ -260,6 +275,7 @@ export type TransactionAction =
   | MarketV1RepayAction
   | MarketV1WithdrawCollateralAction
   | MarketV1RepayWithdrawCollateralAction
+  | MarketV1RefinanceAction
   | MorphoAuthorizationAction;
 
 export interface Transaction<TAction extends BaseAction = TransactionAction> {
