@@ -133,6 +133,7 @@ describe.sequential("marketV1Supply unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     const tx = marketV1Supply({
       market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
@@ -155,6 +156,7 @@ describe.sequential("marketV1Supply unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     marketV1Supply({
       market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },

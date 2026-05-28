@@ -315,6 +315,7 @@ describe.sequential("marketV1Repay unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     marketV1Repay({
       market: {

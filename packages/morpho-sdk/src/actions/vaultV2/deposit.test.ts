@@ -125,6 +125,7 @@ describe.sequential("depositVaultV2 unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     const tx = vaultV2Deposit({
       vault: {
@@ -311,6 +312,7 @@ describe.sequential("depositVaultV2 unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     const tx = vaultV2Deposit({
       vault: {

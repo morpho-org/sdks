@@ -141,6 +141,7 @@ describe.sequential("marketV1SupplyCollateral unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     const tx = marketV1SupplyCollateral({
       market: {
@@ -168,6 +169,7 @@ describe.sequential("marketV1SupplyCollateral unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     marketV1SupplyCollateral({
       market: {

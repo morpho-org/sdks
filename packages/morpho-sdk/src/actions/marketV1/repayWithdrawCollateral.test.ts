@@ -383,6 +383,7 @@ describe.sequential("marketV1RepayWithdrawCollateral unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     marketV1RepayWithdrawCollateral({
       market: {

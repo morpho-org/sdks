@@ -150,6 +150,7 @@ describe.sequential("vaultV1MigrateToV2 unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     const tx = vaultV1MigrateToV2({
       vault: {
@@ -247,6 +248,7 @@ describe.sequential("vaultV1MigrateToV2 unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     const tx = vaultV1MigrateToV2({
       vault: {

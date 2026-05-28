@@ -186,6 +186,7 @@ describe.sequential("marketV1SupplyCollateralBorrow unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
+    localSpy.mockClear();
 
     const tx = marketV1SupplyCollateralBorrow({
       market: {
