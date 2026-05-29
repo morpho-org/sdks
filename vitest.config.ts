@@ -9,9 +9,7 @@ export default defineConfig({
         "scripts/release/**/*.{js,mjs}",
       ],
       exclude: [
-        "packages/test/**",
         "packages/test-wagmi/**",
-        "packages/morpho-test/**",
         "packages/**/*.md",
         "packages/**/src/**/*.test.ts",
         "packages/**/src/__test__/**",
