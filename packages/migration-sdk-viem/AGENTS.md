@@ -1,5 +1,11 @@
 # migration-sdk-viem Conventions
 
+## Deprecated package freeze
+
+- `@morpho-org/migration-sdk-viem` is frozen/deprecated. Do not make feature, address, ABI, dependency, test, JSDoc, refactor, or changeset updates in this package.
+- Only PRs explicitly scoped to deprecation metadata or source deletion may touch this package, and those PRs must not add new supported behavior.
+- If requested work appears to require this package, stop and move the maintained surface to `@morpho-org/morpho-sdk`, `@morpho-org/blue-sdk`, or `@morpho-org/blue-sdk-viem` as appropriate, or leave this package unchanged.
+
 - Keep per-protocol fetchers under `src/fetchers/<protocol>/<protocol>.fetchers.ts`.
 - Fetchers return `MigratablePosition[]` and return `[]` when a protocol is unsupported on the chain.
 - Fetchers instantiate protocol-specific position classes; they should not return loose transaction data.

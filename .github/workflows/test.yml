@@ -42,7 +42,7 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: pnpm run test --coverage
+      - run: pnpm run test:ci
         env:
           MAINNET_RPC_URL: ${{ secrets.MAINNET_RPC_URL }}
           BASE_RPC_URL: ${{ secrets.BASE_RPC_URL }}
