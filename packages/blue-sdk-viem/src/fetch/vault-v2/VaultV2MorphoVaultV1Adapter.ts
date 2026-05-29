@@ -29,6 +29,7 @@ export async function fetchVaultV2MorphoVaultV1Adapter(
 
   const { morphoVaultV1AdapterFactory } = getChainAddresses(parameters.chainId);
 
+  /* v8 ignore next: V8 does not credit this guard's empty false branch; both paths are tested. */
   if (!morphoVaultV1AdapterFactory) {
     throw new UnknownFactory();
   }

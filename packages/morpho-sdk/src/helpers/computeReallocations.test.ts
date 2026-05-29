@@ -500,6 +500,37 @@ describe("computeReallocations", () => {
       expect(vaultBResult!.fee).toBe(2000n);
     });
 
+    test("should prioritize vault groups with larger total withdrawal assets", () => {
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: 800n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const borrowAmount = 500n * MathLib.WAD;
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: 1500n * MathLib.WAD,
+        totalBorrowAssets: 500n * MathLib.WAD,
+      });
+      const data = makeMockState({
+        targetMarket: tm,
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_B, assets: 50n * MathLib.WAD },
+          { id: sourceB.id, vault: VAULT_A, assets: 200n * MathLib.WAD },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 1000n, [VAULT_B]: 2000n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "borrow",
+        amount: borrowAmount,
+        options: { enabled: true },
+      });
+
+      expect(result[0]!.vault).toBe(VAULT_A);
+    });
+
     test("should group by vault before capping to avoid an unnecessary second vault fee", () => {
       const tm = makeMarket(targetParams, {
         totalSupplyAssets: 800n * MathLib.WAD,

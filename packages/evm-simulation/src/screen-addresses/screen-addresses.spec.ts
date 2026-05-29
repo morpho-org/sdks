@@ -174,6 +174,108 @@ describe.sequential("screenAddresses", () => {
     ).rejects.toThrow(AddressScreeningError);
   });
 
+  it("fails open and logs when Chainalysis registration returns non-ok", async () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    installFetchMock(
+      vi.fn<MockFetch>().mockResolvedValue({
+        ok: false,
+        status: 429,
+        statusText: "Too Many Requests",
+      }),
+    );
+
+    await expect(
+      screenAddresses({
+        simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
+        transfers: [],
+        chainalysisApiKey: "test-key",
+        logger,
+      }),
+    ).resolves.not.toThrow();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Chainalysis screening failed (fail-open)",
+      { error: "Chainalysis registration failed: 429 Too Many Requests" },
+    );
+  });
+
+  it("fails open and logs non-Error pre-registration failures", async () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    installFetchMock(vi.fn<MockFetch>().mockRejectedValue("socket closed"));
+
+    await expect(
+      screenAddresses({
+        simulationTxs: [{ from: USER, to: VAULT, data: "0x" as Hex }],
+        transfers: [],
+        chainalysisApiKey: "test-key",
+        logger,
+      }),
+    ).resolves.not.toThrow();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Chainalysis screening failed (fail-open)",
+      { error: "socket closed" },
+    );
+  });
+
+  it("treats a post-registration fetch rejection as Severe", async () => {
+    installFetchMock(
+      vi
+        .fn<MockFetch>()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+        .mockRejectedValueOnce(new Error("lookup failed")),
+    );
+
+    await expect(
+      screenAddresses({
+        simulationTxs: [{ from: VAULT, to: VAULT, data: "0x" as Hex }],
+        transfers: [],
+        chainalysisApiKey: "test-key",
+      }),
+    ).rejects.toThrow(AddressScreeningError);
+  });
+
+  it("treats malformed Chainalysis response bodies as Severe", async () => {
+    installFetchMock(
+      vi
+        .fn<MockFetch>()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ risk: 12 }),
+        }),
+    );
+
+    await expect(
+      screenAddresses({
+        simulationTxs: [{ from: VAULT, to: VAULT, data: "0x" as Hex }],
+        transfers: [],
+        chainalysisApiKey: "test-key",
+      }),
+    ).rejects.toThrow(AddressScreeningError);
+  });
+
+  it("treats null Chainalysis risk as clean with a caller signal", async () => {
+    installFetchMock(
+      vi
+        .fn<MockFetch>()
+        .mockResolvedValueOnce({ ok: true, json: async () => ({}) })
+        .mockResolvedValueOnce({
+          ok: true,
+          json: async () => ({ risk: null }),
+        }),
+    );
+
+    await expect(
+      screenAddresses({
+        simulationTxs: [{ from: VAULT, to: VAULT, data: "0x" as Hex }],
+        transfers: [],
+        chainalysisApiKey: "test-key",
+        signal: new AbortController().signal,
+      }),
+    ).resolves.not.toThrow();
+  });
+
   it("deduplicates addresses before screening", async () => {
     const logs = [
       makeTransferLog({

@@ -1,10 +1,15 @@
 import { addressesRegistry } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isHex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import { test } from "../../../../test/setup.js";
-import { AddressMismatchError } from "../../../types/index.js";
+import {
+  AddressMismatchError,
+  ChainIdMismatchError,
+  InvalidSignatureError,
+} from "../../../types/index.js";
 import { encodeErc20Permit } from "./encodeErc20Permit.js";
 
 describe("encodeErc20Permit", () => {
@@ -17,7 +22,25 @@ describe("encodeErc20Permit", () => {
   const mockAmount = 1000000n;
   const mockNonce = 0n;
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   describe("sign", () => {
+    test("should throw ChainIdMismatchError when client chain does not match", async ({
+      client,
+    }) => {
+      await expect(
+        encodeErc20Permit(client, {
+          token: usdc,
+          spender: generalAdapter1,
+          amount: mockAmount,
+          chainId: mainnet.id + 1,
+          nonce: mockNonce,
+        }),
+      ).rejects.toThrow(ChainIdMismatchError);
+    });
+
     test("should sign permit for non-DAI token", async ({ client }) => {
       const userAddress = client.account.address;
 
@@ -71,6 +94,33 @@ describe("encodeErc20Permit", () => {
       await expect(permit.sign(client, differentAddress)).rejects.toThrow(
         new AddressMismatchError(client.account.address, differentAddress),
       );
+    });
+
+    test("should throw InvalidSignatureError when signature verification fails", async ({
+      client,
+    }) => {
+      const userAddress = client.account.address;
+      const wrongSigner = privateKeyToAccount(
+        "0x0000000000000000000000000000000000000000000000000000000000000002",
+      );
+      const invalidSignatureClient = {
+        ...client,
+        account: {
+          ...wrongSigner,
+          address: userAddress,
+        },
+      };
+      const permit = await encodeErc20Permit(client, {
+        token: usdc,
+        spender: generalAdapter1,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+      });
+
+      await expect(
+        permit.sign(invalidSignatureClient, userAddress),
+      ).rejects.toThrow(InvalidSignatureError);
     });
 
     test("should return all expected properties in signature args", async ({

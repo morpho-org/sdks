@@ -132,6 +132,30 @@ describe("buildSimulationTxs", () => {
     ).toThrow(SimulationValidationError);
   });
 
+  it("rejects approval-type auth whose `from` is malformed", () => {
+    const auths: SimulationAuthorization[] = [
+      {
+        type: "approval",
+        transaction: {
+          from: "not-an-address" as Address,
+          to: USDC,
+          data: "0xabcdef" as Hex,
+          value: 0n,
+        },
+      },
+    ];
+
+    try {
+      buildSimulationTxs(makeParams({ authorizations: auths }));
+      expect.fail("should have thrown");
+    } catch (error) {
+      expect(error).toBeInstanceOf(SimulationValidationError);
+      expect((error as SimulationValidationError).fieldErrors).toEqual([
+        "simulationTxs[0].from: not a valid address (not-an-address)",
+      ]);
+    }
+  });
+
   it("accepts approval-type auth whose `from` matches the user sender after case normalization", () => {
     // User sender is checksummed; approval tx sender is lowercase — same
     // address, different string form. Must be accepted.
