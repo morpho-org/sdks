@@ -1,7 +1,7 @@
 import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   CbbtcUsdcMarketV1,
   WethUsdsMarketV1,
@@ -21,6 +21,10 @@ import { getRequirements } from "../requirements/index.js";
 import { marketV1Supply } from "./supply.js";
 
 describe("marketV1Supply unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const { wNative } = addressesRegistry[mainnet.id];
   const {
     bundler3: { bundler3 },
@@ -133,7 +137,6 @@ describe("marketV1Supply unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     const tx = marketV1Supply({
       market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
@@ -156,7 +159,6 @@ describe("marketV1Supply unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     marketV1Supply({
       market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },

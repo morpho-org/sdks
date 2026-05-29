@@ -125,7 +125,6 @@ describe("depositVaultV2 unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     const tx = vaultV2Deposit({
       vault: {
@@ -312,7 +311,6 @@ describe("depositVaultV2 unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     const tx = vaultV2Deposit({
       vault: {

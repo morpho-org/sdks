@@ -1,7 +1,7 @@
 import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   UsdcEurcvMarketV1,
   WethUsdsMarketV1,
@@ -20,6 +20,10 @@ import { getRequirements } from "../requirements/index.js";
 import { marketV1SupplyCollateral } from "./supplyCollateral.js";
 
 describe("marketV1SupplyCollateral unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const { wNative } = addressesRegistry[mainnet.id];
   const {
     bundler3: { bundler3 },
@@ -141,7 +145,6 @@ describe("marketV1SupplyCollateral unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     const tx = marketV1SupplyCollateral({
       market: {
@@ -169,7 +172,6 @@ describe("marketV1SupplyCollateral unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     marketV1SupplyCollateral({
       market: {

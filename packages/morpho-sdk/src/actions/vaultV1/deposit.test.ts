@@ -2,7 +2,7 @@ import { addressesRegistry } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
@@ -22,6 +22,10 @@ import { getRequirements } from "../requirements/index.js";
 import { vaultV1Deposit } from "./deposit.js";
 
 describe("depositVaultV1 unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const { dai, usdc, wNative } = addressesRegistry[mainnet.id];
 
   test("should create deposit bundle with DAI via permit2", async ({
@@ -117,7 +121,6 @@ describe("depositVaultV1 unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     const tx = vaultV1Deposit({
       vault: {
@@ -240,7 +243,6 @@ describe("depositVaultV1 unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     const tx = vaultV1Deposit({
       vault: {

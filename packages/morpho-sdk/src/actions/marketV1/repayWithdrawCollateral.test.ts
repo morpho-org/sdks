@@ -1,7 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import { WethUsdsMarketV1 } from "../../../test/fixtures/marketV1.js";
 import { test } from "../../../test/setup.js";
 import {
@@ -16,6 +16,10 @@ import * as getRequirementsActionModule from "../requirements/getRequirementsAct
 import { marketV1RepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 
 describe("marketV1RepayWithdrawCollateral unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const {
     bundler3: { bundler3 },
   } = getChainAddresses(mainnet.id);
@@ -383,7 +387,6 @@ describe("marketV1RepayWithdrawCollateral unit tests", () => {
       getRequirementsActionModule,
       "getRequirementsAction",
     );
-    localSpy.mockClear();
 
     marketV1RepayWithdrawCollateral({
       market: {
