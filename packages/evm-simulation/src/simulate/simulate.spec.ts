@@ -65,10 +65,9 @@ function makeConfig(
   return {
     chains: new Map([[1, { simulateV1Url: "http://localhost:8545" }]]),
     tenderlyRest: {
-      apiBaseUrl: "https://api.tenderly.co",
+      apiUrl:
+        "https://api.tenderly.co/api/v1/account/test-account/project/test-project",
       accessToken: "test-token",
-      accountSlug: "test-account",
-      projectSlug: "test-project",
       supportedChainIds: new Set([1]),
     },
     timeoutMs: 5000,

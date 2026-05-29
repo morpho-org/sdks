@@ -9,10 +9,8 @@ const VAULT: Address = "0x2222222222222222222222222222222222222222";
 const USDC: Address = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 
 const CONFIG: TenderlyRestConfig = {
-  apiBaseUrl: "https://api.tenderly.co",
+  apiUrl: "https://api.tenderly.co/api/v1/account/acct/project/proj",
   accessToken: "test-token",
-  accountSlug: "acct",
-  projectSlug: "proj",
   supportedChainIds: new Set([1]),
 };
 
