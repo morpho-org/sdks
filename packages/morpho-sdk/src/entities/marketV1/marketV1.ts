@@ -1361,9 +1361,23 @@ export class MorphoMarketV1 implements MarketV1Actions {
     //   - source projects assets-from-shares fidelity (overshoot only covers
     //     signature→exec, not read→signature)
     //   - target's LLTV check uses the existing-debt accrued forward
-    const now = BigInt(Math.floor(Date.now() / 1000));
-    const accruedSource = positionData.market.accrueInterest(now);
-    const accruedTarget = target.positionData.market.accrueInterest(now);
+    // `Market.accrueInterest` requires `timestamp >= lastUpdate`; clamp via
+    // `MathLib.max` so a stale clock or simulated future position never
+    // produces a negative elapsed interval.
+    const sourceAccrualTimestamp = MathLib.max(
+      Time.timestamp(),
+      positionData.market.lastUpdate,
+    );
+    const targetAccrualTimestamp = MathLib.max(
+      Time.timestamp(),
+      target.positionData.market.lastUpdate,
+    );
+    const accruedSource = positionData.market.accrueInterest(
+      sourceAccrualTimestamp,
+    );
+    const accruedTarget = target.positionData.market.accrueInterest(
+      targetAccrualTimestamp,
+    );
 
     const projectedBorrowAssets = sharesMode
       ? accruedSource.toBorrowAssets(requestedShares, "Up")

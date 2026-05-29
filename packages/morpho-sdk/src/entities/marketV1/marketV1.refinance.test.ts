@@ -10,6 +10,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { MorphoClient } from "../../client/index.js";
 import {
+  BorrowAmountAndSharesExclusiveError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
   RefinanceExceedsBorrowSharesError,
@@ -225,6 +226,31 @@ describe("MorphoMarketV1.refinance", () => {
         collateralAmount: parseUnits("2", 18),
       }),
     ).toThrow(RefinanceExceedsCollateralError);
+  });
+
+  test("error: BorrowAmountAndSharesExclusiveError when both borrowAssets and borrowShares are positive", () => {
+    const market = makeMarket();
+    const positionData = makePosition({
+      market: baseMarket(sourceParams),
+      user: USER,
+      collateral: parseUnits("1", 18),
+      borrowShares: parseUnits("100", 12),
+    });
+    const targetPosition = makePosition({
+      market: baseMarket(targetParams),
+      user: USER,
+    });
+
+    expect(() =>
+      market.refinance({
+        userAddress: USER,
+        positionData,
+        target: { marketParams: targetParams, positionData: targetPosition },
+        collateralAmount: parseUnits("0.1", 18),
+        borrowAssets: parseUnits("10", 6),
+        borrowShares: parseUnits("100", 12),
+      }),
+    ).toThrow(BorrowAmountAndSharesExclusiveError);
   });
 
   test("error: RefinanceExceedsBorrowSharesError when borrowShares > position.borrowShares", () => {
