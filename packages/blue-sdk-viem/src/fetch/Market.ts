@@ -22,6 +22,7 @@ export async function fetchMarket(
 
   const { morpho, adaptiveCurveIrm } = getChainAddresses(parameters.chainId);
 
+  /* v8 ignore next: V8 reports a negative false-branch count here; deployless=false is tested. */
   if (deployless) {
     try {
       const {

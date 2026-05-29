@@ -61,6 +61,25 @@ describe("withdrawVaultV2 unit tests", () => {
     expect(tx.value).toBe(0n);
   });
 
+  test("should append metadata to transaction data when provided", async ({
+    client,
+  }) => {
+    const amount = parseUnits("1000", 6);
+    const tx = vaultV2Withdraw({
+      vault: {
+        address: KeyrockUsdcVaultV2.address,
+      },
+      args: {
+        amount,
+        recipient: client.account.address,
+        onBehalf: client.account.address,
+      },
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.includes("a1b2c3d4")).toBe(true);
+  });
+
   test("should throw NonPositiveAssetAmountError when assets is zero", async () => {
     expect(() =>
       vaultV2Withdraw({

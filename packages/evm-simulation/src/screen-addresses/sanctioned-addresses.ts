@@ -71,6 +71,7 @@ export const sanctionedAddresses: Set<string> = new Set(
 // inserts a malformed string. Throwing at load is the loudest signal — the
 // package won't import if the dataset is invalid.
 for (const entry of sanctionedAddresses) {
+  /* v8 ignore next: this module-load invariant only trips if the static dataset is edited incorrectly. */
   if (!/^0x[0-9a-f]{40}$/.test(entry)) {
     throw new Error(
       `sanctioned-addresses.ts: entry "${entry}" is not a well-formed lowercased EVM address. Every entry must match /^0x[0-9a-f]{40}$/ so lowercase lookup matches.`,

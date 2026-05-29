@@ -1,10 +1,14 @@
 import { addressesRegistry, MathLib } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { type Address, isHex } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import { mainnet } from "viem/chains";
-import { describe, expect } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import { test } from "../../../../test/setup.js";
-import { AddressMismatchError } from "../../../types/index.js";
+import {
+  AddressMismatchError,
+  InvalidSignatureError,
+} from "../../../types/index.js";
 import { encodeErc20Permit2 } from "./encodeErc20Permit2.js";
 
 describe("encodeErc20Permit2", () => {
@@ -16,6 +20,10 @@ describe("encodeErc20Permit2", () => {
   const mockAmount = 1000000n;
   const mockNonce = 0n;
   const mockExpiration = MathLib.MAX_UINT_48;
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   describe("sign", () => {
     test("should sign permit2 for token", async ({ client }) => {
@@ -53,6 +61,32 @@ describe("encodeErc20Permit2", () => {
       await expect(permit.sign(client, differentAddress)).rejects.toThrow(
         new AddressMismatchError(client.account.address, differentAddress),
       );
+    });
+
+    test("should throw InvalidSignatureError when signature verification fails", async ({
+      client,
+    }) => {
+      const wrongSigner = privateKeyToAccount(
+        "0x0000000000000000000000000000000000000000000000000000000000000002",
+      );
+      const invalidSignatureClient = {
+        ...client,
+        account: {
+          ...wrongSigner,
+          address: client.account.address,
+        },
+      };
+      const permit = encodeErc20Permit2({
+        token: usdc,
+        amount: mockAmount,
+        chainId: mainnet.id,
+        nonce: mockNonce,
+        expiration: mockExpiration,
+      });
+
+      await expect(
+        permit.sign(invalidSignatureClient, client.account.address),
+      ).rejects.toThrow(InvalidSignatureError);
     });
 
     test("should return all expected properties in signature args", async ({

@@ -94,6 +94,7 @@ export async function executeSimulation(params: {
     }
   }
 
+  /* v8 ignore next: resolveChain rejects this state before executeSimulation reaches the fallback path. */
   if (!chain.simulateV1Url) {
     throw new UnsupportedChainError(chainId);
   }

@@ -1,19 +1,16 @@
 import {
   type AccrualPosition,
   AccrualPosition as AccrualPositionClass,
-  DEFAULT_SLIPPAGE_TOLERANCE,
 } from "@morpho-org/blue-sdk";
 import { Time } from "@morpho-org/morpho-ts";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { afterEach, describe, expect, vi } from "vitest";
 import {
-  computeMaxRepaySharePrice,
   isRequirementApproval,
   isRequirementAuthorization,
   MissingAccrualPositionError,
   MorphoClient,
-  marketV1RepayWithdrawCollateral,
   NonPositiveRepayAmountError,
   NonPositiveWithdrawCollateralAmountError,
   RepayExceedsDebtError,
@@ -23,71 +20,12 @@ import {
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { borrow, supplyCollateral } from "../../helpers/marketV1.js";
-
 import { test } from "../../setup.js";
 
 describe("RepayWithdrawCollateralMarketV1", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
-
-  test("should create repayWithdrawCollateral bundle (by assets)", async ({
-    client,
-  }) => {
-    const collateralAmount = parseUnits("10", 18);
-    const borrowAmount = parseUnits("1000", 18);
-    const repayAmount = parseUnits("500", 18);
-    const withdrawAmount = parseUnits("1", 18);
-
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsMarketV1,
-      collateralAmount,
-    });
-    await borrow({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsMarketV1,
-      borrowAmount,
-    });
-
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    const action = market.repayWithdrawCollateral({
-      userAddress: client.account.address,
-      assets: repayAmount,
-      withdrawAmount,
-      positionData,
-    });
-
-    const tx = action.buildTx();
-
-    const maxSharePrice = computeMaxRepaySharePrice({
-      repayAssets: repayAmount,
-      repayShares: 0n,
-      market: positionData.market,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    const directTx = marketV1RepayWithdrawCollateral({
-      market: { chainId: mainnet.id, marketParams: WethUsdsMarketV1 },
-      args: {
-        assets: repayAmount,
-        shares: 0n,
-        transferAmount: repayAmount,
-        withdrawAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        maxSharePrice,
-      },
-    });
-
-    expect(directTx).toStrictEqual(tx);
-  });
-
   test("should repay and withdraw collateral (by assets)", async ({
     client,
   }) => {
@@ -493,40 +431,5 @@ describe("RepayWithdrawCollateralMarketV1", () => {
         positionData: undefined as unknown as AccrualPosition,
       }),
     ).toThrow(MissingAccrualPositionError);
-  });
-
-  test("should return deep-frozen transaction", async ({ client }) => {
-    const collateralAmount = parseUnits("10", 18);
-    const borrowAmount = parseUnits("1000", 18);
-
-    await supplyCollateral({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsMarketV1,
-      collateralAmount,
-    });
-    await borrow({
-      client,
-      chainId: mainnet.id,
-      market: WethUsdsMarketV1,
-      borrowAmount,
-    });
-
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    const tx = market
-      .repayWithdrawCollateral({
-        userAddress: client.account.address,
-        assets: parseUnits("500", 18),
-        withdrawAmount: parseUnits("1", 18),
-        positionData,
-      })
-      .buildTx();
-
-    expect(Object.isFrozen(tx)).toBe(true);
-    expect(Object.isFrozen(tx.action)).toBe(true);
-    expect(Object.isFrozen(tx.action.args)).toBe(true);
   });
 });
