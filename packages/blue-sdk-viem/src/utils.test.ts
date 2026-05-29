@@ -1,6 +1,9 @@
-import { InvalidAddressError, parseAbi, parseUnits } from "viem";
+import { createMockClient, mockRead } from "@morpho-org/test/mock";
+import { erc20Abi, InvalidAddressError, parseAbi, parseUnits } from "viem";
+import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
+  readContractRestructured,
   restructure,
   safeGetAddress,
   safeParseNumber,
@@ -128,5 +131,24 @@ describe("restructure", () => {
     expect(() =>
       restructure([1n, 2n], { abi: unnamedAbi, name: "foo", args: [] }),
     ).toThrow(/lacking names/);
+  });
+
+  test("readContractRestructured throws when viem returns a scalar", async () => {
+    const handle = createMockClient(mainnet);
+    const token = "0x1111111111111111111111111111111111111111";
+    mockRead(handle, {
+      address: token,
+      abi: erc20Abi,
+      functionName: "decimals",
+      result: 18,
+    });
+
+    await expect(
+      readContractRestructured(handle.client, {
+        address: token,
+        abi: erc20Abi,
+        functionName: "decimals",
+      }),
+    ).rejects.toThrow(/non-tuple/);
   });
 });

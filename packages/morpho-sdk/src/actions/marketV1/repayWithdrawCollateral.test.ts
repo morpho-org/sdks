@@ -1,7 +1,7 @@
 import { getChainAddresses } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import { WethUsdsMarketV1 } from "../../../test/fixtures/marketV1.js";
 import { test } from "../../../test/setup.js";
 import {
@@ -10,12 +10,17 @@ import {
   NonPositiveRepayMaxSharePriceError,
   NonPositiveTransferAmountError,
   NonPositiveWithdrawCollateralAmountError,
+  type RequirementSignature,
   TransferAmountNotEqualToAssetsError,
 } from "../../types/index.js";
 import * as getRequirementsActionModule from "../requirements/getRequirementsAction.js";
 import { marketV1RepayWithdrawCollateral } from "./repayWithdrawCollateral.js";
 
 describe("marketV1RepayWithdrawCollateral unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const {
     bundler3: { bundler3 },
   } = getChainAddresses(mainnet.id);
@@ -401,6 +406,64 @@ describe("marketV1RepayWithdrawCollateral unit tests", () => {
     });
 
     expect(localSpy).not.toHaveBeenCalled();
+  });
+
+  test("should include requirement actions when requirementSignature is provided", async ({
+    client,
+  }) => {
+    const assets = parseUnits("100", 6);
+    const withdrawAmount = parseUnits("1", 18);
+    const signature = `0x${"11".repeat(64)}1b` as `0x${string}`;
+    const {
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(mainnet.id);
+    const requirementSignature = {
+      args: {
+        owner: client.account.address,
+        signature,
+        deadline: 1n,
+        amount: assets,
+        asset: WethUsdsMarketV1.loanToken,
+        nonce: 0n,
+      },
+      action: {
+        type: "permit",
+        args: {
+          spender: generalAdapter1,
+          amount: assets,
+          deadline: 1n,
+        },
+      },
+    } satisfies RequirementSignature;
+    const localSpy = vi.spyOn(
+      getRequirementsActionModule,
+      "getRequirementsAction",
+    );
+
+    const tx = marketV1RepayWithdrawCollateral({
+      market: {
+        chainId: mainnet.id,
+        marketParams: WethUsdsMarketV1,
+      },
+      args: {
+        assets,
+        shares: 0n,
+        transferAmount: assets,
+        withdrawAmount,
+        onBehalf: client.account.address,
+        receiver: client.account.address,
+        maxSharePrice: 1n,
+        requirementSignature,
+      },
+    });
+
+    expect(tx.action.type).toBe("marketV1RepayWithdrawCollateral");
+    expect(localSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        asset: WethUsdsMarketV1.loanToken,
+        amount: assets,
+      }),
+    );
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

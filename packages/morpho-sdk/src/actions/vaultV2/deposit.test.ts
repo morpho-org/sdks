@@ -1,4 +1,4 @@
-import { addressesRegistry } from "@morpho-org/blue-sdk";
+import { addressesRegistry, ChainId } from "@morpho-org/blue-sdk";
 import type { Address } from "viem";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
@@ -9,6 +9,7 @@ import {
 } from "../../../test/fixtures/vaultV2.js";
 import { test } from "../../../test/setup.js";
 import {
+  ChainWNativeMissingError,
   DepositAmountMismatchError,
   DepositAssetMismatchError,
   isRequirementApproval,
@@ -21,7 +22,7 @@ import * as getRequirementsActionModule from "../requirements/getRequirementsAct
 import { getRequirements } from "../requirements/index.js";
 import { vaultV2Deposit } from "./deposit.js";
 
-describe.sequential("depositVaultV2 unit tests", () => {
+describe("depositVaultV2 unit tests", () => {
   const { dai, usdc, wNative } = addressesRegistry[mainnet.id];
 
   afterEach(() => {
@@ -393,6 +394,26 @@ describe.sequential("depositVaultV2 unit tests", () => {
         },
       }),
     ).toThrow(NonPositiveMaxSharePriceError);
+  });
+
+  test("should throw ChainWNativeMissingError when nativeAmount is used on a chain without wNative", async ({
+    client,
+  }) => {
+    expect(() =>
+      vaultV2Deposit({
+        vault: {
+          chainId: ChainId.CeloMainnet,
+          address: KpkWETHVaultV2.address,
+          asset: wNative,
+        },
+        args: {
+          amount: 0n,
+          nativeAmount: 1n,
+          maxSharePrice: 1000000n,
+          recipient: client.account.address,
+        },
+      }),
+    ).toThrow(ChainWNativeMissingError);
   });
 
   test("should throw DepositAssetMismatchError when signature asset does not match deposit asset", async ({

@@ -12,7 +12,7 @@
   "exclude": [
     "src/**/*.test.ts",
     "src/**/*.test-d.ts",
-    "src/**/__test-utils__/**",
+    "src/**/__test__/**",
     "src/**/__mocks__/**",
     "src/**/__fixtures__/**"
   ]
