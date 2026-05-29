@@ -13,6 +13,7 @@ import {
   BorrowAmountAndSharesExclusiveError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
+  RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
   RefinanceExceedsCollateralError,
   RefinanceSameMarketError,
@@ -226,6 +227,32 @@ describe("MorphoMarketV1.refinance", () => {
         collateralAmount: parseUnits("2", 18),
       }),
     ).toThrow(RefinanceExceedsCollateralError);
+  });
+
+  test("error: RefinanceExceedsBorrowAssetsError when borrowAssets > position.borrowAssets", () => {
+    const market = makeMarket();
+    // borrowShares = 100 (12-decimal share units) → borrowAssets ≈ 50 USDC at our 2:1
+    // shares:assets ratio. Asking for 1000 USDC of asset repay exceeds that.
+    const positionData = makePosition({
+      market: baseMarket(sourceParams),
+      user: USER,
+      collateral: parseUnits("1", 18),
+      borrowShares: parseUnits("100", 12),
+    });
+    const targetPosition = makePosition({
+      market: baseMarket(targetParams),
+      user: USER,
+    });
+
+    expect(() =>
+      market.refinance({
+        userAddress: USER,
+        positionData,
+        target: { marketParams: targetParams, positionData: targetPosition },
+        collateralAmount: parseUnits("0.1", 18),
+        borrowAssets: parseUnits("1000", 6),
+      }),
+    ).toThrow(RefinanceExceedsBorrowAssetsError);
   });
 
   test("error: BorrowAmountAndSharesExclusiveError when both borrowAssets and borrowShares are positive", () => {

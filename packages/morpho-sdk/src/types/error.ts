@@ -714,3 +714,36 @@ export class RefinanceExceedsBorrowSharesError extends Error {
     this.available = params.available;
   }
 }
+
+/** Thrown when a refinance's `borrowAssets` exceeds the source position's outstanding debt assets. */
+export class RefinanceExceedsBorrowAssetsError extends Error {
+  public readonly market: string;
+  public readonly requested: bigint;
+  public readonly available: bigint;
+
+  constructor(params: {
+    market: string;
+    requested: bigint;
+    available: bigint;
+  }) {
+    super(
+      `Refinance borrow assets ${params.requested} exceed outstanding debt assets ${params.available} for market: ${params.market}`,
+    );
+    this.market = params.market;
+    this.requested = params.requested;
+    this.available = params.available;
+  }
+}
+
+/**
+ * Thrown when a refinance is requested in shares mode (`borrowShares > 0n`) without the
+ * accompanying `borrowAssets` overshoot for the target borrow leg. The entity layer always
+ * passes an overshoot computed from `slippageTolerance`; direct action callers must do the same.
+ */
+export class RefinanceSharesMissingBorrowAssetsError extends Error {
+  constructor(market: string) {
+    super(
+      `Refinance shares mode requires a positive borrowAssets overshoot for the target borrow leg (market: ${market}).`,
+    );
+  }
+}

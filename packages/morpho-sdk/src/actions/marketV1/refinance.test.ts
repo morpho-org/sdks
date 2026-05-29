@@ -8,6 +8,7 @@ import {
   NonPositiveAssetAmountError,
   NonPositiveMinBorrowSharePriceError,
   RefinanceSameMarketError,
+  RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
@@ -225,6 +226,34 @@ describe("marketV1Refinance", () => {
         args: baseArgs,
       }),
     ).toThrow(RefinanceTokenMismatchError);
+  });
+
+  test("error: RefinanceSharesMissingBorrowAssetsError when shares mode passes no overshoot", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowShares: parseUnits("1000", 24),
+          // borrowAssets omitted — direct callers must provide the entity-computed overshoot.
+        },
+      }),
+    ).toThrow(RefinanceSharesMissingBorrowAssetsError);
+  });
+
+  test("error: RefinanceSharesMissingBorrowAssetsError when shares mode passes zero overshoot", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowShares: parseUnits("1000", 24),
+          borrowAssets: 0n,
+        },
+      }),
+    ).toThrow(RefinanceSharesMissingBorrowAssetsError);
   });
 
   test("behavior: metadata is appended to tx.data when provided", () => {

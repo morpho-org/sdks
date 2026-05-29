@@ -11,6 +11,7 @@ import {
   NonPositiveAssetAmountError,
   NonPositiveMinBorrowSharePriceError,
   RefinanceSameMarketError,
+  RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type Transaction,
   ZeroCollateralAmountError,
@@ -112,6 +113,8 @@ export interface MarketV1RefinanceParams {
  * @throws {NegativeMaxRepaySharePriceError} when `maxRepaySharePrice < 0n`.
  * @throws {RefinanceSameMarketError} when source and target market ids are equal.
  * @throws {RefinanceTokenMismatchError} when source and target do not share both tokens.
+ * @throws {RefinanceSharesMissingBorrowAssetsError} when `borrowShares > 0n` but `borrowAssets`
+ *   is omitted or non-positive — the target `morphoBorrow` requires a positive asset overshoot.
  * @example
  * ```ts
  * import { marketV1Refinance } from "@morpho-org/morpho-sdk";
@@ -184,6 +187,13 @@ export const marketV1Refinance = ({
 
   const sharesMode = borrowShares > 0n;
   const shouldMigrateBorrow = borrowAssets > 0n || sharesMode;
+
+  // Shares mode encodes `morphoBorrow(target, borrowAssets, 0n, …)`. Morpho rejects a borrow
+  // with both amounts zero, so we require a positive overshoot from the caller (the entity
+  // computes one from `slippageTolerance`; direct callers must do the same).
+  if (sharesMode && borrowAssets <= 0n) {
+    throw new RefinanceSharesMissingBorrowAssetsError(sourceParams.id);
+  }
 
   const callback: Action[] = [];
 

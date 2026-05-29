@@ -77,6 +77,7 @@ import {
   NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
   type ReallocationComputeOptions,
+  RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
   RefinanceExceedsCollateralError,
   RefinanceSameMarketError,
@@ -376,9 +377,11 @@ export interface MarketV1Actions {
    * Validates:
    * - Both positions belong to `userAddress` (source = this entity, target via `target.positionData`).
    * - Source and target share both tokens; source and target market ids differ.
-   * - `collateralAmount` and `borrowShares` do not exceed source position amounts.
-   * - Resulting source position (after partial migration) stays healthy or fully closes.
-   * - Target position aggregate (existing + migrated) respects LLTV − buffer.
+   * - `collateralAmount`, `borrowShares`, and `borrowAssets` do not exceed source position amounts.
+   * - Resulting source position (after partial migration) stays healthy or fully closes — uses the
+   *   accrued source market and accounts for shares burned by assets-mode repay.
+   * - Target position aggregate (existing + migrated, including the shares-mode overshoot) respects
+   *   LLTV − buffer.
    *
    * Both markets are forward-accrued to `now` before share-price slippage bounds are computed.
    * In shares mode, the target borrow is overshot by `slippageTolerance` to absorb mid-tx
@@ -1332,28 +1335,11 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
     }
 
-    // Post-state SOURCE health: if any debt remains, the residual position must stay healthy.
-    // Covers both `remainingCollateral > 0` (LTV check) and `remainingCollateral === 0`
-    // (validatePositionHealth fails — liquidable). When shares fully close, the check is
-    // skipped because the residual position has no debt.
-    const remainingCollateral = positionData.collateral - collateralAmount;
-    const remainingShares = positionData.borrowShares - requestedShares;
-    if (remainingShares > 0n) {
-      const residualPosition = new AccrualPosition(
-        {
-          user: positionData.user,
-          supplyShares: positionData.supplyShares,
-          borrowShares: remainingShares,
-          collateral: remainingCollateral,
-        },
-        positionData.market,
-      );
-      validatePositionHealth({
-        positionData: residualPosition,
-        additionalCollateral: 0n,
-        borrowAmount: 0n,
-        marketId: this.marketParams.id,
-        lltv: this.marketParams.lltv,
+    if (requestedAssets > positionData.borrowAssets) {
+      throw new RefinanceExceedsBorrowAssetsError({
+        market: this.marketParams.id,
+        requested: requestedAssets,
+        available: positionData.borrowAssets,
       });
     }
 
@@ -1361,6 +1347,8 @@ export class MorphoMarketV1 implements MarketV1Actions {
     //   - source projects assets-from-shares fidelity (overshoot only covers
     //     signature→exec, not read→signature)
     //   - target's LLTV check uses the existing-debt accrued forward
+    //   - source residual check uses the accrued market so the projected
+    //     residual debt reflects what the on-chain repay actually consumes
     // `Market.accrueInterest` requires `timestamp >= lastUpdate`; clamp via
     // `MathLib.max` so a stale clock or simulated future position never
     // produces a negative elapsed interval.
@@ -1379,24 +1367,60 @@ export class MorphoMarketV1 implements MarketV1Actions {
       targetAccrualTimestamp,
     );
 
+    // Shares actually burned on-chain by the source repay:
+    //   - shares mode: exactly `requestedShares` (immune to mid-tx accrual)
+    //   - assets mode: Morpho computes `shares = assets.toSharesDown(assets, shares)` —
+    //     mirror that conversion using the accrued source market.
+    const repaidShares = sharesMode
+      ? requestedShares
+      : accruedSource.toBorrowShares(requestedAssets, "Down");
+
+    // Post-state SOURCE health: if any debt remains, the residual position must stay healthy.
+    // Covers both `remainingCollateral > 0` (LTV check) and `remainingCollateral === 0`
+    // (validatePositionHealth fails — liquidable). Uses the accrued source market so the
+    // residual `borrowAssets` getter reflects accrual rather than reading stale state.
+    const remainingCollateral = positionData.collateral - collateralAmount;
+    const remainingShares = positionData.borrowShares - repaidShares;
+    if (remainingShares > 0n) {
+      const residualPosition = new AccrualPosition(
+        {
+          user: positionData.user,
+          supplyShares: positionData.supplyShares,
+          borrowShares: remainingShares,
+          collateral: remainingCollateral,
+        },
+        accruedSource,
+      );
+      validatePositionHealth({
+        positionData: residualPosition,
+        additionalCollateral: 0n,
+        borrowAmount: 0n,
+        marketId: this.marketParams.id,
+        lltv: this.marketParams.lltv,
+      });
+    }
+
     const projectedBorrowAssets = sharesMode
       ? accruedSource.toBorrowAssets(requestedShares, "Up")
       : requestedAssets;
 
+    // Shares-mode overshoot covers (a) target share-price drift between signature and exec,
+    // and (b) mempool accrual between read and exec on the target's borrow leg. Computed
+    // before the target LLTV check so the health validation tests the *actual* on-chain
+    // borrow amount (a near-LLTV target could otherwise pass against `projectedBorrowAssets`
+    // and revert against the overshot value).
+    const borrowAssetsAdjusted = sharesMode
+      ? MathLib.wMulUp(projectedBorrowAssets, MathLib.WAD + slippageTolerance)
+      : projectedBorrowAssets;
+
     // Post-state TARGET health: aggregate (existing + migrated) must respect LLTV − buffer.
-    const accruedTargetPosition = new AccrualPosition(
-      {
-        user: target.positionData.user,
-        supplyShares: target.positionData.supplyShares,
-        borrowShares: target.positionData.borrowShares,
-        collateral: target.positionData.collateral,
-      },
-      accruedTarget,
+    const accruedTargetPosition = target.positionData.accrueInterest(
+      targetAccrualTimestamp,
     );
     validatePositionHealth({
       positionData: accruedTargetPosition,
       additionalCollateral: collateralAmount,
-      borrowAmount: projectedBorrowAssets,
+      borrowAmount: borrowAssetsAdjusted,
       marketId: target.marketParams.id,
       lltv: target.marketParams.lltv,
     });
@@ -1420,13 +1444,6 @@ export class MorphoMarketV1 implements MarketV1Actions {
           slippageTolerance,
         })
       : 0n;
-
-    // Shares-mode overshoot covers (a) target share-price drift between signature and exec,
-    // and (b) mempool accrual between read and exec on the target's borrow leg. The action's
-    // trailing `morphoRepay(target, maxUint256, …, skipRevert=true)` sweeps the residual.
-    const borrowAssetsAdjusted = sharesMode
-      ? MathLib.wMulUp(projectedBorrowAssets, MathLib.WAD + slippageTolerance)
-      : projectedBorrowAssets;
 
     return {
       getRequirements: async () => {
