@@ -29,10 +29,9 @@ import {
 
 const config: SimulationConfig = {
   tenderlyRest: {
-    apiBaseUrl: "https://api.tenderly.co",
+    apiUrl:
+      "https://api.tenderly.co/api/v1/account/my-account/project/my-project",
     accessToken: process.env.TENDERLY_ACCESS_TOKEN!,
-    accountSlug: "my-account",
-    projectSlug: "my-project",
     supportedChainIds: new Set([1]),
   },
   chains: new Map([[1, { simulateV1Url: process.env.MAINNET_RPC_URL }]]),

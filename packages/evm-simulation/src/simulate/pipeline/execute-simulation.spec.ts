@@ -40,10 +40,8 @@ function bothBackends(timeoutMs = 5000): SimulationConfig {
   return {
     chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]),
     tenderlyRest: {
-      apiBaseUrl: "https://api.tenderly.co",
+      apiUrl: "https://api.tenderly.co/api/v1/account/a/project/p",
       accessToken: "t",
-      accountSlug: "a",
-      projectSlug: "p",
       supportedChainIds: new Set([1]),
     },
     timeoutMs,

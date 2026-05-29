@@ -3,10 +3,8 @@ import type { SimulationConfig, TenderlyRestConfig } from "../../types.js";
 import { resolveChain } from "./resolve-chain.js";
 
 const TENDERLY: TenderlyRestConfig = {
-  apiBaseUrl: "https://api.tenderly.co",
+  apiUrl: "https://api.tenderly.co/api/v1/account/a/project/p",
   accessToken: "t",
-  accountSlug: "a",
-  projectSlug: "p",
   supportedChainIds: new Set([1, 8453]),
 };
 

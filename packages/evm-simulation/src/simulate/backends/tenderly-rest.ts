@@ -114,12 +114,10 @@ export async function simulateTenderlyRest(params: {
     signal,
     logger,
   } = params;
-  const baseUrl = buildBaseUrl(config);
 
   try {
     if (transactions.length === 1) {
       return await simulateSingle({
-        baseUrl,
         config,
         chainId,
         tx: transactions[0]!,
@@ -131,7 +129,6 @@ export async function simulateTenderlyRest(params: {
     }
 
     return await simulateBundle({
-      baseUrl,
       config,
       chainId,
       transactions,
@@ -148,13 +145,6 @@ export async function simulateTenderlyRest(params: {
       { cause: error },
     );
   }
-}
-
-/** URL-encode the path-segment config values so `/`, `?`, `#` can't retarget the request. */
-function buildBaseUrl(config: TenderlyRestConfig): string {
-  const account = encodeURIComponent(config.accountSlug);
-  const project = encodeURIComponent(config.projectSlug);
-  return `${config.apiBaseUrl}/api/v1/account/${account}/project/${project}`;
 }
 
 /** Build the `TenderlySimulateRequest` body for one transaction. Shared by single + bundle. */
@@ -182,7 +172,6 @@ function buildTxBody(
 }
 
 async function simulateSingle(params: {
-  baseUrl: string;
   config: TenderlyRestConfig;
   chainId: number;
   tx: SimulationTransaction;
@@ -191,20 +180,12 @@ async function simulateSingle(params: {
   signal?: AbortSignal;
   logger?: SimulationLogger;
 }): Promise<RawSimulationResult> {
-  const {
-    baseUrl,
-    config,
-    chainId,
-    tx,
-    blockNumber,
-    shareable,
-    signal,
-    logger,
-  } = params;
+  const { config, chainId, tx, blockNumber, shareable, signal, logger } =
+    params;
 
   const body = buildTxBody(tx, chainId, shareable, blockNumber);
 
-  const response = await fetch(`${baseUrl}/simulate`, {
+  const response = await fetch(`${config.apiUrl}/simulate`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -224,7 +205,6 @@ async function simulateSingle(params: {
   const call = parseTenderlyCall(data);
 
   const tenderlyUrl = await resolveTenderlyUrl({
-    baseUrl,
     config,
     simulationId: data.simulation.id,
     shareable,
@@ -236,7 +216,6 @@ async function simulateSingle(params: {
 }
 
 async function simulateBundle(params: {
-  baseUrl: string;
   config: TenderlyRestConfig;
   chainId: number;
   transactions: SimulationTransaction[];
@@ -246,7 +225,6 @@ async function simulateBundle(params: {
   logger?: SimulationLogger;
 }): Promise<RawSimulationResult> {
   const {
-    baseUrl,
     config,
     chainId,
     transactions,
@@ -262,7 +240,7 @@ async function simulateBundle(params: {
     ),
   };
 
-  const response = await fetch(`${baseUrl}/simulate-bundle`, {
+  const response = await fetch(`${config.apiUrl}/simulate-bundle`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -285,7 +263,6 @@ async function simulateBundle(params: {
 
   const lastSim = simulations[simulations.length - 1]!;
   const tenderlyUrl = await resolveTenderlyUrl({
-    baseUrl,
     config,
     simulationId: lastSim.simulation.id,
     shareable,
@@ -304,20 +281,18 @@ async function simulateBundle(params: {
  * URL is constructed up-front and cleared if `shareSimulation` returns false.
  */
 async function resolveTenderlyUrl(params: {
-  baseUrl: string;
   config: TenderlyRestConfig;
   simulationId: string | undefined;
   shareable: boolean;
   signal?: AbortSignal;
   logger?: SimulationLogger;
 }): Promise<string | undefined> {
-  const { baseUrl, config, simulationId, shareable, signal, logger } = params;
+  const { config, simulationId, shareable, signal, logger } = params;
   if (!shareable || !simulationId) return undefined;
 
   let tenderlyUrl: string | undefined =
     `https://dashboard.tenderly.co/shared/simulation/${simulationId}`;
   const shared = await shareSimulation({
-    baseUrl,
     config,
     simulationId,
     signal,
@@ -335,20 +310,22 @@ async function resolveTenderlyUrl(params: {
  * propagates cleanly instead of silently downgrading to "no URL".
  */
 async function shareSimulation(params: {
-  baseUrl: string;
   config: TenderlyRestConfig;
   simulationId: string;
   signal?: AbortSignal;
   logger?: SimulationLogger;
 }): Promise<boolean> {
-  const { baseUrl, config, simulationId, signal, logger } = params;
+  const { config, simulationId, signal, logger } = params;
   const safeId = encodeURIComponent(simulationId);
   try {
-    const response = await fetch(`${baseUrl}/simulations/${safeId}/share`, {
-      method: "POST",
-      headers: { "X-Access-Key": config.accessToken },
-      signal,
-    });
+    const response = await fetch(
+      `${config.apiUrl}/simulations/${safeId}/share`,
+      {
+        method: "POST",
+        headers: { "X-Access-Key": config.accessToken },
+        signal,
+      },
+    );
     if (!response.ok) {
       logger?.warn(
         "Tenderly /share returned non-ok; tenderlyUrl will be cleared",
