@@ -62,7 +62,7 @@ export {
 export {
   validateAccrualPosition,
   validateChainId,
-  validateNativeCollateral,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateReallocations,

@@ -4,7 +4,7 @@ import {
   MarketParams,
   MathLib,
 } from "@morpho-org/blue-sdk";
-import type { Address } from "viem";
+import { type Address, parseEther } from "viem";
 import { describe, expect, test } from "vitest";
 import {
   CbbtcUsdcMarketV1,
@@ -16,6 +16,7 @@ import type { ReallocationData } from "../entities/reallocationData.js";
 import {
   InsufficientSharedLiquidityError,
   MissingPublicAllocatorConfigError,
+  ReallocationWithdrawExceedsMarketSupplyError,
 } from "../types/index.js";
 import { computeReallocations } from "./computeReallocations.js";
 
@@ -142,7 +143,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: {} as ReallocationData,
         marketId: targetParams.id,
-        borrowAmount: MathLib.WAD,
+        operation: "borrow",
+        amount: MathLib.WAD,
         options: { enabled: false },
       });
       expect(result).toEqual([]);
@@ -154,7 +156,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount: MathLib.WAD,
+        operation: "borrow",
+        amount: MathLib.WAD,
         options: { enabled: true },
       });
       expect(result).toEqual([]);
@@ -182,7 +185,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         // No options at all — must NOT early-return.
       });
 
@@ -217,7 +221,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -254,7 +259,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -290,7 +296,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: {
           enabled: true,
           // Low supply target → requiredAssets covers all three withdrawals
@@ -341,7 +348,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -385,7 +393,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -430,7 +439,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -474,7 +484,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -515,7 +526,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: {
           enabled: true,
           supplyTargetUtilization: { [targetParams.id]: MathLib.WAD },
@@ -567,7 +579,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -599,7 +612,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -642,7 +656,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: {
           enabled: true,
           supplyTargetUtilization: { [targetParams.id]: 0n },
@@ -658,7 +673,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: makeMockState(),
         marketId: targetParams.id,
-        borrowAmount: 500n * MathLib.WAD,
+        operation: "borrow",
+        amount: 500n * MathLib.WAD,
         options: {
           enabled: true,
           defaultSupplyTargetUtilization: -MathLib.WAD,
@@ -686,7 +702,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -717,7 +734,8 @@ describe("computeReallocations", () => {
       const resultHigh = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: {
           enabled: true,
           supplyTargetUtilization: { [targetParams.id]: highTarget },
@@ -729,7 +747,8 @@ describe("computeReallocations", () => {
       const resultLow = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: {
           enabled: true,
           supplyTargetUtilization: { [targetParams.id]: lowTarget },
@@ -771,7 +790,8 @@ describe("computeReallocations", () => {
         computeReallocations({
           reallocationData: data,
           marketId: targetParams.id,
-          borrowAmount,
+          operation: "borrow",
+          amount: borrowAmount,
           options: { enabled: true },
         });
         expect.unreachable();
@@ -813,7 +833,8 @@ describe("computeReallocations", () => {
         computeReallocations({
           reallocationData: data,
           marketId: targetParams.id,
-          borrowAmount,
+          operation: "borrow",
+          amount: borrowAmount,
           options: { enabled: true },
         });
         expect.unreachable();
@@ -844,7 +865,8 @@ describe("computeReallocations", () => {
       const result = computeReallocations({
         reallocationData: data,
         marketId: targetParams.id,
-        borrowAmount,
+        operation: "borrow",
+        amount: borrowAmount,
         options: { enabled: true },
       });
 
@@ -873,10 +895,187 @@ describe("computeReallocations", () => {
         computeReallocations({
           reallocationData: data,
           marketId: targetParams.id,
-          borrowAmount,
+          operation: "borrow",
+          amount: borrowAmount,
           options: { enabled: true },
         }),
       ).toThrow(MissingPublicAllocatorConfigError);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // Operation: withdraw
+  // ---------------------------------------------------------------------------
+
+  describe("operation: withdraw", () => {
+    test("should return empty when post-withdraw utilization is below supply target", () => {
+      // Default market: S=1000, B=500. Withdraw 100 → S'=900, util = 500/900 ≈ 55.5% < 90.5%.
+      const data = makeMockState();
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "withdraw",
+        amount: parseEther("100"),
+        options: { enabled: true },
+      });
+      expect(result).toEqual([]);
+    });
+
+    test("should return friendly reallocations when post-withdraw utilization exceeds target", () => {
+      // S=1000, B=500. Withdraw 460 → S'=540, util = 500/540 ≈ 92.6% > 90.5%.
+      const withdrawAmount = parseEther("460");
+
+      // After friendly reallocation: target gets +500 supply, easing utilization.
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: parseEther("1500"),
+        totalBorrowAssets: parseEther("500"),
+      });
+
+      const data = makeMockState({
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: parseEther("500") },
+        ],
+        friendlyTargetMarket,
+        vaultFees: { [VAULT_A]: 0n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "withdraw",
+        amount: withdrawAmount,
+        options: { enabled: true },
+      });
+
+      expect(result).toHaveLength(1);
+      expect(result[0]!.vault).toBe(VAULT_A);
+      expect(result[0]!.withdrawals[0]!.amount).toBeGreaterThan(0n);
+    });
+
+    test("should fall back to aggressive when friendly is insufficient", () => {
+      // S=600, B=500. Withdraw 200 → S'=400, B=500 > S' so on-chain revert without help.
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: parseEther("600"),
+        totalBorrowAssets: parseEther("500"),
+      });
+      const withdrawAmount = parseEther("200");
+
+      // Friendly: target after = +50 supply → still S=650, B=500. Withdraw 200 → S'=450 < B=500.
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: parseEther("650"),
+        totalBorrowAssets: parseEther("500"),
+      });
+
+      const data = makeMockState({
+        targetMarket: tm,
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: parseEther("50") },
+        ],
+        friendlyTargetMarket,
+        aggressiveWithdrawals: [
+          { id: sourceB.id, vault: VAULT_A, assets: parseEther("200") },
+        ],
+        vaultFees: { [VAULT_A]: 0n },
+      });
+
+      const result = computeReallocations({
+        reallocationData: data,
+        marketId: targetParams.id,
+        operation: "withdraw",
+        amount: withdrawAmount,
+        options: { enabled: true },
+      });
+
+      // absoluteShortfall = B − (S − withdrawAmount) = 500 − 400 = 100.
+      // Phase 2 covers it via the aggressive withdrawals.
+      expect(result).toHaveLength(1);
+      const totalAmount = result[0]!.withdrawals.reduce(
+        (sum, w) => sum + w.amount,
+        0n,
+      );
+      expect(totalAmount).toBeGreaterThanOrEqual(parseEther("100"));
+    });
+
+    test("should throw InsufficientSharedLiquidityError when even aggressive falls short", () => {
+      // S=600, B=500. Withdraw 200 → S'=400 < B=500. Absolute shortfall = 100.
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: parseEther("600"),
+        totalBorrowAssets: parseEther("500"),
+      });
+      const withdrawAmount = parseEther("200");
+
+      const friendlyTargetMarket = makeMarket(targetParams, {
+        totalSupplyAssets: parseEther("605"),
+        totalBorrowAssets: parseEther("500"),
+      });
+
+      const data = makeMockState({
+        targetMarket: tm,
+        // Only 5 + 50 = 55 available < 100 shortfall.
+        friendlyWithdrawals: [
+          { id: sourceA.id, vault: VAULT_A, assets: parseEther("5") },
+        ],
+        friendlyTargetMarket,
+        aggressiveWithdrawals: [
+          { id: sourceB.id, vault: VAULT_A, assets: parseEther("50") },
+        ],
+        vaultFees: { [VAULT_A]: 0n },
+      });
+
+      expect(() =>
+        computeReallocations({
+          reallocationData: data,
+          marketId: targetParams.id,
+          operation: "withdraw",
+          amount: withdrawAmount,
+          options: { enabled: true },
+        }),
+      ).toThrow(InsufficientSharedLiquidityError);
+    });
+
+    test("error: ReallocationWithdrawExceedsMarketSupplyError when amount exceeds market supply", () => {
+      // Default target: S=1000, B=500. Withdraw 1001 → would yield S' negative.
+      // Without the guard, getUtilization returns a negative ratio that slips
+      // under supplyTargetUtilization and silently returns [] — masking a sure revert.
+      const data = makeMockState();
+      const withdrawAmount = parseEther("1001");
+
+      try {
+        computeReallocations({
+          reallocationData: data,
+          marketId: targetParams.id,
+          operation: "withdraw",
+          amount: withdrawAmount,
+          options: { enabled: true },
+        });
+        throw new Error("should have thrown");
+      } catch (e) {
+        expect(e).toBeInstanceOf(ReallocationWithdrawExceedsMarketSupplyError);
+        const err = e as ReallocationWithdrawExceedsMarketSupplyError;
+        expect(err.params.marketId).toBe(targetParams.id);
+        expect(err.params.withdrawAmount).toBe(withdrawAmount);
+        expect(err.params.totalSupplyAssets).toBe(parseEther("1000"));
+      }
+    });
+
+    test("should not throw when withdraw amount equals total supply (boundary)", () => {
+      // Edge: amount === totalSupplyAssets is reachable on-chain (drains supply
+      // exactly, B must be 0 for the call to succeed); we delegate the
+      // utilization / shortfall reasoning to the rest of the algorithm.
+      const tm = makeMarket(targetParams, {
+        totalSupplyAssets: parseEther("1000"),
+        totalBorrowAssets: 0n,
+      });
+      const data = makeMockState({ targetMarket: tm });
+      expect(() =>
+        computeReallocations({
+          reallocationData: data,
+          marketId: targetParams.id,
+          operation: "withdraw",
+          amount: parseEther("1000"),
+          options: { enabled: true },
+        }),
+      ).not.toThrow(ReallocationWithdrawExceedsMarketSupplyError);
     });
   });
 });

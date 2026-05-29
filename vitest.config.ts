@@ -14,7 +14,7 @@ export default defineConfig({
         "packages/morpho-test/**",
         "packages/**/*.md",
         "packages/**/src/**/*.test.ts",
-        "packages/**/src/**/__test-utils__/**",
+        "packages/**/src/**/__test__/**",
         "packages/**/src/**/__mocks__/**",
         "packages/**/src/**/__fixtures__/**",
         "packages/**/src/**/index.ts",
@@ -190,8 +190,8 @@ export default defineConfig({
         test: {
           name: "wdk-protocol-lending-morpho-evm",
           include: [
-            "packages/wdk-protocol-lending-morpho-evm/tests/**/*.test.{ts,js}",
-            "packages/wdk-protocol-lending-morpho-evm/src/**/*.test.{ts,js}",
+            "packages/wdk-protocol-lending-morpho-evm/src/**/*.test.ts",
+            "packages/wdk-protocol-lending-morpho-evm/tests/**/*.test.ts",
           ],
           testTimeout: 120_000,
         },

@@ -10,7 +10,7 @@ import { test } from "../../../test/setup.js";
 import {
   isRequirementApproval,
   isRequirementSignature,
-  NativeAmountOnNonWNativeCollateralError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeNativeAmountError,
   NonPositiveAssetAmountError,
   ZeroCollateralAmountError,
@@ -234,7 +234,7 @@ describe("marketV1SupplyCollateral unit tests", () => {
     ).toThrow(NegativeNativeAmountError);
   });
 
-  test("should throw NativeAmountOnNonWNativeCollateralError for non-wNative collateral", async ({
+  test("should throw NativeAmountOnNonWNativeAssetError for non-wNative collateral", async ({
     client,
   }) => {
     expect(() =>
@@ -248,7 +248,7 @@ describe("marketV1SupplyCollateral unit tests", () => {
           onBehalf: client.account.address,
         },
       }),
-    ).toThrow(NativeAmountOnNonWNativeCollateralError);
+    ).toThrow(NativeAmountOnNonWNativeAssetError);
   });
 
   test("should return a deep-frozen transaction object", async ({ client }) => {

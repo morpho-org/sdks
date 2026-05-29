@@ -1,36 +1,52 @@
 import { entries } from "@morpho-org/morpho-ts";
-
 import { describe, expect, test } from "vitest";
-import { ChainId, ChainUtils } from "../../src/index.js";
+import { ChainId, ChainUtils } from "./chain.js";
 
-describe("ChainUtils", () => {
-  test("should have consistent chainIds", () => {
-    entries(ChainUtils.CHAIN_METADATA).forEach(([chainId, { id }]) => {
-      expect(+chainId).toEqual(id);
-    });
+describe("ChainUtils explorer URL helpers", () => {
+  test("CHAIN_METADATA keys match their chain id fields", () => {
+    for (const [chainId, { id }] of entries(ChainUtils.CHAIN_METADATA)) {
+      expect(+chainId).toBe(id);
+    }
   });
 
-  test("should convert correctly a chainId to hexChainId", () => {
-    expect(ChainUtils.toHexChainId(ChainId.BaseMainnet)).toEqual("0x2105");
-  });
-
-  test("should report unreliable native balance for Tempo", () => {
+  test("hasReliableNativeBalance returns configured values and defaults to true", () => {
+    expect(ChainUtils.hasReliableNativeBalance(ChainId.EthMainnet)).toBe(true);
     expect(ChainUtils.hasReliableNativeBalance(ChainId.TempoMainnet)).toBe(
       false,
     );
+    expect(ChainUtils.hasReliableNativeBalance(999_999_999)).toBe(true);
   });
 
-  test("should report reliable native balance for Ethereum", () => {
-    expect(ChainUtils.hasReliableNativeBalance(ChainId.EthMainnet)).toBe(true);
+  test("toHexChainId converts decimal chain ids", () => {
+    expect(ChainUtils.toHexChainId(ChainId.BaseMainnet)).toBe("0x2105");
   });
 
-  test("should default to reliable native balance for unknown chains", () => {
-    expect(ChainUtils.hasReliableNativeBalance(99999)).toBe(true);
+  test("getExplorerUrl returns the chain explorer", () => {
+    expect(ChainUtils.getExplorerUrl(ChainId.EthMainnet)).toBe(
+      "https://etherscan.io",
+    );
+  });
+
+  test("getExplorerAddressUrl appends the address path", () => {
+    expect(
+      ChainUtils.getExplorerAddressUrl(
+        ChainId.BaseMainnet,
+        "0x0000000000000000000000000000000000000001",
+      ),
+    ).toBe(
+      "https://basescan.org/address/0x0000000000000000000000000000000000000001",
+    );
+  });
+
+  test("getExplorerTransactionUrl appends the transaction path", () => {
+    expect(
+      ChainUtils.getExplorerTransactionUrl(ChainId.BaseMainnet, "0xabc"),
+    ).toBe("https://basescan.org/tx/0xabc");
   });
 
   test.each([
     [
-      685689,
+      685_689,
       {
         name: "Gensyn",
         explorerUrl: "https://gensyn-mainnet.explorer.alchemy.com",
@@ -39,7 +55,7 @@ describe("ChainUtils", () => {
       },
     ],
     [
-      1672,
+      1_672,
       {
         name: "Pharos",
         explorerUrl: "https://pharosscan.xyz",
@@ -75,7 +91,7 @@ describe("ChainUtils", () => {
       },
     ],
     [
-      8217,
+      8_217,
       {
         name: "Kaia",
         explorerUrl: "https://kaiascan.io",
@@ -83,7 +99,7 @@ describe("ChainUtils", () => {
         nativeCurrency: { name: "Kaia", symbol: "KAIA", decimals: 18 },
       },
     ],
-  ])("should expose metadata for chain %i", (chainId, expectedMetadata) => {
+  ])("exposes era-2 metadata for chain %i", (chainId, expectedMetadata) => {
     expect(
       (ChainUtils.CHAIN_METADATA as Record<number, unknown>)[chainId],
     ).toMatchObject({

@@ -220,14 +220,20 @@ export class ZeroCollateralAmountError extends Error {
   }
 }
 
-/** Thrown when a collateral supply uses `nativeAmount` but the collateral token is not the chain's wNative. */
-export class NativeAmountOnNonWNativeCollateralError extends Error {
-  constructor(collateralToken: Address, wNative: Address) {
+/** Thrown when an action uses `nativeAmount` but the target asset is not the chain's wNative. */
+export class NativeAmountOnNonWNativeAssetError extends Error {
+  constructor(asset: Address, wNative: Address) {
     super(
-      `Cannot use nativeAmount: collateral token ${collateralToken} is not the wrapped native token ${wNative}`,
+      `Cannot use nativeAmount: asset ${asset} is not the wrapped native token ${wNative}`,
     );
   }
 }
+
+/** @deprecated Use {@link NativeAmountOnNonWNativeAssetError}. */
+export const NativeAmountOnNonWNativeCollateralError =
+  NativeAmountOnNonWNativeAssetError;
+export type NativeAmountOnNonWNativeCollateralError =
+  NativeAmountOnNonWNativeAssetError;
 
 /** Thrown when a borrow exceeds the LLTV-buffered safe maximum for the position. */
 export class BorrowExceedsSafeLtvError extends Error {
@@ -288,11 +294,11 @@ export class NonPositiveReallocationAmountError extends Error {
   }
 }
 
-/** Thrown when a reallocation withdrawal references the borrow target market (which would be a no-op or self-deal). */
+/** Thrown when a reallocation withdrawal references the operation's target market (which would be a no-op or self-deal). */
 export class ReallocationWithdrawalOnTargetMarketError extends Error {
   constructor(vault: string, marketId: string) {
     super(
-      `Reallocation withdrawal cannot include the borrow target market ${marketId} for vault ${vault}.`,
+      `Reallocation withdrawal cannot include the target market ${marketId} for vault ${vault}.`,
     );
   }
 }
@@ -443,8 +449,8 @@ export class DisabledReallocationMarketError extends Error {
 
 /**
  * Thrown when shared liquidity selected by `computeReallocations` cannot cover
- * the absolute borrow shortfall on the target market — the resulting
- * `morphoBorrow` would still revert onchain.
+ * the operation's absolute shortfall on the target market — the resulting
+ * `morphoBorrow` or `morphoWithdraw` would still revert onchain.
  *
  * Pattern-match on the class and inspect `params` to surface the gap to users.
  */
@@ -457,7 +463,7 @@ export class InsufficientSharedLiquidityError extends Error {
     },
   ) {
     super(
-      `Shared liquidity is insufficient to cover the borrow on market ${params.marketId}: shortfall "${params.shortfall}", available "${params.available}". Reduce the borrow amount or wait for additional vault liquidity.`,
+      `Shared liquidity is insufficient on market ${params.marketId}: shortfall "${params.shortfall}", available "${params.available}". Reduce the operation amount or wait for additional vault liquidity.`,
     );
   }
 }
@@ -516,6 +522,99 @@ export class UnknownReallocationPositionError extends UnknownDataError {
 export class NonPositiveMinBorrowSharePriceError extends Error {
   constructor(market: string) {
     super(`Min share price must be non-negative for market: ${market}`);
+  }
+}
+
+/** Thrown when a market loan-asset supply amount is negative. */
+export class NegativeSupplyAmountError extends Error {
+  constructor(market: string) {
+    super(`Supply amount must be non-negative for market: ${market}`);
+  }
+}
+
+/** Thrown when a market loan-asset supply's `maxSharePrice` slippage bound is negative. */
+export class NegativeSupplyMaxSharePriceError extends Error {
+  constructor(market: string) {
+    super(`Max share price must be non-negative for market: ${market}`);
+  }
+}
+
+/** Thrown when both `amount` and `nativeAmount` resolve to zero on a market loan-asset supply. */
+export class ZeroSupplyAmountError extends Error {
+  constructor(market: string) {
+    super(
+      `Total supply amount must be positive for market: ${market}. Both amount and nativeAmount are zero.`,
+    );
+  }
+}
+
+/** Thrown when a market loan-asset withdraw has both `assets` and `shares` zero, or either negative. */
+export class NonPositiveWithdrawAmountError extends Error {
+  constructor(market: string) {
+    super(`Withdraw amount must be positive for market: ${market}`);
+  }
+}
+
+/** Thrown when a market loan-asset withdraw's `minSharePrice` slippage bound is negative. */
+export class NegativeWithdrawMinSharePriceError extends Error {
+  constructor(market: string) {
+    super(`Min share price must be non-negative for market: ${market}`);
+  }
+}
+
+/** Thrown when a loan-asset withdraw specifies both `assets` and `shares` as non-zero (modes are mutually exclusive). */
+export class MutuallyExclusiveWithdrawAmountsError extends Error {
+  constructor(market: string) {
+    super(
+      `Exactly one of assets or shares must be non-zero for market: ${market}. Both were provided.`,
+    );
+  }
+}
+
+/** Thrown when a loan-asset withdraw in assets mode exceeds the user's supplied assets in the market. */
+export class WithdrawExceedsSupplyError extends Error {
+  constructor(params: {
+    withdrawAmount: bigint;
+    available: bigint;
+    market: string;
+  }) {
+    super(
+      `Withdraw amount ${params.withdrawAmount} exceeds available supply ${params.available} for market: ${params.market}. Reduce withdraw amount.`,
+    );
+  }
+}
+
+/** Thrown when a loan-asset withdraw in shares mode exceeds the user's owned supply shares in the market. */
+export class WithdrawSharesExceedSupplyError extends Error {
+  constructor(params: {
+    withdrawShares: bigint;
+    supplyShares: bigint;
+    market: string;
+  }) {
+    super(
+      `Withdraw shares ${params.withdrawShares} exceed owned supply shares ${params.supplyShares} for market: ${params.market}. Reduce withdraw shares.`,
+    );
+  }
+}
+
+/**
+ * Thrown when `computeReallocations` is called with a withdraw `amount` greater
+ * than the target market's current `totalSupplyAssets` — the post-withdraw
+ * supply would be negative, making the on-chain `morphoWithdraw` revert
+ * regardless of any reallocation. Caught here so callers do not pay
+ * PublicAllocator fees on an unreachable operation.
+ */
+export class ReallocationWithdrawExceedsMarketSupplyError extends Error {
+  constructor(
+    public readonly params: {
+      readonly marketId: MarketId;
+      readonly withdrawAmount: bigint;
+      readonly totalSupplyAssets: bigint;
+    },
+  ) {
+    super(
+      `Withdraw amount "${params.withdrawAmount}" exceeds market total supply "${params.totalSupplyAssets}" on market ${params.marketId}. Reduce the withdraw amount.`,
+    );
   }
 }
 

@@ -264,8 +264,33 @@ export namespace BundlerAction {
           skipRevert,
         );
       }
+      case "morphoSupply": {
+        const [
+          market,
+          assets,
+          shares,
+          slippageAmount,
+          onBehalf,
+          onMorphoSupply,
+          skipRevert,
+        ] = args;
+
+        return BundlerAction.morphoSupply(
+          chainId,
+          market,
+          assets,
+          shares,
+          slippageAmount,
+          onBehalf,
+          onMorphoSupply.flatMap(BundlerAction.encode.bind(null, chainId)),
+          skipRevert,
+        );
+      }
       case "morphoBorrow": {
         return BundlerAction.morphoBorrow(chainId, ...args);
+      }
+      case "morphoWithdraw": {
+        return BundlerAction.morphoWithdraw(chainId, ...args);
       }
       case "morphoRepay": {
         const [
@@ -333,6 +358,18 @@ export namespace BundlerAction {
     if (action.type === "morphoSupplyCollateral") {
       const [, , , onMorphoSupplyCollateral] = action.args;
       for (const callbackAction of onMorphoSupplyCollateral) {
+        const encodedCallback = encodeBundleAction({
+          chainId,
+          action: callbackAction,
+          valueState: nextValueState,
+        });
+        nextValueState = encodedCallback.valueState;
+      }
+    }
+
+    if (action.type === "morphoSupply") {
+      const [, , , , , onMorphoSupply] = action.args;
+      for (const callbackAction of onMorphoSupply) {
         const encodedCallback = encodeBundleAction({
           chainId,
           action: callbackAction,
@@ -901,6 +938,79 @@ export namespace BundlerAction {
   }
 
   /**
+   * Encodes a GeneralAdapter1 Morpho Blue supply call.
+   *
+   * @param chainId - Chain where the action will execute.
+   * @param market - Morpho Blue market parameters.
+   * @param assets - Supply asset amount.
+   * @param shares - Supply share amount.
+   * @param slippageAmount - Slippage guard amount (max share price in RAY for share-price slippage).
+   * @param onBehalf - Account receiving the supply position.
+   * @param callbackCalls - Calls executed in Morpho's callback.
+   * @param skipRevert - Whether Bundler3 should tolerate a revert.
+   * @returns Encoded Bundler3 calls.
+   *
+   * @example
+   * ```ts
+   * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   *
+   * const loanToken = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+   * const collateralToken = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+   * const oracle = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
+   * const irm = "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC";
+   * const onBehalf = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+   * const marketParams = {
+   *   loanToken,
+   *   collateralToken,
+   *   oracle,
+   *   irm,
+   *   lltv: 860_000000000000000000n,
+   * };
+   *
+   * const calls = BundlerAction.morphoSupply(
+   *   1,
+   *   marketParams,
+   *   100n,
+   *   0n,
+   *   1_010000000000000000000000000n,
+   *   onBehalf,
+   *   [],
+   * );
+   * ```
+   */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+  export function morphoSupply(
+    chainId: number,
+    market: InputMarketParams,
+    assets: bigint,
+    shares: bigint,
+    slippageAmount: bigint,
+    onBehalf: Address,
+    callbackCalls: BundlerCall[],
+    skipRevert = false,
+  ): BundlerCall[] {
+    const {
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(chainId);
+
+    const { callbackHash, reenterData } = encodeCallbackCalls(callbackCalls);
+
+    return [
+      {
+        to: generalAdapter1,
+        data: encodeFunctionData({
+          abi: generalAdapter1Abi,
+          functionName: "morphoSupply",
+          args: [market, assets, shares, slippageAmount, onBehalf, reenterData],
+        }),
+        value: 0n,
+        skipRevert,
+        callbackHash,
+      },
+    ];
+  }
+
+  /**
    * Encodes a GeneralAdapter1 Morpho Blue borrow call.
    *
    * @param chainId - Chain where the action will execute.
@@ -1037,6 +1147,74 @@ export namespace BundlerAction {
         value: 0n,
         skipRevert,
         callbackHash,
+      },
+    ];
+  }
+
+  /**
+   * Encodes a GeneralAdapter1 Morpho Blue withdraw call.
+   *
+   * @param chainId - Chain where the action will execute.
+   * @param market - Morpho Blue market parameters.
+   * @param assets - Withdraw asset amount.
+   * @param shares - Withdraw share amount.
+   * @param slippageAmount - Slippage guard amount (min share price in RAY for share-price slippage).
+   * @param receiver - Recipient of withdrawn assets.
+   * @param skipRevert - Whether Bundler3 should tolerate a revert.
+   * @returns Encoded Bundler3 calls.
+   *
+   * @example
+   * ```ts
+   * import { BundlerAction } from "@morpho-org/morpho-sdk/bundler";
+   *
+   * const loanToken = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+   * const collateralToken = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2";
+   * const oracle = "0x5f4eC3Df9cbd43714FE2740f5E3616155c5b8419";
+   * const irm = "0x870aC11D48B15DB9a138Cf899d20F13F79Ba00BC";
+   * const receiver = "0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045";
+   * const marketParams = {
+   *   loanToken,
+   *   collateralToken,
+   *   oracle,
+   *   irm,
+   *   lltv: 860_000000000000000000n,
+   * };
+   *
+   * const calls = BundlerAction.morphoWithdraw(
+   *   1,
+   *   marketParams,
+   *   100n,
+   *   0n,
+   *   990000000000000000000000000n,
+   *   receiver,
+   * );
+   * ```
+   */
+  // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
+  export function morphoWithdraw(
+    chainId: number,
+    market: InputMarketParams,
+    assets: bigint,
+    shares: bigint,
+    slippageAmount: bigint,
+    receiver: Address,
+    skipRevert = false,
+  ): BundlerCall[] {
+    const {
+      bundler3: { generalAdapter1 },
+    } = getChainAddresses(chainId);
+
+    return [
+      {
+        to: generalAdapter1,
+        data: encodeFunctionData({
+          abi: generalAdapter1Abi,
+          functionName: "morphoWithdraw",
+          args: [market, assets, shares, slippageAmount, receiver],
+        }),
+        value: 0n,
+        skipRevert,
+        callbackHash: zeroHash,
       },
     ];
   }

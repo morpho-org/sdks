@@ -1,12 +1,16 @@
 {
   "name": "@morpho-org/test-wagmi",
   "description": "Wagmi-based extension of `@morpho-org/test` that injects a test Wagmi config as a test fixture alongside viem's anvil client.",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"
   ],
-  "repository": "github:morpho-org/sdks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morpho-org/sdks.git",
+    "directory": "packages/test-wagmi"
+  },
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
     "url": "https://github.com/morpho-org/sdks/issues",
@@ -15,6 +19,7 @@
   "type": "module",
   "main": "src/index.ts",
   "files": [
+    "DEPRECATION.md",
     "lib"
   ],
   "license": "MIT",

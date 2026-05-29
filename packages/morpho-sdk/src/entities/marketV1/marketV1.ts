@@ -24,41 +24,54 @@ import {
   marketV1Borrow,
   marketV1Repay,
   marketV1RepayWithdrawCollateral,
+  marketV1Supply,
   marketV1SupplyCollateral,
   marketV1SupplyCollateralBorrow,
+  marketV1Withdraw,
   marketV1WithdrawCollateral,
 } from "../../actions/index.js";
 import {
   computeMaxRepaySharePrice,
+  computeMaxSupplySharePrice,
   computeMinBorrowSharePrice,
+  computeMinWithdrawSharePrice,
   computeReallocations,
   validateAccrualPosition,
   validateChainId,
-  validateNativeCollateral,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateRepayAmount,
   validateRepayShares,
   validateSlippageTolerance,
+  validateWithdrawAmount,
+  validateWithdrawShares,
 } from "../../helpers/index.js";
 import type { FetchParameters } from "../../types/data.js";
 import {
+  type AssetsOrSharesArgs,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
+  MarketIdMismatchError,
   type MarketV1BorrowAction,
   type MarketV1RepayAction,
   type MarketV1RepayWithdrawCollateralAction,
+  type MarketV1SupplyAction,
   type MarketV1SupplyCollateralAction,
   type MarketV1SupplyCollateralBorrowAction,
+  type MarketV1WithdrawAction,
   type MarketV1WithdrawCollateralAction,
   MissingAccrualPositionError,
   type MorphoAuthorizationAction,
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
+  MutuallyExclusiveWithdrawAmountsError,
   NegativeNativeAmountError,
+  NegativeSupplyAmountError,
   NonPositiveAssetAmountError,
   NonPositiveBorrowAmountError,
   NonPositiveRepayAmountError,
+  NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
   type ReallocationComputeOptions,
   type RepayAmountArgs,
@@ -68,6 +81,7 @@ import {
   type VaultReallocation,
   WithdrawExceedsCollateralError,
   ZeroCollateralAmountError,
+  ZeroSupplyAmountError,
 } from "../../types/index.js";
 import { ReallocationData } from "../reallocationData.js";
 
@@ -109,6 +123,71 @@ export interface MarketV1Actions {
     getRequirements: (params?: {
       useSimplePermit?: boolean;
     }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+  };
+
+  /**
+   * Prepares a loan-asset supply transaction.
+   *
+   * Routed through bundler via GeneralAdapter1. Computes `maxSharePrice` from market supply
+   * state and `slippageTolerance` to protect against share-price inflation.
+   * `getRequirements` returns ERC20 approval or permit for `GeneralAdapter1` on the loan token.
+   * When `nativeAmount` is provided, native token is wrapped; the loan token must be wNative.
+   *
+   * No Morpho authorization required (supplier is crediting, not withdrawing).
+   *
+   * @param params - Supply parameters.
+   * @returns Object with `buildTx` and `getRequirements`.
+   */
+  supply: (
+    params: {
+      userAddress: Address;
+      marketData: Market;
+      slippageTolerance?: bigint;
+    } & DepositAmountArgs,
+  ) => {
+    buildTx: (
+      requirementSignature?: RequirementSignature,
+    ) => Readonly<Transaction<MarketV1SupplyAction>>;
+    getRequirements: (params?: {
+      useSimplePermit?: boolean;
+    }) => Promise<(Readonly<Transaction<ERC20ApprovalAction>> | Requirement)[]>;
+  };
+
+  /**
+   * Prepares a loan-asset withdraw transaction.
+   *
+   * Routed through bundler3 via `morphoWithdraw`. Supports two modes via {@link AssetsOrSharesArgs}:
+   * - **By assets** (`{ assets }`): withdraws an exact asset amount.
+   * - **By shares** (`{ shares }`): burns an exact share count (full close, immune to interest accrual).
+   *
+   * Computes `minSharePrice` from market supply state and `slippageTolerance`.
+   *
+   * When `reallocations` is provided, `reallocateTo` actions are prepended to the bundle,
+   * moving liquidity from other markets via the PublicAllocator before withdrawing — used to
+   * unblock withdraws that exceed on-market liquidity.
+   *
+   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` if GA1 is not
+   * yet authorized on Morpho (returns `[]` when already authorized), since the bundler calls
+   * `withdraw(...,onBehalf=user,...)`.
+   *
+   * **Stale `positionData` may cause unexpected supply share calculations.**
+   *
+   * @param params - Withdraw parameters including pre-fetched `positionData`.
+   * @returns Object with `buildTx` and `getRequirements`.
+   */
+  withdraw: (
+    params: {
+      userAddress: Address;
+      receiver?: Address;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+      reallocations?: readonly VaultReallocation[];
+    } & AssetsOrSharesArgs,
+  ) => {
+    buildTx: () => Readonly<Transaction<MarketV1WithdrawAction>>;
+    getRequirements: () => Promise<
+      Readonly<Transaction<MorphoAuthorizationAction>>[]
+    >;
   };
 
   /**
@@ -307,29 +386,48 @@ export interface MarketV1Actions {
   }) => Promise<ReallocationData>;
 
   /**
-   * Computes vault reallocations for a borrow on this market.
+   * Computes vault reallocations for a borrow or withdraw on this market.
    *
-   * Uses the shared liquidity algorithm to determine which vaults should
-   * reallocate liquidity to this market via the PublicAllocator, based on
-   * post-borrow utilization targets.
+   * Uses the shared-liquidity algorithm to determine which vaults should reallocate liquidity to
+   * this market via the PublicAllocator, based on the post-operation utilization target.
+   *
+   * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow",
+   * amount }`) or `{ operation: "withdraw", amount }` for a loan-asset withdraw.
    *
    * @param params.reallocationData - The current on-chain state (from {@link getReallocationData}).
-   * @param params.borrowAmount - The intended borrow amount.
+   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+   *        Defaults to `"borrow"` when `borrowAmount` is provided.
+   * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
+   * @param params.borrowAmount - {@deprecated} Equivalent to `{ operation: "borrow", amount }`. Use the
+   *   `operation` + `amount` form on new code.
    * @param params.options - Optional reallocation computation options
    *        (timestamp, utilization targets, reallocatable vaults filter, etc.).
    *        Pass the fetched block timestamp to compute reallocations at the same block.
-   * @returns Array of vault reallocations ready to pass to `borrow()` or
-   *          `supplyCollateralBorrow()`. Empty array if no reallocation is needed.
+   * @returns Array of vault reallocations ready to pass to `borrow()`, `supplyCollateralBorrow()`,
+   *          or `withdraw()`. Empty array if no reallocation is needed.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
-   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the borrow shortfall on the target market.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market — preventing fee-bearing reallocations from being attached to a call that would still revert onchain.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
    */
-  getReallocations: (params: {
-    reallocationData: ReallocationData;
-    borrowAmount: bigint;
-    options?: ReallocationComputeOptions;
-  }) => readonly VaultReallocation[];
+  getReallocations: (
+    params: {
+      reallocationData: ReallocationData;
+      options?: ReallocationComputeOptions;
+    } & (
+      | {
+          operation: "borrow" | "withdraw";
+          amount: bigint;
+          borrowAmount?: never;
+        }
+      | {
+          /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
+          borrowAmount: bigint;
+          operation?: never;
+          amount?: never;
+        }
+    ),
+  ) => readonly VaultReallocation[];
 }
 
 export class MorphoMarketV1 implements MarketV1Actions {
@@ -368,6 +466,167 @@ export class MorphoMarketV1 implements MarketV1Actions {
     );
   }
 
+  supply({
+    amount = 0n,
+    userAddress,
+    nativeAmount,
+    marketData,
+    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+  }: {
+    userAddress: Address;
+    marketData: Market;
+    slippageTolerance?: bigint;
+  } & DepositAmountArgs) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    if (amount < 0n) {
+      throw new NegativeSupplyAmountError(this.marketParams.id);
+    }
+
+    if (nativeAmount !== undefined && nativeAmount < 0n) {
+      throw new NegativeNativeAmountError(nativeAmount);
+    }
+
+    const totalAssets = amount + (nativeAmount ?? 0n);
+    if (totalAssets === 0n) {
+      throw new ZeroSupplyAmountError(this.marketParams.id);
+    }
+
+    if (marketData.id !== this.marketParams.id) {
+      throw new MarketIdMismatchError(marketData.id, this.marketParams.id);
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+
+    if (nativeAmount !== undefined && nativeAmount > 0n) {
+      validateNativeAsset(this.chainId, this.marketParams.loanToken);
+    }
+
+    const maxSharePrice = computeMaxSupplySharePrice({
+      supplyAssets: totalAssets,
+      market: marketData,
+      slippageTolerance,
+    });
+
+    return {
+      getRequirements: (params?: { useSimplePermit?: boolean }) =>
+        getRequirements(this.client.viemClient, {
+          address: this.marketParams.loanToken,
+          chainId: this.chainId,
+          supportSignature: this.client.options.supportSignature,
+          supportDeployless: this.client.options.supportDeployless,
+          useSimplePermit: params?.useSimplePermit,
+          args: { amount, from: userAddress },
+        }),
+
+      buildTx: (requirementSignature?: RequirementSignature) =>
+        marketV1Supply({
+          market: { chainId: this.chainId, marketParams: this.marketParams },
+          args: {
+            amount,
+            nativeAmount,
+            onBehalf: userAddress,
+            maxSharePrice,
+            requirementSignature,
+          },
+          metadata: this.client.options.metadata,
+        }),
+    };
+  }
+
+  withdraw(
+    params: {
+      userAddress: Address;
+      receiver?: Address;
+      positionData: AccrualPosition;
+      slippageTolerance?: bigint;
+      reallocations?: readonly VaultReallocation[];
+    } & AssetsOrSharesArgs,
+  ) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+
+    const {
+      userAddress,
+      receiver = userAddress,
+      positionData,
+      slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+      reallocations,
+    } = params;
+
+    // Mode normalization: a missing or undefined `assets`/`shares` key collapses to `0n`
+    // so the mutual-exclusion and positivity checks below are pure value comparisons.
+    const assets = ("assets" in params ? params.assets : undefined) ?? 0n;
+    const shares = ("shares" in params ? params.shares : undefined) ?? 0n;
+
+    // Mode conflict comes first: detect "both values present" (either non-zero)
+    // before positivity, so `{ assets: -1n, shares: 5n }` reports the actual
+    // mode conflict instead of being misclassified as a positivity error.
+    // Mirrors action layer.
+    if (assets !== 0n && shares !== 0n) {
+      throw new MutuallyExclusiveWithdrawAmountsError(this.marketParams.id);
+    }
+    if (assets < 0n || shares < 0n || (assets === 0n && shares === 0n)) {
+      throw new NonPositiveWithdrawAmountError(this.marketParams.id);
+    }
+
+    validateSlippageTolerance(slippageTolerance);
+
+    if (!positionData) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: userAddress,
+    });
+
+    if (shares > 0n) {
+      validateWithdrawShares({
+        positionData,
+        withdrawShares: shares,
+        marketId: this.marketParams.id,
+      });
+    } else {
+      validateWithdrawAmount({
+        positionData,
+        withdrawAssets: assets,
+        marketId: this.marketParams.id,
+      });
+    }
+
+    const minSharePrice = computeMinWithdrawSharePrice({
+      withdrawAssets: assets,
+      withdrawShares: shares,
+      market: positionData.market,
+      slippageTolerance,
+    });
+
+    return {
+      getRequirements: async () => {
+        const authTx = await getMorphoAuthorizationRequirement({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          userAddress,
+        });
+        return authTx ? [authTx] : [];
+      },
+
+      buildTx: () =>
+        marketV1Withdraw({
+          market: { chainId: this.chainId, marketParams: this.marketParams },
+          args: {
+            assets,
+            shares,
+            receiver,
+            minSharePrice,
+            reallocations,
+          },
+          metadata: this.client.options.metadata,
+        }),
+    };
+  }
+
   supplyCollateral({
     amount = 0n,
     userAddress,
@@ -389,7 +648,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     }
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
-      validateNativeCollateral(this.chainId, this.marketParams.collateralToken);
+      validateNativeAsset(this.chainId, this.marketParams.collateralToken);
     }
 
     return {
@@ -859,7 +1118,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     validateSlippageTolerance(slippageTolerance);
 
     if (nativeAmount !== undefined && nativeAmount > 0n) {
-      validateNativeCollateral(this.chainId, this.marketParams.collateralToken);
+      validateNativeAsset(this.chainId, this.marketParams.collateralToken);
     }
 
     validatePositionHealth({
@@ -1039,34 +1298,63 @@ export class MorphoMarketV1 implements MarketV1Actions {
   }
 
   /**
-   * Computes public allocator reallocations for a borrow on this market.
+   * Computes public allocator reallocations for a borrow or withdraw on this market.
+   *
+   * Pass `{ borrowAmount }` for a borrow (legacy alias, equivalent to `{ operation: "borrow", amount }`)
+   * or `{ operation, amount }` for a borrow or loan-asset withdraw.
    *
    * @param params - Reallocation computation parameters.
    * @param params.reallocationData - State returned by {@link getReallocationData}.
-   * @param params.borrowAmount - Borrow amount to test against post-borrow utilization.
+   * @param params.operation - The operation driving the reallocation (`"borrow"` or `"withdraw"`).
+   * @param params.amount - The borrow or withdraw amount used to compute the post-state utilization.
+   * @param params.borrowAmount - {@deprecated Pass `{ operation: "borrow", amount }` instead.}
    * @param params.options - Optional allocator and utilization options.
-   * @returns Vault reallocations ready to pass to `borrow` or `supplyCollateralBorrow`.
+   * @returns Vault reallocations ready to pass to `borrow`, `supplyCollateralBorrow`, or `withdraw`.
    * @throws {ChainIdMismatchError} when `reallocationData` belongs to a different chain than this market.
-   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the borrow shortfall on the target market.
+   * @throws {InsufficientSharedLiquidityError} when shared liquidity cannot cover the operation's absolute shortfall on the target market.
+   * @throws {ReallocationWithdrawExceedsMarketSupplyError} when `operation === "withdraw"` and `amount` exceeds the target market's `totalSupplyAssets`.
    * @throws {MissingPublicAllocatorConfigError} when a selected vault is missing its public allocator config.
    * @throws {UnknownReallocationMarketError} when the target market is absent from the reallocation data.
    */
-  getReallocations({
-    reallocationData,
-    borrowAmount,
-    options,
-  }: {
-    reallocationData: ReallocationData;
-    borrowAmount: bigint;
-    options?: ReallocationComputeOptions;
-  }): readonly VaultReallocation[] {
-    validateChainId(reallocationData.chainId, this.chainId);
+  getReallocations(
+    params: {
+      reallocationData: ReallocationData;
+      options?: ReallocationComputeOptions;
+    } & (
+      | {
+          operation: "borrow" | "withdraw";
+          amount: bigint;
+          borrowAmount?: never;
+        }
+      | {
+          /** @deprecated Pass `{ operation: "borrow", amount }` instead. */
+          borrowAmount: bigint;
+          operation?: never;
+          amount?: never;
+        }
+    ),
+  ): readonly VaultReallocation[] {
+    validateChainId(params.reallocationData.chainId, this.chainId);
+
+    const marketId = this.marketParams.id;
+    const options = { enabled: true, ...params.options };
+
+    if (params.borrowAmount !== undefined) {
+      return computeReallocations({
+        reallocationData: params.reallocationData,
+        marketId,
+        operation: "borrow",
+        amount: params.borrowAmount,
+        options,
+      });
+    }
 
     return computeReallocations({
-      reallocationData,
-      marketId: this.marketParams.id,
-      borrowAmount,
-      options: { enabled: true, ...options },
+      reallocationData: params.reallocationData,
+      marketId,
+      operation: params.operation,
+      amount: params.amount,
+      options,
     });
   }
 }

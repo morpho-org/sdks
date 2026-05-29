@@ -4,5 +4,12 @@
     "outDir": "lib",
     "rootDir": ".",
     "baseUrl": "."
-  }
+  },
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/**/*.test-d.ts",
+    "src/**/__test__/**",
+    "src/**/__mocks__/**",
+    "src/**/__fixtures__/**"
+  ]
 }

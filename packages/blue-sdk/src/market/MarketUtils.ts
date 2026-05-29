@@ -594,7 +594,6 @@ export namespace MarketUtils {
   ) {
     const hf = getHealthFactor(position, market, marketParams);
     if (hf === undefined) return;
-    if (hf === null) return 0n;
     if (hf === 0n) return MathLib.MAX_UINT_256;
 
     return MathLib.wDivUp(MathLib.WAD, hf);

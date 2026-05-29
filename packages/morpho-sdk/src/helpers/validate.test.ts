@@ -23,7 +23,7 @@ import {
   MarketIdMismatchError,
   MissingClientPropertyError,
   MissingMarketPriceError,
-  NativeAmountOnNonWNativeCollateralError,
+  NativeAmountOnNonWNativeAssetError,
   NegativeReallocationFeeError,
   NegativeSlippageToleranceError,
   NonPositiveReallocationAmountError,
@@ -32,13 +32,15 @@ import {
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
   type VaultReallocation,
+  WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
+  WithdrawSharesExceedSupplyError,
 } from "../types/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "./constant.js";
 import {
   validateAccrualPosition,
   validateChainId,
-  validateNativeCollateral,
+  validateNativeAsset,
   validatePositionHealth,
   validatePositionHealthAfterWithdraw,
   validateReallocations,
@@ -46,6 +48,8 @@ import {
   validateRepayShares,
   validateSlippageTolerance,
   validateUserAddress,
+  validateWithdrawAmount,
+  validateWithdrawShares,
 } from "./validate.js";
 
 const USER_A: Address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
@@ -254,21 +258,21 @@ describe("validateChainId", () => {
 });
 
 // ---------------------------------------------------------------------------
-// validateNativeCollateral
+// validateNativeAsset
 // ---------------------------------------------------------------------------
 
-describe("validateNativeCollateral", () => {
+describe("validateNativeAsset", () => {
   // On mainnet, wNative = WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
   const wNative = "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2" as Address;
   const usdc = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48" as Address;
 
-  test("should pass when collateral is wNative", () => {
-    expect(() => validateNativeCollateral(mainnet.id, wNative)).not.toThrow();
+  test("should pass when asset is wNative", () => {
+    expect(() => validateNativeAsset(mainnet.id, wNative)).not.toThrow();
   });
 
-  test("should throw NativeAmountOnNonWNativeCollateralError when collateral is not wNative", () => {
-    expect(() => validateNativeCollateral(mainnet.id, usdc)).toThrow(
-      NativeAmountOnNonWNativeCollateralError,
+  test("should throw NativeAmountOnNonWNativeAssetError when asset is not wNative", () => {
+    expect(() => validateNativeAsset(mainnet.id, usdc)).toThrow(
+      NativeAmountOnNonWNativeAssetError,
     );
   });
 });
@@ -494,7 +498,7 @@ describe("validateReallocations", () => {
     ).toThrow(NonPositiveReallocationAmountError);
   });
 
-  test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets borrow market", () => {
+  test("should throw ReallocationWithdrawalOnTargetMarketError when withdrawal targets the target market", () => {
     expect(() =>
       validateReallocations(
         [
@@ -579,5 +583,93 @@ describe("validateSlippageTolerance", () => {
     expect(() =>
       validateSlippageTolerance(MAX_SLIPPAGE_TOLERANCE + 1n),
     ).toThrow(ExcessiveSlippageToleranceError);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// validateWithdrawAmount / validateWithdrawShares
+// ---------------------------------------------------------------------------
+
+describe("validateWithdrawAmount", () => {
+  test("should pass when withdraw assets are within supplied assets", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 24n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawAmount({
+        positionData: pos,
+        withdrawAssets: 10n ** 18n,
+        marketId: marketParams.id,
+      }),
+    ).not.toThrow();
+  });
+
+  test("should throw WithdrawExceedsSupplyError when withdraw assets exceed supplied assets", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 18n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawAmount({
+        positionData: pos,
+        withdrawAssets: 10n ** 30n,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawExceedsSupplyError);
+  });
+});
+
+describe("validateWithdrawShares", () => {
+  test("should pass when withdraw shares are within owned supply shares", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 24n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawShares({
+        positionData: pos,
+        withdrawShares: 10n ** 18n,
+        marketId: marketParams.id,
+      }),
+    ).not.toThrow();
+  });
+
+  test("should throw WithdrawSharesExceedSupplyError when withdraw shares exceed owned supply shares", () => {
+    const m = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = new AccrualPosition(
+      {
+        user: USER_A,
+        supplyShares: 10n ** 18n,
+        borrowShares: 0n,
+        collateral: 0n,
+      },
+      m,
+    );
+    expect(() =>
+      validateWithdrawShares({
+        positionData: pos,
+        withdrawShares: 10n ** 30n,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawSharesExceedSupplyError);
   });
 });

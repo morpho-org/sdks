@@ -115,6 +115,31 @@ export interface VaultV1MigrateToV2Action
     }
   > {}
 
+export interface MarketV1SupplyAction
+  extends BaseAction<
+    "marketV1Supply",
+    {
+      market: Hex;
+      amount: bigint;
+      onBehalf: Address;
+      maxSharePrice: bigint;
+      nativeAmount?: bigint;
+    }
+  > {}
+
+export interface MarketV1WithdrawAction
+  extends BaseAction<
+    "marketV1Withdraw",
+    {
+      market: Hex;
+      assets: bigint;
+      shares: bigint;
+      receiver: Address;
+      minSharePrice: bigint;
+      reallocationFee: bigint;
+    }
+  > {}
+
 export interface MarketV1SupplyCollateralAction
   extends BaseAction<
     "marketV1SupplyCollateral",
@@ -194,13 +219,18 @@ export interface MarketV1RepayWithdrawCollateralAction
   > {}
 
 /**
- * Enforces that exactly one repay amount source is provided.
+ * Enforces that exactly one of `assets` / `shares` is provided.
  *
- * - `assets`: partial repay by exact asset amount.
- * - `shares`: full repay by exact share count (guarantees full debt repayment
- *   regardless of interest accrued between tx construction and execution).
+ * - `assets`: operate on an exact asset amount.
+ * - `shares`: operate on an exact share count (typical for full position closes,
+ *   immune to interest accrual between tx construction and execution).
+ *
+ * Used by repay (asserts on borrow side) and withdraw (asserts on supply side).
  */
-export type RepayAmountArgs = { assets: bigint } | { shares: bigint };
+export type AssetsOrSharesArgs = { assets: bigint } | { shares: bigint };
+
+/** @deprecated Use {@link AssetsOrSharesArgs}. Kept as an alias for back-compat. */
+export type RepayAmountArgs = AssetsOrSharesArgs;
 
 export interface MorphoAuthorizationAction
   extends BaseAction<
@@ -222,6 +252,8 @@ export type TransactionAction =
   | VaultV1WithdrawAction
   | VaultV1RedeemAction
   | VaultV1MigrateToV2Action
+  | MarketV1SupplyAction
+  | MarketV1WithdrawAction
   | MarketV1SupplyCollateralAction
   | MarketV1BorrowAction
   | MarketV1SupplyCollateralBorrowAction

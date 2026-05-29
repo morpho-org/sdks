@@ -253,6 +253,23 @@ describe("BundlerAction", () => {
         amountArbitrary,
         amountArbitrary,
         addressArbitrary,
+        fc.array(callbackActionArbitrary, { maxLength: 2 }),
+        skipRevertArbitrary,
+      )
+      .map(
+        (args) =>
+          ({
+            type: "morphoSupply",
+            args,
+          }) satisfies Action,
+      ),
+    fc
+      .tuple(
+        marketArbitrary,
+        amountArbitrary,
+        amountArbitrary,
+        amountArbitrary,
+        addressArbitrary,
         skipRevertArbitrary,
       )
       .map(
@@ -276,6 +293,22 @@ describe("BundlerAction", () => {
         (args) =>
           ({
             type: "morphoRepay",
+            args,
+          }) satisfies Action,
+      ),
+    fc
+      .tuple(
+        marketArbitrary,
+        amountArbitrary,
+        amountArbitrary,
+        amountArbitrary,
+        addressArbitrary,
+        skipRevertArbitrary,
+      )
+      .map(
+        (args) =>
+          ({
+            type: "morphoWithdraw",
             args,
           }) satisfies Action,
       ),
@@ -470,6 +503,18 @@ describe("BundlerAction", () => {
       ],
     },
     {
+      type: "morphoSupply",
+      args: [
+        market,
+        22n,
+        0n,
+        23n,
+        owner,
+        [{ type: "erc20Transfer", args: [asset, recipient, 24n, adapter] }],
+        false,
+      ],
+    },
+    {
       type: "morphoBorrow",
       args: [market, 13n, 0n, 14n, recipient, false],
     },
@@ -484,6 +529,10 @@ describe("BundlerAction", () => {
         [{ type: "erc20Transfer", args: [asset, recipient, 17n, adapter] }],
         false,
       ],
+    },
+    {
+      type: "morphoWithdraw",
+      args: [market, 25n, 0n, 26n, recipient, false],
     },
     {
       type: "morphoWithdrawCollateral",
@@ -1001,6 +1050,36 @@ describe("BundlerAction", () => {
           ),
         ],
         [
+          "morphoSupply",
+          {
+            type: "morphoSupply",
+            args: [
+              market,
+              13n,
+              0n,
+              14n,
+              owner,
+              [
+                {
+                  type: "erc20Transfer",
+                  args: [asset, recipient, 19n, adapter],
+                },
+              ],
+              false,
+            ],
+          },
+          BundlerAction.morphoSupply(
+            chainId,
+            market,
+            13n,
+            0n,
+            14n,
+            owner,
+            BundlerAction.erc20Transfer(asset, recipient, 19n, adapter),
+            false,
+          ),
+        ],
+        [
           "morphoBorrow",
           {
             type: "morphoBorrow",
@@ -1043,6 +1122,22 @@ describe("BundlerAction", () => {
             16n,
             owner,
             BundlerAction.erc20Transfer(asset, recipient, 17n, adapter),
+            false,
+          ),
+        ],
+        [
+          "morphoWithdraw",
+          {
+            type: "morphoWithdraw",
+            args: [market, 20n, 0n, 21n, recipient, false],
+          },
+          BundlerAction.morphoWithdraw(
+            chainId,
+            market,
+            20n,
+            0n,
+            21n,
+            recipient,
             false,
           ),
         ],
@@ -1304,6 +1399,35 @@ describe("BundlerAction", () => {
     expect(decoded.args).toEqual([market, 1n, owner, "0x"]);
   });
 
+  test("morphoSupply", () => {
+    const reenterAbiInputs = bundler3Abi.find(
+      (item) => item.type === "function" && item.name === "reenter",
+    )!.inputs;
+    const reenterData = encodeAbiParameters(reenterAbiInputs, [[callbackCall]]);
+    const call = onlyCall(
+      BundlerAction.morphoSupply(
+        chainId,
+        market,
+        1n,
+        0n,
+        2n,
+        owner,
+        [callbackCall],
+        true,
+      ),
+    );
+    const decoded = decodeFunctionData({
+      abi: generalAdapter1Abi,
+      data: call.data,
+    });
+
+    expect(call.to).toBe(generalAdapter1);
+    expect(call.callbackHash).toBe(keccak256(reenterData));
+    expect(call.skipRevert).toBe(true);
+    expect(decoded.functionName).toBe("morphoSupply");
+    expect(decoded.args).toEqual([market, 1n, 0n, 2n, owner, reenterData]);
+  });
+
   test("morphoBorrow", () => {
     const call = onlyCall(
       BundlerAction.morphoBorrow(chainId, market, 1n, 0n, 2n, recipient, true),
@@ -1346,6 +1470,29 @@ describe("BundlerAction", () => {
     expect(call.skipRevert).toBe(true);
     expect(decoded.functionName).toBe("morphoRepay");
     expect(decoded.args).toEqual([market, 1n, 0n, 2n, owner, reenterData]);
+  });
+
+  test("morphoWithdraw", () => {
+    const call = onlyCall(
+      BundlerAction.morphoWithdraw(
+        chainId,
+        market,
+        1n,
+        0n,
+        2n,
+        recipient,
+        true,
+      ),
+    );
+    const decoded = decodeFunctionData({
+      abi: generalAdapter1Abi,
+      data: call.data,
+    });
+
+    expect(call.to).toBe(generalAdapter1);
+    expect(call.skipRevert).toBe(true);
+    expect(decoded.functionName).toBe("morphoWithdraw");
+    expect(decoded.args).toEqual([market, 1n, 0n, 2n, recipient]);
   });
 
   test("morphoWithdrawCollateral", () => {

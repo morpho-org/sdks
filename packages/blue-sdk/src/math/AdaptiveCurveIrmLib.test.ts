@@ -103,6 +103,10 @@ describe("AdaptiveCurveIrmLib.getUtilizationAtBorrowRate", () => {
     expect(u).toBe(TARGET_UTILIZATION);
   });
 
+  test("when rateAtTarget is zero, returns full utilization without dividing by zero", () => {
+    expect(getUtilizationAtBorrowRate(0n, 0n)).toBe(MathLib.WAD);
+  });
+
   test("at the maxBorrowRate (4x rateAtTarget), returns 1 WAD", () => {
     const rate = MathLib.WAD;
     const max = rate * 4n;
