@@ -829,6 +829,38 @@ const _addressesRegistry = {
     chainlinkOracleFactory: "0xbFc8D6167a02889D5EB08a023d9aB712B44f7dE8",
     preLiquidationFactory: "0x8edf6Ac769a7E7D81d571aC0FB8733aD724f6922",
   },
+  [ChainId.MorphMainnet]: {
+    morpho: "0xAd10d07901Dc3195c3cb5e78E061F4EA8D9B4905",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundler3: {
+      bundler3: "0xDB83A44Bf8f53966f7A4F7dCE7F8CdAaBCf83628",
+      generalAdapter1: "0xcaeec65c85Fe964c8Bd814cb8E4CaF8B06bde776",
+    },
+    adaptiveCurveIrm: "0xfB69467De332E03FF502B85bB2249d2f721F3319",
+    vaultV2Factory: "0x7D8BF8B276f967F7539c9e91E1a85a33fefE612B",
+    morphoMarketV1AdapterV2Factory:
+      "0xa01D7c41cf419405d4DF2e5750d26438DCAC28a6",
+    registryList: "0x553c013d1978CF82EF6b316f5c247B73718ba481",
+    chainlinkOracleFactory: "0xE91032cE5B8D86bA4Be146c186984F49Af37fbf1",
+    preLiquidationFactory: "0x41581344ba49B07EFA758a0F2a199b90f05Cc866",
+    wNative: "0x5300000000000000000000000000000000000011",
+  },
+  [ChainId.MegaEthMainnet]: {
+    morpho: "0x18120312A7cf44DcfEc6dCe5632a431579ED9100",
+    permit2: "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    bundler3: {
+      bundler3: "0xf53D4c8f0f83F697CD6bB303567400cCf411aA63",
+      generalAdapter1: "0x74d3cbc721613C8461df92658d0a20dF275Ca31b",
+    },
+    adaptiveCurveIrm: "0x56875764185548B0ca72A1877b3aE15E44e8A323",
+    vaultV2Factory: "0xf133FA5A78C398B31Cc4a180E6Ae84111D6DCF5B",
+    morphoMarketV1AdapterV2Factory:
+      "0x00a58b7a9B3E86CB21f5F11f29F4A12346457012",
+    registryList: "0x3aE18af9717C734820137726967bef4fBc5Ec95c",
+    chainlinkOracleFactory: "0x02522D475E7064E1d1E966e3197db050b19b2FC2",
+    preLiquidationFactory: "0xF6035B231028E61cd2283651f22ecA45f8e3ADc8",
+    wNative: "0x4200000000000000000000000000000000000006",
+  },
 } as const;
 
 /** Deployment block registry with the same shape as `ChainAddresses`. */
@@ -1447,6 +1479,36 @@ const _deployments = {
     chainlinkOracleFactory: 1208882n,
     preLiquidationFactory: 1208882n,
   },
+  [ChainId.MorphMainnet]: {
+    morpho: 23180020n,
+    permit2: 5081244n,
+    bundler3: {
+      bundler3: 23180020n,
+      generalAdapter1: 23180020n,
+    },
+    adaptiveCurveIrm: 23180020n,
+    vaultV2Factory: 23180183n,
+    morphoMarketV1AdapterV2Factory: 23180228n,
+    registryList: 23180228n,
+    chainlinkOracleFactory: 23180111n,
+    preLiquidationFactory: 23180111n,
+    wNative: 0n,
+  },
+  [ChainId.MegaEthMainnet]: {
+    morpho: 16408957n,
+    permit2: 0n,
+    bundler3: {
+      bundler3: 16408957n,
+      generalAdapter1: 16408957n,
+    },
+    adaptiveCurveIrm: 16408957n,
+    vaultV2Factory: 16409067n,
+    morphoMarketV1AdapterV2Factory: 16409115n,
+    registryList: 16409115n,
+    chainlinkOracleFactory: 16409024n,
+    preLiquidationFactory: 16409024n,
+    wNative: 0n,
+  },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
 /** Dot-separated label for an address entry in the chain registry. */
@@ -1606,6 +1668,12 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.KaiaMainnet]: {
     [_addressesRegistry[ChainId.KaiaMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.MorphMainnet]: {
+    [_addressesRegistry[ChainId.MorphMainnet].wNative]: NATIVE_ADDRESS,
+  },
+  [ChainId.MegaEthMainnet]: {
+    [_addressesRegistry[ChainId.MegaEthMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 

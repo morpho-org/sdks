@@ -40,6 +40,8 @@ export enum ChainId {
   XdcMainnet = 50,
   KaiaMainnet = 8217,
   ArcMainnet = 5042,
+  MorphMainnet = 2818,
+  MegaEthMainnet = 4326,
 }
 
 /** Explorer, native currency, and identifier metadata for a supported chain. */
@@ -431,6 +433,20 @@ export namespace ChainUtils {
       nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
       explorerUrl: "http://explorer.arc.io/",
       identifier: "arc",
+    },
+    [ChainId.MorphMainnet]: {
+      name: "Morph",
+      id: ChainId.MorphMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://explorer.morphl2.io",
+      identifier: "morph",
+    },
+    [ChainId.MegaEthMainnet]: {
+      name: "MegaETH",
+      id: ChainId.MegaEthMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://mega.etherscan.io",
+      identifier: "megaeth",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
