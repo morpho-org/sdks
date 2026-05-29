@@ -154,15 +154,11 @@ describe("MorphoMarketV1 validation", () => {
 
   test("withdraw getRequirements returns no authorization when already authorized", async () => {
     const handle = createMockClient(mainnet);
-    const {
-      morpho,
-      bundler3: { generalAdapter1 },
-    } = getChainAddresses(mainnet.id);
+    const { morpho } = getChainAddresses(mainnet.id);
     mockRead(handle, {
       address: morpho,
       abi: blueAbi,
       functionName: "isAuthorized",
-      args: [USER, generalAdapter1],
       result: true,
     });
     const market = new MorphoClient(handle.client, {
