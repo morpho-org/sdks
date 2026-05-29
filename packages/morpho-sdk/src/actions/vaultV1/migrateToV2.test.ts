@@ -1,5 +1,5 @@
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   GauntletWethVaultV1,
   SteakhouseUsdcVaultV1,
@@ -23,6 +23,10 @@ import { getRequirements } from "../requirements/index.js";
 import { vaultV1MigrateToV2 } from "./migrateToV2.js";
 
 describe("vaultV1MigrateToV2 unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   test("should create migrate transaction for USDC vaults", async ({
     client,
   }) => {

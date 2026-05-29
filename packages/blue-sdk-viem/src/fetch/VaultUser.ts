@@ -16,6 +16,7 @@ export async function fetchVaultUser(
 ) {
   parameters.chainId ??= await getChainId(client);
 
+  /* v8 ignore next: V8 reports a negative false-branch count here; deployless=false is tested. */
   if (deployless) {
     try {
       const { isAllocator, allowance } = await readContract(client, {

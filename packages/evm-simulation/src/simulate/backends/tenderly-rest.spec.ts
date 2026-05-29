@@ -227,6 +227,77 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
     expect(result.tenderlyUrl).toBeUndefined();
   });
 
+  it("logs and clears tenderlyUrl when /share fetch rejects", async () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const fetchMock = vi
+      .fn<MockFetch>()
+      .mockImplementation(async (url) =>
+        String(url).includes("/share")
+          ? Promise.reject(new Error("share down"))
+          : Promise.resolve({ ok: true, json: async () => successBody() }),
+      );
+    installFetchMock(fetchMock);
+
+    const result = await simulateTenderlyRest({
+      config: CONFIG,
+      chainId: 1,
+      transactions: [TX1],
+      shareable: true,
+      logger,
+    });
+
+    expect(result.tenderlyUrl).toBeUndefined();
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Tenderly /share fetch failed; tenderlyUrl will be cleared",
+      expect.objectContaining({ error: "share down" }),
+    );
+  });
+
+  it("logs non-Error /share fetch rejections", async () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const fetchMock = vi
+      .fn<MockFetch>()
+      .mockImplementation(async (url) =>
+        String(url).includes("/share")
+          ? Promise.reject("share down")
+          : Promise.resolve({ ok: true, json: async () => successBody() }),
+      );
+    installFetchMock(fetchMock);
+
+    await simulateTenderlyRest({
+      config: CONFIG,
+      chainId: 1,
+      transactions: [TX1],
+      shareable: true,
+      logger,
+    });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Tenderly /share fetch failed; tenderlyUrl will be cleared",
+      expect.objectContaining({ error: "share down" }),
+    );
+  });
+
+  it("propagates AbortError from /share", async () => {
+    const fetchMock = vi
+      .fn<MockFetch>()
+      .mockImplementation(async (url) =>
+        String(url).includes("/share")
+          ? Promise.reject(new DOMException("aborted", "AbortError"))
+          : Promise.resolve({ ok: true, json: async () => successBody() }),
+      );
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRest({
+        config: CONFIG,
+        chainId: 1,
+        transactions: [TX1],
+        shareable: true,
+      }),
+    ).rejects.toThrow(ExternalServiceError);
+  });
+
   it("returns undefined tenderlyUrl when shareable=false", async () => {
     const fetchMock = vi
       .fn<MockFetch>()
@@ -295,6 +366,54 @@ describe.sequential("simulateTenderlyRest — single tx", () => {
     });
 
     expect(result.calls[0]!.assetChanges).toEqual({ foo: "bar" });
+  });
+
+  it("defaults omitted log fields to empty topics and 0x data", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        successBody({
+          logs: [{ raw: { address: USDC } }, {}],
+        }),
+    });
+    installFetchMock(fetchMock);
+
+    const result = await simulateTenderlyRest({
+      config: CONFIG,
+      chainId: 1,
+      transactions: [TX1],
+      shareable: false,
+    });
+
+    expect(result.calls[0]!.logs).toEqual([
+      { address: USDC, topics: [], data: "0x" },
+    ]);
+  });
+
+  it("defaults omitted Tenderly logs to an empty array", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        simulation: { id: "sim-no-logs", status: true },
+        transaction: {
+          gas_used: 21_000,
+          transaction_info: {
+            asset_changes: { foo: "bar" },
+            call_trace: { output: "0x" as Hex },
+          },
+        },
+      }),
+    });
+    installFetchMock(fetchMock);
+
+    const result = await simulateTenderlyRest({
+      config: CONFIG,
+      chainId: 1,
+      transactions: [TX1],
+      shareable: false,
+    });
+
+    expect(result.calls[0]!.logs).toEqual([]);
   });
 });
 
@@ -440,6 +559,24 @@ describe.sequential("simulateTenderlyRest — bundle (multi-tx)", () => {
     ).rejects.toThrow(SimulationRevertedError);
   });
 
+  it("throws ExternalServiceError on non-200 bundle response", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: false,
+      status: 503,
+      statusText: "Service Unavailable",
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRest({
+        config: CONFIG,
+        chainId: 1,
+        transactions: [TX1, TX2],
+        shareable: false,
+      }),
+    ).rejects.toThrow(ExternalServiceError);
+  });
+
   it("clears tenderlyUrl when /share fails in bundle mode", async () => {
     const fetchMock = vi.fn<MockFetch>().mockImplementation(async (url) => {
       if (String(url).includes("/share")) {
@@ -514,6 +651,79 @@ describe.sequential("simulateTenderlyRest — errors", () => {
         shareable: false,
       }),
     ).rejects.toThrow(ExternalServiceError);
+  });
+
+  it("wraps non-Error fetch failures in ExternalServiceError", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockRejectedValueOnce("fetch down");
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRest({
+        config: CONFIG,
+        chainId: 1,
+        transactions: [TX1],
+        shareable: false,
+      }),
+    ).rejects.toThrow("fetch down");
+  });
+
+  it("uses simulation.error_message when transaction error_message is omitted", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        simulation: {
+          id: "sim-abc",
+          status: false,
+          error_message: "simulation-level revert",
+        },
+        transaction: {
+          gas_used: 21_000,
+          transaction_info: {
+            logs: [],
+            call_trace: { output: "0x" as Hex },
+          },
+        },
+      }),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRest({
+        config: CONFIG,
+        chainId: 1,
+        transactions: [TX1],
+        shareable: false,
+      }),
+    ).rejects.toThrow("simulation-level revert");
+  });
+
+  it("uses a generic revert message when Tenderly omits all error messages", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        simulation: {
+          id: "sim-abc",
+          status: false,
+        },
+        transaction: {
+          gas_used: 21_000,
+          transaction_info: {
+            logs: [],
+            call_trace: { output: "0x" as Hex },
+          },
+        },
+      }),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRest({
+        config: CONFIG,
+        chainId: 1,
+        transactions: [TX1],
+        shareable: false,
+      }),
+    ).rejects.toThrow("Transaction simulation reverted");
   });
 
   it("throws ExternalServiceError when bundle returns empty simulation_results", async () => {
