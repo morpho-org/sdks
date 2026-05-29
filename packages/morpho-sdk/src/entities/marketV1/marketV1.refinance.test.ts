@@ -13,6 +13,8 @@ import {
   BorrowAmountAndSharesExclusiveError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
+  NegativeBorrowSharesError,
+  NonPositiveAssetAmountError,
   RefinanceExceedsBorrowAssetsError,
   RefinanceExceedsBorrowSharesError,
   RefinanceExceedsCollateralError,
@@ -385,6 +387,89 @@ describe("MorphoMarketV1.refinance", () => {
     const tx = refi.buildTx();
     expect(tx.action.args.borrowAssets).toBe(parseUnits("50", 6));
     expect(tx.action.args.borrowShares).toBe(0n);
+  });
+
+  test("error: NonPositiveAssetAmountError when borrowAssets is negative", () => {
+    const market = makeMarket();
+    const positionData = makePosition({
+      market: baseMarket(sourceParams),
+      user: USER,
+      collateral: parseUnits("1", 18),
+      borrowShares: parseUnits("100", 12),
+    });
+    const targetPosition = makePosition({
+      market: baseMarket(targetParams),
+      user: USER,
+    });
+
+    expect(() =>
+      market.refinance({
+        userAddress: USER,
+        positionData,
+        target: { marketParams: targetParams, positionData: targetPosition },
+        collateralAmount: parseUnits("0.1", 18),
+        borrowAssets: -1n,
+      }),
+    ).toThrow(NonPositiveAssetAmountError);
+  });
+
+  test("error: NegativeBorrowSharesError when borrowShares is negative", () => {
+    const market = makeMarket();
+    const positionData = makePosition({
+      market: baseMarket(sourceParams),
+      user: USER,
+      collateral: parseUnits("1", 18),
+      borrowShares: parseUnits("100", 12),
+    });
+    const targetPosition = makePosition({
+      market: baseMarket(targetParams),
+      user: USER,
+    });
+
+    expect(() =>
+      market.refinance({
+        userAddress: USER,
+        positionData,
+        target: { marketParams: targetParams, positionData: targetPosition },
+        collateralAmount: parseUnits("0.1", 18),
+        borrowShares: -1n,
+      }),
+    ).toThrow(NegativeBorrowSharesError);
+  });
+
+  test("behavior: collat-only refinance skips target health validation (no oracle required)", () => {
+    // Target market constructed WITHOUT a `price` — `validatePositionHealth` would throw
+    // `MissingMarketPriceError`. The fix gates the target health check on `shouldMigrateBorrow`,
+    // so a collat-only refinance into a price-less market must succeed.
+    const market = makeMarket();
+    const positionData = makePosition({
+      market: baseMarket(sourceParams),
+      user: USER,
+      collateral: parseUnits("1", 18),
+    });
+    const targetMarketNoPrice = new Market({
+      params: targetParams,
+      totalSupplyAssets: parseUnits("10000000", 6),
+      totalBorrowAssets: parseUnits("5000000", 6),
+      totalSupplyShares: parseUnits("10000000", 12),
+      totalBorrowShares: parseUnits("5000000", 12),
+      lastUpdate: 1_700_000_000n,
+      fee: 0n,
+      // price intentionally omitted
+    });
+    const targetPosition = makePosition({
+      market: targetMarketNoPrice,
+      user: USER,
+    });
+
+    expect(() =>
+      market.refinance({
+        userAddress: USER,
+        positionData,
+        target: { marketParams: targetParams, positionData: targetPosition },
+        collateralAmount: parseUnits("1", 18),
+      }),
+    ).not.toThrow();
   });
 
   test("default: collat-only migration builds a valid bundle", () => {

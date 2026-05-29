@@ -60,10 +60,11 @@ export interface MarketV1RefinanceParams {
  *   morphoBorrow(target, borrowAssets, 0, minBorrowSharePrice, GA1),
  *   morphoRepay(source, assets|0, 0|shares, maxRepaySharePrice, user, []),
  *
- *   morphoWithdrawCollateral(source, collateralAmount, GA1),
- *
- *   // shares mode only — sweeps borrow overshoot back into the target debt
+ *   // shares mode only — sweeps loan-token overshoot back into the target debt BEFORE
+ *   // the collateral withdrawal so same-token markets (loan === collat) aren't drained.
  *   morphoRepay(target, maxUint256, 0, maxUint256, user, [], skipRevert=true),
+ *
+ *   morphoWithdrawCollateral(source, collateralAmount, GA1),
  * ])
  * ```
  *
@@ -239,21 +240,26 @@ export const marketV1Refinance = ({
     );
   }
 
-  callback.push({
-    type: "morphoWithdrawCollateral",
-    args: [sourceParams, collateralAmount, generalAdapter1, false],
-  });
-
-  // Shares mode overshoots the target borrow to cover accrual + slippage; sweep the residual
-  // into the target debt so GA1 finishes drained. `assets=maxUint256` pulls the full GA1
-  // balance, `maxSharePrice=maxUint256` disables slippage (intra-tx, no manipulation surface),
-  // `skipRevert=true` is safe if the residual is zero.
+  // Shares mode overshoots the target borrow to cover accrual + slippage; sweep the loan-token
+  // residual into the target debt so GA1 finishes drained of loan tokens. `assets=maxUint256`
+  // pulls the full GA1 loan-token balance, `maxSharePrice=maxUint256` disables slippage
+  // (intra-tx, no manipulation surface), `skipRevert=true` is safe if the residual is zero.
+  //
+  // The sweep MUST run before `morphoWithdrawCollateral` — otherwise, in a same-token market
+  // (`loanToken === collateralToken`), `maxUint256` would also consume the just-withdrawn
+  // collateral that the outer `morphoSupplyCollateral`'s deferred `safeTransferFrom` still
+  // needs to pull, reverting the whole bundle.
   if (sharesMode) {
     callback.push({
       type: "morphoRepay",
       args: [targetParams, maxUint256, 0n, maxUint256, user, [], true],
     });
   }
+
+  callback.push({
+    type: "morphoWithdrawCollateral",
+    args: [sourceParams, collateralAmount, generalAdapter1, false],
+  });
 
   const actions: Action[] = [
     {

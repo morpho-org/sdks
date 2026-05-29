@@ -98,6 +98,35 @@ describe("marketV1Refinance", () => {
     expect(tx.value).toBe(0n);
   });
 
+  test("behavior: shares-mode sweep is encoded BEFORE source withdrawCollateral", () => {
+    // In same-token markets (`loanToken === collateralToken`), a trailing `maxUint256` repay
+    // after the source withdrawal would drain the just-withdrawn collateral and revert the
+    // outer `safeTransferFrom`. The action must emit the sweep before the withdraw.
+    const tx = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowShares: parseUnits("1000", 24),
+        borrowAssets: parseUnits("1001", 6),
+      },
+    });
+
+    const data = tx.data.toLowerCase();
+    const sweepHex = maxUint256.toString(16); // 64 'f's — only the sweep uses `assets = maxUint256`
+    // Source params are encoded inline at every call site that touches the source market.
+    // Use the unique source oracle address (lowercase, unpadded) as the anchor — its last
+    // occurrence in the calldata is the source `morphoWithdrawCollateral` leg.
+    const sourceOracleHex = source.oracle.slice(2).toLowerCase();
+
+    const sweepIdx = data.indexOf(sweepHex);
+    const sourceWithdrawIdx = data.lastIndexOf(sourceOracleHex);
+
+    expect(sweepIdx).toBeGreaterThan(-1);
+    expect(sourceWithdrawIdx).toBeGreaterThan(-1);
+    expect(sweepIdx).toBeLessThan(sourceWithdrawIdx);
+  });
+
   test("behavior: maxUint256 sweep arg is encoded for shares-mode bundles", () => {
     // Sanity: the shares-mode bundle's last callback action is a target repay with
     // assets=maxUint256 and skipRevert=true. We verify by re-encoding without the dust

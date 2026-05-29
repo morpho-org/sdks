@@ -69,6 +69,7 @@ import {
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
+  NegativeBorrowSharesError,
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
   NonPositiveAssetAmountError,
@@ -1312,6 +1313,16 @@ export class MorphoMarketV1 implements MarketV1Actions {
     const requestedAssets = borrowAssets ?? 0n;
     const requestedShares = borrowShares ?? 0n;
 
+    // Reject negative debt amounts up front — otherwise they fall through the `> 0n` mode
+    // checks as if no debt were migrated, and the failure only surfaces at `buildTx()` time
+    // (after `getRequirements()` already prompted the user for GA1 authorization).
+    if (requestedAssets < 0n) {
+      throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
+    }
+    if (requestedShares < 0n) {
+      throw new NegativeBorrowSharesError(this.marketParams.id);
+    }
+
     if (requestedAssets > 0n && requestedShares > 0n) {
       throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
     }
@@ -1414,16 +1425,22 @@ export class MorphoMarketV1 implements MarketV1Actions {
       : projectedBorrowAssets;
 
     // Post-state TARGET health: aggregate (existing + migrated) must respect LLTV − buffer.
-    const accruedTargetPosition = target.positionData.accrueInterest(
-      targetAccrualTimestamp,
-    );
-    validatePositionHealth({
-      positionData: accruedTargetPosition,
-      additionalCollateral: collateralAmount,
-      borrowAmount: borrowAssetsAdjusted,
-      marketId: target.marketParams.id,
-      lltv: target.marketParams.lltv,
-    });
+    // Skipped for collat-only refinances — the encoded tx only supplies target collateral and
+    // withdraws source collateral, neither of which can degrade target health, and running the
+    // helper here would otherwise reject markets whose oracle is unavailable or whose collateral
+    // value is below the helper's `+1` rounding guard.
+    if (shouldMigrateBorrow) {
+      const accruedTargetPosition = target.positionData.accrueInterest(
+        targetAccrualTimestamp,
+      );
+      validatePositionHealth({
+        positionData: accruedTargetPosition,
+        additionalCollateral: collateralAmount,
+        borrowAmount: borrowAssetsAdjusted,
+        marketId: target.marketParams.id,
+        lltv: target.marketParams.lltv,
+      });
+    }
 
     // Share-price bounds — only computed when a debt leg exists; the slippage helpers throw
     // ShareDivideByZeroError on zero inputs, so in collat-only refinance we leave the bounds
