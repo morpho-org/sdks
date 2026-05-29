@@ -10,6 +10,7 @@ import {
   NegativeMaxRepaySharePriceError,
   NonPositiveAssetAmountError,
   NonPositiveMinBorrowSharePriceError,
+  NonPositiveRepayMaxSharePriceError,
   RefinanceSameMarketError,
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
@@ -29,13 +30,27 @@ export interface MarketV1RefinanceParams {
   args: {
     user: Address;
     collateralAmount: bigint;
-    /** Loan assets to borrow on the target market (mutually exclusive with `borrowShares`). */
+    /**
+     * Loan assets to borrow on the target market. In **assets mode** this is the user-meaningful
+     * exact-asset borrow and is mutually exclusive with `borrowShares`. In **shares mode** this
+     * MUST also be set to the positive overshoot amount that covers projected accrual + slippage
+     * on the target borrow leg (the entity layer computes this from `slippageTolerance`).
+     * Omitting it in shares mode throws {@link RefinanceSharesMissingBorrowAssetsError}.
+     */
     borrowAssets?: bigint;
-    /** Source borrow shares to repay (mutually exclusive with `borrowAssets`). */
+    /**
+     * Source borrow shares to repay (immune to mid-tx accrual). In shares mode this is the
+     * user-meaningful exact-share repay; `borrowAssets` must additionally be set to the
+     * overshoot for the target borrow leg.
+     */
     borrowShares?: bigint;
     /** Minimum borrow share price on the target market (in ray). */
     minBorrowSharePrice: bigint;
-    /** Maximum repay share price on the source market (in ray). */
+    /**
+     * Maximum repay share price on the source market (in ray). Required to be > 0 whenever a
+     * repay leg is encoded (`borrowAssets > 0n` or `borrowShares > 0n`); the zero sentinel is
+     * only valid in collat-only refinances.
+     */
     maxRepaySharePrice: bigint;
   };
   metadata?: Metadata;
@@ -116,6 +131,9 @@ export interface MarketV1RefinanceParams {
  * @throws {RefinanceTokenMismatchError} when source and target do not share both tokens.
  * @throws {RefinanceSharesMissingBorrowAssetsError} when `borrowShares > 0n` but `borrowAssets`
  *   is omitted or non-positive — the target `morphoBorrow` requires a positive asset overshoot.
+ * @throws {NonPositiveRepayMaxSharePriceError} when a repay leg is encoded
+ *   (`borrowAssets > 0n` or `borrowShares > 0n`) and `maxRepaySharePrice <= 0n` — an on-chain
+ *   `morphoRepay` with a zero cap is doomed to revert.
  * @example
  * ```ts
  * import { marketV1Refinance } from "@morpho-org/morpho-sdk";
@@ -194,6 +212,14 @@ export const marketV1Refinance = ({
   // computes one from `slippageTolerance`; direct callers must do the same).
   if (sharesMode && borrowAssets <= 0n) {
     throw new RefinanceSharesMissingBorrowAssetsError(sourceParams.id);
+  }
+
+  // When a repay leg is encoded, `maxRepaySharePrice = 0n` is doomed to revert on-chain
+  // (actual share price > 0). Match the existing `marketV1Repay` / `marketV1RepayWithdrawCollateral`
+  // contract by requiring a positive cap whenever debt is migrated. The zero sentinel remains
+  // legal in collat-only refinances (where the repay leg is omitted).
+  if (shouldMigrateBorrow && maxRepaySharePrice <= 0n) {
+    throw new NonPositiveRepayMaxSharePriceError(sourceParams.id);
   }
 
   const callback: Action[] = [];

@@ -7,6 +7,7 @@ import {
   NegativeMaxRepaySharePriceError,
   NonPositiveAssetAmountError,
   NonPositiveMinBorrowSharePriceError,
+  NonPositiveRepayMaxSharePriceError,
   RefinanceSameMarketError,
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
@@ -255,6 +256,34 @@ describe("marketV1Refinance", () => {
         args: baseArgs,
       }),
     ).toThrow(RefinanceTokenMismatchError);
+  });
+
+  test("error: NonPositiveRepayMaxSharePriceError when debt is migrated with zero maxRepaySharePrice", () => {
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          maxRepaySharePrice: 0n,
+        },
+      }),
+    ).toThrow(NonPositiveRepayMaxSharePriceError);
+  });
+
+  test("behavior: collat-only refinance accepts zero maxRepaySharePrice", () => {
+    // Zero sentinel is legitimate in collat-only mode (no repay leg encoded).
+    expect(() =>
+      marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          maxRepaySharePrice: 0n,
+        },
+      }),
+    ).not.toThrow();
   });
 
   test("error: RefinanceSharesMissingBorrowAssetsError when shares mode passes no overshoot", () => {

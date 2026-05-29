@@ -1354,19 +1354,20 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
     }
 
-    // Forward-accrue both markets to "now":
-    //   - source projects assets-from-shares fidelity (overshoot only covers
-    //     signature→exec, not read→signature)
-    //   - target's LLTV check uses the existing-debt accrued forward
-    //   - source residual check uses the accrued market so the projected
-    //     residual debt reflects what the on-chain repay actually consumes
-    // `Market.accrueInterest` requires `timestamp >= lastUpdate`; clamp via
-    // `MathLib.max` so a stale clock or simulated future position never
-    // produces a negative elapsed interval.
-    const sourceAccrualTimestamp = MathLib.max(
-      Time.timestamp(),
-      positionData.market.lastUpdate,
-    );
+    // Forward-accrue both markets:
+    //   - source projects assets-from-shares fidelity; in shares mode we add a 2h buffer
+    //     (same pattern as `repay()` / `repayWithdrawCollateral()`) so an exact-share repay
+    //     under low slippage or delayed execution still has enough borrow + slippage headroom.
+    //     The buffer inflates both `projectedBorrowAssets` and `maxRepaySharePrice` together.
+    //   - target's LLTV check uses the existing-debt accrued to "now" (no 2h buffer — that
+    //     would tighten `minBorrowSharePrice` past on-chain reality and risk false reverts).
+    //   - source residual check uses the accrued market so the projected residual debt
+    //     reflects what the on-chain repay actually consumes.
+    // `Market.accrueInterest` requires `timestamp >= lastUpdate`; clamp via `MathLib.max` so
+    // a stale clock or simulated future position never produces a negative elapsed interval.
+    const sourceAccrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      (sharesMode ? Time.s.from.h(2n) : 0n);
     const targetAccrualTimestamp = MathLib.max(
       Time.timestamp(),
       target.positionData.market.lastUpdate,
