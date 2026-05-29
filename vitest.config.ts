@@ -12,7 +12,6 @@ export default defineConfig({
         "packages/test-wagmi/**",
         "packages/**/*.md",
         "packages/**/src/**/*.test.ts",
-        "packages/**/src/__test__/**",
         "packages/**/src/**/__test__/**",
         "packages/**/src/**/__mocks__/**",
         "packages/**/src/**/__fixtures__/**",
