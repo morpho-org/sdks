@@ -38,6 +38,8 @@ export enum ChainId {
   FlareMainnet = 14,
   XdcMainnet = 50,
   KaiaMainnet = 8217,
+  MorphMainnet = 2818,
+  MegaEthMainnet = 4326,
 }
 
 export interface ChainMetadata {
@@ -352,6 +354,20 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Kaia", symbol: "KAIA", decimals: 18 },
       explorerUrl: "https://kaiascan.io",
       identifier: "kaia",
+    },
+    [ChainId.MorphMainnet]: {
+      name: "Morph",
+      id: ChainId.MorphMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://explorer.morphl2.io",
+      identifier: "morph",
+    },
+    [ChainId.MegaEthMainnet]: {
+      name: "MegaETH",
+      id: ChainId.MegaEthMainnet,
+      nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+      explorerUrl: "https://mega.etherscan.io",
+      identifier: "megaeth",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }
