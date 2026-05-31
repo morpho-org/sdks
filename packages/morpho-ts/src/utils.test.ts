@@ -200,6 +200,15 @@ describe("keys / values / entries / fromEntries", () => {
     expect(keys({ b: 2, a: 1, "3": "c" })).toEqual(["3", "b", "a"]);
   });
 
+  test("keys() preserves insertion order for non-index numeric-like keys", () => {
+    expect(keys({ a: 1, b: 2, 3: "c", 1.1: 1 })).toEqual([
+      "3",
+      "a",
+      "b",
+      "1.1",
+    ]);
+  });
+
   test("keys() handles empty object", () => {
     expect(keys({})).toEqual([]);
   });

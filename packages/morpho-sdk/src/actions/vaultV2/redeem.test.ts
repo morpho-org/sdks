@@ -83,6 +83,25 @@ describe("redeemVaultV2 unit tests", () => {
     expect(tx.to).toBe(KeyrockUsdcVaultV2.address);
   });
 
+  test("should append metadata to transaction data when provided", async ({
+    client,
+  }) => {
+    const shares = parseUnits("100", 18);
+    const tx = vaultV2Redeem({
+      vault: {
+        address: KeyrockUsdcVaultV2.address,
+      },
+      args: {
+        shares,
+        recipient: client.account.address,
+        onBehalf: client.account.address,
+      },
+      metadata: { origin: "a1b2c3d4" },
+    });
+
+    expect(tx.data.includes("a1b2c3d4")).toBe(true);
+  });
+
   test("should throw NonPositiveSharesAmountError when shares is zero", async () => {
     expect(() =>
       vaultV2Redeem({

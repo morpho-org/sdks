@@ -1,5 +1,6 @@
 import {
   AccrualPosition,
+  ChainId,
   Market,
   type MarketId,
   MarketParams,
@@ -18,6 +19,7 @@ import {
   AddressMismatchError,
   BorrowExceedsSafeLtvError,
   ChainIdMismatchError,
+  ChainWNativeMissingError,
   EmptyReallocationWithdrawalsError,
   ExcessiveSlippageToleranceError,
   MarketIdMismatchError,
@@ -32,6 +34,7 @@ import {
   RepaySharesExceedDebtError,
   UnsortedReallocationWithdrawalsError,
   type VaultReallocation,
+  WithdrawExceedsCollateralError,
   WithdrawExceedsSupplyError,
   WithdrawMakesPositionUnhealthyError,
   WithdrawSharesExceedSupplyError,
@@ -233,6 +236,24 @@ describe("validatePositionHealth", () => {
       }),
     ).not.toThrow();
   });
+
+  test("should use zero effective LLTV when LLTV is below the buffer", () => {
+    const pos = makePosition({
+      collateral: 10n ** 18n,
+      borrowShares: 0n,
+      market: makeMarket({ price: ORACLE_PRICE_SCALE }),
+    });
+
+    expect(() =>
+      validatePositionHealth({
+        positionData: pos,
+        additionalCollateral: 0n,
+        borrowAmount: 1n,
+        marketId: marketParams.id,
+        lltv: 1n,
+      }),
+    ).toThrow(BorrowExceedsSafeLtvError);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -273,6 +294,12 @@ describe("validateNativeAsset", () => {
   test("should throw NativeAmountOnNonWNativeAssetError when asset is not wNative", () => {
     expect(() => validateNativeAsset(mainnet.id, usdc)).toThrow(
       NativeAmountOnNonWNativeAssetError,
+    );
+  });
+
+  test("should throw ChainWNativeMissingError when the chain has no wNative", () => {
+    expect(() => validateNativeAsset(ChainId.CeloMainnet, usdc)).toThrow(
+      ChainWNativeMissingError,
     );
   });
 });
@@ -350,6 +377,51 @@ describe("validatePositionHealthAfterWithdraw", () => {
         positionData: pos,
         withdrawAmount: (9n * 10n ** 17n) / 10n,
         lltv,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawMakesPositionUnhealthyError);
+  });
+
+  test("should throw MarketIdMismatchError when the position market differs", () => {
+    const pos = makePosition();
+    const otherMarketId = new MarketParams(CbbtcUsdcMarketV1).id;
+
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData: pos,
+        withdrawAmount: 1n,
+        lltv,
+        marketId: otherMarketId,
+      }),
+    ).toThrow(MarketIdMismatchError);
+  });
+
+  test("should throw WithdrawExceedsCollateralError when withdrawal exceeds collateral", () => {
+    const pos = makePosition({ collateral: 1n });
+
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData: pos,
+        withdrawAmount: 2n,
+        lltv,
+        marketId: marketParams.id,
+      }),
+    ).toThrow(WithdrawExceedsCollateralError);
+  });
+
+  test("should use zero effective LLTV when LLTV is below the buffer", () => {
+    const market = makeMarket({ price: ORACLE_PRICE_SCALE });
+    const pos = makePosition({
+      collateral: 10n ** 18n,
+      borrowShares: 1n,
+      market,
+    });
+
+    expect(() =>
+      validatePositionHealthAfterWithdraw({
+        positionData: pos,
+        withdrawAmount: 0n,
+        lltv: 1n,
         marketId: marketParams.id,
       }),
     ).toThrow(WithdrawMakesPositionUnhealthyError);

@@ -1,4 +1,4 @@
-import { getChainAddresses } from "@morpho-org/blue-sdk";
+import { addressesRegistry, getChainAddresses } from "@morpho-org/blue-sdk";
 import { type Address, getAddress } from "viem";
 import { vi } from "vitest";
 
@@ -67,6 +67,23 @@ describe("assertNoBundlerRetention", () => {
     expect(() =>
       assertNoBundlerRetention({ chainId: 999999, transfers }),
     ).not.toThrow();
+  });
+
+  it("warns and skips when blue-sdk knows the chain but has no bundler3 config", () => {
+    vi.mocked(getChainAddresses).mockReturnValueOnce({
+      ...addressesRegistry[1],
+      bundler3: undefined as never,
+    });
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+
+    expect(() =>
+      assertNoBundlerRetention({ chainId: 1, transfers: [], logger }),
+    ).not.toThrow();
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Chain known to blue-sdk but has no bundler3 config, retention check skipped",
+      { chainId: 1 },
+    );
   });
 
   it("propagates unexpected SDK errors instead of swallowing them", () => {

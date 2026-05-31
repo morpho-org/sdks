@@ -1,13 +1,24 @@
-import { addressesRegistry, Holding, MathLib } from "@morpho-org/blue-sdk";
+import {
+  addressesRegistry,
+  type ChainAddresses,
+  Holding,
+  MathLib,
+  registerCustomAddresses,
+} from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
 import { mainnet } from "viem/chains";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
+  ApprovalAmountLessThanSpendAmountError,
   ChainIdMismatchError,
   isRequirementApproval,
   isRequirementSignature,
+  Permit2ExpirationMissingError,
 } from "../../types/index.js";
 import { getRequirements } from "./getRequirements.js";
+import { getRequirementsAction } from "./getRequirementsAction.js";
+import { getRequirementsApproval } from "./getRequirementsApproval.js";
+import { getRequirementsPermit } from "./getRequirementsPermit.js";
 
 vi.mock("@morpho-org/blue-sdk-viem", async (_importOriginal) => {
   return {
@@ -30,6 +41,7 @@ describe("getRequirements", () => {
 
   const mockFrom: Address = "0x1234567890123456789012345678901234567890";
   const mockAmount = 1000000n;
+  const noPermit2ChainId = 9_101_003;
 
   let mockClient: Client;
 
@@ -49,6 +61,16 @@ describe("getRequirements", () => {
       name: "USD Coin",
       fromUsd: () => 0n,
       toUsd: () => 0n,
+    });
+
+    registerCustomAddresses({
+      addresses: {
+        [noPermit2ChainId]: {
+          morpho: addressesRegistry[mainnet.id].morpho,
+          bundler3: addressesRegistry[mainnet.id].bundler3,
+          adaptiveCurveIrm: addressesRegistry[mainnet.id].adaptiveCurveIrm,
+        } satisfies ChainAddresses,
+      },
     });
   });
 
@@ -422,6 +444,103 @@ describe("getRequirements", () => {
         expect(permit2Requirement.action.args.spender).toBe(generalAdapter1);
         expect(permit2Requirement.action.args.amount).toBe(mockAmount);
       });
+
+      test("should fall back to classic approval when a chain has no Permit2", async () => {
+        vi.mocked(fetchHolding).mockResolvedValue(
+          new Holding({
+            user: mockFrom,
+            token: usdc,
+            erc20Allowances: {
+              morpho: 0n,
+              "bundler3.generalAdapter1": 0n,
+              permit2: 0n,
+            },
+            permit2BundlerAllowance: {
+              amount: 0n,
+              expiration: 0n,
+              nonce: 0n,
+            },
+            erc2612Nonce: undefined,
+            canTransfer: false,
+            balance: 0n,
+          }),
+        );
+        mockClient = { chain: { id: noPermit2ChainId } } as unknown as Client;
+
+        const requirements = await getRequirements(mockClient, {
+          supportSignature: true,
+          address: usdc,
+          chainId: noPermit2ChainId,
+          args: { amount: mockAmount, from: mockFrom },
+        });
+
+        expect(requirements).toHaveLength(1);
+        const approval = requirements[0];
+        if (!isRequirementApproval(approval)) {
+          throw new Error("Requirement is not an approval transaction");
+        }
+        expect(approval.action.args.spender).toBe(
+          addressesRegistry[mainnet.id].bundler3.generalAdapter1,
+        );
+      });
+    });
+  });
+
+  describe("direct requirement helpers", () => {
+    test("getRequirementsAction throws when permit2 signature args omit expiration", () => {
+      expect(() =>
+        getRequirementsAction({
+          asset: usdc,
+          amount: mockAmount,
+          recipient: generalAdapter1,
+          requirementSignature: {
+            args: {
+              owner: mockFrom,
+              signature: "0x00",
+              deadline: 1n,
+              amount: mockAmount,
+              asset: usdc,
+              nonce: 0n,
+            },
+            action: {
+              type: "permit2",
+              args: {
+                spender: generalAdapter1,
+                amount: mockAmount,
+                deadline: 1n,
+                expiration: 2n,
+              },
+            },
+          },
+        }),
+      ).toThrow(Permit2ExpirationMissingError);
+    });
+
+    test("getRequirementsApproval rejects approval amounts below spend amount", () => {
+      expect(() =>
+        getRequirementsApproval({
+          address: usdc,
+          chainId: mainnet.id,
+          args: {
+            spendAmount: mockAmount,
+            approvalAmount: mockAmount - 1n,
+            spender: generalAdapter1,
+          },
+          allowances: 0n,
+        }),
+      ).toThrow(ApprovalAmountLessThanSpendAmountError);
+    });
+
+    test("getRequirementsPermit returns no requirement when allowance is sufficient", async () => {
+      await expect(
+        getRequirementsPermit(mockClient, {
+          token: usdc,
+          chainId: mainnet.id,
+          args: { amount: mockAmount },
+          allowancesGeneralAdapter: mockAmount,
+          nonce: 0n,
+        }),
+      ).resolves.toEqual([]);
     });
   });
 });

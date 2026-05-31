@@ -61,6 +61,7 @@ const capVaultWithdrawals = (
 
   for (const withdrawal of withdrawals) {
     const cappedAssets = MathLib.min(withdrawal.assets, remainingAssets);
+    /* v8 ignore next: grouped withdrawals and positive reallocation cap keep this defensive guard unreachable. */
     if (cappedAssets <= 0n) continue;
 
     const existing = cappedWithdrawals.find(
@@ -260,6 +261,7 @@ export const computeReallocations = ({
       remainingRequiredAssets,
     );
 
+    /* v8 ignore next: groups with non-positive assets are filtered before this point. */
     if (reallocatedAssets <= 0n) continue;
 
     reallocations.push({

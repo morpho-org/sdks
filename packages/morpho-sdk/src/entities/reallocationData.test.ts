@@ -1341,5 +1341,18 @@ describe("ReallocationData unit coverage", () => {
         withdrawal,
       ),
     ).toThrow(DisabledReallocationMarketError);
+
+    const sameMarketData = new TestReallocationData(
+      new ReallocationData(baseInput),
+    ).applyPublicReallocationForTest({
+      vault: VAULT,
+      supplyMarketId: sourceParams.id,
+      withdrawal,
+      timestamp: TIMESTAMP,
+    });
+    expect(
+      sameMarketData.getVaultMarketConfig(VAULT, sourceParams.id)
+        .publicAllocatorConfig?.maxOut,
+    ).toBe(10_000n * MathLib.WAD);
   });
 });
