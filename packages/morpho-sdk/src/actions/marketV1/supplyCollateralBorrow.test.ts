@@ -1,7 +1,7 @@
 import { addressesRegistry, MarketParams } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
-import { describe, expect, vi } from "vitest";
+import { afterEach, describe, expect, vi } from "vitest";
 import {
   UsdcEurcvMarketV1,
   WbtcUsdcSourceMarket,
@@ -25,6 +25,10 @@ import { getRequirements } from "../requirements/index.js";
 import { marketV1SupplyCollateralBorrow } from "./supplyCollateralBorrow.js";
 
 describe("marketV1SupplyCollateralBorrow unit tests", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const { wNative } = addressesRegistry[mainnet.id];
   const marketParams = new MarketParams(WethUsdsMarketV1);
   const marketId = marketParams.id;

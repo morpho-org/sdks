@@ -1,5 +1,18 @@
 # @morpho-org/simulation-sdk-wagmi
 
+## 5.0.2
+
+### Patch Changes
+
+- [#742](https://github.com/morpho-org/sdks/pull/742) [`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fix npm source metadata by publishing full repository URLs and monorepo package directories.
+
+- Updated dependencies [[`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7)]:
+  - @morpho-org/blue-sdk@6.0.1
+  - @morpho-org/blue-sdk-viem@5.0.1
+  - @morpho-org/blue-sdk-wagmi@5.0.2
+  - @morpho-org/morpho-ts@2.5.3
+  - @morpho-org/simulation-sdk@4.0.2
+
 ## 5.0.1
 
 ### Patch Changes

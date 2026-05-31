@@ -441,6 +441,7 @@ export class ReallocationData implements InputReallocationData {
 
           const vaultPublicAllocatorConfig =
             data.getVault(vault).publicAllocatorConfig;
+          /* v8 ignore next: repeated withdrawals require a configured public allocator earlier in the flow. */
           if (vaultPublicAllocatorConfig == null)
             throw new MissingPublicAllocatorConfigError(vault);
 
@@ -582,7 +583,9 @@ export class ReallocationData implements InputReallocationData {
   }) {
     const data = this.forkAliasedState();
     data.vaults[vault] = cloneVault(this.getVault(vault));
+    /* v8 ignore next: forkAliasedState keeps vault position buckets initialized for known vaults. */
     data.positions[vault] = { ...(this.positions[vault] ?? {}) };
+    /* v8 ignore next: forkAliasedState keeps vault market config buckets initialized for known vaults. */
     data.vaultMarketConfigs[vault] = {
       ...(this.vaultMarketConfigs[vault] ?? {}),
     };

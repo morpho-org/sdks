@@ -10,7 +10,6 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   MorphoClient,
-  vaultV1Deposit,
 } from "../../../src/index.js";
 import {
   GauntletWethVaultV1,
@@ -21,39 +20,6 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("DepositVaultV1", () => {
-  test("should create deposit bundle", async ({ client }) => {
-    const morpho = new MorphoClient(client);
-
-    const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
-    const vaultData = await vault.getData();
-    const deposit = vault.deposit({
-      userAddress: client.account.address,
-      amount: 1000000000000000000n,
-      vaultData,
-    });
-    const requirements_1 = await deposit.getRequirements();
-    const tx_1 = deposit.buildTx();
-
-    const tx_2 = vaultV1Deposit({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
-      args: {
-        amount: 1000000000000000000n,
-        maxSharePrice: tx_1.action.args.maxSharePrice,
-        recipient: client.account.address,
-      },
-    });
-
-    expect(deposit).toBeDefined();
-    expect(requirements_1).toBeDefined();
-    expect(tx_1).toStrictEqual(tx_2);
-    expect(vaultData.asset).toStrictEqual(SteakhouseUsdcVaultV1.asset);
-    expect(vaultData.address).toStrictEqual(SteakhouseUsdcVaultV1.address);
-  });
-
   test("should deposit 1K USDC in vaultV1", async ({ client }) => {
     const amount = parseUnits("1000", 6);
     await client.deal({

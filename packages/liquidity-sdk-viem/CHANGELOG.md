@@ -1,5 +1,17 @@
 # @morpho-org/liquidity-sdk-viem
 
+## 3.0.1
+
+### Patch Changes
+
+- [#742](https://github.com/morpho-org/sdks/pull/742) [`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Fix npm source metadata by publishing full repository URLs and monorepo package directories.
+
+- Updated dependencies [[`49b24e7`](https://github.com/morpho-org/sdks/commit/49b24e7e8ffc9e1ff6ea1381b81873de7cccdd83), [`25ba440`](https://github.com/morpho-org/sdks/commit/25ba440e708a95770959af425f60ce82fdc553c7), [`49b24e7`](https://github.com/morpho-org/sdks/commit/49b24e7e8ffc9e1ff6ea1381b81873de7cccdd83)]:
+  - @morpho-org/morpho-sdk@3.1.0
+  - @morpho-org/blue-sdk@6.0.1
+  - @morpho-org/blue-sdk-viem@5.0.1
+  - @morpho-org/morpho-ts@2.5.3
+
 ## 3.0.0
 
 ### Major Changes

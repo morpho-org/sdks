@@ -1,6 +1,6 @@
 {
   "name": "@morpho-org/wdk-protocol-lending-morpho-evm",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "A WDK lending module that lets EVM wallet accounts interact with Morpho vaults and markets through @morpho-org/morpho-sdk.",
   "keywords": [
     "wdk",
@@ -17,7 +17,11 @@
   "contributors": [
     "Morpho Labs"
   ],
-  "repository": "github:morpho-org/sdks",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/morpho-org/sdks.git",
+    "directory": "packages/wdk-protocol-lending-morpho-evm"
+  },
   "homepage": "https://github.com/morpho-org/sdks",
   "bugs": {
     "url": "https://github.com/morpho-org/sdks/issues",

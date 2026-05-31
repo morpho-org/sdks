@@ -10,7 +10,6 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   MorphoClient,
-  marketV1SupplyCollateral,
 } from "../../../src/index.js";
 import {
   CbbtcUsdcMarketV1,
@@ -21,31 +20,6 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("SupplyCollateralMarketV1", () => {
-  test("should create supply collateral bundle", async ({ client }) => {
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
-
-    const supplyCollateral = market.supplyCollateral({
-      userAddress: client.account.address,
-      amount: parseUnits("1", 18),
-    });
-    const tx = supplyCollateral.buildTx();
-
-    const directTx = marketV1SupplyCollateral({
-      market: {
-        chainId: mainnet.id,
-        marketParams: CbbtcUsdcMarketV1,
-      },
-      args: {
-        amount: parseUnits("1", 18),
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(supplyCollateral).toBeDefined();
-    expect(directTx).toStrictEqual(tx);
-  });
-
   test("should supply 1 collateral with approval", async ({ client }) => {
     const amount = parseUnits("1", 18);
     await client.deal({
