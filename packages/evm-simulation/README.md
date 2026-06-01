@@ -2,8 +2,8 @@
 
 ## Overview
 
-EVM transaction simulation engine for Morpho — bundle execution preview,
-transfer parsing, and compliance screening.
+EVM transaction simulation engine for Morpho — bundle execution preview
+and transfer parsing.
 
 ## Installation
 
@@ -22,7 +22,6 @@ Add to the consuming app's `package.json`:
 ```ts
 import {
   simulate,
-  screenAddresses,
   type SimulationConfig,
   SimulationRevertedError
 } from "@morpho-org/evm-simulation";
@@ -50,9 +49,6 @@ try {
     },
     { shareable: true }
   );
-
-  // For server-side flows, pipe into screenAddresses:
-  await screenAddresses({ simulationTxs, transfers });
 } catch (err) {
   if (err instanceof SimulationRevertedError) {
     // show err.reason to the user
@@ -66,15 +62,14 @@ try {
 All symbols below are re-exported from the package root.
 
 - `simulate(config, params, options?)` — run a bundle through the simulation pipeline. Pass `{ shareable: true }` for a shareable Tenderly URL; omit for server-side verification.
-- `screenAddresses({ simulationTxs, transfers, chainalysisApiKey? })` — static sanctioned-set + optional Chainalysis screening.
 - Config types: `SimulationConfig`, `TenderlyRestConfig`, `ChainSimulationConfig`, `SimulationLogger`.
 - Data types: `SimulationTransaction`, `SimulationAuthorization`, `Transfer`, `SimulateParams`, `SimulationResult`.
-- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `AddressScreeningError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
+- Errors: `SimulationPackageError` (abstract base — `instanceof` it to catch any package error), `SimulationRevertedError`, `BlacklistViolationError`, `ExternalServiceError`, `SimulationValidationError`, `UnsupportedChainError`.
 
 ### Deeper docs
 
 See [`CLAUDE.md`](./CLAUDE.md) in this directory for the execution flow diagram,
-backend tradeoffs, authorizations model, screening design, error-handling table,
+backend tradeoffs, authorizations model, error-handling table,
 and recipes for adding a chain or a new backend.
 
 ## Development

@@ -22,8 +22,7 @@ import {
  * by `bundler3` → returns the full result set. The caller reads whichever fields they need:
  *
  * - `transfers` + `tenderlyUrl` → user-facing preview.
- * - `simulationTxs` + `transfers` → server-side verification before broadcast, then pass
- *   both to `screenAddresses` for compliance.
+ * - `simulationTxs` + `transfers` → server-side verification before broadcast.
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`, `gasUsed`,
  *   and Tenderly-only `assetChanges`). Aligned 1:1 with `simulationTxs[i]`.
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
