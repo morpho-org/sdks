@@ -178,6 +178,29 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     expect(block).toBe("pending");
   });
 
+  it("inflates the sender ETH balance via state overrides to dodge insufficient-funds false reverts", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () => envelope(successResult()),
+    });
+    installFetchMock(fetchMock);
+
+    await simulateTenderlyRpc({
+      config: CONFIG,
+      transactions: [TX1],
+    });
+
+    const body = requestBody(fetchMock.mock.calls[0]!);
+    const [, , overrides] = body.params as [
+      unknown,
+      unknown,
+      Record<Address, { balance: Hex }>,
+    ];
+    expect(overrides[USER]!.balance).toBe(
+      "0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    );
+  });
+
   it("encodes tx.value as hex", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: true,

@@ -4,6 +4,7 @@ import {
   type Hex,
   isAddress,
   isHex,
+  maxUint256,
   numberToHex,
 } from "viem";
 import { z } from "zod";
@@ -102,13 +103,16 @@ export async function simulateTenderlyRpc(params: {
 }): Promise<RawSimulationResult> {
   const { config, transactions, blockNumber, signal } = params;
   const block = encodeBlock(blockNumber);
+  // Inflate sender ETH balance to avoid false "insufficient funds for gas"
+  // reverts on wallets low on native gas token — mirrors simulateV1.
+  const stateOverrides = buildStateOverrides(transactions[0]!.from);
 
   try {
     if (transactions.length === 1) {
       const json = await rpcRequest({
         rpcUrl: config.rpcUrl,
         method: "tenderly_simulateTransaction",
-        params: [buildCall(transactions[0]!), block],
+        params: [buildCall(transactions[0]!), block, stateOverrides],
         signal,
       });
       const result = unwrapResult(singleEnvelope.parse(json));
@@ -118,7 +122,7 @@ export async function simulateTenderlyRpc(params: {
     const json = await rpcRequest({
       rpcUrl: config.rpcUrl,
       method: "tenderly_simulateBundle",
-      params: [transactions.map(buildCall), block],
+      params: [transactions.map(buildCall), block, stateOverrides],
       signal,
     });
     const result = unwrapResult(bundleEnvelope.parse(json));
@@ -176,6 +180,12 @@ function buildCall(tx: SimulationTransaction): TenderlyRpcCall {
     data: tx.data,
     value: numberToHex(tx.value ?? 0n),
   };
+}
+
+function buildStateOverrides(
+  sender: Address,
+): Record<Address, { balance: Hex }> {
+  return { [sender]: { balance: numberToHex(maxUint256) } };
 }
 
 function encodeBlock(blockNumber?: bigint | BlockTag): string {
