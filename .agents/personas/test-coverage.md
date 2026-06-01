@@ -1,7 +1,7 @@
 ---
 name: test-coverage
 kind: baseline
-applies: AGENTS.md §5 Testing
+applies: AGENTS.md §5 Testing, §2 Forbidden patterns (rule 6 — mocked viem clients on RPC paths)
 out-of-scope:
   - Correctness of the test assertions themselves — see code-quality.
   - Missing tests for CI workflows — see ci-release-security.

@@ -1,5 +1,4 @@
 import {
-  AddressScreeningError,
   BlacklistViolationError,
   ExternalServiceError,
   SimulationPackageError,
@@ -13,7 +12,6 @@ describe("error hierarchy", () => {
     const instances = [
       new SimulationRevertedError("x"),
       new BlacklistViolationError("x"),
-      new AddressScreeningError("x", []),
       new ExternalServiceError("x"),
       new SimulationValidationError("x"),
       new UnsupportedChainError(1),
@@ -31,7 +29,6 @@ describe("error codes", () => {
   it.each([
     [() => new SimulationRevertedError("x"), "SIMULATION_REVERTED"],
     [() => new BlacklistViolationError("x"), "BLACKLIST_ERROR"],
-    [() => new AddressScreeningError("x", []), "SCREENING_ERROR"],
     [() => new ExternalServiceError("x"), "EXTERNAL_SERVICE_ERROR"],
     [() => new SimulationValidationError("x"), "VALIDATION_ERROR"],
     [() => new UnsupportedChainError(1), "UNSUPPORTED_CHAIN"],
@@ -45,7 +42,6 @@ describe("error names match class names", () => {
   it.each([
     [new SimulationRevertedError("x"), "SimulationRevertedError"],
     [new BlacklistViolationError("x"), "BlacklistViolationError"],
-    [new AddressScreeningError("x", []), "AddressScreeningError"],
     [new ExternalServiceError("x"), "ExternalServiceError"],
     [new SimulationValidationError("x"), "SimulationValidationError"],
     [new UnsupportedChainError(1), "UnsupportedChainError"],
@@ -85,14 +81,6 @@ describe("BlacklistViolationError", () => {
   it("allows undefined assetChanges", () => {
     const err = new BlacklistViolationError("stuck");
     expect(err.assetChanges).toBeUndefined();
-  });
-});
-
-describe("AddressScreeningError", () => {
-  it("attaches the flagged addresses array", () => {
-    const addrs = ["0x1234567890123456789012345678901234567890"];
-    const err = new AddressScreeningError("sanctioned", addrs);
-    expect(err.addresses).toBe(addrs);
   });
 });
 

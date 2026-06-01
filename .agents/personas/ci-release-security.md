@@ -15,18 +15,11 @@ severity-guidance: Workflow injection → critical. Floating action tags or wide
 
 Focus: the trust boundary that ships our code. CI runs with privileged tokens; releases push artifacts under the org's identity. A bad workflow merge can leak secrets, run attacker code on a maintainer's box, or publish a poisoned package. This persona reviews diffs that touch that surface.
 
+Authoritative rules live in [`AGENTS.md` §10](../../AGENTS.md#10-review-automation--cirelease-security) (CI / release security rules) — read those first. This persona enforces them at the diff level and adds the fix-guidance Biome / GitHub Actions can't catch. When wording differs between this body and §10, §10 wins.
+
 ## Trigger
 
-Fires when `<HAS_CI_RELEASE>` is true — i.e. any changed file matches:
-
-- `.github/workflows/**`
-- `.github/actions/**` (composite or local actions)
-- `.changeset/**` (changeset entries, changesets config)
-- root `package.json` or any `packages/*/package.json` where a `scripts.*publish*` / `scripts.*release*` field is touched
-- `pnpm-lock.yaml`
-- `pnpm-workspace.yaml`
-- `.npmrc` (any level)
-- file content contains `changeset publish`, `npm publish`, `pnpm publish`, or `gh release create`
+Fires when `<HAS_CI_RELEASE>` is true. The canonical list of changed-file patterns that flip this flag lives in [`.agents/lib/pr-review-base.md`](../lib/pr-review-base.md) Step 4 — do not restate it here.
 
 ## Prompt must include
 
@@ -46,7 +39,7 @@ Fires when `<HAS_CI_RELEASE>` is true — i.e. any changed file matches:
 
 - Missing top-level `permissions:` block in a new workflow — defaults to write-all on classic-permissions repos. Require an explicit `permissions:` block (job-level if scopes differ between jobs).
 - Wide scopes where narrow ones would do: `contents: write` when only `contents: read` is needed; `id-token: write` outside of OIDC/provenance-publishing jobs; `pull-requests: write` outside of bot-comment jobs.
-- `secrets: inherit` passed to reusable workflows — flag and request explicit secret listing.
+- `secrets: inherit` passed to reusable workflows is forbidden — list secrets explicitly (per AGENTS.md §10).
 
 ### Secret exposure (HIGH)
 
