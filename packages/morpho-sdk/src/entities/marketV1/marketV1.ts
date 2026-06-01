@@ -1446,9 +1446,15 @@ export class MorphoMarketV1 implements MarketV1Actions {
     // Share-price bounds — only computed when a debt leg exists; the slippage helpers throw
     // ShareDivideByZeroError on zero inputs, so in collat-only refinance we leave the bounds
     // at 0n (the action layer accepts non-negative bounds).
+    //
+    // The guard must be derived from `borrowAssetsAdjusted` — the value actually encoded into
+    // `morphoBorrow` — and not `projectedBorrowAssets`. Otherwise, in shares-mode with a low
+    // positive slippage on dust positions, `toBorrowShares("Up")` rounding can make the
+    // encoded borrow's on-chain asset/share ratio fall below the guard computed from the
+    // smaller projected value, reverting a bundle that passed preflight.
     const minBorrowSharePrice = shouldMigrateBorrow
       ? computeMinBorrowSharePrice({
-          borrowAmount: projectedBorrowAssets,
+          borrowAmount: borrowAssetsAdjusted,
           market: accruedTarget,
           slippageTolerance,
         })

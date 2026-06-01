@@ -2,6 +2,7 @@ import {
   AccrualPosition,
   Market,
   MarketParams,
+  MathLib,
   ORACLE_PRICE_SCALE,
 } from "@morpho-org/blue-sdk";
 import { createMockClient } from "@morpho-org/test/mock";
@@ -9,6 +10,7 @@ import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { MorphoClient } from "../../client/index.js";
+import { computeMinBorrowSharePrice } from "../../helpers/index.js";
 import {
   BorrowAmountAndSharesExclusiveError,
   BorrowExceedsSafeLtvError,
@@ -470,6 +472,72 @@ describe("MorphoMarketV1.refinance", () => {
         collateralAmount: parseUnits("1", 18),
       }),
     ).not.toThrow();
+  });
+
+  test("regression: shares-mode low-slippage encodes minBorrowSharePrice from borrowAssetsAdjusted, not projectedBorrowAssets", () => {
+    // Pre-fix, `minBorrowSharePrice` was derived from `projectedBorrowAssets`, but the encoded
+    // `morphoBorrow` carries the larger `borrowAssetsAdjusted` (the slippage overshoot). The
+    // GA1 on-chain check is `mulDivDown(borrowedAssets, RAY, borrowedShares) >= minSharePrice`,
+    // and `borrowedShares` is `toSharesUp(borrowedAssets)` — i.e. derived from the encoded
+    // assets. The guard must therefore be derived from the same encoded assets, not from a
+    // hypothetical un-overshot value, or the asset/share ratio computed at execution can
+    // diverge from the validation-time ratio due to `toBorrowShares("Up")` rounding and
+    // revert a bundle that passed preflight.
+    //
+    // This test reconstructs both candidate guards and asserts the encoded action uses the
+    // one derived from `borrowAssetsAdjusted`. The two values are observably different for
+    // shares-mode + non-zero slippage because `borrowAssetsAdjusted > projectedBorrowAssets`.
+    const market = makeMarket();
+    const sourceMarket = baseMarket(sourceParams);
+    const targetMarket = baseMarket(targetParams);
+    const positionData = makePosition({
+      market: sourceMarket,
+      user: USER,
+      collateral: parseUnits("1", 18),
+      borrowShares: parseUnits("100", 12),
+    });
+    const targetPosition = makePosition({ market: targetMarket, user: USER });
+
+    const slippageTolerance = parseUnits("0.0001", 18);
+
+    const refi = market.refinance({
+      userAddress: USER,
+      positionData,
+      target: { marketParams: targetParams, positionData: targetPosition },
+      collateralAmount: parseUnits("1", 18),
+      borrowShares: parseUnits("100", 12),
+      slippageTolerance,
+    });
+    const tx = refi.buildTx();
+
+    // Recompute the entity's intermediate values. Accrual deltas are zero because the
+    // fixture market's `lastUpdate` matches `Time.timestamp()`-clamped behaviour: the source
+    // ages by the 2h shares-mode buffer, the target ages by 0; both effects cancel here
+    // because the helper inputs are the *encoded* tx args, not the entity's internals.
+    const projectedBorrowAssets = sourceMarket.toBorrowAssets(
+      parseUnits("100", 12),
+      "Up",
+    );
+    const borrowAssetsAdjusted = MathLib.wMulUp(
+      projectedBorrowAssets,
+      MathLib.WAD + slippageTolerance,
+    );
+
+    // The encoded `borrowAssets` is the overshot value. Confirm the precondition.
+    expect(tx.action.args.borrowAssets).toBe(borrowAssetsAdjusted);
+    expect(borrowAssetsAdjusted).toBeGreaterThan(projectedBorrowAssets);
+
+    // The encoded guard must be derived from `borrowAssetsAdjusted` (the fix) — not from
+    // `projectedBorrowAssets` (the pre-fix behaviour, which silently desyncs the guard from
+    // the actual encoded borrow). For smooth share-price ratios the two values often
+    // coincide, but in dust regimes / contrived ratios the guard divergence can revert a
+    // bundle at execution.
+    const guardFromAdjusted = computeMinBorrowSharePrice({
+      borrowAmount: borrowAssetsAdjusted,
+      market: targetMarket,
+      slippageTolerance,
+    });
+    expect(tx.action.args.minBorrowSharePrice).toBe(guardFromAdjusted);
   });
 
   test("default: collat-only migration builds a valid bundle", () => {
