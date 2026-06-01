@@ -29,7 +29,11 @@ const addressSchema = z.custom<Address>(
 const hexSchema = z.custom<Hex>((val) => typeof val === "string" && isHex(val));
 
 const traceFrameSchema = z
-  .object({ output: hexSchema.optional() })
+  .object({
+    output: hexSchema.optional(),
+    error: z.string().optional(),
+    errorReason: z.string().optional(),
+  })
   .passthrough();
 
 const logSchema = z
@@ -183,8 +187,15 @@ function encodeBlock(blockNumber?: bigint | BlockTag): string {
 
 function toRawCall(data: SimResult): RawCall {
   if (data.status !== true) {
+    // Tenderly RPC surfaces the revert reason on the trace frame; the
+    // top-level fields are checked as a defensive fallback.
+    const traceError = data.trace?.find((f) => f.errorReason || f.error);
     const message =
-      data.errorMessage || data.error || "Transaction simulation reverted";
+      traceError?.errorReason ||
+      traceError?.error ||
+      data.errorMessage ||
+      data.error ||
+      "Transaction simulation reverted";
     throw new SimulationRevertedError(message, data);
   }
   const logs: RawLog[] = [];

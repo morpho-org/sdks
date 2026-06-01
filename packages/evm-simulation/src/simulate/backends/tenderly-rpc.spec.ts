@@ -385,6 +385,48 @@ describe.sequential("simulateTenderlyRpc — errors", () => {
     ).rejects.toThrow("Transaction simulation reverted");
   });
 
+  it("surfaces the revert reason from trace[].errorReason", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope({
+          status: false,
+          gasUsed: "0x5208",
+          logs: [],
+          trace: [
+            {
+              output: "0x",
+              error: "execution reverted",
+              errorReason: "ERC20: insufficient allowance",
+            },
+          ],
+        }),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] }),
+    ).rejects.toThrow("ERC20: insufficient allowance");
+  });
+
+  it("falls back to trace[].error when errorReason is absent", async () => {
+    const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
+      ok: true,
+      json: async () =>
+        envelope({
+          status: false,
+          gasUsed: "0x5208",
+          logs: [],
+          trace: [{ output: "0x", error: "execution reverted" }],
+        }),
+    });
+    installFetchMock(fetchMock);
+
+    await expect(
+      simulateTenderlyRpc({ config: CONFIG, transactions: [TX1] }),
+    ).rejects.toThrow("execution reverted");
+  });
+
   it("throws ExternalServiceError on non-200 response", async () => {
     const fetchMock = vi.fn<MockFetch>().mockResolvedValueOnce({
       ok: false,
