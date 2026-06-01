@@ -80,6 +80,15 @@ const bundleEnvelope = rpcEnvelope(z.array(simResultSchema).min(1));
  * Simulate one or more transactions via Tenderly's Node Web3 Gateway.
  * Dispatches to `tenderly_simulateTransaction` for a single call and
  * `tenderly_simulateBundle` for a multi-call bundle.
+ *
+ * @param params.config - Tenderly RPC config (URL with access key embedded).
+ * @param params.transactions - Bundle to simulate, in execution order.
+ * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
+ * @param params.signal - Optional `AbortSignal` for cancellation / timeout.
+ * @returns A {@link RawSimulationResult} with one `RawCall` per input transaction.
+ * @throws {SimulationRevertedError} when any simulated tx reports `status: false`.
+ * @throws {ExternalServiceError} on non-2xx response, JSON-RPC envelope error,
+ *   schema-validation failure, or fetch-layer failure.
  */
 export async function simulateTenderlyRpc(params: {
   config: TenderlyRpcConfig;
