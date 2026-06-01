@@ -6,6 +6,7 @@ import type { BigIntish } from "../../types.js";
 import { type CapacityLimit, CapacityLimitReason } from "../../utils.js";
 import type { IAccrualVaultV2Adapter } from "./VaultV2Adapter.js";
 
+/** Plain input shape for one Vault V2 liquidity allocation. */
 export interface IVaultV2Allocation {
   id: Hash;
   absoluteCap: bigint;
@@ -13,6 +14,7 @@ export interface IVaultV2Allocation {
   allocation: bigint;
 }
 
+/** Plain input shape for a Morpho Vault V2. */
 export interface IVaultV2 extends IToken {
   asset: Address;
   /**
@@ -36,6 +38,7 @@ export interface IVaultV2 extends IToken {
   managementFeeRecipient: Address;
 }
 
+/** Represents a Morpho Vault V2 and its fee, adapter, and accounting state. */
 export class VaultV2 extends WrappedToken implements IVaultV2 {
   public readonly asset: Address;
 
@@ -119,8 +122,10 @@ export class VaultV2 extends WrappedToken implements IVaultV2 {
   }
 }
 
+/** Plain input shape for a Morpho Vault V2 paired with accrued adapter state. */
 export interface IAccrualVaultV2 extends Omit<IVaultV2, "adapters"> {}
 
+/** Represents a Morpho Vault V2 with accrued adapter and liquidity state. */
 export class AccrualVaultV2 extends VaultV2 implements IAccrualVaultV2 {
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   constructor(

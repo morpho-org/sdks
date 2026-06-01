@@ -10,11 +10,13 @@ import {
   VaultMarketAllocation,
 } from "./VaultMarketAllocation.js";
 
+/** Pending governance value and the timestamp at which it becomes valid. */
 export interface Pending<T> {
   value: T;
   validAt: bigint;
 }
 
+/** PublicAllocator configuration attached to a MetaMorpho vault. */
 export interface VaultPublicAllocatorConfig {
   /**
    * The PublicAllocator's admin address.
@@ -30,6 +32,7 @@ export interface VaultPublicAllocatorConfig {
   accruedFee: bigint;
 }
 
+/** Plain input shape for a MetaMorpho vault. */
 export interface IVault extends IVaultConfig {
   curator: Address;
   owner: Address;
@@ -50,6 +53,7 @@ export interface IVault extends IVaultConfig {
   publicAllocatorConfig?: VaultPublicAllocatorConfig;
 }
 
+/** Represents a MetaMorpho vault and its governance, queue, and accounting state. */
 export class Vault extends VaultToken implements IVault {
   /**
    * The vault's share token's name.
@@ -187,6 +191,7 @@ export class Vault extends VaultToken implements IVault {
   }
 }
 
+/** Aggregated vault allocation exposure for one collateral asset. */
 export interface CollateralAllocation {
   address: Address;
   lltvs: Set<bigint>;
@@ -195,9 +200,11 @@ export interface CollateralAllocation {
   proportion: bigint;
 }
 
+/** Plain input shape for a MetaMorpho vault paired with accrued market allocations. */
 export interface IAccrualVault
   extends Omit<IVault, "withdrawQueue" | "totalAssets"> {}
 
+/** Represents a MetaMorpho vault with accrued market allocation state. */
 export class AccrualVault extends Vault implements IAccrualVault {
   /**
    * @inheritdoc

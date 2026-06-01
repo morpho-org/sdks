@@ -3,6 +3,7 @@ import type { Address, MarketId } from "../types.js";
 import type { Pending } from "./Vault.js";
 import type { VaultMarketPublicAllocatorConfig } from "./VaultMarketPublicAllocatorConfig.js";
 
+/** Plain input shape for a vault's configuration on one Morpho Blue market. */
 export interface IVaultMarketConfig {
   vault: Address;
   marketId: MarketId;
@@ -13,6 +14,7 @@ export interface IVaultMarketConfig {
   publicAllocatorConfig?: VaultMarketPublicAllocatorConfig;
 }
 
+/** Represents a vault's configuration on one Morpho Blue market. */
 export class VaultMarketConfig implements IVaultMarketConfig {
   /**
    * The vault's address.

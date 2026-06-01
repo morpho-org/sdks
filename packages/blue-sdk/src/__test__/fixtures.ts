@@ -13,22 +13,33 @@ import type { IVaultMarketConfig } from "../vault/VaultMarketConfig.js";
 import type { IVaultV2 } from "../vault/v2/VaultV2.js";
 import type { IVaultV2Adapter } from "../vault/v2/VaultV2Adapter.js";
 
+/** @internal */
 export const USER = "0x0000000000000000000000000000000000000001" as Address;
+/** @internal */
 export const LOAN_TOKEN =
   "0x0000000000000000000000000000000000000002" as Address;
+/** @internal */
 export const COLLATERAL_TOKEN =
   "0x0000000000000000000000000000000000000003" as Address;
+/** @internal */
 export const ORACLE = "0x0000000000000000000000000000000000000004" as Address;
+/** @internal */
 export const IRM = "0x0000000000000000000000000000000000000005" as Address;
+/** @internal */
 export const VAULT_ADDRESS =
   "0x0000000000000000000000000000000000000006" as Address;
+/** @internal */
 export const ADAPTER = "0x0000000000000000000000000000000000000007" as Address;
+/** @internal */
 export const LIQUIDITY_ADAPTER =
   "0x0000000000000000000000000000000000000008" as Address;
+/** @internal */
 export const RECIPIENT =
   "0x0000000000000000000000000000000000000009" as Address;
+/** @internal */
 export const EMPTY_HEX = "0x" as Hex;
 
+/** @internal */
 export function marketParams(
   overrides: Partial<IMarketParams> = {},
 ): IMarketParams {
@@ -42,6 +53,7 @@ export function marketParams(
   };
 }
 
+/** @internal */
 export function marketInput(overrides: Partial<IMarket> = {}): IMarket {
   return {
     params: marketParams(),
@@ -57,10 +69,12 @@ export function marketInput(overrides: Partial<IMarket> = {}): IMarket {
   };
 }
 
+/** @internal */
 export function market(overrides: Partial<IMarket> = {}) {
   return new Market(marketInput(overrides));
 }
 
+/** @internal */
 export function positionInput(overrides: Partial<IPosition> = {}): IPosition {
   const m = market();
   return {
@@ -73,6 +87,7 @@ export function positionInput(overrides: Partial<IPosition> = {}): IPosition {
   };
 }
 
+/** @internal */
 export function accrualPosition(
   positionOverrides: Partial<IAccrualPosition> = {},
   marketOverrides: Partial<IMarket> = {},
@@ -89,6 +104,7 @@ export function accrualPosition(
   );
 }
 
+/** @internal */
 export function vaultConfig(
   overrides: Partial<IVaultConfig> = {},
 ): IVaultConfig {
@@ -102,6 +118,7 @@ export function vaultConfig(
   };
 }
 
+/** @internal */
 export function vaultInput(overrides: Partial<IVault> = {}): IVault {
   return {
     ...vaultConfig(),
@@ -124,6 +141,7 @@ export function vaultInput(overrides: Partial<IVault> = {}): IVault {
   };
 }
 
+/** @internal */
 export function vaultMarketConfig(
   marketId: MarketId,
   overrides: Partial<IVaultMarketConfig> = {},
@@ -139,6 +157,7 @@ export function vaultMarketConfig(
   };
 }
 
+/** @internal */
 export function vaultV2Input(overrides: Partial<IVaultV2> = {}): IVaultV2 {
   return {
     address: VAULT_ADDRESS,
@@ -170,6 +189,7 @@ export function vaultV2Input(overrides: Partial<IVaultV2> = {}): IVaultV2 {
   };
 }
 
+/** @internal */
 export function vaultV2AdapterInput(
   overrides: Partial<IVaultV2Adapter> = {},
 ): IVaultV2Adapter {
