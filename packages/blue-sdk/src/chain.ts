@@ -38,6 +38,7 @@ export enum ChainId {
   FlareMainnet = 14,
   XdcMainnet = 50,
   KaiaMainnet = 8217,
+  ArcMainnet = 5042,
 }
 
 export interface ChainMetadata {
@@ -352,6 +353,13 @@ export namespace ChainUtils {
       nativeCurrency: { name: "Kaia", symbol: "KAIA", decimals: 18 },
       explorerUrl: "https://kaiascan.io",
       identifier: "kaia",
+    },
+    [ChainId.ArcMainnet]: {
+      name: "Arc",
+      id: ChainId.ArcMainnet,
+      nativeCurrency: { name: "USDC", symbol: "USDC", decimals: 18 },
+      explorerUrl: "http://explorer.arc.io/",
+      identifier: "arc",
     },
   } satisfies Record<ChainId, ChainMetadata>;
 }

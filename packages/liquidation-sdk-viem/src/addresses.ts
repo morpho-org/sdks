@@ -132,6 +132,7 @@ export const midasConfigs: Record<ChainId, Record<Address, MidasConfig>> = {
   [ChainId.FlareMainnet]: {},
   [ChainId.XdcMainnet]: {},
   [ChainId.KaiaMainnet]: {},
+  [ChainId.ArcMainnet]: {},
 };
 
 export const preLiquidationFactoryConfigs: Record<
