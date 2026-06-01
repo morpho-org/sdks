@@ -17,12 +17,11 @@ import type {
   TenderlyRpcConfig,
 } from "../../types.js";
 
-interface TenderlyRpcCall {
+type TenderlyRpcCall = {
   from: Address;
   to: Address;
-  data: Hex;
   value: Hex;
-}
+} & ({ input: Hex } | { data: Hex });
 
 const addressSchema = z.custom<Address>(
   (val) => typeof val === "string" && isAddress(val),
@@ -112,7 +111,7 @@ export async function simulateTenderlyRpc(params: {
       const json = await rpcRequest({
         rpcUrl: config.rpcUrl,
         method: "tenderly_simulateTransaction",
-        params: [buildCall(transactions[0]!), block, stateOverrides],
+        params: [buildSingleCall(transactions[0]!), block, stateOverrides],
         signal,
       });
       const result = unwrapResult(singleEnvelope.parse(json));
@@ -122,7 +121,7 @@ export async function simulateTenderlyRpc(params: {
     const json = await rpcRequest({
       rpcUrl: config.rpcUrl,
       method: "tenderly_simulateBundle",
-      params: [transactions.map(buildCall), block, stateOverrides],
+      params: [transactions.map(buildBundleCall), block, stateOverrides],
       signal,
     });
     const result = unwrapResult(bundleEnvelope.parse(json));
@@ -173,7 +172,19 @@ function unwrapResult<T>(envelope: {
   return envelope.result;
 }
 
-function buildCall(tx: SimulationTransaction): TenderlyRpcCall {
+// Per Tenderly Node RPC docs, the calldata field name differs by method:
+// `tenderly_simulateTransaction` expects `input`, `tenderly_simulateBundle` expects `data`.
+
+function buildSingleCall(tx: SimulationTransaction): TenderlyRpcCall {
+  return {
+    from: tx.from,
+    to: tx.to,
+    input: tx.data,
+    value: numberToHex(tx.value ?? 0n),
+  };
+}
+
+function buildBundleCall(tx: SimulationTransaction): TenderlyRpcCall {
   return {
     from: tx.from,
     to: tx.to,

@@ -112,12 +112,14 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     expect(body.jsonrpc).toBe("2.0");
     expect(body.method).toBe("tenderly_simulateTransaction");
     const [tx, block] = body.params as [
-      { from: Address; to: Address; data: Hex; value: Hex },
+      { from: Address; to: Address; input: Hex; data?: Hex; value: Hex },
       string,
     ];
     expect(tx.from).toBe(USER);
     expect(tx.to).toBe(VAULT);
-    expect(tx.data).toBe("0x12");
+    // tenderly_simulateTransaction carries calldata under `input`, not `data`.
+    expect(tx.input).toBe("0x12");
+    expect(tx.data).toBeUndefined();
     expect(tx.value).toBe("0x0");
     expect(block).toBe("latest");
   });
@@ -296,10 +298,17 @@ describe.sequential("simulateTenderlyRpc — bundle", () => {
 
     const body = requestBody(fetchMock.mock.calls[0]!);
     expect(body.method).toBe("tenderly_simulateBundle");
-    const [txs] = body.params as [Array<{ to: Address }>, string];
+    const [txs] = body.params as [
+      Array<{ to: Address; data: Hex; input?: Hex }>,
+      string,
+    ];
     expect(txs).toHaveLength(2);
     expect(txs[0]!.to).toBe(VAULT);
     expect(txs[1]!.to).toBe(USDC);
+    // tenderly_simulateBundle carries calldata under `data`, not `input`.
+    expect(txs[0]!.data).toBe("0x12");
+    expect(txs[0]!.input).toBeUndefined();
+    expect(txs[1]!.data).toBe("0x34");
   });
 
   it("emits one call per bundle step with its own gas/output/logs/assetChanges", async () => {
