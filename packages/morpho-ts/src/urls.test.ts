@@ -42,8 +42,8 @@ describe("urls", () => {
     test("BLUE_API_BASE_URL points to api", () => {
       expect(BLUE_API_BASE_URL).toBe("https://api.morpho.org");
     });
-    test("REWARDS_BASE_URL points to rewards", () => {
-      expect(REWARDS_BASE_URL).toBe("https://rewards.morpho.org");
+    test("REWARDS_BASE_URL points to campaigns", () => {
+      expect(REWARDS_BASE_URL).toBe("https://campaigns.morpho.org");
     });
     test("OPTIMIZERS_BASE_URL points to optimizers", () => {
       expect(OPTIMIZERS_BASE_URL).toBe("https://optimizers.morpho.org");

@@ -403,6 +403,9 @@ export abstract class BaseFormatter {
   }
 }
 
+/**
+ * Formats integer values as hexadecimal strings.
+ */
 export class HexFormatter extends BaseFormatter {
   protected _options: Readonly<FormatHexOptions> = {
     format: Format.hex,
@@ -430,6 +433,9 @@ export class HexFormatter extends BaseFormatter {
   }
 }
 
+/**
+ * Provides shared chainable options for decimal-based formatters.
+ */
 export abstract class CommonFormatter extends BaseFormatter {
   protected abstract _options: Readonly<BaseFormatOptions>;
 
@@ -926,4 +932,5 @@ export function createFormat<
   } & { readonly [K in keyof TCustom]: TFormatters[TCustom[K]["format"]] };
 }
 
+/** Default formatter collection with hex, number, commas, short, and percent formatters. */
 export const format = createFormat();
