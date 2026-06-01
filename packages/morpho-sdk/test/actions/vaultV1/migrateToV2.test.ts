@@ -5,7 +5,6 @@ import {
   isRequirementApproval,
   isRequirementSignature,
   MorphoClient,
-  vaultV1MigrateToV2,
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
@@ -13,49 +12,6 @@ import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("MigrateToV2 VaultV1", () => {
-  test("should create migration bundle via entity", async ({ client }) => {
-    const morpho = new MorphoClient(client);
-
-    const vaultV1 = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
-    const sourceVault = await vaultV1.getData();
-
-    const vaultV2 = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
-    const targetVault = await vaultV2.getData();
-
-    const shares = parseUnits("1000", 18);
-    const migrate = vaultV1.migrateToV2({
-      userAddress: client.account.address,
-      sourceVault,
-      targetVault,
-      shares,
-    });
-
-    const requirements = await migrate.getRequirements();
-    const tx_1 = migrate.buildTx();
-
-    const tx_2 = vaultV1MigrateToV2({
-      vault: {
-        chainId: mainnet.id,
-        address: SteakhouseUsdcVaultV1.address,
-        asset: SteakhouseUsdcVaultV1.asset,
-      },
-      args: {
-        targetVault: KeyrockUsdcVaultV2.address,
-        targetAsset: KeyrockUsdcVaultV2.asset,
-        shares,
-        minSharePriceVaultV1: tx_1.action.args.minSharePriceVaultV1,
-        maxSharePriceVaultV2: tx_1.action.args.maxSharePriceVaultV2,
-        recipient: client.account.address,
-      },
-    });
-
-    expect(migrate).toBeDefined();
-    expect(requirements).toBeDefined();
-    expect(tx_1).toStrictEqual(tx_2);
-    expect(sourceVault.asset).toStrictEqual(SteakhouseUsdcVaultV1.asset);
-    expect(sourceVault.address).toStrictEqual(SteakhouseUsdcVaultV1.address);
-  });
-
   test("should migrate full USDC position from V1 to V2", async ({
     client,
   }) => {

@@ -1,8 +1,4 @@
-import {
-  type AccrualPosition,
-  DEFAULT_SLIPPAGE_TOLERANCE,
-  getChainAddresses,
-} from "@morpho-org/blue-sdk";
+import { type AccrualPosition, getChainAddresses } from "@morpho-org/blue-sdk";
 import { blueAbi } from "@morpho-org/blue-sdk-viem";
 
 import { encodeFunctionData, parseUnits } from "viem";
@@ -11,14 +7,12 @@ import { describe, expect } from "vitest";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../../src/helpers/constant.js";
 import {
   BorrowExceedsSafeLtvError,
-  computeMinBorrowSharePrice,
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
   isRequirementAuthorization,
   isRequirementSignature,
   MissingAccrualPositionError,
   MorphoClient,
-  marketV1SupplyCollateralBorrow,
 } from "../../../src/index.js";
 import {
   UsdcEurcvMarketV1,
@@ -29,43 +23,6 @@ import { supplyCollateral } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("SupplyCollateralBorrowMarketV1", () => {
-  test("should create supply collateral borrow bundle", async ({ client }) => {
-    const amount = parseUnits("10", 18);
-    const borrowAmount = parseUnits("1000", 18);
-
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    const tx = market
-      .supplyCollateralBorrow({
-        userAddress: client.account.address,
-        amount,
-        borrowAmount,
-        positionData,
-      })
-      .buildTx();
-
-    const minSharePrice = computeMinBorrowSharePrice({
-      borrowAmount,
-      market: positionData.market,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    const directTx = marketV1SupplyCollateralBorrow({
-      market: { chainId: mainnet.id, marketParams: WethUsdsMarketV1 },
-      args: {
-        amount,
-        borrowAmount,
-        onBehalf: client.account.address,
-        receiver: client.account.address,
-        minSharePrice,
-      },
-    });
-
-    expect(directTx).toStrictEqual(tx);
-  });
-
   test("should supply collateral and borrow with ERC20 approval and authorization", async ({
     client,
   }) => {

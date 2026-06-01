@@ -211,6 +211,38 @@ describe.sequential("simulateV1", () => {
     expect(callArgs.blockNumber).toBeUndefined();
   });
 
+  it("passes AbortSignal through to the HTTP transport options", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    const signal = new AbortController().signal;
+    await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+      signal,
+    });
+
+    expect(mockSimulateCalls).toHaveBeenCalledOnce();
+  });
+
+  it("uses a default revert message when eth_simulateV1 omits the error", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [{ status: "failure", gasUsed: 0n, data: "0x" as Hex }],
+    });
+
+    await expect(
+      simulateV1({
+        rpcUrl: "http://rpc.local",
+        chainId: 1,
+        transactions: [BASIC_TX],
+      }),
+    ).rejects.toThrow("Simulation failed");
+  });
+
   it("omits both block params when blockNumber is undefined", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
@@ -239,6 +271,18 @@ describe.sequential("simulateV1", () => {
         transactions: [BASIC_TX],
       }),
     ).rejects.toThrow(ExternalServiceError);
+  });
+
+  it("wraps non-Error viem failures in ExternalServiceError", async () => {
+    mockSimulateCalls.mockRejectedValueOnce("transport down");
+
+    await expect(
+      simulateV1({
+        rpcUrl: "http://rpc.local",
+        chainId: 1,
+        transactions: [BASIC_TX],
+      }),
+    ).rejects.toThrow("transport down");
   });
 
   it("preserves SimulationRevertedError when viem throws one", async () => {
@@ -290,9 +334,7 @@ describe.sequential("simulateV1", () => {
 
   it("does not crash when a result has no logs array", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex /* no logs */ },
-      ],
+      results: [{ status: "success", gasUsed: 0n /* no data or logs */ }],
     });
 
     const result = await simulateV1({
@@ -302,5 +344,6 @@ describe.sequential("simulateV1", () => {
     });
 
     expect(result.calls[0]!.logs).toEqual([]);
+    expect(result.calls[0]!.returnData).toBe("0x");
   });
 });

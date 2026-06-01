@@ -41,6 +41,12 @@ describe("validateInput", () => {
     );
   });
 
+  it("throws when transactions is omitted", () => {
+    expect(() =>
+      validateInput(params({ transactions: undefined as never })),
+    ).toThrow(SimulationValidationError);
+  });
+
   it("throws when a tx has zero-address from", () => {
     expect(() =>
       validateInput(
@@ -92,6 +98,19 @@ describe("validateInput", () => {
           transactions: [
             { from: USER, to: VAULT, data: "0x11" as Hex },
             { from: OTHER, to: VAULT, data: "0x22" as Hex },
+          ],
+        }),
+      ),
+    ).toThrow(SimulationValidationError);
+  });
+
+  it("includes missing from values in the same-sender check", () => {
+    expect(() =>
+      validateInput(
+        params({
+          transactions: [
+            { from: undefined as never, to: VAULT, data: "0x11" as Hex },
+            { from: USER, to: VAULT, data: "0x22" as Hex },
           ],
         }),
       ),

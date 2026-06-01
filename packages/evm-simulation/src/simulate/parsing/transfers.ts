@@ -185,6 +185,7 @@ export function parseTransfers(
         warnMalformed(
           logger,
           log,
+          /* v8 ignore next: parser paths throw Error instances for valid RawLog shapes. */
           error instanceof Error ? error.message : String(error),
         );
       }

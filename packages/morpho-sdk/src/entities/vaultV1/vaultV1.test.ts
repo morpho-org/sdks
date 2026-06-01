@@ -1,6 +1,7 @@
+import { ChainId } from "@morpho-org/blue-sdk";
 import { fetchAccrualVaultV2 } from "@morpho-org/blue-sdk-viem";
 import { type Address, createPublicClient, http, parseUnits } from "viem";
-import { mainnet } from "viem/chains";
+import { celo, mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   GauntletWethVaultV1,
@@ -14,15 +15,78 @@ import { test } from "../../../test/setup.js";
 import { MorphoClient } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
+  ChainIdMismatchError,
+  ChainWNativeMissingError,
   ExcessiveSlippageToleranceError,
   isRequirementApproval,
   NativeAmountOnNonWNativeVaultError,
   NegativeNativeAmountError,
   NegativeSlippageToleranceError,
+  NonPositiveAssetAmountError,
+  NonPositiveSharesAmountError,
+  VaultAddressMismatchError,
   VaultAssetMismatchError,
 } from "../../types/index.js";
 
 describe("MorphoVaultV1 entity tests", () => {
+  describe("chain and data validation", () => {
+    test("getData throws ChainIdMismatchError when client chain differs", async () => {
+      const publicClient = createPublicClient({
+        chain: mainnet,
+        transport: http("https://rpc.example"),
+      });
+      const vault = new MorphoClient(publicClient).vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id + 1,
+      );
+
+      await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
+    });
+
+    test("deposit throws ChainIdMismatchError when client chain differs", () => {
+      const publicClient = createPublicClient({
+        chain: mainnet,
+        transport: http("https://rpc.example"),
+      });
+      const vault = new MorphoClient(publicClient).vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id + 1,
+      );
+
+      expect(() =>
+        vault.deposit({
+          amount: 1n,
+          userAddress: SteakhouseUsdcVaultV1.address,
+          vaultData: {} as never,
+        }),
+      ).toThrow(ChainIdMismatchError);
+    });
+
+    test("withdraw and redeem throw ChainIdMismatchError when client chain differs", () => {
+      const publicClient = createPublicClient({
+        chain: mainnet,
+        transport: http("https://rpc.example"),
+      });
+      const vault = new MorphoClient(publicClient).vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id + 1,
+      );
+
+      expect(() =>
+        vault.withdraw({
+          amount: 1n,
+          userAddress: SteakhouseUsdcVaultV1.address,
+        }),
+      ).toThrow(ChainIdMismatchError);
+      expect(() =>
+        vault.redeem({
+          shares: 1n,
+          userAddress: SteakhouseUsdcVaultV1.address,
+        }),
+      ).toThrow(ChainIdMismatchError);
+    });
+  });
+
   describe("slippageTolerance boundary", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,
@@ -124,6 +188,71 @@ describe("MorphoVaultV1 entity tests", () => {
   });
 
   describe("nativeAmount validation", () => {
+    test("should throw VaultAddressMismatchError when data belongs to a different vault", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client, {
+        supportSignature: true,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+      const vaultData = await morphoClient
+        .vaultV1(GauntletWethVaultV1.address, mainnet.id)
+        .getData();
+
+      expect(() =>
+        vault.deposit({
+          amount: 1n,
+          userAddress: client.account.address,
+          vaultData,
+        }),
+      ).toThrow(VaultAddressMismatchError);
+    });
+
+    test("should throw NonPositiveAssetAmountError for negative amount", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client, {
+        supportSignature: true,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+      const vaultData = await vault.getData();
+
+      expect(() =>
+        vault.deposit({
+          amount: -1n,
+          userAddress: client.account.address,
+          vaultData,
+        }),
+      ).toThrow(NonPositiveAssetAmountError);
+    });
+
+    test("should throw NonPositiveSharesAmountError for zero total assets", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client, {
+        supportSignature: true,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+      const vaultData = await vault.getData();
+
+      expect(() =>
+        vault.deposit({
+          amount: 0n,
+          userAddress: client.account.address,
+          vaultData,
+        }),
+      ).toThrow(NonPositiveSharesAmountError);
+    });
+
     test("should throw NegativeNativeAmountError for negative nativeAmount", async ({
       client,
     }) => {
@@ -167,6 +296,29 @@ describe("MorphoVaultV1 entity tests", () => {
         }),
       ).toThrow(NativeAmountOnNonWNativeVaultError);
     });
+
+    test("should throw ChainWNativeMissingError when native deposit is requested on a chain without wNative", () => {
+      const publicClient = createPublicClient({
+        chain: celo,
+        transport: http("https://rpc.example"),
+      });
+      const vault = new MorphoClient(publicClient).vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        ChainId.CeloMainnet,
+      );
+
+      expect(() =>
+        vault.deposit({
+          amount: 1n,
+          nativeAmount: 1n,
+          userAddress: SteakhouseUsdcVaultV1.address,
+          vaultData: {
+            address: SteakhouseUsdcVaultV1.address,
+            asset: SteakhouseUsdcVaultV1.asset,
+          } as never,
+        }),
+      ).toThrow(ChainWNativeMissingError);
+    });
   });
 
   describe("getRequirements with supportSignature: false", () => {
@@ -200,6 +352,110 @@ describe("MorphoVaultV1 entity tests", () => {
   });
 
   describe("migrateToV2", () => {
+    test("should throw ChainIdMismatchError when client chain differs", () => {
+      const publicClient = createPublicClient({
+        chain: mainnet,
+        transport: http("https://rpc.example"),
+      });
+      const vault = new MorphoClient(publicClient, {
+        supportSignature: false,
+      }).vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
+
+      expect(() =>
+        vault.migrateToV2({
+          userAddress: SteakhouseUsdcVaultV1.address,
+          sourceVault: {} as never,
+          targetVault: {} as never,
+          shares: 1n,
+        }),
+      ).toThrow(ChainIdMismatchError);
+    });
+
+    test("should throw VaultAddressMismatchError when source vault data differs", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client, {
+        supportSignature: false,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+      const sourceVault = await morphoClient
+        .vaultV1(GauntletWethVaultV1.address, mainnet.id)
+        .getData();
+      const targetVault = await fetchAccrualVaultV2(
+        KeyrockUsdcVaultV2.address,
+        client,
+        { chainId: mainnet.id },
+      );
+
+      expect(() =>
+        vault.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault,
+          shares: 1n,
+        }),
+      ).toThrow(VaultAddressMismatchError);
+    });
+
+    test("should throw NonPositiveSharesAmountError when shares is zero", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client, {
+        supportSignature: false,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+      const sourceVault = await vault.getData();
+      const targetVault = await fetchAccrualVaultV2(
+        KeyrockUsdcVaultV2.address,
+        client,
+        { chainId: mainnet.id },
+      );
+
+      expect(() =>
+        vault.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault,
+          shares: 0n,
+        }),
+      ).toThrow(NonPositiveSharesAmountError);
+    });
+
+    test("should throw NonPositiveSharesAmountError when the target V2 vault mints zero shares", async ({
+      client,
+    }) => {
+      const morphoClient = new MorphoClient(client, {
+        supportSignature: false,
+      });
+      const vault = morphoClient.vaultV1(
+        SteakhouseUsdcVaultV1.address,
+        mainnet.id,
+      );
+      const sourceVault = await vault.getData();
+
+      expect(() =>
+        vault.migrateToV2({
+          userAddress: client.account.address,
+          sourceVault,
+          targetVault: {
+            address: KeyrockUsdcVaultV2.address,
+            asset: sourceVault.asset,
+            lastUpdate: 0n,
+            accrueInterest: () => ({
+              vault: { toShares: () => 0n },
+            }),
+          } as never,
+          shares: 1n,
+        }),
+      ).toThrow(NonPositiveSharesAmountError);
+    });
+
     test("should return buildTx and getRequirements", async ({ client }) => {
       const morphoClient = new MorphoClient(client, {
         supportSignature: false,

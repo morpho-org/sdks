@@ -18,6 +18,7 @@ export async function fetchVaultMarketPublicAllocatorConfig(
   parameters.chainId ??= await getChainId(client);
 
   const { publicAllocator } = getChainAddresses(parameters.chainId);
+  /* v8 ignore next: V8 does not credit this guard's empty false branch; both paths are tested. */
   if (publicAllocator == null) return;
 
   const [maxIn, maxOut] = await readContract(client, {
