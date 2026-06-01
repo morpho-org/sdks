@@ -22,6 +22,36 @@ import type { DeploylessFetchParameters } from "../types.js";
 import { fetchVaultConfig } from "./VaultConfig.js";
 import { fetchVaultMarketAllocation } from "./VaultMarketAllocation.js";
 
+/**
+ * Fetches MetaMorpho vault state, accounting, queues, and public allocator config.
+ *
+ * Uses the deployless `GetVault` query by default and falls back to MetaMorpho, factory, and
+ * PublicAllocator contract reads when allowed.
+ *
+ * @param address - MetaMorpho vault address.
+ * @param client - Viem client used for deployless reads or multicalls.
+ * @param parameters.account - Optional account passed to viem calls.
+ * @param parameters.blockNumber - Optional block number for historical reads.
+ * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
+ * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
+ * @returns The hydrated `Vault` entity.
+ * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
+ * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
+ * @example
+ * ```ts
+ * import type { Vault } from "@morpho-org/blue-sdk";
+ * import { fetchVault } from "@morpho-org/blue-sdk-viem";
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+ *
+ * const vault: Vault = await fetchVault(vaultAddress, client);
+ * ```
+ */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVault(
   address: Address,
@@ -331,6 +361,37 @@ export async function fetchVault(
     lostAssets,
   });
 }
+
+/**
+ * Fetches MetaMorpho vault state with accrued market allocations.
+ *
+ * Reads the vault state with `fetchVault`, then fetches an accrued `VaultMarketAllocation` for every
+ * market in the withdraw queue.
+ *
+ * @param address - MetaMorpho vault address.
+ * @param client - Viem client used for deployless reads or multicalls.
+ * @param parameters.account - Optional account passed to viem calls.
+ * @param parameters.blockNumber - Optional block number for historical reads.
+ * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
+ * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
+ * @returns The hydrated `AccrualVault` entity with accrued market allocations.
+ * @throws {UnknownFactory} when the configured chain has no MetaMorpho factory.
+ * @throws {UnknownOfFactory} when `address` is not a MetaMorpho vault from the configured factory.
+ * @example
+ * ```ts
+ * import type { AccrualVault } from "@morpho-org/blue-sdk";
+ * import { fetchAccrualVault } from "@morpho-org/blue-sdk-viem";
+ * import { createPublicClient, http } from "viem";
+ * import { mainnet } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: mainnet, transport: http() });
+ * const vaultAddress = "0x9a8bC3B04b7f3D87cfC09ba407dCED575f2d61D8";
+ *
+ * const vault: AccrualVault = await fetchAccrualVault(vaultAddress, client);
+ * ```
+ */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchAccrualVault(
   address: Address,
