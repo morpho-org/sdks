@@ -827,7 +827,6 @@ const _addressesRegistry = {
     registryList: "0xdEBC92370Cd74d55DA144116138681dbbb528765",
     chainlinkOracleFactory: "0xbFc8D6167a02889D5EB08a023d9aB712B44f7dE8",
     preLiquidationFactory: "0x8edf6Ac769a7E7D81d571aC0FB8733aD724f6922",
-    wNative: "0x0000000000000000000000000000000000000001",
   },
 } as const;
 
@@ -1445,7 +1444,6 @@ const _deployments = {
     registryList: 1208978n,
     chainlinkOracleFactory: 1208882n,
     preLiquidationFactory: 1208882n,
-    wNative: 0n,
   },
 } as const satisfies Record<ChainId, ChainDeployments>;
 
@@ -1591,9 +1589,6 @@ const _unwrappedTokensMapping: Record<number, Record<Address, Address>> = {
   },
   [ChainId.KaiaMainnet]: {
     [_addressesRegistry[ChainId.KaiaMainnet].wNative]: NATIVE_ADDRESS,
-  },
-  [ChainId.ArcMainnet]: {
-    [_addressesRegistry[ChainId.ArcMainnet].wNative]: NATIVE_ADDRESS,
   },
 };
 

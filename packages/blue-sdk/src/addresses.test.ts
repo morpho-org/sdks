@@ -239,13 +239,6 @@ describe("addresses helpers", () => {
       morphoDeployment: 208_021_118n,
       wNativeDeployment: 104_802_159n,
     },
-    {
-      chainId: 5_042,
-      morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
-      wNative: "0x0000000000000000000000000000000000000001",
-      morphoDeployment: 1_208_685n,
-      wNativeDeployment: 0n,
-    },
   ])("exposes era-2 addresses and deployments for chain $chainId", ({
     chainId,
     morpho,
@@ -263,6 +256,22 @@ describe("addresses helpers", () => {
     expect(getUnwrappedToken(wNative as `0x${string}`, chainId)).toBe(
       NATIVE_ADDRESS,
     );
+  });
+
+  test("exposes era-2 addresses and deployments without wNative for chain 5042", () => {
+    const chainAddresses = getChainAddresses(5_042);
+    expect(chainAddresses).toMatchObject({
+      morpho: "0x34CD04070dD72b14E241112F6d83812Df5Af7fCD",
+    });
+    expect(chainAddresses.wNative).toBeUndefined();
+    expect(
+      (deployments as Record<number, ChainDeployments>)[5_042],
+    ).toMatchObject({
+      morpho: 1_208_685n,
+    });
+    expect(
+      (deployments as Record<number, Record<string, unknown>>)[5_042]?.wNative,
+    ).toBeUndefined();
   });
 
   test("registerCustomAddresses rejects overriding existing addresses and unwrapped tokens", () => {
