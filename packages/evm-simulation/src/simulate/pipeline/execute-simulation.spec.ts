@@ -40,10 +40,8 @@ function bothBackends(timeoutMs = 5000): SimulationConfig {
   return {
     chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]),
     tenderlyRest: {
-      apiBaseUrl: "https://api.tenderly.co",
+      apiUrl: "https://api.tenderly.co/api/v1/account/a/project/p",
       accessToken: "t",
-      accountSlug: "a",
-      projectSlug: "p",
       supportedChainIds: new Set([1]),
     },
     timeoutMs,
@@ -230,6 +228,25 @@ describe.sequential("executeSimulation — simulateV1 only (chain not in Tenderl
     });
     expect(mockTenderlyRest).not.toHaveBeenCalled();
     expect(mockSimulateV1).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses the default timeout when timeoutMs is omitted", async () => {
+    const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
+    try {
+      mockSimulateV1.mockResolvedValueOnce({ calls: [] });
+      await executeSimulation({
+        config: {
+          chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]),
+        },
+        chainId: 1,
+        transactions: txs,
+        shareable: false,
+      });
+
+      expect(timeoutSpy).toHaveBeenCalledWith(5000);
+    } finally {
+      timeoutSpy.mockRestore();
+    }
   });
 });
 

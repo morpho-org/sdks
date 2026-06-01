@@ -100,6 +100,19 @@ describe("parseTransfers", () => {
     expect(logger.warn).toHaveBeenCalledOnce();
   });
 
+  it("skips WETH9 Deposit with short topic or bad data", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: WETH,
+        topics: [DEPOSIT_TOPIC, "0x00" as Hex],
+        data: encodeUint256(1n),
+      },
+    ];
+    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledOnce();
+  });
+
   it("deduplicates WETH9 unwrap (Withdrawal + burn Transfer)", () => {
     const amount = 1000000000000000000n; // 1 ETH
     const logs: RawLog[] = [
@@ -211,6 +224,98 @@ describe("parseTransfers", () => {
     expect(result).toHaveLength(1);
     expect(result[0]!.amount).toBe(1000000n);
     expect(logger.warn).toHaveBeenCalledOnce();
+  });
+
+  it("warns and skips logs that fail after length validation", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: "0xnotanaddress" as Address,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(1000n),
+      },
+    ];
+
+    expect(parseTransfers([makeCall(logs)], logger)).toEqual([]);
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Skipping malformed log during transfer parsing",
+      expect.objectContaining({
+        address: "0xnotanaddress",
+        reason: expect.stringContaining("Address"),
+      }),
+    );
+  });
+
+  it("sorts equal token/from/to transfers by amount", () => {
+    const logs: RawLog[] = [
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(2n),
+      },
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(1n),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)]);
+
+    expect(result.map((t) => t.amount)).toEqual([1n, 2n]);
+  });
+
+  it("keeps already-sorted equal token/from/to transfers by amount", () => {
+    const logs: RawLog[] = [
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(1n),
+      },
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(2n),
+      },
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(2n),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)]);
+
+    expect(result.map((t) => t.amount)).toEqual([1n, 2n, 2n]);
+  });
+
+  it("sorts equal token transfers by sender and recipient in both directions", () => {
+    const HIGHER: Address = "0x3333333333333333333333333333333333333333";
+    const logs: RawLog[] = [
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(VAULT)],
+        data: encodeUint256(1n),
+      },
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(HIGHER), padAddress(USER)],
+        data: encodeUint256(1n),
+      },
+      {
+        address: USDC,
+        topics: [TRANSFER_TOPIC, padAddress(USER), padAddress(HIGHER)],
+        data: encodeUint256(1n),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)]);
+
+    expect(result.map((t) => [t.from, t.to])).toEqual([
+      [getAddress(USER), getAddress(VAULT)],
+      [getAddress(USER), getAddress(HIGHER)],
+      [getAddress(HIGHER), getAddress(USER)],
+    ]);
   });
 
   test("behavior: stamps txIdx according to originating call index", () => {
@@ -333,6 +438,26 @@ describe("parseTransfers", () => {
     const result = parseTransfers([makeCall(logs)], logger);
     expect(result).toHaveLength(1);
     expect(result[0]!.from).toBe(zeroAddress);
+    expect(logger.warn).not.toHaveBeenCalled();
+  });
+
+  test("behavior: zero-address burn Transfer on non-wnative token does not warn", () => {
+    const logger = { info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const logs: RawLog[] = [
+      {
+        address: USDC,
+        topics: [
+          TRANSFER_TOPIC,
+          padAddress(USER),
+          `0x${"0".repeat(64)}` as Hex,
+        ],
+        data: encodeUint256(1000n),
+      },
+    ];
+
+    const result = parseTransfers([makeCall(logs)], logger);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.to).toBe(zeroAddress);
     expect(logger.warn).not.toHaveBeenCalled();
   });
 });

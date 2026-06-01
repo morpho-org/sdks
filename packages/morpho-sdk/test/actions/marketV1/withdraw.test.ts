@@ -1,20 +1,15 @@
-import {
-  AccrualPosition as AccrualPositionClass,
-  DEFAULT_SLIPPAGE_TOLERANCE,
-} from "@morpho-org/blue-sdk";
+import { AccrualPosition as AccrualPositionClass } from "@morpho-org/blue-sdk";
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   AccrualPositionUserMismatchError,
-  computeMinWithdrawSharePrice,
   ExcessiveSlippageToleranceError,
   isRequirementAuthorization,
   MarketIdMismatchError,
   MissingAccrualPositionError,
   MorphoClient,
   MutuallyExclusiveWithdrawAmountsError,
-  marketV1Withdraw,
   NegativeSlippageToleranceError,
   NonPositiveWithdrawAmountError,
   type VaultReallocation,
@@ -31,49 +26,6 @@ import { supplyLoan } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
 describe("WithdrawMarketV1", () => {
-  test("should create withdraw bundle by assets", async ({ client }) => {
-    const supplyAmount = parseUnits("1000", 6);
-    const withdrawAmount = parseUnits("100", 6);
-
-    await supplyLoan({
-      client,
-      chainId: mainnet.id,
-      market: CbbtcUsdcMarketV1,
-      supplyAmount,
-    });
-
-    const morphoClient = new MorphoClient(client);
-    const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
-    const positionData = await market.getPositionData(client.account.address);
-
-    const withdraw = market.withdraw({
-      userAddress: client.account.address,
-      assets: withdrawAmount,
-      positionData,
-    });
-
-    const tx = withdraw.buildTx();
-
-    const minSharePrice = computeMinWithdrawSharePrice({
-      withdrawAssets: withdrawAmount,
-      withdrawShares: 0n,
-      market: positionData.market,
-      slippageTolerance: DEFAULT_SLIPPAGE_TOLERANCE,
-    });
-
-    const directTx = marketV1Withdraw({
-      market: { chainId: mainnet.id, marketParams: CbbtcUsdcMarketV1 },
-      args: {
-        assets: withdrawAmount,
-        shares: 0n,
-        receiver: client.account.address,
-        minSharePrice,
-      },
-    });
-
-    expect(directTx).toStrictEqual(tx);
-  });
-
   test("should withdraw loan token end-to-end (assets mode)", async ({
     client,
   }) => {

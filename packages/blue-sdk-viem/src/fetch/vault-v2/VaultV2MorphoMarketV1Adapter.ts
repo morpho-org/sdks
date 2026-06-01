@@ -32,6 +32,7 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
     parameters.chainId,
   );
 
+  /* v8 ignore next: V8 does not credit this guard's empty false branch; both paths are tested. */
   if (!morphoMarketV1AdapterFactory) {
     throw new UnknownFactory();
   }

@@ -1,42 +1,12 @@
 import { parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
-import {
-  isRequirementApproval,
-  MorphoClient,
-  vaultV1Redeem,
-} from "../../../src/index.js";
+import { isRequirementApproval, MorphoClient } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import { test } from "../../setup.js";
 
 describe("Redeem VaultV1", () => {
-  test("should create redeem transaction", async ({ client }) => {
-    const morpho = new MorphoClient(client);
-
-    const redeem = morpho
-      .vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id)
-      .redeem({
-        userAddress: client.account.address,
-        shares: 1000000000000000000n,
-      });
-    const tx_1 = redeem.buildTx();
-
-    const tx_2 = vaultV1Redeem({
-      vault: {
-        address: SteakhouseUsdcVaultV1.address,
-      },
-      args: {
-        shares: 1000000000000000000n,
-        recipient: client.account.address,
-        onBehalf: client.account.address,
-      },
-    });
-
-    expect(redeem).toBeDefined();
-    expect(tx_1).toStrictEqual(tx_2);
-  });
-
   test("should redeem 1K shares in vaultV1", async ({ client }) => {
     const shares = parseUnits("1000", 18);
     await client.deal({

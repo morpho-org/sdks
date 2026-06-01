@@ -31,10 +31,12 @@ pnpm add @morpho-org/morpho-sdk
 | **VaultV1**  | `deposit`                 | Bundler (general adapter) | Same ERC-4626 inflation attack prevention as V2. Supports native token wrapping.                    |
 |              | `withdraw`                | Direct vault call         | No attack surface                                                                                   |
 |              | `redeem`                  | Direct vault call         | No attack surface                                                                                   |
-| **MarketV1** | `supplyCollateral`        | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
+| **MarketV1** | `supply`                  | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
+|              | `supplyCollateral`        | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
 |              | `borrow`                  | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `supplyCollateralBorrow`  | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
 |              | `repay`                   | Bundler (general adapter) | `erc20TransferFrom` + `morphoRepay` with `maxSharePrice` protection. Supports partial or full.      |
+|              | `withdraw`                | Bundler (general adapter) | `morphoWithdraw` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `withdrawCollateral`      | Direct Morpho call        | No bundler overhead. Validates position health after withdrawal.                                    |
 |              | `repayWithdrawCollateral` | Bundler (general adapter) | Atomic repay + withdraw. Bundle order matters: repay first, then withdraw.                          |
 
@@ -81,9 +83,11 @@ const tx = buildTx(permitSignature);
 |              | `withdraw`               | Direct vault call         | No attack surface                                                                                   |
 |              | `redeem`                 | Direct vault call         | No attack surface                                                                                   |
 |              | `migrateToV2`            | Bundler (general adapter) | Atomic V1 → V2 migration: redeem V1 shares + deposit into V2 in one tx. Slippage-protected.         |
-| **MarketV1** | `supplyCollateral`       | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
+| **MarketV1** | `supply`                 | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
+|              | `supplyCollateral`       | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
 |              | `borrow`                 | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `supplyCollateralBorrow` | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
+|              | `withdraw`               | Bundler (general adapter) | `morphoWithdraw` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 
 ### VaultV2
 
@@ -252,6 +256,37 @@ const market = client.morpho.marketV1(
 );
 ```
 
+#### Supply (loan asset)
+
+Supply the loan asset to earn yield on the market.
+
+```typescript
+const marketData = await market.getMarketData();
+
+const { buildTx, getRequirements } = market.supply({
+  amount: 1000000000n,
+  userAddress: "0xUser...",
+  marketData,
+});
+
+const requirements = await getRequirements();
+const tx = buildTx(requirementSignature);
+```
+
+##### Supply with native token wrapping
+
+If the market's `loanToken` is the chain's wNative, you can supply native token that will be wrapped automatically:
+
+```typescript
+const { buildTx, getRequirements } = market.supply({
+  nativeAmount: 1000000000000000000n,
+  userAddress: "0xUser...",
+  marketData,
+});
+```
+
+The bundle routes through `GeneralAdapter1` with `maxSharePrice` slippage protection (anti-inflation guard).
+
 #### Supply Collateral
 
 ```typescript
@@ -321,6 +356,33 @@ const tx = buildTx(requirementSignature);
 ```
 
 Repay does **not** require Morpho authorization (it only requires a loan token approval for `GeneralAdapter1`).
+
+#### Withdraw (loan asset)
+
+Two modes — `assets` (exact amount) or `shares` (full close, immune to interest accrual between quote and inclusion). Routed through bundler3 with `minSharePrice` slippage protection; the withdrawn assets are sent directly to `receiver` (defaults to `userAddress`). Optional `reallocations` top up market liquidity via the **PublicAllocator** when the on-market liquidity is insufficient (same mechanism as `borrow`).
+
+```typescript
+const positionData = await market.getPositionData("0xUser...");
+
+// Withdraw an exact amount of loan asset
+const { buildTx, getRequirements } = market.withdraw({
+  assets: 500000000n,
+  userAddress: "0xUser...",
+  positionData,
+});
+
+// Or close the full supply position by shares
+const { buildTx, getRequirements } = market.withdraw({
+  shares: positionData.supplyShares,
+  userAddress: "0xUser...",
+  positionData,
+});
+
+const requirements = await getRequirements();
+const tx = buildTx();
+```
+
+Loan-asset withdraw requires Morpho authorization for `GeneralAdapter1` (returned by `getRequirements` when missing). It does **not** require a token approval.
 
 #### Withdraw Collateral
 
@@ -443,13 +505,17 @@ graph LR
 
     subgraph MarketV1 Flow
         MM1[MorphoMarketV1]
+        MM1 --> M1S[marketV1Supply]
         MM1 --> M1SC[marketV1SupplyCollateral]
         MM1 --> M1B[marketV1Borrow]
         MM1 --> M1SCB[marketV1SupplyCollateralBorrow]
+        MM1 --> M1W[marketV1Withdraw]
 
-        M1SC -->|erc20TransferFrom + morphoSupplyCollateral| B3[Bundler3]
+        M1S -->|nativeWrap? + erc20TransferFrom + morphoSupply| B3[Bundler3]
+        M1SC -->|erc20TransferFrom + morphoSupplyCollateral| B3
         M1B -->|reallocateTo? + morphoBorrow| B3
         M1SCB -->|transfer + supplyCollateral + reallocateTo? + borrow| B3
+        M1W -->|reallocateTo? + morphoWithdraw| B3
 
         B3 -.->|reallocateTo| PA[PublicAllocator]
     end

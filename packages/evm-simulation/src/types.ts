@@ -8,11 +8,13 @@ import type { Address, BlockTag, Hex } from "viem";
  * Omit from `SimulationConfig.tenderlyRest` to disable the Tenderly path entirely.
  */
 export interface TenderlyRestConfig {
-  /** e.g. "https://api.tenderly.co" */
-  apiBaseUrl: string;
+  /**
+   * Fully-qualified project-scoped Tenderly API URL, onto which `/simulate`,
+   * `/simulate-bundle`, and `/simulations/{id}/share` are appended.
+   * e.g. "https://api.tenderly.co/api/v1/account/my-account/project/my-project".
+   */
+  apiUrl: string;
   accessToken: string;
-  accountSlug: string;
-  projectSlug: string;
   /** Chain IDs that Tenderly supports for simulation */
   supportedChainIds: Set<number>;
 }
