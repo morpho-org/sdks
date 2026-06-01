@@ -2,7 +2,6 @@
 
 // Errors (for instanceof checks by consumers)
 export {
-  AddressScreeningError,
   BlacklistViolationError,
   ExternalServiceError,
   SimulationPackageError,
@@ -10,7 +9,6 @@ export {
   SimulationValidationError,
   UnsupportedChainError,
 } from "./errors.js";
-export { screenAddresses } from "./screen-addresses/index.js";
 export { simulate } from "./simulate/index.js";
 // Types
 export type {
