@@ -8,7 +8,11 @@ import {
   numberToHex,
 } from "viem";
 import { z } from "zod";
-import { ExternalServiceError, SimulationRevertedError } from "../../errors.js";
+import {
+  ExternalServiceError,
+  SimulationRevertedError,
+  SimulationValidationError,
+} from "../../errors.js";
 import type {
   RawCall,
   RawLog,
@@ -17,11 +21,16 @@ import type {
   TenderlyRpcConfig,
 } from "../../types.js";
 
-type TenderlyRpcCall = {
+interface TenderlyRpcCall {
   from: Address;
   to: Address;
+  // `tenderly_simulateTransaction` keys calldata as `input`,
+  // `tenderly_simulateBundle` keys it as `data`. Setting both lets the
+  // same call shape work for either method without branching at call sites.
+  input: Hex;
+  data: Hex;
   value: Hex;
-} & ({ input: Hex } | { data: Hex });
+}
 
 const addressSchema = z.custom<Address>(
   (val) => typeof val === "string" && isAddress(val),
@@ -90,6 +99,7 @@ const bundleEnvelope = rpcEnvelope(z.array(simResultSchema).min(1));
  * @param params.blockNumber - Optional pinned block number or `BlockTag`. Defaults to `latest`.
  * @param params.signal - Optional `AbortSignal` for cancellation / timeout.
  * @returns A {@link RawSimulationResult} with one `RawCall` per input transaction.
+ * @throws {SimulationValidationError} when `transactions` is empty.
  * @throws {SimulationRevertedError} when any simulated tx reports `status: false`.
  * @throws {ExternalServiceError} on non-2xx response, JSON-RPC envelope error,
  *   schema-validation failure, or fetch-layer failure.
@@ -101,17 +111,26 @@ export async function simulateTenderlyRpc(params: {
   signal?: AbortSignal;
 }): Promise<RawSimulationResult> {
   const { config, transactions, blockNumber, signal } = params;
+
+  const firstTx = transactions[0];
+  if (!firstTx) {
+    throw new SimulationValidationError(
+      "At least one transaction is required",
+      [],
+    );
+  }
+
   const block = encodeBlock(blockNumber);
   // Inflate sender ETH balance to avoid false "insufficient funds for gas"
   // reverts on wallets low on native gas token — mirrors simulateV1.
-  const stateOverrides = buildStateOverrides(transactions[0]!.from);
+  const stateOverrides = buildStateOverrides(firstTx.from);
 
   try {
     if (transactions.length === 1) {
       const json = await rpcRequest({
         rpcUrl: config.rpcUrl,
         method: "tenderly_simulateTransaction",
-        params: [buildSingleCall(transactions[0]!), block, stateOverrides],
+        params: [buildCall(firstTx), block, stateOverrides],
         signal,
       });
       const result = unwrapResult(singleEnvelope.parse(json));
@@ -121,7 +140,7 @@ export async function simulateTenderlyRpc(params: {
     const json = await rpcRequest({
       rpcUrl: config.rpcUrl,
       method: "tenderly_simulateBundle",
-      params: [transactions.map(buildBundleCall), block, stateOverrides],
+      params: [transactions.map(buildCall), block, stateOverrides],
       signal,
     });
     const result = unwrapResult(bundleEnvelope.parse(json));
@@ -172,22 +191,11 @@ function unwrapResult<T>(envelope: {
   return envelope.result;
 }
 
-// Per Tenderly Node RPC docs, the calldata field name differs by method:
-// `tenderly_simulateTransaction` expects `input`, `tenderly_simulateBundle` expects `data`.
-
-function buildSingleCall(tx: SimulationTransaction): TenderlyRpcCall {
+function buildCall(tx: SimulationTransaction): TenderlyRpcCall {
   return {
     from: tx.from,
     to: tx.to,
     input: tx.data,
-    value: numberToHex(tx.value ?? 0n),
-  };
-}
-
-function buildBundleCall(tx: SimulationTransaction): TenderlyRpcCall {
-  return {
-    from: tx.from,
-    to: tx.to,
     data: tx.data,
     value: numberToHex(tx.value ?? 0n),
   };
