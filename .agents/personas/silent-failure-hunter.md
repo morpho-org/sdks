@@ -1,7 +1,7 @@
 ---
 name: silent-failure-hunter
 kind: baseline
-applies: AGENTS.md §1 Architecture (testability), §2 Forbidden patterns (typed errors over `throw new Error`)
+applies: AGENTS.md §2 rule 2 — handling discipline for typed errors once they exist (code-quality owns the rule's existence; this persona owns what happens to the error after it's thrown)
 out-of-scope:
   - General type-safety inside function bodies — see code-quality.
   - Whether the typed error class exists at all (vs `throw new Error`) — see code-quality (it owns §2's typed-error rule).
