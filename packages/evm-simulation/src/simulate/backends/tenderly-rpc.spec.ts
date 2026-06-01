@@ -121,8 +121,6 @@ describe.sequential("simulateTenderlyRpc — single tx", () => {
     ];
     expect(tx.from).toBe(USER);
     expect(tx.to).toBe(VAULT);
-    // The SDK emits both `input` and `data` on every call so the same shape
-    // works for either Tenderly method; consumers only ever pass `data`.
     expect(tx.input).toBe("0x12");
     expect(tx.data).toBe("0x12");
     expect(tx.value).toBe("0x0");
@@ -310,8 +308,6 @@ describe.sequential("simulateTenderlyRpc — bundle", () => {
     expect(txs).toHaveLength(2);
     expect(txs[0]!.to).toBe(VAULT);
     expect(txs[1]!.to).toBe(USDC);
-    // Both `input` and `data` are populated on every call — the same shape
-    // works for either Tenderly method; consumers only ever pass `data`.
     expect(txs[0]!.data).toBe("0x12");
     expect(txs[0]!.input).toBe("0x12");
     expect(txs[1]!.data).toBe("0x34");

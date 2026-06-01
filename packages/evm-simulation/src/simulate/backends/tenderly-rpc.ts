@@ -24,9 +24,7 @@ import type {
 interface TenderlyRpcCall {
   from: Address;
   to: Address;
-  // `tenderly_simulateTransaction` keys calldata as `input`,
-  // `tenderly_simulateBundle` keys it as `data`. Setting both lets the
-  // same call shape work for either method without branching at call sites.
+  // `tenderly_simulateTransaction` reads `input`, `tenderly_simulateBundle` reads `data` — set both.
   input: Hex;
   data: Hex;
   value: Hex;
