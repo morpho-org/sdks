@@ -4,41 +4,39 @@ import type { Address, BlockTag, Hex } from "viem";
 // Shapes the caller constructs once and passes into `simulate()`.
 
 /**
- * Credentials and routing for the Tenderly REST simulation backend.
- * Omit from `SimulationConfig.tenderlyRest` to disable the Tenderly path entirely.
+ * Credentials for the Tenderly Node Web3 Gateway. The `rpcUrl` is the
+ * chain-specific gateway URL with the access key embedded in the path,
+ * e.g. `https://mainnet.gateway.tenderly.co/{ACCESS_KEY}`.
  */
-export interface TenderlyRestConfig {
-  /**
-   * Fully-qualified project-scoped Tenderly API URL, onto which `/simulate`,
-   * `/simulate-bundle`, and `/simulations/{id}/share` are appended.
-   * e.g. "https://api.tenderly.co/api/v1/account/my-account/project/my-project".
-   */
-  apiUrl: string;
-  accessToken: string;
-  /** Chain IDs that Tenderly supports for simulation */
-  supportedChainIds: Set<number>;
+export interface TenderlyRpcConfig {
+  rpcUrl: string;
 }
 
 /**
- * Per-chain capabilities. Stored as a `Map` value in
- * `SimulationConfig.chains`, keyed by chain ID.
+ * Per-chain backend capabilities. Exactly one configuration shape per chain;
+ * the discriminated union enforces that **at least one** of `tenderlyRpc`
+ * (primary) or `simulateV1Url` (fallback) is supplied.
  */
-export interface ChainSimulationConfig {
-  /** JSON-RPC URL supporting `eth_simulateV1`. undefined = not available for this chain. */
-  simulateV1Url?: string;
-}
+export type ChainSimulationConfig =
+  | {
+      /** Tenderly RPC config — `tenderly_simulateTransaction` / `tenderly_simulateBundle`. */
+      tenderlyRpc: TenderlyRpcConfig;
+      /** JSON-RPC URL supporting `eth_simulateV1`. Optional when Tenderly is set. */
+      simulateV1Url?: string;
+    }
+  | {
+      tenderlyRpc?: TenderlyRpcConfig;
+      simulateV1Url: string;
+    };
 
 /**
  * Top-level configuration for `simulate`.
  *
- * At least one backend must be reachable for a given chainId — either Tenderly
- * (via `tenderlyRest` with that chainId in `TenderlyRestConfig.supportedChainIds`)
- * or `ChainSimulationConfig.simulateV1Url` in the `chains` map. Otherwise the
- * orchestrator throws `UnsupportedChainError`.
+ * Every chain entry must declare at least one backend (Tenderly RPC primary,
+ * `eth_simulateV1` fallback, or both). Calling `simulate` for a `chainId`
+ * missing from `chains` throws `UnsupportedChainError`.
  */
 export interface SimulationConfig {
-  /** Tenderly REST API config. undefined = Tenderly not available. */
-  tenderlyRest?: TenderlyRestConfig;
   /** Per-chain simulation capabilities. */
   chains: Map<number, ChainSimulationConfig>;
   logger?: SimulationLogger;
@@ -106,8 +104,6 @@ export interface Transfer {
  *   status, returnData/gasUsed, and (Tenderly only) assetChanges per tx.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
- * - `tenderlyUrl` is set only when `shareable: true` AND the Tenderly backend
- *   ran successfully (not the `eth_simulateV1` fallback).
  */
 export interface SimulationResult {
   /** The full resolved transaction list (including prepended authorization txs). */
@@ -120,8 +116,6 @@ export interface SimulationResult {
   readonly calls: readonly SimulationCall[];
   /** Parsed ERC-20 / WETH9 transfers from the simulation. */
   readonly transfers: readonly Transfer[];
-  /** Shareable Tenderly URL. Present only when `shareable: true` and Tenderly ran (not fallback). */
-  readonly tenderlyUrl?: string;
 }
 
 /** Minimal structured logger the package calls for warnings and info. */
@@ -151,12 +145,11 @@ export interface SimulateParams {
  */
 export interface RawSimulationResult {
   calls: RawCall[];
-  tenderlyUrl?: string;
 }
 
 /**
  * Normalized EVM log emitted by a single simulated call. The shape is the
- * common subset both backends (`eth_simulateV1` via viem and Tenderly REST)
+ * common subset both backends (`eth_simulateV1` via viem and Tenderly RPC)
  * produce after schema validation. Returned indirectly via
  * `SimulationCall.logs` and consumed by the SDK's transfer parser.
  */
@@ -177,7 +170,7 @@ export interface RawCall {
   status: boolean;
   returnData: Hex;
   gasUsed: bigint;
-  /** Tenderly-only `asset_changes` payload. Absent on `eth_simulateV1`. */
+  /** Tenderly-only `assetChanges` payload. Absent on `eth_simulateV1`. */
   assetChanges?: unknown;
 }
 
@@ -202,7 +195,7 @@ export interface SimulationCall {
   /** Gas used by this call (root frame). */
   readonly gasUsed: bigint;
   /**
-   * Tenderly-only `asset_changes` payload for this tx. Opaque `unknown` —
+   * Tenderly-only `assetChanges` payload for this tx. Opaque `unknown` —
    * do not destructure without validation. Absent on `eth_simulateV1`.
    */
   readonly assetChanges?: unknown;

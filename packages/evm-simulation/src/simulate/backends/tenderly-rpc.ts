@@ -1,0 +1,198 @@
+import {
+  type Address,
+  type BlockTag,
+  type Hex,
+  isAddress,
+  isHex,
+  numberToHex,
+} from "viem";
+import { z } from "zod";
+import { ExternalServiceError, SimulationRevertedError } from "../../errors.js";
+import type {
+  RawCall,
+  RawLog,
+  RawSimulationResult,
+  SimulationTransaction,
+  TenderlyRpcConfig,
+} from "../../types.js";
+
+interface TenderlyRpcCall {
+  from: Address;
+  to: Address;
+  data: Hex;
+  value: Hex;
+}
+
+const addressSchema = z.custom<Address>(
+  (val) => typeof val === "string" && isAddress(val),
+);
+const hexSchema = z.custom<Hex>((val) => typeof val === "string" && isHex(val));
+
+const traceFrameSchema = z
+  .object({ output: hexSchema.optional() })
+  .passthrough();
+
+const logSchema = z
+  .object({
+    raw: z
+      .object({
+        address: addressSchema,
+        topics: z.array(hexSchema).optional(),
+        data: hexSchema.optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+const simResultSchema = z
+  .object({
+    status: z.boolean(),
+    gasUsed: hexSchema,
+    logs: z.array(logSchema).optional(),
+    trace: z.array(traceFrameSchema).optional(),
+    assetChanges: z.unknown().optional(),
+    error: z.string().optional(),
+    errorMessage: z.string().optional(),
+  })
+  .passthrough();
+
+type SimResult = z.infer<typeof simResultSchema>;
+
+const rpcErrorSchema = z
+  .object({
+    code: z.number().optional(),
+    message: z.string(),
+    data: z.unknown().optional(),
+  })
+  .passthrough();
+
+function rpcEnvelope<T extends z.ZodTypeAny>(result: T) {
+  return z
+    .object({ result: result.optional(), error: rpcErrorSchema.optional() })
+    .passthrough();
+}
+
+const singleEnvelope = rpcEnvelope(simResultSchema);
+const bundleEnvelope = rpcEnvelope(z.array(simResultSchema).min(1));
+
+/**
+ * Simulate one or more transactions via Tenderly's Node Web3 Gateway.
+ * Dispatches to `tenderly_simulateTransaction` for a single call and
+ * `tenderly_simulateBundle` for a multi-call bundle.
+ */
+export async function simulateTenderlyRpc(params: {
+  config: TenderlyRpcConfig;
+  transactions: SimulationTransaction[];
+  blockNumber?: bigint | BlockTag;
+  signal?: AbortSignal;
+}): Promise<RawSimulationResult> {
+  const { config, transactions, blockNumber, signal } = params;
+  const block = encodeBlock(blockNumber);
+
+  try {
+    if (transactions.length === 1) {
+      const json = await rpcRequest({
+        rpcUrl: config.rpcUrl,
+        method: "tenderly_simulateTransaction",
+        params: [buildCall(transactions[0]!), block],
+        signal,
+      });
+      const result = unwrapResult(singleEnvelope.parse(json));
+      return { calls: [toRawCall(result)] };
+    }
+
+    const json = await rpcRequest({
+      rpcUrl: config.rpcUrl,
+      method: "tenderly_simulateBundle",
+      params: [transactions.map(buildCall), block],
+      signal,
+    });
+    const result = unwrapResult(bundleEnvelope.parse(json));
+    return { calls: result.map(toRawCall) };
+  } catch (error) {
+    if (error instanceof SimulationRevertedError) throw error;
+    if (error instanceof ExternalServiceError) throw error;
+    throw new ExternalServiceError(
+      `Tenderly RPC error: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+}
+
+async function rpcRequest(params: {
+  rpcUrl: string;
+  method: string;
+  params: unknown[];
+  signal?: AbortSignal;
+}): Promise<unknown> {
+  const { rpcUrl, method, params: rpcParams, signal } = params;
+  const response = await fetch(rpcUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: rpcParams }),
+    signal,
+  });
+  if (!response.ok) {
+    throw new ExternalServiceError(
+      `Tenderly RPC returned ${response.status}: ${response.statusText}`,
+    );
+  }
+  return await response.json();
+}
+
+function unwrapResult<T>(envelope: {
+  result?: T;
+  error?: { message: string };
+}): T {
+  if (envelope.error) {
+    throw new ExternalServiceError(
+      `Tenderly RPC error: ${envelope.error.message}`,
+    );
+  }
+  if (envelope.result === undefined) {
+    throw new ExternalServiceError("Tenderly RPC returned no result");
+  }
+  return envelope.result;
+}
+
+function buildCall(tx: SimulationTransaction): TenderlyRpcCall {
+  return {
+    from: tx.from,
+    to: tx.to,
+    data: tx.data,
+    value: numberToHex(tx.value ?? 0n),
+  };
+}
+
+function encodeBlock(blockNumber?: bigint | BlockTag): string {
+  if (blockNumber === undefined) return "latest";
+  return typeof blockNumber === "bigint"
+    ? numberToHex(blockNumber)
+    : blockNumber;
+}
+
+function toRawCall(data: SimResult): RawCall {
+  if (data.status !== true) {
+    const message =
+      data.errorMessage || data.error || "Transaction simulation reverted";
+    throw new SimulationRevertedError(message, data);
+  }
+  const logs: RawLog[] = [];
+  for (const log of data.logs ?? []) {
+    if (log.raw) {
+      logs.push({
+        address: log.raw.address,
+        topics: log.raw.topics ?? [],
+        data: log.raw.data ?? "0x",
+      });
+    }
+  }
+  return {
+    logs,
+    status: true,
+    returnData: data.trace?.[0]?.output ?? "0x",
+    gasUsed: BigInt(data.gasUsed),
+    assetChanges: data.assetChanges,
+  };
+}

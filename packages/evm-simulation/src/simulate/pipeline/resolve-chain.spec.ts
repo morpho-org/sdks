@@ -1,82 +1,62 @@
 import { UnsupportedChainError } from "../../errors.js";
-import type { SimulationConfig, TenderlyRestConfig } from "../../types.js";
+import type { ChainSimulationConfig, SimulationConfig } from "../../types.js";
 import { resolveChain } from "./resolve-chain.js";
 
-const TENDERLY: TenderlyRestConfig = {
-  apiUrl: "https://api.tenderly.co/api/v1/account/a/project/p",
-  accessToken: "t",
-  supportedChainIds: new Set([1, 8453]),
-};
+const TENDERLY = { rpcUrl: "https://mainnet.gateway.tenderly.co/key" };
 
 function makeConfig(
-  overrides: Partial<SimulationConfig> = {},
+  chains: Array<[number, ChainSimulationConfig]>,
 ): SimulationConfig {
-  return {
-    chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]),
-    tenderlyRest: TENDERLY,
-    ...overrides,
-  };
+  return { chains: new Map(chains) };
 }
 
 describe("resolveChain", () => {
-  it("flags tenderlySupported=true when chainId is in Tenderly supportedChainIds", () => {
-    const cap = resolveChain(makeConfig(), 1);
-    expect(cap.tenderlySupported).toBe(true);
+  it("returns both backends when both are configured", () => {
+    const cap = resolveChain(
+      makeConfig([
+        [1, { tenderlyRpc: TENDERLY, simulateV1Url: "http://rpc.local" }],
+      ]),
+      1,
+    );
+    expect(cap.tenderlyRpc).toEqual(TENDERLY);
     expect(cap.simulateV1Url).toBe("http://rpc.local");
   });
 
-  it("flags tenderlySupported=false when chainId is missing from Tenderly supportedChainIds", () => {
+  it("returns only simulateV1Url when Tenderly is absent", () => {
     const cap = resolveChain(
-      makeConfig({
-        chains: new Map([[137, { simulateV1Url: "http://poly" }]]),
-      }),
+      makeConfig([[137, { simulateV1Url: "http://poly" }]]),
       137,
     );
-    expect(cap.tenderlySupported).toBe(false);
+    expect(cap.tenderlyRpc).toBeUndefined();
     expect(cap.simulateV1Url).toBe("http://poly");
   });
 
-  it("returns simulateV1Url undefined when chains map has no entry for chainId", () => {
-    const cap = resolveChain(
-      makeConfig({ chains: new Map(), tenderlyRest: TENDERLY }),
-      1, // Tenderly supports it; no simulateV1Url
-    );
-    expect(cap.tenderlySupported).toBe(true);
+  it("returns only tenderlyRpc when fallback is absent", () => {
+    const cap = resolveChain(makeConfig([[1, { tenderlyRpc: TENDERLY }]]), 1);
+    expect(cap.tenderlyRpc).toEqual(TENDERLY);
     expect(cap.simulateV1Url).toBeUndefined();
   });
 
-  it("returns simulateV1Url undefined when entry exists but simulateV1Url is not set", () => {
-    const cap = resolveChain(makeConfig({ chains: new Map([[1, {}]]) }), 1);
-    expect(cap.simulateV1Url).toBeUndefined();
+  it("throws UnsupportedChainError when the chainId is missing from the map", () => {
+    expect(() =>
+      resolveChain(makeConfig([[1, { tenderlyRpc: TENDERLY }]]), 999999),
+    ).toThrow(UnsupportedChainError);
   });
 
-  it("treats missing tenderlyRest as tenderlySupported=false", () => {
-    const cap = resolveChain(
-      { chains: new Map([[1, { simulateV1Url: "http://rpc.local" }]]) },
-      1,
-    );
-    expect(cap.tenderlySupported).toBe(false);
-    expect(cap.simulateV1Url).toBe("http://rpc.local");
-  });
-
-  it("throws UnsupportedChainError when neither Tenderly nor simulateV1Url is available", () => {
+  it("throws UnsupportedChainError when neither backend is configured for the chain", () => {
     expect(() =>
       resolveChain(
-        { chains: new Map(), tenderlyRest: TENDERLY },
-        999999, // not in Tenderly supportedChainIds
+        // Cast: the discriminated union prevents this at compile time;
+        // the runtime guard exists for callers bypassing the type.
+        { chains: new Map([[1, {} as ChainSimulationConfig]]) },
+        1,
       ),
     ).toThrow(UnsupportedChainError);
   });
 
-  it("throws UnsupportedChainError when tenderlyRest is absent and simulateV1Url is absent", () => {
-    expect(() => resolveChain({ chains: new Map() }, 1)).toThrow(
-      UnsupportedChainError,
-    );
-  });
-
   it("UnsupportedChainError carries the offending chainId", () => {
     try {
-      resolveChain({ chains: new Map() }, 42);
+      resolveChain(makeConfig([]), 42);
       expect.fail("should have thrown");
     } catch (err) {
       expect(err).toBeInstanceOf(UnsupportedChainError);
