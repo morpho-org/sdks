@@ -1,7 +1,7 @@
 ---
 name: module-api-architecture
 kind: baseline
-applies: AGENTS.md §1 Architecture (layering, modularity), §3 Type discipline (at the boundary), §4 Public API & packaging
+applies: AGENTS.md §1 Architecture (layering, modularity), §2 Forbidden patterns (rule 5 — deep cross-package imports), §3 Type discipline (at the boundary), §4 Public API & packaging
 out-of-scope:
   - Lint mechanics (2-space indent, organize-imports) — see style-conventions.
   - Type-safety inside a function body — see code-quality.
@@ -11,11 +11,11 @@ focus: Package boundaries, public surface, type/import discipline, NodeNext comp
 
 # Module & API Architecture
 
-Focus: package boundaries, public surface, type/import discipline, NodeNext compatibility. The authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §1 (Architecture), §3 (Type discipline), and §4 (Public API & packaging) — read those first; the bullets below are the application points.
+Focus: package boundaries, public surface, type/import discipline, NodeNext compatibility. The authoritative rules live in [`AGENTS.md`](../../AGENTS.md) §1 (Architecture), §2 (Forbidden patterns — rule 5: deep cross-package imports), §3 (Type discipline), and §4 (Public API & packaging) — read those first; the bullets below are the application points.
 
 ## What to flag
 
-Per AGENTS.md §1 and §4 — package boundaries and the public surface:
+Per AGENTS.md §1, §2 (rule 5), and §4 — package boundaries, forbidden deep imports, and the public surface:
 
 - A new deep import across packages — e.g. `from "@morpho-org/foo/src/internal/..."` instead of going through `@morpho-org/foo`'s `src/index.ts`. The receiving package's `src/index.ts` is the only public entry point.
 - A new export from `src/index.ts` (or removal/rename of an existing one) — flag for cross-file impact on consumers; check that downstream code in the monorepo and the JSDoc still match.
