@@ -1,5 +1,20 @@
 # @morpho-org/morpho-sdk
 
+## 3.1.1
+
+### Patch Changes
+
+- [#746](https://github.com/morpho-org/sdks/pull/746) [`401cf32`](https://github.com/morpho-org/sdks/commit/401cf3244b32fcb00f6c7676b2a43e34a0283cad) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add Arc chain metadata, deployment addresses, deployment block lower bounds, and native-token mapping.
+
+  Patch maintained packages that depend directly on `@morpho-org/blue-sdk` so their latest releases resolve the new address registry.
+
+- [#736](https://github.com/morpho-org/sdks/pull/736) [`797928c`](https://github.com/morpho-org/sdks/commit/797928cd09234c98ac3259f7a07e7961eb670755) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Clarify Bundler3 Morpho Blue share-price guard names in the bundler action surface.
+
+- Updated dependencies [[`401cf32`](https://github.com/morpho-org/sdks/commit/401cf3244b32fcb00f6c7676b2a43e34a0283cad), [`738421e`](https://github.com/morpho-org/sdks/commit/738421e4a428ce361d2fe551746b0c406a0fe31f), [`95b07ef`](https://github.com/morpho-org/sdks/commit/95b07ef56b8146f1084a35834243df4a7399a51d), [`6d59b5a`](https://github.com/morpho-org/sdks/commit/6d59b5abdcdab7f5da3df826ea4556899a5b765d), [`43e6cfc`](https://github.com/morpho-org/sdks/commit/43e6cfcf7eaab0355dccbe3f9f55c59cdac72f0a)]:
+  - @morpho-org/blue-sdk@6.1.0
+  - @morpho-org/blue-sdk-viem@5.1.0
+  - @morpho-org/morpho-ts@2.6.0
+
 ## 3.1.0
 
 ### Minor Changes

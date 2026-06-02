@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/blue-sdk",
   "description": "Framework-agnostic package that defines Morpho-related entity classes (such as `Market`, `Token`, `Vault`).",
-  "version": "6.0.1",
+  "version": "6.1.0",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"

@@ -1,5 +1,11 @@
 # @morpho-org/morpho-ts
 
+## 2.6.0
+
+### Minor Changes
+
+- [#748](https://github.com/morpho-org/sdks/pull/748) [`6d59b5a`](https://github.com/morpho-org/sdks/commit/6d59b5abdcdab7f5da3df826ea4556899a5b765d) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Deprecate unused `WithId` and `WithIndex` utility types, deprecate legacy CDN and optimizer URL constants, and point `REWARDS_BASE_URL` to the campaigns subdomain.
+
 ## 2.5.3
 
 ### Patch Changes

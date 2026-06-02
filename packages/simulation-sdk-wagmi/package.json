@@ -1,7 +1,7 @@
 {
   "name": "@morpho-org/simulation-sdk-wagmi",
   "description": "Wagmi-based extension of `@morpho-org/simulation-sdk` that exports Wagmi (React) hooks to fetch simulation states.",
-  "version": "5.0.2",
+  "version": "5.0.3",
   "author": "Morpho Association <contact@morpho.org>",
   "contributors": [
     "Rubilmax <rmilon@gmail.com>"

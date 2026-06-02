@@ -1,5 +1,22 @@
 # @morpho-org/blue-sdk
 
+## 6.1.0
+
+### Minor Changes
+
+- [#746](https://github.com/morpho-org/sdks/pull/746) [`401cf32`](https://github.com/morpho-org/sdks/commit/401cf3244b32fcb00f6c7676b2a43e34a0283cad) Thanks [@prd-carapulse](https://github.com/apps/prd-carapulse)! - Add Arc chain metadata, deployment addresses, deployment block lower bounds, and native-token mapping.
+
+  Patch maintained packages that depend directly on `@morpho-org/blue-sdk` so their latest releases resolve the new address registry.
+
+- [#757](https://github.com/morpho-org/sdks/pull/757) [`738421e`](https://github.com/morpho-org/sdks/commit/738421e4a428ce361d2fe551746b0c406a0fe31f) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Add JSDoc coverage for the exported blue-sdk surface.
+
+### Patch Changes
+
+- [#740](https://github.com/morpho-org/sdks/pull/740) [`43e6cfc`](https://github.com/morpho-org/sdks/commit/43e6cfcf7eaab0355dccbe3f9f55c59cdac72f0a) Thanks [@Rubilmax](https://github.com/Rubilmax)! - Remove an unreachable borrow-capacity branch and keep sidecar test fixtures out of package builds.
+
+- Updated dependencies [[`6d59b5a`](https://github.com/morpho-org/sdks/commit/6d59b5abdcdab7f5da3df826ea4556899a5b765d)]:
+  - @morpho-org/morpho-ts@2.6.0
+
 ## 6.0.1
 
 ### Patch Changes
