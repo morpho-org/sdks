@@ -275,12 +275,7 @@ describe("RefinanceMarketV1 (fork)", () => {
   // 1:1 oracle on the fork; tracked as a follow-up so the encoded skim ordering
   // (loan-leg repay BEFORE collateral withdraw) is exercised end-to-end.
 
-  // TODO: fork test for `targetReallocations` non-empty path. The encoding contract
-  // (top-level `reallocateTo` prepended before `morphoSupplyCollateral`, fee
-  // accumulated into `tx.value`) is covered by `src/actions/marketV1/refinance.test.ts`
-  // and `src/entities/marketV1/marketV1.refinance.test.ts`. A fork e2e requires a
-  // refinance-eligible market pair (same loan + collat tokens, different
-  // oracle/IRM/LLTV) whose target is publicly allocated by a vault that has source
-  // markets to withdraw from at the pinned block — see `reallocations.test.ts` for
-  // an analogous setup on the borrow path (`CbbtcUsdcMarketV1` + `SteakhouseUsdcVaultV1`).
+  // TODO: fork test for non-empty `targetReallocations`. Needs a refinance-eligible
+  // market pair whose target is publicly allocated at the pinned block — see
+  // `reallocations.test.ts` for the analogous borrow setup.
 });

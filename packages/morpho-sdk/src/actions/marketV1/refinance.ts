@@ -55,11 +55,9 @@ export interface MarketV1RefinanceParams {
      */
     maxRepaySharePrice: bigint;
     /**
-     * Optional PublicAllocator reallocations to execute against the **target** market before the
-     * refinance bundle runs. Each `reallocateTo` moves liquidity from another market on the listed
-     * vault into the target market, so the target borrow leg inside the
-     * `onMorphoSupplyCollateral` callback finds enough on-chain liquidity. Reallocation fees
-     * accumulate in `tx.value`.
+     * Optional PublicAllocator reallocations into the target market, executed before the refinance
+     * bundle so the in-callback target borrow finds on-chain liquidity. Fees accumulate in
+     * `tx.value`.
      */
     targetReallocations?: readonly VaultReallocation[];
   };
@@ -129,9 +127,8 @@ export interface MarketV1RefinanceParams {
  *   protection for the target borrow leg.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source — slippage
  *   protection for the source repay leg.
- * @param params.args.targetReallocations - Optional vault reallocations to execute against the
- *   target market before the refinance bundle (PublicAllocator). Computed by the entity layer.
- *   Reallocation fees accumulate in `tx.value`.
+ * @param params.args.targetReallocations - Optional PublicAllocator reallocations into the target
+ *   market. Encoded as `reallocateTo` calls before the supply leg. Fees accumulate in `tx.value`.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.
  * @returns A deep-frozen `Transaction<MarketV1RefinanceAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
@@ -319,9 +316,6 @@ export const marketV1Refinance = ({
   const actions: Action[] = [];
   let reallocationFee = 0n;
 
-  // Reallocations against the target market run before `morphoSupplyCollateral` — the
-  // PublicAllocator moves liquidity into the target so the in-callback `morphoBorrow` finds it.
-  // Same pattern as `marketV1Borrow` / `marketV1SupplyCollateralBorrow`: top-level prepend.
   if (targetReallocations && targetReallocations.length > 0) {
     const result = buildReallocationActions(targetReallocations, targetParams);
     actions.push(...result.actions);

@@ -333,8 +333,6 @@ describe("marketV1Refinance", () => {
   });
 
   describe("targetReallocations", () => {
-    // A reallocation source market — distinct from `target.id` so the PublicAllocator's
-    // "withdrawal on target" guard does not trip.
     const reallocSource = new MarketParams({
       collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // WBTC
       loanToken: source.loanToken,
@@ -390,8 +388,6 @@ describe("marketV1Refinance", () => {
       expect(txOmitted.action.args.reallocationFee).toBe(0n);
       expect(txEmpty.value).toBe(0n);
       expect(txEmpty.action.args.reallocationFee).toBe(0n);
-      // Empty array must produce the same calldata as omitting the field entirely —
-      // no stray `reallocateTo` action prepended.
       expect(txEmpty.data).toBe(txOmitted.data);
     });
 
@@ -411,16 +407,12 @@ describe("marketV1Refinance", () => {
         },
       });
 
-      // The reallocation prepends an extra bundler call, so the calldata grows AND the plain
-      // payload is a strict suffix of the reallocated one at the bundler-multicall boundary.
       expect(txWithRealloc.data.length).toBeGreaterThan(txPlain.data.length);
 
       const vaultHex = VAULT.slice(2).toLowerCase();
       const reallocVaultIdx = txWithRealloc.data
         .toLowerCase()
         .indexOf(vaultHex);
-      // `morphoSupplyCollateral` is anchored on the unique target oracle (the target's params
-      // first appear at the supplyCollateral encoding inside the bundler bundle).
       const targetOracleHex = target.oracle.slice(2).toLowerCase();
       const supplyIdx = txWithRealloc.data
         .toLowerCase()
@@ -431,9 +423,7 @@ describe("marketV1Refinance", () => {
       expect(reallocVaultIdx).toBeLessThan(supplyIdx);
     });
 
-    test("behavior: collat-only refinance still accepts reallocations (no-op encoding case)", () => {
-      // Reallocating without a target borrow is unusual but legal — the user might want to
-      // pre-position liquidity for a follow-up borrow. The bundle still pays the fee.
+    test("behavior: collat-only refinance accepts reallocations", () => {
       const tx = marketV1Refinance({
         source: { chainId: mainnet.id, marketParams: source },
         target: { marketParams: target },
@@ -454,8 +444,6 @@ describe("marketV1Refinance", () => {
         {
           vault: VAULT,
           fee: REALLOC_FEE,
-          // Withdrawing FROM the target market is a no-op + edge-case revert — guard delegates
-          // to `buildReallocationActions` via `validateReallocations`.
           withdrawals: [
             { marketParams: target, amount: parseUnits("2000", 6) },
           ],

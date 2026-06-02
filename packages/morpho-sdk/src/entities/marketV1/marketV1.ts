@@ -406,11 +406,9 @@ export interface MarketV1Actions {
    *   `borrowAssets`). Use this for full source closure (immune to mid-tx accrual). Optional.
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to
    *   `DEFAULT_SLIPPAGE_TOLERANCE`.
-   * @param params.targetReallocations - Optional PublicAllocator reallocations against the
-   *   **target** market, computed by the caller via {@link getReallocationData} +
-   *   {@link getReallocations} on a `MarketV1` instance for the target. Prepended as
-   *   `reallocateTo` calls before the refinance bundle so the in-callback `morphoBorrow` on the
-   *   target finds enough on-chain liquidity. Reallocation fees accumulate in `tx.value`.
+   * @param params.targetReallocations - Optional PublicAllocator reallocations into the **target**
+   *   market. Compute via {@link getReallocationData} + {@link getReallocations} on a `MarketV1`
+   *   for the target. Fees accumulate in `tx.value`.
    * @returns Object with `buildTx` and `getRequirements`.
    */
   refinance: (params: {

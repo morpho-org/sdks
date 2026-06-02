@@ -578,8 +578,6 @@ describe("MorphoMarketV1.refinance", () => {
       user: USER,
     });
 
-    // A reallocation source distinct from `targetParams` (the PublicAllocator rejects
-    // withdrawing from the target market).
     const reallocSource = new MarketParams({
       collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // WBTC
       loanToken: USDC,
