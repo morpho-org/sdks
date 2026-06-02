@@ -82,7 +82,6 @@ describe.sequential("simulateV1", () => {
     expect(result.calls[0]!.logs[0]!.address).toBe(USDC);
     expect(result.calls[1]!.gasUsed).toBe(42_000n);
     expect(result.calls[1]!.logs[0]!.topics[0]).toBe("0xbbbb");
-    expect(result.tenderlyUrl).toBeUndefined();
   });
 
   it("requires at least one transaction", async () => {

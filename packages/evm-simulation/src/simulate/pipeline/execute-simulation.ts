@@ -5,7 +5,7 @@ import type {
   SimulationConfig,
   SimulationTransaction,
 } from "../../types.js";
-import { simulateTenderlyRest, simulateV1 } from "../backends/index.js";
+import { simulateTenderlyRpc, simulateV1 } from "../backends/index.js";
 import { resolveChain } from "./resolve-chain.js";
 
 /** Total budget for a single `simulate()` call across both backends. */
@@ -30,41 +30,34 @@ const FALLBACK_MIN_BUDGET_MS = 1500;
  *
  * Dispatches the transaction bundle to the available backend with a shared timeout
  * budget:
- * - If Tenderly is configured for the chain, it gets `TENDERLY_BUDGET_RATIO` (60%) of
- *   the timeout. On `ExternalServiceError`, falls back to `eth_simulateV1` with
- *   `max(remaining, FALLBACK_MIN_BUDGET_MS)` so the fallback still has a viable
- *   window when Tenderly eats its full slice. `SimulationRevertedError` (contract
- *   revert) propagates immediately without retry — a revert is a property of the
- *   bundle, not the backend.
+ * - If a Tenderly RPC URL is configured for the chain, it gets
+ *   `TENDERLY_BUDGET_RATIO` (60%) of the timeout. On `ExternalServiceError`,
+ *   falls back to `eth_simulateV1` with `max(remaining, FALLBACK_MIN_BUDGET_MS)`
+ *   so the fallback still has a viable window when Tenderly eats its full slice.
+ *   `SimulationRevertedError` (contract revert) propagates immediately without
+ *   retry — a revert is a property of the bundle, not the backend.
  * - If only `eth_simulateV1` is configured, it gets the full timeout.
- *
- * `shareable` is Tenderly-only: when true, the backend persists the simulation and
- * returns a shareable URL. `eth_simulateV1` ignores it (no persistence concept).
  */
 export async function executeSimulation(params: {
   config: SimulationConfig;
   chainId: number;
   transactions: SimulationTransaction[];
   blockNumber?: bigint | BlockTag;
-  shareable: boolean;
 }): Promise<RawSimulationResult> {
-  const { config, chainId, transactions, blockNumber, shareable } = params;
+  const { config, chainId, transactions, blockNumber } = params;
   const chain = resolveChain(config, chainId);
   const timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const deadline = Date.now() + timeoutMs;
 
-  if (chain.tenderlySupported && config.tenderlyRest) {
+  if (chain.tenderlyRpc) {
     const tenderlyTimeout = Math.floor(timeoutMs * TENDERLY_BUDGET_RATIO);
 
     try {
-      return await simulateTenderlyRest({
-        config: config.tenderlyRest,
-        chainId,
+      return await simulateTenderlyRpc({
+        config: chain.tenderlyRpc,
         transactions,
         blockNumber,
-        shareable,
         signal: AbortSignal.timeout(tenderlyTimeout),
-        logger: config.logger,
       });
     } catch (error) {
       if (!(error instanceof ExternalServiceError)) throw error;
@@ -77,8 +70,6 @@ export async function executeSimulation(params: {
 
       if (!chain.simulateV1Url) throw error;
 
-      // Give the fallback a reasonable minimum even if Tenderly consumed the
-      // whole budget — otherwise slow-Tenderly == total outage.
       const fallbackBudget = Math.max(
         deadline - Date.now(),
         FALLBACK_MIN_BUDGET_MS,
