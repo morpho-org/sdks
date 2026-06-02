@@ -7,6 +7,7 @@ import {
 import type { Address, BigIntish, MarketId } from "../types.js";
 import { MarketUtils } from "./MarketUtils.js";
 
+/** Plain input shape for Morpho Blue market params. */
 export interface IMarketParams {
   loanToken: Address;
   collateralToken: Address;
@@ -15,11 +16,13 @@ export interface IMarketParams {
   lltv: BigIntish;
 }
 
+/** Minimal market params shape accepted by SDK constructors and helpers. */
 export type InputMarketParams = Pick<
   MarketParams,
   "loanToken" | "collateralToken" | "oracle" | "irm" | "lltv"
 >;
 
+/** ABI tuple definition for Morpho Blue market params. */
 export const marketParamsAbi = {
   type: "tuple",
   components: [

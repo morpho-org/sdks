@@ -1,3 +1,4 @@
+/** Supported EIP-155 chain ids with Morpho Blue deployments or registry metadata. */
 export enum ChainId {
   EthMainnet = 1,
   BaseMainnet = 8453,
@@ -41,6 +42,7 @@ export enum ChainId {
   ArcMainnet = 5042,
 }
 
+/** Explorer, native currency, and identifier metadata for a supported chain. */
 export interface ChainMetadata {
   readonly name: string;
   readonly id: ChainId;
@@ -55,7 +57,21 @@ export interface ChainMetadata {
   readonly hasReliableNativeBalance?: boolean;
 }
 
+/** Chain metadata helpers and registries. */
 export namespace ChainUtils {
+  /**
+   * Returns whether native token balances are reliable on a chain.
+   *
+   * @param chainId - The EIP-155 chain id to inspect.
+   * @returns `false` only for chains whose metadata marks native balances as unreliable.
+   * @example
+   * ```ts
+   * import { ChainId, ChainUtils } from "@morpho-org/blue-sdk";
+   *
+   * const reliable = ChainUtils.hasReliableNativeBalance(ChainId.EthMainnet);
+   * // reliable === true
+   * ```
+   */
   export const hasReliableNativeBalance = (chainId: number): boolean => {
     return (
       (CHAIN_METADATA as Record<number, ChainMetadata | undefined>)[chainId]
@@ -63,22 +79,77 @@ export namespace ChainUtils {
     );
   };
 
+  /**
+   * Converts a supported chain id to its hexadecimal JSON-RPC form.
+   *
+   * @param chainId - The supported chain id.
+   * @returns The chain id as a `0x`-prefixed hexadecimal string.
+   * @example
+   * ```ts
+   * import { ChainId, ChainUtils } from "@morpho-org/blue-sdk";
+   *
+   * const hexChainId = ChainUtils.toHexChainId(ChainId.EthMainnet);
+   * // hexChainId === "0x1"
+   * ```
+   */
   export const toHexChainId = (chainId: ChainId) => {
     return `0x${chainId.toString(16)}`;
   };
 
+  /**
+   * Returns the block explorer base URL for a supported chain.
+   *
+   * @param chainId - The supported chain id.
+   * @returns The chain's configured block explorer base URL.
+   * @example
+   * ```ts
+   * import { ChainId, ChainUtils } from "@morpho-org/blue-sdk";
+   *
+   * const explorerUrl = ChainUtils.getExplorerUrl(ChainId.EthMainnet);
+   * // explorerUrl === "https://etherscan.io"
+   * ```
+   */
   export const getExplorerUrl = (chainId: ChainId) => {
     return ChainUtils.CHAIN_METADATA[chainId].explorerUrl;
   };
 
+  /**
+   * Returns a block explorer address URL for a supported chain.
+   *
+   * @param chainId - The supported chain id.
+   * @param address - The address to link to.
+   * @returns The block explorer URL for `address`.
+   * @example
+   * ```ts
+   * import { ChainId, ChainUtils, NATIVE_ADDRESS } from "@morpho-org/blue-sdk";
+   *
+   * const url = ChainUtils.getExplorerAddressUrl(ChainId.EthMainnet, NATIVE_ADDRESS);
+   * // url satisfies string
+   * ```
+   */
   export const getExplorerAddressUrl = (chainId: ChainId, address: string) => {
     return `${getExplorerUrl(chainId)}/address/${address}`;
   };
 
+  /**
+   * Returns a block explorer transaction URL for a supported chain.
+   *
+   * @param chainId - The supported chain id.
+   * @param tx - The transaction hash to link to.
+   * @returns The block explorer URL for `tx`.
+   * @example
+   * ```ts
+   * import { ChainId, ChainUtils } from "@morpho-org/blue-sdk";
+   *
+   * const url = ChainUtils.getExplorerTransactionUrl(ChainId.EthMainnet, "0xabc");
+   * // url satisfies string
+   * ```
+   */
   export const getExplorerTransactionUrl = (chainId: ChainId, tx: string) => {
     return `${getExplorerUrl(chainId)}/tx/${tx}`;
   };
 
+  /** Metadata for each supported chain, keyed by `ChainId`. */
   export const CHAIN_METADATA = {
     [ChainId.EthMainnet]: {
       name: "Ethereum",

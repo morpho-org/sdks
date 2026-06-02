@@ -10,6 +10,7 @@ export interface IVaultMarketPublicAllocatorConfig {
   maxOut: bigint;
 }
 
+/** Represents a vault market's PublicAllocator limits. */
 export class VaultMarketPublicAllocatorConfig
   implements IVaultMarketPublicAllocatorConfig
 {
