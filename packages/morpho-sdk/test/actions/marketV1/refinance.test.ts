@@ -6,7 +6,14 @@ import {
   isRequirementAuthorization,
   MAX_SLIPPAGE_TOLERANCE,
   MorphoClient,
+  type VaultReallocation,
 } from "../../../src/index.js";
+import {
+  CbbtcUsdcMarketV1,
+  CbbtcUsdcMarketV1Alt,
+  WstethUsdcSourceMarket,
+} from "../../fixtures/marketV1.js";
+import { YearnUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
 import {
   borrow,
@@ -275,7 +282,116 @@ describe("RefinanceMarketV1 (fork)", () => {
   // 1:1 oracle on the fork; tracked as a follow-up so the encoded skim ordering
   // (loan-leg repay BEFORE collateral withdraw) is exercised end-to-end.
 
-  // TODO: fork test for non-empty `targetReallocations`. Needs a refinance-eligible
-  // market pair whose target is publicly allocated at the pinned block — see
-  // `reallocations.test.ts` for the analogous borrow setup.
+  test("assets-mode: targetReallocations supplies liquidity into the target market", async ({
+    client,
+  }) => {
+    const collateralAmount = parseUnits("1", 8); // cbBTC (8 decimals)
+    const borrowAmount = parseUnits("1000", 6); // USDC (6 decimals)
+    const migrateCollateral = parseUnits("0.4", 8);
+    const migrateBorrow = parseUnits("400", 6);
+    const reallocationAmount = parseUnits("2000", 6);
+
+    await supplyLoan({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcMarketV1,
+      supplyAmount: borrowAmount * 4n,
+    });
+    await supplyCollateral({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcMarketV1,
+      collateralAmount,
+    });
+    await borrow({
+      client,
+      chainId: mainnet.id,
+      market: CbbtcUsdcMarketV1,
+      borrowAmount,
+    });
+
+    const reallocations: readonly VaultReallocation[] = [
+      {
+        vault: YearnUsdcVaultV1.address,
+        fee: 0n,
+        withdrawals: [
+          {
+            marketParams: WstethUsdcSourceMarket,
+            amount: reallocationAmount,
+          },
+        ],
+      },
+    ];
+
+    const {
+      markets: {
+        target: { initialState: targetInitial, finalState: targetFinal },
+      },
+    } = await testInvariants({
+      client,
+      params: {
+        markets: {
+          source: CbbtcUsdcMarketV1,
+          target: CbbtcUsdcMarketV1Alt,
+        },
+      },
+      actionFn: async () => {
+        const morphoClient = new MorphoClient(client);
+        const sourceEntity = morphoClient.marketV1(
+          CbbtcUsdcMarketV1,
+          mainnet.id,
+        );
+        const sourcePosition = await sourceEntity.getPositionData(
+          client.account.address,
+        );
+        const targetEntity = morphoClient.marketV1(
+          CbbtcUsdcMarketV1Alt,
+          mainnet.id,
+        );
+        const targetPosition = await targetEntity.getPositionData(
+          client.account.address,
+        );
+
+        const refi = sourceEntity.refinance({
+          userAddress: client.account.address,
+          positionData: sourcePosition,
+          target: {
+            marketParams: CbbtcUsdcMarketV1Alt,
+            positionData: targetPosition,
+          },
+          collateralAmount: migrateCollateral,
+          borrowAssets: migrateBorrow,
+          slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
+          targetReallocations: reallocations,
+        });
+
+        const requirements = await refi.getRequirements();
+        expect(requirements.length).toBeLessThanOrEqual(1);
+        for (const requirement of requirements) {
+          if (!isRequirementAuthorization(requirement)) {
+            throw new Error("Unexpected non-authorization requirement");
+          }
+          await client.sendTransaction(requirement);
+        }
+
+        const tx = refi.buildTx();
+        expect(tx.value).toBe(0n);
+        expect(tx.action.args.reallocationFee).toBe(0n);
+
+        await client.sendTransaction(tx);
+      },
+    });
+
+    // The PA reallocation supplies `reallocationAmount` into the target; the in-callback
+    // borrow does not move `totalSupplyAssets`. Accrual can only inflate the delta.
+    expect(
+      targetFinal.position.market.totalSupplyAssets -
+        targetInitial.position.market.totalSupplyAssets,
+    ).toBeGreaterThanOrEqual(reallocationAmount);
+
+    expect(targetFinal.position.collateral).toBe(
+      targetInitial.position.collateral + migrateCollateral,
+    );
+    expect(targetFinal.position.borrowShares).toBeGreaterThan(0n);
+  });
 });
