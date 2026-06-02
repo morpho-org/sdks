@@ -19,6 +19,7 @@ type ReadFunctionName<abi extends Abi> = ContractFunctionName<
   "view" | "pure"
 >;
 
+/** @internal Encodes a mock result for a read-only contract function. */
 export function encodeReadResult<
   abi extends Abi,
   fn extends ReadFunctionName<abi>,
@@ -34,6 +35,7 @@ export function encodeReadResult<
 
 /**
  * Queue responses for viem deployless reads (`readContract` with `code`).
+ * @internal
  */
 export function mockDeploylessReads(
   handle: MockClientHandle<Chain>,
@@ -59,6 +61,7 @@ export function mockDeploylessReads(
 
 /**
  * Queue ABI-encoded responses for viem deployless reads.
+ * @internal
  */
 export function mockDeploylessRead<
   abi extends Abi,
@@ -72,6 +75,7 @@ export function mockDeploylessRead<
 
 /**
  * Force a specific read to fail at decode time.
+ * @internal
  */
 export function mockReadFailure<
   abi extends Abi,
@@ -96,6 +100,7 @@ export function mockReadFailure<
 
 /**
  * Mock `eth_getBalance` while preserving the default mock client handlers.
+ * @internal
  */
 export function mockNativeBalance(
   handle: MockClientHandle<Chain>,
@@ -112,6 +117,7 @@ export function mockNativeBalance(
 
 /**
  * Replace the mock transport with a custom handler that can delegate to base.
+ * @internal
  */
 export function extendRpc(
   handle: MockClientHandle<Chain>,

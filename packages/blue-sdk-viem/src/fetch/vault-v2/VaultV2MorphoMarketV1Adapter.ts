@@ -20,6 +20,37 @@ import type { DeploylessFetchParameters } from "../../types.js";
 import { readContractRestructured } from "../../utils.js";
 import { fetchAccrualPosition } from "../Position.js";
 
+/**
+ * Fetches a MorphoMarketV1Adapter used by VaultV2.
+ *
+ * Uses the deployless adapter query by default and falls back to factory validation plus adapter
+ * state reads when allowed.
+ *
+ * @param address - Adapter address to fetch.
+ * @param client - Viem client used for deployless reads or multicalls.
+ * @param parameters.account - Optional account passed to viem calls.
+ * @param parameters.blockNumber - Optional block number for historical reads.
+ * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to `getChainId(client)`.
+ * @param parameters.deployless - Optional deployless read mode; defaults to `true`.
+ * @returns The hydrated `VaultV2MorphoMarketV1Adapter` entity.
+ * @throws {UnknownFactory} when the configured chain has no MorphoMarketV1Adapter factory.
+ * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
+ * @example
+ * ```ts
+ * import type { VaultV2MorphoMarketV1Adapter } from "@morpho-org/blue-sdk";
+ * import { fetchVaultV2MorphoMarketV1Adapter } from "@morpho-org/blue-sdk-viem";
+ * import { createPublicClient, http } from "viem";
+ * import { base } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: base, transport: http() });
+ * const adapterAddress = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb";
+ *
+ * const adapter: VaultV2MorphoMarketV1Adapter =
+ *   await fetchVaultV2MorphoMarketV1Adapter(adapterAddress, client);
+ * ```
+ */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchVaultV2MorphoMarketV1Adapter(
   address: Address,
@@ -117,6 +148,36 @@ export async function fetchVaultV2MorphoMarketV1Adapter(
   });
 }
 
+/**
+ * Fetches a MorphoMarketV1Adapter with accrued market positions.
+ *
+ * Reads the adapter state, then fetches an accrued position for each market params entry.
+ *
+ * @param address - Adapter address to fetch.
+ * @param client - Viem client used for deployless reads or multicalls.
+ * @param parameters.account - Optional account passed to viem calls.
+ * @param parameters.blockNumber - Optional block number for historical reads.
+ * @param parameters.blockTag - Optional block tag for historical reads.
+ * @param parameters.stateOverride - Optional viem state override.
+ * @param parameters.chainId - Optional chain id; defaults to downstream fetchers.
+ * @param parameters.deployless - Optional deployless read mode; defaults to downstream fetchers.
+ * @returns The hydrated `AccrualVaultV2MorphoMarketV1Adapter` entity.
+ * @throws {UnknownFactory} when the configured chain has no MorphoMarketV1Adapter factory.
+ * @throws {UnknownOfFactory} when `address` is not an adapter from the configured factory.
+ * @example
+ * ```ts
+ * import type { AccrualVaultV2MorphoMarketV1Adapter } from "@morpho-org/blue-sdk";
+ * import { fetchAccrualVaultV2MorphoMarketV1Adapter } from "@morpho-org/blue-sdk-viem";
+ * import { createPublicClient, http } from "viem";
+ * import { base } from "viem/chains";
+ *
+ * const client = createPublicClient({ chain: base, transport: http() });
+ * const adapterAddress = "0xBBBBBbbBBb9cC5e90e3b3Af64bdAF62C37EEFFCb";
+ *
+ * const adapter: AccrualVaultV2MorphoMarketV1Adapter =
+ *   await fetchAccrualVaultV2MorphoMarketV1Adapter(adapterAddress, client);
+ * ```
+ */
 // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
 export async function fetchAccrualVaultV2MorphoMarketV1Adapter(
   address: Address,

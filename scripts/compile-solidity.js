@@ -19,6 +19,9 @@ const contractsDir = join(packageDir, "contracts");
 const packageConfigs = {
   "blue-sdk-viem": {
     bytecodeExportName: "code",
+    describeArtifact(contractName) {
+      return `Deployless \`${contractName}\` query`;
+    },
     resolveOutputPath(sourceName) {
       if (sourceName.includes("/interfaces/")) return null;
 
@@ -33,6 +36,9 @@ const packageConfigs = {
   },
   "liquidation-sdk-viem": {
     bytecodeExportName: "bytecode",
+    describeArtifact(contractName) {
+      return `Compiled \`${contractName}\` test contract`;
+    },
     resolveOutputPath(sourceName) {
       if (sourceName.includes("/interfaces/")) return null;
 
@@ -124,12 +130,14 @@ for (const [sourceName, contracts] of Object.entries(output.contracts)) {
 
   writeFileSync(
     outputPath,
-    `export const abi = ${inspect(artifact.abi, {
+    `/** @internal ${config.describeArtifact(contractName)} ABI. */
+export const abi = ${inspect(artifact.abi, {
       compact: false,
       depth: null,
       maxArrayLength: null,
     })} as const;
 
+/** @internal ${config.describeArtifact(contractName)} bytecode. */
 export const ${config.bytecodeExportName} =
   ${JSON.stringify(`0x${artifact.evm.bytecode.object}`)};
 `,

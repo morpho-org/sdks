@@ -6,6 +6,7 @@ import {
 } from "@morpho-org/blue-sdk";
 import type { TypedDataDefinition } from "viem";
 
+/** Message fields for Permit2 allowance typed data. */
 export interface Permit2PermitArgs {
   erc20: Address;
   allowance: bigint;
@@ -15,6 +16,7 @@ export interface Permit2PermitArgs {
   expiration?: number;
 }
 
+/** Message fields for Permit2 signature-transfer typed data. */
 export interface Permit2TransferFromArgs {
   erc20: Address;
   allowance: bigint;
@@ -37,6 +39,29 @@ const permit2PermitTypes = {
   ],
 };
 
+/**
+ * Builds Permit2 allowance typed data for signing.
+ *
+ * @param args - Permit2 allowance message fields.
+ * @param chainId - Chain id whose Permit2 deployment verifies the signature.
+ * @returns Typed data ready to pass to a wallet for signing.
+ * @example
+ * ```ts
+ * import { ChainId } from "@morpho-org/blue-sdk";
+ * import { getPermit2PermitTypedData } from "@morpho-org/blue-sdk-viem";
+ *
+ * const typedData = getPermit2PermitTypedData(
+ *   {
+ *     erc20: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+ *     allowance: 1_000_000n,
+ *     nonce: 0,
+ *     deadline: 1_900_000_000n,
+ *     spender: "0x6566194141Ff46B819C55E7137d8329898EcD06c",
+ *   },
+ *   ChainId.EthMainnet,
+ * );
+ * ```
+ */
 export const getPermit2PermitTypedData = (
   args: Permit2PermitArgs,
   chainId: ChainId,
@@ -80,6 +105,29 @@ const permit2TransferFromTypes = {
   ],
 };
 
+/**
+ * Builds Permit2 signature-transfer typed data for signing.
+ *
+ * @param args - Permit2 signature-transfer message fields.
+ * @param chainId - Chain id whose Permit2 deployment verifies the signature.
+ * @returns Typed data ready to pass to a wallet for signing.
+ * @example
+ * ```ts
+ * import { ChainId } from "@morpho-org/blue-sdk";
+ * import { getPermit2TransferFromTypedData } from "@morpho-org/blue-sdk-viem";
+ *
+ * const typedData = getPermit2TransferFromTypedData(
+ *   {
+ *     erc20: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+ *     allowance: 1_000_000n,
+ *     spender: "0x6566194141Ff46B819C55E7137d8329898EcD06c",
+ *     nonce: 0n,
+ *     deadline: 1_900_000_000n,
+ *   },
+ *   ChainId.EthMainnet,
+ * );
+ * ```
+ */
 export const getPermit2TransferFromTypedData = (
   args: Permit2TransferFromArgs,
   chainId: ChainId,

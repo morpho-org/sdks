@@ -1,3 +1,4 @@
+/** ERC-2612 permit ABI fragment used for nonce reads and permit calldata. */
 export const erc2612Abi = [
   {
     inputs: [],
@@ -76,6 +77,7 @@ export const erc2612Abi = [
   },
 ] as const;
 
+/** Uniswap Permit2 ABI used for allowance reads and Permit2 signature helpers. */
 export const permit2Abi = [
   {
     inputs: [
@@ -916,6 +918,7 @@ export const permit2Abi = [
   },
 ] as const;
 
+/** wstETH ABI fragment used to read the stETH exchange rate. */
 export const wstEthAbi = [
   {
     inputs: [
@@ -1394,6 +1397,7 @@ export const wstEthAbi = [
   },
 ] as const;
 
+/** Morpho Blue ABI used for market, position, authorization, and nonce reads. */
 export const blueAbi = [
   {
     type: "event",
@@ -2921,6 +2925,7 @@ export const blueAbi = [
   },
 ] as const;
 
+/** AdaptiveCurveIRM ABI used to read market rates at target. */
 export const adaptiveCurveIrmAbi = [
   {
     inputs: [
@@ -3158,6 +3163,7 @@ export const adaptiveCurveIrmAbi = [
   },
 ] as const;
 
+/** Morpho Blue oracle ABI used to read market prices. */
 export const blueOracleAbi = [
   {
     type: "function",
@@ -3174,6 +3180,7 @@ export const blueOracleAbi = [
   },
 ] as const;
 
+/** MetaMorpho factory ABI used to verify vault factory membership. */
 export const metaMorphoFactoryAbi = [
   {
     inputs: [{ internalType: "address", name: "morpho", type: "address" }],
@@ -3267,6 +3274,7 @@ export const metaMorphoFactoryAbi = [
   },
 ];
 
+/** MetaMorpho vault ABI used for vault reads and MetaMorpho action encoding. */
 export const metaMorphoAbi = [
   {
     type: "constructor",
@@ -5813,6 +5821,7 @@ export const metaMorphoAbi = [
   },
 ] as const;
 
+/** PublicAllocator ABI used to read vault allocator configuration and flow caps. */
 export const publicAllocatorAbi = [
   {
     inputs: [
@@ -6393,6 +6402,7 @@ export const publicAllocatorAbi = [
   },
 ] as const;
 
+/** Wrapped Backed token ABI used to discover permissioning controllers. */
 export const wrappedBackedTokenAbi = [
   {
     inputs: [],
@@ -7073,6 +7083,7 @@ export const wrappedBackedTokenAbi = [
   },
 ] as const;
 
+/** WhitelistControllerAggregatorV2 ABI used to read transfer permission status. */
 export const whitelistControllerAggregatorV2Abi = [
   {
     inputs: [],
@@ -7243,6 +7254,7 @@ export const whitelistControllerAggregatorV2Abi = [
   },
 ] as const;
 
+/** Permissioned ERC20 wrapper ABI used to read account transfer permission status. */
 export const permissionedErc20WrapperAbi = [
   {
     inputs: [
@@ -7935,6 +7947,7 @@ export const permissionedErc20WrapperAbi = [
   },
 ] as const;
 
+/** EIP-5267 ABI used to read ERC20 EIP-712 domain metadata. */
 export const erc5267Abi = [
   {
     inputs: [],
@@ -7981,6 +7994,7 @@ export const erc5267Abi = [
   },
 ] as const;
 
+/** Pre-liquidation factory ABI used to verify pre-liquidation factory membership. */
 export const preLiquidationFactoryAbi = [
   {
     type: "constructor",
@@ -8073,6 +8087,7 @@ export const preLiquidationFactoryAbi = [
   { type: "error", name: "ZeroAddress", inputs: [] },
 ] as const;
 
+/** Pre-liquidation ABI used to read pre-liquidation parameters. */
 export const preLiquidationAbi = [
   {
     type: "constructor",
@@ -8275,6 +8290,7 @@ export const preLiquidationAbi = [
   { type: "error", name: "PreLltvTooHigh", inputs: [] },
 ] as const;
 
+/** VaultV2 ABI used to read vault accounting, adapter, and allocation state. */
 export const vaultV2Abi = [
   {
     type: "constructor",
@@ -10994,6 +11010,7 @@ export const vaultV2Abi = [
   },
 ] as const;
 
+/** VaultV2 factory ABI used to verify VaultV2 factory membership. */
 export const vaultV2FactoryAbi = [
   {
     type: "function",
@@ -11105,6 +11122,7 @@ export const vaultV2FactoryAbi = [
   },
 ] as const;
 
+/** MorphoVaultV1Adapter factory ABI used to verify adapter factory membership. */
 export const morphoVaultV1AdapterFactoryAbi = [
   {
     type: "function",
@@ -11200,6 +11218,7 @@ export const morphoVaultV1AdapterFactoryAbi = [
   },
 ] as const;
 
+/** MorphoVaultV1Adapter ABI used to read VaultV2 adapter state. */
 export const morphoVaultV1AdapterAbi = [
   {
     type: "constructor",
@@ -11504,6 +11523,7 @@ export const morphoVaultV1AdapterAbi = [
   },
 ] as const;
 
+/** MorphoMarketV1Adapter ABI used to read VaultV2 market adapter state. */
 export const morphoMarketV1AdapterAbi = [
   {
     type: "constructor",
@@ -11929,6 +11949,7 @@ export const morphoMarketV1AdapterAbi = [
   },
 ] as const;
 
+/** MorphoMarketV1Adapter factory ABI used to verify adapter factory membership. */
 export const morphoMarketV1AdapterFactoryAbi = [
   {
     anonymous: false,
@@ -11985,15 +12006,20 @@ export const morphoMarketV1AdapterFactoryAbi = [
 ] as const;
 
 /**
+ * Alias for the MorphoVaultV1Adapter factory ABI.
+ *
  * @deprecated Use `morphoVaultV1AdapterFactoryAbi` instead.
  */
 export const vaultV1AdapterFactoryAbi = morphoVaultV1AdapterFactoryAbi;
 
 /**
+ * Alias for the MorphoVaultV1Adapter ABI.
+ *
  * @deprecated Use `morphoVaultV1AdapterAbi` instead.
  */
 export const vaultV1AdapterAbi = morphoVaultV1AdapterAbi;
 
+/** MorphoMarketV1AdapterV2 ABI used to read VaultV2 market adapter state. */
 export const morphoMarketV1AdapterV2Abi = [
   {
     inputs: [
@@ -12467,6 +12493,7 @@ export const morphoMarketV1AdapterV2Abi = [
   },
 ] as const;
 
+/** MorphoMarketV1AdapterV2 factory ABI used to verify adapter factory membership. */
 export const morphoMarketV1AdapterV2FactoryAbi = [
   {
     inputs: [

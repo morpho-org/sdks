@@ -1,5 +1,6 @@
 import type { CallParameters, UnionPick } from "viem";
 
+/** Common viem call parameters accepted by blue-sdk-viem fetchers. */
 export type FetchParameters = UnionPick<
   CallParameters,
   "account" | "blockNumber" | "blockTag" | "stateOverride"
@@ -7,6 +8,7 @@ export type FetchParameters = UnionPick<
   chainId?: number;
 };
 
+/** Fetch parameters for readers that can use deployless bytecode queries. */
 export type DeploylessFetchParameters = FetchParameters & {
   /**
    * If `true`, the function will use deployless reads and fallback to multicall if it fails.
