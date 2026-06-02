@@ -8,9 +8,11 @@ import {
   NonPositiveAssetAmountError,
   NonPositiveMinBorrowSharePriceError,
   NonPositiveRepayMaxSharePriceError,
+  ReallocationWithdrawalOnTargetMarketError,
   RefinanceSameMarketError,
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
+  type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
 import { marketV1Refinance } from "./refinance.js";
@@ -328,5 +330,148 @@ describe("marketV1Refinance", () => {
     });
     expect(txWith.data.length).toBeGreaterThan(txWithout.data.length);
     expect(txWith.data.includes("a1b2c3d4")).toBe(true);
+  });
+
+  describe("targetReallocations", () => {
+    // A reallocation source market — distinct from `target.id` so the PublicAllocator's
+    // "withdrawal on target" guard does not trip.
+    const reallocSource = new MarketParams({
+      collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // WBTC
+      loanToken: source.loanToken,
+      oracle: "0x3333333333333333333333333333333333333333",
+      irm: source.irm,
+      lltv: 860000000000000000n,
+    });
+    const VAULT: Address = "0xBEEf5aFE88eF73337e5070aB2855d37dBF5493A4";
+    const REALLOC_FEE = parseUnits("0.01", 18);
+
+    const makeReallocations = (): readonly VaultReallocation[] => [
+      {
+        vault: VAULT,
+        fee: REALLOC_FEE,
+        withdrawals: [
+          { marketParams: reallocSource, amount: parseUnits("2000", 6) },
+        ],
+      },
+    ];
+
+    test("default: accumulates the reallocation fee in tx.value and the action discriminator", () => {
+      const tx = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          targetReallocations: makeReallocations(),
+        },
+      });
+
+      expect(tx.value).toBe(REALLOC_FEE);
+      expect(tx.action.args.reallocationFee).toBe(REALLOC_FEE);
+    });
+
+    test("behavior: omitted or empty reallocations leave tx.value and reallocationFee at zero", () => {
+      const txOmitted = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
+      });
+      const txEmpty = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          targetReallocations: [],
+        },
+      });
+
+      expect(txOmitted.value).toBe(0n);
+      expect(txOmitted.action.args.reallocationFee).toBe(0n);
+      expect(txEmpty.value).toBe(0n);
+      expect(txEmpty.action.args.reallocationFee).toBe(0n);
+      // Empty array must produce the same calldata as omitting the field entirely —
+      // no stray `reallocateTo` action prepended.
+      expect(txEmpty.data).toBe(txOmitted.data);
+    });
+
+    test("behavior: reallocateTo is encoded BEFORE morphoSupplyCollateral", () => {
+      const txPlain = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
+      });
+      const txWithRealloc = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          borrowAssets: parseUnits("1000", 6),
+          targetReallocations: makeReallocations(),
+        },
+      });
+
+      // The reallocation prepends an extra bundler call, so the calldata grows AND the plain
+      // payload is a strict suffix of the reallocated one at the bundler-multicall boundary.
+      expect(txWithRealloc.data.length).toBeGreaterThan(txPlain.data.length);
+
+      const vaultHex = VAULT.slice(2).toLowerCase();
+      const reallocVaultIdx = txWithRealloc.data
+        .toLowerCase()
+        .indexOf(vaultHex);
+      // `morphoSupplyCollateral` is anchored on the unique target oracle (the target's params
+      // first appear at the supplyCollateral encoding inside the bundler bundle).
+      const targetOracleHex = target.oracle.slice(2).toLowerCase();
+      const supplyIdx = txWithRealloc.data
+        .toLowerCase()
+        .indexOf(targetOracleHex);
+
+      expect(reallocVaultIdx).toBeGreaterThan(-1);
+      expect(supplyIdx).toBeGreaterThan(-1);
+      expect(reallocVaultIdx).toBeLessThan(supplyIdx);
+    });
+
+    test("behavior: collat-only refinance still accepts reallocations (no-op encoding case)", () => {
+      // Reallocating without a target borrow is unusual but legal — the user might want to
+      // pre-position liquidity for a follow-up borrow. The bundle still pays the fee.
+      const tx = marketV1Refinance({
+        source: { chainId: mainnet.id, marketParams: source },
+        target: { marketParams: target },
+        args: {
+          ...baseArgs,
+          targetReallocations: makeReallocations(),
+        },
+      });
+
+      expect(tx.value).toBe(REALLOC_FEE);
+      expect(tx.action.args.reallocationFee).toBe(REALLOC_FEE);
+      expect(tx.action.args.borrowAssets).toBe(0n);
+      expect(tx.action.args.borrowShares).toBe(0n);
+    });
+
+    test("error: ReallocationWithdrawalOnTargetMarketError when a withdrawal references the target", () => {
+      const reallocations: readonly VaultReallocation[] = [
+        {
+          vault: VAULT,
+          fee: REALLOC_FEE,
+          // Withdrawing FROM the target market is a no-op + edge-case revert — guard delegates
+          // to `buildReallocationActions` via `validateReallocations`.
+          withdrawals: [
+            { marketParams: target, amount: parseUnits("2000", 6) },
+          ],
+        },
+      ];
+      expect(() =>
+        marketV1Refinance({
+          source: { chainId: mainnet.id, marketParams: source },
+          target: { marketParams: target },
+          args: {
+            ...baseArgs,
+            borrowAssets: parseUnits("1000", 6),
+            targetReallocations: reallocations,
+          },
+        }),
+      ).toThrow(ReallocationWithdrawalOnTargetMarketError);
+    });
   });
 });

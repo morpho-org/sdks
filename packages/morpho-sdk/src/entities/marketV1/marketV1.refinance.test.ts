@@ -22,6 +22,7 @@ import {
   RefinanceExceedsCollateralError,
   RefinanceSameMarketError,
   RefinanceTokenMismatchError,
+  type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
 
@@ -562,5 +563,52 @@ describe("MorphoMarketV1.refinance", () => {
     const tx = refi.buildTx();
     expect(tx.action.args.borrowAssets).toBe(0n);
     expect(tx.action.args.borrowShares).toBe(0n);
+  });
+
+  test("behavior: targetReallocations are forwarded to the action layer", () => {
+    const market = makeMarket();
+    const positionData = makePosition({
+      market: baseMarket(sourceParams),
+      user: USER,
+      collateral: parseUnits("1", 18),
+      borrowShares: parseUnits("100", 12),
+    });
+    const targetPosition = makePosition({
+      market: baseMarket(targetParams),
+      user: USER,
+    });
+
+    // A reallocation source distinct from `targetParams` (the PublicAllocator rejects
+    // withdrawing from the target market).
+    const reallocSource = new MarketParams({
+      collateralToken: "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599", // WBTC
+      loanToken: USDC,
+      oracle: "0x3333333333333333333333333333333333333333",
+      irm: IRM,
+      lltv: parseUnits("0.86", 18),
+    });
+    const fee = parseUnits("0.005", 18);
+    const targetReallocations: readonly VaultReallocation[] = [
+      {
+        vault: "0xBEEf5aFE88eF73337e5070aB2855d37dBF5493A4",
+        fee,
+        withdrawals: [
+          { marketParams: reallocSource, amount: parseUnits("1000", 6) },
+        ],
+      },
+    ];
+
+    const refi = market.refinance({
+      userAddress: USER,
+      positionData,
+      target: { marketParams: targetParams, positionData: targetPosition },
+      collateralAmount: parseUnits("0.5", 18),
+      borrowAssets: parseUnits("50", 6),
+      targetReallocations,
+    });
+
+    const tx = refi.buildTx();
+    expect(tx.value).toBe(fee);
+    expect(tx.action.args.reallocationFee).toBe(fee);
   });
 });

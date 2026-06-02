@@ -15,8 +15,10 @@ import {
   RefinanceSharesMissingBorrowAssetsError,
   RefinanceTokenMismatchError,
   type Transaction,
+  type VaultReallocation,
   ZeroCollateralAmountError,
 } from "../../types/index.js";
+import { buildReallocationActions } from "./buildReallocationActions.js";
 
 /** Parameters for {@link marketV1Refinance}. */
 export interface MarketV1RefinanceParams {
@@ -52,6 +54,14 @@ export interface MarketV1RefinanceParams {
      * only valid in collat-only refinances.
      */
     maxRepaySharePrice: bigint;
+    /**
+     * Optional PublicAllocator reallocations to execute against the **target** market before the
+     * refinance bundle runs. Each `reallocateTo` moves liquidity from another market on the listed
+     * vault into the target market, so the target borrow leg inside the
+     * `onMorphoSupplyCollateral` callback finds enough on-chain liquidity. Reallocation fees
+     * accumulate in `tx.value`.
+     */
+    targetReallocations?: readonly VaultReallocation[];
   };
   metadata?: Metadata;
 }
@@ -70,6 +80,11 @@ export interface MarketV1RefinanceParams {
  * Bundle shape (callback contents depend on borrow mode):
  *
  * ```text
+ * // optional — when `targetReallocations` is non-empty, one `reallocateTo` per
+ * // entry runs first to free up liquidity on the target market.
+ * reallocateTo(vault_i, fee_i, withdrawals_i, target, false),
+ * ...
+ *
  * morphoSupplyCollateral(target, collateralAmount, user, [
  *   // omitted when no debt is migrated (collat-only refinance)
  *   morphoBorrow(target, borrowAssets, 0, minBorrowSharePrice, GA1),
@@ -114,6 +129,9 @@ export interface MarketV1RefinanceParams {
  *   protection for the target borrow leg.
  * @param params.args.maxRepaySharePrice - Maximum repay share price (ray) on the source — slippage
  *   protection for the source repay leg.
+ * @param params.args.targetReallocations - Optional vault reallocations to execute against the
+ *   target market before the refinance bundle (PublicAllocator). Computed by the entity layer.
+ *   Reallocation fees accumulate in `tx.value`.
  * @param params.metadata - Optional analytics metadata appended to `tx.data`.
  * @returns A deep-frozen `Transaction<MarketV1RefinanceAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
@@ -134,6 +152,16 @@ export interface MarketV1RefinanceParams {
  * @throws {NonPositiveRepayMaxSharePriceError} when a repay leg is encoded
  *   (`borrowAssets > 0n` or `borrowShares > 0n`) and `maxRepaySharePrice <= 0n` — an on-chain
  *   `morphoRepay` with a zero cap is doomed to revert.
+ * @throws {NegativeReallocationFeeError} from `buildReallocationActions` when
+ *   `targetReallocations` is non-empty and any `reallocation.fee < 0n`.
+ * @throws {EmptyReallocationWithdrawalsError} from `buildReallocationActions` when any
+ *   `reallocation.withdrawals` is empty.
+ * @throws {NonPositiveReallocationAmountError} from `buildReallocationActions` when any
+ *   `reallocation.withdrawals[i].amount <= 0n`.
+ * @throws {ReallocationWithdrawalOnTargetMarketError} from `buildReallocationActions` when any
+ *   reallocation withdrawal references the target market.
+ * @throws {UnsortedReallocationWithdrawalsError} from `buildReallocationActions` when
+ *   reallocation withdrawals are not strictly sorted by market id.
  * @example
  * ```ts
  * import { marketV1Refinance } from "@morpho-org/morpho-sdk";
@@ -163,6 +191,7 @@ export const marketV1Refinance = ({
     borrowShares = 0n,
     minBorrowSharePrice,
     maxRepaySharePrice,
+    targetReallocations,
   },
   metadata,
 }: MarketV1RefinanceParams): Readonly<Transaction<MarketV1RefinanceAction>> => {
@@ -287,12 +316,22 @@ export const marketV1Refinance = ({
     args: [sourceParams, collateralAmount, generalAdapter1, false],
   });
 
-  const actions: Action[] = [
-    {
-      type: "morphoSupplyCollateral",
-      args: [targetParams, collateralAmount, user, callback, false],
-    },
-  ];
+  const actions: Action[] = [];
+  let reallocationFee = 0n;
+
+  // Reallocations against the target market run before `morphoSupplyCollateral` — the
+  // PublicAllocator moves liquidity into the target so the in-callback `morphoBorrow` finds it.
+  // Same pattern as `marketV1Borrow` / `marketV1SupplyCollateralBorrow`: top-level prepend.
+  if (targetReallocations && targetReallocations.length > 0) {
+    const result = buildReallocationActions(targetReallocations, targetParams);
+    actions.push(...result.actions);
+    reallocationFee = result.fee;
+  }
+
+  actions.push({
+    type: "morphoSupplyCollateral",
+    args: [targetParams, collateralAmount, user, callback, false],
+  });
 
   let tx = BundlerAction.encodeBundle(chainId, actions);
 
@@ -313,6 +352,7 @@ export const marketV1Refinance = ({
         minBorrowSharePrice,
         maxRepaySharePrice,
         user,
+        reallocationFee,
       },
     },
   });

@@ -406,6 +406,11 @@ export interface MarketV1Actions {
    *   `borrowAssets`). Use this for full source closure (immune to mid-tx accrual). Optional.
    * @param params.slippageTolerance - WAD slippage tolerance. Defaults to
    *   `DEFAULT_SLIPPAGE_TOLERANCE`.
+   * @param params.targetReallocations - Optional PublicAllocator reallocations against the
+   *   **target** market, computed by the caller via {@link getReallocationData} +
+   *   {@link getReallocations} on a `MarketV1` instance for the target. Prepended as
+   *   `reallocateTo` calls before the refinance bundle so the in-callback `morphoBorrow` on the
+   *   target finds enough on-chain liquidity. Reallocation fees accumulate in `tx.value`.
    * @returns Object with `buildTx` and `getRequirements`.
    */
   refinance: (params: {
@@ -419,6 +424,7 @@ export interface MarketV1Actions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
+    targetReallocations?: readonly VaultReallocation[];
   }) => {
     buildTx: () => Readonly<Transaction<MarketV1RefinanceAction>>;
     getRequirements: () => Promise<
@@ -1255,6 +1261,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     borrowAssets,
     borrowShares,
     slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+    targetReallocations,
   }: {
     userAddress: Address;
     positionData: AccrualPosition;
@@ -1266,6 +1273,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     borrowAssets?: bigint;
     borrowShares?: bigint;
     slippageTolerance?: bigint;
+    targetReallocations?: readonly VaultReallocation[];
   }) {
     validateChainId(this.client.viemClient.chain?.id, this.chainId);
     validateSlippageTolerance(slippageTolerance);
@@ -1493,6 +1501,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
             borrowShares: requestedShares,
             minBorrowSharePrice,
             maxRepaySharePrice,
+            targetReallocations,
           },
           metadata: this.client.options.metadata,
         }),

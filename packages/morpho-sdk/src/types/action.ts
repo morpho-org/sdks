@@ -230,6 +230,7 @@ export interface MarketV1RefinanceAction
       readonly minBorrowSharePrice: bigint;
       readonly maxRepaySharePrice: bigint;
       readonly user: Address;
+      readonly reallocationFee: bigint;
     }
   > {}
 
