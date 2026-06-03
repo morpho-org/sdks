@@ -39,6 +39,7 @@ pnpm add @morpho-org/morpho-sdk
 |              | `withdraw`                | Bundler (general adapter) | `morphoWithdraw` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `withdrawCollateral`      | Direct Morpho call        | No bundler overhead. Validates position health after withdrawal.                                    |
 |              | `repayWithdrawCollateral` | Bundler (general adapter) | Atomic repay + withdraw. Bundle order matters: repay first, then withdraw.                          |
+|              | `refinance`               | Bundler (general adapter) | Atomic position migration to another market with the same loan + collateral tokens. Flash-collateral via the target's `onMorphoSupplyCollateral` callback: borrow target → repay source → withdraw source collateral. Requires GA1 auth. Supports target reallocations. |
 
 ### The `getRequirements` flow
 
@@ -88,6 +89,7 @@ const tx = buildTx(permitSignature);
 |              | `borrow`                 | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `supplyCollateralBorrow` | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
 |              | `withdraw`               | Bundler (general adapter) | `morphoWithdraw` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
+|              | `refinance`              | Bundler (general adapter) | Atomic position migration to another market sharing the same loan + collateral tokens. Requires GA1 auth. Supports reallocations. |
 
 ### VaultV2
 
@@ -418,6 +420,49 @@ const tx = buildTx(requirementSignature);
 
 Atomically bundles repay → withdraw collateral via bundler3. Bundle order is critical: repay runs first to reduce debt, then withdraw. Requires both a loan token approval (for repay) and a Morpho authorization (for withdraw). The SDK validates combined position health by simulating the repay before checking withdrawal safety.
 
+#### Refinance
+
+Atomically migrate a position from this market to another Morpho Blue market that shares the **same loan and collateral tokens** on the same chain — no flash loan, no upfront capital. The bundle flash-collateralizes the target via its `onMorphoSupplyCollateral` callback: inside the callback `GeneralAdapter1` borrows on the target, repays the source debt, then withdraws the source collateral to settle the deferred transfer.
+
+```typescript
+const source = client.morpho.marketV1(sourceMarketParams, 1);
+const target = client.morpho.marketV1(targetMarketParams, 1);
+
+const positionData = await source.getPositionData("0xUser...");
+const targetPositionData = await target.getPositionData("0xUser...");
+
+// Refinance by assets — exact-asset borrow and repay, no GA1 dust
+const { buildTx, getRequirements } = source.refinance({
+  userAddress: "0xUser...",
+  positionData,
+  target: { marketParams: targetMarketParams, positionData: targetPositionData },
+  collateralAmount: 1000000000000000000n,
+  borrowAssets: 500000000000000000n,
+});
+
+// Or migrate the full debt by shares (immune to interest accrual between quote and inclusion)
+const { buildTx, getRequirements } = source.refinance({
+  userAddress: "0xUser...",
+  positionData,
+  target: { marketParams: targetMarketParams, positionData: targetPositionData },
+  collateralAmount: 1000000000000000000n,
+  borrowShares: positionData.borrowShares,
+});
+
+// Collateral-only migration — omit both borrow fields
+const { buildTx, getRequirements } = source.refinance({
+  userAddress: "0xUser...",
+  positionData,
+  target: { marketParams: targetMarketParams, positionData: targetPositionData },
+  collateralAmount: 1000000000000000000n,
+});
+
+const requirements = await getRequirements();
+const tx = buildTx();
+```
+
+The SDK validates ownership, token/id match, and that amounts do not exceed the source position. Health is checked against `LLTV − buffer` where it can degrade: the residual source position is validated whenever debt remains after the repay, and the aggregate target position is validated whenever a borrow leg is migrated. Collateral-only migrations (both borrow fields omitted) skip the target health check — they can't degrade target health and would otherwise fail on missing-oracle target markets. Both markets are forward-accrued to `now`; in shares mode the target borrow overshoots by `slippageTolerance` and the callback sweeps the residual back into the target debt (or skims it to the user). `getRequirements` returns the `setAuthorization(generalAdapter1, true)` transaction when GA1 is not yet authorized — a single global authorization covers both markets. Optional `targetReallocations` top up target-market liquidity via the **PublicAllocator** (same mechanism as `borrow`); their fees add to `tx.value`.
+
 #### Borrow with Shared Liquidity (Reallocations)
 
 When a market lacks sufficient liquidity, you can reallocate liquidity from other markets managed by MetaMorpho Vaults via the **PublicAllocator** contract:
@@ -510,12 +555,14 @@ graph LR
         MM1 --> M1B[marketV1Borrow]
         MM1 --> M1SCB[marketV1SupplyCollateralBorrow]
         MM1 --> M1W[marketV1Withdraw]
+        MM1 --> M1RF[marketV1Refinance]
 
         M1S -->|nativeWrap? + erc20TransferFrom + morphoSupply| B3[Bundler3]
         M1SC -->|erc20TransferFrom + morphoSupplyCollateral| B3
         M1B -->|reallocateTo? + morphoBorrow| B3
         M1SCB -->|transfer + supplyCollateral + reallocateTo? + borrow| B3
         M1W -->|reallocateTo? + morphoWithdraw| B3
+        M1RF -->|reallocateTo? + supplyCollateral callback: borrow + repay + withdrawCollateral| B3
 
         B3 -.->|reallocateTo| PA[PublicAllocator]
     end
