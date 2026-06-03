@@ -63,6 +63,18 @@ describe("morphoViemExtension", () => {
     expect(Object.isFrozen(client.morpho.options.metadata)).toBe(true);
   });
 
+  test("behavior: options metadata is copied before freezing", () => {
+    const metadata = { origin: "test" };
+    const client = publicClient().extend(morphoViemExtension({ metadata }));
+
+    expect(client.morpho.options.metadata).toEqual({ origin: "test" });
+    expect(client.morpho.options.metadata).not.toBe(metadata);
+    expect(Object.isFrozen(metadata)).toBe(false);
+
+    metadata.origin = "changed";
+    expect(client.morpho.options.metadata).toEqual({ origin: "test" });
+  });
+
   test("error: MarketIdMismatchError", () => {
     const client = publicClient().extend(morphoViemExtension());
     const marketParams = new MarketParams(CbbtcUsdcMarketV1);
