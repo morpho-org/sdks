@@ -4,10 +4,67 @@ import { describe, expect, test } from "vitest";
 
 import { baseOffer } from "../__test__/fixtures.js";
 import { MAX_TICK } from "../constants.js";
-import { DivisionByZeroError } from "../errors.js";
+import {
+  DivisionByZeroError,
+  NegativeValueError,
+  SettlementFeeExceedsPriceError,
+} from "../errors.js";
 import { ConsumableUnitsLib } from "./ConsumableUnitsLib.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 import { TickLib } from "./TickLib.js";
+
+describe("TakeAmountsLib namespace exports", () => {
+  test("default: mulDiv", () => {
+    expect(
+      TakeAmountsLib.mulDiv({
+        x: 5n,
+        y: 1n,
+        denominator: 2n,
+        rounding: "Down",
+      }),
+    ).toBe(2n);
+    expect(
+      TakeAmountsLib.mulDiv({
+        x: 5n,
+        y: 1n,
+        denominator: 2n,
+        rounding: "Up",
+      }),
+    ).toBe(3n);
+  });
+
+  test("default: prices", () => {
+    const prices = TakeAmountsLib.prices({
+      offer: baseOffer({ buy: true, tick: MAX_TICK }),
+      settlementFee: 1n,
+    });
+
+    expect(prices).toEqual({
+      buyerPrice: MathLib.WAD,
+      sellerPrice: MathLib.WAD - 1n,
+    });
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() =>
+      TakeAmountsLib.prices({
+        offer: baseOffer(),
+        settlementFee: -1n,
+      }),
+    ).toThrow(NegativeValueError);
+  });
+
+  test("error: SettlementFeeExceedsPriceError", () => {
+    const offer = baseOffer({ buy: true, tick: 2n });
+
+    expect(() =>
+      TakeAmountsLib.prices({
+        offer,
+        settlementFee: TickLib.tickToPrice(offer.tick) + 1n,
+      }),
+    ).toThrow(SettlementFeeExceedsPriceError);
+  });
+});
 
 describe("TakeAmountsLib.buyerAssetsToUnits", () => {
   test("behavior: buy offers round borrower max units up", () => {
@@ -19,7 +76,6 @@ describe("TakeAmountsLib.buyerAssetsToUnits", () => {
         offer,
         targetBuyerAssets: 123n,
         settlementFee: 0n,
-        now: 0n,
       }),
     ).toBe(TakeAmountsLib.toUnits({ assets: 123n, price, rounding: "Up" }));
   });
@@ -33,9 +89,27 @@ describe("TakeAmountsLib.buyerAssetsToUnits", () => {
         offer,
         targetBuyerAssets: 123n,
         settlementFee: 0n,
-        now: 0n,
       }),
     ).toBe(TakeAmountsLib.toUnits({ assets: 123n, price, rounding: "Down" }));
+  });
+
+  test("error: NegativeValueError", () => {
+    const offer = baseOffer();
+
+    expect(() =>
+      TakeAmountsLib.buyerAssetsToUnits({
+        offer,
+        targetBuyerAssets: -1n,
+        settlementFee: 0n,
+      }),
+    ).toThrow(NegativeValueError);
+    expect(() =>
+      TakeAmountsLib.buyerAssetsToUnits({
+        offer,
+        targetBuyerAssets: 123n,
+        settlementFee: -1n,
+      }),
+    ).toThrow(NegativeValueError);
   });
 
   test("error: DivisionByZeroError", () => {
@@ -44,9 +118,20 @@ describe("TakeAmountsLib.buyerAssetsToUnits", () => {
         offer: baseOffer({ buy: false, tick: 0n }),
         targetBuyerAssets: 123n,
         settlementFee: 0n,
-        now: 0n,
       }),
     ).toThrow(DivisionByZeroError);
+  });
+
+  test("error: SettlementFeeExceedsPriceError", () => {
+    const offer = baseOffer({ buy: true, tick: 2n });
+
+    expect(() =>
+      TakeAmountsLib.buyerAssetsToUnits({
+        offer,
+        targetBuyerAssets: 123n,
+        settlementFee: TickLib.tickToPrice(offer.tick) + 1n,
+      }),
+    ).toThrow(SettlementFeeExceedsPriceError);
   });
 });
 
@@ -59,9 +144,27 @@ describe("TakeAmountsLib.sellerAssetsToUnits", () => {
         offer,
         targetSellerAssets: 123n,
         settlementFee: TickLib.tickToPrice(offer.tick),
-        now: 0n,
       }),
     ).toThrow(DivisionByZeroError);
+  });
+
+  test("error: NegativeValueError", () => {
+    const offer = baseOffer();
+
+    expect(() =>
+      TakeAmountsLib.sellerAssetsToUnits({
+        offer,
+        targetSellerAssets: -1n,
+        settlementFee: 0n,
+      }),
+    ).toThrow(NegativeValueError);
+    expect(() =>
+      TakeAmountsLib.sellerAssetsToUnits({
+        offer,
+        targetSellerAssets: 123n,
+        settlementFee: -1n,
+      }),
+    ).toThrow(NegativeValueError);
   });
 });
 
@@ -88,6 +191,23 @@ describe("TakeAmountsLib.toUnits", () => {
       ),
       { numRuns: 100 },
     );
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() =>
+      TakeAmountsLib.toUnits({
+        assets: -1n,
+        price: MathLib.WAD,
+        rounding: "Down",
+      }),
+    ).toThrow(NegativeValueError);
+    expect(() =>
+      TakeAmountsLib.toUnits({
+        assets: 1n,
+        price: -1n,
+        rounding: "Down",
+      }),
+    ).toThrow(NegativeValueError);
   });
 });
 
@@ -122,8 +242,111 @@ describe("ConsumableUnitsLib.consumableUnits", () => {
         offer: baseOffer({ maxUnits: 100n }),
         consumed: 40n,
         settlementFee: 0n,
-        now: 0n,
       }),
     ).toBe(60n);
+  });
+
+  test("behavior: max units use zero-floor subtraction", () => {
+    expect(
+      ConsumableUnitsLib.consumableUnits({
+        offer: baseOffer({ maxUnits: 100n }),
+        consumed: 120n,
+        settlementFee: MathLib.WAD,
+      }),
+    ).toBe(0n);
+  });
+
+  test("behavior: buy max assets convert buyer assets", () => {
+    const offer = baseOffer({ buy: true, maxUnits: 0n, maxAssets: 123n });
+
+    expect(
+      ConsumableUnitsLib.consumableUnits({
+        offer,
+        consumed: 23n,
+        settlementFee: 0n,
+      }),
+    ).toBe(
+      TakeAmountsLib.buyerAssetsToUnits({
+        offer,
+        targetBuyerAssets: 100n,
+        settlementFee: 0n,
+      }),
+    );
+  });
+
+  test("behavior: sell max assets convert seller assets", () => {
+    const offer = baseOffer({
+      buy: false,
+      maxUnits: 0n,
+      maxAssets: 123n,
+    });
+
+    expect(
+      ConsumableUnitsLib.consumableUnits({
+        offer,
+        consumed: 23n,
+        settlementFee: 0n,
+      }),
+    ).toBe(
+      TakeAmountsLib.sellerAssetsToUnits({
+        offer,
+        targetSellerAssets: 100n,
+        settlementFee: 0n,
+      }),
+    );
+  });
+
+  test("behavior: max assets use zero-floor subtraction", () => {
+    expect(
+      ConsumableUnitsLib.consumableUnits({
+        offer: baseOffer({
+          buy: true,
+          tick: MAX_TICK,
+          maxUnits: 0n,
+          maxAssets: 100n,
+        }),
+        consumed: 120n,
+        settlementFee: 0n,
+      }),
+    ).toBe(0n);
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() =>
+      ConsumableUnitsLib.consumableUnits({
+        offer: baseOffer({ maxUnits: 100n }),
+        consumed: -1n,
+        settlementFee: 0n,
+      }),
+    ).toThrow(NegativeValueError);
+    expect(() =>
+      ConsumableUnitsLib.consumableUnits({
+        offer: baseOffer({ maxUnits: -1n }),
+        consumed: 0n,
+        settlementFee: 0n,
+      }),
+    ).toThrow(NegativeValueError);
+  });
+
+  test("error: DivisionByZeroError", () => {
+    expect(() =>
+      ConsumableUnitsLib.consumableUnits({
+        offer: baseOffer({ buy: true, tick: 0n, maxUnits: 0n }),
+        consumed: 0n,
+        settlementFee: 0n,
+      }),
+    ).toThrow(DivisionByZeroError);
+  });
+
+  test("error: SettlementFeeExceedsPriceError", () => {
+    const offer = baseOffer({ buy: true, tick: 2n, maxUnits: 0n });
+
+    expect(() =>
+      ConsumableUnitsLib.consumableUnits({
+        offer,
+        consumed: 0n,
+        settlementFee: TickLib.tickToPrice(offer.tick) + 1n,
+      }),
+    ).toThrow(SettlementFeeExceedsPriceError);
   });
 });

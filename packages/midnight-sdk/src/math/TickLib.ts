@@ -8,38 +8,11 @@ import {
 import {
   DivisionByZeroError,
   InvalidTickSpacingError,
-  NegativeValueError,
   PriceGreaterThanOneError,
   TickOutOfRangeError,
 } from "../errors.js";
+import { assertNonNegative } from "../internal.js";
 import type { BigIntish } from "../types.js";
-
-const LN_ONE_PLUS_DELTA = 4_987_541_511_039_073n;
-const LN_2 = 693_147_180_559_945_309n;
-const EXP_OFFSET = 322_611_214_989_459_870n;
-
-const divHalfDownUnchecked = (x: bigint, d: bigint) => (x + (d - 1n) / 2n) / d;
-
-const assertNonNegative = (field: string, value: bigint) => {
-  if (value < 0n) throw new NegativeValueError(field, value);
-};
-
-const assertTickInRange = (tick: bigint) => {
-  assertNonNegative("tick", tick);
-  if (tick > MAX_TICK) throw new TickOutOfRangeError(tick, MAX_TICK);
-};
-
-const wExp = (x: bigint): bigint => {
-  if (x < 0n) return 1_000000000000000000000000000000000000n / wExp(-x);
-
-  const q = (x + EXP_OFFSET) / LN_2;
-  const r = x - q * LN_2;
-  const secondTerm = (r * r) / (2n * MathLib.WAD);
-  const thirdTerm = (secondTerm * r) / (3n * MathLib.WAD);
-  const expR = MathLib.WAD + r + secondTerm + thirdTerm;
-
-  return expR << q;
-};
 
 /**
  * TypeScript port of Midnight `TickLib`.
@@ -52,6 +25,108 @@ const wExp = (x: bigint): bigint => {
  * ```
  */
 export namespace TickLib {
+  /**
+   * WAD-scaled natural log of one plus Midnight's tick delta.
+   *
+   * @example
+   * ```ts
+   * import { TickLib } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(TickLib.LN_ONE_PLUS_DELTA);
+   * ```
+   */
+  export const LN_ONE_PLUS_DELTA = 4_987_541_511_039_073n;
+
+  /**
+   * WAD-scaled natural log of two.
+   *
+   * @example
+   * ```ts
+   * import { TickLib } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(TickLib.LN_2);
+   * ```
+   */
+  export const LN_2 = 693_147_180_559_945_309n;
+
+  /**
+   * Exponent offset used by the Midnight exponential approximation.
+   *
+   * @example
+   * ```ts
+   * import { TickLib } from "@morpho-org/midnight-sdk";
+   *
+   * console.log(TickLib.EXP_OFFSET);
+   * ```
+   */
+  export const EXP_OFFSET = 322_611_214_989_459_870n;
+
+  /**
+   * Divides with half-down rounding without validating the denominator.
+   *
+   * @param x - Dividend.
+   * @param d - Divisor.
+   * @returns Quotient rounded half down.
+   * @example
+   * ```ts
+   * import { TickLib } from "@morpho-org/midnight-sdk";
+   *
+   * const value = TickLib.divHalfDownUnchecked(5n, 2n);
+   * console.log(value);
+   * ```
+   */
+  export const divHalfDownUnchecked = (x: bigint, d: bigint) =>
+    (x + (d - 1n) / 2n) / d;
+
+  /**
+   * Asserts that a tick is non-negative and within Midnight's deployed range.
+   *
+   * @param tick - Tick to validate.
+   * @returns The normalized tick.
+   * @throws NegativeValueError when `tick` is negative.
+   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
+   * @example
+   * ```ts
+   * import { TickLib } from "@morpho-org/midnight-sdk";
+   *
+   * const tick = TickLib.assertTickInRange(100n);
+   * console.log(tick);
+   * ```
+   */
+  export const assertTickInRange = (tick: BigIntish) => {
+    const normalizedTick = BigInt(tick);
+    assertNonNegative("tick", normalizedTick);
+    if (normalizedTick > MAX_TICK)
+      throw new TickOutOfRangeError(normalizedTick, MAX_TICK);
+
+    return normalizedTick;
+  };
+
+  /**
+   * Computes the WAD-scaled exponential approximation used by Midnight ticks.
+   *
+   * @param x - WAD-scaled exponent.
+   * @returns WAD-scaled exponential value.
+   * @example
+   * ```ts
+   * import { TickLib } from "@morpho-org/midnight-sdk";
+   *
+   * const value = TickLib.wExp(0n);
+   * console.log(value);
+   * ```
+   */
+  export const wExp = (x: bigint): bigint => {
+    if (x < 0n) return 1_000000000000000000000000000000000000n / wExp(-x);
+
+    const q = (x + EXP_OFFSET) / LN_2;
+    const r = x - q * LN_2;
+    const secondTerm = (r * r) / (2n * MathLib.WAD);
+    const thirdTerm = (secondTerm * r) / (3n * MathLib.WAD);
+    const expR = MathLib.WAD + r + secondTerm + thirdTerm;
+
+    return expR << q;
+  };
+
   /**
    * Converts a Midnight tick into a WAD price.
    *
@@ -68,8 +143,7 @@ export namespace TickLib {
    * ```
    */
   export function tickToPrice(tick: BigIntish) {
-    const normalizedTick = BigInt(tick);
-    assertTickInRange(normalizedTick);
+    const normalizedTick = assertTickInRange(tick);
 
     const exponent = LN_ONE_PLUS_DELTA * (MAX_TICK / 2n - normalizedTick);
     const rawPrice = divHalfDownUnchecked(
@@ -226,9 +300,8 @@ export namespace TickLib {
     tick: BigIntish,
     spacing: BigIntish = DEFAULT_TICK_SPACING,
   ) {
-    const normalizedTick = BigInt(tick);
+    const normalizedTick = assertTickInRange(tick);
     const normalizedSpacing = BigInt(spacing);
-    assertTickInRange(normalizedTick);
     if (normalizedSpacing <= 0n || MAX_TICK % normalizedSpacing !== 0n) {
       throw new InvalidTickSpacingError(normalizedSpacing);
     }

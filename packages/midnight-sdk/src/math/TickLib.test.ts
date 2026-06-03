@@ -12,6 +12,23 @@ import {
 } from "../errors.js";
 import { TickLib } from "./TickLib.js";
 
+describe("TickLib namespace exports", () => {
+  test("default", () => {
+    expect(TickLib.LN_ONE_PLUS_DELTA).toBe(4_987_541_511_039_073n);
+    expect(TickLib.LN_2).toBe(693_147_180_559_945_309n);
+    expect(TickLib.EXP_OFFSET).toBe(322_611_214_989_459_870n);
+    expect(TickLib.divHalfDownUnchecked(5n, 2n)).toBe(2n);
+    expect(TickLib.assertTickInRange(MAX_TICK)).toBe(MAX_TICK);
+    expect(TickLib.wExp(0n)).toBe(MathLib.WAD);
+  });
+
+  test("error: TickOutOfRangeError", () => {
+    expect(() => TickLib.assertTickInRange(MAX_TICK + 1n)).toThrow(
+      TickOutOfRangeError,
+    );
+  });
+});
+
 describe("TickLib.tickToPrice", () => {
   test("default", () => {
     expect(TickLib.tickToPrice(0n)).toBe(0n);

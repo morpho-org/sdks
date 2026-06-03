@@ -1,9 +1,9 @@
-import { MathLib } from "@morpho-org/morpho-ts";
 import type { Address, Client, Hex } from "viem";
 import { getBytecode, readContract } from "viem/actions";
 
 import { erc20Abi, midnightAbi } from "../abis.js";
 import { MAX_COLLATERALS } from "../constants.js";
+import { assertNonNegative } from "../internal.js";
 import {
   type IMarket,
   Market,
@@ -409,6 +409,7 @@ export function fetchTickSpacing(
  *
  * @param params - Fetch parameters.
  * @returns WAD-scaled settlement fee.
+ * @throws NegativeValueError when `timeToMaturity` is negative.
  * @example
  * ```ts
  * import { fetchSettlementFee } from "@morpho-org/midnight-sdk";
@@ -423,11 +424,14 @@ export function fetchSettlementFee(
     readonly timeToMaturity: BigIntish;
   },
 ) {
+  const timeToMaturity = BigInt(params.timeToMaturity);
+  assertNonNegative("timeToMaturity", timeToMaturity);
+
   return readContract(params.client, {
     address: params.midnight,
     abi: midnightAbi,
     functionName: "settlementFee",
-    args: [params.marketId, BigInt(params.timeToMaturity)],
+    args: [params.marketId, timeToMaturity],
   });
 }
 
@@ -461,8 +465,15 @@ export function fetchConsumed(
 /**
  * Fetches and computes remaining consumable units for an offer.
  *
+ * For unit-capped offers this only reads `consumed`, matching the Solidity
+ * library's early return before any settlement-fee lookup. For asset-capped
+ * offers, pass the time to maturity for the same block context as the quote.
+ *
  * @param params - Fetch parameters.
  * @returns Consumable units.
+ * @throws NegativeValueError when asset-capped `timeToMaturity` or SDK-normalized math inputs are negative.
+ * @throws DivisionByZeroError when the delegated units conversion divides by zero.
+ * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
  * @example
  * ```ts
  * import { fetchConsumableUnits } from "@morpho-org/midnight-sdk";
@@ -475,26 +486,35 @@ export async function fetchConsumableUnits(
   params: MidnightFetchParams & {
     readonly marketId: Hex;
     readonly offer: IOffer | Offer;
-    readonly now: BigIntish;
+    readonly timeToMaturity: BigIntish;
   },
 ) {
   const offer = normalizeOffer(params.offer);
-  const timeToMaturity = MathLib.zeroFloorSub(
-    offer.market.maturity,
-    BigInt(params.now),
-  );
+  assertNonNegative("offer.maxUnits", offer.maxUnits);
+  assertNonNegative("offer.maxAssets", offer.maxAssets);
+
+  const consumedParams = {
+    client: params.client,
+    midnight: params.midnight,
+    user: offer.maker,
+    group: offer.group,
+  };
+
+  if (offer.maxUnits > 0n) {
+    return ConsumableUnitsLib.consumableUnits({
+      offer,
+      consumed: await fetchConsumed(consumedParams),
+      settlementFee: 0n,
+    });
+  }
+
   const [consumed, settlementFee] = await Promise.all([
-    fetchConsumed({
-      client: params.client,
-      midnight: params.midnight,
-      user: offer.maker,
-      group: offer.group,
-    }),
+    fetchConsumed(consumedParams),
     fetchSettlementFee({
       client: params.client,
       midnight: params.midnight,
       marketId: params.marketId,
-      timeToMaturity,
+      timeToMaturity: params.timeToMaturity,
     }),
   ]);
 
@@ -502,7 +522,6 @@ export async function fetchConsumableUnits(
     offer,
     consumed,
     settlementFee,
-    now: params.now,
   });
 }
 
