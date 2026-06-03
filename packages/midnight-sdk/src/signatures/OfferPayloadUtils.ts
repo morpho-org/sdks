@@ -1,3 +1,4 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   type Address,
   concat,
@@ -6,14 +7,12 @@ import {
   type Hex,
   keccak256,
 } from "viem";
-
 import { setterRatifierAbi } from "../abis.js";
 import { EIP712_DOMAIN_TYPEHASH, OFFER_TYPEHASH } from "../constants.js";
 import {
   InvalidOfferPayloadError,
   InvalidOfferTreeHeightError,
 } from "../errors.js";
-import { deepFreeze } from "../internal.js";
 import { MarketUtils } from "../market/index.js";
 import { type IOffer, Offer, type OfferStruct } from "../offers/index.js";
 import type { BigIntish, MidnightCall } from "../types.js";

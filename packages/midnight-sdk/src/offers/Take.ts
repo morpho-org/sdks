@@ -1,6 +1,5 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Hex } from "viem";
-
-import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 import { type IOffer, Offer, type OfferStruct } from "./Offer.js";
 

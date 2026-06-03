@@ -1,7 +1,6 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, type Hex, zeroAddress } from "viem";
-
 import { midnightAbi } from "../abis.js";
-import { deepFreeze } from "../internal.js";
 import { type IMarket, Market } from "../market/index.js";
 import type { BigIntish, MidnightCall } from "../types.js";
 

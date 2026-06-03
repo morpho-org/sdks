@@ -1,8 +1,7 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, encodeFunctionData, type Hex, zeroAddress } from "viem";
-
 import { midnightBundlesAbi } from "../abis.js";
 import { NoMatchingOffersError } from "../errors.js";
-import { deepFreeze } from "../internal.js";
 import { type IMarket, Market } from "../market/index.js";
 import { type ITake, Take, type TakeStruct } from "../offers/index.js";
 import {

@@ -1,12 +1,11 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import { type Address, type Hex, zeroAddress } from "viem";
-
 import {
   InconsistentMarketError,
   MissingOfferGroupError,
   NoMatchingOffersError,
   UnexpectedOfferSideError,
 } from "../errors.js";
-import { deepFreeze } from "../internal.js";
 import { MarketUtils } from "../market/index.js";
 import type { BigIntish } from "../types.js";
 import { type BuildOfferParams, type IOffer, Offer } from "./Offer.js";

@@ -1,4 +1,4 @@
-import { deepFreeze } from "../internal.js";
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { BigIntish } from "../types.js";
 
 /**

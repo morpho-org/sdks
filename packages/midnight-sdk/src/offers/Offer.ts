@@ -1,6 +1,5 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address, Hex } from "viem";
-
-import { deepFreeze } from "../internal.js";
 import { type IMarket, Market, type MarketStruct } from "../market/index.js";
 import type { BigIntish } from "../types.js";
 

@@ -1,11 +1,10 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import {
   type Address,
   encodeAbiParameters,
   encodePacked,
   keccak256,
 } from "viem";
-
-import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 import {
   CollateralParams,
