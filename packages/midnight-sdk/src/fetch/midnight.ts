@@ -1,9 +1,9 @@
+import { zeroFloorSub } from "@morpho-org/morpho-ts";
 import type { Address, Client, Hex } from "viem";
 import { getBytecode, readContract } from "viem/actions";
 
 import { erc20Abi, midnightAbi } from "../abis.js";
 import { MAX_COLLATERALS } from "../constants.js";
-import { toBigInt, zeroFloorSub } from "../internal.js";
 import {
   type IMarket,
   Market,
@@ -262,11 +262,7 @@ export function fetchCollateral(
     address: params.midnight,
     abi: midnightAbi,
     functionName: "collateral",
-    args: [
-      params.marketId,
-      params.user,
-      toBigInt(params.collateralIndex, "collateralIndex"),
-    ],
+    args: [params.marketId, params.user, BigInt(params.collateralIndex)],
   });
 }
 
@@ -431,7 +427,7 @@ export function fetchSettlementFee(
     address: params.midnight,
     abi: midnightAbi,
     functionName: "settlementFee",
-    args: [params.marketId, toBigInt(params.timeToMaturity, "timeToMaturity")],
+    args: [params.marketId, BigInt(params.timeToMaturity)],
   });
 }
 
@@ -485,7 +481,7 @@ export async function fetchConsumableUnits(
   const offer = normalizeOffer(params.offer);
   const timeToMaturity = zeroFloorSub(
     offer.market.maturity,
-    toBigInt(params.now, "now"),
+    BigInt(params.now),
   );
   const [consumed, settlementFee] = await Promise.all([
     fetchConsumed({

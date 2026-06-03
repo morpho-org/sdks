@@ -1,4 +1,4 @@
-import { type Hex, zeroAddress } from "viem";
+import { type Address, type Hex, zeroAddress } from "viem";
 
 import {
   InconsistentMarketError,
@@ -6,7 +6,7 @@ import {
   NoMatchingOffersError,
   UnexpectedOfferSideError,
 } from "../errors.js";
-import { deepFreeze, normalizeAddress } from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import { MarketUtils } from "../market/index.js";
 import type { BigIntish } from "../types.js";
 import {
@@ -92,7 +92,7 @@ export namespace OfferUtils {
    * ```
    */
   export function buildOffer(params: BuildOfferParams) {
-    const maker = normalizeAddress(params.maker, "maker");
+    const maker = params.maker as Address;
 
     return new Offer({
       market: params.market,

@@ -1,17 +1,12 @@
 import { type Address, encodeFunctionData, type Hex, zeroAddress } from "viem";
 
 import { midnightAbi } from "../abis.js";
-import {
-  deepFreeze,
-  normalizeAddress,
-  normalizeHex,
-  toBigInt,
-} from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import { type IMarket, type Market, normalizeMarket } from "../market/index.js";
 import type { BigIntish, MidnightCall } from "../types.js";
 
 const call = (to: Address | string, data: Hex): MidnightCall =>
-  deepFreeze({ to: normalizeAddress(to, "midnight"), data });
+  deepFreeze({ to: to as Address, data });
 
 /**
  * Parameters for `Midnight.supplyCollateral`.
@@ -145,9 +140,9 @@ export namespace MidnightCalls {
         functionName: "supplyCollateral",
         args: [
           normalizeMarket(params.market).toStruct(),
-          toBigInt(params.collateralIndex, "collateralIndex"),
-          toBigInt(params.assets, "assets"),
-          normalizeAddress(params.onBehalf, "onBehalf"),
+          BigInt(params.collateralIndex),
+          BigInt(params.assets),
+          params.onBehalf as Address,
         ],
       }),
     );
@@ -176,10 +171,10 @@ export namespace MidnightCalls {
         functionName: "withdrawCollateral",
         args: [
           normalizeMarket(params.market).toStruct(),
-          toBigInt(params.collateralIndex, "collateralIndex"),
-          toBigInt(params.assets, "assets"),
-          normalizeAddress(params.onBehalf, "onBehalf"),
-          normalizeAddress(params.receiver, "receiver"),
+          BigInt(params.collateralIndex),
+          BigInt(params.assets),
+          params.onBehalf as Address,
+          params.receiver as Address,
         ],
       }),
     );
@@ -206,10 +201,10 @@ export namespace MidnightCalls {
         functionName: "repay",
         args: [
           normalizeMarket(params.market).toStruct(),
-          toBigInt(params.units, "units"),
-          normalizeAddress(params.onBehalf, "onBehalf"),
-          normalizeAddress(params.callback ?? zeroAddress, "callback"),
-          normalizeHex(params.data ?? "0x", "data"),
+          BigInt(params.units),
+          params.onBehalf as Address,
+          (params.callback ?? zeroAddress) as Address,
+          (params.data ?? "0x") as Hex,
         ],
       }),
     );
@@ -237,9 +232,9 @@ export namespace MidnightCalls {
         abi: midnightAbi,
         functionName: "setIsAuthorized",
         args: [
-          normalizeAddress(params.authorized, "authorized"),
+          params.authorized as Address,
           params.newIsAuthorized,
-          normalizeAddress(params.onBehalf, "onBehalf"),
+          params.onBehalf as Address,
         ],
       }),
     );

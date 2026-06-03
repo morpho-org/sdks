@@ -1,4 +1,4 @@
-import { deepFreeze, toBigInt } from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 
 /**
@@ -94,13 +94,10 @@ export class MarketState {
   public readonly tickSpacing: number;
 
   public constructor(state: IMarketState) {
-    this.totalUnits = toBigInt(state.totalUnits, "totalUnits");
-    this.lossFactor = toBigInt(state.lossFactor, "lossFactor");
-    this.withdrawable = toBigInt(state.withdrawable, "withdrawable");
-    this.continuousFeeCredit = toBigInt(
-      state.continuousFeeCredit,
-      "continuousFeeCredit",
-    );
+    this.totalUnits = BigInt(state.totalUnits);
+    this.lossFactor = BigInt(state.lossFactor);
+    this.withdrawable = BigInt(state.withdrawable);
+    this.continuousFeeCredit = BigInt(state.continuousFeeCredit);
     this.settlementFeeCbps = deepFreeze([...state.settlementFeeCbps] as [
       number,
       number,

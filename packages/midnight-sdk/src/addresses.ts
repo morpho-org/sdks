@@ -1,29 +1,17 @@
 import type { Address } from "viem";
 
 import { UnsupportedMidnightChainError } from "./errors.js";
-import { deepFreeze, normalizeAddress } from "./internal.js";
+import { deepFreeze } from "./internal.js";
 import type { MidnightAddresses } from "./types.js";
 
-const normalizeAddresses = (addresses: MidnightAddresses): MidnightAddresses =>
+const freezeAddresses = (addresses: MidnightAddresses): MidnightAddresses =>
   deepFreeze({
-    midnight: normalizeAddress(addresses.midnight, "midnight"),
-    midnightBundles: normalizeAddress(
-      addresses.midnightBundles,
-      "midnightBundles",
-    ),
-    midnightMempool: normalizeAddress(
-      addresses.midnightMempool,
-      "midnightMempool",
-    ),
-    ecrecoverRatifier: normalizeAddress(
-      addresses.ecrecoverRatifier,
-      "ecrecoverRatifier",
-    ),
-    setterRatifier: normalizeAddress(
-      addresses.setterRatifier,
-      "setterRatifier",
-    ),
-    permit2: normalizeAddress(addresses.permit2, "permit2"),
+    midnight: addresses.midnight as Address,
+    midnightBundles: addresses.midnightBundles as Address,
+    midnightMempool: addresses.midnightMempool as Address,
+    ecrecoverRatifier: addresses.ecrecoverRatifier as Address,
+    setterRatifier: addresses.setterRatifier as Address,
+    permit2: addresses.permit2 as Address,
   });
 
 const midnightAddressEntries: readonly (readonly [
@@ -48,7 +36,7 @@ export const midnightAddressRegistry: ReadonlyMap<number, MidnightAddresses> =
   new Map(
     midnightAddressEntries.map(([chainId, addresses]) => [
       chainId,
-      normalizeAddresses(addresses),
+      freezeAddresses(addresses),
     ]),
   );
 

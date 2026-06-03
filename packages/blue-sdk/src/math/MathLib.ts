@@ -1,4 +1,9 @@
-import { WAD as SHARED_WAD } from "@morpho-org/morpho-ts";
+import {
+  WAD as SHARED_WAD,
+  mulDivDown as sharedMulDivDown,
+  mulDivUp as sharedMulDivUp,
+  zeroFloorSub as sharedZeroFloorSub,
+} from "@morpho-org/morpho-ts";
 
 import type { BigIntish } from "../types.js";
 
@@ -58,12 +63,7 @@ export namespace MathLib {
    * @param y The second number
    */
   export function zeroFloorSub(x: BigIntish, y: BigIntish) {
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    x = BigInt(x);
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    y = BigInt(y);
-
-    return x <= y ? 0n : x - y;
+    return sharedZeroFloorSub(x, y);
   }
 
   /**
@@ -142,15 +142,7 @@ export namespace MathLib {
     y: BigIntish,
     denominator: BigIntish,
   ) {
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    x = BigInt(x);
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    y = BigInt(y);
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    denominator = BigInt(denominator);
-    if (denominator === 0n) throw Error("MathLib: DIVISION_BY_ZERO");
-
-    return (x * y) / denominator;
+    return sharedMulDivDown(x, y, denominator);
   }
 
   /**
@@ -161,17 +153,7 @@ export namespace MathLib {
    */
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params
   export function mulDivUp(x: BigIntish, y: BigIntish, denominator: BigIntish) {
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    x = BigInt(x);
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    y = BigInt(y);
-    // biome-ignore lint/style/noParameterAssign: TODO refactor to avoid mutating parameter
-    denominator = BigInt(denominator);
-    if (denominator === 0n) throw Error("MathLib: DIVISION_BY_ZERO");
-
-    const roundup = (x * y) % denominator > 0 ? 1n : 0n;
-
-    return (x * y) / denominator + roundup;
+    return sharedMulDivUp(x, y, denominator);
   }
 
   // biome-ignore lint/complexity/useMaxParams: TODO refactor to ≤2 params

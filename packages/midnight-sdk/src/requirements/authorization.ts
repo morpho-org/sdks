@@ -4,7 +4,6 @@ import {
   MidnightCalls,
   type SetIsAuthorizedCallParams,
 } from "../calls/index.js";
-import { normalizeAddress } from "../internal.js";
 import type { MidnightCall } from "../types.js";
 
 /**
@@ -85,8 +84,8 @@ export function planAuthorizationRequirement(
 
   return {
     type: "authorization",
-    authorizer: normalizeAddress(params.authorizer, "authorizer"),
-    authorized: normalizeAddress(params.authorized, "authorized"),
+    authorizer: params.authorizer as Address,
+    authorized: params.authorized as Address,
     isAuthorized: false,
     call: MidnightCalls.setIsAuthorized(callParams),
   };

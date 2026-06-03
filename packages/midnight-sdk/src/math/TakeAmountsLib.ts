@@ -1,10 +1,11 @@
+import { mulDivDown, mulDivUp } from "@morpho-org/morpho-ts";
+
 import { WAD } from "../constants.js";
 import {
   DivisionByZeroError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
-import { mulDivDown, mulDivUp, toBigInt } from "../internal.js";
 import { type IOffer, normalizeOffer, type Offer } from "../offers/index.js";
 import type { BigIntish, RoundingDirection } from "../types.js";
 import { TickLib } from "./TickLib.js";
@@ -70,11 +71,8 @@ export namespace TakeAmountsLib {
     readonly now: BigIntish;
   }) {
     const offer = normalizeOffer(params.offer);
-    const settlementFee = toBigInt(params.settlementFee, "settlementFee");
-    const targetBuyerAssets = toBigInt(
-      params.targetBuyerAssets,
-      "targetBuyerAssets",
-    );
+    const settlementFee = BigInt(params.settlementFee);
+    const targetBuyerAssets = BigInt(params.targetBuyerAssets);
     const { buyerPrice } = prices(offer, settlementFee);
     if (buyerPrice === 0n) throw new DivisionByZeroError("buyerPrice");
     if (buyerPrice > WAD) throw new PriceGreaterThanOneError(buyerPrice);
@@ -111,11 +109,8 @@ export namespace TakeAmountsLib {
     readonly now: BigIntish;
   }) {
     const offer = normalizeOffer(params.offer);
-    const settlementFee = toBigInt(params.settlementFee, "settlementFee");
-    const targetSellerAssets = toBigInt(
-      params.targetSellerAssets,
-      "targetSellerAssets",
-    );
+    const settlementFee = BigInt(params.settlementFee);
+    const targetSellerAssets = BigInt(params.targetSellerAssets);
     const { sellerPrice } = prices(offer, settlementFee);
     if (sellerPrice === 0n) throw new DivisionByZeroError("sellerPrice");
 
@@ -143,15 +138,10 @@ export namespace TakeAmountsLib {
     readonly price: BigIntish;
     readonly rounding: RoundingDirection;
   }) {
-    const price = toBigInt(params.price, "price");
+    const price = BigInt(params.price);
     if (price === 0n) throw new DivisionByZeroError("price");
 
-    return mulDiv(
-      toBigInt(params.assets, "assets"),
-      WAD,
-      price,
-      params.rounding,
-    );
+    return mulDiv(BigInt(params.assets), WAD, price, params.rounding);
   }
 
   /**

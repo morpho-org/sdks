@@ -1,5 +1,4 @@
 import type { Address, Hex } from "viem";
-import { normalizeBytes32, normalizeHex } from "../internal.js";
 import {
   type EcrecoverRatificationTypedData,
   OfferPayloadUtils,
@@ -352,7 +351,7 @@ export function planMakeOfferRequirements(
     params.root != null &&
     params.isRootRatified !== true
   ) {
-    const root = normalizeBytes32(params.root, "root");
+    const root = params.root as Hex;
     requirements.push({
       type: "rootApproval",
       root,
@@ -369,7 +368,7 @@ export function planMakeOfferRequirements(
   if (params.payload != null && params.payloadValidated !== true) {
     requirements.push({
       type: "payloadValidation",
-      payload: normalizeHex(params.payload, "payload"),
+      payload: params.payload as Hex,
     });
   }
 
@@ -400,7 +399,7 @@ export function buildRootApprovalRequirement(params: {
 }): MidnightRootApprovalRequirement {
   return {
     type: "rootApproval",
-    root: normalizeBytes32(params.root, "root"),
+    root: params.root as Hex,
     call: OfferPayloadUtils.buildSetterRootApprovalCall(params),
   };
 }

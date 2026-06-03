@@ -5,7 +5,6 @@ import {
   baseMarket,
   baseMarketInput,
 } from "../__test__/fixtures.js";
-import { InvalidMidnightBigIntError } from "../errors.js";
 import { MarketUtils } from "./MarketUtils.js";
 
 describe("Market", () => {
@@ -18,14 +17,14 @@ describe("Market", () => {
     expect(Object.isFrozen(market)).toBe(true);
   });
 
-  test("error: InvalidMidnightBigIntError", () => {
+  test("error: invalid bigint input", () => {
     expect(() =>
       MarketUtils.toId({
         market: baseMarketInput(),
         chainId: "not-a-number",
         midnight: addresses.midnight,
       }),
-    ).toThrow(InvalidMidnightBigIntError);
+    ).toThrow(SyntaxError);
   });
 });
 

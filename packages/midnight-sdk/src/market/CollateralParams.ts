@@ -1,6 +1,6 @@
 import type { Address } from "viem";
 
-import { deepFreeze, normalizeAddress, toBigInt } from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 
 /**
@@ -59,10 +59,10 @@ export class CollateralParams {
   public readonly oracle: Address;
 
   public constructor(params: ICollateralParams) {
-    this.token = normalizeAddress(params.token);
-    this.lltv = toBigInt(params.lltv, "lltv");
-    this.maxLif = toBigInt(params.maxLif, "maxLif");
-    this.oracle = normalizeAddress(params.oracle);
+    this.token = params.token as Address;
+    this.lltv = BigInt(params.lltv);
+    this.maxLif = BigInt(params.maxLif);
+    this.oracle = params.oracle as Address;
     deepFreeze(this);
   }
 
