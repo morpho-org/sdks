@@ -3,7 +3,13 @@ import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
 import { MAX_TICK, PRICE_ROUNDING_STEP } from "../constants.js";
-import { TickOutOfRangeError } from "../errors.js";
+import {
+  DivisionByZeroError,
+  InvalidTickSpacingError,
+  NegativeValueError,
+  PriceGreaterThanOneError,
+  TickOutOfRangeError,
+} from "../errors.js";
 import { TickLib } from "./TickLib.js";
 
 describe("TickLib.tickToPrice", () => {
@@ -21,9 +27,20 @@ describe("TickLib.tickToPrice", () => {
       TickOutOfRangeError,
     );
   });
+
+  test("error: NegativeValueError", () => {
+    expect(() => TickLib.tickToPrice(-1n)).toThrow(NegativeValueError);
+  });
 });
 
 describe("TickLib.priceToTick", () => {
+  test("default", () => {
+    expect(TickLib.priceToTick(0n, 4n)).toBe(0n);
+    expect(TickLib.priceToTick(1n, 4n)).toBe(4n);
+    expect(TickLib.priceToTick(PRICE_ROUNDING_STEP, 4n)).toBe(4n);
+    expect(TickLib.priceToTick(MathLib.WAD, 4n)).toBe(MAX_TICK);
+  });
+
   test("behavior: returns the lowest aligned tick above the price", () => {
     fc.assert(
       fc.property(fc.bigInt({ min: 0n, max: MathLib.WAD }), (price) => {
@@ -37,11 +54,99 @@ describe("TickLib.priceToTick", () => {
       { numRuns: 100 },
     );
   });
+
+  test("error: NegativeValueError", () => {
+    expect(() => TickLib.priceToTick(-1n, 4n)).toThrow(NegativeValueError);
+  });
+
+  test("error: PriceGreaterThanOneError", () => {
+    expect(() => TickLib.priceToTick(MathLib.WAD + 1n, 4n)).toThrow(
+      PriceGreaterThanOneError,
+    );
+  });
+
+  test("error: InvalidTickSpacingError", () => {
+    expect(() => TickLib.priceToTick(0n, 0n)).toThrow(InvalidTickSpacingError);
+    expect(() => TickLib.priceToTick(0n, 7n)).toThrow(InvalidTickSpacingError);
+  });
+});
+
+describe("TickLib.snapPriceToTick", () => {
+  test("default", () => {
+    expect(TickLib.snapPriceToTick(0n, 4n)).toBe(0n);
+    expect(TickLib.snapPriceToTick(1n, 4n)).toBe(PRICE_ROUNDING_STEP);
+    expect(TickLib.snapPriceToTick(PRICE_ROUNDING_STEP, 4n)).toBe(
+      PRICE_ROUNDING_STEP,
+    );
+    expect(TickLib.snapPriceToTick(MathLib.WAD, 4n)).toBe(MathLib.WAD);
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() => TickLib.snapPriceToTick(-1n, 4n)).toThrow(NegativeValueError);
+  });
+
+  test("error: PriceGreaterThanOneError", () => {
+    expect(() => TickLib.snapPriceToTick(MathLib.WAD + 1n, 4n)).toThrow(
+      PriceGreaterThanOneError,
+    );
+  });
+
+  test("error: InvalidTickSpacingError", () => {
+    expect(() => TickLib.snapPriceToTick(0n, 0n)).toThrow(
+      InvalidTickSpacingError,
+    );
+  });
 });
 
 describe("TickLib.rateToPrice / tickToRate", () => {
   test("default", () => {
     expect(TickLib.rateToPrice(0n)).toBe(MathLib.WAD);
+    expect(TickLib.rateToPrice(1n)).toBe(MathLib.WAD - 1n);
     expect(TickLib.tickToRate(MAX_TICK)).toBe(0n);
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() => TickLib.rateToPrice(-1n)).toThrow(NegativeValueError);
+    expect(() => TickLib.tickToRate(-1n)).toThrow(NegativeValueError);
+  });
+
+  test("error: DivisionByZeroError", () => {
+    expect(() => TickLib.tickToRate(0n)).toThrow(DivisionByZeroError);
+  });
+
+  test("error: TickOutOfRangeError", () => {
+    expect(() => TickLib.tickToRate(MAX_TICK + 1n)).toThrow(
+      TickOutOfRangeError,
+    );
+  });
+});
+
+describe("TickLib.assertTickAlignedToSpacing", () => {
+  test("default", () => {
+    expect(TickLib.assertTickAlignedToSpacing(100n, 4n)).toBe(100n);
+  });
+
+  test("error: NegativeValueError", () => {
+    expect(() => TickLib.assertTickAlignedToSpacing(-4n, 4n)).toThrow(
+      NegativeValueError,
+    );
+  });
+
+  test("error: TickOutOfRangeError", () => {
+    expect(() => TickLib.assertTickAlignedToSpacing(MAX_TICK + 4n, 4n)).toThrow(
+      TickOutOfRangeError,
+    );
+  });
+
+  test("error: InvalidTickSpacingError", () => {
+    expect(() => TickLib.assertTickAlignedToSpacing(101n, 4n)).toThrow(
+      InvalidTickSpacingError,
+    );
+    expect(() => TickLib.assertTickAlignedToSpacing(0n, 0n)).toThrow(
+      InvalidTickSpacingError,
+    );
+    expect(() => TickLib.assertTickAlignedToSpacing(0n, 7n)).toThrow(
+      InvalidTickSpacingError,
+    );
   });
 });

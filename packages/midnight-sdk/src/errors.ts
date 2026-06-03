@@ -129,7 +129,24 @@ export class PriceGreaterThanOneError extends Error {
 }
 
 /**
- * Thrown when a tick or spacing value is not aligned to the market spacing.
+ * Thrown when a uint-like protocol value is negative.
+ *
+ * @example
+ * ```ts
+ * import { NegativeValueError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new NegativeValueError("tick", -1n);
+ * ```
+ */
+export class NegativeValueError extends Error {
+  public constructor(field: string, value: bigint) {
+    super(`${field} "${value}" must be non-negative.`);
+    this.name = "NegativeValueError";
+  }
+}
+
+/**
+ * Thrown when a tick is not aligned or spacing is not valid.
  *
  * @example
  * ```ts
@@ -140,7 +157,9 @@ export class PriceGreaterThanOneError extends Error {
  */
 export class InvalidTickSpacingError extends Error {
   public constructor(tick: bigint, spacing: bigint) {
-    super(`Tick "${tick}" is not aligned to spacing "${spacing}".`);
+    super(
+      `Tick "${tick}" is not valid for spacing "${spacing}". Use a positive spacing that divides the maximum tick and a tick aligned to it.`,
+    );
     this.name = "InvalidTickSpacingError";
   }
 }

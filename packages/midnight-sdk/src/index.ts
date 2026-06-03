@@ -53,6 +53,7 @@ export {
   InvalidSettlementFeeIndexError,
   InvalidTickSpacingError,
   MissingOfferGroupError,
+  NegativeValueError,
   NoMatchingOffersError,
   PayloadValidationFailedError,
   PriceGreaterThanOneError,
