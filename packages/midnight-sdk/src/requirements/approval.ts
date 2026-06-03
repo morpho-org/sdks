@@ -1,6 +1,5 @@
 import type { Address } from "viem";
 
-import { normalizeAddress, toBigInt } from "../internal.js";
 import type { BigIntish } from "../types.js";
 
 /**
@@ -75,18 +74,15 @@ export interface PlanApprovalRequirementParams {
 export function planApprovalRequirement(
   params: PlanApprovalRequirementParams,
 ): MidnightApprovalRequirement | undefined {
-  const requiredAmount = toBigInt(params.requiredAmount, "requiredAmount");
-  const currentAllowance = toBigInt(
-    params.currentAllowance,
-    "currentAllowance",
-  );
+  const requiredAmount = BigInt(params.requiredAmount);
+  const currentAllowance = BigInt(params.currentAllowance);
   if (requiredAmount === 0n || currentAllowance >= requiredAmount) return;
 
   return {
     type: "approval",
-    token: normalizeAddress(params.token, "token"),
-    owner: normalizeAddress(params.owner, "owner"),
-    spender: normalizeAddress(params.spender, "spender"),
+    token: params.token as Address,
+    owner: params.owner as Address,
+    spender: params.spender as Address,
     amount: requiredAmount,
     currentAllowance,
   };

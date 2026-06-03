@@ -7,7 +7,6 @@ import {
 } from "../__test__/fixtures.js";
 import {
   InconsistentMarketError,
-  InvalidMidnightHexError,
   MissingOfferGroupError,
   NoMatchingOffersError,
   UnexpectedOfferSideError,
@@ -121,19 +120,5 @@ describe("OfferUtils.buildTakesFromOffers", () => {
         enforceSameMarket: true,
       }),
     ).toThrow(InconsistentMarketError);
-  });
-
-  test("error: InvalidMidnightHexError", () => {
-    expect(() =>
-      OfferUtils.buildTakesFromOffers({
-        entries: [
-          {
-            units: 1n,
-            ratifierData: "not-hex" as never,
-            offer: baseOffer(),
-          },
-        ],
-      }),
-    ).toThrow(InvalidMidnightHexError);
   });
 });

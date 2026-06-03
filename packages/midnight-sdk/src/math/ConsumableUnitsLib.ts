@@ -1,4 +1,5 @@
-import { toBigInt, zeroFloorSub } from "../internal.js";
+import { zeroFloorSub } from "@morpho-org/morpho-ts";
+
 import { type IOffer, normalizeOffer, type Offer } from "../offers/index.js";
 import type { BigIntish } from "../types.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
@@ -39,7 +40,7 @@ export namespace ConsumableUnitsLib {
     readonly now: BigIntish;
   }) {
     const offer = normalizeOffer(params.offer);
-    const consumed = toBigInt(params.consumed, "consumed");
+    const consumed = BigInt(params.consumed);
 
     if (offer.maxUnits > 0n) return zeroFloorSub(offer.maxUnits, consumed);
 

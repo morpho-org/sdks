@@ -1,7 +1,6 @@
 import type { Hex } from "viem";
 
 import { PayloadValidationFailedError } from "../errors.js";
-import { normalizeHex } from "../internal.js";
 
 /**
  * Parameters for {@link OfferValidationUtils.validateOfferPayload}.
@@ -58,7 +57,7 @@ export namespace OfferValidationUtils {
   export async function validateOfferPayload(
     params: ValidateOfferPayloadParams,
   ) {
-    const payload = normalizeHex(params.payload, "payload");
+    const payload = params.payload as Hex;
     try {
       const valid = await params.validate(payload);
       if (!valid) {

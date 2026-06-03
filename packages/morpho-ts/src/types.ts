@@ -1,3 +1,15 @@
+/**
+ * Primitive value accepted by helpers that coerce inputs with `BigInt`.
+ *
+ * @example
+ * ```ts
+ * import type { BigIntish } from "@morpho-org/morpho-ts";
+ *
+ * const value: BigIntish = "1000000000000000000";
+ * ```
+ */
+export type BigIntish = bigint | string | number | boolean;
+
 export type WithId<T> = T & { id: string };
 export type WithIndex<T> = T & { index: number };
 

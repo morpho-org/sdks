@@ -50,9 +50,6 @@ export {
 export {
   DivisionByZeroError,
   InconsistentMarketError,
-  InvalidMidnightAddressError,
-  InvalidMidnightBigIntError,
-  InvalidMidnightHexError,
   InvalidOfferPayloadError,
   InvalidOfferTreeHeightError,
   InvalidSettlementFeeIndexError,
@@ -64,7 +61,6 @@ export {
   SettlementFeeExceedsPriceError,
   TickOutOfRangeError,
   UnexpectedOfferSideError,
-  UnsafeNumberError,
   UnsupportedMidnightChainError,
 } from "./errors.js";
 export type { MidnightFetchParams } from "./fetch/index.js";

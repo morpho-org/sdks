@@ -1,6 +1,6 @@
 import type { Hex } from "viem";
 
-import { deepFreeze, normalizeHex, toBigInt } from "../internal.js";
+import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 import {
   type IOffer,
@@ -51,9 +51,9 @@ export class Take {
   public readonly ratifierData: Hex;
 
   public constructor(take: ITake) {
-    this.units = toBigInt(take.units, "units");
+    this.units = BigInt(take.units);
     this.offer = normalizeOffer(take.offer);
-    this.ratifierData = normalizeHex(take.ratifierData, "ratifierData");
+    this.ratifierData = take.ratifierData as Hex;
     deepFreeze(this);
   }
 
