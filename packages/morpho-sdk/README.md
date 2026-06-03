@@ -428,8 +428,8 @@ Atomically bundles repay → withdraw collateral via bundler3. Bundle order is c
 Atomically migrate a position from this market to another Morpho Blue market that shares the **same loan and collateral tokens** on the same chain — no flash loan, no upfront capital. The bundle flash-collateralizes the target via its `onMorphoSupplyCollateral` callback: inside the callback `GeneralAdapter1` borrows on the target, repays the source debt, then withdraws the source collateral to settle the deferred transfer.
 
 ```typescript
-const source = client.morpho.marketV1(sourceMarketParams, 1);
-const target = client.morpho.marketV1(targetMarketParams, 1);
+const source = client.morpho.blue(sourceMarketParams, 1);
+const target = client.morpho.blue(targetMarketParams, 1);
 
 const positionData = await source.getPositionData("0xUser...");
 const targetPositionData = await target.getPositionData("0xUser...");
