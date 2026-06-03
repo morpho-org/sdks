@@ -3,6 +3,11 @@ export const SteakhouseUsdcVaultV1 = {
   asset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
 } as const;
 
+export const YearnUsdcVaultV1 = {
+  address: "0x68Aea7b82Df6CcdF76235D46445Ed83f85F845A3",
+  asset: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
+} as const;
+
 export const GauntletWethVaultV1 = {
   address: "0x2371e134e3455e0593363cBF89d3b6cf53740618",
   asset: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2",
