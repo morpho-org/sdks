@@ -11,7 +11,6 @@ import {
 import {
   CbbtcUsdcMarketV1,
   CbbtcUsdcMarketV1Alt,
-  WstethUsdcSourceMarket,
 } from "../../fixtures/marketV1.js";
 import { YearnUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
@@ -316,7 +315,7 @@ describe("RefinanceMarketV1 (fork)", () => {
         fee: 0n,
         withdrawals: [
           {
-            marketParams: WstethUsdcSourceMarket,
+            marketParams: CbbtcUsdcMarketV1,
             amount: reallocationAmount,
           },
         ],
