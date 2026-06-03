@@ -9,7 +9,7 @@ import { createMockClient } from "@morpho-org/test/mock";
 import { type Address, parseUnits } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
-import { MorphoClient } from "../../client/index.js";
+import { morphoViemExtension } from "../../client/index.js";
 import { computeMinBorrowSharePrice } from "../../helpers/index.js";
 import {
   BorrowAmountAndSharesExclusiveError,
@@ -82,7 +82,9 @@ const makePosition = (params: {
 
 const makeMarket = () => {
   const { client } = createMockClient(mainnet);
-  return new MorphoClient(client).marketV1(sourceParams, mainnet.id);
+  return client
+    .extend(morphoViemExtension())
+    .morpho.marketV1(sourceParams, mainnet.id);
 };
 
 describe("MorphoMarketV1.refinance", () => {
@@ -112,7 +114,9 @@ describe("MorphoMarketV1.refinance", () => {
   test("error: ChainIdMismatchError when client.chain.id !== entity.chainId", () => {
     const { client } = createMockClient(mainnet);
     // Construct the entity bound to a different chain id than the client reports.
-    const market = new MorphoClient(client).marketV1(sourceParams, 137);
+    const market = client
+      .extend(morphoViemExtension())
+      .morpho.marketV1(sourceParams, 137);
     const positionData = makePosition({
       market: baseMarket(sourceParams),
       user: USER,
