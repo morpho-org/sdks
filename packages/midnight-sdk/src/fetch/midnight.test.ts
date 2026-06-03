@@ -3,6 +3,12 @@ import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { addresses, baseMarket, baseOffer } from "../__test__/fixtures.js";
 import { erc20Abi, midnightAbi } from "../abis.js";
+import { MAX_TICK } from "../constants.js";
+import {
+  NegativeValueError,
+  SettlementFeeExceedsPriceError,
+} from "../errors.js";
+import { TickLib } from "../math/index.js";
 import {
   fetchConsumableUnits,
   fetchErc20Allowance,
@@ -160,12 +166,52 @@ describe("fetchSettlementFee", () => {
       }),
     ).resolves.toBe(0n);
   });
+
+  test("error: NegativeValueError", () => {
+    const handle = createMockClient(base);
+
+    expect(() =>
+      fetchSettlementFee({
+        client: handle.client,
+        midnight: addresses.midnight,
+        marketId,
+        timeToMaturity: -1n,
+      }),
+    ).toThrow(NegativeValueError);
+  });
 });
 
 describe("fetchConsumableUnits", () => {
-  test("default", async () => {
+  test("default: max-unit offers only read consumed", async () => {
     const handle = createMockClient(base);
     const offer = baseOffer({ maxUnits: 100n });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "consumed",
+      args: [addresses.maker, offer.group],
+      result: 40n,
+    });
+
+    await expect(
+      fetchConsumableUnits({
+        client: handle.client,
+        midnight: addresses.midnight,
+        marketId,
+        offer,
+        timeToMaturity: 1000n,
+      }),
+    ).resolves.toBe(60n);
+  });
+
+  test("behavior: asset-capped offers fetch settlement fee", async () => {
+    const handle = createMockClient(base);
+    const offer = baseOffer({
+      buy: true,
+      tick: MAX_TICK,
+      maxUnits: 0n,
+      maxAssets: 100n,
+    });
     mockRead(handle, {
       address: addresses.midnight,
       abi: midnightAbi,
@@ -187,9 +233,52 @@ describe("fetchConsumableUnits", () => {
         midnight: addresses.midnight,
         marketId,
         offer,
-        now: 1000n,
+        timeToMaturity: 1000n,
       }),
     ).resolves.toBe(60n);
+  });
+
+  test("error: SettlementFeeExceedsPriceError from fetched settlement fee", async () => {
+    const handle = createMockClient(base);
+    const offer = baseOffer({ buy: true, tick: 2n, maxUnits: 0n });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "consumed",
+      args: [addresses.maker, offer.group],
+      result: 0n,
+    });
+    mockRead(handle, {
+      address: addresses.midnight,
+      abi: midnightAbi,
+      functionName: "settlementFee",
+      args: [marketId, 1000n],
+      result: TickLib.tickToPrice(offer.tick) + 1n,
+    });
+
+    await expect(
+      fetchConsumableUnits({
+        client: handle.client,
+        midnight: addresses.midnight,
+        marketId,
+        offer,
+        timeToMaturity: 1000n,
+      }),
+    ).rejects.toBeInstanceOf(SettlementFeeExceedsPriceError);
+  });
+
+  test("error: NegativeValueError before reads for negative offer limits", async () => {
+    const handle = createMockClient(base);
+
+    await expect(
+      fetchConsumableUnits({
+        client: handle.client,
+        midnight: addresses.midnight,
+        marketId,
+        offer: baseOffer({ maxUnits: -1n }),
+        timeToMaturity: 1000n,
+      }),
+    ).rejects.toBeInstanceOf(NegativeValueError);
   });
 });
 

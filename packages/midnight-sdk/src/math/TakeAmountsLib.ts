@@ -5,31 +5,10 @@ import {
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
+import { assertNonNegative } from "../internal.js";
 import { type IOffer, normalizeOffer, type Offer } from "../offers/index.js";
 import type { BigIntish } from "../types.js";
 import { TickLib } from "./TickLib.js";
-
-// biome-ignore lint/complexity/useMaxParams: Internal dispatcher for Solidity-style rounding helpers.
-const mulDiv = (
-  x: bigint,
-  y: bigint,
-  denominator: bigint,
-  rounding: RoundingDirection,
-) =>
-  rounding === "Up"
-    ? MathLib.mulDivUp(x, y, denominator)
-    : MathLib.mulDivDown(x, y, denominator);
-
-const prices = (offer: Offer, settlementFee: bigint) => {
-  const offerPrice = TickLib.tickToPrice(offer.tick);
-  if (offer.buy && offerPrice < settlementFee) {
-    throw new SettlementFeeExceedsPriceError(settlementFee, offerPrice);
-  }
-  const sellerPrice = offer.buy ? offerPrice - settlementFee : offerPrice;
-  const buyerPrice = sellerPrice + settlementFee;
-
-  return { buyerPrice, sellerPrice };
-};
 
 /**
  * TypeScript port of Midnight `TakeAmountsLib`.
@@ -43,10 +22,68 @@ const prices = (offer: Offer, settlementFee: bigint) => {
  */
 export namespace TakeAmountsLib {
   /**
+   * Dispatches to the selected `MathLib.mulDiv` rounding direction.
+   *
+   * @param params - Multiplication/division parameters.
+   * @returns `x * y / denominator` with the requested rounding direction.
+   * @example
+   * ```ts
+   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
+   *
+   * const units = TakeAmountsLib.mulDiv({ x: 5n, y: 1n, denominator: 2n, rounding: "Up" });
+   * console.log(units);
+   * ```
+   */
+  export function mulDiv(params: {
+    readonly x: bigint;
+    readonly y: bigint;
+    readonly denominator: bigint;
+    readonly rounding: RoundingDirection;
+  }) {
+    return params.rounding === "Up"
+      ? MathLib.mulDivUp(params.x, params.y, params.denominator)
+      : MathLib.mulDivDown(params.x, params.y, params.denominator);
+  }
+
+  /**
+   * Computes buyer and seller prices for an offer and settlement fee.
+   *
+   * @param params - Price parameters.
+   * @returns Buyer and seller prices.
+   * @throws NegativeValueError when `settlementFee` is negative.
+   * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
+   * @example
+   * ```ts
+   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
+   *
+   * const prices = TakeAmountsLib.prices({ offer: {} as never, settlementFee: 0n });
+   * console.log(prices.buyerPrice);
+   * ```
+   */
+  export function prices(params: {
+    readonly offer: IOffer | Offer;
+    readonly settlementFee: BigIntish;
+  }) {
+    const offer = normalizeOffer(params.offer);
+    const settlementFee = BigInt(params.settlementFee);
+    assertNonNegative("settlementFee", settlementFee);
+
+    const offerPrice = TickLib.tickToPrice(offer.tick);
+    if (offer.buy && offerPrice < settlementFee) {
+      throw new SettlementFeeExceedsPriceError(settlementFee, offerPrice);
+    }
+    const sellerPrice = offer.buy ? offerPrice - settlementFee : offerPrice;
+    const buyerPrice = sellerPrice + settlementFee;
+
+    return { buyerPrice, sellerPrice } as const;
+  }
+
+  /**
    * Converts a target buyer-asset amount into units for an offer.
    *
    * @param params - Conversion parameters.
    * @returns Units that round-trip to the target buyer assets where reachable.
+   * @throws NegativeValueError when `targetBuyerAssets` or `settlementFee` is negative.
    * @throws DivisionByZeroError when the computed buyer price is zero.
    * @throws PriceGreaterThanOneError when buyer price is above WAD.
    * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
@@ -58,7 +95,6 @@ export namespace TakeAmountsLib {
    *   offer: {} as never,
    *   targetBuyerAssets: 100n,
    *   settlementFee: 0n,
-   *   now: 0n,
    * });
    * console.log(units);
    * ```
@@ -67,12 +103,13 @@ export namespace TakeAmountsLib {
     readonly offer: IOffer | Offer;
     readonly targetBuyerAssets: BigIntish;
     readonly settlementFee: BigIntish;
-    readonly now: BigIntish;
   }) {
     const offer = normalizeOffer(params.offer);
     const settlementFee = BigInt(params.settlementFee);
     const targetBuyerAssets = BigInt(params.targetBuyerAssets);
-    const { buyerPrice } = prices(offer, settlementFee);
+    assertNonNegative("targetBuyerAssets", targetBuyerAssets);
+
+    const { buyerPrice } = prices({ offer, settlementFee });
     if (buyerPrice === 0n) throw new DivisionByZeroError("buyerPrice");
     if (buyerPrice > MathLib.WAD)
       throw new PriceGreaterThanOneError(buyerPrice);
@@ -87,6 +124,7 @@ export namespace TakeAmountsLib {
    *
    * @param params - Conversion parameters.
    * @returns Units that round-trip to the target seller assets where reachable.
+   * @throws NegativeValueError when `targetSellerAssets` or `settlementFee` is negative.
    * @throws DivisionByZeroError when the computed seller price is zero.
    * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
    * @example
@@ -97,7 +135,6 @@ export namespace TakeAmountsLib {
    *   offer: {} as never,
    *   targetSellerAssets: 100n,
    *   settlementFee: 0n,
-   *   now: 0n,
    * });
    * console.log(units);
    * ```
@@ -106,12 +143,13 @@ export namespace TakeAmountsLib {
     readonly offer: IOffer | Offer;
     readonly targetSellerAssets: BigIntish;
     readonly settlementFee: BigIntish;
-    readonly now: BigIntish;
   }) {
     const offer = normalizeOffer(params.offer);
     const settlementFee = BigInt(params.settlementFee);
     const targetSellerAssets = BigInt(params.targetSellerAssets);
-    const { sellerPrice } = prices(offer, settlementFee);
+    assertNonNegative("targetSellerAssets", targetSellerAssets);
+
+    const { sellerPrice } = prices({ offer, settlementFee });
     if (sellerPrice === 0n) throw new DivisionByZeroError("sellerPrice");
 
     return offer.buy
@@ -124,6 +162,7 @@ export namespace TakeAmountsLib {
    *
    * @param params - Generic conversion parameters.
    * @returns Units.
+   * @throws NegativeValueError when `assets` or `price` is negative.
    * @throws DivisionByZeroError when price is zero.
    * @example
    * ```ts
@@ -139,10 +178,18 @@ export namespace TakeAmountsLib {
     readonly price: BigIntish;
     readonly rounding: RoundingDirection;
   }) {
+    const assets = BigInt(params.assets);
     const price = BigInt(params.price);
+    assertNonNegative("assets", assets);
+    assertNonNegative("price", price);
     if (price === 0n) throw new DivisionByZeroError("price");
 
-    return mulDiv(BigInt(params.assets), MathLib.WAD, price, params.rounding);
+    return mulDiv({
+      x: assets,
+      y: MathLib.WAD,
+      denominator: price,
+      rounding: params.rounding,
+    });
   }
 
   /**
@@ -150,6 +197,9 @@ export namespace TakeAmountsLib {
    *
    * @param params - Tick conversion parameters.
    * @returns Units.
+   * @throws NegativeValueError when `assets` or `tick` is negative.
+   * @throws DivisionByZeroError when the tick price is zero.
+   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
    * @example
    * ```ts
    * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
