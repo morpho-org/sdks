@@ -1,7 +1,6 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
-
 import { UnsupportedMidnightChainError } from "./errors.js";
-import { deepFreeze } from "./internal.js";
 import type { MidnightAddresses } from "./types.js";
 
 const freezeAddresses = (addresses: MidnightAddresses): MidnightAddresses =>

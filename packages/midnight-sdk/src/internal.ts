@@ -1,7 +1,5 @@
 import { NegativeValueError } from "./errors.js";
 
-export { deepFreeze } from "@morpho-org/morpho-ts";
-
 /**
  * @internal
  */
