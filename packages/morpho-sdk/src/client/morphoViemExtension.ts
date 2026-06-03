@@ -33,6 +33,8 @@ function createMorphoNamespace(
     viemClient,
     options: deepFreeze({
       ...options,
+      metadata:
+        options?.metadata === undefined ? undefined : { ...options.metadata },
       supportSignature: options?.supportSignature ?? false,
       supportDeployless: options?.supportDeployless,
     }),

@@ -1,5 +1,5 @@
 ---
-"@morpho-org/morpho-sdk": minor
+"@morpho-org/morpho-sdk": major
 ---
 
 Remove the deprecated `MorphoClient` class. The only supported entry point is now the viem extension `morphoViemExtension()`, which adds a stateless `morpho` namespace to a viem client.
