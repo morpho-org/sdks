@@ -208,7 +208,7 @@ SDK-only derived helpers should live beside the domain they describe:
 - `MarketUtils.getMaxLif`
 - `OfferUtils.getOfferExpiry`
 
-The helpers that mirror `TakeAmountsLib` should accept `settlementFee` and `now` as explicit inputs instead of reading the chain. Fetching settlement fee remains a boundary concern.
+The pure helpers that mirror `TakeAmountsLib` should accept `settlementFee` as an explicit input instead of reading the chain. Fetching settlement fee remains a boundary concern; fetch helpers that compute it should accept `timeToMaturity` directly so callers do not confuse wall-clock time with Solidity's `block.timestamp`.
 
 Rounding names should match local SDK convention: `"Up"` and `"Down"`. Tests must cover the app-known boundary cases:
 

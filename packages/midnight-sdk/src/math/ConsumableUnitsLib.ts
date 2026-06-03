@@ -1,5 +1,6 @@
 import { MathLib } from "@morpho-org/morpho-ts";
 
+import { assertNonNegative } from "../internal.js";
 import { type IOffer, normalizeOffer, type Offer } from "../offers/index.js";
 import type { BigIntish } from "../types.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
@@ -20,6 +21,9 @@ export namespace ConsumableUnitsLib {
    *
    * @param params - Consumption parameters.
    * @returns Remaining consumable units.
+   * @throws NegativeValueError when `consumed`, offer limits, or delegated asset inputs are negative.
+   * @throws DivisionByZeroError when the delegated units conversion divides by zero.
+   * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
    * import { ConsumableUnitsLib } from "@morpho-org/midnight-sdk";
@@ -28,7 +32,6 @@ export namespace ConsumableUnitsLib {
    *   offer: {} as never,
    *   consumed: 0n,
    *   settlementFee: 0n,
-   *   now: 0n,
    * });
    * console.log(units);
    * ```
@@ -37,10 +40,12 @@ export namespace ConsumableUnitsLib {
     readonly offer: IOffer | Offer;
     readonly consumed: BigIntish;
     readonly settlementFee: BigIntish;
-    readonly now: BigIntish;
   }) {
     const offer = normalizeOffer(params.offer);
     const consumed = BigInt(params.consumed);
+    assertNonNegative("consumed", consumed);
+    assertNonNegative("offer.maxUnits", offer.maxUnits);
+    assertNonNegative("offer.maxAssets", offer.maxAssets);
 
     if (offer.maxUnits > 0n)
       return MathLib.zeroFloorSub(offer.maxUnits, consumed);
@@ -51,13 +56,11 @@ export namespace ConsumableUnitsLib {
           offer,
           targetBuyerAssets: maxAssets,
           settlementFee: params.settlementFee,
-          now: params.now,
         })
       : TakeAmountsLib.sellerAssetsToUnits({
           offer,
           targetSellerAssets: maxAssets,
           settlementFee: params.settlementFee,
-          now: params.now,
         });
   }
 }
