@@ -78,7 +78,7 @@ function createMorphoNamespace(
  *   `client.morpho`.
  * @example
  * ```ts
- * import { createWalletClient, http } from "viem";
+ * import { createWalletClient, http, publicActions } from "viem";
  * import { mainnet } from "viem/chains";
  * import { morphoViemExtension } from "@morpho-org/morpho-sdk";
  *
@@ -86,7 +86,9 @@ function createMorphoNamespace(
  *   chain: mainnet,
  *   transport: http(),
  *   account: user,
- * }).extend(morphoViemExtension({ supportSignature: true }));
+ * })
+ *   .extend(publicActions)
+ *   .extend(morphoViemExtension({ supportSignature: true }));
  *
  * // Native viem reads and Morpho factories share the same client:
  * const block = await client.getBlockNumber();
