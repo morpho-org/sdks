@@ -33,6 +33,7 @@ Cross-layer leaks (entities encoding calldata, actions reading state, helpers de
 
 - Every package has one clear job. If a package needs a paragraph to describe, split it.
 - Every module has one responsibility. Files grow by *adding* exports of the same kind, never by stretching scope.
+- Do not extract a local, non-exported helper for a single call site. Inline it; create a helper only when it is reused or names a stable boundary concept.
 - **Single source of truth** per concept: one place per ABI, one place per address registry, one place per error class. Duplication is a refactor, not a feature.
 - Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`). Core packages stay framework-free.
 - Public API = barrel re-exports from `src/index.ts`. No deep imports across packages, ever.
