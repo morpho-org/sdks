@@ -1,14 +1,10 @@
 import type { Address } from "viem";
 
-import { PERMIT2_ADDRESS } from "./constants.js";
 import { UnsupportedMidnightChainError } from "./errors.js";
 import { deepFreeze, normalizeAddress } from "./internal.js";
 import type { MidnightAddresses } from "./types.js";
 
-const normalizeAddresses = (
-  addresses: Omit<MidnightAddresses, "permit2"> &
-    Partial<Pick<MidnightAddresses, "permit2">>,
-): MidnightAddresses =>
+const normalizeAddresses = (addresses: MidnightAddresses): MidnightAddresses =>
   deepFreeze({
     midnight: normalizeAddress(addresses.midnight, "midnight"),
     midnightBundles: normalizeAddress(
@@ -27,13 +23,12 @@ const normalizeAddresses = (
       addresses.setterRatifier,
       "setterRatifier",
     ),
-    permit2: normalizeAddress(addresses.permit2 ?? PERMIT2_ADDRESS, "permit2"),
+    permit2: normalizeAddress(addresses.permit2, "permit2"),
   });
 
 const midnightAddressEntries: readonly (readonly [
   number,
-  Omit<MidnightAddresses, "permit2"> &
-    Partial<Pick<MidnightAddresses, "permit2">>,
+  MidnightAddresses,
 ])[] = [];
 
 /**

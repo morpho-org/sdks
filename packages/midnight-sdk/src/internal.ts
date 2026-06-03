@@ -1,3 +1,5 @@
+export { deepFreeze } from "@morpho-org/morpho-ts";
+
 import { type Address, getAddress, type Hex, isAddress, isHex } from "viem";
 
 import {
@@ -63,16 +65,4 @@ export const mulDivDown = (x: bigint, y: bigint, denominator: bigint) =>
 export const mulDivUp = (x: bigint, y: bigint, denominator: bigint) => {
   const product = x * y;
   return product / denominator + (product % denominator === 0n ? 0n : 1n);
-};
-
-export const deepFreeze = <T>(value: T): Readonly<T> => {
-  if (value !== null && typeof value === "object" && !Object.isFrozen(value)) {
-    for (const key of Reflect.ownKeys(value)) {
-      const child = (value as Record<PropertyKey, unknown>)[key];
-      deepFreeze(child);
-    }
-    Object.freeze(value);
-  }
-
-  return value as Readonly<T>;
 };
