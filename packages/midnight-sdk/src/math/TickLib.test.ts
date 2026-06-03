@@ -1,7 +1,8 @@
+import { WAD } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
-import { MAX_TICK, PRICE_ROUNDING_STEP, WAD } from "../constants.js";
+import { MAX_TICK, PRICE_ROUNDING_STEP } from "../constants.js";
 import { TickOutOfRangeError } from "../errors.js";
 import { TickLib } from "./TickLib.js";
 

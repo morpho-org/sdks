@@ -1,31 +1,4 @@
-import {
-  ORACLE_PRICE_SCALE as SHARED_ORACLE_PRICE_SCALE,
-  WAD as SHARED_WAD,
-} from "@morpho-org/morpho-ts";
-
-/**
- * Midnight WAD scale.
- *
- * @example
- * ```ts
- * import { WAD } from "@morpho-org/midnight-sdk";
- *
- * console.log(WAD === 10n ** 18n);
- * ```
- */
-export const WAD = SHARED_WAD;
-
-/**
- * Midnight oracle price scale.
- *
- * @example
- * ```ts
- * import { ORACLE_PRICE_SCALE } from "@morpho-org/midnight-sdk";
- *
- * console.log(ORACLE_PRICE_SCALE);
- * ```
- */
-export const ORACLE_PRICE_SCALE = SHARED_ORACLE_PRICE_SCALE;
+import { WAD } from "@morpho-org/morpho-ts";
 
 /**
  * Centibip scale used by settlement fees.
