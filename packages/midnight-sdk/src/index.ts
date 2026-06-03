@@ -3,7 +3,6 @@ export {
   erc20Abi,
   midnightAbi,
   midnightBundlesAbi,
-  midnightMempoolAbi,
   setterRatifierAbi,
 } from "./abis.js";
 export type { MidnightAddressOverrides } from "./addresses.js";
