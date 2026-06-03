@@ -9,12 +9,7 @@ import {
 } from "../constants.js";
 import { InvalidSettlementFeeIndexError } from "../errors.js";
 import type { BigIntish } from "../types.js";
-import {
-  type IMarket,
-  type Market,
-  type MarketStruct,
-  normalizeMarket,
-} from "./Market.js";
+import { type IMarket, Market, type MarketStruct } from "./Market.js";
 
 const collateralParamsHashParams = [
   { name: "typehash", type: "bytes32" },
@@ -51,7 +46,7 @@ const hashPackedBytes32 = (values: readonly Hex[]) =>
   keccak256(`0x${values.map((value) => value.slice(2)).join("")}`);
 
 /**
- * Domain helpers for normalized Midnight markets.
+ * Domain helpers for Midnight markets.
  *
  * @example
  * ```ts
@@ -95,8 +90,8 @@ export namespace MarketUtils {
    * ```
    */
   export function isLltvAllowed(lltv: BigIntish) {
-    const normalized = BigInt(lltv);
-    return ALLOWED_LLTVS.some((allowed) => allowed === normalized);
+    const lltvValue = BigInt(lltv);
+    return ALLOWED_LLTVS.some((allowed) => allowed === lltvValue);
   }
 
   /**
@@ -117,16 +112,11 @@ export namespace MarketUtils {
     lltv: BigIntish,
     cursor: BigIntish = LIQUIDATION_CURSOR_LOW,
   ) {
-    const normalizedLltv = BigInt(lltv);
-    const normalizedCursor = BigInt(cursor);
+    const lltvValue = BigInt(lltv);
+    const cursorValue = BigInt(cursor);
     const denominator =
       MathLib.WAD -
-      MathLib.mulDiv(
-        normalizedCursor,
-        MathLib.WAD - normalizedLltv,
-        MathLib.WAD,
-        "Down",
-      );
+      MathLib.mulDiv(cursorValue, MathLib.WAD - lltvValue, MathLib.WAD, "Down");
 
     return MathLib.mulDiv(MathLib.WAD, MathLib.WAD, denominator, "Down");
   }
@@ -152,20 +142,20 @@ export namespace MarketUtils {
    * ```
    */
   export function hashMarket(market: IMarket | Market) {
-    const normalized = normalizeMarket(market).toStruct();
+    const marketStruct = Market.from(market).toStruct();
     const collateralParamsHash = hashPackedBytes32(
-      normalized.collateralParams.map(hashCollateralParams),
+      marketStruct.collateralParams.map(hashCollateralParams),
     );
 
     return keccak256(
       encodeAbiParameters(marketHashParams, [
         MARKET_TYPEHASH,
-        normalized.loanToken,
+        marketStruct.loanToken,
         collateralParamsHash,
-        normalized.maturity,
-        normalized.rcfThreshold,
-        normalized.enterGate,
-        normalized.liquidatorGate,
+        marketStruct.maturity,
+        marketStruct.rcfThreshold,
+        marketStruct.enterGate,
+        marketStruct.liquidatorGate,
       ]),
     );
   }
@@ -201,6 +191,6 @@ export namespace MarketUtils {
     readonly chainId: BigIntish;
     readonly midnight: Address | string;
   }) {
-    return normalizeMarket(params.market).toId(params.chainId, params.midnight);
+    return Market.from(params.market).toId(params.chainId, params.midnight);
   }
 }

@@ -8,11 +8,10 @@ import {
   type IMarket,
   Market,
   MarketState,
-  normalizeMarket,
   Position,
 } from "../market/index.js";
 import { ConsumableUnitsLib } from "../math/index.js";
-import { type IOffer, normalizeOffer, type Offer } from "../offers/index.js";
+import { type IOffer, Offer } from "../offers/index.js";
 import { RatifierUtils } from "../signatures/index.js";
 import type { BigIntish, RatifierInfo } from "../types.js";
 
@@ -110,7 +109,7 @@ export function fetchMarketId(
     address: params.midnight,
     abi: midnightAbi,
     functionName: "toId",
-    args: [normalizeMarket(params.market).toStruct()],
+    args: [Market.from(params.market).toStruct()],
   });
 }
 
@@ -118,7 +117,7 @@ export function fetchMarketId(
  * Fetches a market struct by id.
  *
  * @param params - Fetch parameters.
- * @returns Normalized market.
+ * @returns Market instance.
  * @example
  * ```ts
  * import { fetchMarket } from "@morpho-org/midnight-sdk";
@@ -146,7 +145,7 @@ export async function fetchMarket(
  * Fetches a Midnight market state by id.
  *
  * @param params - Fetch parameters.
- * @returns Normalized market state.
+ * @returns Market state instance.
  * @example
  * ```ts
  * import { fetchMarketState } from "@morpho-org/midnight-sdk";
@@ -190,11 +189,10 @@ export async function fetchMarketState(
  * Fetches a Midnight position by id and user.
  *
  * The Solidity storage getter does not return the fixed collateral array, so
- * this helper reads each collateral slot before returning the normalized
- * position.
+ * this helper reads each collateral slot before returning the position.
  *
  * @param params - Fetch parameters.
- * @returns Normalized position.
+ * @returns Position instance.
  * @example
  * ```ts
  * import { fetchPosition } from "@morpho-org/midnight-sdk";
@@ -371,7 +369,7 @@ export function fetchIsHealthy(
     abi: midnightAbi,
     functionName: "isHealthy",
     args: [
-      normalizeMarket(params.market).toStruct(),
+      Market.from(params.market).toStruct(),
       params.marketId,
       params.borrower,
     ],
@@ -471,7 +469,7 @@ export function fetchConsumed(
  *
  * @param params - Fetch parameters.
  * @returns Consumable units.
- * @throws NegativeValueError when asset-capped `timeToMaturity` or SDK-normalized math inputs are negative.
+ * @throws NegativeValueError when asset-capped `timeToMaturity` or SDK math inputs are negative.
  * @throws DivisionByZeroError when the delegated units conversion divides by zero.
  * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
  * @example
@@ -489,7 +487,7 @@ export async function fetchConsumableUnits(
     readonly timeToMaturity: BigIntish;
   },
 ) {
-  const offer = normalizeOffer(params.offer);
+  const offer = Offer.from(params.offer);
   assertNonNegative("offer.maxUnits", offer.maxUnits);
   assertNonNegative("offer.maxAssets", offer.maxAssets);
 

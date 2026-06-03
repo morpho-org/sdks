@@ -3,8 +3,8 @@ import { type Address, encodeFunctionData, type Hex, zeroAddress } from "viem";
 import { midnightBundlesAbi } from "../abis.js";
 import { NoMatchingOffersError } from "../errors.js";
 import { deepFreeze } from "../internal.js";
-import { type IMarket, type Market, normalizeMarket } from "../market/index.js";
-import { type ITake, normalizeTake, type TakeStruct } from "../offers/index.js";
+import { type IMarket, Market } from "../market/index.js";
+import { type ITake, Take, type TakeStruct } from "../offers/index.js";
 import {
   type BigIntish,
   type CollateralSupply,
@@ -262,7 +262,7 @@ const toSupplies = (
 const toTakes = (takes: readonly BundleTakeInput[]) => {
   if (takes.length === 0) throw new NoMatchingOffersError();
 
-  return deepFreeze(takes.map((take) => normalizeTake(take).toStruct()));
+  return deepFreeze(takes.map((take) => Take.from(take).toStruct()));
 };
 
 const referralRecipientOrZero = (recipient?: Address | string) =>
@@ -450,7 +450,7 @@ export namespace MidnightBundles {
         abi: midnightBundlesAbi,
         functionName: "repayAndWithdrawCollateral",
         args: [
-          normalizeMarket(params.market).toStruct(),
+          Market.from(params.market).toStruct(),
           BigInt(params.assets),
           params.onBehalf as Address,
           toPermit(params.loanTokenPermit),
