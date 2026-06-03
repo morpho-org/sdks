@@ -6,7 +6,6 @@ import { type IMarket, Market } from "../market/index.js";
 import { type ITake, Take, type TakeStruct } from "../offers/index.js";
 import {
   type BigIntish,
-  type CollateralSupply,
   type CollateralWithdrawal,
   type MidnightCall,
   PermitKind,
@@ -245,17 +244,6 @@ const toWithdrawals = (
     })),
   );
 
-const toSupplies = (
-  supplies: readonly CollateralSupplyInput[] = [],
-): readonly CollateralSupply[] =>
-  deepFreeze(
-    supplies.map((supply) => ({
-      collateralIndex: BigInt(supply.collateralIndex),
-      assets: BigInt(supply.assets),
-      permit: toPermit(supply.permit),
-    })),
-  );
-
 const toTakes = (takes: readonly BundleTakeInput[]) => {
   if (takes.length === 0) throw new NoMatchingOffersError();
 
@@ -343,7 +331,13 @@ export namespace MidnightBundles {
           BigInt(params.minSellerAssets),
           params.taker as Address,
           params.receiverIfTakerIsSeller as Address,
-          toSupplies(params.collateralSupplies),
+          deepFreeze(
+            (params.collateralSupplies ?? []).map((supply) => ({
+              collateralIndex: BigInt(supply.collateralIndex),
+              assets: BigInt(supply.assets),
+              permit: toPermit(supply.permit),
+            })),
+          ),
           toTakes(params.takes),
           BigInt(params.referralFeePct ?? 0n),
           referralRecipientOrZero(params.referralFeeRecipient),
@@ -416,7 +410,13 @@ export namespace MidnightBundles {
           BigInt(params.maxUnits),
           params.taker as Address,
           params.receiverIfTakerIsSeller as Address,
-          toSupplies(params.collateralSupplies),
+          deepFreeze(
+            (params.collateralSupplies ?? []).map((supply) => ({
+              collateralIndex: BigInt(supply.collateralIndex),
+              assets: BigInt(supply.assets),
+              permit: toPermit(supply.permit),
+            })),
+          ),
           toTakes(params.takes),
           BigInt(params.referralFeePct ?? 0n),
           referralRecipientOrZero(params.referralFeeRecipient),
