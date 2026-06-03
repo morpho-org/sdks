@@ -39,6 +39,13 @@ export class UnknownVaultConfigError extends UnknownDataError {
   }
 }
 
+/** Error thrown when a vault withdraw queue references a market without an allocation. */
+export class UnknownMarketAllocationError extends UnknownDataError {
+  constructor(public readonly marketId: MarketId) {
+    super(`unknown allocation for market ${marketId}`);
+  }
+}
+
 /** Error thrown when a chain id has no configured SDK registry entry. */
 export class UnsupportedChainIdError extends Error {
   constructor(public readonly chainId: number) {
