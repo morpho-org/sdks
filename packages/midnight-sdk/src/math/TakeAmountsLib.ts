@@ -24,8 +24,12 @@ export namespace TakeAmountsLib {
   /**
    * Dispatches to the selected `MathLib.mulDiv` rounding direction.
    *
+   * This is an SDK-only arithmetic convenience.
+   *
    * @param params - Multiplication/division parameters.
    * @returns `x * y / denominator` with the requested rounding direction.
+   * @throws NegativeValueError when `x`, `y`, or `denominator` is negative.
+   * @throws DivisionByZeroError when `denominator` is zero.
    * @example
    * ```ts
    * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
@@ -35,14 +39,22 @@ export namespace TakeAmountsLib {
    * ```
    */
   export function mulDiv(params: {
-    readonly x: bigint;
-    readonly y: bigint;
-    readonly denominator: bigint;
+    readonly x: BigIntish;
+    readonly y: BigIntish;
+    readonly denominator: BigIntish;
     readonly rounding: RoundingDirection;
   }) {
+    const x = BigInt(params.x);
+    const y = BigInt(params.y);
+    const denominator = BigInt(params.denominator);
+    assertNonNegative("x", x);
+    assertNonNegative("y", y);
+    assertNonNegative("denominator", denominator);
+    if (denominator === 0n) throw new DivisionByZeroError("denominator");
+
     return params.rounding === "Up"
-      ? MathLib.mulDivUp(params.x, params.y, params.denominator)
-      : MathLib.mulDivDown(params.x, params.y, params.denominator);
+      ? MathLib.mulDivUp(x, y, denominator)
+      : MathLib.mulDivDown(x, y, denominator);
   }
 
   /**
@@ -50,13 +62,38 @@ export namespace TakeAmountsLib {
    *
    * @param params - Price parameters.
    * @returns Buyer and seller prices.
-   * @throws NegativeValueError when `settlementFee` is negative.
+   * @throws NegativeValueError when `settlementFee` or the offer tick is negative.
+   * @throws TickOutOfRangeError when the offer tick exceeds `MAX_TICK`.
    * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
-   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
+   * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
    *
-   * const prices = TakeAmountsLib.prices({ offer: {} as never, settlementFee: 0n });
+   * const offer = {
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000000001",
+   *     collateralParams: [],
+   *     maturity: 1_735_689_600n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000000002",
+   *   start: 0n,
+   *   expiry: 1_735_603_200n,
+   *   tick: 5_820n,
+   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
+   *   ratifier: "0x0000000000000000000000000000000000000003",
+   *   reduceOnly: false,
+   *   maxUnits: 0n,
+   *   maxAssets: 1_000n,
+   * } satisfies IOffer;
+   *
+   * const prices = TakeAmountsLib.prices({ offer, settlementFee: 1_000000000000n });
    * console.log(prices.buyerPrice);
    * ```
    */
@@ -81,18 +118,45 @@ export namespace TakeAmountsLib {
   /**
    * Converts a target buyer-asset amount into units for an offer.
    *
+   * `settlementFee` must be the fee for the offer market's current time to maturity.
+   *
    * @param params - Conversion parameters.
    * @returns Units that round-trip to the target buyer assets where reachable.
-   * @throws NegativeValueError when `targetBuyerAssets` or `settlementFee` is negative.
+   * @throws NegativeValueError when `targetBuyerAssets`, `settlementFee`, or the offer tick is negative.
    * @throws DivisionByZeroError when the computed buyer price is zero.
    * @throws PriceGreaterThanOneError when buyer price is above WAD.
+   * @throws TickOutOfRangeError when the offer tick exceeds `MAX_TICK`.
    * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
-   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
+   * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = {
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000000001",
+   *     collateralParams: [],
+   *     maturity: 1_735_689_600n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000000002",
+   *   start: 0n,
+   *   expiry: 1_735_603_200n,
+   *   tick: 5_820n,
+   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
+   *   ratifier: "0x0000000000000000000000000000000000000003",
+   *   reduceOnly: false,
+   *   maxUnits: 0n,
+   *   maxAssets: 1_000n,
+   * } satisfies IOffer;
    *
    * const units = TakeAmountsLib.buyerAssetsToUnits({
-   *   offer: {} as never,
+   *   offer,
    *   targetBuyerAssets: 100n,
    *   settlementFee: 0n,
    * });
@@ -122,17 +186,44 @@ export namespace TakeAmountsLib {
   /**
    * Converts a target seller-asset amount into units for an offer.
    *
+   * `settlementFee` must be the fee for the offer market's current time to maturity.
+   *
    * @param params - Conversion parameters.
    * @returns Units that round-trip to the target seller assets where reachable.
-   * @throws NegativeValueError when `targetSellerAssets` or `settlementFee` is negative.
+   * @throws NegativeValueError when `targetSellerAssets`, `settlementFee`, or the offer tick is negative.
    * @throws DivisionByZeroError when the computed seller price is zero.
+   * @throws TickOutOfRangeError when the offer tick exceeds `MAX_TICK`.
    * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
-   * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
+   * import { TakeAmountsLib, type IOffer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = {
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000000001",
+   *     collateralParams: [],
+   *     maturity: 1_735_689_600n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: false,
+   *   maker: "0x0000000000000000000000000000000000000002",
+   *   start: 0n,
+   *   expiry: 1_735_603_200n,
+   *   tick: 5_820n,
+   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
+   *   ratifier: "0x0000000000000000000000000000000000000003",
+   *   reduceOnly: false,
+   *   maxUnits: 0n,
+   *   maxAssets: 1_000n,
+   * } satisfies IOffer;
    *
    * const units = TakeAmountsLib.sellerAssetsToUnits({
-   *   offer: {} as never,
+   *   offer,
    *   targetSellerAssets: 100n,
    *   settlementFee: 0n,
    * });
@@ -159,6 +250,8 @@ export namespace TakeAmountsLib {
 
   /**
    * Converts assets to units at a WAD price.
+   *
+   * This is an SDK-only generic conversion convenience.
    *
    * @param params - Generic conversion parameters.
    * @returns Units.
@@ -194,6 +287,8 @@ export namespace TakeAmountsLib {
 
   /**
    * Converts assets to units at a tick price.
+   *
+   * This is an SDK-only tick-priced conversion convenience.
    *
    * @param params - Tick conversion parameters.
    * @returns Units.
