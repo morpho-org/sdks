@@ -1,3 +1,8 @@
+import {
+  ORACLE_PRICE_SCALE as SHARED_ORACLE_PRICE_SCALE,
+  WAD as SHARED_WAD,
+} from "@morpho-org/morpho-ts";
+
 /**
  * Midnight WAD scale.
  *
@@ -8,7 +13,7 @@
  * console.log(WAD === 10n ** 18n);
  * ```
  */
-export const WAD = 1_000000000000000000n;
+export const WAD = SHARED_WAD;
 
 /**
  * Midnight oracle price scale.
@@ -20,7 +25,7 @@ export const WAD = 1_000000000000000000n;
  * console.log(ORACLE_PRICE_SCALE);
  * ```
  */
-export const ORACLE_PRICE_SCALE = 1_000000000000000000000000000000000000n;
+export const ORACLE_PRICE_SCALE = SHARED_ORACLE_PRICE_SCALE;
 
 /**
  * Centibip scale used by settlement fees.
@@ -93,18 +98,6 @@ export const MAX_COLLATERALS = 128n;
  * ```
  */
 export const MAX_COLLATERALS_PER_BORROWER = 16n;
-
-/**
- * Permit2 deployment used by MidnightBundles.
- *
- * @example
- * ```ts
- * import { PERMIT2_ADDRESS } from "@morpho-org/midnight-sdk";
- *
- * console.log(PERMIT2_ADDRESS);
- * ```
- */
-export const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 
 /**
  * Allowed LLTV tiers copied from Midnight ConstantsLib.
@@ -235,16 +228,3 @@ export const OFFER_TYPEHASH =
  */
 export const EIP712_DOMAIN_TYPEHASH =
   "0x47e79534a245952e8b16893a336b85a3d9ea9fa8c573f3d803afb92a79469218";
-
-/**
- * Source commit used for the pinned Midnight interface and library shapes.
- *
- * @example
- * ```ts
- * import { MIDNIGHT_SOURCE_COMMIT } from "@morpho-org/midnight-sdk";
- *
- * console.log(MIDNIGHT_SOURCE_COMMIT);
- * ```
- */
-export const MIDNIGHT_SOURCE_COMMIT =
-  "a7c6da7e70cb216982f6c5d20b46f40b943e67e4";

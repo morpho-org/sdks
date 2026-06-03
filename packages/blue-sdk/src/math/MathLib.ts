@@ -1,3 +1,5 @@
+import { WAD as SHARED_WAD } from "@morpho-org/morpho-ts";
+
 import type { BigIntish } from "../types.js";
 
 export type RoundingDirection = "Up" | "Down";
@@ -7,7 +9,7 @@ export type RoundingDirection = "Up" | "Down";
  * https://github.com/morpho-org/morpho-blue/blob/main/src/libraries/MathLib.sol
  */
 export namespace MathLib {
-  export const WAD = 1_000000000000000000n;
+  export const WAD = SHARED_WAD;
   export const RAY = 1_000000000000000000000000000n;
 
   export const MAX_UINT_256 = maxUint(256);

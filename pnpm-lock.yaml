@@ -394,6 +394,9 @@ importers:
 
   packages/midnight-sdk:
     devDependencies:
+      '@morpho-org/morpho-ts':
+        specifier: workspace:^
+        version: link:../morpho-ts
       '@morpho-org/test':
         specifier: workspace:^
         version: link:../test
