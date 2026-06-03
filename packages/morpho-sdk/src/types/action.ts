@@ -115,9 +115,9 @@ export interface VaultV1MigrateToV2Action
     }
   > {}
 
-export interface MarketV1SupplyAction
+export interface BlueSupplyAction
   extends BaseAction<
-    "marketV1Supply",
+    "blueSupply",
     {
       market: Hex;
       amount: bigint;
@@ -127,9 +127,9 @@ export interface MarketV1SupplyAction
     }
   > {}
 
-export interface MarketV1WithdrawAction
+export interface BlueWithdrawAction
   extends BaseAction<
-    "marketV1Withdraw",
+    "blueWithdraw",
     {
       market: Hex;
       assets: bigint;
@@ -140,9 +140,9 @@ export interface MarketV1WithdrawAction
     }
   > {}
 
-export interface MarketV1SupplyCollateralAction
+export interface BlueSupplyCollateralAction
   extends BaseAction<
-    "marketV1SupplyCollateral",
+    "blueSupplyCollateral",
     {
       market: Hex;
       amount: bigint;
@@ -151,9 +151,9 @@ export interface MarketV1SupplyCollateralAction
     }
   > {}
 
-export interface MarketV1BorrowAction
+export interface BlueBorrowAction
   extends BaseAction<
-    "marketV1Borrow",
+    "blueBorrow",
     {
       market: Hex;
       amount: bigint;
@@ -163,9 +163,9 @@ export interface MarketV1BorrowAction
     }
   > {}
 
-export interface MarketV1SupplyCollateralBorrowAction
+export interface BlueSupplyCollateralBorrowAction
   extends BaseAction<
-    "marketV1SupplyCollateralBorrow",
+    "blueSupplyCollateralBorrow",
     {
       market: Hex;
       collateralAmount: bigint;
@@ -178,9 +178,9 @@ export interface MarketV1SupplyCollateralBorrowAction
     }
   > {}
 
-export interface MarketV1RepayAction
+export interface BlueRepayAction
   extends BaseAction<
-    "marketV1Repay",
+    "blueRepay",
     {
       market: Hex;
       assets: bigint;
@@ -192,9 +192,9 @@ export interface MarketV1RepayAction
     }
   > {}
 
-export interface MarketV1WithdrawCollateralAction
+export interface BlueWithdrawCollateralAction
   extends BaseAction<
-    "marketV1WithdrawCollateral",
+    "blueWithdrawCollateral",
     {
       market: Hex;
       amount: bigint;
@@ -203,9 +203,9 @@ export interface MarketV1WithdrawCollateralAction
     }
   > {}
 
-export interface MarketV1RepayWithdrawCollateralAction
+export interface BlueRepayWithdrawCollateralAction
   extends BaseAction<
-    "marketV1RepayWithdrawCollateral",
+    "blueRepayWithdrawCollateral",
     {
       market: Hex;
       repayAssets: bigint;
@@ -218,9 +218,9 @@ export interface MarketV1RepayWithdrawCollateralAction
     }
   > {}
 
-export interface MarketV1RefinanceAction
+export interface BlueRefinanceAction
   extends BaseAction<
-    "marketV1Refinance",
+    "blueRefinance",
     {
       readonly sourceMarket: Hex;
       readonly targetMarket: Hex;
@@ -268,15 +268,15 @@ export type TransactionAction =
   | VaultV1WithdrawAction
   | VaultV1RedeemAction
   | VaultV1MigrateToV2Action
-  | MarketV1SupplyAction
-  | MarketV1WithdrawAction
-  | MarketV1SupplyCollateralAction
-  | MarketV1BorrowAction
-  | MarketV1SupplyCollateralBorrowAction
-  | MarketV1RepayAction
-  | MarketV1WithdrawCollateralAction
-  | MarketV1RepayWithdrawCollateralAction
-  | MarketV1RefinanceAction
+  | BlueSupplyAction
+  | BlueWithdrawAction
+  | BlueSupplyCollateralAction
+  | BlueBorrowAction
+  | BlueSupplyCollateralBorrowAction
+  | BlueRepayAction
+  | BlueWithdrawCollateralAction
+  | BlueRepayWithdrawCollateralAction
+  | BlueRefinanceAction
   | MorphoAuthorizationAction;
 
 export interface Transaction<TAction extends BaseAction = TransactionAction> {

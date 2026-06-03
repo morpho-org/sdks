@@ -1,6 +1,6 @@
 import { Market, MarketParams, MathLib } from "@morpho-org/blue-sdk";
 import { describe, expect, test } from "vitest";
-import { WethUsdsMarketV1 } from "../../test/fixtures/marketV1.js";
+import { WethUsdsBlue } from "../../test/fixtures/blue.js";
 import {
   ExcessiveSlippageToleranceError,
   ShareDivideByZeroError,
@@ -15,7 +15,7 @@ import {
 
 /** 1:1 share-to-asset ratio market for predictable results. */
 const normalMarket = new Market({
-  params: new MarketParams(WethUsdsMarketV1),
+  params: new MarketParams(WethUsdsBlue),
   totalSupplyAssets: 10n ** 24n,
   totalBorrowAssets: 10n ** 24n,
   totalSupplyShares: 10n ** 24n,
@@ -30,7 +30,7 @@ const normalMarket = new Market({
  * Used to trigger MAX_ABSOLUTE_SHARE_PRICE cap and zero-shares edge case.
  */
 const highSharePriceMarket = new Market({
-  params: new MarketParams(WethUsdsMarketV1),
+  params: new MarketParams(WethUsdsBlue),
   totalSupplyAssets: 10n ** 30n,
   totalBorrowAssets: 10n ** 30n,
   totalSupplyShares: 10n ** 30n,
@@ -218,7 +218,7 @@ describe("computeMaxSupplySharePrice", () => {
   test("should cap at MAX_ABSOLUTE_SHARE_PRICE for extreme share prices", () => {
     // Market where 1 share backs 10^30 assets on the supply side.
     const extreme = new Market({
-      params: new MarketParams(WethUsdsMarketV1),
+      params: new MarketParams(WethUsdsBlue),
       totalSupplyAssets: 10n ** 30n,
       totalBorrowAssets: 10n ** 30n,
       totalSupplyShares: 1n,
@@ -238,7 +238,7 @@ describe("computeMaxSupplySharePrice", () => {
   test("should throw ShareDivideByZeroError when expected shares round to zero", () => {
     // Market with very high share price so a tiny asset supply rounds shares to 0 (Down).
     const extreme = new Market({
-      params: new MarketParams(WethUsdsMarketV1),
+      params: new MarketParams(WethUsdsBlue),
       totalSupplyAssets: 10n ** 30n,
       totalBorrowAssets: 10n ** 30n,
       totalSupplyShares: 1n,

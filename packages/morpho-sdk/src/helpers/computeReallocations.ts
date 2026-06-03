@@ -124,7 +124,7 @@ const capVaultWithdrawals = (
  *
  * const userAddress = "0x000000000000000000000000000000000000dEaD";
  * const marketParams = markets[mainnet.id].usdc_wbtc;
- * const market = client.morpho.marketV1(marketParams, mainnet.id);
+ * const market = client.morpho.blue(marketParams, mainnet.id);
  * const block = await client.getBlock();
  * const reallocationData = await market.getReallocationData({
  *   vaultAddresses: [vaults[mainnet.id].steakUsdc.address],

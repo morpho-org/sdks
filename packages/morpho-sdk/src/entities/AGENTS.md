@@ -1,6 +1,6 @@
 # `entities/`
 
-`MorphoVaultV1` implements `VaultV1Actions`. `MorphoVaultV2` implements `VaultV2Actions`. `MorphoMarketV1` implements `MarketV1Actions`. Inherits the rules in [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
+`MorphoVaultV1` implements `VaultV1Actions`. `MorphoVaultV2` implements `VaultV2Actions`. `MorphoBlue` implements `BlueActions`. Inherits the rules in [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md).
 
 ## Responsibilities
 
@@ -15,6 +15,6 @@ See [`packages/morpho-sdk/AGENTS.md`](../../AGENTS.md) routing summary.
 
 ## Shared liquidity
 
-`MorphoMarketV1.borrow()` and `supplyCollateralBorrow()` accept optional `reallocations: VaultReallocation[]`. The entity passes them through to the action layer; encoding and validation happen there. `getReallocationData` may fetch the inputs needed to compute reallocations, but action encoding stays outside the entity fetch path.
+`MorphoBlue.borrow()` and `supplyCollateralBorrow()` accept optional `reallocations: VaultReallocation[]`. The entity passes them through to the action layer; encoding and validation happen there. `getReallocationData` may fetch the inputs needed to compute reallocations, but action encoding stays outside the entity fetch path.
 
 `ReallocationData` is the entity-level state container for public allocator simulations. Its public maps are readable snapshots for inspection; state transitions stay on its methods and return cloned `ReallocationData` instances.

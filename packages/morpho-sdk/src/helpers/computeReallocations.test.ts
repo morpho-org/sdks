@@ -7,11 +7,11 @@ import {
 import { type Address, parseEther } from "viem";
 import { describe, expect, test } from "vitest";
 import {
-  CbbtcUsdcMarketV1,
+  CbbtcUsdcBlue,
   WbtcUsdcSourceMarket,
-  WethUsdsMarketV1,
+  WethUsdsBlue,
   WstethUsdcSourceMarket,
-} from "../../test/fixtures/marketV1.js";
+} from "../../test/fixtures/blue.js";
 import type { ReallocationData } from "../entities/reallocationData.js";
 import {
   InsufficientSharedLiquidityError,
@@ -28,8 +28,8 @@ const TIMESTAMP = 1_700_000_000n;
 
 // --- Market fixtures ---
 
-const targetParams = new MarketParams(WethUsdsMarketV1);
-const sourceParamsA = new MarketParams(CbbtcUsdcMarketV1);
+const targetParams = new MarketParams(WethUsdsBlue);
+const sourceParamsA = new MarketParams(CbbtcUsdcBlue);
 const sourceParamsB = new MarketParams(WbtcUsdcSourceMarket);
 const sourceParamsC = new MarketParams(WstethUsdcSourceMarket);
 

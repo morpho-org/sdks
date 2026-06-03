@@ -306,8 +306,8 @@ export const validateRepayShares = (params: {
 };
 
 /**
- * Validates the common repay input parameters shared by `marketV1Repay`
- * and `marketV1RepayWithdrawCollateral`.
+ * Validates the common repay input parameters shared by `blueRepay`
+ * and `blueRepayWithdrawCollateral`.
  *
  * @param params - Validation parameters.
  * @param params.assets - Repay assets amount (0n when repaying by shares).

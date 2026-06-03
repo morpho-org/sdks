@@ -9,7 +9,7 @@
 
 > **The abstraction layer that simplifies Morpho protocol**
 
-Build transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **MarketV1** (Morpho Blue) on EVM-compatible chains.
+Build transactions for **VaultV1** (MetaMorpho), **VaultV2**, and **Blue** (Morpho Blue) on EVM-compatible chains.
 
 ## Installation
 
@@ -31,7 +31,7 @@ pnpm add @morpho-org/morpho-sdk
 | **VaultV1**  | `deposit`                 | Bundler (general adapter) | Same ERC-4626 inflation attack prevention as V2. Supports native token wrapping.                    |
 |              | `withdraw`                | Direct vault call         | No attack surface                                                                                   |
 |              | `redeem`                  | Direct vault call         | No attack surface                                                                                   |
-| **MarketV1** | `supply`                  | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
+| **Blue** | `supply`                  | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
 |              | `supplyCollateral`        | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
 |              | `borrow`                  | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `supplyCollateralBorrow`  | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
@@ -83,7 +83,7 @@ const tx = buildTx(permitSignature);
 |              | `withdraw`               | Direct vault call         | No attack surface                                                                                   |
 |              | `redeem`                 | Direct vault call         | No attack surface                                                                                   |
 |              | `migrateToV2`            | Bundler (general adapter) | Atomic V1 → V2 migration: redeem V1 shares + deposit into V2 in one tx. Slippage-protected.         |
-| **MarketV1** | `supply`                 | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
+| **Blue** | `supply`                 | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupply` with `maxSharePrice` (inflation guard). Supports native wrapping when `loanToken === wNative`. |
 |              | `supplyCollateral`       | Bundler (general adapter) | `erc20TransferFrom` + `morphoSupplyCollateral`. Supports native wrapping.                           |
 |              | `borrow`                 | Bundler (general adapter) | `morphoBorrow` with `minSharePrice` slippage protection. Requires GA1 auth. Supports reallocations. |
 |              | `supplyCollateralBorrow` | Bundler (general adapter) | Atomic supply + borrow. LLTV buffer prevents instant liquidation. Supports reallocations.           |
@@ -241,10 +241,13 @@ const requirements = await getRequirements();
 const tx = buildTx(requirementSignature);
 ```
 
-### MarketV1
+### Blue
+
+Blue (Morpho Blue) is Morpho's immutable, variable-rate lending primitive: isolated markets whose
+borrow rate floats with utilization. Each market is identified by its `MarketParams`.
 
 ```typescript
-const market = client.morpho.marketV1(
+const market = client.morpho.blue(
   {
     loanToken: "0xLoan...",
     collateralToken: "0xCollateral...",
@@ -473,7 +476,7 @@ graph LR
 
     MC -->|.vaultV1| MV1
     MC -->|.vaultV2| MV2
-    MC -->|.marketV1| MM1
+    MC -->|.blue| MM1
 
     subgraph VaultV1 Flow
         MV1[MorphoVaultV1]
@@ -503,13 +506,13 @@ graph LR
         V2FR -->|multicall| V2C
     end
 
-    subgraph MarketV1 Flow
-        MM1[MorphoMarketV1]
-        MM1 --> M1S[marketV1Supply]
-        MM1 --> M1SC[marketV1SupplyCollateral]
-        MM1 --> M1B[marketV1Borrow]
-        MM1 --> M1SCB[marketV1SupplyCollateralBorrow]
-        MM1 --> M1W[marketV1Withdraw]
+    subgraph Blue Flow
+        MM1[MorphoBlue]
+        MM1 --> M1S[blueSupply]
+        MM1 --> M1SC[blueSupplyCollateral]
+        MM1 --> M1B[blueBorrow]
+        MM1 --> M1SCB[blueSupplyCollateralBorrow]
+        MM1 --> M1W[blueWithdraw]
 
         M1S -->|nativeWrap? + erc20TransferFrom + morphoSupply| B3[Bundler3]
         M1SC -->|erc20TransferFrom + morphoSupplyCollateral| B3

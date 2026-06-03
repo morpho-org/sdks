@@ -70,7 +70,7 @@ For action builders, name `Readonly<Transaction<TAction>>` and call out that the
 
 ```ts
 /**
- * @returns A deep-frozen `Transaction<MarketV1BorrowAction>` with `to`, `value`, `data`, and the
+ * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator the simulation layer consumes.
  */
 ```
@@ -124,7 +124,7 @@ Rules for examples:
  *   createWalletClient({ chain: mainnet, transport: http(), account: borrower }),
  * );
  *
- * const market = client.marketV1(marketParams, 1);
+ * const market = client.blue(marketParams, 1);
  * const positionData = await market.getPositionData(borrower);
  * const { buildTx } = market.borrow({
  *   userAddress: borrower,
@@ -132,7 +132,7 @@ Rules for examples:
  *   positionData,
  * });
  * const tx = buildTx();
- * // tx satisfies Readonly<Transaction<MarketV1BorrowAction>>
+ * // tx satisfies Readonly<Transaction<BlueBorrowAction>>
  * ```
  */
 ```
@@ -175,7 +175,7 @@ export const MAX_SLIPPAGE_TOLERANCE = 100_000_000_000_000_000n; // 10%
  * @param {Object} params - The borrow parameters.
  * @returns {any} The transaction.
  */
-export const marketV1Borrow = (params: MarketV1BorrowParams) => { … };
+export const blueBorrow = (params: BlueBorrowParams) => { … };
 ```
 
 What's wrong:
@@ -207,15 +207,15 @@ What's wrong:
  * @param params.args.minSharePrice - Minimum borrow share price (in ray). Slippage protection.
  * @param params.args.reallocations - Optional vault reallocations to execute before borrowing.
  * @param params.metadata - Optional analytics metadata attached to the bundle.
- * @returns A deep-frozen `Transaction<MarketV1BorrowAction>` with `to`, `value`, `data`, and the
+ * @returns A deep-frozen `Transaction<BlueBorrowAction>` with `to`, `value`, `data`, and the
  *   typed `action` discriminator.
  * @throws {NonPositiveBorrowAmountError} when `amount <= 0n`.
  * @throws {NonPositiveMinBorrowSharePriceError} when `minSharePrice < 0n`.
  * @example
  * ```ts
- * import { marketV1Borrow } from "@morpho-org/morpho-sdk";
+ * import { blueBorrow } from "@morpho-org/morpho-sdk";
  *
- * const tx = marketV1Borrow({
+ * const tx = blueBorrow({
  *   market: { chainId: 1, marketParams },
  *   args: {
  *     amount: 1_000_000n,
@@ -223,14 +223,14 @@ What's wrong:
  *     minSharePrice: 0n,
  *   },
  * });
- * // tx satisfies Readonly<Transaction<MarketV1BorrowAction>>
+ * // tx satisfies Readonly<Transaction<BlueBorrowAction>>
  * ```
  */
 ```
 
 The two cited reference exemplars in this repo are:
 
-- `packages/morpho-sdk/src/actions/marketV1/borrow.ts` — `marketV1Borrow` (action builder).
+- `packages/morpho-sdk/src/actions/blue/borrow.ts` — `blueBorrow` (action builder).
 - `packages/morpho-sdk/src/actions/vaultV1/deposit.ts` — `vaultV1Deposit` (action builder with nested options bag, including the `nativeAmount` branch).
 
 Copy from those files when in doubt.

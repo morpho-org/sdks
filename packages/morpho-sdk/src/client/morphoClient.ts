@@ -1,10 +1,6 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
 import type { Address, Client } from "viem";
-import {
-  MorphoMarketV1,
-  MorphoVaultV1,
-  MorphoVaultV2,
-} from "../entities/index.js";
+import { MorphoBlue, MorphoVaultV1, MorphoVaultV2 } from "../entities/index.js";
 import {
   MarketIdMismatchError,
   type Metadata,
@@ -16,7 +12,7 @@ import {
  * factory methods for the protocol entities.
  *
  * Holds no state beyond configuration: no cache, no `init()`, no warm-up. Each factory call
- * (`vaultV1`, `vaultV2`, `marketV1`) returns a fresh entity bound to this client.
+ * (`vaultV1`, `vaultV2`, `blue`) returns a fresh entity bound to this client.
  *
  * @deprecated Use {@link morphoViemExtension} instead. Extending your viem client keeps a single
  *   transport / chain / account on the integrator side and exposes the same factories under
@@ -146,19 +142,19 @@ export class MorphoClient implements MorphoClientType {
   }
 
   /**
-   * Returns a `MorphoMarketV1` entity bound to this client. Validates that the supplied
+   * Returns a `MorphoBlue` entity bound to this client. Validates that the supplied
    * `marketParams.id` matches the hash of the other params, so a hand-rolled or agent-written
    * `MarketParams` cannot point at the wrong market silently.
    *
    * @param marketParams - Market params (`loanToken`, `collateralToken`, `oracle`, `irm`, `lltv`,
    *   `id`).
    * @param chainId - Chain the market lives on.
-   * @returns A fresh `MorphoMarketV1` entity.
+   * @returns A fresh `MorphoBlue` entity.
    * @throws {MarketIdMismatchError} when `marketParams.id` does not equal the hash derived from
    *   the other fields.
    * @example
    * ```ts
-   * const market = client.marketV1(marketParams, 1);
+   * const market = client.blue(marketParams, 1);
    * const positionData = await market.getPositionData(borrower);
    * const { buildTx } = market.borrow({
    *   userAddress: borrower,
@@ -168,12 +164,12 @@ export class MorphoClient implements MorphoClientType {
    * const tx = buildTx();
    * ```
    */
-  public marketV1(marketParams: MarketParams, chainId: number) {
+  public blue(marketParams: MarketParams, chainId: number) {
     const derivedId = MarketUtils.getMarketId(marketParams);
     // Can happen with one-time/hardcoded/agent-written possibly inconsistent input market params.
     if (marketParams.id !== derivedId) {
       throw new MarketIdMismatchError(marketParams.id, derivedId);
     }
-    return new MorphoMarketV1(this, marketParams, chainId);
+    return new MorphoBlue(this, marketParams, chainId);
   }
 }

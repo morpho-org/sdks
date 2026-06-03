@@ -246,7 +246,7 @@ export class MorphoVaultV2 implements VaultV2Actions {
     const totalAssets = amount + (nativeAmount ?? 0n);
 
     // Accrue interest forward to bound the on-chain share price at execution.
-    // Mirrors marketV1 repay's 2h forward-accrual buffer.
+    // Mirrors blue repay's 2h forward-accrual buffer.
     const accrualTimestamp =
       MathLib.max(Time.timestamp(), vaultData.lastUpdate) + Time.s.from.h(2n);
     const { vault: accruedVault } = vaultData.accrueInterest(accrualTimestamp);

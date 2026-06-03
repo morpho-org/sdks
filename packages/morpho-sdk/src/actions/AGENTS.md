@@ -6,13 +6,13 @@ Pure synchronous transaction builders. Each action returns a deep-frozen `Transa
 
 - `vaultV1/` — VaultV1 (MetaMorpho) `deposit` / `withdraw` / `redeem` / `migrateToV2`.
 - `vaultV2/` — VaultV2 `deposit` / `withdraw` / `redeem` / `forceWithdraw` / `forceRedeem`.
-- `marketV1/` — Morpho Blue `supplyCollateral` / `borrow` / `supplyCollateralBorrow` / `repay` / `repayWithdrawCollateral` / `withdrawCollateral`. Borrow paths support optional shared liquidity via `reallocations`.
+- `blue/` — Morpho Blue `supplyCollateral` / `borrow` / `supplyCollateralBorrow` / `repay` / `repayWithdrawCollateral` / `withdrawCollateral`. Borrow paths support optional shared liquidity via `reallocations`.
 - `requirements/` — token approvals, permit/permit2 signatures, Morpho authorization resolved before deposit/supply.
 
 ## Common builder pattern
 
 1. Validate inputs with dedicated errors from `src/types/error.ts` (`assets > 0`, `shares > 0`, `maxSharePrice > 0`, `nativeAmount >= 0`).
-2. Encode calldata. **Bundled paths** use `BundlerAction.encodeBundle`; **direct calls** (`vaultV1/withdraw`, `vaultV1/redeem`, `vaultV2/withdraw`, `vaultV2/redeem`, `marketV1/withdrawCollateral`) encode their single function call directly.
+2. Encode calldata. **Bundled paths** use `BundlerAction.encodeBundle`; **direct calls** (`vaultV1/withdraw`, `vaultV1/redeem`, `vaultV2/withdraw`, `vaultV2/redeem`, `blue/withdrawCollateral`) encode their single function call directly.
 3. Call `addTransactionMetadata` only when `metadata` is provided.
 4. `deepFreeze` the return value: `{ to, value, data, action: { type, args } }`.
 
@@ -22,7 +22,7 @@ Only valid for assets/collateral configured as wNative. When `nativeAmount > 0`:
 
 ## Shared liquidity / reallocations (canonical statement)
 
-`marketV1Borrow` and `marketV1SupplyCollateralBorrow` accept optional `reallocations: VaultReallocation[]`. Each reallocation becomes a `PublicAllocator.reallocateTo(vault, fee, withdrawals, targetMarket)` bundler action **before** `morphoBorrow`. `BundlerAction.encodeBundle` includes those fees in `tx.value`. Validation: `helpers/validateReallocations`. Other layer docs link here rather than restating these rules.
+`blueBorrow` and `blueSupplyCollateralBorrow` accept optional `reallocations: VaultReallocation[]`. Each reallocation becomes a `PublicAllocator.reallocateTo(vault, fee, withdrawals, targetMarket)` bundler action **before** `morphoBorrow`. `BundlerAction.encodeBundle` includes those fees in `tx.value`. Validation: `helpers/validateReallocations`. Other layer docs link here rather than restating these rules.
 
 ## Discriminated unions
 

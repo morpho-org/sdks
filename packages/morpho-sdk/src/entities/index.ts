@@ -65,7 +65,7 @@ export {
   VaultV2MorphoVaultV1Adapter,
   WrappedToken,
 } from "@morpho-org/blue-sdk";
-export { MorphoMarketV1 } from "./marketV1/index.js";
+export { MorphoBlue } from "./blue/index.js";
 export {
   type InputReallocationData,
   ReallocationData,

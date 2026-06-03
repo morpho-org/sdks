@@ -6,7 +6,7 @@ The SDK is a product. It has users (integrators, internal and external, human _a
 
 ## Scope
 
-- **In:** transaction builders for Morpho — VaultV1, VaultV2, MarketV1; entity fetchers for the data those builders need; framework adapters in opt-in `*-wagmi` / `*-viem` packages.
+- **In:** transaction builders for Morpho — VaultV1, VaultV2, Blue; entity fetchers for the data those builders need; framework adapters in opt-in `*-wagmi` / `*-viem` packages.
 - **Out:** framework wrappers (React/Redux/ethers), simulation engines, indexers, hosted infrastructure. Any work that doesn't make Morpho integrations faster or safer is out of scope by design.
 - **One peer dep:** `viem`. Integrators install `morpho-sdk + viem` and they're done.
 
