@@ -496,6 +496,40 @@ export function getLastDefined<T>(array: T[]) {
 }
 
 /**
+ * Thrown when a uint-like value is negative.
+ *
+ * @example
+ * ```ts
+ * import { NegativeValueError } from "@morpho-org/morpho-ts";
+ *
+ * throw new NegativeValueError("assets", -1n);
+ * ```
+ */
+export class NegativeValueError extends Error {
+  public constructor(field: string, value: bigint) {
+    super(`${field} "${value}" must be non-negative.`);
+    this.name = "NegativeValueError";
+  }
+}
+
+/**
+ * Asserts that a bigint value is non-negative.
+ *
+ * @param field - Field name used in the thrown error message.
+ * @param value - Bigint value to validate.
+ * @throws NegativeValueError when `value` is negative.
+ * @example
+ * ```ts
+ * import { assertNonNegative } from "@morpho-org/morpho-ts";
+ *
+ * assertNonNegative("assets", 0n);
+ * ```
+ */
+export function assertNonNegative(field: string, value: bigint) {
+  if (value < 0n) throw new NegativeValueError(field, value);
+}
+
+/**
  * Recursively freezes an object and its nested object properties.
  *
  * @param obj - Object to freeze recursively.

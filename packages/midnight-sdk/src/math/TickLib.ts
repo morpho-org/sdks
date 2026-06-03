@@ -1,4 +1,4 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { assertNonNegative, MathLib } from "@morpho-org/morpho-ts";
 
 import {
   DEFAULT_TICK_SPACING,
@@ -11,7 +11,6 @@ import {
   PriceGreaterThanOneError,
   TickOutOfRangeError,
 } from "../errors.js";
-import { assertNonNegative } from "../internal.js";
 import type { BigIntish } from "../types.js";
 
 /**

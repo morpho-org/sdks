@@ -1,6 +1,5 @@
-import { MathLib } from "@morpho-org/morpho-ts";
+import { assertNonNegative, MathLib } from "@morpho-org/morpho-ts";
 
-import { assertNonNegative } from "../internal.js";
 import { type IOffer, Offer } from "../offers/index.js";
 import type { BigIntish } from "../types.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
