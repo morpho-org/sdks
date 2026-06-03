@@ -14,44 +14,6 @@ import { ConsumableUnitsLib } from "./ConsumableUnitsLib.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 import { TickLib } from "./TickLib.js";
 
-type TestOffer = ReturnType<typeof baseOffer>;
-
-const buyerAssetsFromUnits = (params: {
-  readonly offer: TestOffer;
-  readonly units: bigint;
-  readonly settlementFee: bigint;
-}) => {
-  const { buyerPrice } = TakeAmountsLib.prices({
-    offer: params.offer,
-    settlementFee: params.settlementFee,
-  });
-
-  return MathLib.mulDiv(
-    params.units,
-    buyerPrice,
-    MathLib.WAD,
-    params.offer.buy ? "Down" : "Up",
-  );
-};
-
-const sellerAssetsFromUnits = (params: {
-  readonly offer: TestOffer;
-  readonly units: bigint;
-  readonly settlementFee: bigint;
-}) => {
-  const { sellerPrice } = TakeAmountsLib.prices({
-    offer: params.offer,
-    settlementFee: params.settlementFee,
-  });
-
-  return MathLib.mulDiv(
-    params.units,
-    sellerPrice,
-    MathLib.WAD,
-    params.offer.buy ? "Down" : "Up",
-  );
-};
-
 describe("TakeAmountsLib.prices", () => {
   test("default: prices", () => {
     const prices = TakeAmountsLib.prices({
@@ -135,20 +97,30 @@ describe("TakeAmountsLib.buyerAssetsToUnits", () => {
     ];
 
     for (const offer of cases) {
-      const targetBuyerAssets = buyerAssetsFromUnits({
+      const { buyerPrice } = TakeAmountsLib.prices({
         offer,
-        units: 123_456789000000000000n,
         settlementFee,
       });
+      const targetBuyerAssets = MathLib.mulDiv(
+        123_456789000000000000n,
+        buyerPrice,
+        MathLib.WAD,
+        offer.buy ? "Down" : "Up",
+      );
       const units = TakeAmountsLib.buyerAssetsToUnits({
         offer,
         targetBuyerAssets,
         settlementFee,
       });
 
-      expect(buyerAssetsFromUnits({ offer, units, settlementFee })).toBe(
-        targetBuyerAssets,
-      );
+      expect(
+        MathLib.mulDiv(
+          units,
+          buyerPrice,
+          MathLib.WAD,
+          offer.buy ? "Down" : "Up",
+        ),
+      ).toBe(targetBuyerAssets);
     }
   });
 
@@ -240,20 +212,30 @@ describe("TakeAmountsLib.sellerAssetsToUnits", () => {
     ];
 
     for (const offer of cases) {
-      const targetSellerAssets = sellerAssetsFromUnits({
+      const { sellerPrice } = TakeAmountsLib.prices({
         offer,
-        units: 123_456789000000000000n,
         settlementFee,
       });
+      const targetSellerAssets = MathLib.mulDiv(
+        123_456789000000000000n,
+        sellerPrice,
+        MathLib.WAD,
+        offer.buy ? "Down" : "Up",
+      );
       const units = TakeAmountsLib.sellerAssetsToUnits({
         offer,
         targetSellerAssets,
         settlementFee,
       });
 
-      expect(sellerAssetsFromUnits({ offer, units, settlementFee })).toBe(
-        targetSellerAssets,
-      );
+      expect(
+        MathLib.mulDiv(
+          units,
+          sellerPrice,
+          MathLib.WAD,
+          offer.buy ? "Down" : "Up",
+        ),
+      ).toBe(targetSellerAssets);
     }
   });
 

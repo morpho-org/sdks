@@ -20,7 +20,7 @@ Per AGENTS.md §1 and §4 — package boundaries and the public surface:
 - A new deep import across packages — e.g. `from "@morpho-org/foo/src/internal/..."` instead of going through `@morpho-org/foo`'s `src/index.ts`. The receiving package's `src/index.ts` is the only public entry point.
 - A new export from `src/index.ts` (or removal/rename of an existing one) — flag for cross-file impact on consumers; check that downstream code in the monorepo and the JSDoc still match.
 - A layering reversal — entity reading state when it should be lazy, action encoding calldata that should belong to a helper, helper depending on an entity, etc. (See the §1 Layering table.)
-- A local, non-exported helper introduced for a single call site. Inline it unless it names a stable boundary concept.
+- A local, non-exported helper introduced with fewer than three call sites. Inline one-off and two-use helpers.
 - A new framework import (`react`, `wagmi`, `redux`, `ethers`) in a core SDK package. Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`); core packages stay framework-free.
 
 Per AGENTS.md §3 — type discipline at the boundary:
