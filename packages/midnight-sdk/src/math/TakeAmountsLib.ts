@@ -1,4 +1,4 @@
-import { mulDivDown, mulDivUp, WAD } from "@morpho-org/morpho-ts";
+import { MathLib, type RoundingDirection } from "@morpho-org/morpho-ts";
 
 import {
   DivisionByZeroError,
@@ -6,7 +6,7 @@ import {
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
 import { type IOffer, normalizeOffer, type Offer } from "../offers/index.js";
-import type { BigIntish, RoundingDirection } from "../types.js";
+import type { BigIntish } from "../types.js";
 import { TickLib } from "./TickLib.js";
 
 // biome-ignore lint/complexity/useMaxParams: Internal dispatcher for Solidity-style rounding helpers.
@@ -17,8 +17,8 @@ const mulDiv = (
   rounding: RoundingDirection,
 ) =>
   rounding === "Up"
-    ? mulDivUp(x, y, denominator)
-    : mulDivDown(x, y, denominator);
+    ? MathLib.mulDivUp(x, y, denominator)
+    : MathLib.mulDivDown(x, y, denominator);
 
 const prices = (offer: Offer, settlementFee: bigint) => {
   const offerPrice = TickLib.tickToPrice(offer.tick);
@@ -74,11 +74,12 @@ export namespace TakeAmountsLib {
     const targetBuyerAssets = BigInt(params.targetBuyerAssets);
     const { buyerPrice } = prices(offer, settlementFee);
     if (buyerPrice === 0n) throw new DivisionByZeroError("buyerPrice");
-    if (buyerPrice > WAD) throw new PriceGreaterThanOneError(buyerPrice);
+    if (buyerPrice > MathLib.WAD)
+      throw new PriceGreaterThanOneError(buyerPrice);
 
     return offer.buy
-      ? mulDivUp(targetBuyerAssets, WAD, buyerPrice)
-      : mulDivDown(targetBuyerAssets, WAD, buyerPrice);
+      ? MathLib.mulDivUp(targetBuyerAssets, MathLib.WAD, buyerPrice)
+      : MathLib.mulDivDown(targetBuyerAssets, MathLib.WAD, buyerPrice);
   }
 
   /**
@@ -114,8 +115,8 @@ export namespace TakeAmountsLib {
     if (sellerPrice === 0n) throw new DivisionByZeroError("sellerPrice");
 
     return offer.buy
-      ? mulDivUp(targetSellerAssets, WAD, sellerPrice)
-      : mulDivDown(targetSellerAssets, WAD, sellerPrice);
+      ? MathLib.mulDivUp(targetSellerAssets, MathLib.WAD, sellerPrice)
+      : MathLib.mulDivDown(targetSellerAssets, MathLib.WAD, sellerPrice);
   }
 
   /**
@@ -126,10 +127,10 @@ export namespace TakeAmountsLib {
    * @throws DivisionByZeroError when price is zero.
    * @example
    * ```ts
-   * import { WAD } from "@morpho-org/morpho-ts";
+   * import { MathLib } from "@morpho-org/morpho-ts";
    * import { TakeAmountsLib } from "@morpho-org/midnight-sdk";
    *
-   * const units = TakeAmountsLib.toUnits({ assets: 100n, price: WAD, rounding: "Down" });
+   * const units = TakeAmountsLib.toUnits({ assets: 100n, price: MathLib.WAD, rounding: "Down" });
    * console.log(units);
    * ```
    */
@@ -141,7 +142,7 @@ export namespace TakeAmountsLib {
     const price = BigInt(params.price);
     if (price === 0n) throw new DivisionByZeroError("price");
 
-    return mulDiv(BigInt(params.assets), WAD, price, params.rounding);
+    return mulDiv(BigInt(params.assets), MathLib.WAD, price, params.rounding);
   }
 
   /**

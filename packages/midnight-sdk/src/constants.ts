@@ -1,4 +1,4 @@
-import { WAD } from "@morpho-org/morpho-ts";
+import { MathLib } from "@morpho-org/morpho-ts";
 
 /**
  * Centibip scale used by settlement fees.
@@ -91,7 +91,7 @@ export const ALLOWED_LLTVS = [
   945000000000000000n,
   965000000000000000n,
   980000000000000000n,
-  WAD,
+  MathLib.WAD,
 ] as const;
 
 /**

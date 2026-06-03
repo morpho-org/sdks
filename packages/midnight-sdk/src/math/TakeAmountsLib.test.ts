@@ -1,4 +1,4 @@
-import { WAD } from "@morpho-org/morpho-ts";
+import { MathLib } from "@morpho-org/morpho-ts";
 import fc from "fast-check";
 import { describe, expect, test } from "vitest";
 
@@ -69,8 +69,8 @@ describe("TakeAmountsLib.toUnits", () => {
   test("behavior: rounded-up units are at most one above rounded-down units", () => {
     fc.assert(
       fc.property(
-        fc.bigInt({ min: 0n, max: WAD * WAD }),
-        fc.bigInt({ min: 1n, max: WAD }),
+        fc.bigInt({ min: 0n, max: MathLib.WAD * MathLib.WAD }),
+        fc.bigInt({ min: 1n, max: MathLib.WAD }),
         (assets, price) => {
           const down = TakeAmountsLib.toUnits({
             assets,
@@ -96,7 +96,7 @@ describe("TakeAmountsLib.toUnitsAtTick", () => {
     fc.assert(
       fc.property(
         fc.record({
-          assets: fc.bigInt({ min: 0n, max: WAD * WAD }),
+          assets: fc.bigInt({ min: 0n, max: MathLib.WAD * MathLib.WAD }),
           tick: fc.bigInt({ min: 2n, max: MAX_TICK }),
           rounding: fc.constantFrom("Up" as const, "Down" as const),
         }),
