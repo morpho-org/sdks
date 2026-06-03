@@ -1,3 +1,5 @@
+export { NegativeValueError } from "@morpho-org/morpho-ts";
+
 /**
  * Thrown when a chain id has no pinned Midnight deployment entry.
  *
@@ -125,23 +127,6 @@ export class PriceGreaterThanOneError extends Error {
   public constructor(price: bigint) {
     super(`Price "${price}" is greater than WAD.`);
     this.name = "PriceGreaterThanOneError";
-  }
-}
-
-/**
- * Thrown when a uint-like protocol value is negative.
- *
- * @example
- * ```ts
- * import { NegativeValueError } from "@morpho-org/midnight-sdk";
- *
- * throw new NegativeValueError("tick", -1n);
- * ```
- */
-export class NegativeValueError extends Error {
-  public constructor(field: string, value: bigint) {
-    super(`${field} "${value}" must be non-negative.`);
-    this.name = "NegativeValueError";
   }
 }
 

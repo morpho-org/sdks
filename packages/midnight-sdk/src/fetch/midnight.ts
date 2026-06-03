@@ -1,9 +1,9 @@
+import { assertNonNegative } from "@morpho-org/morpho-ts";
 import type { Address, Client, Hex } from "viem";
 import { getBytecode, readContract } from "viem/actions";
 
 import { erc20Abi, midnightAbi } from "../abis.js";
 import { MAX_COLLATERALS } from "../constants.js";
-import { assertNonNegative } from "../internal.js";
 import {
   type IMarket,
   Market,

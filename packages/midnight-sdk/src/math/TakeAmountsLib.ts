@@ -1,11 +1,14 @@
-import { MathLib, type RoundingDirection } from "@morpho-org/morpho-ts";
+import {
+  assertNonNegative,
+  MathLib,
+  type RoundingDirection,
+} from "@morpho-org/morpho-ts";
 
 import {
   DivisionByZeroError,
   PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
-import { assertNonNegative } from "../internal.js";
 import { type IOffer, Offer } from "../offers/index.js";
 import type { BigIntish } from "../types.js";
 import { TickLib } from "./TickLib.js";
