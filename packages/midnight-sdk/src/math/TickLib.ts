@@ -8,6 +8,7 @@ import {
 import {
   DivisionByZeroError,
   InvalidTickSpacingError,
+  NegativeValueError,
   PriceGreaterThanOneError,
   TickOutOfRangeError,
 } from "../errors.js";
@@ -18,6 +19,15 @@ const LN_2 = 693_147_180_559_945_309n;
 const EXP_OFFSET = 322_611_214_989_459_870n;
 
 const divHalfDownUnchecked = (x: bigint, d: bigint) => (x + (d - 1n) / 2n) / d;
+
+const assertNonNegative = (field: string, value: bigint) => {
+  if (value < 0n) throw new NegativeValueError(field, value);
+};
+
+const assertTickInRange = (tick: bigint) => {
+  assertNonNegative("tick", tick);
+  if (tick > MAX_TICK) throw new TickOutOfRangeError(tick, MAX_TICK);
+};
 
 const wExp = (x: bigint): bigint => {
   if (x < 0n) return 1_000000000000000000000000000000000000n / wExp(-x);
@@ -47,6 +57,7 @@ export namespace TickLib {
    *
    * @param tick - Tick in the deployed range.
    * @returns WAD price rounded to `PRICE_ROUNDING_STEP`.
+   * @throws NegativeValueError when `tick` is negative.
    * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
    * @example
    * ```ts
@@ -58,9 +69,7 @@ export namespace TickLib {
    */
   export function tickToPrice(tick: BigIntish) {
     const normalizedTick = BigInt(tick);
-    if (normalizedTick > MAX_TICK) {
-      throw new TickOutOfRangeError(normalizedTick, MAX_TICK);
-    }
+    assertTickInRange(normalizedTick);
 
     const exponent = LN_ONE_PLUS_DELTA * (MAX_TICK / 2n - normalizedTick);
     const rawPrice = divHalfDownUnchecked(
@@ -79,6 +88,7 @@ export namespace TickLib {
    * @param price - WAD price.
    * @param spacing - Tick spacing; defaults to `DEFAULT_TICK_SPACING`.
    * @returns Lowest aligned tick with price greater than or equal to `price`.
+   * @throws NegativeValueError when `price` is negative.
    * @throws PriceGreaterThanOneError when price is above WAD.
    * @throws InvalidTickSpacingError when spacing is invalid.
    * @example
@@ -96,6 +106,7 @@ export namespace TickLib {
     const normalizedPrice = BigInt(price);
     const normalizedSpacing = BigInt(spacing);
 
+    assertNonNegative("price", normalizedPrice);
     if (normalizedPrice > MathLib.WAD)
       throw new PriceGreaterThanOneError(normalizedPrice);
     if (normalizedSpacing <= 0n || MAX_TICK % normalizedSpacing !== 0n) {
@@ -118,9 +129,14 @@ export namespace TickLib {
   /**
    * Snaps a WAD price to the price of the lowest spacing-aligned tick above it.
    *
+   * This is an SDK-only convenience around `priceToTick` and `tickToPrice`.
+   *
    * @param price - WAD price.
    * @param spacing - Tick spacing.
    * @returns Snapped WAD price.
+   * @throws NegativeValueError when `price` is negative.
+   * @throws PriceGreaterThanOneError when price is above WAD.
+   * @throws InvalidTickSpacingError when spacing is invalid.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -139,8 +155,11 @@ export namespace TickLib {
   /**
    * Converts a WAD fixed rate into a WAD zero-coupon price.
    *
+   * This is an SDK-only rate conversion convenience.
+   *
    * @param rate - WAD fixed rate.
    * @returns WAD price rounded down.
+   * @throws NegativeValueError when `rate` is negative.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -151,6 +170,8 @@ export namespace TickLib {
    */
   export function rateToPrice(rate: BigIntish) {
     const normalizedRate = BigInt(rate);
+    assertNonNegative("rate", normalizedRate);
+
     return MathLib.mulDivDown(
       MathLib.WAD,
       MathLib.WAD,
@@ -161,8 +182,12 @@ export namespace TickLib {
   /**
    * Converts a Midnight tick into a WAD fixed rate.
    *
+   * This is an SDK-only rate conversion convenience.
+   *
    * @param tick - Midnight tick.
    * @returns WAD fixed rate rounded up.
+   * @throws NegativeValueError when `tick` is negative.
+   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
    * @throws DivisionByZeroError when the tick price is zero.
    * @example
    * ```ts
@@ -182,10 +207,14 @@ export namespace TickLib {
   /**
    * Asserts that a tick is aligned to the provided spacing.
    *
+   * This is an SDK-only tick-domain assertion.
+   *
    * @param tick - Tick to validate.
    * @param spacing - Market tick spacing.
    * @returns The normalized tick.
-   * @throws InvalidTickSpacingError when the tick is not aligned.
+   * @throws NegativeValueError when `tick` is negative.
+   * @throws TickOutOfRangeError when `tick` exceeds `MAX_TICK`.
+   * @throws InvalidTickSpacingError when spacing is invalid or the tick is not aligned.
    * @example
    * ```ts
    * import { TickLib } from "@morpho-org/midnight-sdk";
@@ -199,7 +228,12 @@ export namespace TickLib {
   ) {
     const normalizedTick = BigInt(tick);
     const normalizedSpacing = BigInt(spacing);
-    if (normalizedSpacing <= 0n || normalizedTick % normalizedSpacing !== 0n) {
+    assertTickInRange(normalizedTick);
+    if (
+      normalizedSpacing <= 0n ||
+      MAX_TICK % normalizedSpacing !== 0n ||
+      normalizedTick % normalizedSpacing !== 0n
+    ) {
       throw new InvalidTickSpacingError(normalizedTick, normalizedSpacing);
     }
 
