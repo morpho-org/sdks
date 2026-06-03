@@ -10,6 +10,7 @@ import {
   SimulationRevertedError,
   SimulationValidationError,
 } from "../../errors.js";
+import { makeTransferLog } from "../../test-helpers/index.js";
 import type { SimulationTransaction } from "../../types.js";
 import { simulateV1 } from "./eth-simulate-v1.js";
 
@@ -346,33 +347,21 @@ describe.sequential("simulateV1", () => {
     expect(result.calls[0]!.returnData).toBe("0x");
   });
 
-  it("requests traceAssetChanges scoped to the sender account", async () => {
+  it("derives assetChanges from transfer logs as the sender's net per-token delta", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-    });
-
-    await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX],
-    });
-
-    const callArgs = mockSimulateCalls.mock.calls[0]![0];
-    expect(callArgs.traceAssetChanges).toBe(true);
-    expect(callArgs.account).toBe(USER);
-  });
-
-  it("normalizes viem assetChanges to the canonical AssetChange shape", async () => {
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-      assetChanges: [
         {
-          token: { address: USDC.toLowerCase(), decimals: 6, symbol: "USDC" },
-          value: { pre: 0n, post: 1_000_000n, diff: 1_000_000n },
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            makeTransferLog({
+              token: USDC,
+              from: USER,
+              to: VAULT,
+              amount: 1_000_000n,
+            }),
+          ],
         },
       ],
     });
@@ -383,20 +372,20 @@ describe.sequential("simulateV1", () => {
       transactions: [BASIC_TX],
     });
 
-    expect(result.assetChanges).toEqual([
-      { token: USDC, symbol: "USDC", decimals: 6, diff: 1_000_000n },
-    ]);
+    expect(result.assetChanges).toEqual([{ token: USDC, diff: -1_000_000n }]);
   });
 
-  it("drops assetChanges entries with a zero diff", async () => {
+  it("nets inbound and outbound transfers of the same token to zero and drops it", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-      assetChanges: [
         {
-          token: { address: USDC, decimals: 6, symbol: "USDC" },
-          value: { pre: 5n, post: 5n, diff: 0n },
+          status: "success",
+          gasUsed: 0n,
+          data: "0x" as Hex,
+          logs: [
+            makeTransferLog({ token: USDC, from: USER, to: VAULT, amount: 5n }),
+            makeTransferLog({ token: USDC, from: VAULT, to: USER, amount: 5n }),
+          ],
         },
       ],
     });
@@ -410,7 +399,7 @@ describe.sequential("simulateV1", () => {
     expect(result.assetChanges).toEqual([]);
   });
 
-  it("returns empty assetChanges when viem reports none", async () => {
+  it("returns empty assetChanges when no transfer logs are emitted", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },

@@ -1,4 +1,5 @@
 import {
+  type Address,
   type BlockTag,
   createPublicClient,
   getAddress,
@@ -15,7 +16,9 @@ import type {
   RawCall,
   RawSimulationResult,
   SimulationTransaction,
+  Transfer,
 } from "../../types.js";
+import { parseTransfers } from "../parsing/index.js";
 
 /**
  * Simulate transactions using eth_simulateV1 (viem simulateCalls).
@@ -23,11 +26,9 @@ import type {
  * Uses stateOverride to set the user's ETH balance high enough to avoid
  * false "insufficient balance for gas" reverts.
  *
- * Requests viem's native `traceAssetChanges` (scoped to the sender account) and
- * normalizes the result to the bundle-level `AssetChange[]`, native ETH
- * included. This relies on the RPC supporting `eth_createAccessList` and
- * multi-block `eth_simulateV1`; on RPCs lacking either, it throws
- * `ExternalServiceError`.
+ * Derives `assetChanges` (the sender's net per-token delta) from the emitted
+ * transfer logs, matching the Tenderly backend's shape. Native ETH has no log
+ * and is not reported on this path.
  */
 export async function simulateV1(params: {
   rpcUrl: string;
@@ -85,7 +86,6 @@ export async function simulateV1(params: {
       // Inflate sender ETH balance to prevent false "insufficient gas" reverts.
       // Without this, valid ERC20 flows fail when the sender has low ETH.
       stateOverrides: [{ address: sender, balance: maxUint256 }],
-      traceAssetChanges: true,
     });
 
     const results = simulationResult.results;
@@ -115,16 +115,10 @@ export async function simulateV1(params: {
       gasUsed: r.gasUsed,
     }));
 
-    const assetChanges: AssetChange[] = (simulationResult.assetChanges ?? [])
-      .filter((c) => c.value.diff !== 0n)
-      .map((c) => ({
-        token: getAddress(c.token.address),
-        symbol: c.token.symbol,
-        decimals: c.token.decimals,
-        diff: c.value.diff,
-      }));
-
-    return { calls: rawCalls, assetChanges };
+    return {
+      calls: rawCalls,
+      assetChanges: toAssetChanges(parseTransfers(rawCalls), sender),
+    };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
@@ -133,4 +127,19 @@ export async function simulateV1(params: {
       { cause: error },
     );
   }
+}
+
+/** Reduce parsed transfer logs to the sender's net per-token delta. */
+function toAssetChanges(transfers: Transfer[], sender: Address): AssetChange[] {
+  const byToken = new Map<Address, bigint>();
+  for (const { token, from, to, amount } of transfers) {
+    let diff = 0n;
+    if (to === sender) diff += amount;
+    if (from === sender) diff -= amount;
+    if (diff === 0n) continue;
+    byToken.set(token, (byToken.get(token) ?? 0n) + diff);
+  }
+  return [...byToken]
+    .map(([token, diff]) => ({ token, diff }))
+    .filter((c) => c.diff !== 0n);
 }
