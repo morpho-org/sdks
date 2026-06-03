@@ -1,0 +1,48 @@
+{
+  "name": "@morpho-org/midnight-sdk",
+  "description": "Framework-agnostic protocol utilities for Morpho Midnight.",
+  "version": "0.0.0",
+  "author": "Morpho Association <contact@morpho.org>",
+  "contributors": [
+    "Rubilmax <rmilon@gmail.com>"
+  ],
+  "repository": "github:morpho-org/sdks",
+  "homepage": "https://github.com/morpho-org/sdks",
+  "bugs": {
+    "url": "https://github.com/morpho-org/sdks/issues",
+    "email": "contact@morpho.org"
+  },
+  "license": "MIT",
+  "type": "module",
+  "main": "src/index.ts",
+  "sideEffects": false,
+  "files": [
+    "lib"
+  ],
+  "scripts": {
+    "prepublish": "$npm_execpath build",
+    "build": "tsc --noEmit && $npm_execpath build:cjs && $npm_execpath build:esm",
+    "build:cjs": "tsc --build tsconfig.build.cjs.json && echo '{\"type\":\"commonjs\"}' > lib/cjs/package.json",
+    "build:esm": "tsc --build tsconfig.build.esm.json && echo '{\"type\":\"module\"}' > lib/esm/package.json",
+    "test": "vitest --root ../.. --project midnight-sdk"
+  },
+  "peerDependencies": {
+    "viem": "^2.0.0"
+  },
+  "devDependencies": {
+    "@morpho-org/test": "workspace:^",
+    "fast-check": "^4.4.0",
+    "typescript": "^6.0.3",
+    "viem": "^2.49.3",
+    "vitest": "^4.1.6"
+  },
+  "publishConfig": {
+    "exports": {
+      ".": {
+        "types": "./lib/esm/index.d.ts",
+        "import": "./lib/esm/index.js",
+        "require": "./lib/cjs/index.js"
+      }
+    }
+  }
+}

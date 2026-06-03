@@ -117,7 +117,7 @@ packages/X/
 │   ├── sub/
 │   │   ├── Bar.ts
 │   │   └── Bar.test.ts              # NEW
-│   └── __test-utils__/              # NEW shared test helpers (mock builders, nock setup)
+│   └── __test__/                    # NEW shared test helpers (mock builders, nock setup)
 │       ├── nock-setup.ts
 │       └── <package-specific>.ts
 └── test/                            # UNTOUCHED: existing fork/e2e tests remain
@@ -166,7 +166,7 @@ Used by every test of `fetch/*.ts`, `queries/*.ts`, augmenters, and encoders tha
 
 ### Convention 3 — Mock HTTP / GraphQL with `nock`
 
-`nock` is already a devDep in `liquidation-sdk-viem` and `liquidity-sdk-viem`. Add it to `blue-sdk-viem` and `bundler-sdk-viem`. Each HTTP-using package gets `src/__test-utils__/nock-setup.ts`:
+`nock` is already a devDep in `liquidation-sdk-viem` and `liquidity-sdk-viem`. Add it to `blue-sdk-viem` and `bundler-sdk-viem`. Each HTTP-using package gets `src/__test__/nock-setup.ts`:
 
 ```ts
 import nock from "nock";
@@ -203,7 +203,7 @@ This is a deliberate scope cut: the prize is high unit-test coverage, and migrat
       "packages/test-wagmi/**",
       "packages/morpho-test/**",
       "packages/**/src/**/*.test.ts",
-      "packages/**/src/**/__test-utils__/**",
+      "packages/**/src/**/__test__/**",
       "packages/**/src/**/__mocks__/**",
       "packages/**/src/**/__fixtures__/**",
       "packages/**/src/**/index.ts",
@@ -221,7 +221,7 @@ This is a deliberate scope cut: the prize is high unit-test coverage, and migrat
   "exclude": [
     "src/**/*.test.ts",
     "src/**/*.test-d.ts",
-    "src/**/__test-utils__/**",
+    "src/**/__test__/**",
     "src/**/__mocks__/**",
     "src/**/__fixtures__/**"
   ]
@@ -234,7 +234,7 @@ This is a deliberate scope cut: the prize is high unit-test coverage, and migrat
 
 ### Implementation Phases
 
-Ordered easiest-first: each phase validates the conventions and primitives that the next one depends on. One PR per phase, stacked on this TIB's branch. **No phase moves, renames, or rewrites any existing test in `packages/X/test/`.** Each phase only adds new `*.test.ts` files in `packages/X/src/` (and shared helpers in `src/__test-utils__/`).
+Ordered easiest-first: each phase validates the conventions and primitives that the next one depends on. One PR per phase, stacked on this TIB's branch. **No phase moves, renames, or rewrites any existing test in `packages/X/test/`.** Each phase only adds new `*.test.ts` files in `packages/X/src/` (and shared helpers in `src/__test__/`).
 
 - **Phase 1 — `morpho-ts`** *(target: ≥ 95% line coverage, ≥ 90% branch).* Pure TS utilities, no mocking. Adds colocated unit tests for every source file, especially the three currently-zero ones: `format/array.ts`, `format/string.ts`, `types.ts`. Validates the colocation tooling (vitest include union, tsconfig excludes, coverage excludes).
 
@@ -303,7 +303,7 @@ Wire a `coverage.thresholds.global` value into `vitest.config.ts` to fail CI bel
 - The repo retains pnpm workspaces with the current 13 packages. Adding/removing packages mid-migration would force re-sequencing.
 - `tsc --build` keeps the `rootDir: "src"`, `include: ["src"]` shape. Any package that switches to tsup/rollup needs a different exclusion mechanism.
 - Vitest stays at v4.x; the `projects` array shape and `coverage` config glob semantics are version-coupled.
-- Node ≥22 stays the supported runtime. JSON fixtures use `with { type: "json" }`; if Node policy changes, fall back to `JSON.parse(fs.readFileSync(...))` inside `__test-utils__/`.
+- Node ≥22 stays the supported runtime. JSON fixtures use `with { type: "json" }`; if Node policy changes, fall back to `JSON.parse(fs.readFileSync(...))` inside `__test__/`.
 - CI continues to provide `MAINNET_RPC_URL`, `BASE_RPC_URL`, etc. as secrets. Integration tests still need them; mocked unit tests do not.
 - Source code keeps using viem via `viem/actions` named imports. If style switches to client methods, the transport-level mock still works; a method-level mock would also become viable.
 
@@ -320,7 +320,7 @@ Wire a `coverage.thresholds.global` value into `vitest.config.ts` to fail CI bel
 - **Coverage report** (`pnpm test:coverage`, lcov + text-summary) becomes the primary signal. After Phase 1 the report should be runnable without RPC URLs; after each subsequent phase, the relevant package's per-file coverage should rise visibly. The captured baseline (per-package table above) is the comparison reference.
 - **CI smoke checks**:
   - `find packages/<pkg>/lib -name "*.test.*"` after build — must be empty.
-  - `pnpm pack --dry-run` per published package — file list must contain no `*.test.*` or `__test-utils__` paths.
+  - `pnpm pack --dry-run` per published package — file list must contain no `*.test.*` or `__test__` paths.
 - **Per-file zero-coverage tracking**: keep an eye on the file list in the baseline above; each phase reduces it.
 
 ## Security

@@ -14,7 +14,7 @@ export default defineConfig({
         "packages/morpho-test/**",
         "packages/**/*.md",
         "packages/**/src/**/*.test.ts",
-        "packages/**/src/**/__test-utils__/**",
+        "packages/**/src/**/__test__/**",
         "packages/**/src/**/__mocks__/**",
         "packages/**/src/**/__fixtures__/**",
         "packages/**/src/**/index.ts",
@@ -58,6 +58,13 @@ export default defineConfig({
             "packages/blue-sdk/test/**/*.test.ts",
             "packages/blue-sdk/src/**/*.test.ts",
           ],
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: "midnight-sdk",
+          include: ["packages/midnight-sdk/src/**/*.test.ts"],
         },
       },
       {

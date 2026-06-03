@@ -1,0 +1,247 @@
+import { type Address, encodeFunctionData, type Hex, zeroAddress } from "viem";
+
+import { midnightAbi } from "../abis.js";
+import {
+  deepFreeze,
+  normalizeAddress,
+  normalizeHex,
+  toBigInt,
+} from "../internal.js";
+import { type IMarket, type Market, normalizeMarket } from "../market/index.js";
+import type { BigIntish, MidnightCall } from "../types.js";
+
+const call = (to: Address | string, data: Hex): MidnightCall =>
+  deepFreeze({ to: normalizeAddress(to, "midnight"), data });
+
+/**
+ * Parameters for `Midnight.supplyCollateral`.
+ *
+ * @example
+ * ```ts
+ * import type { SupplyCollateralCallParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as SupplyCollateralCallParams;
+ * console.log(params.assets);
+ * ```
+ */
+export interface SupplyCollateralCallParams {
+  /** Core Midnight contract address. */
+  readonly midnight: Address | string;
+  /** Market whose collateral is supplied. */
+  readonly market: IMarket | Market;
+  /** Collateral index. */
+  readonly collateralIndex: BigIntish;
+  /** Assets supplied. */
+  readonly assets: BigIntish;
+  /** Account receiving the collateral position. */
+  readonly onBehalf: Address | string;
+}
+
+/**
+ * Parameters for `Midnight.withdrawCollateral`.
+ *
+ * @example
+ * ```ts
+ * import type { WithdrawCollateralCallParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as WithdrawCollateralCallParams;
+ * console.log(params.receiver);
+ * ```
+ */
+export interface WithdrawCollateralCallParams {
+  /** Core Midnight contract address. */
+  readonly midnight: Address | string;
+  /** Market whose collateral is withdrawn. */
+  readonly market: IMarket | Market;
+  /** Collateral index. */
+  readonly collateralIndex: BigIntish;
+  /** Assets withdrawn. */
+  readonly assets: BigIntish;
+  /** Account whose collateral position is debited. */
+  readonly onBehalf: Address | string;
+  /** Receiver of withdrawn collateral. */
+  readonly receiver: Address | string;
+}
+
+/**
+ * Parameters for `Midnight.repay`.
+ *
+ * @example
+ * ```ts
+ * import type { RepayCallParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as RepayCallParams;
+ * console.log(params.units);
+ * ```
+ */
+export interface RepayCallParams {
+  /** Core Midnight contract address. */
+  readonly midnight: Address | string;
+  /** Market whose debt is repaid. */
+  readonly market: IMarket | Market;
+  /** Units repaid. */
+  readonly units: BigIntish;
+  /** Account whose debt is repaid. */
+  readonly onBehalf: Address | string;
+  /** Optional repay callback. */
+  readonly callback?: Address | string;
+  /** Callback payload. */
+  readonly data?: Hex;
+}
+
+/**
+ * Parameters for `Midnight.setIsAuthorized`.
+ *
+ * @example
+ * ```ts
+ * import type { SetIsAuthorizedCallParams } from "@morpho-org/midnight-sdk";
+ *
+ * const params = {} as SetIsAuthorizedCallParams;
+ * console.log(params.newIsAuthorized);
+ * ```
+ */
+export interface SetIsAuthorizedCallParams {
+  /** Core Midnight contract address. */
+  readonly midnight: Address | string;
+  /** Authorized account or contract. */
+  readonly authorized: Address | string;
+  /** New authorization value. */
+  readonly newIsAuthorized: boolean;
+  /** Account granting authorization. */
+  readonly onBehalf: Address | string;
+}
+
+/**
+ * Namespaced calldata encoders for direct user-facing Midnight calls.
+ *
+ * @example
+ * ```ts
+ * import { MidnightCalls } from "@morpho-org/midnight-sdk";
+ *
+ * console.log(typeof MidnightCalls.setIsAuthorized);
+ * ```
+ */
+export namespace MidnightCalls {
+  /**
+   * Encodes `Midnight.supplyCollateral`.
+   *
+   * @param params - Call parameters.
+   * @returns Neutral call descriptor.
+   * @example
+   * ```ts
+   * import { MidnightCalls } from "@morpho-org/midnight-sdk";
+   *
+   * const call = MidnightCalls.supplyCollateral({} as never);
+   * console.log(call.data);
+   * ```
+   */
+  export function supplyCollateral(
+    params: SupplyCollateralCallParams,
+  ): MidnightCall {
+    return call(
+      params.midnight,
+      encodeFunctionData({
+        abi: midnightAbi,
+        functionName: "supplyCollateral",
+        args: [
+          normalizeMarket(params.market).toStruct(),
+          toBigInt(params.collateralIndex, "collateralIndex"),
+          toBigInt(params.assets, "assets"),
+          normalizeAddress(params.onBehalf, "onBehalf"),
+        ],
+      }),
+    );
+  }
+
+  /**
+   * Encodes `Midnight.withdrawCollateral`.
+   *
+   * @param params - Call parameters.
+   * @returns Neutral call descriptor.
+   * @example
+   * ```ts
+   * import { MidnightCalls } from "@morpho-org/midnight-sdk";
+   *
+   * const call = MidnightCalls.withdrawCollateral({} as never);
+   * console.log(call.to);
+   * ```
+   */
+  export function withdrawCollateral(
+    params: WithdrawCollateralCallParams,
+  ): MidnightCall {
+    return call(
+      params.midnight,
+      encodeFunctionData({
+        abi: midnightAbi,
+        functionName: "withdrawCollateral",
+        args: [
+          normalizeMarket(params.market).toStruct(),
+          toBigInt(params.collateralIndex, "collateralIndex"),
+          toBigInt(params.assets, "assets"),
+          normalizeAddress(params.onBehalf, "onBehalf"),
+          normalizeAddress(params.receiver, "receiver"),
+        ],
+      }),
+    );
+  }
+
+  /**
+   * Encodes `Midnight.repay`.
+   *
+   * @param params - Call parameters.
+   * @returns Neutral call descriptor.
+   * @example
+   * ```ts
+   * import { MidnightCalls } from "@morpho-org/midnight-sdk";
+   *
+   * const call = MidnightCalls.repay({} as never);
+   * console.log(call.data);
+   * ```
+   */
+  export function repay(params: RepayCallParams): MidnightCall {
+    return call(
+      params.midnight,
+      encodeFunctionData({
+        abi: midnightAbi,
+        functionName: "repay",
+        args: [
+          normalizeMarket(params.market).toStruct(),
+          toBigInt(params.units, "units"),
+          normalizeAddress(params.onBehalf, "onBehalf"),
+          normalizeAddress(params.callback ?? zeroAddress, "callback"),
+          normalizeHex(params.data ?? "0x", "data"),
+        ],
+      }),
+    );
+  }
+
+  /**
+   * Encodes `Midnight.setIsAuthorized`.
+   *
+   * @param params - Call parameters.
+   * @returns Neutral call descriptor.
+   * @example
+   * ```ts
+   * import { MidnightCalls } from "@morpho-org/midnight-sdk";
+   *
+   * const call = MidnightCalls.setIsAuthorized({} as never);
+   * console.log(call.to);
+   * ```
+   */
+  export function setIsAuthorized(
+    params: SetIsAuthorizedCallParams,
+  ): MidnightCall {
+    return call(
+      params.midnight,
+      encodeFunctionData({
+        abi: midnightAbi,
+        functionName: "setIsAuthorized",
+        args: [
+          normalizeAddress(params.authorized, "authorized"),
+          params.newIsAuthorized,
+          normalizeAddress(params.onBehalf, "onBehalf"),
+        ],
+      }),
+    );
+  }
+}
