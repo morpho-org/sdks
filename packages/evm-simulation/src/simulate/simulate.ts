@@ -24,7 +24,8 @@ import {
  * - `transfers` → user-facing preview / server-side verification.
  * - `simulationTxs` + `transfers` → server-side verification before broadcast.
  * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`, `gasUsed`,
- *   and Tenderly-only `assetChanges`). Aligned 1:1 with `simulationTxs[i]`.
+ *   and `assetChanges` — per-tx on Tenderly, a bundle-level aggregate on the last
+ *   call for `eth_simulateV1`). Aligned 1:1 with `simulationTxs[i]`.
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
  *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *

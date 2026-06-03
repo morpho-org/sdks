@@ -101,7 +101,8 @@ export interface Transfer {
  * - `simulationTxs` is the full resolved transaction list (including
  *   prepended authorization txs).
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
- *   status, returnData/gasUsed, and (Tenderly only) assetChanges per tx.
+ *   status, returnData/gasUsed, and `assetChanges` (per-tx on Tenderly, a
+ *   bundle-level aggregate on the last call for `eth_simulateV1`).
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
  */
@@ -111,7 +112,8 @@ export interface SimulationResult {
   /**
    * Per-transaction normalized output. `calls[i]` corresponds 1:1 with
    * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas
-   * used, and (Tenderly only) asset changes per transaction.
+   * used, and asset changes (per-tx on Tenderly; a bundle-level aggregate on
+   * the last call for `eth_simulateV1`).
    */
   readonly calls: readonly SimulationCall[];
   /** Parsed ERC-20 / WETH9 transfers from the simulation. */
@@ -170,7 +172,11 @@ export interface RawCall {
   status: boolean;
   returnData: Hex;
   gasUsed: bigint;
-  /** Tenderly-only `assetChanges` payload. Absent on `eth_simulateV1`. */
+  /**
+   * Asset-changes payload. Tenderly attaches a per-tx blob to each call;
+   * `eth_simulateV1` attaches a single sender-scoped, bundle-level aggregate
+   * to the last call (see `simulateV1`). Absent when there are no changes.
+   */
   assetChanges?: unknown;
 }
 
@@ -195,8 +201,11 @@ export interface SimulationCall {
   /** Gas used by this call (root frame). */
   readonly gasUsed: bigint;
   /**
-   * Tenderly-only `assetChanges` payload for this tx. Opaque `unknown` —
-   * do not destructure without validation. Absent on `eth_simulateV1`.
+   * Asset-changes payload. Opaque `unknown` — do not destructure without
+   * validation. The shape differs by backend: Tenderly reports per-tx changes
+   * on each call; `eth_simulateV1` reports a single sender-scoped, bundle-level
+   * aggregate (`{ token, value: { pre, post, diff } }[]`, native ETH included)
+   * attached to the last call. Absent when the backend reports no changes.
    */
   readonly assetChanges?: unknown;
 }

@@ -345,4 +345,64 @@ describe.sequential("simulateV1", () => {
     expect(result.calls[0]!.logs).toEqual([]);
     expect(result.calls[0]!.returnData).toBe("0x");
   });
+
+  it("requests traceAssetChanges scoped to the sender account", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    const callArgs = mockSimulateCalls.mock.calls[0]![0];
+    expect(callArgs.traceAssetChanges).toBe(true);
+    expect(callArgs.account).toBe(USER);
+  });
+
+  it("attaches the bundle-level assetChanges aggregate to the last call", async () => {
+    const aggregate = [
+      {
+        token: { address: USDC, decimals: 6, symbol: "USDC" },
+        value: { pre: 0n, post: 1_000_000n, diff: 1_000_000n },
+      },
+    ];
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+      assetChanges: aggregate,
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX, BASIC_TX],
+    });
+
+    expect(result.calls[0]!.assetChanges).toBeUndefined();
+    expect(result.calls[1]!.assetChanges).toEqual(aggregate);
+  });
+
+  it("omits assetChanges when the aggregate is empty", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+      assetChanges: [],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    expect(result.calls[0]!.assetChanges).toBeUndefined();
+  });
 });
