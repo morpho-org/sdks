@@ -7,11 +7,44 @@ import { MAX_TICK } from "../constants.js";
 import {
   DivisionByZeroError,
   NegativeValueError,
+  PriceGreaterThanOneError,
   SettlementFeeExceedsPriceError,
 } from "../errors.js";
 import { ConsumableUnitsLib } from "./ConsumableUnitsLib.js";
 import { TakeAmountsLib } from "./TakeAmountsLib.js";
 import { TickLib } from "./TickLib.js";
+
+type TestOffer = ReturnType<typeof baseOffer>;
+
+const buyerAssetsFromUnits = (params: {
+  readonly offer: TestOffer;
+  readonly units: bigint;
+  readonly settlementFee: bigint;
+}) => {
+  const { buyerPrice } = TakeAmountsLib.prices({
+    offer: params.offer,
+    settlementFee: params.settlementFee,
+  });
+
+  return params.offer.buy
+    ? MathLib.mulDivDown(params.units, buyerPrice, MathLib.WAD)
+    : MathLib.mulDivUp(params.units, buyerPrice, MathLib.WAD);
+};
+
+const sellerAssetsFromUnits = (params: {
+  readonly offer: TestOffer;
+  readonly units: bigint;
+  readonly settlementFee: bigint;
+}) => {
+  const { sellerPrice } = TakeAmountsLib.prices({
+    offer: params.offer,
+    settlementFee: params.settlementFee,
+  });
+
+  return params.offer.buy
+    ? MathLib.mulDivDown(params.units, sellerPrice, MathLib.WAD)
+    : MathLib.mulDivUp(params.units, sellerPrice, MathLib.WAD);
+};
 
 describe("TakeAmountsLib namespace exports", () => {
   test("default: mulDiv", () => {
@@ -46,6 +79,44 @@ describe("TakeAmountsLib namespace exports", () => {
   });
 
   test("error: NegativeValueError", () => {
+    expect(() =>
+      TakeAmountsLib.mulDiv({
+        x: -1n,
+        y: 1n,
+        denominator: 2n,
+        rounding: "Down",
+      }),
+    ).toThrow(NegativeValueError);
+    expect(() =>
+      TakeAmountsLib.mulDiv({
+        x: 1n,
+        y: -1n,
+        denominator: 2n,
+        rounding: "Down",
+      }),
+    ).toThrow(NegativeValueError);
+    expect(() =>
+      TakeAmountsLib.mulDiv({
+        x: 1n,
+        y: 1n,
+        denominator: -1n,
+        rounding: "Down",
+      }),
+    ).toThrow(NegativeValueError);
+  });
+
+  test("error: DivisionByZeroError", () => {
+    expect(() =>
+      TakeAmountsLib.mulDiv({
+        x: 1n,
+        y: 1n,
+        denominator: 0n,
+        rounding: "Down",
+      }),
+    ).toThrow(DivisionByZeroError);
+  });
+
+  test("error: prices NegativeValueError", () => {
     expect(() =>
       TakeAmountsLib.prices({
         offer: baseOffer(),
@@ -93,6 +164,45 @@ describe("TakeAmountsLib.buyerAssetsToUnits", () => {
     ).toBe(TakeAmountsLib.toUnits({ assets: 123n, price, rounding: "Down" }));
   });
 
+  test("behavior: sell offers include settlement fee in buyer price", () => {
+    const offer = baseOffer({ buy: false, tick: 5_000n });
+    const settlementFee = 1_000000000000n;
+    const price = TickLib.tickToPrice(offer.tick) + settlementFee;
+
+    expect(
+      TakeAmountsLib.buyerAssetsToUnits({
+        offer,
+        targetBuyerAssets: 123n,
+        settlementFee,
+      }),
+    ).toBe(TakeAmountsLib.toUnits({ assets: 123n, price, rounding: "Down" }));
+  });
+
+  test("behavior: returned units forward to the reachable target buyer assets", () => {
+    const settlementFee = 1_000000000000n;
+    const cases = [
+      baseOffer({ buy: true, tick: 5_000n }),
+      baseOffer({ buy: false, tick: 5_000n }),
+    ];
+
+    for (const offer of cases) {
+      const targetBuyerAssets = buyerAssetsFromUnits({
+        offer,
+        units: 123_456789000000000000n,
+        settlementFee,
+      });
+      const units = TakeAmountsLib.buyerAssetsToUnits({
+        offer,
+        targetBuyerAssets,
+        settlementFee,
+      });
+
+      expect(buyerAssetsFromUnits({ offer, units, settlementFee })).toBe(
+        targetBuyerAssets,
+      );
+    }
+  });
+
   test("error: NegativeValueError", () => {
     const offer = baseOffer();
 
@@ -133,9 +243,71 @@ describe("TakeAmountsLib.buyerAssetsToUnits", () => {
       }),
     ).toThrow(SettlementFeeExceedsPriceError);
   });
+
+  test("error: PriceGreaterThanOneError", () => {
+    expect(() =>
+      TakeAmountsLib.buyerAssetsToUnits({
+        offer: baseOffer({ buy: false, tick: MAX_TICK }),
+        targetBuyerAssets: 123n,
+        settlementFee: 1n,
+      }),
+    ).toThrow(PriceGreaterThanOneError);
+  });
 });
 
 describe("TakeAmountsLib.sellerAssetsToUnits", () => {
+  test("behavior: buy offers round seller units up after settlement fee", () => {
+    const offer = baseOffer({ buy: true, tick: 5_000n });
+    const settlementFee = 1_000000000000n;
+    const price = TickLib.tickToPrice(offer.tick) - settlementFee;
+
+    expect(
+      TakeAmountsLib.sellerAssetsToUnits({
+        offer,
+        targetSellerAssets: 123n,
+        settlementFee,
+      }),
+    ).toBe(TakeAmountsLib.toUnits({ assets: 123n, price, rounding: "Up" }));
+  });
+
+  test("behavior: sell offers round seller units down", () => {
+    const offer = baseOffer({ buy: false, tick: 5_000n });
+    const price = TickLib.tickToPrice(offer.tick);
+
+    expect(
+      TakeAmountsLib.sellerAssetsToUnits({
+        offer,
+        targetSellerAssets: 123n,
+        settlementFee: 1_000000000000n,
+      }),
+    ).toBe(TakeAmountsLib.toUnits({ assets: 123n, price, rounding: "Down" }));
+  });
+
+  test("behavior: returned units forward to the reachable target seller assets", () => {
+    const settlementFee = 1_000000000000n;
+    const cases = [
+      baseOffer({ buy: true, tick: 5_000n }),
+      baseOffer({ buy: false, tick: 5_000n }),
+    ];
+
+    for (const offer of cases) {
+      const targetSellerAssets = sellerAssetsFromUnits({
+        offer,
+        units: 123_456789000000000000n,
+        settlementFee,
+      });
+      const units = TakeAmountsLib.sellerAssetsToUnits({
+        offer,
+        targetSellerAssets,
+        settlementFee,
+      });
+
+      expect(sellerAssetsFromUnits({ offer, units, settlementFee })).toBe(
+        targetSellerAssets,
+      );
+    }
+  });
+
   test("error: DivisionByZeroError", () => {
     const offer = baseOffer({ buy: true, tick: 2n });
 

@@ -21,15 +21,40 @@ export namespace ConsumableUnitsLib {
    *
    * @param params - Consumption parameters.
    * @returns Remaining consumable units.
-   * @throws NegativeValueError when `consumed`, offer limits, or delegated asset inputs are negative.
+   * @throws NegativeValueError when `consumed`, offer limits, delegated asset inputs, or the offer tick is negative.
    * @throws DivisionByZeroError when the delegated units conversion divides by zero.
+   * @throws TickOutOfRangeError when the offer tick exceeds `MAX_TICK`.
    * @throws SettlementFeeExceedsPriceError when settlement fee exceeds a buy offer price.
    * @example
    * ```ts
-   * import { ConsumableUnitsLib } from "@morpho-org/midnight-sdk";
+   * import { ConsumableUnitsLib, type IOffer } from "@morpho-org/midnight-sdk";
+   *
+   * const offer = {
+   *   market: {
+   *     loanToken: "0x0000000000000000000000000000000000000001",
+   *     collateralParams: [],
+   *     maturity: 1_735_689_600n,
+   *     rcfThreshold: 0n,
+   *     enterGate: "0x0000000000000000000000000000000000000000",
+   *     liquidatorGate: "0x0000000000000000000000000000000000000000",
+   *   },
+   *   buy: true,
+   *   maker: "0x0000000000000000000000000000000000000002",
+   *   start: 0n,
+   *   expiry: 1_735_603_200n,
+   *   tick: 5_820n,
+   *   group: "0x0000000000000000000000000000000000000000000000000000000000000000",
+   *   callback: "0x0000000000000000000000000000000000000000",
+   *   callbackData: "0x",
+   *   receiverIfMakerIsSeller: "0x0000000000000000000000000000000000000002",
+   *   ratifier: "0x0000000000000000000000000000000000000003",
+   *   reduceOnly: false,
+   *   maxUnits: 0n,
+   *   maxAssets: 1_000n,
+   * } satisfies IOffer;
    *
    * const units = ConsumableUnitsLib.consumableUnits({
-   *   offer: {} as never,
+   *   offer,
    *   consumed: 0n,
    *   settlementFee: 0n,
    * });
