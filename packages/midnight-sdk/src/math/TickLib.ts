@@ -246,10 +246,11 @@ export namespace TickLib {
     const normalizedRate = BigInt(rate);
     assertNonNegative("rate", normalizedRate);
 
-    return MathLib.mulDivDown(
+    return MathLib.mulDiv(
       MathLib.WAD,
       MathLib.WAD,
       MathLib.WAD + normalizedRate,
+      "Down",
     );
   }
 
@@ -275,7 +276,7 @@ export namespace TickLib {
     const price = tickToPrice(tick);
     if (price === 0n) throw new DivisionByZeroError("price");
 
-    return MathLib.mulDivUp(MathLib.WAD, MathLib.WAD, price) - MathLib.WAD;
+    return MathLib.mulDiv(MathLib.WAD, MathLib.WAD, price, "Up") - MathLib.WAD;
   }
 
   /**

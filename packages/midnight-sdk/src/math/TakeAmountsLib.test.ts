@@ -26,9 +26,12 @@ const buyerAssetsFromUnits = (params: {
     settlementFee: params.settlementFee,
   });
 
-  return params.offer.buy
-    ? MathLib.mulDivDown(params.units, buyerPrice, MathLib.WAD)
-    : MathLib.mulDivUp(params.units, buyerPrice, MathLib.WAD);
+  return MathLib.mulDiv(
+    params.units,
+    buyerPrice,
+    MathLib.WAD,
+    params.offer.buy ? "Down" : "Up",
+  );
 };
 
 const sellerAssetsFromUnits = (params: {
@@ -41,31 +44,15 @@ const sellerAssetsFromUnits = (params: {
     settlementFee: params.settlementFee,
   });
 
-  return params.offer.buy
-    ? MathLib.mulDivDown(params.units, sellerPrice, MathLib.WAD)
-    : MathLib.mulDivUp(params.units, sellerPrice, MathLib.WAD);
+  return MathLib.mulDiv(
+    params.units,
+    sellerPrice,
+    MathLib.WAD,
+    params.offer.buy ? "Down" : "Up",
+  );
 };
 
-describe("TakeAmountsLib namespace exports", () => {
-  test("default: mulDiv", () => {
-    expect(
-      TakeAmountsLib.mulDiv({
-        x: 5n,
-        y: 1n,
-        denominator: 2n,
-        rounding: "Down",
-      }),
-    ).toBe(2n);
-    expect(
-      TakeAmountsLib.mulDiv({
-        x: 5n,
-        y: 1n,
-        denominator: 2n,
-        rounding: "Up",
-      }),
-    ).toBe(3n);
-  });
-
+describe("TakeAmountsLib.prices", () => {
   test("default: prices", () => {
     const prices = TakeAmountsLib.prices({
       offer: baseOffer({ buy: true, tick: MAX_TICK }),
@@ -76,44 +63,6 @@ describe("TakeAmountsLib namespace exports", () => {
       buyerPrice: MathLib.WAD,
       sellerPrice: MathLib.WAD - 1n,
     });
-  });
-
-  test("error: NegativeValueError", () => {
-    expect(() =>
-      TakeAmountsLib.mulDiv({
-        x: -1n,
-        y: 1n,
-        denominator: 2n,
-        rounding: "Down",
-      }),
-    ).toThrow(NegativeValueError);
-    expect(() =>
-      TakeAmountsLib.mulDiv({
-        x: 1n,
-        y: -1n,
-        denominator: 2n,
-        rounding: "Down",
-      }),
-    ).toThrow(NegativeValueError);
-    expect(() =>
-      TakeAmountsLib.mulDiv({
-        x: 1n,
-        y: 1n,
-        denominator: -1n,
-        rounding: "Down",
-      }),
-    ).toThrow(NegativeValueError);
-  });
-
-  test("error: DivisionByZeroError", () => {
-    expect(() =>
-      TakeAmountsLib.mulDiv({
-        x: 1n,
-        y: 1n,
-        denominator: 0n,
-        rounding: "Down",
-      }),
-    ).toThrow(DivisionByZeroError);
   });
 
   test("error: prices NegativeValueError", () => {
@@ -380,6 +329,16 @@ describe("TakeAmountsLib.toUnits", () => {
         rounding: "Down",
       }),
     ).toThrow(NegativeValueError);
+  });
+
+  test("error: DivisionByZeroError", () => {
+    expect(() =>
+      TakeAmountsLib.toUnits({
+        assets: 1n,
+        price: 0n,
+        rounding: "Down",
+      }),
+    ).toThrow(DivisionByZeroError);
   });
 });
 
