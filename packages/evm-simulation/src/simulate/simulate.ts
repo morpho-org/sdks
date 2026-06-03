@@ -23,9 +23,10 @@ import {
  *
  * - `transfers` → user-facing preview / server-side verification.
  * - `simulationTxs` + `transfers` → server-side verification before broadcast.
- * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`, `gasUsed`,
- *   and `assetChanges` — per-tx on Tenderly, a bundle-level aggregate on the last
- *   call for `eth_simulateV1`). Aligned 1:1 with `simulationTxs[i]`.
+ * - `calls[i]` → per-tx raw backend output (`logs`, `status`, `returnData`, `gasUsed`).
+ *   Aligned 1:1 with `simulationTxs[i]`.
+ * - `assetChanges` → sender's net per-asset balance change over the whole bundle,
+ *   normalized identically across backends.
  * - `transfers[k].txIdx` → index into `simulationTxs` of the tx that emitted the
  *   underlying log; consumers map back via `simulationTxs[transfer.txIdx]`.
  *
@@ -49,8 +50,8 @@ import {
  *   not match the resolved `simulationTxs` — refusing to map transfers with mismatched
  *   per-tx output.
  * @returns A {@link SimulationResult} carrying the resolved `simulationTxs`, per-tx
- *   `calls` (aligned 1:1 with `simulationTxs`), and parsed `transfers` (each stamped
- *   with `txIdx`).
+ *   `calls` (aligned 1:1 with `simulationTxs`), parsed `transfers` (each stamped
+ *   with `txIdx`), and the sender's net `assetChanges`.
  * @example
  * ```ts
  * import { simulate } from "@morpho-org/evm-simulation";
@@ -103,5 +104,6 @@ export async function simulate(
     simulationTxs,
     calls: result.calls,
     transfers,
+    assetChanges: result.assetChanges,
   };
 }

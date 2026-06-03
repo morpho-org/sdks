@@ -55,7 +55,7 @@ beforeEach(() => vi.clearAllMocks());
 
 describe.sequential("executeSimulation — Tenderly + simulateV1 configured", () => {
   it("calls Tenderly first and returns its result on success", async () => {
-    mockTenderlyRpc.mockResolvedValueOnce({ calls: [] });
+    mockTenderlyRpc.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
     await executeSimulation({
       config: bothBackends(),
@@ -68,7 +68,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
   });
 
   it("passes the chain's tenderlyRpc config to the backend", async () => {
-    mockTenderlyRpc.mockResolvedValueOnce({ calls: [] });
+    mockTenderlyRpc.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
     await executeSimulation({
       config: bothBackends(),
@@ -84,7 +84,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
   it("allocates 60% of timeoutMs to Tenderly (budget-ratio pin)", async () => {
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
     try {
-      mockTenderlyRpc.mockResolvedValueOnce({ calls: [] });
+      mockTenderlyRpc.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
       await executeSimulation({
         config: bothBackends(10_000),
@@ -102,7 +102,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
     mockTenderlyRpc.mockRejectedValueOnce(
       new ExternalServiceError("Tenderly 502"),
     );
-    mockSimulateV1.mockResolvedValueOnce({ calls: [] });
+    mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
     await executeSimulation({
       config: bothBackends(),
@@ -148,7 +148,7 @@ describe.sequential("executeSimulation — Tenderly + simulateV1 configured", ()
     mockTenderlyRpc.mockRejectedValueOnce(
       new ExternalServiceError("Tenderly timeout"),
     );
-    mockSimulateV1.mockResolvedValueOnce({ calls: [] });
+    mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
     const result = await executeSimulation({
       config: bothBackends(1),
@@ -169,7 +169,7 @@ describe.sequential("executeSimulation — Tenderly only", () => {
   };
 
   it("returns Tenderly result on success", async () => {
-    mockTenderlyRpc.mockResolvedValueOnce({ calls: [] });
+    mockTenderlyRpc.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
     await executeSimulation({
       config: tenderlyOnly,
@@ -203,7 +203,7 @@ describe.sequential("executeSimulation — simulateV1 only", () => {
   };
 
   it("uses simulateV1 directly without touching Tenderly", async () => {
-    mockSimulateV1.mockResolvedValueOnce({ calls: [] });
+    mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
     await executeSimulation({
       config: simV1Only,
@@ -218,7 +218,7 @@ describe.sequential("executeSimulation — simulateV1 only", () => {
   it("uses the default timeout when timeoutMs is omitted", async () => {
     const timeoutSpy = vi.spyOn(AbortSignal, "timeout");
     try {
-      mockSimulateV1.mockResolvedValueOnce({ calls: [] });
+      mockSimulateV1.mockResolvedValueOnce({ calls: [], assetChanges: [] });
 
       await executeSimulation({
         config: simV1Only,

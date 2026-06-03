@@ -43,6 +43,7 @@ const SPENDER: Address = "0x3333333333333333333333333333333333333333";
 function makeSuccessResult(logs: RawLog[] = []): RawSimulationResult {
   return {
     calls: [{ logs, status: true, returnData: "0x", gasUsed: 0n }],
+    assetChanges: [],
   };
 }
 
@@ -125,6 +126,7 @@ describe.sequential("simulate — success", () => {
           gasUsed: 0n,
         },
       ],
+      assetChanges: [],
     });
 
     const result = await simulate(
@@ -188,6 +190,7 @@ describe.sequential("simulate — authorizations", () => {
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
       ],
+      assetChanges: [],
     });
 
     const auths: SimulationAuthorization[] = [
@@ -226,6 +229,7 @@ describe.sequential("simulate — authorizations", () => {
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [transferLog], status: true, returnData: "0x", gasUsed: 0n },
       ],
+      assetChanges: [],
     });
 
     const resetApproveTx = {
@@ -282,6 +286,7 @@ describe.sequential("simulate — error handling", () => {
   it("error: ExternalServiceError when backend returns fewer calls than transactions", async () => {
     mockTenderlyRpc.mockResolvedValueOnce({
       calls: [{ logs: [], status: true, returnData: "0x", gasUsed: 0n }],
+      assetChanges: [],
     });
 
     const auths: SimulationAuthorization[] = [
@@ -445,6 +450,7 @@ describe.sequential("simulate — validation", () => {
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
         { logs: [], status: true, returnData: "0x", gasUsed: 0n },
       ],
+      assetChanges: [],
     });
 
     await expect(

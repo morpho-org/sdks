@@ -364,37 +364,17 @@ describe.sequential("simulateV1", () => {
     expect(callArgs.account).toBe(USER);
   });
 
-  it("attaches the bundle-level assetChanges aggregate to the last call", async () => {
-    const aggregate = [
-      {
-        token: { address: USDC, decimals: 6, symbol: "USDC" },
-        value: { pre: 0n, post: 1_000_000n, diff: 1_000_000n },
-      },
-    ];
-    mockSimulateCalls.mockResolvedValueOnce({
-      results: [
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
-      ],
-      assetChanges: aggregate,
-    });
-
-    const result = await simulateV1({
-      rpcUrl: "http://rpc.local",
-      chainId: 1,
-      transactions: [BASIC_TX, BASIC_TX],
-    });
-
-    expect(result.calls[0]!.assetChanges).toBeUndefined();
-    expect(result.calls[1]!.assetChanges).toEqual(aggregate);
-  });
-
-  it("omits assetChanges when the aggregate is empty", async () => {
+  it("normalizes viem assetChanges to the canonical AssetChange shape", async () => {
     mockSimulateCalls.mockResolvedValueOnce({
       results: [
         { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
       ],
-      assetChanges: [],
+      assetChanges: [
+        {
+          token: { address: USDC.toLowerCase(), decimals: 6, symbol: "USDC" },
+          value: { pre: 0n, post: 1_000_000n, diff: 1_000_000n },
+        },
+      ],
     });
 
     const result = await simulateV1({
@@ -403,6 +383,46 @@ describe.sequential("simulateV1", () => {
       transactions: [BASIC_TX],
     });
 
-    expect(result.calls[0]!.assetChanges).toBeUndefined();
+    expect(result.assetChanges).toEqual([
+      { token: USDC, symbol: "USDC", decimals: 6, diff: 1_000_000n },
+    ]);
+  });
+
+  it("drops assetChanges entries with a zero diff", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+      assetChanges: [
+        {
+          token: { address: USDC, decimals: 6, symbol: "USDC" },
+          value: { pre: 5n, post: 5n, diff: 0n },
+        },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    expect(result.assetChanges).toEqual([]);
+  });
+
+  it("returns empty assetChanges when viem reports none", async () => {
+    mockSimulateCalls.mockResolvedValueOnce({
+      results: [
+        { status: "success", gasUsed: 0n, data: "0x" as Hex, logs: [] },
+      ],
+    });
+
+    const result = await simulateV1({
+      rpcUrl: "http://rpc.local",
+      chainId: 1,
+      transactions: [BASIC_TX],
+    });
+
+    expect(result.assetChanges).toEqual([]);
   });
 });

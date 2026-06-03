@@ -1,6 +1,8 @@
 import {
   type Address,
   type BlockTag,
+  ethAddress,
+  getAddress,
   type Hex,
   isAddress,
   isHex,
@@ -14,6 +16,7 @@ import {
   SimulationValidationError,
 } from "../../errors.js";
 import type {
+  AssetChange,
   RawCall,
   RawLog,
   RawSimulationResult,
@@ -56,13 +59,28 @@ const logSchema = z
   })
   .passthrough();
 
+const assetChangeSchema = z
+  .object({
+    assetInfo: z
+      .object({
+        contractAddress: addressSchema.optional(),
+        symbol: z.string().optional(),
+        decimals: z.number().optional(),
+      })
+      .passthrough(),
+    from: addressSchema.optional(),
+    to: addressSchema.optional(),
+    rawAmount: hexSchema,
+  })
+  .passthrough();
+
 const simResultSchema = z
   .object({
     status: z.boolean(),
     gasUsed: hexSchema,
     logs: z.array(logSchema).optional(),
     trace: z.array(traceFrameSchema).optional(),
-    assetChanges: z.unknown().optional(),
+    assetChanges: z.array(assetChangeSchema).optional(),
     error: z.string().optional(),
     errorMessage: z.string().optional(),
   })
@@ -132,7 +150,10 @@ export async function simulateTenderlyRpc(params: {
         signal,
       });
       const result = unwrapResult(singleEnvelope.parse(json));
-      return { calls: [toRawCall(result)] };
+      return {
+        calls: [toRawCall(result)],
+        assetChanges: toAssetChanges([result], firstTx.from),
+      };
     }
 
     const json = await rpcRequest({
@@ -141,8 +162,11 @@ export async function simulateTenderlyRpc(params: {
       params: [transactions.map(buildCall), block, stateOverrides],
       signal,
     });
-    const result = unwrapResult(bundleEnvelope.parse(json));
-    return { calls: result.map(toRawCall) };
+    const results = unwrapResult(bundleEnvelope.parse(json));
+    return {
+      calls: results.map(toRawCall),
+      assetChanges: toAssetChanges(results, firstTx.from),
+    };
   } catch (error) {
     if (error instanceof SimulationRevertedError) throw error;
     if (error instanceof ExternalServiceError) throw error;
@@ -240,6 +264,31 @@ function toRawCall(data: SimResult): RawCall {
     status: true,
     returnData: data.trace?.[0]?.output ?? "0x",
     gasUsed: BigInt(data.gasUsed),
-    assetChanges: data.assetChanges,
   };
+}
+
+/** Reduce Tenderly's per-transfer asset changes to the sender's net per-token delta. */
+function toAssetChanges(results: SimResult[], sender: Address): AssetChange[] {
+  const account = getAddress(sender);
+  const byToken = new Map<Address, AssetChange>();
+  for (const result of results) {
+    for (const change of result.assetChanges ?? []) {
+      const amount = BigInt(change.rawAmount);
+      let diff = 0n;
+      if (change.to && getAddress(change.to) === account) diff += amount;
+      if (change.from && getAddress(change.from) === account) diff -= amount;
+      if (diff === 0n) continue;
+      const token = change.assetInfo.contractAddress
+        ? getAddress(change.assetInfo.contractAddress)
+        : ethAddress;
+      const prev = byToken.get(token);
+      byToken.set(token, {
+        token,
+        symbol: prev?.symbol ?? change.assetInfo.symbol,
+        decimals: prev?.decimals ?? change.assetInfo.decimals,
+        diff: (prev?.diff ?? 0n) + diff,
+      });
+    }
+  }
+  return [...byToken.values()].filter((c) => c.diff !== 0n);
 }

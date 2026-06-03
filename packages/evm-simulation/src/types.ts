@@ -78,6 +78,19 @@ export type SimulationAuthorization =
     };
 
 /**
+ * Net balance change of the sender for a single asset over the whole bundle.
+ * Backends normalize their native payloads to this identical shape. Native ETH
+ * uses viem's `ethAddress` sentinel as `token`.
+ */
+export interface AssetChange {
+  readonly token: Address;
+  readonly symbol?: string;
+  readonly decimals?: number;
+  /** Signed net change of the sender's balance, in raw token units. */
+  readonly diff: bigint;
+}
+
+/**
  * A parsed ERC20 / WETH9 transfer extracted from simulation logs. Returned in
  * `SimulationResult.transfers`.
  */
@@ -101,8 +114,9 @@ export interface Transfer {
  * - `simulationTxs` is the full resolved transaction list (including
  *   prepended authorization txs).
  * - `calls[i]` corresponds 1:1 with `simulationTxs[i]` — read raw logs,
- *   status, returnData/gasUsed, and `assetChanges` (per-tx on Tenderly, a
- *   bundle-level aggregate on the last call for `eth_simulateV1`).
+ *   status, returnData/gasUsed.
+ * - `assetChanges` is the sender's net per-asset balance change over the whole
+ *   bundle, normalized identically across backends.
  * - `transfers[k].txIdx` indexes into `simulationTxs` to attribute each
  *   transfer to its emitting transaction.
  */
@@ -111,13 +125,13 @@ export interface SimulationResult {
   readonly simulationTxs: readonly SimulationTransaction[];
   /**
    * Per-transaction normalized output. `calls[i]` corresponds 1:1 with
-   * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas
-   * used, and asset changes (per-tx on Tenderly; a bundle-level aggregate on
-   * the last call for `eth_simulateV1`).
+   * `simulationTxs[i]`. Use this to read raw logs, status, return data, gas used.
    */
   readonly calls: readonly SimulationCall[];
   /** Parsed ERC-20 / WETH9 transfers from the simulation. */
   readonly transfers: readonly Transfer[];
+  /** Sender's net per-asset balance changes over the whole bundle. */
+  readonly assetChanges: readonly AssetChange[];
 }
 
 /** Minimal structured logger the package calls for warnings and info. */
@@ -143,10 +157,11 @@ export interface SimulateParams {
 /**
  * Internal raw result from a simulation adapter before normalization.
  * `calls[i]` corresponds 1:1 with the i-th transaction passed to the
- * backend.
+ * backend; `assetChanges` is the bundle-level normalized aggregate.
  */
 export interface RawSimulationResult {
   calls: RawCall[];
+  assetChanges: AssetChange[];
 }
 
 /**
@@ -172,12 +187,6 @@ export interface RawCall {
   status: boolean;
   returnData: Hex;
   gasUsed: bigint;
-  /**
-   * Asset-changes payload. Tenderly attaches a per-tx blob to each call;
-   * `eth_simulateV1` attaches a single sender-scoped, bundle-level aggregate
-   * to the last call (see `simulateV1`). Absent when there are no changes.
-   */
-  assetChanges?: unknown;
 }
 
 /**
@@ -200,12 +209,4 @@ export interface SimulationCall {
   readonly returnData: Hex;
   /** Gas used by this call (root frame). */
   readonly gasUsed: bigint;
-  /**
-   * Asset-changes payload. Opaque `unknown` — do not destructure without
-   * validation. The shape differs by backend: Tenderly reports per-tx changes
-   * on each call; `eth_simulateV1` reports a single sender-scoped, bundle-level
-   * aggregate (`{ token, value: { pre, post, diff } }[]`, native ETH included)
-   * attached to the last call. Absent when the backend reports no changes.
-   */
-  readonly assetChanges?: unknown;
 }
