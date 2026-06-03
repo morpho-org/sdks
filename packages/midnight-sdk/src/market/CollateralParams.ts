@@ -1,6 +1,5 @@
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address } from "viem";
-
-import { deepFreeze } from "../internal.js";
 import type { BigIntish } from "../types.js";
 
 /**
