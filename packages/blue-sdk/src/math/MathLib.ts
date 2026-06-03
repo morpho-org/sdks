@@ -1,3 +1,5 @@
+import { WAD as SHARED_WAD } from "@morpho-org/morpho-ts";
+
 import type { BigIntish } from "../types.js";
 
 /** Rounding direction used by fixed-point math helpers. */
@@ -9,7 +11,7 @@ export type RoundingDirection = "Up" | "Down";
  */
 export namespace MathLib {
   /** WAD scale used for 18-decimal fixed-point values. */
-  export const WAD = 1_000000000000000000n;
+  export const WAD = SHARED_WAD;
   /** RAY scale used for 27-decimal fixed-point values. */
   export const RAY = 1_000000000000000000000000000n;
 

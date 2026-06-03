@@ -27,9 +27,11 @@
     "test": "vitest --root ../.. --project midnight-sdk"
   },
   "peerDependencies": {
+    "@morpho-org/morpho-ts": "workspace:^",
     "viem": "^2.0.0"
   },
   "devDependencies": {
+    "@morpho-org/morpho-ts": "workspace:^",
     "@morpho-org/test": "workspace:^",
     "fast-check": "^4.4.0",
     "typescript": "^6.0.3",
