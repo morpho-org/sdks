@@ -22,7 +22,7 @@ Per AGENTS.md §1, §2 (rule 5), and §4 — package boundaries, forbidden deep 
 - A layering reversal — entity reading state when it should be lazy, action encoding calldata that should belong to a helper, helper depending on an entity, etc. (See the §1 Layering table.)
 - A public `*Utils` factory whose main job is returning a public class instance. Prefer a static method on the class (`Offer.create`, `Offer.createGroup`, `Tree.create`) and keep the `*Utils` namespace for pure object-compatible implementation.
 - A class-specific getter or method that reimplements domain logic instead of delegating to a pure `*Utils` function that accepts readonly plain objects compatible with the class shape.
-- A local, non-exported helper introduced for a single call site. Inline it unless it names a stable boundary concept.
+- A local, non-exported helper introduced with fewer than three call sites. Inline one-off and two-use helpers.
 - A new framework import (`react`, `wagmi`, `redux`, `ethers`) in a core SDK package. Framework adapters live in explicitly named packages (`*-wagmi`, `*-viem`); core packages stay framework-free.
 - Internal workspace dependencies that do not use `workspace:` ranges, except `peerDependencies`: internal peers intentionally use explicit published semver ranges so Changesets does not auto-bump peer dependents. When a package is bumped, check all packages that declare it as a peer dependency; flag missing peer range updates or missing explicit dependent changesets.
 

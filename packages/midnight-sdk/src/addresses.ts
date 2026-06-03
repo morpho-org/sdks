@@ -19,35 +19,6 @@ const MIDNIGHT_ADDRESS_LABELS = [
   "permit2",
 ] as const satisfies readonly (keyof MidnightAddresses)[];
 
-const _midnightAddressRegistry = {} satisfies Record<number, MidnightAddresses>;
-
-const copyMidnightAddresses = (
-  addresses: MidnightAddresses,
-): MidnightAddresses => ({
-  midnight: addresses.midnight,
-  midnightBundles: addresses.midnightBundles,
-  midnightMempool: addresses.midnightMempool,
-  ecrecoverRatifier: addresses.ecrecoverRatifier,
-  setterRatifier: addresses.setterRatifier,
-  permit2: addresses.permit2,
-});
-
-const copyMidnightAddressRegistry = (
-  registry: Readonly<Record<number, MidnightAddresses>>,
-): Record<number, MidnightAddresses> => {
-  const nextRegistry: Record<number, MidnightAddresses> = {};
-
-  for (const [chainId, addresses] of Object.entries(registry)) {
-    nextRegistry[Number(chainId)] = copyMidnightAddresses(addresses);
-  }
-
-  return nextRegistry;
-};
-
-const freezeMidnightAddressRegistry = (
-  registry: Readonly<Record<number, MidnightAddresses>>,
-): MidnightAddressRegistry => deepFreeze(copyMidnightAddressRegistry(registry));
-
 /**
  * Dotted label for a field in a Midnight chain address entry.
  *
@@ -132,8 +103,9 @@ export type MidnightAddressRegistryOverrides = Record<
  * console.log(Object.keys(midnightAddressRegistry).length);
  * ```
  */
-export let midnightAddressRegistry: MidnightAddressRegistry =
-  freezeMidnightAddressRegistry(_midnightAddressRegistry);
+export let midnightAddressRegistry: MidnightAddressRegistry = deepFreeze(
+  {} satisfies Record<number, MidnightAddresses>,
+);
 
 /**
  * Alias of {@link midnightAddressRegistry} matching the object-style registry
@@ -209,7 +181,17 @@ export function registerCustomMidnightAddresses({
 } = {}) {
   if (customAddresses == null) return;
 
-  const nextRegistry = copyMidnightAddressRegistry(midnightAddressRegistry);
+  const nextRegistry: Record<number, MidnightAddresses> = {};
+  for (const [chainId, addresses] of Object.entries(midnightAddressRegistry)) {
+    nextRegistry[Number(chainId)] = {
+      midnight: addresses.midnight,
+      midnightBundles: addresses.midnightBundles,
+      midnightMempool: addresses.midnightMempool,
+      ecrecoverRatifier: addresses.ecrecoverRatifier,
+      setterRatifier: addresses.setterRatifier,
+      permit2: addresses.permit2,
+    };
+  }
 
   for (const [chainIdString, requestedAddresses] of Object.entries(
     customAddresses,
@@ -254,8 +236,6 @@ export function registerCustomMidnightAddresses({
       continue;
     }
 
-    const nextAddresses = copyMidnightAddresses(registeredAddresses);
-
     for (const label of MIDNIGHT_ADDRESS_LABELS) {
       const requestedAddress = requestedAddresses[label];
       if (requestedAddress == null) continue;
@@ -269,10 +249,7 @@ export function registerCustomMidnightAddresses({
           requestedAddress,
         });
     }
-
-    nextRegistry[chainId] = nextAddresses;
   }
 
-  midnightAddresses = midnightAddressRegistry =
-    freezeMidnightAddressRegistry(nextRegistry);
+  midnightAddresses = midnightAddressRegistry = deepFreeze(nextRegistry);
 }
