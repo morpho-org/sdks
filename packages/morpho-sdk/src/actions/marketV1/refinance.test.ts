@@ -1,5 +1,5 @@
 import { getChainAddresses, MarketParams } from "@morpho-org/blue-sdk";
-import { type Address, maxUint256, parseUnits } from "viem";
+import { type Address, maxUint256, parseUnits, toFunctionSelector } from "viem";
 import { mainnet } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import {
@@ -113,7 +113,7 @@ describe("marketV1Refinance", () => {
     });
 
     const data = tx.data.toLowerCase();
-    const sweepHex = maxUint256.toString(16); // 64 'f's — only the sweep uses `assets = maxUint256`
+    const sweepHex = maxUint256.toString(16); // 64 'f's — first occurrence is the sweep repay
     // Anchor on the unique source oracle address; its last occurrence is the source withdrawCollateral leg.
     const sourceOracleHex = source.oracle.slice(2).toLowerCase();
 
@@ -147,6 +147,56 @@ describe("marketV1Refinance", () => {
     expect(txShares.data).not.toBe(txAssets.data);
     // The shares-mode calldata embeds maxUint256 (encoded as 64 hex `f`s).
     expect(txShares.data.toLowerCase()).toContain(maxUint256.toString(16));
+  });
+
+  test("behavior: shares mode skims residual loan tokens to the user, before the withdraw", () => {
+    const skimSelector = toFunctionSelector(
+      "function erc20Transfer(address, address, uint256)",
+    )
+      .slice(2)
+      .toLowerCase();
+
+    const txShares = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: {
+        ...baseArgs,
+        borrowShares: parseUnits("1000", 24),
+        borrowAssets: parseUnits("1001", 6),
+      },
+    });
+
+    const data = txShares.data.toLowerCase();
+    const skimIdx = data.indexOf(skimSelector);
+    const sourceWithdrawIdx = data.lastIndexOf(
+      source.oracle.slice(2).toLowerCase(),
+    );
+
+    expect(skimIdx).toBeGreaterThan(-1);
+    // Same ordering constraint as the sweep: skim before the source withdraw.
+    expect(skimIdx).toBeLessThan(sourceWithdrawIdx);
+  });
+
+  test("behavior: assets and collat-only modes encode no skim", () => {
+    const skimSelector = toFunctionSelector(
+      "function erc20Transfer(address, address, uint256)",
+    )
+      .slice(2)
+      .toLowerCase();
+
+    const txAssets = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: { ...baseArgs, borrowAssets: parseUnits("1000", 6) },
+    });
+    const txCollatOnly = marketV1Refinance({
+      source: { chainId: mainnet.id, marketParams: source },
+      target: { marketParams: target },
+      args: { ...baseArgs, borrowAssets: 0n, borrowShares: 0n },
+    });
+
+    expect(txAssets.data.toLowerCase()).not.toContain(skimSelector);
+    expect(txCollatOnly.data.toLowerCase()).not.toContain(skimSelector);
   });
 
   test("error: ZeroCollateralAmountError when collateralAmount === 0n", () => {

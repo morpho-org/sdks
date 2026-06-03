@@ -70,6 +70,8 @@ export interface MarketV1RefinanceParams {
  *   morphoRepay(source, assets|0, 0|shares, maxRepaySharePrice, user, []),
  *   // shares mode only: sweep overshoot before the withdraw so same-token markets aren't drained
  *   morphoRepay(target, maxUint256, 0, maxUint256, user, [], skipRevert=true),
+ *   // shares mode only: fallback if the repay is skipped, skim residual loan tokens to the user
+ *   erc20Transfer(loanToken, user, maxUint256, GA1, skipRevert=false),
  *   morphoWithdrawCollateral(source, collateralAmount, GA1),
  * ])
  * ```
@@ -78,7 +80,8 @@ export interface MarketV1RefinanceParams {
  *
  * - **Assets mode** (`borrowAssets > 0n`): exact-asset borrow and repay, no GA1 dust.
  * - **Shares mode** (`borrowShares > 0n`, `borrowAssets` is the overshoot): the trailing
- *   `morphoRepay(target, maxUint256, …, skipRevert=true)` sweeps the residual into the target debt.
+ *   `morphoRepay(target, maxUint256, …, skipRevert=true)` sweeps the residual into the target debt,
+ *   then an `erc20Transfer` skims any residual to the user if that repay is skipped.
  * - **Collat-only** (both zero/omitted): only collateral is migrated; borrow/repay legs omitted.
  *
  * Prerequisite: GA1 must be authorized on Morpho — the entity's `getRequirements()` returns the
@@ -246,6 +249,11 @@ export const marketV1Refinance = ({
     callback.push({
       type: "morphoRepay",
       args: [targetParams, maxUint256, 0n, maxUint256, user, [], true],
+    });
+    // Fallback: if the repay above is skipped, skim any residual loan tokens to the user.
+    callback.push({
+      type: "erc20Transfer",
+      args: [targetParams.loanToken, user, maxUint256, generalAdapter1, false],
     });
   }
 
