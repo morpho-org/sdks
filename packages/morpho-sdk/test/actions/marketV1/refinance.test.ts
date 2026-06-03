@@ -21,9 +21,7 @@ import {
 } from "../../helpers/marketV1.js";
 import { test } from "../../setup.js";
 
-// wstETH / wNative — two real Morpho Blue markets sharing the same loan + collateral
-// pair but differing oracles. Both exist on mainnet at the fork block configured in
-// `test/setup.ts`, so we can use them directly without a `createMarket` hop.
+// Two real wstETH/wNative markets sharing the loan + collateral pair but differing oracles, at the pinned fork.
 const wstEthWeth_v1 = new MarketParams({
   loanToken: "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2", // WETH (wNative)
   collateralToken: "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0", // wstETH
@@ -99,14 +97,11 @@ describe("RefinanceMarketV1 (fork)", () => {
           },
           collateralAmount: migrateCollateral,
           borrowAssets: migrateBorrow,
-          // The fork is pinned while wall-clock `Time.timestamp()` keeps moving; use the widest
-          // SDK-accepted tolerance so share-price guards do not fail only because the pinned fork
-          // is older than the test runner.
+          // Widest tolerance so share-price guards don't fail just because the fork is older than wall-clock.
           slippageTolerance: MAX_SLIPPAGE_TOLERANCE,
         });
 
-        // The `borrow()` setup helper already authorizes GA1. Keep this path tolerant to either
-        // a clean wallet (one auth requirement) or a pre-authorized wallet (no requirements).
+        // Tolerate either a clean wallet (one auth requirement) or a pre-authorized one (none).
         const requirements = await refi.getRequirements();
         expect(requirements.length).toBeLessThanOrEqual(1);
         for (const requirement of requirements) {
@@ -119,8 +114,7 @@ describe("RefinanceMarketV1 (fork)", () => {
         await client.sendTransaction(refi.buildTx());
       },
     });
-    // testInvariants already asserts every bundler3 component (including GA1) preserves its
-    // initial 0 balance for both loan and collateral tokens — i.e. nothing is left behind.
+    // testInvariants already asserts every bundler3 component ends with 0 balance — nothing left behind.
   });
 
   test("shares-mode: full close overshoot is fully swept, zero bundler3 balances", async ({
@@ -254,9 +248,7 @@ describe("RefinanceMarketV1 (fork)", () => {
         });
 
         const requirements = await refi.getRequirements();
-        // Collat-only refinance still flash-borrows via target.supplyCollateral with a
-        // callback that withdraws source collateral, which requires GA1 to be authorized
-        // on Morpho (the WithdrawCollateral leg in the callback runs `onBehalf=user`).
+        // Collat-only still needs GA1 authorized: the callback's withdrawCollateral runs onBehalf=user.
         expect(requirements).toHaveLength(1);
         const auth = requirements[0]!;
         if (!isRequirementAuthorization(auth)) {
@@ -275,11 +267,8 @@ describe("RefinanceMarketV1 (fork)", () => {
     expect(targetFinal.position.borrowShares).toBe(0n);
   });
 
-  // TODO: same-token refinance (loanToken === collateralToken). Morpho permits such
-  // markets but they're degenerate (no LLTV semantics) and none exist on mainnet to
-  // pin a fork against. Covering this case requires deploying a custom market with a
-  // 1:1 oracle on the fork; tracked as a follow-up so the encoded skim ordering
-  // (loan-leg repay BEFORE collateral withdraw) is exercised end-to-end.
+  // TODO: same-token refinance (loanToken === collateralToken). None exist on mainnet to pin a
+  // fork against; needs a custom 1:1-oracle market to exercise the repay-before-withdraw ordering.
 
   test("assets-mode: targetReallocations supplies liquidity into the target market", async ({
     client,
@@ -381,8 +370,7 @@ describe("RefinanceMarketV1 (fork)", () => {
       },
     });
 
-    // The PA reallocation supplies `reallocationAmount` into the target; the in-callback
-    // borrow does not move `totalSupplyAssets`. Accrual can only inflate the delta.
+    // The PA reallocation supplies reallocationAmount into the target; accrual only inflates the delta.
     expect(
       targetFinal.position.market.totalSupplyAssets -
         targetInitial.position.market.totalSupplyAssets,

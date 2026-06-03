@@ -735,11 +735,7 @@ export class RefinanceExceedsBorrowAssetsError extends Error {
   }
 }
 
-/**
- * Thrown when a refinance is requested in shares mode (`borrowShares > 0n`) without the
- * accompanying `borrowAssets` overshoot for the target borrow leg. The entity layer always
- * passes an overshoot computed from `slippageTolerance`; direct action callers must do the same.
- */
+/** Thrown when a refinance in shares mode (`borrowShares > 0n`) omits the `borrowAssets` overshoot for the target borrow leg. */
 export class RefinanceSharesMissingBorrowAssetsError extends Error {
   constructor(market: string) {
     super(

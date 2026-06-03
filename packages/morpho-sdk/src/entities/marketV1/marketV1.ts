@@ -366,49 +366,26 @@ export interface MarketV1Actions {
   };
 
   /**
-   * Prepares an atomic refinance transaction migrating this market's position to another Morpho
-   * Blue market that shares the same loan and collateral tokens.
+   * Prepares an atomic refinance migrating this market's position to another Morpho Blue market
+   * that shares the same loan and collateral tokens. See {@link marketV1Refinance} for the bundle.
    *
-   * Routed through bundler3 via the `onMorphoSupplyCollateral` callback on the **target** market:
-   * GA1 deposits the collateral on target (callback fires with the collateral already credited),
-   * borrows from target inside the callback, repays the source, then withdraws the source
-   * collateral to GA1 to settle the deferred `safeTransferFrom`. See {@link marketV1Refinance}
-   * for the full bundle shape.
+   * Validates ownership, token/id match, that amounts do not exceed the source position, and that
+   * both the residual source and the aggregate target position stay within LLTV − buffer. Both
+   * markets are forward-accrued to `now`; in shares mode the target borrow is overshot by
+   * `slippageTolerance` and the callback sweeps the residual.
    *
-   * Validates:
-   * - Both positions belong to `userAddress` (source = this entity, target via `target.positionData`).
-   * - Source and target share both tokens; source and target market ids differ.
-   * - `collateralAmount`, `borrowShares`, and `borrowAssets` do not exceed source position amounts.
-   * - Resulting source position (after partial migration) stays healthy or fully closes — uses the
-   *   accrued source market and accounts for shares burned by assets-mode repay.
-   * - Target position aggregate (existing + migrated, including the shares-mode overshoot) respects
-   *   LLTV − buffer.
+   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
+   * authorized (a single global authorization covers both markets).
    *
-   * Both markets are forward-accrued to `now` before share-price slippage bounds are computed.
-   * In shares mode, the target borrow is overshot by `slippageTolerance` to absorb mid-tx
-   * accrual; the action's callback sweeps the residual into the target debt.
-   *
-   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not
-   * yet authorized on Morpho. A single authorization covers both markets (Morpho's auth is
-   * global, not per-market).
-   *
-   * @param params - Refinance parameters.
    * @param params.userAddress - Position owner on both markets.
    * @param params.positionData - Pre-fetched source-market accrual position.
    * @param params.target.marketParams - Target market params.
-   * @param params.target.positionData - Pre-fetched target-market accrual position. Required so
-   *   the LLTV check operates on the aggregate (existing + migrated) position. Pass a zero-position
-   *   when the user has no prior position on target.
+   * @param params.target.positionData - Pre-fetched target-market accrual position (zero-position if none).
    * @param params.collateralAmount - Amount of collateral to migrate from source to target.
-   * @param params.borrowAssets - Loan-asset amount to repay on source (mutually exclusive with
-   *   `borrowShares`). Use this for partial debt migration in assets mode.
-   * @param params.borrowShares - Borrow shares to repay on source (mutually exclusive with
-   *   `borrowAssets`). Use this for full source closure (immune to mid-tx accrual). Optional.
-   * @param params.slippageTolerance - WAD slippage tolerance. Defaults to
-   *   `DEFAULT_SLIPPAGE_TOLERANCE`.
-   * @param params.targetReallocations - Optional PublicAllocator reallocations into the **target**
-   *   market. Compute via {@link getReallocationData} + {@link getReallocations} on a `MarketV1`
-   *   for the target. Fees accumulate in `tx.value`.
+   * @param params.borrowAssets - Loan assets to repay on source; exclusive with `borrowShares`.
+   * @param params.borrowShares - Borrow shares to repay on source; exclusive with `borrowAssets`.
+   * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
+   * @param params.targetReallocations - PublicAllocator reallocations into the target market.
    * @returns Object with `buildTx` and `getRequirements`.
    */
   refinance: (params: {
@@ -1319,9 +1296,7 @@ export class MorphoMarketV1 implements MarketV1Actions {
     const requestedAssets = borrowAssets ?? 0n;
     const requestedShares = borrowShares ?? 0n;
 
-    // Reject negative debt amounts up front — otherwise they fall through the `> 0n` mode
-    // checks as if no debt were migrated, and the failure only surfaces at `buildTx()` time
-    // (after `getRequirements()` already prompted the user for GA1 authorization).
+    // Reject negative debt up front; otherwise it slips past the `> 0n` mode checks and only fails at buildTx().
     if (requestedAssets < 0n) {
       throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
     }
@@ -1360,17 +1335,9 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
     }
 
-    // Forward-accrue both markets:
-    //   - source projects assets-from-shares fidelity; in shares mode we add a 2h buffer
-    //     (same pattern as `repay()` / `repayWithdrawCollateral()`) so an exact-share repay
-    //     under low slippage or delayed execution still has enough borrow + slippage headroom.
-    //     The buffer inflates both `projectedBorrowAssets` and `maxRepaySharePrice` together.
-    //   - target's LLTV check uses the existing-debt accrued to "now" (no 2h buffer — that
-    //     would tighten `minBorrowSharePrice` past on-chain reality and risk false reverts).
-    //   - source residual check uses the accrued market so the projected residual debt
-    //     reflects what the on-chain repay actually consumes.
-    // `Market.accrueInterest` requires `timestamp >= lastUpdate`; clamp via `MathLib.max` so
-    // a stale clock or simulated future position never produces a negative elapsed interval.
+    // Forward-accrue both markets to now (clamped to lastUpdate). Source gets a 2h buffer in
+    // shares mode (as in repay()) for repay headroom; target accrues without buffer to avoid
+    // tightening minBorrowSharePrice past on-chain reality.
     const sourceAccrualTimestamp =
       MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
       (sharesMode ? Time.s.from.h(2n) : 0n);
@@ -1385,18 +1352,12 @@ export class MorphoMarketV1 implements MarketV1Actions {
       targetAccrualTimestamp,
     );
 
-    // Shares actually burned on-chain by the source repay:
-    //   - shares mode: exactly `requestedShares` (immune to mid-tx accrual)
-    //   - assets mode: Morpho computes `shares = assets.toSharesDown(assets, shares)` —
-    //     mirror that conversion using the accrued source market.
+    // Shares burned by the source repay: exact in shares mode, else mirror Morpho's toSharesDown.
     const repaidShares = sharesMode
       ? requestedShares
       : accruedSource.toBorrowShares(requestedAssets, "Down");
 
-    // Post-state SOURCE health: if any debt remains, the residual position must stay healthy.
-    // Covers both `remainingCollateral > 0` (LTV check) and `remainingCollateral === 0`
-    // (validatePositionHealth fails — liquidable). Uses the accrued source market so the
-    // residual `borrowAssets` getter reflects accrual rather than reading stale state.
+    // Post-state source health: any remaining debt must stay healthy (accrued market).
     const remainingCollateral = positionData.collateral - collateralAmount;
     const remainingShares = positionData.borrowShares - repaidShares;
     if (remainingShares > 0n) {
@@ -1422,20 +1383,14 @@ export class MorphoMarketV1 implements MarketV1Actions {
       ? accruedSource.toBorrowAssets(requestedShares, "Up")
       : requestedAssets;
 
-    // Shares-mode overshoot covers (a) target share-price drift between signature and exec,
-    // and (b) mempool accrual between read and exec on the target's borrow leg. Computed
-    // before the target LLTV check so the health validation tests the *actual* on-chain
-    // borrow amount (a near-LLTV target could otherwise pass against `projectedBorrowAssets`
-    // and revert against the overshot value).
+    // Shares-mode overshoot covers target drift + accrual on the borrow leg. Computed before the
+    // LLTV check so health validates the actual on-chain borrow, not the smaller projected value.
     const borrowAssetsAdjusted = sharesMode
       ? MathLib.wMulUp(projectedBorrowAssets, MathLib.WAD + slippageTolerance)
       : projectedBorrowAssets;
 
-    // Post-state TARGET health: aggregate (existing + migrated) must respect LLTV − buffer.
-    // Skipped for collat-only refinances — the encoded tx only supplies target collateral and
-    // withdraws source collateral, neither of which can degrade target health, and running the
-    // helper here would otherwise reject markets whose oracle is unavailable or whose collateral
-    // value is below the helper's `+1` rounding guard.
+    // Post-state target health: aggregate must respect LLTV − buffer. Skipped for collat-only
+    // refinances, which can't degrade target health and would fail on missing-oracle markets.
     if (shouldMigrateBorrow) {
       const accruedTargetPosition = target.positionData.accrueInterest(
         targetAccrualTimestamp,
@@ -1449,15 +1404,9 @@ export class MorphoMarketV1 implements MarketV1Actions {
       });
     }
 
-    // Share-price bounds — only computed when a debt leg exists; the slippage helpers throw
-    // ShareDivideByZeroError on zero inputs, so in collat-only refinance we leave the bounds
-    // at 0n (the action layer accepts non-negative bounds).
-    //
-    // The guard must be derived from `borrowAssetsAdjusted` — the value actually encoded into
-    // `morphoBorrow` — and not `projectedBorrowAssets`. Otherwise, in shares-mode with a low
-    // positive slippage on dust positions, `toBorrowShares("Up")` rounding can make the
-    // encoded borrow's on-chain asset/share ratio fall below the guard computed from the
-    // smaller projected value, reverting a bundle that passed preflight.
+    // Share-price bounds only when a debt leg exists (helpers throw on zero inputs); else 0n.
+    // Derived from borrowAssetsAdjusted (the encoded value) so rounding can't push the on-chain
+    // ratio below a guard computed from the smaller projected amount.
     const minBorrowSharePrice = shouldMigrateBorrow
       ? computeMinBorrowSharePrice({
           borrowAmount: borrowAssetsAdjusted,

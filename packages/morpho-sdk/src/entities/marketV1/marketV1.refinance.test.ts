@@ -48,9 +48,7 @@ const targetParams = new MarketParams({
   lltv: parseUnits("0.915", 18),
 });
 
-// 1 WETH (18d) = 4_000 USDC (6d). Morpho oracle convention:
-//   collateral_smallest_unit * price / ORACLE_PRICE_SCALE = loan_smallest_unit_value
-// => price = 4_000 * 10**6 * ORACLE_PRICE_SCALE / 10**18 = 4e27.
+// 1 WETH = 4_000 USDC at Morpho oracle scale: price = 4_000 * 10**6 * ORACLE_PRICE_SCALE / 10**18.
 const PRICE = (4_000n * 10n ** 6n * ORACLE_PRICE_SCALE) / 10n ** 18n;
 
 const baseMarket = (params: MarketParams) =>
@@ -236,8 +234,7 @@ describe("MorphoMarketV1.refinance", () => {
 
   test("error: RefinanceExceedsBorrowAssetsError when borrowAssets > position.borrowAssets", () => {
     const market = makeMarket();
-    // borrowShares = 100 (12-decimal share units) → borrowAssets ≈ 50 USDC at our 2:1
-    // shares:assets ratio. Asking for 1000 USDC of asset repay exceeds that.
+    // borrowShares ≈ 50 USDC at the 2:1 ratio; asking for 1000 USDC of asset repay exceeds it.
     const positionData = makePosition({
       market: baseMarket(sourceParams),
       user: USER,
@@ -311,8 +308,7 @@ describe("MorphoMarketV1.refinance", () => {
 
   test("error: BorrowExceedsSafeLtvError when partial migration leaves residual unhealthy", () => {
     // 1 WETH collateral ($4000 power), ~1000 USDC debt — currently safe on source.
-    // Migrating ALL collateral while leaving the debt creates a zero-collateral residual,
-    // which the LLTV check rejects.
+    // Migrating all collateral while leaving debt creates a zero-collateral residual the LLTV check rejects.
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -441,9 +437,7 @@ describe("MorphoMarketV1.refinance", () => {
   });
 
   test("behavior: collat-only refinance skips target health validation (no oracle required)", () => {
-    // Target market constructed WITHOUT a `price` — `validatePositionHealth` would throw
-    // `MissingMarketPriceError`. The fix gates the target health check on `shouldMigrateBorrow`,
-    // so a collat-only refinance into a price-less market must succeed.
+    // Target has no price; a collat-only refinance skips the target health check and must succeed.
     const market = makeMarket();
     const positionData = makePosition({
       market: baseMarket(sourceParams),
@@ -476,18 +470,9 @@ describe("MorphoMarketV1.refinance", () => {
   });
 
   test("regression: shares-mode low-slippage encodes minBorrowSharePrice from borrowAssetsAdjusted, not projectedBorrowAssets", () => {
-    // Pre-fix, `minBorrowSharePrice` was derived from `projectedBorrowAssets`, but the encoded
-    // `morphoBorrow` carries the larger `borrowAssetsAdjusted` (the slippage overshoot). The
-    // GA1 on-chain check is `mulDivDown(borrowedAssets, RAY, borrowedShares) >= minSharePrice`,
-    // and `borrowedShares` is `toSharesUp(borrowedAssets)` — i.e. derived from the encoded
-    // assets. The guard must therefore be derived from the same encoded assets, not from a
-    // hypothetical un-overshot value, or the asset/share ratio computed at execution can
-    // diverge from the validation-time ratio due to `toBorrowShares("Up")` rounding and
-    // revert a bundle that passed preflight.
-    //
-    // This test reconstructs both candidate guards and asserts the encoded action uses the
-    // one derived from `borrowAssetsAdjusted`. The two values are observably different for
-    // shares-mode + non-zero slippage because `borrowAssetsAdjusted > projectedBorrowAssets`.
+    // minBorrowSharePrice must be derived from the encoded borrowAssetsAdjusted, not the smaller
+    // projectedBorrowAssets, or toBorrowShares("Up") rounding can revert a preflight-passing bundle.
+    // Assert the encoded guard matches the borrowAssetsAdjusted-derived one.
     const market = makeMarket();
     const sourceMarket = baseMarket(sourceParams);
     const targetMarket = baseMarket(targetParams);
@@ -511,10 +496,7 @@ describe("MorphoMarketV1.refinance", () => {
     });
     const tx = refi.buildTx();
 
-    // Recompute the entity's intermediate values. Accrual deltas are zero because the
-    // fixture market's `lastUpdate` matches `Time.timestamp()`-clamped behaviour: the source
-    // ages by the 2h shares-mode buffer, the target ages by 0; both effects cancel here
-    // because the helper inputs are the *encoded* tx args, not the entity's internals.
+    // Recompute the entity's intermediate values (accrual deltas cancel for this fixture).
     const projectedBorrowAssets = sourceMarket.toBorrowAssets(
       parseUnits("100", 12),
       "Up",
@@ -528,11 +510,7 @@ describe("MorphoMarketV1.refinance", () => {
     expect(tx.action.args.borrowAssets).toBe(borrowAssetsAdjusted);
     expect(borrowAssetsAdjusted).toBeGreaterThan(projectedBorrowAssets);
 
-    // The encoded guard must be derived from `borrowAssetsAdjusted` (the fix) — not from
-    // `projectedBorrowAssets` (the pre-fix behaviour, which silently desyncs the guard from
-    // the actual encoded borrow). For smooth share-price ratios the two values often
-    // coincide, but in dust regimes / contrived ratios the guard divergence can revert a
-    // bundle at execution.
+    // The encoded guard must come from borrowAssetsAdjusted, not projectedBorrowAssets.
     const guardFromAdjusted = computeMinBorrowSharePrice({
       borrowAmount: borrowAssetsAdjusted,
       market: targetMarket,

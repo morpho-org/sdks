@@ -8,8 +8,7 @@ export const CbbtcUsdcMarketV1 = new MarketParams({
   lltv: 860000000000000000n,
 });
 
-/** Second cbBTC/USDC market at the pinned block — same loan + collateral as
- * {@link CbbtcUsdcMarketV1} but different oracle. Used as a refinance destination. */
+/** Second cbBTC/USDC market: same tokens as {@link CbbtcUsdcMarketV1}, different oracle. Refinance destination. */
 export const CbbtcUsdcMarketV1Alt = new MarketParams({
   collateralToken: "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf",
   loanToken: "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48",
