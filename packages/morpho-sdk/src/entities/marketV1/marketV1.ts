@@ -1,5 +1,5 @@
 import {
-  type AccrualPosition,
+  AccrualPosition,
   DEFAULT_SLIPPAGE_TOLERANCE,
   type Market,
   type MarketId,
@@ -17,11 +17,12 @@ import {
   fetchVaultMarketConfig,
 } from "@morpho-org/blue-sdk-viem";
 import { Time } from "@morpho-org/morpho-ts";
-import type { Address } from "viem";
+import { type Address, isAddressEqual } from "viem";
 import {
   getMorphoAuthorizationRequirement,
   getRequirements,
   marketV1Borrow,
+  marketV1Refinance,
   marketV1Repay,
   marketV1RepayWithdrawCollateral,
   marketV1Supply,
@@ -50,10 +51,12 @@ import {
 import type { FetchParameters } from "../../types/data.js";
 import {
   type AssetsOrSharesArgs,
+  BorrowAmountAndSharesExclusiveError,
   type DepositAmountArgs,
   type ERC20ApprovalAction,
   MarketIdMismatchError,
   type MarketV1BorrowAction,
+  type MarketV1RefinanceAction,
   type MarketV1RepayAction,
   type MarketV1RepayWithdrawCollateralAction,
   type MarketV1SupplyAction,
@@ -66,6 +69,7 @@ import {
   type MorphoClientType,
   MutuallyExclusiveRepayAmountsError,
   MutuallyExclusiveWithdrawAmountsError,
+  NegativeBorrowSharesError,
   NegativeNativeAmountError,
   NegativeSupplyAmountError,
   NonPositiveAssetAmountError,
@@ -74,6 +78,11 @@ import {
   NonPositiveWithdrawAmountError,
   NonPositiveWithdrawCollateralAmountError,
   type ReallocationComputeOptions,
+  RefinanceExceedsBorrowAssetsError,
+  RefinanceExceedsBorrowSharesError,
+  RefinanceExceedsCollateralError,
+  RefinanceSameMarketError,
+  RefinanceTokenMismatchError,
   type RepayAmountArgs,
   type Requirement,
   type RequirementSignature,
@@ -353,6 +362,48 @@ export interface MarketV1Actions {
         | Readonly<Transaction<MorphoAuthorizationAction>>
         | Requirement
       )[]
+    >;
+  };
+
+  /**
+   * Prepares an atomic refinance migrating this market's position to another Morpho Blue market
+   * that shares the same loan and collateral tokens. See {@link marketV1Refinance} for the bundle.
+   *
+   * Validates ownership, token/id match, that amounts do not exceed the source position, and that
+   * both the residual source and the aggregate target position stay within LLTV − buffer. Both
+   * markets are forward-accrued to `now`; in shares mode the target borrow is overshot by
+   * `slippageTolerance` and the callback sweeps the residual.
+   *
+   * `getRequirements` returns `morpho.setAuthorization(generalAdapter1, true)` when GA1 is not yet
+   * authorized (a single global authorization covers both markets).
+   *
+   * @param params.userAddress - Position owner on both markets.
+   * @param params.positionData - Pre-fetched source-market accrual position.
+   * @param params.target.marketParams - Target market params.
+   * @param params.target.positionData - Pre-fetched target-market accrual position (zero-position if none).
+   * @param params.collateralAmount - Amount of collateral to migrate from source to target.
+   * @param params.borrowAssets - Loan assets to repay on source; exclusive with `borrowShares`.
+   * @param params.borrowShares - Borrow shares to repay on source; exclusive with `borrowAssets`.
+   * @param params.slippageTolerance - WAD slippage tolerance. Defaults to `DEFAULT_SLIPPAGE_TOLERANCE`.
+   * @param params.targetReallocations - PublicAllocator reallocations into the target market.
+   * @returns Object with `buildTx` and `getRequirements`.
+   */
+  refinance: (params: {
+    userAddress: Address;
+    positionData: AccrualPosition;
+    target: {
+      marketParams: MarketParams;
+      positionData: AccrualPosition;
+    };
+    collateralAmount: bigint;
+    borrowAssets?: bigint;
+    borrowShares?: bigint;
+    slippageTolerance?: bigint;
+    targetReallocations?: readonly VaultReallocation[];
+  }) => {
+    buildTx: () => Readonly<Transaction<MarketV1RefinanceAction>>;
+    getRequirements: () => Promise<
+      Readonly<Transaction<MorphoAuthorizationAction>>[]
     >;
   };
 
@@ -1171,6 +1222,233 @@ export class MorphoMarketV1 implements MarketV1Actions {
             minSharePrice,
             requirementSignature,
             reallocations,
+          },
+          metadata: this.client.options.metadata,
+        }),
+    };
+  }
+
+  refinance({
+    userAddress,
+    positionData,
+    target,
+    collateralAmount,
+    borrowAssets,
+    borrowShares,
+    slippageTolerance = DEFAULT_SLIPPAGE_TOLERANCE,
+    targetReallocations,
+  }: {
+    userAddress: Address;
+    positionData: AccrualPosition;
+    target: {
+      marketParams: MarketParams;
+      positionData: AccrualPosition;
+    };
+    collateralAmount: bigint;
+    borrowAssets?: bigint;
+    borrowShares?: bigint;
+    slippageTolerance?: bigint;
+    targetReallocations?: readonly VaultReallocation[];
+  }) {
+    validateChainId(this.client.viemClient.chain?.id, this.chainId);
+    validateSlippageTolerance(slippageTolerance);
+
+    if (collateralAmount <= 0n) {
+      throw new ZeroCollateralAmountError(this.marketParams.id);
+    }
+
+    if (!positionData) {
+      throw new MissingAccrualPositionError(this.marketParams.id);
+    }
+
+    validateAccrualPosition({
+      positionData,
+      expectedMarketId: this.marketParams.id,
+      expectedUser: userAddress,
+    });
+
+    if (this.marketParams.id === target.marketParams.id) {
+      throw new RefinanceSameMarketError(this.marketParams.id);
+    }
+
+    if (
+      !isAddressEqual(
+        this.marketParams.collateralToken,
+        target.marketParams.collateralToken,
+      ) ||
+      !isAddressEqual(
+        this.marketParams.loanToken,
+        target.marketParams.loanToken,
+      )
+    ) {
+      throw new RefinanceTokenMismatchError(
+        this.marketParams.id,
+        target.marketParams.id,
+      );
+    }
+
+    validateAccrualPosition({
+      positionData: target.positionData,
+      expectedMarketId: target.marketParams.id,
+      expectedUser: userAddress,
+    });
+
+    const requestedAssets = borrowAssets ?? 0n;
+    const requestedShares = borrowShares ?? 0n;
+
+    // Reject negative debt up front; otherwise it slips past the `> 0n` mode checks and only fails at buildTx().
+    if (requestedAssets < 0n) {
+      throw new NonPositiveAssetAmountError(this.marketParams.loanToken);
+    }
+    if (requestedShares < 0n) {
+      throw new NegativeBorrowSharesError(this.marketParams.id);
+    }
+
+    if (requestedAssets > 0n && requestedShares > 0n) {
+      throw new BorrowAmountAndSharesExclusiveError(this.marketParams.id);
+    }
+
+    const sharesMode = requestedShares > 0n;
+    const shouldMigrateBorrow = requestedAssets > 0n || sharesMode;
+
+    if (collateralAmount > positionData.collateral) {
+      throw new RefinanceExceedsCollateralError({
+        market: this.marketParams.id,
+        requested: collateralAmount,
+        available: positionData.collateral,
+      });
+    }
+
+    if (requestedShares > positionData.borrowShares) {
+      throw new RefinanceExceedsBorrowSharesError({
+        market: this.marketParams.id,
+        requested: requestedShares,
+        available: positionData.borrowShares,
+      });
+    }
+
+    if (requestedAssets > positionData.borrowAssets) {
+      throw new RefinanceExceedsBorrowAssetsError({
+        market: this.marketParams.id,
+        requested: requestedAssets,
+        available: positionData.borrowAssets,
+      });
+    }
+
+    // Forward-accrue both markets to now (clamped to lastUpdate). Source gets a 2h buffer in
+    // shares mode (as in repay()) for repay headroom; target accrues without buffer to avoid
+    // tightening minBorrowSharePrice past on-chain reality.
+    const sourceAccrualTimestamp =
+      MathLib.max(Time.timestamp(), positionData.market.lastUpdate) +
+      (sharesMode ? Time.s.from.h(2n) : 0n);
+    const targetAccrualTimestamp = MathLib.max(
+      Time.timestamp(),
+      target.positionData.market.lastUpdate,
+    );
+    const accruedSource = positionData.market.accrueInterest(
+      sourceAccrualTimestamp,
+    );
+    const accruedTarget = target.positionData.market.accrueInterest(
+      targetAccrualTimestamp,
+    );
+
+    // Shares burned by the source repay: exact in shares mode, else mirror Morpho's toSharesDown.
+    const repaidShares = sharesMode
+      ? requestedShares
+      : accruedSource.toBorrowShares(requestedAssets, "Down");
+
+    // Post-state source health: any remaining debt must stay healthy (accrued market).
+    const remainingCollateral = positionData.collateral - collateralAmount;
+    const remainingShares = positionData.borrowShares - repaidShares;
+    if (remainingShares > 0n) {
+      const residualPosition = new AccrualPosition(
+        {
+          user: positionData.user,
+          supplyShares: positionData.supplyShares,
+          borrowShares: remainingShares,
+          collateral: remainingCollateral,
+        },
+        accruedSource,
+      );
+      validatePositionHealth({
+        positionData: residualPosition,
+        additionalCollateral: 0n,
+        borrowAmount: 0n,
+        marketId: this.marketParams.id,
+        lltv: this.marketParams.lltv,
+      });
+    }
+
+    const projectedBorrowAssets = sharesMode
+      ? accruedSource.toBorrowAssets(requestedShares, "Up")
+      : requestedAssets;
+
+    // Shares-mode overshoot covers target drift + accrual on the borrow leg. Computed before the
+    // LLTV check so health validates the actual on-chain borrow, not the smaller projected value.
+    const borrowAssetsAdjusted = sharesMode
+      ? MathLib.wMulUp(projectedBorrowAssets, MathLib.WAD + slippageTolerance)
+      : projectedBorrowAssets;
+
+    // Post-state target health: aggregate must respect LLTV − buffer. Skipped for collat-only
+    // refinances, which can't degrade target health and would fail on missing-oracle markets.
+    if (shouldMigrateBorrow) {
+      const accruedTargetPosition = target.positionData.accrueInterest(
+        targetAccrualTimestamp,
+      );
+      validatePositionHealth({
+        positionData: accruedTargetPosition,
+        additionalCollateral: collateralAmount,
+        borrowAmount: borrowAssetsAdjusted,
+        marketId: target.marketParams.id,
+        lltv: target.marketParams.lltv,
+      });
+    }
+
+    // Share-price bounds only when a debt leg exists (helpers throw on zero inputs); else 0n.
+    // Derived from borrowAssetsAdjusted (the encoded value) so rounding can't push the on-chain
+    // ratio below a guard computed from the smaller projected amount.
+    const minBorrowSharePrice = shouldMigrateBorrow
+      ? computeMinBorrowSharePrice({
+          borrowAmount: borrowAssetsAdjusted,
+          market: accruedTarget,
+          slippageTolerance,
+        })
+      : 0n;
+
+    const maxRepaySharePrice = shouldMigrateBorrow
+      ? computeMaxRepaySharePrice({
+          repayAssets: requestedAssets,
+          repayShares: requestedShares,
+          market: accruedSource,
+          slippageTolerance,
+        })
+      : 0n;
+
+    return {
+      getRequirements: async () => {
+        const authTx = await getMorphoAuthorizationRequirement({
+          viemClient: this.client.viemClient,
+          chainId: this.chainId,
+          userAddress,
+        });
+        return authTx ? [authTx] : [];
+      },
+
+      buildTx: () =>
+        marketV1Refinance({
+          source: {
+            chainId: this.chainId,
+            marketParams: this.marketParams,
+          },
+          target: { marketParams: target.marketParams },
+          args: {
+            user: userAddress,
+            collateralAmount,
+            borrowAssets: borrowAssetsAdjusted,
+            borrowShares: requestedShares,
+            minBorrowSharePrice,
+            maxRepaySharePrice,
+            targetReallocations,
           },
           metadata: this.client.options.metadata,
         }),
