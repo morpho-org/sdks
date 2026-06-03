@@ -185,6 +185,13 @@ describe.sequential("MorphoProtocolEvm", () => {
 
       const result = await protocol.supply({ token: TOKEN, amount: 100_000n });
 
+      expect(morphoViemExtensionMock).toHaveBeenCalledWith({
+        supportSignature: false,
+        supportDeployless: undefined,
+        metadata: undefined,
+      });
+      // The viem client is extended with the morpho namespace via morphoViemExtension's output.
+      expect(morphoExtendMock).toHaveBeenCalledWith("morpho-extension");
       expect(vaultV2Mock).toHaveBeenCalledWith(VAULT, 1);
       expect(vaultV2Entity.deposit).toHaveBeenCalledWith({
         amount: 100_000n,

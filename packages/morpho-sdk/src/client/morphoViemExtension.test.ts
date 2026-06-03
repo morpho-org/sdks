@@ -54,6 +54,15 @@ describe("morphoViemExtension", () => {
     expect(client.morpho.options.metadata).toEqual(metadata);
   });
 
+  test("behavior: the resolved options bag is frozen", () => {
+    const client = publicClient().extend(
+      morphoViemExtension({ metadata: { origin: "test" } }),
+    );
+
+    expect(Object.isFrozen(client.morpho.options)).toBe(true);
+    expect(Object.isFrozen(client.morpho.options.metadata)).toBe(true);
+  });
+
   test("error: MarketIdMismatchError", () => {
     const client = publicClient().extend(morphoViemExtension());
     const marketParams = new MarketParams(CbbtcUsdcMarketV1);

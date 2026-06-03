@@ -1,4 +1,5 @@
 import { type MarketParams, MarketUtils } from "@morpho-org/blue-sdk";
+import { deepFreeze } from "@morpho-org/morpho-ts";
 import type { Address, Client } from "viem";
 import {
   MorphoMarketV1,
@@ -30,11 +31,11 @@ function createMorphoNamespace(
 ): MorphoClientType {
   const namespace: MorphoClientType = {
     viemClient,
-    options: {
+    options: deepFreeze({
       ...options,
       supportSignature: options?.supportSignature ?? false,
       supportDeployless: options?.supportDeployless,
-    },
+    }),
 
     vaultV1(vault: Address, chainId: number) {
       return new MorphoVaultV1(namespace, vault, chainId);
