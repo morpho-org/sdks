@@ -5,10 +5,17 @@ export {
   midnightBundlesAbi,
   setterRatifierAbi,
 } from "./abis.js";
-export type { MidnightAddressOverrides } from "./addresses.js";
+export type {
+  MidnightAddressLabel,
+  MidnightAddressOverrides,
+  MidnightAddressRegistry,
+  MidnightAddressRegistryOverrides,
+} from "./addresses.js";
 export {
   getMidnightAddresses,
+  midnightAddresses,
   midnightAddressRegistry,
+  registerCustomMidnightAddresses,
 } from "./addresses.js";
 export type {
   BundleTakeInput,
@@ -47,11 +54,13 @@ export {
 } from "./constants.js";
 export {
   DivisionByZeroError,
+  IncompleteMidnightAddressesError,
   InconsistentMarketError,
   InvalidOfferPayloadError,
   InvalidOfferTreeHeightError,
   InvalidSettlementFeeIndexError,
   InvalidTickSpacingError,
+  MidnightAddressAlreadyRegisteredError,
   MissingOfferGroupError,
   NegativeValueError,
   NoMatchingOffersError,

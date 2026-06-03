@@ -1,5 +1,7 @@
 export { NegativeValueError } from "@morpho-org/morpho-ts";
 
+import type { Address } from "viem";
+
 /**
  * Thrown when a chain id has no pinned Midnight deployment entry.
  *
@@ -18,6 +20,59 @@ export class UnsupportedMidnightChainError extends Error {
   public constructor(chainId: number) {
     super(`No Midnight deployment is registered for chain id "${chainId}".`);
     this.name = "UnsupportedMidnightChainError";
+  }
+}
+
+/**
+ * Thrown when a custom Midnight address registration is missing required entries.
+ *
+ * @example
+ * ```ts
+ * import { IncompleteMidnightAddressesError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new IncompleteMidnightAddressesError(8453, ["midnight"]);
+ * ```
+ */
+export class IncompleteMidnightAddressesError extends Error {
+  public constructor(chainId: number, missingLabels: readonly string[]) {
+    super(
+      `Midnight addresses for chain id "${chainId}" are missing "${missingLabels.join('", "')}". Provide a complete deployment entry.`,
+    );
+    this.name = "IncompleteMidnightAddressesError";
+  }
+}
+
+/**
+ * Thrown when a custom Midnight address registration attempts to change an existing value.
+ *
+ * @example
+ * ```ts
+ * import { MidnightAddressAlreadyRegisteredError } from "@morpho-org/midnight-sdk";
+ *
+ * throw new MidnightAddressAlreadyRegisteredError({
+ *   chainId: 8453,
+ *   label: "midnight",
+ *   registeredAddress: "0x0000000000000000000000000000000000000001",
+ *   requestedAddress: "0x0000000000000000000000000000000000000002",
+ * });
+ * ```
+ */
+export class MidnightAddressAlreadyRegisteredError extends Error {
+  public constructor({
+    chainId,
+    label,
+    registeredAddress,
+    requestedAddress,
+  }: {
+    chainId: number;
+    label: string;
+    registeredAddress: Address;
+    requestedAddress: Address;
+  }) {
+    super(
+      `Midnight address "${chainId}.${label}" is already registered as "${registeredAddress}", got "${requestedAddress}". Use the registered address or choose an unregistered chain id.`,
+    );
+    this.name = "MidnightAddressAlreadyRegisteredError";
   }
 }
 

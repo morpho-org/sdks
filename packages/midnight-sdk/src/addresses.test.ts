@@ -1,9 +1,24 @@
+import { randomAddress } from "@morpho-org/test/fixtures";
 import { describe, expect, test } from "vitest";
 import {
   getMidnightAddresses,
+  IncompleteMidnightAddressesError,
+  MidnightAddressAlreadyRegisteredError,
+  type MidnightAddresses,
+  midnightAddresses,
   midnightAddressRegistry,
+  registerCustomMidnightAddresses,
   UnsupportedMidnightChainError,
 } from "./index.js";
+
+const createMidnightAddresses = (): MidnightAddresses => ({
+  midnight: randomAddress(),
+  midnightBundles: randomAddress(),
+  midnightMempool: randomAddress(),
+  ecrecoverRatifier: randomAddress(),
+  setterRatifier: randomAddress(),
+  permit2: randomAddress(),
+});
 
 describe("getMidnightAddresses", () => {
   test("error: UnsupportedMidnightChainError", () => {
@@ -11,10 +26,132 @@ describe("getMidnightAddresses", () => {
       UnsupportedMidnightChainError,
     );
   });
+
+  test("default", () => {
+    const chainId = 31_337_001;
+    const chainAddresses = createMidnightAddresses();
+
+    registerCustomMidnightAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(getMidnightAddresses(chainId)).toEqual(chainAddresses);
+  });
 });
 
 describe("midnightAddressRegistry", () => {
   test("default", () => {
-    expect(midnightAddressRegistry.size).toBe(0);
+    expect(midnightAddressRegistry[1]).toBeUndefined();
+  });
+
+  test("behavior: exposes object-style registry aliases", () => {
+    const chainId = 31_337_002;
+    const chainAddresses = createMidnightAddresses();
+
+    registerCustomMidnightAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(midnightAddressRegistry[chainId]).toEqual(chainAddresses);
+    expect(midnightAddresses[chainId]).toEqual(chainAddresses);
+  });
+
+  test("behavior: freezes registered entries", () => {
+    const chainId = 31_337_003;
+    const chainAddresses = createMidnightAddresses();
+
+    registerCustomMidnightAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(() => {
+      Object.assign(midnightAddressRegistry, {
+        [chainId + 1]: createMidnightAddresses(),
+      });
+    }).toThrow(TypeError);
+    expect(() => {
+      Object.assign(getMidnightAddresses(chainId), {
+        midnight: randomAddress(),
+      });
+    }).toThrow(TypeError);
+  });
+});
+
+describe("registerCustomMidnightAddresses", () => {
+  test("default", () => {
+    const chainId = 31_337_004;
+    const chainAddresses = createMidnightAddresses();
+
+    registerCustomMidnightAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(getMidnightAddresses(chainId)).toEqual(chainAddresses);
+  });
+
+  test("behavior: accepts repeated registration of the same value", () => {
+    const chainId = 31_337_005;
+    const chainAddresses = createMidnightAddresses();
+
+    registerCustomMidnightAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(() =>
+      registerCustomMidnightAddresses({
+        addresses: {
+          [chainId]: {
+            midnight: chainAddresses.midnight,
+          },
+        },
+      }),
+    ).not.toThrow();
+  });
+
+  test("error: IncompleteMidnightAddressesError", () => {
+    expect(() =>
+      registerCustomMidnightAddresses({
+        addresses: {
+          31337006: {
+            midnight: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(IncompleteMidnightAddressesError);
+  });
+
+  test("error: MidnightAddressAlreadyRegisteredError", () => {
+    const chainId = 31_337_007;
+    const chainAddresses = createMidnightAddresses();
+
+    registerCustomMidnightAddresses({
+      addresses: {
+        [chainId]: chainAddresses,
+      },
+    });
+
+    expect(() =>
+      registerCustomMidnightAddresses({
+        addresses: {
+          [chainId]: {
+            midnight: randomAddress(),
+          },
+        },
+      }),
+    ).toThrow(MidnightAddressAlreadyRegisteredError);
+
+    expect(getMidnightAddresses(chainId).midnight).toBe(
+      chainAddresses.midnight,
+    );
   });
 });
