@@ -1,5 +1,5 @@
 import { MathLib } from "@morpho-org/morpho-ts";
-import { type Address, encodeAbiParameters, type Hex, keccak256 } from "viem";
+import { type Address, encodeAbiParameters, keccak256 } from "viem";
 import {
   ALLOWED_LLTVS,
   COLLATERAL_PARAMS_TYPEHASH,
@@ -9,7 +9,7 @@ import {
 } from "../constants.js";
 import { InvalidSettlementFeeIndexError } from "../errors.js";
 import type { BigIntish } from "../types.js";
-import { type IMarket, Market, type MarketStruct } from "./Market.js";
+import { type IMarket, Market } from "./Market.js";
 
 const collateralParamsHashParams = [
   { name: "typehash", type: "bytes32" },
@@ -28,22 +28,6 @@ const marketHashParams = [
   { name: "enterGate", type: "address" },
   { name: "liquidatorGate", type: "address" },
 ] as const;
-
-const hashCollateralParams = (
-  params: MarketStruct["collateralParams"][number],
-) =>
-  keccak256(
-    encodeAbiParameters(collateralParamsHashParams, [
-      COLLATERAL_PARAMS_TYPEHASH,
-      params.token,
-      params.lltv,
-      params.maxLif,
-      params.oracle,
-    ]),
-  );
-
-const hashPackedBytes32 = (values: readonly Hex[]) =>
-  keccak256(`0x${values.map((value) => value.slice(2)).join("")}`);
 
 /**
  * Domain helpers for Midnight markets.
@@ -143,8 +127,19 @@ export namespace MarketUtils {
    */
   export function hashMarket(market: IMarket | Market) {
     const marketStruct = Market.from(market).toStruct();
-    const collateralParamsHash = hashPackedBytes32(
-      marketStruct.collateralParams.map(hashCollateralParams),
+    const collateralParamHashes = marketStruct.collateralParams.map((params) =>
+      keccak256(
+        encodeAbiParameters(collateralParamsHashParams, [
+          COLLATERAL_PARAMS_TYPEHASH,
+          params.token,
+          params.lltv,
+          params.maxLif,
+          params.oracle,
+        ]),
+      ),
+    );
+    const collateralParamsHash = keccak256(
+      `0x${collateralParamHashes.map((value) => value.slice(2)).join("")}`,
     );
 
     return keccak256(

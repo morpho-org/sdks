@@ -230,11 +230,9 @@ export interface RepayAndWithdrawCollateralParams {
   readonly referralFeeRecipient?: Address | string;
 }
 
-const emptyPermit = (): TokenPermit => ({ kind: PermitKind.None, data: "0x" });
-
 const toPermit = (permit?: TokenPermit): TokenPermit =>
   permit == null
-    ? emptyPermit()
+    ? { kind: PermitKind.None, data: "0x" }
     : { kind: permit.kind, data: permit.data as Hex };
 
 const toWithdrawals = (

@@ -19,8 +19,6 @@ const MIDNIGHT_ADDRESS_LABELS = [
   "permit2",
 ] as const satisfies readonly (keyof MidnightAddresses)[];
 
-type MidnightAddressKey = (typeof MIDNIGHT_ADDRESS_LABELS)[number];
-
 const _midnightAddressRegistry = {} satisfies Record<number, MidnightAddresses>;
 
 const copyMidnightAddresses = (
@@ -49,49 +47,6 @@ const copyMidnightAddressRegistry = (
 const freezeMidnightAddressRegistry = (
   registry: Readonly<Record<number, MidnightAddresses>>,
 ): MidnightAddressRegistry => deepFreeze(copyMidnightAddressRegistry(registry));
-
-const getMissingAddressLabels = (
-  addresses: MidnightAddressOverrides,
-): readonly MidnightAddressKey[] =>
-  MIDNIGHT_ADDRESS_LABELS.filter((label) => addresses[label] == null);
-
-function assertCompleteMidnightAddresses(
-  chainId: number,
-  addresses: MidnightAddressOverrides,
-): asserts addresses is MidnightAddresses {
-  const missingLabels = getMissingAddressLabels(addresses);
-
-  if (missingLabels.length > 0)
-    throw new IncompleteMidnightAddressesError(chainId, missingLabels);
-}
-
-const mergeMidnightAddresses = ({
-  chainId,
-  registeredAddresses,
-  requestedAddresses,
-}: {
-  chainId: number;
-  registeredAddresses: MidnightAddresses;
-  requestedAddresses: MidnightAddressOverrides;
-}): MidnightAddresses => {
-  const nextAddresses = copyMidnightAddresses(registeredAddresses);
-
-  for (const label of MIDNIGHT_ADDRESS_LABELS) {
-    const requestedAddress = requestedAddresses[label];
-    if (requestedAddress == null) continue;
-
-    const registeredAddress = registeredAddresses[label];
-    if (registeredAddress !== requestedAddress)
-      throw new MidnightAddressAlreadyRegisteredError({
-        chainId,
-        label,
-        registeredAddress,
-        requestedAddress,
-      });
-  }
-
-  return nextAddresses;
-};
 
 /**
  * Dotted label for a field in a Midnight chain address entry.
@@ -263,16 +218,59 @@ export function registerCustomMidnightAddresses({
     const registeredAddresses = nextRegistry[chainId];
 
     if (registeredAddresses == null) {
-      assertCompleteMidnightAddresses(chainId, requestedAddresses);
-      nextRegistry[chainId] = copyMidnightAddresses(requestedAddresses);
+      const {
+        midnight,
+        midnightBundles,
+        midnightMempool,
+        ecrecoverRatifier,
+        setterRatifier,
+        permit2,
+      } = requestedAddresses;
+
+      if (
+        midnight == null ||
+        midnightBundles == null ||
+        midnightMempool == null ||
+        ecrecoverRatifier == null ||
+        setterRatifier == null ||
+        permit2 == null
+      ) {
+        throw new IncompleteMidnightAddressesError(
+          chainId,
+          MIDNIGHT_ADDRESS_LABELS.filter(
+            (label) => requestedAddresses[label] == null,
+          ),
+        );
+      }
+
+      nextRegistry[chainId] = {
+        midnight,
+        midnightBundles,
+        midnightMempool,
+        ecrecoverRatifier,
+        setterRatifier,
+        permit2,
+      };
       continue;
     }
 
-    nextRegistry[chainId] = mergeMidnightAddresses({
-      chainId,
-      registeredAddresses,
-      requestedAddresses,
-    });
+    const nextAddresses = copyMidnightAddresses(registeredAddresses);
+
+    for (const label of MIDNIGHT_ADDRESS_LABELS) {
+      const requestedAddress = requestedAddresses[label];
+      if (requestedAddress == null) continue;
+
+      const registeredAddress = registeredAddresses[label];
+      if (registeredAddress !== requestedAddress)
+        throw new MidnightAddressAlreadyRegisteredError({
+          chainId,
+          label,
+          registeredAddress,
+          requestedAddress,
+        });
+    }
+
+    nextRegistry[chainId] = nextAddresses;
   }
 
   midnightAddresses = midnightAddressRegistry =
