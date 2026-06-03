@@ -4,7 +4,7 @@ import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
   isRequirementSignature,
-  MorphoClient,
+  morphoViemExtension,
 } from "../../../src/index.js";
 import { SteakhouseUsdcVaultV1 } from "../../fixtures/vaultV1.js";
 import { KeyrockUsdcVaultV2 } from "../../fixtures/vaultV2.js";
@@ -32,7 +32,7 @@ describe("MigrateToV2 VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = client.extend(morphoViemExtension()).morpho;
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -101,7 +101,9 @@ describe("MigrateToV2 VaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1, KeyrockUsdcVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = client.extend(
+          morphoViemExtension({ supportSignature: true }),
+        ).morpho;
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,

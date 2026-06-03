@@ -12,7 +12,7 @@ import {
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
 import { test } from "../../../test/setup.js";
-import { MorphoClient } from "../../client/index.js";
+import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
   ChainIdMismatchError,
@@ -35,10 +35,9 @@ describe("MorphoVaultV1 entity tests", () => {
         chain: mainnet,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient).vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id + 1,
-      );
+      const vault = publicClient
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
 
       await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
     });
@@ -48,10 +47,9 @@ describe("MorphoVaultV1 entity tests", () => {
         chain: mainnet,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient).vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id + 1,
-      );
+      const vault = publicClient
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
 
       expect(() =>
         vault.deposit({
@@ -67,10 +65,9 @@ describe("MorphoVaultV1 entity tests", () => {
         chain: mainnet,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient).vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        mainnet.id + 1,
-      );
+      const vault = publicClient
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
 
       expect(() =>
         vault.withdraw({
@@ -91,9 +88,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -118,9 +117,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should accept slippageTolerance of exactly MAX_SLIPPAGE_TOLERANCE", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -145,9 +146,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -167,9 +170,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -191,9 +196,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw VaultAddressMismatchError when data belongs to a different vault", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -214,9 +221,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NonPositiveAssetAmountError for negative amount", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -235,9 +244,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NonPositiveSharesAmountError for zero total assets", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -256,9 +267,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NegativeNativeAmountError for negative nativeAmount", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         GauntletWethVaultV1.address,
         mainnet.id,
@@ -278,9 +291,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vault", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -302,10 +317,9 @@ describe("MorphoVaultV1 entity tests", () => {
         chain: celo,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient).vaultV1(
-        SteakhouseUsdcVaultV1.address,
-        ChainId.CeloMainnet,
-      );
+      const vault = publicClient
+        .extend(morphoViemExtension())
+        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, ChainId.CeloMainnet);
 
       expect(() =>
         vault.deposit({
@@ -325,9 +339,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should return classic approval requirements when supportSignature is false", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -357,9 +373,13 @@ describe("MorphoVaultV1 entity tests", () => {
         chain: mainnet,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient, {
-        supportSignature: false,
-      }).vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
+      const vault = publicClient
+        .extend(
+          morphoViemExtension({
+            supportSignature: false,
+          }),
+        )
+        .morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id + 1);
 
       expect(() =>
         vault.migrateToV2({
@@ -374,9 +394,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw VaultAddressMismatchError when source vault data differs", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -403,9 +425,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NonPositiveSharesAmountError when shares is zero", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -430,9 +454,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NonPositiveSharesAmountError when the target V2 vault mints zero shares", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -457,9 +483,11 @@ describe("MorphoVaultV1 entity tests", () => {
     });
 
     test("should return buildTx and getRequirements", async ({ client }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -494,9 +522,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -523,9 +553,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -552,9 +584,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should throw VaultAssetMismatchError when V1 and V2 have different underlying assets", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -580,9 +614,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -611,9 +647,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("should accept slippageTolerance of exactly MAX_SLIPPAGE_TOLERANCE", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -648,9 +686,11 @@ describe("MorphoVaultV1 entity tests", () => {
         amount: shares,
       });
 
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -689,9 +729,11 @@ describe("MorphoVaultV1 entity tests", () => {
         amount: shares,
       });
 
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -726,9 +768,11 @@ describe("MorphoVaultV1 entity tests", () => {
     test("builds tx with userAddress different from client.account", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: false,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,
@@ -757,9 +801,11 @@ describe("MorphoVaultV1 entity tests", () => {
         chain: mainnet,
         transport: http(client.transport.url),
       });
-      const morphoClient = new MorphoClient(publicClient, {
-        supportSignature: false,
-      });
+      const morphoClient = publicClient.extend(
+        morphoViemExtension({
+          supportSignature: false,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV1(
         SteakhouseUsdcVaultV1.address,
         mainnet.id,

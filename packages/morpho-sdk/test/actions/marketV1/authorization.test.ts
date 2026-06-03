@@ -4,7 +4,7 @@ import { mainnet } from "viem/chains";
 import { describe, expect } from "vitest";
 import {
   isRequirementAuthorization,
-  MorphoClient,
+  morphoViemExtension,
 } from "../../../src/index.js";
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { supplyCollateral } from "../../helpers/marketV1.js";
@@ -27,7 +27,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = client.extend(morphoViemExtension()).morpho;
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
@@ -57,7 +57,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = client.extend(morphoViemExtension()).morpho;
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 
@@ -94,7 +94,7 @@ describe("AuthorizationMarketV1", () => {
         collateralAmount: parseUnits("10", 18),
       });
 
-      const morphoClient = new MorphoClient(client);
+      const morphoClient = client.extend(morphoViemExtension()).morpho;
       const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
       const positionData = await market.getPositionData(client.account.address);
 

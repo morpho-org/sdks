@@ -9,9 +9,9 @@ import {
   EmptyReallocationWithdrawalsError,
   isRequirementApproval,
   isRequirementAuthorization,
-  MorphoClient,
   marketV1Borrow,
   marketV1SupplyCollateralBorrow,
+  morphoViemExtension,
   NegativeReallocationFeeError,
   NonPositiveReallocationAmountError,
   ReallocationWithdrawalOnTargetMarketError,
@@ -66,7 +66,7 @@ describe("Borrow with single vault reallocation (e2e)", () => {
         markets: { CbbtcUsdcMarketV1, WbtcUsdcSourceMarket },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -151,7 +151,7 @@ describe("Borrow with multiple source market withdrawals", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -252,7 +252,7 @@ describe("Borrow with reallocation fee", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -341,7 +341,7 @@ describe("SupplyCollateralBorrow with single vault reallocation", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -435,7 +435,7 @@ describe("SupplyCollateralBorrow with multiple source market withdrawals", () =>
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -548,7 +548,7 @@ describe("SupplyCollateralBorrow with reallocation fee", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -620,7 +620,7 @@ describe("getReallocationData and getReallocations", () => {
   test("should reject getReallocationData when the client chain differs from the market chain", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, base.id);
 
     await expect(
@@ -654,7 +654,7 @@ describe("getReallocationData and getReallocations", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -733,7 +733,7 @@ describe("getReallocationData and getReallocations", () => {
         markets: { CbbtcUsdcMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -796,7 +796,7 @@ describe("getReallocationData and getReallocations", () => {
   }) => {
     const borrowAmount = parseUnits("1", 6); // tiny borrow, liquidity is sufficient
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     const block = await client.getBlock();

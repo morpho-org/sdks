@@ -12,7 +12,7 @@ import {
   BorrowExceedsSafeLtvError,
   isRequirementAuthorization,
   MissingAccrualPositionError,
-  MorphoClient,
+  morphoViemExtension,
 } from "../../../src/index.js";
 import { WethUsdsMarketV1 } from "../../fixtures/marketV1.js";
 import { testInvariants } from "../../helpers/invariants.js";
@@ -35,7 +35,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -80,7 +80,7 @@ describe("BorrowMarketV1", () => {
         markets: { WethUsdsMarketV1 },
       },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -140,7 +140,7 @@ describe("BorrowMarketV1", () => {
       collateralAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -156,7 +156,7 @@ describe("BorrowMarketV1", () => {
   test("should revert when positionData is not provided", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(WethUsdsMarketV1, mainnet.id);
 
     expect(() =>

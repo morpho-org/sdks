@@ -109,12 +109,16 @@ const marketEntity = {
 
 const vaultV2Mock = vi.fn().mockReturnValue(vaultV2Entity);
 const marketV1Mock = vi.fn().mockReturnValue(marketEntity);
-const morphoClientMock = vi.fn(function MorphoClient() {
-  return {
-    vaultV2: vaultV2Mock,
-    marketV1: marketV1Mock,
-  };
-});
+const morphoNamespaceMock = {
+  vaultV2: vaultV2Mock,
+  marketV1: marketV1Mock,
+};
+// The SDK is now consumed via `client.extend(morphoViemExtension(...)).morpho`,
+// so the extended viem client exposes the morpho namespace directly.
+const morphoExtendMock = vi
+  .fn()
+  .mockReturnValue({ morpho: morphoNamespaceMock });
+const morphoViemExtensionMock = vi.fn().mockReturnValue("morpho-extension");
 const fetchMarketMock = vi.fn();
 const mockGetChainId = vi.fn().mockResolvedValue(1);
 const readContractMock = vi.fn().mockResolvedValue(123n);
@@ -123,11 +127,12 @@ const extendMock = vi.fn().mockReturnValue({
   chain: { id: 1 },
   getChainId: mockGetChainId,
   readContract: readContractMock,
+  extend: morphoExtendMock,
 });
 const createClientMock = vi.fn().mockReturnValue({ extend: extendMock });
 
 vi.doMock("@morpho-org/morpho-sdk", () => ({
-  MorphoClient: morphoClientMock,
+  morphoViemExtension: morphoViemExtensionMock,
 }));
 
 vi.doMock("@morpho-org/blue-sdk-viem", () => ({

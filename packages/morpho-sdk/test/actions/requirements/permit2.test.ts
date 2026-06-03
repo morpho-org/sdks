@@ -5,7 +5,7 @@ import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
   isRequirementSignature,
-  MorphoClient,
+  morphoViemExtension,
 } from "../../../src/index.js";
 import {
   KeyrockUsdcVaultV2,
@@ -47,7 +47,9 @@ describe("Permit2", () => {
         vaults: { Re7UsdtVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = client.extend(
+          morphoViemExtension({ supportSignature: true }),
+        ).morpho;
         const vault = morpho.vaultV2(Re7UsdtVaultV2.address, mainnet.id);
         const vaultData = await vault.getData();
         const deposit = vault.deposit({
@@ -135,7 +137,9 @@ describe("Permit2", () => {
         vaults: { Re7UsdtVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = client.extend(
+          morphoViemExtension({ supportSignature: true }),
+        ).morpho;
         const vault = morpho.vaultV2(Re7UsdtVaultV2.address, mainnet.id);
         const vaultData = await vault.getData();
         const deposit = vault.deposit({
@@ -218,7 +222,9 @@ describe("Permit2", () => {
         vaults: { KpkWETHVaultV2 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = client.extend(
+          morphoViemExtension({ supportSignature: true }),
+        ).morpho;
         const vault = morpho.vaultV2(KpkWETHVaultV2.address, mainnet.id);
         const vaultData = await vault.getData();
         const deposit = vault.deposit({
@@ -264,7 +270,9 @@ describe("Permit2", () => {
       asset: dai,
     } as const;
 
-    const morpho = new MorphoClient(client, { supportSignature: true });
+    const morpho = client.extend(
+      morphoViemExtension({ supportSignature: true }),
+    ).morpho;
     const vault = morpho.vaultV2(address, mainnet.id);
 
     const {
@@ -347,7 +355,9 @@ describe("Permit2", () => {
       amount,
     });
 
-    const morpho = new MorphoClient(client, { supportSignature: true });
+    const morpho = client.extend(
+      morphoViemExtension({ supportSignature: true }),
+    ).morpho;
     const vault = morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id);
 
     const {

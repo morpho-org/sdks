@@ -7,7 +7,7 @@ import {
   KpkWETHVaultV2,
 } from "../../../test/fixtures/vaultV2.js";
 import { test } from "../../../test/setup.js";
-import { MorphoClient } from "../../client/index.js";
+import { morphoViemExtension } from "../../client/index.js";
 import { MAX_SLIPPAGE_TOLERANCE } from "../../helpers/constant.js";
 import {
   ChainIdMismatchError,
@@ -28,10 +28,9 @@ describe("MorphoVaultV2 entity tests", () => {
         chain: mainnet,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient).vaultV2(
-        KeyrockUsdcVaultV2.address,
-        mainnet.id + 1,
-      );
+      const vault = publicClient
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id + 1);
 
       await expect(vault.getData()).rejects.toThrow(ChainIdMismatchError);
     });
@@ -41,10 +40,9 @@ describe("MorphoVaultV2 entity tests", () => {
         chain: mainnet,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient).vaultV2(
-        KeyrockUsdcVaultV2.address,
-        mainnet.id + 1,
-      );
+      const vault = publicClient
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id + 1);
 
       expect(() =>
         vault.deposit({
@@ -60,10 +58,9 @@ describe("MorphoVaultV2 entity tests", () => {
         chain: mainnet,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient).vaultV2(
-        KeyrockUsdcVaultV2.address,
-        mainnet.id + 1,
-      );
+      const vault = publicClient
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(KeyrockUsdcVaultV2.address, mainnet.id + 1);
 
       expect(() =>
         vault.withdraw({ amount: 1n, userAddress: KeyrockUsdcVaultV2.address }),
@@ -92,9 +89,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should accept slippageTolerance of exactly 0n", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(
         KeyrockUsdcVaultV2.address,
         mainnet.id,
@@ -119,9 +118,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should accept slippageTolerance of exactly MAX_SLIPPAGE_TOLERANCE", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(
         KeyrockUsdcVaultV2.address,
         mainnet.id,
@@ -146,9 +147,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw ExcessiveSlippageToleranceError when slippageTolerance exceeds MAX", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(
         KeyrockUsdcVaultV2.address,
         mainnet.id,
@@ -168,9 +171,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw NegativeSlippageToleranceError when slippageTolerance is negative", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(
         KeyrockUsdcVaultV2.address,
         mainnet.id,
@@ -192,9 +197,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw VaultAddressMismatchError when data belongs to a different vault", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(
         KeyrockUsdcVaultV2.address,
         mainnet.id,
@@ -215,9 +222,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw NonPositiveAssetAmountError for negative amount", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(
         KeyrockUsdcVaultV2.address,
         mainnet.id,
@@ -236,9 +245,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw NegativeNativeAmountError for negative nativeAmount", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(KpkWETHVaultV2.address, mainnet.id);
 
       const vaultData = await vault.getData();
@@ -257,10 +268,9 @@ describe("MorphoVaultV2 entity tests", () => {
         chain: celo,
         transport: http("https://rpc.example"),
       });
-      const vault = new MorphoClient(publicClient).vaultV2(
-        KeyrockUsdcVaultV2.address,
-        ChainId.CeloMainnet,
-      );
+      const vault = publicClient
+        .extend(morphoViemExtension())
+        .morpho.vaultV2(KeyrockUsdcVaultV2.address, ChainId.CeloMainnet);
 
       expect(() =>
         vault.deposit({
@@ -278,9 +288,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw NativeAmountOnNonWNativeVaultError for non-WETH vault", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(
         KeyrockUsdcVaultV2.address,
         mainnet.id,
@@ -300,9 +312,11 @@ describe("MorphoVaultV2 entity tests", () => {
     test("should throw NonPositiveSharesAmountError for zero total assets", async ({
       client,
     }) => {
-      const morphoClient = new MorphoClient(client, {
-        supportSignature: true,
-      });
+      const morphoClient = client.extend(
+        morphoViemExtension({
+          supportSignature: true,
+        }),
+      ).morpho;
       const vault = morphoClient.vaultV2(
         KeyrockUsdcVaultV2.address,
         mainnet.id,

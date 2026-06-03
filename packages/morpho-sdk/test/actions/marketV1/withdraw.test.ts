@@ -8,8 +8,8 @@ import {
   isRequirementAuthorization,
   MarketIdMismatchError,
   MissingAccrualPositionError,
-  MorphoClient,
   MutuallyExclusiveWithdrawAmountsError,
+  morphoViemExtension,
   NegativeSlippageToleranceError,
   NonPositiveWithdrawAmountError,
   type VaultReallocation,
@@ -47,7 +47,7 @@ describe("WithdrawMarketV1", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -101,7 +101,7 @@ describe("WithdrawMarketV1", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1 } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -148,7 +148,7 @@ describe("WithdrawMarketV1", () => {
       supplyAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -175,7 +175,7 @@ describe("WithdrawMarketV1", () => {
       supplyAmount,
     });
 
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const positionData = await market.getPositionData(client.account.address);
 
@@ -226,7 +226,7 @@ describe("WithdrawMarketV1", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1, WbtcUsdcSourceMarket } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -293,7 +293,7 @@ describe("WithdrawMarketV1", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1, WbtcUsdcSourceMarket } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -371,7 +371,7 @@ describe("WithdrawMarketV1", () => {
       client,
       params: { markets: { CbbtcUsdcMarketV1, WbtcUsdcSourceMarket } },
       actionFn: async () => {
-        const morphoClient = new MorphoClient(client);
+        const morphoClient = client.extend(morphoViemExtension()).morpho;
         const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
         const positionData = await market.getPositionData(
           client.account.address,
@@ -410,7 +410,7 @@ describe("WithdrawMarketV1", () => {
   test("error: MutuallyExclusiveWithdrawAmountsError when both assets and shares are non-zero", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
@@ -426,7 +426,7 @@ describe("WithdrawMarketV1", () => {
   test("error: NonPositiveWithdrawAmountError when shares is negative", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
@@ -441,7 +441,7 @@ describe("WithdrawMarketV1", () => {
   test("error: MissingAccrualPositionError when positionData is missing", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
@@ -456,7 +456,7 @@ describe("WithdrawMarketV1", () => {
   test("error: MarketIdMismatchError when positionData is for a different market", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const otherMarket = morphoClient.marketV1(WbtcUsdcSourceMarket, mainnet.id);
     const wrongPositionData = await otherMarket.getPositionData(
@@ -475,7 +475,7 @@ describe("WithdrawMarketV1", () => {
   test("error: AccrualPositionUserMismatchError when positionData is for a different user", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const otherUser = "0x000000000000000000000000000000000000dEaD" as const;
     const positionData = await market.getPositionData(otherUser);
@@ -492,7 +492,7 @@ describe("WithdrawMarketV1", () => {
   test("error: WithdrawExceedsSupplyError when assets exceed supplied", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const positionData = new AccrualPositionClass(
       {
@@ -524,7 +524,7 @@ describe("WithdrawMarketV1", () => {
   test("error: WithdrawSharesExceedSupplyError when shares exceed owned", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
     const positionData = new AccrualPositionClass(
       {
@@ -556,7 +556,7 @@ describe("WithdrawMarketV1", () => {
   test("error: NegativeSlippageToleranceError when slippageTolerance is negative", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>
@@ -572,7 +572,7 @@ describe("WithdrawMarketV1", () => {
   test("error: ExcessiveSlippageToleranceError when slippageTolerance is too high", async ({
     client,
   }) => {
-    const morphoClient = new MorphoClient(client);
+    const morphoClient = client.extend(morphoViemExtension()).morpho;
     const market = morphoClient.marketV1(CbbtcUsdcMarketV1, mainnet.id);
 
     expect(() =>

@@ -9,7 +9,7 @@ import { describe, expect } from "vitest";
 import {
   isRequirementApproval,
   isRequirementSignature,
-  MorphoClient,
+  morphoViemExtension,
 } from "../../../src/index.js";
 import {
   GauntletWethVaultV1,
@@ -37,7 +37,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = client.extend(morphoViemExtension()).morpho;
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
@@ -105,7 +105,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUSDTVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = client.extend(morphoViemExtension()).morpho;
         const vaultV1 = morpho.vaultV1(
           SteakhouseUSDTVaultV1.address,
           mainnet.id,
@@ -171,7 +171,9 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = client.extend(
+          morphoViemExtension({ supportSignature: true }),
+        ).morpho;
 
         const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
         const vaultData = await vault.getData();
@@ -235,7 +237,9 @@ describe("DepositVaultV1", () => {
       amount,
     });
 
-    const morpho = new MorphoClient(client, { supportSignature: true });
+    const morpho = client.extend(
+      morphoViemExtension({ supportSignature: true }),
+    ).morpho;
     const vault = morpho.vaultV1(SteakhouseUsdcVaultV1.address, mainnet.id);
 
     const {
@@ -344,7 +348,9 @@ describe("DepositVaultV1", () => {
         vaults: { GauntletWethVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client, { supportSignature: true });
+        const morpho = client.extend(
+          morphoViemExtension({ supportSignature: true }),
+        ).morpho;
         const vault = morpho.vaultV1(GauntletWethVaultV1.address, mainnet.id);
         const vaultData = await vault.getData();
         const deposit = vault.deposit({
@@ -392,7 +398,7 @@ describe("DepositVaultV1", () => {
         vaults: { SteakhouseUsdcVaultV1 },
       },
       actionFn: async () => {
-        const morpho = new MorphoClient(client);
+        const morpho = client.extend(morphoViemExtension()).morpho;
         const vaultV1 = morpho.vaultV1(
           SteakhouseUsdcVaultV1.address,
           mainnet.id,
