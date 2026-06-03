@@ -1,27 +1,4 @@
-export { NegativeValueError } from "@morpho-org/morpho-ts";
-
 import type { Address } from "viem";
-
-/**
- * Thrown when a chain id has no pinned Midnight deployment entry.
- *
- * @example
- * ```ts
- * import { getMidnightAddresses, UnsupportedMidnightChainError } from "@morpho-org/midnight-sdk";
- *
- * try {
- *   getMidnightAddresses(1);
- * } catch (error) {
- *   console.log(error instanceof UnsupportedMidnightChainError);
- * }
- * ```
- */
-export class UnsupportedMidnightChainError extends Error {
-  public constructor(chainId: number) {
-    super(`No Midnight deployment is registered for chain id "${chainId}".`);
-    this.name = "UnsupportedMidnightChainError";
-  }
-}
 
 /**
  * Thrown when a custom Midnight address registration is missing required entries.

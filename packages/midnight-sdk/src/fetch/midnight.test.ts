@@ -1,13 +1,11 @@
+import { NegativeValueError } from "@morpho-org/morpho-ts";
 import { createMockClient, mockRead } from "@morpho-org/test/mock";
 import { base } from "viem/chains";
 import { describe, expect, test } from "vitest";
 import { addresses, baseMarket, baseOffer } from "../__test__/fixtures.js";
 import { erc20Abi, midnightAbi } from "../abis.js";
 import { MAX_TICK } from "../constants.js";
-import {
-  NegativeValueError,
-  SettlementFeeExceedsPriceError,
-} from "../errors.js";
+import { SettlementFeeExceedsPriceError } from "../errors.js";
 import { TickLib } from "../math/index.js";
 import {
   fetchConsumableUnits,

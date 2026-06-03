@@ -1,3 +1,4 @@
+import { UnsupportedChainIdError } from "@morpho-org/morpho-ts";
 import { randomAddress } from "@morpho-org/test/fixtures";
 import { describe, expect, test } from "vitest";
 import {
@@ -8,7 +9,6 @@ import {
   midnightAddresses,
   midnightAddressRegistry,
   registerCustomMidnightAddresses,
-  UnsupportedMidnightChainError,
 } from "./index.js";
 
 const createMidnightAddresses = (): MidnightAddresses => ({
@@ -21,10 +21,8 @@ const createMidnightAddresses = (): MidnightAddresses => ({
 });
 
 describe("getMidnightAddresses", () => {
-  test("error: UnsupportedMidnightChainError", () => {
-    expect(() => getMidnightAddresses(1)).toThrow(
-      UnsupportedMidnightChainError,
-    );
+  test("error: UnsupportedChainIdError", () => {
+    expect(() => getMidnightAddresses(1)).toThrow(UnsupportedChainIdError);
   });
 
   test("default", () => {
